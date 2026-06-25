@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: roadmap-db
+    restart: always
+    environment:
+      POSTGRES_USER: roadmap_user
+      POSTGRES_PASSWORD: roadmap_password
+      POSTGRES_DB: roadmap_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: roadmap-web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://roadmap_user:roadmap_password@db:5432/roadmap_db
+      - NODE_ENV=development
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
