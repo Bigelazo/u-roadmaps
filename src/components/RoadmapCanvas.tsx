@@ -1,189 +1,241 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import ReactFlow, {
-  MiniMap,
-  Controls,
   Background,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  Connection,
-  Edge,
-  Node,
+  Controls,
+  MiniMap,
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Connection,
+  type EdgeChange,
+  type NodeChange,
+  type Edge,
+  type Node,
+  type NodeDragHandler,
 } from 'reactflow';
-import { Save, Plus, Database, Sparkles, AlertCircle } from 'lucide-react';
+import 'reactflow/dist/style.css';
+import { roadmapUrl, type CourseRoute, type RoadmapDto, type RoadmapNode } from '@/lib/roadmap-types';
 
-export default function RoadmapCanvas() {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [dbStatus, setDbStatus] = useState<'mock' | 'database' | 'loading'>('loading');
-  const [newNodeLabel, setNewNodeLabel] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState('');
+type ApiErrorBody = { error?: { code?: string; message?: string } };
 
-  const fetchRoadmap = async () => {
+type Props = { route: CourseRoute };
+
+function toFlowNodes(nodes: RoadmapNode[], colors: Map<string, string>): Node[] {
+  return nodes.map((node) => ({
+    id: node.id,
+    data: { label: node.titulo },
+    position: { x: node.posX, y: node.posY },
+    hidden: !node.visible,
+    deletable: false,
+    style: { background: colors.get(node.typeId) ?? '#ffffff', color: '#1a1a1a', border: '1px solid #c2c2c2', borderRadius: 8, padding: 12 },
+  }));
+}
+
+function toFlowEdges(dto: RoadmapDto): Edge[] {
+  return dto.dependencias.map((dependency) => ({ id: dependency.id, source: dependency.sourceNodeId, target: dependency.targetNodeId }));
+}
+
+export default function RoadmapCanvas({ route }: Props) {
+  const [dto, setDto] = useState<RoadmapDto | null>(null);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newVisible, setNewVisible] = useState(true);
+  const [newTypeId, setNewTypeId] = useState('');
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeColor, setNewTypeColor] = useState('#024AD8');
+  const [newResourceTitle, setNewResourceTitle] = useState('');
+  const [newResourceUrl, setNewResourceUrl] = useState('');
+  const [newResourceType, setNewResourceType] = useState<'ARCHIVO' | 'ENLACE' | 'VIDEO'>('ENLACE');
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editTypeId, setEditTypeId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    const response = await fetch(roadmapUrl(route));
+    const body = await response.json() as RoadmapDto | ApiErrorBody;
+    if (!response.ok || !('nodos' in body)) {
+      const apiError = 'error' in body ? body.error : undefined;
+      setError(apiError?.code === 'ROADMAP_NOT_FOUND'
+        ? 'El profesor todavía no ha creado un roadmap para este curso.'
+        : apiError?.message ?? 'No se pudo cargar el roadmap.');
+      setDto(null);
+      return;
+    }
+    const colors = new Map(body.tipos.map((type) => [type.id, type.color]));
+    setDto(body);
+    setNodes(toFlowNodes(body.nodos, colors));
+    setEdges(toFlowEdges(body));
+    setNewTypeId(body.tipos[0]?.id ?? '');
+    setError(null);
+  }
+
+  useEffect(() => { void load(); }, [route.ramo, route.anio, route.semestre]);
+
+  async function mutate(url: string, init: RequestInit) {
+    const response = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) } });
+    if (!response.ok) {
+      const body = await response.json() as { error?: { message?: string } };
+      throw new Error(body.error?.message ?? 'La operación no pudo completarse.');
+    }
+  }
+
+  async function addNode(event: React.FormEvent) {
+    event.preventDefault();
+    if (!newTitle.trim() || !newTypeId) return;
     try {
-      const response = await fetch('/api/roadmap');
-      const data = await response.json();
-      setNodes(data.nodes || []);
-      setEdges(data.edges || []);
-      setTitle(data.title || 'Malla Interactiva');
-      setDescription(data.description || '');
-      setDbStatus(data.source || 'mock');
-    } catch (error) {
-      console.error('Error fetching roadmap:', error);
-      setDbStatus('mock');
+      await mutate(roadmapUrl(route, '/nodos'), { method: 'POST', body: JSON.stringify({ titulo: newTitle, descripcion: newDescription || null, typeId: newTypeId, posX: 120, posY: 120, visible: newVisible }) });
+      setNewTitle('');
+      setNewDescription('');
+      setNewVisible(true);
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo crear el nodo.'); }
+  }
+
+  const persistPosition: NodeDragHandler = async (_event, node) => {
+    try {
+      await mutate(roadmapUrl(route, `/nodos/${node.id}`), { method: 'PATCH', body: JSON.stringify({ posX: node.position.x, posY: node.position.y }) });
+    } catch (operationError) {
+      setError(operationError instanceof Error ? operationError.message : 'No se pudo guardar la posición.');
+      await load();
     }
   };
 
-  useEffect(() => {
-    fetchRoadmap();
-  }, []);
-
-  const onConnect = useCallback(
-    (params: Connection | Edge) => 
-      setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#3b82f6' } }, eds)),
-    [setEdges]
-  );
-
-  const addNode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNodeLabel.trim()) return;
-
-    const id = (nodes.length + 1).toString();
-    const newNode: Node = {
-      id,
-      data: { label: newNodeLabel },
-      position: { x: 200 + Math.random() * 200, y: 150 + Math.random() * 150 },
-      style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #475569', borderRadius: '8px' },
-    };
-
-    setNodes((nds) => [...nds, newNode]);
-    setNewNodeLabel('');
-  };
-
-  const saveRoadmap = async () => {
-    setIsSaving(true);
-    setSaveMessage('');
+  async function connect(connection: Connection) {
+    if (!connection.source || !connection.target) return;
     try {
-      const response = await fetch('/api/roadmap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ nodes, edges }),
+      await mutate(roadmapUrl(route, '/dependencias'), { method: 'POST', body: JSON.stringify({ sourceNodeId: connection.source, targetNodeId: connection.target }) });
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo crear la dependencia.'); }
+  }
+
+  function selectNode(nodeId: string) {
+    setSelectedNodeId(nodeId);
+    const node = dto?.nodos.find((item) => item.id === nodeId);
+    if (!node) return;
+    setEditTitle(node.titulo);
+    setEditDescription(node.descripcion ?? '');
+    setEditTypeId(node.typeId);
+  }
+
+  async function updateNode(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedNodeId || !editTitle.trim()) return;
+    try {
+      await mutate(roadmapUrl(route, `/nodos/${selectedNodeId}`), {
+        method: 'PATCH',
+        body: JSON.stringify({ titulo: editTitle, descripcion: editDescription || null, typeId: editTypeId }),
       });
-      const data = await response.json();
-      if (data.success) {
-        setSaveMessage('¡Guardado con éxito en PostgreSQL!');
-        setDbStatus('database');
-      } else {
-        setSaveMessage('Guardado de manera local (DB no conectada)');
-      }
-    } catch (error) {
-      console.error('Error saving roadmap:', error);
-      setSaveMessage('Error de red. Guardado localmente.');
-    } finally {
-      setIsSaving(false);
-      setTimeout(() => setSaveMessage(''), 4000);
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo editar el nodo.'); }
+  }
+
+  async function toggleVisibility() {
+    if (!selectedNodeId || !dto) return;
+    const node = dto.nodos.find((item) => item.id === selectedNodeId);
+    if (!node) return;
+    try {
+      await mutate(roadmapUrl(route, `/nodos/${node.id}`), { method: 'PATCH', body: JSON.stringify({ visible: !node.visible }) });
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo cambiar la visibilidad.'); }
+  }
+
+  async function deleteNode() {
+    if (!selectedNodeId) return;
+    if (!window.confirm('¿Eliminar este nodo y sus dependencias y recursos?')) return;
+    try {
+      await mutate(roadmapUrl(route, `/nodos/${selectedNodeId}`), { method: 'DELETE' });
+      setSelectedNodeId(null);
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo eliminar el nodo.'); }
+  }
+
+  async function addType(event: React.FormEvent) {
+    event.preventDefault();
+    if (!newTypeName.trim()) return;
+    try {
+      await mutate(roadmapUrl(route, '/tipos'), { method: 'POST', body: JSON.stringify({ nombre: newTypeName, color: newTypeColor }) });
+      setNewTypeName('');
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo crear el tipo.'); }
+  }
+
+  async function addResource(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedNodeId || !newResourceTitle.trim() || !newResourceUrl.trim()) return;
+    try {
+      await mutate(roadmapUrl(route, `/nodos/${selectedNodeId}/recursos`), { method: 'POST', body: JSON.stringify({ titulo: newResourceTitle, url: newResourceUrl, tipo: newResourceType }) });
+      setNewResourceTitle('');
+      setNewResourceUrl('');
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo crear el recurso.'); }
+  }
+
+  async function deleteDependency(dependencyId: string) {
+    try {
+      await mutate(roadmapUrl(route, `/dependencias/${dependencyId}`), { method: 'DELETE' });
+      await load();
+    } catch (operationError) {
+      setError(operationError instanceof Error ? operationError.message : 'No se pudo eliminar la dependencia.');
+      await load();
     }
-  };
+  }
 
+  async function editResource(resourceId: string, title: string, url: string) {
+    const nextTitle = window.prompt('Título del recurso', title);
+    const nextUrl = window.prompt('URL del recurso', url);
+    const nextType = window.prompt('Tipo: ARCHIVO, ENLACE o VIDEO', 'ENLACE');
+    if (!nextTitle || !nextUrl || !nextType || !['ARCHIVO', 'ENLACE', 'VIDEO'].includes(nextType)) return;
+    try {
+      await mutate(roadmapUrl(route, `/recursos/${resourceId}`), { method: 'PATCH', body: JSON.stringify({ titulo: nextTitle, url: nextUrl, tipo: nextType }) });
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo editar el recurso.'); }
+  }
+
+  async function deleteResource(resourceId: string) {
+    try {
+      await mutate(roadmapUrl(route, `/recursos/${resourceId}`), { method: 'DELETE' });
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo eliminar el recurso.'); }
+  }
+
+  async function editType(typeId: string, nombre: string, color: string) {
+    const nextName = window.prompt('Nombre del tipo', nombre);
+    const nextColor = window.prompt('Color hexadecimal', color);
+    if (!nextName || !nextColor) return;
+    try {
+      await mutate(roadmapUrl(route, `/tipos/${typeId}`), { method: 'PATCH', body: JSON.stringify({ nombre: nextName, color: nextColor }) });
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo editar el tipo.'); }
+  }
+
+  async function deleteType(typeId: string) {
+    try {
+      await mutate(roadmapUrl(route, `/tipos/${typeId}`), { method: 'DELETE' });
+      await load();
+    } catch (operationError) { setError(operationError instanceof Error ? operationError.message : 'No se pudo eliminar el tipo.'); }
+  }
+
+  if (error && !dto) return <div className="rounded-2xl border border-[#f9d4d2] bg-white p-8 text-[#b3262b]">{error}</div>;
+  if (!dto) return <div className="rounded-2xl border border-[#e8e8e8] bg-white p-8 text-[#636363]">Cargando roadmap...</div>;
+
+  const selectedNode = dto.nodos.find((node) => node.id === selectedNodeId);
   return (
-    <div className="flex flex-col md:flex-row h-[70vh] w-full rounded-2xl border border-slate-800 bg-slate-950 overflow-hidden shadow-2xl">
-      {/* Sidebar de administración */}
-      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-slate-800 p-6 flex flex-col justify-between bg-slate-900 bg-opacity-40 backdrop-blur-md">
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-500" />
-              Gestor de Ruta DCC
-            </h3>
-            <p className="text-xs text-slate-400 mt-1">
-              Agrega asignaturas, arrastra y conéctalas con el mouse para diseñar la estructura curricular.
-            </p>
-          </div>
-
-          {/* Conexión de Base de Datos */}
-          <div className="p-3 rounded-lg border border-slate-800 bg-slate-950 flex items-center gap-2 animate-fadeIn">
-            <Database className={`h-4 w-4 ${dbStatus === 'database' ? 'text-green-500' : 'text-amber-500'}`} />
-            <div>
-              <div className="text-xs font-semibold text-slate-300">
-                Almacenamiento Relacional:
-              </div>
-              <div className="text-[10px] text-slate-400 font-mono">
-                {dbStatus === 'database' ? 'PostgreSQL Activo 🐳' : 'Modo Simulador Local'}
-              </div>
-            </div>
-          </div>
-
-          {/* Formulario Agregar Nodo */}
-          <form onSubmit={addNode} className="space-y-2">
-            <label className="text-xs font-medium text-slate-300 block">Nueva Asignatura o Hito</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Ej: CC5002: Redes"
-                value={newNodeLabel}
-                onChange={(e) => setNewNodeLabel(e.target.value)}
-                className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-              />
-              <button
-                type="submit"
-                className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-                title="Agregar nodo"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Guardar cambios */}
-        <div className="space-y-3 mt-6">
-          {saveMessage && (
-            <div className="p-2 text-center rounded-lg bg-blue-950 border border-blue-800 text-xs text-blue-300 flex items-center justify-center gap-1 animate-pulse">
-              <AlertCircle className="h-3.5 w-3.5" />
-              {saveMessage}
-            </div>
-          )}
-          <button
-            onClick={saveRoadmap}
-            disabled={isSaving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white font-medium text-sm transition-colors shadow-lg shadow-blue-900/20"
-          >
-            <Save className="h-4 w-4" />
-            {isSaving ? 'Guardando...' : 'Guardar Progreso'}
-          </button>
-        </div>
-      </div>
-
-      {/* Canvas de React Flow */}
-      <div className="flex-1 h-full relative">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          fitView
-          attributionPosition="bottom-right"
-        >
-          <Controls />
-          <MiniMap 
-            nodeColor={(node) => {
-              if (node.id === '6') return '#2563eb';
-              return '#475569';
-            }} 
-            maskColor="rgba(15, 23, 42, 0.7)"
-            style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-          />
-          <Background color="#334155" gap={16} size={1} />
-        </ReactFlow>
-      </div>
+    <div className="grid min-h-[70vh] grid-cols-1 overflow-hidden rounded-2xl border border-[#e8e8e8] bg-white shadow-[0_2px_8px_rgba(26,26,26,0.08)] lg:grid-cols-[280px_1fr]">
+      <aside className="roadmap-authoring space-y-6 border-b border-[#e8e8e8] bg-[#f7f7f7] p-6 lg:border-b-0 lg:border-r">
+        <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#024ad8]">Autoría</p><h2 className="mt-2 text-xl font-medium text-[#1a1a1a]">Gestionar roadmap</h2></div>
+        {error && <p className="rounded-lg border border-[#f9d4d2] bg-white p-3 text-sm text-[#b3262b]">{error}</p>}
+        <form onSubmit={addNode} className="space-y-3"><label className="block text-sm font-medium text-[#1a1a1a]">Nuevo nodo<input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Título" className="mt-1 w-full rounded border border-[#c2c2c2] bg-white px-3 py-2" /></label><textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} placeholder="Descripción opcional" className="w-full rounded border border-[#c2c2c2] bg-white px-3 py-2" /><select value={newTypeId} onChange={(event) => setNewTypeId(event.target.value)} className="w-full rounded border border-[#c2c2c2] bg-white px-3 py-2">{dto.tipos.map((type) => <option key={type.id} value={type.id}>{type.nombre}</option>)}</select><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={newVisible} onChange={(event) => setNewVisible(event.target.checked)} /> Visible para estudiantes</label><button className="w-full rounded bg-[#024ad8] px-4 py-3 text-sm font-semibold uppercase tracking-[0.04em] text-white">Agregar nodo</button></form>
+        <form onSubmit={addType} className="space-y-3 border-t border-[#e8e8e8] pt-5"><label className="block text-sm font-medium text-[#1a1a1a]">Tipo personalizado<input value={newTypeName} onChange={(event) => setNewTypeName(event.target.value)} placeholder="Nombre" className="mt-1 w-full rounded border border-[#c2c2c2] bg-white px-3 py-2" /></label><input type="color" value={newTypeColor} onChange={(event) => setNewTypeColor(event.target.value)} className="h-10 w-full" aria-label="Color del tipo" /><button className="w-full rounded border border-[#024ad8] bg-white px-4 py-3 text-sm font-semibold uppercase tracking-[0.04em] text-[#024ad8]">Crear tipo</button></form>
+        <ul className="space-y-2 border-t border-[#e8e8e8] pt-5 text-xs">{dto.tipos.filter((type) => !type.predefinido).map((type) => <li key={type.id} className="flex items-center justify-between gap-2"><span>{type.nombre}</span><span className="flex gap-1"><button onClick={() => void editType(type.id, type.nombre, type.color)} className="rounded border border-[#c2c2c2] px-2 py-1">Editar</button><button onClick={() => void deleteType(type.id)} className="rounded border border-[#b3262b] px-2 py-1 text-[#b3262b]">Eliminar</button></span></li>)}</ul>
+        <ul className="space-y-2 border-t border-[#e8e8e8] pt-5 text-xs"><li className="font-medium text-[#1a1a1a]">Nodos del roadmap</li>{dto.nodos.map((node) => <li key={node.id} className="flex items-center justify-between gap-2"><span className={node.visible ? '' : 'text-[#636363]'}>{node.titulo}{node.visible ? '' : ' (oculto)'}</span><button onClick={() => selectNode(node.id)} className="rounded border border-[#1a1a1a] px-2 py-1">Seleccionar</button></li>)}</ul>
+        {selectedNode && <div className="border-t border-[#e8e8e8] pt-5"><form onSubmit={updateNode} className="space-y-2"><input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm" aria-label="Título del nodo" /><textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} placeholder="Descripción opcional" className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm" /><select value={editTypeId} onChange={(event) => setEditTypeId(event.target.value)} className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm">{dto.tipos.map((type) => <option key={type.id} value={type.id}>{type.nombre}</option>)}</select><button className="w-full rounded border border-[#1a1a1a] px-3 py-2 text-xs">Guardar nodo</button></form><div className="mt-3 flex gap-2"><button onClick={() => void toggleVisibility()} className="rounded border border-[#1a1a1a] px-3 py-2 text-xs">{selectedNode.visible ? 'Ocultar' : 'Mostrar'}</button><button onClick={() => void deleteNode()} className="rounded bg-[#b3262b] px-3 py-2 text-xs text-white">Eliminar</button></div><form onSubmit={addResource} className="mt-4 space-y-2"><input value={newResourceTitle} onChange={(event) => setNewResourceTitle(event.target.value)} placeholder="Título del recurso" className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm" /><input value={newResourceUrl} onChange={(event) => setNewResourceUrl(event.target.value)} placeholder="https://..." className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm" /><select value={newResourceType} onChange={(event) => setNewResourceType(event.target.value as 'ARCHIVO' | 'ENLACE' | 'VIDEO')} className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"><option value="ARCHIVO">Archivo</option><option value="ENLACE">Enlace</option><option value="VIDEO">Video</option></select><button className="w-full rounded border border-[#1a1a1a] px-3 py-2 text-xs">Agregar recurso</button></form><ul className="mt-3 space-y-2 text-xs text-[#636363]">{selectedNode.recursos.map((resource) => <li key={resource.id} className="flex items-center justify-between gap-2"><a href={resource.url} target="_blank" rel="noreferrer" className="text-[#024ad8]">{resource.titulo}</a><span className="flex gap-1"><button onClick={() => void editResource(resource.id, resource.titulo, resource.url)} className="rounded border border-[#c2c2c2] px-2 py-1">Editar</button><button onClick={() => void deleteResource(resource.id)} className="rounded border border-[#b3262b] px-2 py-1 text-[#b3262b]">Eliminar</button></span></li>)}</ul></div>}
+      </aside>
+      <div className="min-h-[70vh]"><ReactFlow nodes={nodes} edges={edges} onNodesChange={(changes: NodeChange[]) => setNodes((current) => applyNodeChanges(changes.filter((change) => change.type !== 'remove'), current))} onEdgesChange={(changes: EdgeChange[]) => setEdges((current) => applyEdgeChanges(changes.filter((change) => change.type !== 'remove'), current))} onNodeClick={(_event, node) => selectNode(node.id)} onNodeDragStop={persistPosition} onConnect={(connection) => void connect(connection)} onEdgesDelete={(deletedEdges) => { for (const edge of deletedEdges) void deleteDependency(edge.id); }} fitView><Controls /><MiniMap /><Background color="#e8e8e8" gap={16} size={1} /></ReactFlow></div>
     </div>
   );
 }
