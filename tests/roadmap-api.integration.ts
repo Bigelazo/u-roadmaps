@@ -102,7 +102,20 @@ test('manages nodes, dependencies, custom types, and resources', async () => {
     remainingResourceIds.push((await remainingResource.json()).recurso.id);
   }
   assert.equal((await jsonRequest(roadmapUrl(path, `/nodos/${first.id}/recursos`), 'POST', { titulo: 'Unsafe', url: 'javascript:alert(1)', tipo: 'ENLACE' })).status, 400);
-  assert.equal((await jsonRequest(roadmapUrl(path, `/nodos/${first.id}`), 'PATCH', { titulo: 'Primero actualizado', descripcion: 'Detalle', typeId: predefinedTypeId, visible: false, posX: 50, posY: 60 })).status, 200);
+  const updatedNodeResponse = await jsonRequest(roadmapUrl(path, `/nodos/${first.id}`), 'PATCH', { titulo: 'Primero actualizado', descripcion: 'Detalle', typeId: predefinedTypeId, visible: false, posX: 50, posY: 60 });
+  assert.equal(updatedNodeResponse.status, 200);
+  const updatedNode = (await updatedNodeResponse.json()).nodo;
+  assert.deepEqual(
+    {
+      titulo: updatedNode.titulo,
+      descripcion: updatedNode.descripcion,
+      typeId: updatedNode.typeId,
+      visible: updatedNode.visible,
+      posX: updatedNode.posX,
+      posY: updatedNode.posY,
+    },
+    { titulo: 'Primero actualizado', descripcion: 'Detalle', typeId: predefinedTypeId, visible: false, posX: 50, posY: 60 },
+  );
 
   const dependency = await jsonRequest(roadmapUrl(path, '/dependencias'), 'POST', { sourceNodeId: first.id, targetNodeId: second.id });
   assert.equal(dependency.status, 201);

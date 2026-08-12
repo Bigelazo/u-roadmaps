@@ -5,18 +5,17 @@
 @import 'reactflow/dist/style.css';
 
 :root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
+  --background: #f7f7f7;
+  --foreground: #1a1a1a;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Plus Jakarta Sans", Arial, sans-serif;
   overflow-x: hidden;
 }
 
-/* Custom React Flow overrides for high polish UI */
 .react-flow__node {
   border-radius: 8px;
   padding: 10px;
@@ -27,26 +26,38 @@ body {
 .react-flow__handle {
   width: 8px;
   height: 8px;
-  background-color: #3b82f6 !important;
+  background-color: #024ad8 !important;
   border: 2px solid #ffffff !important;
 }
 
 .react-flow__controls {
-  background-color: #1e293b !important;
-  border: 1px solid #334155 !important;
+  background-color: #ffffff !important;
+  border: 1px solid #c2c2c2 !important;
   border-radius: 8px !important;
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
 }
 
 .react-flow__controls-button {
-  border-bottom: 1px solid #334155 !important;
-  fill: #f1f5f9 !important;
+  border-bottom: 1px solid #e8e8e8 !important;
+  fill: #1a1a1a !important;
 }
 
 .react-flow__controls-button:hover {
-  background-color: #334155 !important;
+  background-color: #f7f7f7 !important;
 }
 
 .react-flow__background {
-  background-color: #0f172a;
+  background-color: #ffffff;
+}
+
+.roadmap-authoring button {
+  min-height: 44px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.roadmap-authoring input,
+.roadmap-authoring select,
+.roadmap-authoring textarea {
+  min-height: 44px;
 }

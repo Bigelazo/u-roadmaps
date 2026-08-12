@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Ramo {
+  codigo       String   @id @db.VarChar(20)
+  nombre       String   @db.VarChar(200)
+  departamento String   @db.VarChar(200)
+  cursos       Curso[]
+}
+
+model Curso {
+  id         String    @id @default(uuid()) @db.Uuid
+  ramoCodigo String    @db.VarChar(20)
+  anio       Int
+  semestre   Int
+  ramo       Ramo      @relation(fields: [ramoCodigo], references: [codigo], onDelete: Cascade)
+  roadmap    Roadmap?
+  usuarios   Participacion[]
+
+  @@unique([ramoCodigo, anio, semestre])
+  @@index([ramoCodigo])
+}
+
+model Roadmap {
+  id       String     @id @default(uuid()) @db.Uuid
+  cursoId  String     @unique @db.Uuid
+  curso    Curso      @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  tipos    TipoNodo[]
+  nodos    Nodo[]
+}
+
+model TipoNodo {
+  id                String   @id @default(uuid()) @db.Uuid
+  nombre            String   @db.VarChar(120)
+  nombreNormalizado String   @db.VarChar(120)
+  color             String   @db.VarChar(7)
+  predefinido       Boolean  @default(false)
+  roadmapId         String?  @db.Uuid
+  roadmap           Roadmap? @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  nodos             Nodo[]
+
+  @@unique([roadmapId, nombreNormalizado])
+  @@index([predefinido])
+}
+
+model Nodo {
+  id          String         @id @default(uuid()) @db.Uuid
+  roadmapId   String         @db.Uuid
+  tipoNodoId  String         @db.Uuid
+  titulo      String         @db.VarChar(240)
+  descripcion String?
+  posX        Float
+  posY        Float
+  visible     Boolean        @default(true)
+  roadmap     Roadmap        @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  tipoNodo    TipoNodo       @relation(fields: [tipoNodoId], references: [id], onDelete: Restrict)
+  dependenciasSalientes Dependencia[] @relation("DependenciasSalientes")
+  dependenciasEntrantes Dependencia[] @relation("DependenciasEntrantes")
+  recursos    Recurso[]
+  completaciones Completacion[]
+
+  @@index([roadmapId])
+  @@index([tipoNodoId])
+}
+
+model Dependencia {
+  id           String @id @default(uuid()) @db.Uuid
+  sourceNodeId String @db.Uuid
+  targetNodeId String @db.Uuid
+  sourceNode   Nodo   @relation("DependenciasSalientes", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode   Nodo   @relation("DependenciasEntrantes", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceNodeId, targetNodeId])
+  @@index([targetNodeId])
+}
+
+model Recurso {
+  id        String      @id @default(uuid()) @db.Uuid
+  nodoId    String      @db.Uuid
+  titulo    String      @db.VarChar(240)
+  url       String
+  tipo      TipoRecurso
+  nodo      Nodo        @relation(fields: [nodoId], references: [id], onDelete: Cascade)
+  creadoEn  DateTime    @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  @@index([nodoId])
+}
+
+model Usuario {
+  id             String           @id @default(uuid()) @db.Uuid
+  nombre         String           @db.VarChar(200)
+  correoInstitucional String      @unique @db.VarChar(320)
+  participaciones Participacion[]
+  completaciones  Completacion[]
+}
+
+model Participacion {
+  id        String              @id @default(uuid()) @db.Uuid
+  usuarioId String              @db.Uuid
+  cursoId   String              @db.Uuid
+  funcion   FuncionParticipacion
+  vigente   Boolean             @default(true)
+  usuario   Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  curso     Curso               @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, cursoId])
+  @@index([cursoId, funcion])
+}
+
+model Completacion {
+  id         String   @id @default(uuid()) @db.Uuid
+  usuarioId  String   @db.Uuid
+  nodoId     String   @db.Uuid
+  completadaEn DateTime @default(now())
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  nodo       Nodo     @relation(fields: [nodoId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, nodoId])
+  @@index([nodoId])
+}
+
+enum TipoRecurso {
+  ARCHIVO
+  ENLACE
+  VIDEO
+}
+
+enum FuncionParticipacion {
+  ESTUDIANTE
+  DOCENTE
+}

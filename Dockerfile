@@ -2,10 +2,10 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-COPY package.json ./
+COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies and generate the Prisma client.
+RUN npm ci
 
 COPY . .
 
@@ -14,4 +14,4 @@ EXPOSE 3000
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["npm", "run", "dev"]
+CMD ["sh", "-c", "npm run prisma:prepare && npm run dev"]

@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roadmap_user -d roadmap_db"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
 
   web:
     build: .
@@ -25,7 +30,10 @@ services:
       - .:/app
       - /app/node_modules
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    command: sh -c "npm run prisma:prepare && npm run dev"
 
 volumes:
   pgdata:
+    name: roadmap-pgdata-v2

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: roadmap_test_user
+      POSTGRES_PASSWORD: roadmap_test_password
+      POSTGRES_DB: roadmap_test_db
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roadmap_test_user -d roadmap_test_db"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
