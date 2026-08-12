@@ -127,26 +127,3 @@ ALTER TABLE "Participacion" ADD CONSTRAINT "Participacion_usuarioId_fkey" FOREIG
 ALTER TABLE "Participacion" ADD CONSTRAINT "Participacion_cursoId_fkey" FOREIGN KEY ("cursoId") REFERENCES "Curso"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "Completacion" ADD CONSTRAINT "Completacion_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "Usuario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "Completacion" ADD CONSTRAINT "Completacion_nodoId_fkey" FOREIGN KEY ("nodoId") REFERENCES "Nodo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-CREATE FUNCTION enforce_student_completion() RETURNS trigger AS $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM "Participacion" p
-        JOIN "Curso" c ON c."id" = p."cursoId"
-        JOIN "Roadmap" r ON r."cursoId" = c."id"
-        JOIN "Nodo" n ON n."roadmapId" = r."id"
-        WHERE p."usuarioId" = NEW."usuarioId"
-          AND p."funcion" = 'ESTUDIANTE'
-          AND p."vigente" = true
-          AND n."id" = NEW."nodoId"
-    ) THEN
-        RAISE EXCEPTION 'Completacion requires an active student participation for the node course';
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER "Completacion_student_check"
-BEFORE INSERT OR UPDATE ON "Completacion"
-FOR EACH ROW EXECUTE FUNCTION enforce_student_completion();

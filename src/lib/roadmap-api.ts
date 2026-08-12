@@ -287,7 +287,7 @@ export async function getRoadmapDto(path: CoursePath) {
 
 export async function createRoadmap(path: CoursePath, body: JsonObject) {
   const ramoBody = body.ramo && typeof body.ramo === 'object' && !Array.isArray(body.ramo) ? body.ramo as JsonObject : undefined;
-  const nombre = requireString(ramoBody?.nombre ?? body.nombreRamo ?? body.ramoNombre ?? body.nombre, 'nombreRamo', 200);
+  const nombre = requireString(ramoBody?.nombre ?? body.nombreRamo, 'nombreRamo', 200);
   const departamento = requireString(ramoBody?.departamento ?? body.departamento, 'departamento', 200);
 
   try {

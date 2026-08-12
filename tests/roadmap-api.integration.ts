@@ -101,6 +101,7 @@ test('manages nodes, dependencies, custom types, and resources', async () => {
     assert.equal(remainingResource.status, 201);
     remainingResourceIds.push((await remainingResource.json()).recurso.id);
   }
+  assert.equal((await jsonRequest(roadmapUrl(path, `/nodos/${first.id}/recursos`), 'POST', { titulo: 'Sin URL', tipo: 'ENLACE' })).status, 400);
   assert.equal((await jsonRequest(roadmapUrl(path, `/nodos/${first.id}/recursos`), 'POST', { titulo: 'Unsafe', url: 'javascript:alert(1)', tipo: 'ENLACE' })).status, 400);
   const updatedNodeResponse = await jsonRequest(roadmapUrl(path, `/nodos/${first.id}`), 'PATCH', { titulo: 'Primero actualizado', descripcion: 'Detalle', typeId: predefinedTypeId, visible: false, posX: 50, posY: 60 });
   assert.equal(updatedNodeResponse.status, 200);
