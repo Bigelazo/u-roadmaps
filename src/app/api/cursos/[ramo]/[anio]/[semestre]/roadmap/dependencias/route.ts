@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import {
   apiErrorResponse,
@@ -12,12 +12,15 @@ import {
   requireUuid,
   handlePrismaError,
 } from '@/lib/roadmap-api';
+import { requireCourseTeacher } from '@/lib/auth';
 
-type Context = { params: { ramo: string; anio: string; semestre: string } };
+type Context = { params: Promise<{ ramo: string; anio: string; semestre: string }> };
 
 export async function POST(request: Request, context: Context) {
   try {
-    const roadmap = await requireRoadmap(parseCoursePath(context.params));
+    const path = parseCoursePath(await context.params);
+    await requireCourseTeacher(path);
+    const roadmap = await requireRoadmap(path);
     const body = await parseJson(request);
     const sourceNodeId = requireUuid(body.sourceNodeId, 'sourceNodeId');
     const targetNodeId = requireUuid(body.targetNodeId, 'targetNodeId');
@@ -26,23 +29,40 @@ export async function POST(request: Request, context: Context) {
     }
     await requireNodeInRoadmap(sourceNodeId, roadmap.id);
     await requireNodeInRoadmap(targetNodeId, roadmap.id);
-    const dependency = await prisma.$transaction(async (transaction) => {
-      const dependencies = await transaction.dependencia.findMany({
-        where: { sourceNode: { roadmapId: roadmap.id } },
-        select: { sourceNodeId: true, targetNodeId: true },
-      });
-      if (dependencies.some((dependency) => dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId)) {
-        throw new ApiError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
-      }
-      if (findCycle(dependencies, sourceNodeId, targetNodeId)) {
-        throw new ApiError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
-      }
-      return transaction.dependencia.create({ data: { sourceNodeId, targetNodeId } });
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    return NextResponse.json({ dependencia: { id: dependency.id, sourceNodeId, targetNodeId } }, { status: 201 });
+    const dependency = await prisma.$transaction(
+      async (transaction) => {
+        const dependencies = await transaction.dependencia.findMany({
+          where: { sourceNode: { roadmapId: roadmap.id } },
+          select: { sourceNodeId: true, targetNodeId: true },
+        });
+        if (
+          dependencies.some(
+            (dependency) =>
+              dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId,
+          )
+        ) {
+          throw new ApiError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
+        }
+        if (findCycle(dependencies, sourceNodeId, targetNodeId)) {
+          throw new ApiError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
+        }
+        return transaction.dependencia.create({ data: { sourceNodeId, targetNodeId } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    return NextResponse.json(
+      { dependencia: { id: dependency.id, sourceNodeId, targetNodeId } },
+      { status: 201 },
+    );
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-      return apiErrorResponse(new ApiError(409, 'DEPENDENCY_CONFLICT', 'La dependencia entra en conflicto con otra modificación.'));
+      return apiErrorResponse(
+        new ApiError(
+          409,
+          'DEPENDENCY_CONFLICT',
+          'La dependencia entra en conflicto con otra modificación.',
+        ),
+      );
     }
     try {
       handlePrismaError(error);
