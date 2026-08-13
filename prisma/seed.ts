@@ -1,6 +1,13 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../src/generated/prisma/client';
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error('DATABASE_URL must be set to seed the database.');
+}
+
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const predefinedTypes = [
   { id: '00000000-0000-4000-8000-000000000001', nombre: 'Contenido', color: '#024AD8' },

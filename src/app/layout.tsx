@@ -6,16 +6,10 @@ export const metadata: Metadata = {
   description: 'Visualizador y gestor de rutas pedagógicas y asignaturas universitarias.',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className="antialiased">
-        {children}
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
