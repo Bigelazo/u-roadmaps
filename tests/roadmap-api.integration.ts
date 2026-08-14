@@ -619,6 +619,13 @@ serialTest('login page exposes the configured institutional redirect', async () 
   const body = await response.text();
   assert.match(body, /Autenticarse con U-Pasaporte \/ VTI/);
   assert.match(body, /vti\.example\.test/);
+
+  const errorResponse = await fetch(`${baseUrl}/auth/signin?error=Authentication`);
+  assert.equal(errorResponse.status, 200);
+  assert.match(
+    await errorResponse.text(),
+    /No fue posible completar la autenticación institucional/,
+  );
 });
 
 serialTest(

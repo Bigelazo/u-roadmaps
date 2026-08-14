@@ -29,7 +29,7 @@ function isHttps(request: Request) {
   return configuredUrl
     ? configuredUrl.startsWith('https://')
     : request.headers.get('x-forwarded-proto') === 'https' ||
-    new URL(request.url).protocol === 'https:';
+        new URL(request.url).protocol === 'https:';
 }
 
 const sessionMaxAge = 30 * 24 * 60 * 60;
@@ -116,6 +116,7 @@ export async function GET(request: Request) {
       token: {
         sub: user.id,
         ...(preferredUsername ? { preferred_username: preferredUsername } : {}),
+        vtiClaims: payload,
       },
       secret,
       maxAge: sessionMaxAge,

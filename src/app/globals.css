@@ -1,4 +1,3 @@
-@import 'tailwindcss';
 @import 'reactflow/dist/style.css';
 
 :root {
@@ -7,8 +6,6 @@
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
   font-family: 'Plus Jakarta Sans', Arial, sans-serif;
   overflow-x: hidden;
 }
@@ -31,7 +28,7 @@ body {
   background-color: #ffffff !important;
   border: 1px solid #c2c2c2 !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+  box-shadow: 0 2px 8px rgb(26 26 26 / 8%) !important;
 }
 
 .react-flow__controls-button {
@@ -45,16 +42,4 @@ body {
 
 .react-flow__background {
   background-color: #ffffff;
-}
-
-.roadmap-authoring button {
-  min-height: 44px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.roadmap-authoring input,
-.roadmap-authoring select,
-.roadmap-authoring textarea {
-  min-height: 44px;
 }

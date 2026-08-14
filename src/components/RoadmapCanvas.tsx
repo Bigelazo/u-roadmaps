@@ -18,6 +18,23 @@ import 'reactflow/dist/style.css';
 import { roadmapUrl, type RoadmapDto, type RoadmapNode } from '@/lib/roadmap-types';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
 import Link from 'next/link';
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  Link as MuiLink,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 
 type ApiErrorBody = { error?: { code?: string; message?: string } };
 
@@ -349,254 +366,318 @@ export default function RoadmapCanvas({ identifier, canEdit = false }: Props) {
 
   if (error && !dto)
     return (
-      <div className="rounded-2xl border border-[#f9d4d2] bg-white p-8 text-[#b3262b]">
+      <Alert severity="error">
         {error}
         {error === 'Debes iniciar sesión para continuar.' && (
-          <Link href="/auth/signin" className="mt-4 block font-medium text-[#024ad8]">
+          <MuiLink component={Link} href="/auth/signin" sx={{ display: 'block', mt: 1 }}>
             Autenticarse
-          </Link>
+          </MuiLink>
         )}
-      </div>
+      </Alert>
     );
-  if (!dto)
-    return (
-      <div className="rounded-2xl border border-[#e8e8e8] bg-white p-8 text-[#636363]">
-        Cargando roadmap...
-      </div>
-    );
+  if (!dto) return <Paper sx={{ p: 4, color: 'text.secondary' }}>Cargando roadmap...</Paper>;
 
   const selectedNode = dto.nodes.find((node) => node.id === selectedNodeId);
   return (
-    <div
-      className={`grid min-h-[70vh] grid-cols-1 overflow-hidden rounded-2xl border border-[#e8e8e8] bg-white shadow-[0_2px_8px_rgba(26,26,26,0.08)]${canEdit ? ' lg:grid-cols-[280px_1fr]' : ''}`}
+    <Paper
+      variant="outlined"
+      sx={{
+        minHeight: '70vh',
+        overflow: 'hidden',
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', lg: canEdit ? '280px 1fr' : '1fr' },
+        boxShadow: '0 2px 8px rgba(26, 26, 26, 0.08)',
+      }}
     >
       {canEdit && (
-        <>
-          <aside className="roadmap-authoring space-y-6 border-b border-[#e8e8e8] bg-[#f7f7f7] p-6 lg:border-b-0 lg:border-r">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#024ad8]">
+        <Box
+          component="aside"
+          sx={{
+            p: 3,
+            bgcolor: 'background.default',
+            borderBottom: { xs: 1, lg: 0 },
+            borderRight: { lg: 1 },
+            borderColor: 'divider',
+          }}
+        >
+          <Stack spacing={2.5}>
+            <Box>
+              <Typography
+                variant="overline"
+                color="primary"
+                sx={{ fontWeight: 700, letterSpacing: '0.14em' }}
+              >
                 Autoría
-              </p>
-              <h2 className="mt-2 text-xl font-medium text-[#1a1a1a]">Gestionar roadmap</h2>
-            </div>
+              </Typography>
+              <Typography variant="h6" sx={{ mt: 0.5 }}>
+                Gestionar roadmap
+              </Typography>
+            </Box>
             {error && (
-              <p className="rounded-lg border border-[#f9d4d2] bg-white p-3 text-sm text-[#b3262b]">
+              <Alert severity="error">
                 {error}
                 {error === 'Debes iniciar sesión para continuar.' && (
-                  <Link href="/auth/signin" className="mt-2 block font-medium text-[#024ad8]">
+                  <MuiLink component={Link} href="/auth/signin" sx={{ display: 'block', mt: 1 }}>
                     Autenticarse
-                  </Link>
+                  </MuiLink>
                 )}
-              </p>
+              </Alert>
             )}
-            <form onSubmit={addNode} className="space-y-3">
-              <label className="block text-sm font-medium text-[#1a1a1a]">
-                Nuevo nodo
-                <input
-                  value={newTitle}
-                  onChange={(event) => setNewTitle(event.target.value)}
-                  placeholder="Título"
-                  className="mt-1 w-full rounded border border-[#c2c2c2] bg-white px-3 py-2"
-                />
-              </label>
-              <textarea
+            <Stack component="form" onSubmit={addNode} spacing={1.5}>
+              <Typography variant="subtitle2">Nuevo nodo</Typography>
+              <TextField
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+                label="Título"
+                required
+              />
+              <TextField
                 value={newDescription}
                 onChange={(event) => setNewDescription(event.target.value)}
-                placeholder="Descripción opcional"
-                className="w-full rounded border border-[#c2c2c2] bg-white px-3 py-2"
+                label="Descripción opcional"
+                multiline
+                minRows={2}
               />
-              <select
-                value={newTypeId}
-                onChange={(event) => setNewTypeId(event.target.value)}
-                className="w-full rounded border border-[#c2c2c2] bg-white px-3 py-2"
-              >
-                {dto.nodeTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.name}
-                  </option>
-                ))}
-              </select>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={newVisible}
-                  onChange={(event) => setNewVisible(event.target.checked)}
-                />{' '}
-                Visible para estudiantes
-              </label>
-              <button className="w-full rounded bg-[#024ad8] px-4 py-3 text-sm font-semibold uppercase tracking-[0.04em] text-white">
+              <FormControl size="small" fullWidth>
+                <InputLabel id="new-node-type-label">Tipo</InputLabel>
+                <Select
+                  labelId="new-node-type-label"
+                  label="Tipo"
+                  value={newTypeId}
+                  onChange={(event) => setNewTypeId(event.target.value)}
+                >
+                  {dto.nodeTypes.map((type) => (
+                    <MenuItem key={type.id} value={type.id}>
+                      {type.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={newVisible}
+                    onChange={(event) => setNewVisible(event.target.checked)}
+                  />
+                }
+                label="Visible para estudiantes"
+              />
+              <Button type="submit" variant="contained" fullWidth>
                 Agregar nodo
-              </button>
-            </form>
-            <form onSubmit={addType} className="space-y-3 border-t border-[#e8e8e8] pt-5">
-              <label className="block text-sm font-medium text-[#1a1a1a]">
-                Tipo personalizado
-                <input
-                  value={newTypeName}
-                  onChange={(event) => setNewTypeName(event.target.value)}
-                  placeholder="Nombre"
-                  className="mt-1 w-full rounded border border-[#c2c2c2] bg-white px-3 py-2"
-                />
-              </label>
-              <input
+              </Button>
+            </Stack>
+            <Divider />
+            <Stack component="form" onSubmit={addType} spacing={1.5}>
+              <Typography variant="subtitle2">Tipo personalizado</Typography>
+              <TextField
+                value={newTypeName}
+                onChange={(event) => setNewTypeName(event.target.value)}
+                label="Nombre"
+                required
+              />
+              <TextField
                 type="color"
                 value={newTypeColor}
                 onChange={(event) => setNewTypeColor(event.target.value)}
-                className="h-10 w-full"
-                aria-label="Color del tipo"
+                label="Color del tipo"
+                slotProps={{ inputLabel: { shrink: true } }}
               />
-              <button className="w-full rounded border border-[#024ad8] bg-white px-4 py-3 text-sm font-semibold uppercase tracking-[0.04em] text-[#024ad8]">
+              <Button type="submit" variant="outlined" fullWidth>
                 Crear tipo
-              </button>
-            </form>
-            <ul className="space-y-2 border-t border-[#e8e8e8] pt-5 text-xs">
+              </Button>
+            </Stack>
+            <Divider />
+            <Stack component="ul" spacing={1} sx={{ p: 0, m: 0, listStyle: 'none' }}>
               {dto.nodeTypes
                 .filter((type) => !type.isPredefined)
                 .map((type) => (
-                  <li key={type.id} className="flex items-center justify-between gap-2">
-                    <span>{type.name}</span>
-                    <span className="flex gap-1">
-                      <button
-                        onClick={() => void editType(type.id, type.name, type.color)}
-                        className="rounded border border-[#c2c2c2] px-2 py-1"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => void deleteType(type.id)}
-                        className="rounded border border-[#b3262b] px-2 py-1 text-[#b3262b]"
-                      >
-                        Eliminar
-                      </button>
-                    </span>
-                  </li>
+                  <Box
+                    component="li"
+                    key={type.id}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                  >
+                    <Typography variant="caption" sx={{ flexGrow: 1 }}>
+                      {type.name}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void editType(type.id, type.name, type.color)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      onClick={() => void deleteType(type.id)}
+                    >
+                      Eliminar
+                    </Button>
+                  </Box>
                 ))}
-            </ul>
-            <ul className="space-y-2 border-t border-[#e8e8e8] pt-5 text-xs">
-              <li className="font-medium text-[#1a1a1a]">Nodos del roadmap</li>
+            </Stack>
+            <Divider />
+            <Stack component="ul" spacing={1} sx={{ p: 0, m: 0, listStyle: 'none' }}>
+              <Typography component="li" variant="subtitle2">
+                Nodos del roadmap
+              </Typography>
               {dto.nodes.map((node) => (
-                <li key={node.id} className="flex items-center justify-between gap-2">
-                  <span className={node.isVisible ? '' : 'text-[#636363]'}>
+                <Box
+                  component="li"
+                  key={node.id}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                >
+                  <Typography
+                    variant="caption"
+                    color={node.isVisible ? 'text.primary' : 'text.secondary'}
+                    sx={{ flexGrow: 1 }}
+                  >
                     {node.title}
                     {node.isVisible ? '' : ' (oculto)'}
-                  </span>
-                  <button
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="inherit"
                     onClick={() => selectNode(node.id)}
-                    className="rounded border border-[#1a1a1a] px-2 py-1"
                   >
                     Seleccionar
-                  </button>
-                </li>
+                  </Button>
+                </Box>
               ))}
-            </ul>
+            </Stack>
             {selectedNode && (
-              <div className="border-t border-[#e8e8e8] pt-5">
-                <form onSubmit={updateNode} className="space-y-2">
-                  <input
-                    value={editTitle}
-                    onChange={(event) => setEditTitle(event.target.value)}
-                    className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
-                    aria-label="Título del nodo"
-                  />
-                  <textarea
-                    value={editDescription}
-                    onChange={(event) => setEditDescription(event.target.value)}
-                    placeholder="Descripción opcional"
-                    className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
-                  />
-                  <select
-                    value={editTypeId}
-                    onChange={(event) => setEditTypeId(event.target.value)}
-                    className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
-                  >
-                    {dto.nodeTypes.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="w-full rounded border border-[#1a1a1a] px-3 py-2 text-xs">
-                    Guardar nodo
-                  </button>
-                </form>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={() => void toggleVisibility()}
-                    className="rounded border border-[#1a1a1a] px-3 py-2 text-xs"
-                  >
-                    {selectedNode.isVisible ? 'Ocultar' : 'Mostrar'}
-                  </button>
-                  <button
-                    onClick={() => void deleteNode()}
-                    className="rounded bg-[#b3262b] px-3 py-2 text-xs text-white"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-                <form onSubmit={addResource} className="mt-4 space-y-2">
-                  <input
-                    value={newResourceTitle}
-                    onChange={(event) => setNewResourceTitle(event.target.value)}
-                    placeholder="Título del recurso"
-                    className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
-                  />
-                  <input
-                    value={newResourceUrl}
-                    onChange={(event) => setNewResourceUrl(event.target.value)}
-                    placeholder="https://..."
-                    className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
-                  />
-                  <select
-                    value={newResourceType}
-                    onChange={(event) =>
-                      setNewResourceType(event.target.value as 'FILE' | 'LINK' | 'VIDEO')
-                    }
-                    className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
-                  >
-                    <option value="FILE">Archivo</option>
-                    <option value="LINK">Enlace</option>
-                    <option value="VIDEO">Video</option>
-                  </select>
-                  <button className="w-full rounded border border-[#1a1a1a] px-3 py-2 text-xs">
-                    Agregar recurso
-                  </button>
-                </form>
-                <ul className="mt-3 space-y-2 text-xs text-[#636363]">
-                  {selectedNode.resources.map((resource) => (
-                    <li key={resource.id} className="flex items-center justify-between gap-2">
-                      <a
-                        href={resource.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[#024ad8]"
+              <>
+                <Divider />
+                <Stack component="section" spacing={1.5}>
+                  <Stack component="form" onSubmit={updateNode} spacing={1.5}>
+                    <TextField
+                      value={editTitle}
+                      onChange={(event) => setEditTitle(event.target.value)}
+                      label="Título del nodo"
+                      required
+                    />
+                    <TextField
+                      value={editDescription}
+                      onChange={(event) => setEditDescription(event.target.value)}
+                      label="Descripción opcional"
+                      multiline
+                      minRows={2}
+                    />
+                    <FormControl size="small" fullWidth>
+                      <InputLabel id="edit-node-type-label">Tipo</InputLabel>
+                      <Select
+                        labelId="edit-node-type-label"
+                        label="Tipo"
+                        value={editTypeId}
+                        onChange={(event) => setEditTypeId(event.target.value)}
                       >
-                        {resource.title}
-                      </a>
-                      <span className="flex gap-1">
-                        <button
+                        {dto.nodeTypes.map((type) => (
+                          <MenuItem key={type.id} value={type.id}>
+                            {type.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <Button type="submit" variant="outlined" color="inherit" fullWidth>
+                      Guardar nodo
+                    </Button>
+                  </Stack>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      color="inherit"
+                      onClick={() => void toggleVisibility()}
+                    >
+                      {selectedNode.isVisible ? 'Ocultar' : 'Mostrar'}
+                    </Button>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      color="error"
+                      onClick={() => void deleteNode()}
+                    >
+                      Eliminar
+                    </Button>
+                  </Stack>
+                  <Stack component="form" onSubmit={addResource} spacing={1.5} sx={{ pt: 1 }}>
+                    <TextField
+                      value={newResourceTitle}
+                      onChange={(event) => setNewResourceTitle(event.target.value)}
+                      label="Título del recurso"
+                      required
+                    />
+                    <TextField
+                      value={newResourceUrl}
+                      onChange={(event) => setNewResourceUrl(event.target.value)}
+                      label="URL del recurso"
+                      placeholder="https://..."
+                      required
+                    />
+                    <FormControl size="small" fullWidth>
+                      <InputLabel id="resource-type-label">Tipo</InputLabel>
+                      <Select
+                        labelId="resource-type-label"
+                        label="Tipo"
+                        value={newResourceType}
+                        onChange={(event) =>
+                          setNewResourceType(event.target.value as 'FILE' | 'LINK' | 'VIDEO')
+                        }
+                      >
+                        <MenuItem value="FILE">Archivo</MenuItem>
+                        <MenuItem value="LINK">Enlace</MenuItem>
+                        <MenuItem value="VIDEO">Video</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <Button type="submit" variant="outlined" color="inherit" fullWidth>
+                      Agregar recurso
+                    </Button>
+                  </Stack>
+                  <Stack component="ul" spacing={1} sx={{ p: 0, m: 0, listStyle: 'none' }}>
+                    {selectedNode.resources.map((resource) => (
+                      <Box
+                        component="li"
+                        key={resource.id}
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
+                        <MuiLink
+                          href={resource.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          variant="caption"
+                          sx={{ flexGrow: 1 }}
+                        >
+                          {resource.title}
+                        </MuiLink>
+                        <Button
+                          size="small"
+                          variant="outlined"
                           onClick={() =>
                             void editResource(resource.id, resource.title, resource.url)
                           }
-                          className="rounded border border-[#c2c2c2] px-2 py-1"
                         >
                           Editar
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
                           onClick={() => void deleteResource(resource.id)}
-                          className="rounded border border-[#b3262b] px-2 py-1 text-[#b3262b]"
                         >
                           Eliminar
-                        </button>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                        </Button>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Stack>
+              </>
             )}
-          </aside>
-        </>
+          </Stack>
+        </Box>
       )}
-      <div className="min-h-[70vh]">
+      <Box sx={{ minHeight: '70vh' }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -634,7 +715,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false }: Props) {
           <MiniMap />
           <Background color="#e8e8e8" gap={16} size={1} />
         </ReactFlow>
-      </div>
-    </div>
+      </Box>
+    </Paper>
   );
 }

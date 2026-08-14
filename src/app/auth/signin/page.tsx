@@ -1,49 +1,57 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getApplicationSession } from '@/lib/auth';
+import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
 
-type Props = { searchParams: { error?: string } };
+type Props = { searchParams: Promise<{ error?: string }> };
 
 export default async function SignInPage({ searchParams }: Props) {
   if (await getApplicationSession()) redirect('/');
   const loginUrl = process.env.NEXT_PUBLIC_VTI_LOGIN_URL;
-  const error = searchParams.error
+  const { error: authenticationError } = await searchParams;
+  const error = authenticationError
     ? 'No fue posible completar la autenticación institucional. Inténtalo nuevamente.'
     : null;
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#f7f7f7] px-4 py-12 text-[#1a1a1a]">
-      <section className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-[0_2px_8px_rgba(26,26,26,0.08)] sm:p-12">
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#024ad8]">
-          U-roadmaps
-        </p>
-        <h1 className="mt-4 text-3xl font-medium tracking-tight">Acceso institucional</h1>
-        <p className="mt-4 text-base leading-relaxed text-[#636363]">
-          Ingresa con tu identidad de Universidad de Chile mediante U-Pasaporte / VTI.
-        </p>
-        {error && (
-          <p
-            role="alert"
-            className="mt-6 rounded-lg border border-[#f9d4d2] bg-[#fff7f7] p-4 text-sm text-[#b3262b]"
+    <Box
+      component="main"
+      sx={{ minHeight: '100vh', display: 'grid', alignItems: 'center', px: 2, py: 6 }}
+    >
+      <Paper
+        component="section"
+        elevation={0}
+        sx={{
+          width: '100%',
+          maxWidth: 512,
+          mx: 'auto',
+          p: { xs: 4, sm: 6 },
+          boxShadow: '0 2px 8px rgba(26, 26, 26, 0.08)',
+        }}
+      >
+        <Stack spacing={3}>
+          <Typography
+            variant="overline"
+            color="primary"
+            sx={{ fontWeight: 600, letterSpacing: '0.16em' }}
           >
-            {error}
-          </p>
-        )}
-        {loginUrl ? (
-          <a
-            href={loginUrl}
-            className="mt-8 flex min-h-11 items-center justify-center rounded bg-[#024ad8] px-6 py-3 text-center text-sm font-semibold uppercase tracking-[0.04em] text-white transition hover:bg-[#0e3191]"
-          >
-            Autenticarse con U-Pasaporte / VTI
-          </a>
-        ) : (
-          <p className="mt-8 rounded-lg border border-[#f9d4d2] bg-[#fff7f7] p-4 text-sm text-[#b3262b]">
-            El acceso institucional no está configurado.
-          </p>
-        )}
-        <Link href="/" className="mt-6 block text-center text-sm font-medium text-[#024ad8]">
-          Volver al inicio
-        </Link>
-      </section>
-    </main>
+            U-roadmaps
+          </Typography>
+          <Typography variant="h3">Acceso institucional</Typography>
+          <Typography color="text.secondary">
+            Ingresa con tu identidad de Universidad de Chile mediante U-Pasaporte / VTI.
+          </Typography>
+          {error && <Alert severity="error">{error}</Alert>}
+          {loginUrl ? (
+            <Button component="a" href={loginUrl} variant="contained" fullWidth>
+              Autenticarse con U-Pasaporte / VTI
+            </Button>
+          ) : (
+            <Alert severity="error">El acceso institucional no está configurado.</Alert>
+          )}
+          <Button href="/" variant="text">
+            Volver al inicio
+          </Button>
+        </Stack>
+      </Paper>
+    </Box>
   );
 }
