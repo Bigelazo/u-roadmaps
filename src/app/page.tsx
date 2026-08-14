@@ -35,8 +35,8 @@ export default async function Home() {
               Rutas de aprendizaje para cursos universitarios
             </h2>
             <p className="text-lg leading-relaxed text-[#c2c2c2]">
-              Los roadmaps se identifican por ramo y período académico. La integración con U-Cursos
-              materializará aquí los cursos que necesiten una ruta.
+              Los roadmaps se identifican por ramo y período académico. La integración con U-Campus
+              mediante Mufasa materializará aquí los cursos que necesiten una ruta.
             </p>
           </div>
         </section>
