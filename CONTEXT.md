@@ -1,65 +1,69 @@
-# Roadmaps de aprendizaje
+# Learning Roadmaps (Roadmaps de aprendizaje)
 
-Este contexto describe las rutas de aprendizaje de asignaturas universitarias y el avance de sus participantes.
+This context describes the learning paths of university course offerings and their participants' progress.
 
-## Language
+## Language (Lenguaje)
 
-**Ramo**:
-Una asignatura estable del catálogo académico, identificada globalmente por su código e independiente de cuándo o cuántas veces se imparta.
-_Avoid_: Curso, asignatura impartida
+**Course (Ramo)**:
+A stable academic-catalog subject, globally identified by its code and independent of when or how often it is offered.
+_Avoid_: Course offering, subject instance
 
-**Curso**:
-La única impartición de un ramo durante un período académico determinado. Su identidad y existencia dependen del ramo impartido.
-_Avoid_: Ramo, asignatura del catálogo
+**Course offering (Curso)**:
+The unique instance of a course taught in a particular academic term. Its identity and existence depend on the course it offers.
+_Avoid_: Course, catalog subject
 
-**Período académico**:
-El par formado por un año calendario y un número de semestre que ubica temporalmente un curso.
-_Avoid_: Versión, temporada
+**Academic term (Período académico)**:
+The calendar year and semester number that place a course offering in time.
+_Avoid_: Version, season
 
-**Roadmap**:
-La ruta de aprendizaje opcional y única de un curso, formada por nodos y sus dependencias. Puede crearse vacía o copiando la estructura y los recursos de otro roadmap con identidades nuevas, nunca sus participantes ni completaciones.
-_Avoid_: Malla curricular, versión del curso
+**Roadmap (Roadmap)**:
+The optional, unique learning path of a course offering, composed of nodes and their dependencies. It can be empty or copied with fresh identities, excluding participants and completions.
+_Avoid_: Curriculum, course version
 
-**Usuario**:
-Una persona identificada internamente en la plataforma mediante un correo institucional único e inmutable, que puede participar en distintos cursos.
-_Avoid_: Estudiante, docente
+**User (Usuario)**:
+A person identified internally by a unique, immutable institutional email address who can participate in multiple course offerings.
+_Avoid_: Student, teacher
 
-**Participación**:
-La pertenencia histórica de un usuario a un curso, materializada en su primer acceso, junto con su única función de estudiante o docente y su vigencia según U-Cursos. Perder vigencia revoca el acceso sin eliminar completaciones.
-_Avoid_: Rol de usuario, cuenta
+**Participation (Participación)**:
+A user's historical membership in a course offering, materialized at first access, with exactly one student or teacher role and an active state determined by U-Cursos. Losing active status revokes access without deleting completions.
+_Avoid_: User role, account
 
-**U-Cursos**:
-La fuente institucional de ramos, cursos y sus participantes. U-roadmaps materializa localmente esos datos cuando un docente crea o copia un roadmap.
-_Avoid_: Base local, administrador de roadmaps
+**Participation role (Rol de participación)**:
+The student or teacher role held by a participation in one course offering.
+_Avoid_: Function, global user role
 
-**Nodo**:
-Un elemento de un roadmap que almacena información pedagógica, posee exactamente un tipo y puede estar visible u oculto para estudiantes. Su eliminación confirmada también elimina sus dependencias, recursos y completaciones.
-_Avoid_: Unidad de aprendizaje
+**U-Cursos (U-Cursos)**:
+The institutional source of courses, course offerings, and their participants. U-roadmaps materializes that data locally when a teacher creates or copies a roadmap.
+_Avoid_: Local database, roadmap administrator
 
-**Tipo de nodo**:
-La categoría con nombre y color hexadecimal que expresa qué clase de información pedagógica representa un nodo, como una unidad de aprendizaje o una evaluación. Puede ser un tipo predefinido o uno personalizado para un roadmap.
-_Avoid_: Tipo visual, estilo
+**Node (Nodo)**:
+An element of a roadmap that holds pedagogical information, has exactly one node type, and can be visible or hidden from students. Confirmed deletion also removes its dependencies, resources, and completions.
+_Avoid_: Learning unit
 
-**Tipo predefinido**:
-Un tipo de nodo inmutable ofrecido por la plataforma como base común para todos los roadmaps. El conjunto inicial incluye Contenido, Evaluación y Material extra.
-_Avoid_: Tipo personalizado, plantilla editable
+**Node type (Tipo de nodo)**:
+A named, hexadecimal-color category that expresses the kind of pedagogical information represented by a node, such as learning content or an assessment. It can be predefined or customized for a roadmap.
+_Avoid_: Visual type, style
 
-**Tipo personalizado**:
-Un tipo de nodo definido y editable dentro de un roadmap; se copia cuando ese roadmap origina el de otro curso.
-_Avoid_: Tipo global, tipo del docente
+**Predefined node type (Tipo de nodo predefinido)**:
+An immutable node type offered by the platform as a shared base for every roadmap. The initial set includes Content, Assessment, and Supplementary material.
+_Avoid_: Custom node type, editable template
 
-**Material extra**:
-Un posible tipo de nodo para contenido que permite profundizar más allá de la materia principal.
-_Avoid_: Capa de profundización, visibilidad
+**Custom node type (Tipo de nodo personalizado)**:
+A node type defined and editable within a roadmap; it is copied when that roadmap originates one for another course offering.
+_Avoid_: Global node type, teacher node type
 
-**Dependencia**:
-Una relación dirigida y única entre dos nodos distintos del mismo roadmap en la que el nodo de origen es prerrequisito pedagógico del nodo de destino. Las dependencias no pueden formar ciclos.
-_Avoid_: Enlace, conexión visual
+**Supplementary material (Material extra)**:
+A possible node type for content that supports study beyond the core subject matter.
+_Avoid_: Enrichment layer, visibility
 
-**Completación**:
-El hecho fechado de que un estudiante participante completó un nodo del roadmap de su curso. Solo los prerrequisitos visibles vigentes deben estar completos; el estudiante no puede revertirlo y los cambios posteriores al roadmap no lo invalidan, aunque desaparece si el docente elimina el nodo. Su ausencia significa que el nodo está pendiente.
-_Avoid_: Estado de progreso, progreso mutable
+**Dependency (Dependencia)**:
+A unique, directed relationship between distinct nodes in the same roadmap where the source node is a pedagogical prerequisite of the target node. Dependencies cannot form cycles.
+_Avoid_: Link, visual connection
 
-**Recurso**:
-Una referencia obligatoria mediante URL, con título y tipo de archivo, enlace o video, a material pedagógico almacenado fuera de la base de datos y vinculada a un único nodo.
-_Avoid_: Archivo, material global
+**Completion (Completación)**:
+The dated fact that a participating student completed a node in their course offering's roadmap. Only current visible prerequisites must be complete; a student cannot reverse it, and later roadmap changes do not invalidate it, though it disappears if a teacher deletes the node. Its absence means the node is pending.
+_Avoid_: Progress state, mutable progress
+
+**Resource (Recurso)**:
+A URL reference with a title and file, link, or video type to pedagogical material stored outside the database and attached to one node.
+_Avoid_: File, global material
