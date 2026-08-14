@@ -1,7 +1,10 @@
 node_modules
 .next
+src/generated
 .git
 .env
+.env.*
+coverage
 *.log
 Informe Memoria.pdf
 .DS_Store
