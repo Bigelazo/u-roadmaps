@@ -15,27 +15,23 @@ import ReactFlow, {
   type NodeDragHandler,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import {
-  roadmapUrl,
-  type CourseRoute,
-  type RoadmapDto,
-  type RoadmapNode,
-} from '@/lib/roadmap-types';
+import { roadmapUrl, type RoadmapDto, type RoadmapNode } from '@/lib/roadmap-types';
+import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
 import Link from 'next/link';
 
 type ApiErrorBody = { error?: { code?: string; message?: string } };
 
-type Props = { route: CourseRoute; canEdit?: boolean };
+type Props = { identifier: CourseOfferingIdentifier; canEdit?: boolean };
 
 function toFlowNodes(nodes: RoadmapNode[], colors: Map<string, string>): Node[] {
   return nodes.map((node) => ({
     id: node.id,
-    data: { label: node.titulo },
-    position: { x: node.posX, y: node.posY },
-    hidden: !node.visible,
+    data: { label: node.title },
+    position: { x: node.positionX, y: node.positionY },
+    hidden: !node.isVisible,
     deletable: false,
     style: {
-      background: colors.get(node.typeId) ?? '#ffffff',
+      background: colors.get(node.nodeTypeId) ?? '#ffffff',
       color: '#1a1a1a',
       border: '1px solid #c2c2c2',
       borderRadius: 8,
@@ -45,14 +41,14 @@ function toFlowNodes(nodes: RoadmapNode[], colors: Map<string, string>): Node[] 
 }
 
 function toFlowEdges(dto: RoadmapDto): Edge[] {
-  return dto.dependencias.map((dependency) => ({
+  return dto.dependencies.map((dependency) => ({
     id: dependency.id,
     source: dependency.sourceNodeId,
     target: dependency.targetNodeId,
   }));
 }
 
-export default function RoadmapCanvas({ route, canEdit = false }: Props) {
+export default function RoadmapCanvas({ identifier, canEdit = false }: Props) {
   const [dto, setDto] = useState<RoadmapDto | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -65,16 +61,16 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
   const [newTypeColor, setNewTypeColor] = useState('#024AD8');
   const [newResourceTitle, setNewResourceTitle] = useState('');
   const [newResourceUrl, setNewResourceUrl] = useState('');
-  const [newResourceType, setNewResourceType] = useState<'ARCHIVO' | 'ENLACE' | 'VIDEO'>('ENLACE');
+  const [newResourceType, setNewResourceType] = useState<'FILE' | 'LINK' | 'VIDEO'>('LINK');
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editTypeId, setEditTypeId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    const response = await fetch(roadmapUrl(route));
+    const response = await fetch(roadmapUrl(identifier));
     const body = (await response.json()) as RoadmapDto | ApiErrorBody;
-    if (!response.ok || !('nodos' in body)) {
+    if (!response.ok || !('nodes' in body)) {
       const apiError = 'error' in body ? body.error : undefined;
       setError(
         apiError?.code === 'ROADMAP_NOT_FOUND'
@@ -84,11 +80,11 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
       setDto(null);
       return;
     }
-    const colors = new Map(body.tipos.map((type) => [type.id, type.color]));
+    const colors = new Map(body.nodeTypes.map((type) => [type.id, type.color]));
     setDto(body);
-    setNodes(toFlowNodes(body.nodos, colors));
+    setNodes(toFlowNodes(body.nodes, colors));
     setEdges(toFlowEdges(body));
-    setNewTypeId(body.tipos[0]?.id ?? '');
+    setNewTypeId(body.nodeTypes[0]?.id ?? '');
     setError(null);
   }
 
@@ -97,7 +93,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route.ramo, route.anio, route.semestre]);
+  }, [identifier.courseCode, identifier.year, identifier.semester]);
 
   async function mutate(url: string, init: RequestInit) {
     const response = await fetch(url, {
@@ -114,15 +110,15 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
     event.preventDefault();
     if (!newTitle.trim() || !newTypeId) return;
     try {
-      await mutate(roadmapUrl(route, '/nodos'), {
+      await mutate(roadmapUrl(identifier, '/nodes'), {
         method: 'POST',
         body: JSON.stringify({
-          titulo: newTitle,
-          descripcion: newDescription || null,
-          typeId: newTypeId,
-          posX: 120,
-          posY: 120,
-          visible: newVisible,
+          title: newTitle,
+          description: newDescription || null,
+          nodeTypeId: newTypeId,
+          positionX: 120,
+          positionY: 120,
+          isVisible: newVisible,
         }),
       });
       setNewTitle('');
@@ -138,9 +134,9 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
 
   const persistPosition: NodeDragHandler = async (_event, node) => {
     try {
-      await mutate(roadmapUrl(route, `/nodos/${node.id}`), {
+      await mutate(roadmapUrl(identifier, `/nodes/${node.id}`), {
         method: 'PATCH',
-        body: JSON.stringify({ posX: node.position.x, posY: node.position.y }),
+        body: JSON.stringify({ positionX: node.position.x, positionY: node.position.y }),
       });
     } catch (operationError) {
       setError(
@@ -155,7 +151,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
   async function connect(connection: Connection) {
     if (!connection.source || !connection.target) return;
     try {
-      await mutate(roadmapUrl(route, '/dependencias'), {
+      await mutate(roadmapUrl(identifier, '/dependencies'), {
         method: 'POST',
         body: JSON.stringify({ sourceNodeId: connection.source, targetNodeId: connection.target }),
       });
@@ -171,23 +167,23 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
 
   function selectNode(nodeId: string) {
     setSelectedNodeId(nodeId);
-    const node = dto?.nodos.find((item) => item.id === nodeId);
+    const node = dto?.nodes.find((item) => item.id === nodeId);
     if (!node) return;
-    setEditTitle(node.titulo);
-    setEditDescription(node.descripcion ?? '');
-    setEditTypeId(node.typeId);
+    setEditTitle(node.title);
+    setEditDescription(node.description ?? '');
+    setEditTypeId(node.nodeTypeId);
   }
 
   async function updateNode(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedNodeId || !editTitle.trim()) return;
     try {
-      await mutate(roadmapUrl(route, `/nodos/${selectedNodeId}`), {
+      await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}`), {
         method: 'PATCH',
         body: JSON.stringify({
-          titulo: editTitle,
-          descripcion: editDescription || null,
-          typeId: editTypeId,
+          title: editTitle,
+          description: editDescription || null,
+          nodeTypeId: editTypeId,
         }),
       });
       await load();
@@ -200,12 +196,12 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
 
   async function toggleVisibility() {
     if (!selectedNodeId || !dto) return;
-    const node = dto.nodos.find((item) => item.id === selectedNodeId);
+    const node = dto.nodes.find((item) => item.id === selectedNodeId);
     if (!node) return;
     try {
-      await mutate(roadmapUrl(route, `/nodos/${node.id}`), {
+      await mutate(roadmapUrl(identifier, `/nodes/${node.id}`), {
         method: 'PATCH',
-        body: JSON.stringify({ visible: !node.visible }),
+        body: JSON.stringify({ isVisible: !node.isVisible }),
       });
       await load();
     } catch (operationError) {
@@ -221,7 +217,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
     if (!selectedNodeId) return;
     if (!window.confirm('¿Eliminar este nodo y sus dependencias y recursos?')) return;
     try {
-      await mutate(roadmapUrl(route, `/nodos/${selectedNodeId}`), { method: 'DELETE' });
+      await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}`), { method: 'DELETE' });
       setSelectedNodeId(null);
       await load();
     } catch (operationError) {
@@ -235,9 +231,9 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
     event.preventDefault();
     if (!newTypeName.trim()) return;
     try {
-      await mutate(roadmapUrl(route, '/tipos'), {
+      await mutate(roadmapUrl(identifier, '/node-types'), {
         method: 'POST',
-        body: JSON.stringify({ nombre: newTypeName, color: newTypeColor }),
+        body: JSON.stringify({ name: newTypeName, color: newTypeColor }),
       });
       setNewTypeName('');
       await load();
@@ -252,12 +248,12 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
     event.preventDefault();
     if (!selectedNodeId || !newResourceTitle.trim() || !newResourceUrl.trim()) return;
     try {
-      await mutate(roadmapUrl(route, `/nodos/${selectedNodeId}/recursos`), {
+      await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}/resources`), {
         method: 'POST',
         body: JSON.stringify({
-          titulo: newResourceTitle,
+          title: newResourceTitle,
           url: newResourceUrl,
-          tipo: newResourceType,
+          type: newResourceType,
         }),
       });
       setNewResourceTitle('');
@@ -272,7 +268,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
 
   async function deleteDependency(dependencyId: string) {
     try {
-      await mutate(roadmapUrl(route, `/dependencias/${dependencyId}`), { method: 'DELETE' });
+      await mutate(roadmapUrl(identifier, `/dependencies/${dependencyId}`), { method: 'DELETE' });
       await load();
     } catch (operationError) {
       setError(
@@ -288,12 +284,19 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
     const nextTitle = window.prompt('Título del recurso', title);
     const nextUrl = window.prompt('URL del recurso', url);
     const nextType = window.prompt('Tipo: ARCHIVO, ENLACE o VIDEO', 'ENLACE');
-    if (!nextTitle || !nextUrl || !nextType || !['ARCHIVO', 'ENLACE', 'VIDEO'].includes(nextType))
-      return;
+    const resourceType =
+      nextType === 'ARCHIVO'
+        ? 'FILE'
+        : nextType === 'ENLACE'
+          ? 'LINK'
+          : nextType === 'VIDEO'
+            ? 'VIDEO'
+            : null;
+    if (!nextTitle || !nextUrl || !resourceType) return;
     try {
-      await mutate(roadmapUrl(route, `/recursos/${resourceId}`), {
+      await mutate(roadmapUrl(identifier, `/resources/${resourceId}`), {
         method: 'PATCH',
-        body: JSON.stringify({ titulo: nextTitle, url: nextUrl, tipo: nextType }),
+        body: JSON.stringify({ title: nextTitle, url: nextUrl, type: resourceType }),
       });
       await load();
     } catch (operationError) {
@@ -305,7 +308,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
 
   async function deleteResource(resourceId: string) {
     try {
-      await mutate(roadmapUrl(route, `/recursos/${resourceId}`), { method: 'DELETE' });
+      await mutate(roadmapUrl(identifier, `/resources/${resourceId}`), { method: 'DELETE' });
       await load();
     } catch (operationError) {
       setError(
@@ -316,14 +319,14 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
     }
   }
 
-  async function editType(typeId: string, nombre: string, color: string) {
-    const nextName = window.prompt('Nombre del tipo', nombre);
+  async function editType(typeId: string, name: string, color: string) {
+    const nextName = window.prompt('Nombre del tipo', name);
     const nextColor = window.prompt('Color hexadecimal', color);
     if (!nextName || !nextColor) return;
     try {
-      await mutate(roadmapUrl(route, `/tipos/${typeId}`), {
+      await mutate(roadmapUrl(identifier, `/node-types/${typeId}`), {
         method: 'PATCH',
-        body: JSON.stringify({ nombre: nextName, color: nextColor }),
+        body: JSON.stringify({ name: nextName, color: nextColor }),
       });
       await load();
     } catch (operationError) {
@@ -335,7 +338,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
 
   async function deleteType(typeId: string) {
     try {
-      await mutate(roadmapUrl(route, `/tipos/${typeId}`), { method: 'DELETE' });
+      await mutate(roadmapUrl(identifier, `/node-types/${typeId}`), { method: 'DELETE' });
       await load();
     } catch (operationError) {
       setError(
@@ -362,7 +365,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
       </div>
     );
 
-  const selectedNode = dto.nodos.find((node) => node.id === selectedNodeId);
+  const selectedNode = dto.nodes.find((node) => node.id === selectedNodeId);
   return (
     <div
       className={`grid min-h-[70vh] grid-cols-1 overflow-hidden rounded-2xl border border-[#e8e8e8] bg-white shadow-[0_2px_8px_rgba(26,26,26,0.08)]${canEdit ? ' lg:grid-cols-[280px_1fr]' : ''}`}
@@ -407,9 +410,9 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
                 onChange={(event) => setNewTypeId(event.target.value)}
                 className="w-full rounded border border-[#c2c2c2] bg-white px-3 py-2"
               >
-                {dto.tipos.map((type) => (
+                {dto.nodeTypes.map((type) => (
                   <option key={type.id} value={type.id}>
-                    {type.nombre}
+                    {type.name}
                   </option>
                 ))}
               </select>
@@ -447,14 +450,14 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
               </button>
             </form>
             <ul className="space-y-2 border-t border-[#e8e8e8] pt-5 text-xs">
-              {dto.tipos
-                .filter((type) => !type.predefinido)
+              {dto.nodeTypes
+                .filter((type) => !type.isPredefined)
                 .map((type) => (
                   <li key={type.id} className="flex items-center justify-between gap-2">
-                    <span>{type.nombre}</span>
+                    <span>{type.name}</span>
                     <span className="flex gap-1">
                       <button
-                        onClick={() => void editType(type.id, type.nombre, type.color)}
+                        onClick={() => void editType(type.id, type.name, type.color)}
                         className="rounded border border-[#c2c2c2] px-2 py-1"
                       >
                         Editar
@@ -471,11 +474,11 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
             </ul>
             <ul className="space-y-2 border-t border-[#e8e8e8] pt-5 text-xs">
               <li className="font-medium text-[#1a1a1a]">Nodos del roadmap</li>
-              {dto.nodos.map((node) => (
+              {dto.nodes.map((node) => (
                 <li key={node.id} className="flex items-center justify-between gap-2">
-                  <span className={node.visible ? '' : 'text-[#636363]'}>
-                    {node.titulo}
-                    {node.visible ? '' : ' (oculto)'}
+                  <span className={node.isVisible ? '' : 'text-[#636363]'}>
+                    {node.title}
+                    {node.isVisible ? '' : ' (oculto)'}
                   </span>
                   <button
                     onClick={() => selectNode(node.id)}
@@ -506,9 +509,9 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
                     onChange={(event) => setEditTypeId(event.target.value)}
                     className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
                   >
-                    {dto.tipos.map((type) => (
+                    {dto.nodeTypes.map((type) => (
                       <option key={type.id} value={type.id}>
-                        {type.nombre}
+                        {type.name}
                       </option>
                     ))}
                   </select>
@@ -521,7 +524,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
                     onClick={() => void toggleVisibility()}
                     className="rounded border border-[#1a1a1a] px-3 py-2 text-xs"
                   >
-                    {selectedNode.visible ? 'Ocultar' : 'Mostrar'}
+                    {selectedNode.isVisible ? 'Ocultar' : 'Mostrar'}
                   </button>
                   <button
                     onClick={() => void deleteNode()}
@@ -546,12 +549,12 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
                   <select
                     value={newResourceType}
                     onChange={(event) =>
-                      setNewResourceType(event.target.value as 'ARCHIVO' | 'ENLACE' | 'VIDEO')
+                      setNewResourceType(event.target.value as 'FILE' | 'LINK' | 'VIDEO')
                     }
                     className="w-full rounded border border-[#c2c2c2] px-3 py-2 text-sm"
                   >
-                    <option value="ARCHIVO">Archivo</option>
-                    <option value="ENLACE">Enlace</option>
+                    <option value="FILE">Archivo</option>
+                    <option value="LINK">Enlace</option>
                     <option value="VIDEO">Video</option>
                   </select>
                   <button className="w-full rounded border border-[#1a1a1a] px-3 py-2 text-xs">
@@ -559,7 +562,7 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
                   </button>
                 </form>
                 <ul className="mt-3 space-y-2 text-xs text-[#636363]">
-                  {selectedNode.recursos.map((resource) => (
+                  {selectedNode.resources.map((resource) => (
                     <li key={resource.id} className="flex items-center justify-between gap-2">
                       <a
                         href={resource.url}
@@ -567,12 +570,12 @@ export default function RoadmapCanvas({ route, canEdit = false }: Props) {
                         rel="noreferrer"
                         className="text-[#024ad8]"
                       >
-                        {resource.titulo}
+                        {resource.title}
                       </a>
                       <span className="flex gap-1">
                         <button
                           onClick={() =>
-                            void editResource(resource.id, resource.titulo, resource.url)
+                            void editResource(resource.id, resource.title, resource.url)
                           }
                           className="rounded border border-[#c2c2c2] px-2 py-1"
                         >

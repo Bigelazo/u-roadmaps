@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import {
   ApiError,
   apiErrorResponse,
-  parseCoursePath,
+  parseCourseOfferingIdentifier,
   parseJson,
   requireNodeInRoadmap,
   requireResourceType,
@@ -12,32 +12,34 @@ import {
   requireUrl,
   requireUuid,
 } from '@/lib/roadmap-api';
-import { requireCourseParticipation, requireCourseTeacher } from '@/lib/auth';
+import { requireCourseOfferingParticipation, requireCourseOfferingTeacher } from '@/lib/auth';
 
 type Context = {
-  params: Promise<{ ramo: string; anio: string; semestre: string; nodeId: string }>;
+  params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
 };
 
 export async function POST(request: Request, context: Context) {
   try {
     const params = await context.params;
-    const path = parseCoursePath(params);
-    await requireCourseTeacher(path);
-    const roadmap = await requireRoadmap(path);
+    const identifier = parseCourseOfferingIdentifier(params);
+    await requireCourseOfferingTeacher(identifier);
+    const roadmap = await requireRoadmap(identifier);
     const nodeId = requireUuid(params.nodeId, 'nodeId');
     await requireNodeInRoadmap(nodeId, roadmap.id);
     const body = await parseJson(request);
-    const titulo = requireString(body.titulo, 'titulo', 240);
+    const title = requireString(body.title, 'title', 240);
     const url = requireUrl(body.url);
-    const tipo = requireResourceType(body.tipo);
-    const resource = await prisma.recurso.create({ data: { nodoId: nodeId, titulo, url, tipo } });
+    const type = requireResourceType(body.type);
+    const resource = await prisma.resource.create({
+      data: { roadmapNodeId: nodeId, title, url, type },
+    });
     return NextResponse.json(
       {
-        recurso: {
+        resource: {
           id: resource.id,
-          titulo: resource.titulo,
+          title: resource.title,
           url: resource.url,
-          tipo: resource.tipo,
+          type: resource.type,
         },
       },
       { status: 201 },
@@ -50,24 +52,27 @@ export async function POST(request: Request, context: Context) {
 export async function GET(_request: Request, context: Context) {
   try {
     const params = await context.params;
-    const path = parseCoursePath(params);
-    const { participation } = await requireCourseParticipation(path, ['ESTUDIANTE', 'DOCENTE']);
-    const roadmap = await requireRoadmap(path);
+    const identifier = parseCourseOfferingIdentifier(params);
+    const { participation } = await requireCourseOfferingParticipation(identifier, [
+      'STUDENT',
+      'TEACHER',
+    ]);
+    const roadmap = await requireRoadmap(identifier);
     const nodeId = requireUuid(params.nodeId, 'nodeId');
     const node = await requireNodeInRoadmap(nodeId, roadmap.id);
-    if (participation.funcion === 'ESTUDIANTE' && !node.visible) {
+    if (participation.role === 'STUDENT' && !node.isVisible) {
       throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
     }
-    const recursos = await prisma.recurso.findMany({
-      where: { nodoId: nodeId },
-      orderBy: { titulo: 'asc' },
+    const resources = await prisma.resource.findMany({
+      where: { roadmapNodeId: nodeId },
+      orderBy: { title: 'asc' },
     });
     return NextResponse.json({
-      recursos: recursos.map((resource) => ({
+      resources: resources.map((resource) => ({
         id: resource.id,
-        titulo: resource.titulo,
+        title: resource.title,
         url: resource.url,
-        tipo: resource.tipo,
+        type: resource.type,
       })),
     });
   } catch (error) {

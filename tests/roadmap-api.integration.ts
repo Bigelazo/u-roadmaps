@@ -2,22 +2,22 @@ import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import test from 'node:test';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma/client';
 import { encode } from 'next-auth/jwt';
 import { SignJWT } from 'jose';
+import { PrismaClient } from '../src/generated/prisma/client';
 
 const port = 3100 + (process.pid % 500);
 const baseUrl = `http://localhost:${port}`;
 const suffix = Date.now().toString();
-const path = { ramo: `CC${suffix}`, anio: 2026, semestre: 1 };
-const otherPath = { ramo: `CI${suffix}`, anio: 2026, semestre: 1 };
-const predefinedTypeId = '00000000-0000-4000-8000-000000000001';
-let server: ChildProcess;
+const courseOffering = { courseCode: `CC${suffix}`, year: 2026, semester: 1 };
+const otherCourseOffering = { courseCode: `CI${suffix}`, year: 2026, semester: 1 };
+const predefinedNodeTypeId = '00000000-0000-4000-8000-000000000001';
+const authSecret = process.env.NEXTAUTH_SECRET ?? 'integration-nextauth-secret';
+const vtiSecret = process.env.VTI_JWT_SECRET ?? 'integration-vti-secret';
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
-const authSecret = process.env.NEXTAUTH_SECRET ?? 'integration-nextauth-secret';
-const vtiSecret = process.env.VTI_JWT_SECRET ?? 'integration-vti-secret';
+let server: ChildProcess;
 let teacherCookie = '';
 let studentCookie = '';
 
@@ -25,16 +25,15 @@ function serialTest(name: string, callback: () => void | Promise<void>) {
   return test(name, { concurrency: false }, callback);
 }
 
-function roadmapUrl(course: typeof path, suffixPath = '') {
-  return `${baseUrl}/api/cursos/${encodeURIComponent(course.ramo)}/${course.anio}/${course.semestre}/roadmap${suffixPath}`;
+function roadmapUrl(identifier: typeof courseOffering, suffixPath = '') {
+  return `${baseUrl}/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap${suffixPath}`;
 }
 
 async function waitForServer() {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${baseUrl}/`);
-      if (response.ok) return;
+      if ((await fetch(baseUrl)).ok) return;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
@@ -51,7 +50,7 @@ async function authFetch(url: string, init: RequestInit = {}) {
   return fetch(url, { ...init, headers: { cookie: teacherCookie, ...(init.headers ?? {}) } });
 }
 
-async function jsonRequest(
+async function request(
   url: string,
   method: string,
   body?: Record<string, unknown>,
@@ -76,24 +75,29 @@ async function signVtiToken(
     .sign(new TextEncoder().encode(secret));
 }
 
-test.before(async () => {
-  const teacher = await prisma.usuario.create({
-    data: {
-      nombre: 'Docente de integración',
-      correoInstitucional: `docente-${suffix}@uchile.cl`,
-      rut: `9${suffix}`,
-    },
-  });
-  teacherCookie = await sessionCookie(teacher.id);
-  server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '-p', String(port)], {
+function startServer(nextAuthUrl = baseUrl) {
+  return spawn(process.execPath, ['node_modules/next/dist/bin/next', 'dev', '-p', String(port)], {
     env: {
       ...process.env,
       DATABASE_URL:
         'postgresql://roadmap_test_user:roadmap_test_password@localhost:5433/roadmap_test_db',
+      NEXTAUTH_URL: nextAuthUrl,
       NEXT_TELEMETRY_DISABLED: '1',
     },
     stdio: 'ignore',
   });
+}
+
+test.before(async () => {
+  const teacher = await prisma.user.create({
+    data: {
+      name: 'Docente de integración',
+      institutionalEmail: `docente-${suffix}@uchile.cl`,
+      rut: `9${suffix}`,
+    },
+  });
+  teacherCookie = await sessionCookie(teacher.id);
+  server = startServer();
   await waitForServer();
 });
 
@@ -103,82 +107,94 @@ test.after(() => {
 });
 
 serialTest('GET without a roadmap returns the stable not-found error', async () => {
-  const unauthenticated = await fetch(roadmapUrl(path));
+  const unauthenticated = await fetch(roadmapUrl(courseOffering));
   assert.equal(unauthenticated.status, 401);
-  const response = await authFetch(roadmapUrl(path));
+
+  const response = await authFetch(roadmapUrl(courseOffering));
   assert.equal(response.status, 404);
   assert.equal((await response.json()).error.code, 'ROADMAP_NOT_FOUND');
 });
 
 serialTest('rejects an invalid session and a user without course participation', async () => {
-  const invalidSession = await fetch(roadmapUrl(path), {
+  const invalidSession = await fetch(roadmapUrl(courseOffering), {
     headers: { cookie: 'next-auth.session-token=invalid' },
   });
   assert.equal(invalidSession.status, 401);
 });
 
-serialTest('creates and reads an academic roadmap as a domain DTO', async () => {
-  const created = await jsonRequest(roadmapUrl(path), 'POST', {
-    nombreRamo: 'Curso de prueba',
-    departamento: 'DCC',
+serialTest('creates and reads an academic roadmap as an English DTO', async () => {
+  const created = await request(roadmapUrl(courseOffering), 'POST', {
+    course: { name: 'Curso de prueba', department: 'DCC' },
   });
   assert.equal(created.status, 201);
-  const course = await prisma.curso.findUnique({
-    where: {
-      ramoCodigo_anio_semestre: { ramoCodigo: path.ramo, anio: path.anio, semestre: path.semestre },
+
+  const persistedCourseOffering = await prisma.courseOffering.findUniqueOrThrow({
+    where: { courseCode_year_semester: courseOffering },
+  });
+  const teacher = await prisma.user.findUniqueOrThrow({
+    where: { institutionalEmail: `docente-${suffix}@uchile.cl` },
+  });
+  await prisma.participation.create({
+    data: {
+      userId: teacher.id,
+      courseOfferingId: persistedCourseOffering.id,
+      role: 'TEACHER',
     },
   });
-  assert.ok(course);
-  const teacher = await prisma.usuario.findFirstOrThrow({
-    where: { correoInstitucional: { startsWith: 'docente-' } },
-  });
-  await prisma.participacion.create({
-    data: { usuarioId: teacher.id, cursoId: course.id, funcion: 'DOCENTE' },
-  });
-  const conflict = await jsonRequest(roadmapUrl(path), 'POST', {
-    nombreRamo: 'Otro nombre',
-    departamento: 'DCC',
+
+  const conflict = await request(roadmapUrl(courseOffering), 'POST', {
+    course: { name: 'Otro nombre', department: 'DCC' },
   });
   assert.equal(conflict.status, 409);
 
-  const response = await authFetch(roadmapUrl(path));
+  const response = await authFetch(roadmapUrl(courseOffering));
   assert.equal(response.status, 200);
   const dto = await response.json();
-  assert.equal(dto.ramo.codigo, path.ramo);
-  assert.deepEqual(dto.nodos, []);
+  assert.deepEqual(dto.course, {
+    code: courseOffering.courseCode,
+    name: 'Curso de prueba',
+    department: 'DCC',
+  });
+  assert.deepEqual(dto.nodes, []);
+  assert.deepEqual(dto.dependencies, []);
   assert.equal('data' in dto, false);
-  assert.equal('edges' in dto, false);
-  const outsider = await prisma.usuario.create({
+
+  const outsider = await prisma.user.create({
     data: {
-      nombre: 'Sin participación',
-      correoInstitucional: `outsider-${suffix}@uchile.cl`,
+      name: 'Sin participación',
+      institutionalEmail: `outsider-${suffix}@uchile.cl`,
       rut: `6${suffix}`,
     },
   });
-  const outsiderResponse = await fetch(roadmapUrl(path), {
+  const outsiderResponse = await fetch(roadmapUrl(courseOffering), {
     headers: { cookie: await sessionCookie(outsider.id) },
   });
   assert.equal(outsiderResponse.status, 403);
-  await prisma.participacion.create({
-    data: { usuarioId: outsider.id, cursoId: course.id, funcion: 'ESTUDIANTE', vigente: false },
+  await prisma.participation.create({
+    data: {
+      userId: outsider.id,
+      courseOfferingId: persistedCourseOffering.id,
+      role: 'STUDENT',
+      isActive: false,
+    },
   });
-  const inactiveResponse = await fetch(roadmapUrl(path), {
+  const inactiveResponse = await fetch(roadmapUrl(courseOffering), {
     headers: { cookie: await sessionCookie(outsider.id) },
   });
   assert.equal(inactiveResponse.status, 403);
 });
 
 serialTest('manages nodes, dependencies, custom types, and resources', async () => {
-  const typeResponse = await jsonRequest(roadmapUrl(path, '/tipos'), 'POST', {
-    nombre: ' Laboratorio ',
+  const nodeTypeResponse = await request(roadmapUrl(courseOffering, '/node-types'), 'POST', {
+    name: ' Laboratorio ',
     color: '#abcdef',
   });
-  assert.equal(typeResponse.status, 201);
-  const type = (await typeResponse.json()).tipo;
+  assert.equal(nodeTypeResponse.status, 201);
+  const nodeType = (await nodeTypeResponse.json()).nodeType;
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, '/tipos'), 'POST', {
-        nombre: 'laboratorio',
+      await request(roadmapUrl(courseOffering, '/node-types'), 'POST', {
+        name: 'laboratorio',
         color: '#ABCDEF',
       })
     ).status,
@@ -186,8 +202,8 @@ serialTest('manages nodes, dependencies, custom types, and resources', async () 
   );
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, '/tipos'), 'POST', {
-        nombre: ' contenido ',
+      await request(roadmapUrl(courseOffering, '/node-types'), 'POST', {
+        name: ' contenido ',
         color: '#abcdef',
       })
     ).status,
@@ -195,242 +211,305 @@ serialTest('manages nodes, dependencies, custom types, and resources', async () 
   );
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, `/tipos/${type.id}`), 'PATCH', {
-        nombre: 'Práctica',
+      await request(roadmapUrl(courseOffering, `/node-types/${nodeType.id}`), 'PATCH', {
+        name: 'Práctica',
         color: '#123456',
       })
     ).status,
     200,
   );
 
-  const firstResponse = await jsonRequest(roadmapUrl(path, '/nodos'), 'POST', {
-    titulo: 'Primero',
-    typeId: type.id,
-    posX: 0,
-    posY: 0,
+  const firstNodeResponse = await request(roadmapUrl(courseOffering, '/nodes'), 'POST', {
+    title: 'Primero',
+    description: 'Detalle',
+    nodeTypeId: nodeType.id,
+    positionX: 0,
+    positionY: 0,
   });
-  const secondResponse = await jsonRequest(roadmapUrl(path, '/nodos'), 'POST', {
-    titulo: 'Segundo',
-    typeId: predefinedTypeId,
-    posX: 120,
-    posY: 0,
+  const secondNodeResponse = await request(roadmapUrl(courseOffering, '/nodes'), 'POST', {
+    title: 'Segundo',
+    nodeTypeId: predefinedNodeTypeId,
+    positionX: 120,
+    positionY: 0,
   });
-  assert.equal(firstResponse.status, 201);
-  assert.equal(secondResponse.status, 201);
-  const first = (await firstResponse.json()).nodo;
-  const second = (await secondResponse.json()).nodo;
-  assert.equal(
-    (await jsonRequest(roadmapUrl(path, `/tipos/${predefinedTypeId}`), 'PATCH', { nombre: 'Otro' }))
-      .status,
-    409,
-  );
-  assert.equal((await jsonRequest(roadmapUrl(path, `/tipos/${type.id}`), 'DELETE')).status, 409);
-
-  const resource = await jsonRequest(roadmapUrl(path, `/nodos/${first.id}/recursos`), 'POST', {
-    titulo: 'Guía',
-    url: 'https://example.com/guide',
-    tipo: 'ENLACE',
-  });
-  assert.equal(resource.status, 201);
-  const resourceBody = (await resource.json()).recurso;
-  assert.equal('nodoId' in resourceBody, false);
+  assert.equal(firstNodeResponse.status, 201);
+  assert.equal(secondNodeResponse.status, 201);
+  const firstNode = (await firstNodeResponse.json()).node;
+  const secondNode = (await secondNodeResponse.json()).node;
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, `/recursos/${resourceBody.id}`), 'PATCH', {
-        titulo: 'Guía actualizada',
-        tipo: 'VIDEO',
+      await request(roadmapUrl(courseOffering, `/node-types/${predefinedNodeTypeId}`), 'PATCH', {
+        name: 'Otro',
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await request(roadmapUrl(courseOffering, `/node-types/${nodeType.id}`), 'DELETE')).status,
+    409,
+  );
+
+  const resourceResponse = await request(
+    roadmapUrl(courseOffering, `/nodes/${firstNode.id}/resources`),
+    'POST',
+    { title: 'Guía', url: 'https://example.com/guide', type: 'LINK' },
+  );
+  assert.equal(resourceResponse.status, 201);
+  const resource = (await resourceResponse.json()).resource;
+  assert.equal('roadmapNodeId' in resource, false);
+  assert.equal(
+    (
+      await request(roadmapUrl(courseOffering, `/resources/${resource.id}`), 'PATCH', {
+        title: 'Guía actualizada',
+        type: 'VIDEO',
       })
     ).status,
     200,
   );
   assert.equal(
-    (await jsonRequest(roadmapUrl(path, `/recursos/${resourceBody.id}`), 'DELETE')).status,
+    (await request(roadmapUrl(courseOffering, `/resources/${resource.id}`), 'DELETE')).status,
     204,
   );
   const remainingResourceIds: string[] = [];
-  for (const tipo of ['ARCHIVO', 'VIDEO']) {
-    const remainingResource = await jsonRequest(
-      roadmapUrl(path, `/nodos/${first.id}/recursos`),
+  for (const type of ['FILE', 'VIDEO']) {
+    const remainingResource = await request(
+      roadmapUrl(courseOffering, `/nodes/${firstNode.id}/resources`),
       'POST',
-      { titulo: tipo, url: 'https://example.com/resource', tipo },
+      { title: type, url: 'https://example.com/resource', type },
     );
     assert.equal(remainingResource.status, 201);
-    remainingResourceIds.push((await remainingResource.json()).recurso.id);
+    remainingResourceIds.push((await remainingResource.json()).resource.id);
   }
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, `/nodos/${first.id}/recursos`), 'POST', {
-        titulo: 'Sin URL',
-        tipo: 'ENLACE',
+      await request(roadmapUrl(courseOffering, `/nodes/${firstNode.id}/resources`), 'POST', {
+        title: 'Sin URL',
+        type: 'LINK',
       })
     ).status,
     400,
   );
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, `/nodos/${first.id}/recursos`), 'POST', {
-        titulo: 'Unsafe',
+      await request(roadmapUrl(courseOffering, `/nodes/${firstNode.id}/resources`), 'POST', {
+        title: 'Unsafe',
         url: 'javascript:alert(1)',
-        tipo: 'ENLACE',
+        type: 'LINK',
       })
     ).status,
     400,
   );
-  const updatedNodeResponse = await jsonRequest(roadmapUrl(path, `/nodos/${first.id}`), 'PATCH', {
-    titulo: 'Primero actualizado',
-    descripcion: 'Detalle',
-    typeId: predefinedTypeId,
-    visible: false,
-    posX: 50,
-    posY: 60,
-  });
+  const updatedNodeResponse = await request(
+    roadmapUrl(courseOffering, `/nodes/${firstNode.id}`),
+    'PATCH',
+    {
+      title: 'Primero actualizado',
+      description: 'Detalle',
+      nodeTypeId: predefinedNodeTypeId,
+      isVisible: false,
+      positionX: 50,
+      positionY: 60,
+    },
+  );
   assert.equal(updatedNodeResponse.status, 200);
-  const updatedNode = (await updatedNodeResponse.json()).nodo;
+  const updatedNode = (await updatedNodeResponse.json()).node;
   assert.deepEqual(
     {
-      titulo: updatedNode.titulo,
-      descripcion: updatedNode.descripcion,
-      typeId: updatedNode.typeId,
-      visible: updatedNode.visible,
-      posX: updatedNode.posX,
-      posY: updatedNode.posY,
+      title: updatedNode.title,
+      description: updatedNode.description,
+      nodeTypeId: updatedNode.nodeTypeId,
+      isVisible: updatedNode.isVisible,
+      positionX: updatedNode.positionX,
+      positionY: updatedNode.positionY,
     },
     {
-      titulo: 'Primero actualizado',
-      descripcion: 'Detalle',
-      typeId: predefinedTypeId,
-      visible: false,
-      posX: 50,
-      posY: 60,
+      title: 'Primero actualizado',
+      description: 'Detalle',
+      nodeTypeId: predefinedNodeTypeId,
+      isVisible: false,
+      positionX: 50,
+      positionY: 60,
     },
   );
 
-  const dependency = await jsonRequest(roadmapUrl(path, '/dependencias'), 'POST', {
-    sourceNodeId: first.id,
-    targetNodeId: second.id,
+  const dependencyResponse = await request(roadmapUrl(courseOffering, '/dependencies'), 'POST', {
+    sourceNodeId: firstNode.id,
+    targetNodeId: secondNode.id,
   });
-  assert.equal(dependency.status, 201);
-  const dependencyId = (await dependency.json()).dependencia.id;
+  assert.equal(dependencyResponse.status, 201);
+  const dependencyId = (await dependencyResponse.json()).dependency.id;
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, '/dependencias'), 'POST', {
-        sourceNodeId: first.id,
-        targetNodeId: first.id,
+      await request(roadmapUrl(courseOffering, '/dependencies'), 'POST', {
+        sourceNodeId: firstNode.id,
+        targetNodeId: firstNode.id,
       })
     ).status,
     409,
   );
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, '/dependencias'), 'POST', {
-        sourceNodeId: second.id,
-        targetNodeId: first.id,
+      await request(roadmapUrl(courseOffering, '/dependencies'), 'POST', {
+        sourceNodeId: secondNode.id,
+        targetNodeId: firstNode.id,
       })
     ).status,
     409,
   );
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, '/dependencias'), 'POST', {
-        sourceNodeId: first.id,
-        targetNodeId: second.id,
+      await request(roadmapUrl(courseOffering, '/dependencies'), 'POST', {
+        sourceNodeId: firstNode.id,
+        targetNodeId: secondNode.id,
       })
     ).status,
     409,
   );
   assert.equal(
-    (await jsonRequest(roadmapUrl(path, `/dependencias/${dependencyId}`), 'DELETE')).status,
+    (await request(roadmapUrl(courseOffering, `/dependencies/${dependencyId}`), 'DELETE')).status,
     204,
   );
-  const recreatedDependency = await jsonRequest(roadmapUrl(path, '/dependencias'), 'POST', {
-    sourceNodeId: first.id,
-    targetNodeId: second.id,
-  });
-  assert.equal(recreatedDependency.status, 201);
-
-  assert.equal((await jsonRequest(roadmapUrl(path, `/nodos/${first.id}`), 'DELETE')).status, 204);
-  const dto = await (await authFetch(roadmapUrl(path))).json();
-  assert.equal(dto.nodos.length, 1);
-  assert.equal(dto.dependencias.length, 0);
-  assert.equal((await authFetch(roadmapUrl(path, `/nodos/${first.id}/recursos`))).status, 404);
-  for (const resourceId of remainingResourceIds) {
-    assert.equal(
-      (await jsonRequest(roadmapUrl(path, `/recursos/${resourceId}`), 'DELETE')).status,
-      404,
-    );
-  }
-  assert.equal((await jsonRequest(roadmapUrl(path, `/tipos/${type.id}`), 'DELETE')).status, 204);
-});
-
-serialTest('rejects cross-roadmap mutations for valid UUIDs', async () => {
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(otherPath), 'POST', {
-        nombreRamo: 'Otro curso',
-        departamento: 'DCC',
+      await request(roadmapUrl(courseOffering, '/dependencies'), 'POST', {
+        sourceNodeId: firstNode.id,
+        targetNodeId: secondNode.id,
       })
     ).status,
     201,
   );
-  const otherCourse = await prisma.curso.findUniqueOrThrow({
-    where: {
-      ramoCodigo_anio_semestre: {
-        ramoCodigo: otherPath.ramo,
-        anio: otherPath.anio,
-        semestre: otherPath.semestre,
-      },
-    },
-  });
-  const teacher = await prisma.usuario.findFirstOrThrow({
-    where: { correoInstitucional: { startsWith: 'docente-' } },
-  });
-  await prisma.participacion.create({
-    data: { usuarioId: teacher.id, cursoId: otherCourse.id, funcion: 'DOCENTE' },
-  });
-  const foreignNodeResponse = await jsonRequest(roadmapUrl(otherPath, '/nodos'), 'POST', {
-    titulo: 'Ajeno',
-    typeId: predefinedTypeId,
-    posX: 0,
-    posY: 0,
-  });
-  const foreignNode = (await foreignNodeResponse.json()).nodo;
-  const foreignResourceResponse = await jsonRequest(
-    roadmapUrl(otherPath, `/nodos/${foreignNode.id}/recursos`),
-    'POST',
-    { titulo: 'Recurso ajeno', url: 'https://example.com/foreign', tipo: 'ENLACE' },
-  );
-  const foreignResource = (await foreignResourceResponse.json()).recurso;
 
-  const response = await jsonRequest(roadmapUrl(path, `/recursos/${foreignResource.id}`), 'DELETE');
-  assert.equal(response.status, 404);
-  const resources = await (
-    await authFetch(roadmapUrl(otherPath, `/nodos/${foreignNode.id}/recursos`))
+  const dto = await (
+    await fetch(roadmapUrl(courseOffering), { headers: { cookie: teacherCookie } })
   ).json();
-  assert.equal(resources.recursos.length, 1);
+  assert.deepEqual(
+    dto.nodeTypes.find((item: { id: string }) => item.id === nodeType.id),
+    {
+      id: nodeType.id,
+      name: 'Práctica',
+      color: '#123456',
+      isPredefined: false,
+    },
+  );
+  assert.deepEqual(
+    dto.nodes.find((item: { id: string }) => item.id === firstNode.id),
+    {
+      id: firstNode.id,
+      title: 'Primero actualizado',
+      description: 'Detalle',
+      positionX: 50,
+      positionY: 60,
+      nodeTypeId: predefinedNodeTypeId,
+      isVisible: false,
+      resources: [
+        {
+          id: remainingResourceIds[0],
+          title: 'FILE',
+          url: 'https://example.com/resource',
+          type: 'FILE',
+        },
+        {
+          id: remainingResourceIds[1],
+          title: 'VIDEO',
+          url: 'https://example.com/resource',
+          type: 'VIDEO',
+        },
+      ],
+    },
+  );
+  assert.equal(dto.dependencies.length, 1);
   assert.equal(
-    (await jsonRequest(roadmapUrl(path, `/nodos/${foreignNode.id}`), 'PATCH', { visible: false }))
-      .status,
+    (await request(roadmapUrl(courseOffering, `/nodes/${firstNode.id}`), 'DELETE')).status,
+    204,
+  );
+  const afterDelete = await (await authFetch(roadmapUrl(courseOffering))).json();
+  assert.equal(afterDelete.nodes.length, 1);
+  assert.equal(afterDelete.dependencies.length, 0);
+  assert.equal(
+    (await authFetch(roadmapUrl(courseOffering, `/nodes/${firstNode.id}/resources`))).status,
     404,
   );
-  const foreignTypeResponse = await jsonRequest(roadmapUrl(otherPath, '/tipos'), 'POST', {
-    nombre: 'Ajeno',
-    color: '#123456',
+  for (const resourceId of remainingResourceIds) {
+    assert.equal(
+      (await request(roadmapUrl(courseOffering, `/resources/${resourceId}`), 'DELETE')).status,
+      404,
+    );
+  }
+  assert.equal(
+    (await request(roadmapUrl(courseOffering, `/node-types/${nodeType.id}`), 'DELETE')).status,
+    204,
+  );
+});
+
+serialTest('rejects cross-roadmap mutations for valid UUIDs', async () => {
+  const created = await request(roadmapUrl(otherCourseOffering), 'POST', {
+    course: { name: 'Otro curso', department: 'DCC' },
   });
-  const foreignType = (await foreignTypeResponse.json()).tipo;
+  assert.equal(created.status, 201);
+
+  const otherOffering = await prisma.courseOffering.findUniqueOrThrow({
+    where: { courseCode_year_semester: otherCourseOffering },
+  });
+  const teacher = await prisma.user.findUniqueOrThrow({
+    where: { institutionalEmail: `docente-${suffix}@uchile.cl` },
+  });
+  await prisma.participation.create({
+    data: { userId: teacher.id, courseOfferingId: otherOffering.id, role: 'TEACHER' },
+  });
+  const foreignNode = await request(roadmapUrl(otherCourseOffering, '/nodes'), 'POST', {
+    title: 'Ajeno',
+    nodeTypeId: predefinedNodeTypeId,
+    positionX: 0,
+    positionY: 0,
+  });
+  const node = (await foreignNode.json()).node;
+  const foreignResourceResponse = await request(
+    roadmapUrl(otherCourseOffering, `/nodes/${node.id}/resources`),
+    'POST',
+    { title: 'Recurso ajeno', url: 'https://example.com/foreign', type: 'LINK' },
+  );
+  const foreignResource = (await foreignResourceResponse.json()).resource;
+
+  const response = await request(
+    roadmapUrl(courseOffering, `/resources/${foreignResource.id}`),
+    'DELETE',
+  );
+  assert.equal(response.status, 404);
+  const resources = await (
+    await authFetch(roadmapUrl(otherCourseOffering, `/nodes/${node.id}/resources`))
+  ).json();
+  assert.equal(resources.resources.length, 1);
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, `/tipos/${foreignType.id}`), 'PATCH', {
-        nombre: 'Ajeno 2',
+      await request(roadmapUrl(courseOffering, `/nodes/${node.id}`), 'PATCH', {
+        isVisible: false,
       })
     ).status,
     404,
   );
-  const localDto = await (await authFetch(roadmapUrl(path))).json();
+  const foreignNodeTypeResponse = await request(
+    roadmapUrl(otherCourseOffering, '/node-types'),
+    'POST',
+    {
+      name: 'Ajeno',
+      color: '#123456',
+    },
+  );
+  const foreignNodeType = (await foreignNodeTypeResponse.json()).nodeType;
   assert.equal(
     (
-      await jsonRequest(roadmapUrl(path, '/dependencias'), 'POST', {
-        sourceNodeId: foreignNode.id,
-        targetNodeId: localDto.nodos[0].id,
+      await request(roadmapUrl(courseOffering, `/node-types/${foreignNodeType.id}`), 'PATCH', {
+        name: 'Ajeno 2',
+      })
+    ).status,
+    404,
+  );
+  const localDto = await (await authFetch(roadmapUrl(courseOffering))).json();
+  assert.equal(
+    (
+      await request(roadmapUrl(courseOffering, '/dependencies'), 'POST', {
+        sourceNodeId: node.id,
+        targetNodeId: localDto.nodes[0].id,
       })
     ).status,
     404,
@@ -438,42 +517,42 @@ serialTest('rejects cross-roadmap mutations for valid UUIDs', async () => {
 });
 
 serialTest('student sessions read only visible nodes and cannot mutate', async () => {
-  const course = await prisma.curso.findUniqueOrThrow({
-    where: {
-      ramoCodigo_anio_semestre: { ramoCodigo: path.ramo, anio: path.anio, semestre: path.semestre },
-    },
+  const persistedCourseOffering = await prisma.courseOffering.findUniqueOrThrow({
+    where: { courseCode_year_semester: courseOffering },
   });
-  const student = await prisma.usuario.create({
+  const student = await prisma.user.create({
     data: {
-      nombre: 'Estudiante de integración',
-      correoInstitucional: `estudiante-${suffix}@uchile.cl`,
+      name: 'Estudiante de integración',
+      institutionalEmail: `estudiante-${suffix}@uchile.cl`,
       rut: `8${suffix}`,
     },
   });
-  await prisma.participacion.create({
-    data: { usuarioId: student.id, cursoId: course.id, funcion: 'ESTUDIANTE' },
+  await prisma.participation.create({
+    data: { userId: student.id, courseOfferingId: persistedCourseOffering.id, role: 'STUDENT' },
   });
   studentCookie = await sessionCookie(student.id);
-  const hiddenResponse = await jsonRequest(roadmapUrl(path, '/nodos'), 'POST', {
-    titulo: 'Nodo oculto',
-    typeId: predefinedTypeId,
-    posX: 240,
-    posY: 0,
-    visible: false,
+  const hiddenResponse = await request(roadmapUrl(courseOffering, '/nodes'), 'POST', {
+    title: 'Nodo oculto',
+    nodeTypeId: predefinedNodeTypeId,
+    positionX: 240,
+    positionY: 0,
+    isVisible: false,
   });
   assert.equal(hiddenResponse.status, 201);
-  const hidden = (await hiddenResponse.json()).nodo;
-  const studentRoadmap = await fetch(roadmapUrl(path), { headers: { cookie: studentCookie } });
+  const hidden = (await hiddenResponse.json()).node;
+  const studentRoadmap = await fetch(roadmapUrl(courseOffering), {
+    headers: { cookie: studentCookie },
+  });
   assert.equal(studentRoadmap.status, 200);
   const studentDto = await studentRoadmap.json();
   assert.equal(
-    studentDto.nodos.some((node: { id: string }) => node.id === hidden.id),
+    studentDto.nodes.some((node: { id: string }) => node.id === hidden.id),
     false,
   );
-  const forbiddenMutation = await jsonRequest(
-    roadmapUrl(path, `/nodos/${hidden.id}`),
+  const forbiddenMutation = await request(
+    roadmapUrl(courseOffering, `/nodes/${hidden.id}`),
     'PATCH',
-    { titulo: 'No permitido' },
+    { title: 'No permitido' },
     studentCookie,
   );
   assert.equal(forbiddenMutation.status, 403);
@@ -493,36 +572,40 @@ serialTest('VTI callback creates a local user and a compatible session cookie', 
   assert.equal(new URL(response.headers.get('location') ?? '').pathname, '/');
   assert.match(response.headers.get('set-cookie') ?? '', /next-auth\.session-token=/);
   assert.equal(response.headers.get('location')?.includes(token), false);
-  const sessionCookie = response.headers.get('set-cookie')?.split(';', 1)[0];
+  const vtiSessionCookie = response.headers.get('set-cookie')?.split(';', 1)[0];
   const sessionResponse = await fetch(`${baseUrl}/api/auth/session`, {
-    headers: { cookie: sessionCookie ?? '' },
+    headers: { cookie: vtiSessionCookie ?? '' },
   });
   assert.equal(sessionResponse.status, 200);
   assert.equal(
     (await sessionResponse.json()).user.id,
     (
-      await prisma.usuario.findUniqueOrThrow({
-        where: { correoInstitucional: `vti-${suffix}@uchile.cl` },
+      await prisma.user.findUniqueOrThrow({
+        where: { institutionalEmail: `vti-${suffix}@uchile.cl` },
       })
     ).id,
   );
-  const user = await prisma.usuario.findUnique({
-    where: { correoInstitucional: `vti-${suffix}@uchile.cl` },
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { institutionalEmail: `vti-${suffix}@uchile.cl` },
   });
-  assert.equal(user?.rut, '12345678');
-  assert.equal(user?.nombre, 'Persona VTI');
-  assert.equal(await prisma.participacion.count({ where: { usuarioId: user?.id } }), 0);
+  assert.equal(user.name, 'Persona VTI');
+  assert.equal(user.rut, '12345678');
+  assert.equal(await prisma.participation.count({ where: { userId: user.id } }), 0);
 });
 
 serialTest('VTI callback uses the secure cookie contract behind HTTPS', async () => {
+  const stopped = new Promise<void>((resolve) => server.once('exit', () => resolve()));
+  server.kill('SIGTERM');
+  await stopped;
+  server = startServer(`https://localhost:${port}`);
+  await waitForServer();
   const token = await signVtiToken({
-    identification: `000012345679-5`,
+    identification: '000012345679-5',
     email: `https-${suffix}@uchile.cl`,
     name: 'Persona HTTPS',
   });
   const response = await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(token)}`, {
     redirect: 'manual',
-    headers: { 'x-forwarded-proto': 'https' },
   });
   assert.equal(response.status, 307);
   const cookie = response.headers.get('set-cookie') ?? '';
@@ -541,10 +624,10 @@ serialTest('login page exposes the configured institutional redirect', async () 
 serialTest(
   'VTI callback reuses email and RUT identities and rejects conflicts atomically',
   async () => {
-    const byEmail = await prisma.usuario.create({
+    const byEmail = await prisma.user.create({
       data: {
-        nombre: 'Nombre anterior',
-        correoInstitucional: `existing-email-${suffix}@uchile.cl`,
+        name: 'Nombre anterior',
+        institutionalEmail: `existing-email-${suffix}@uchile.cl`,
         rut: `71${suffix}`,
       },
     });
@@ -559,14 +642,14 @@ serialTest(
     );
     assert.equal(emailResponse.status, 307);
     assert.equal(
-      (await prisma.usuario.findUniqueOrThrow({ where: { id: byEmail.id } })).nombre,
+      (await prisma.user.findUniqueOrThrow({ where: { id: byEmail.id } })).name,
       'Nombre actualizado',
     );
 
-    const byRut = await prisma.usuario.create({
+    const byRut = await prisma.user.create({
       data: {
-        nombre: 'Vinculación por RUT',
-        correoInstitucional: `existing-rut-${suffix}@uchile.cl`,
+        name: 'Vinculación por RUT',
+        institutionalEmail: `existing-rut-${suffix}@uchile.cl`,
         rut: `72${suffix}`,
       },
     });
@@ -584,33 +667,33 @@ serialTest(
       307,
     );
     assert.equal(
-      (await prisma.usuario.findUniqueOrThrow({ where: { id: byRut.id } })).correoInstitucional,
+      (await prisma.user.findUniqueOrThrow({ where: { id: byRut.id } })).institutionalEmail,
       `existing-rut-${suffix}@uchile.cl`,
     );
     assert.equal(
-      await prisma.usuario.count({
-        where: { correoInstitucional: `new-email-${suffix}@uchile.cl` },
+      await prisma.user.count({
+        where: { institutionalEmail: `new-email-${suffix}@uchile.cl` },
       }),
       0,
     );
 
-    const emailConflict = await prisma.usuario.create({
+    const emailConflict = await prisma.user.create({
       data: {
-        nombre: 'Correo en conflicto',
-        correoInstitucional: `conflict-email-${suffix}@uchile.cl`,
+        name: 'Correo en conflicto',
+        institutionalEmail: `conflict-email-${suffix}@uchile.cl`,
         rut: `73${suffix}`,
       },
     });
-    const rutConflict = await prisma.usuario.create({
+    const rutConflict = await prisma.user.create({
       data: {
-        nombre: 'RUT en conflicto',
-        correoInstitucional: `conflict-rut-${suffix}@uchile.cl`,
+        name: 'RUT en conflicto',
+        institutionalEmail: `conflict-rut-${suffix}@uchile.cl`,
         rut: `74${suffix}`,
       },
     });
     const conflictToken = await signVtiToken({
       identification: `74${suffix}-5`,
-      email: emailConflict.correoInstitucional,
+      email: emailConflict.institutionalEmail,
       name: 'No debe persistir',
     });
     assert.equal(
@@ -622,11 +705,11 @@ serialTest(
       307,
     );
     assert.equal(
-      (await prisma.usuario.findUniqueOrThrow({ where: { id: emailConflict.id } })).nombre,
+      (await prisma.user.findUniqueOrThrow({ where: { id: emailConflict.id } })).name,
       'Correo en conflicto',
     );
     assert.equal(
-      (await prisma.usuario.findUniqueOrThrow({ where: { id: rutConflict.id } })).nombre,
+      (await prisma.user.findUniqueOrThrow({ where: { id: rutConflict.id } })).name,
       'RUT en conflicto',
     );
   },

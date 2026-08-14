@@ -1,26 +1,28 @@
-export type RoadmapResource = {
+import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
+
+export type Resource = {
   id: string;
-  titulo: string;
+  title: string;
   url: string;
-  tipo: 'ARCHIVO' | 'ENLACE' | 'VIDEO';
+  type: 'FILE' | 'LINK' | 'VIDEO';
 };
 
-export type RoadmapType = {
+export type NodeType = {
   id: string;
-  nombre: string;
+  name: string;
   color: string;
-  predefinido: boolean;
+  isPredefined: boolean;
 };
 
 export type RoadmapNode = {
   id: string;
-  titulo: string;
-  descripcion: string | null;
-  posX: number;
-  posY: number;
-  typeId: string;
-  visible: boolean;
-  recursos: RoadmapResource[];
+  title: string;
+  description: string | null;
+  positionX: number;
+  positionY: number;
+  nodeTypeId: string;
+  isVisible: boolean;
+  resources: Resource[];
 };
 
 export type RoadmapDependency = {
@@ -30,20 +32,14 @@ export type RoadmapDependency = {
 };
 
 export type RoadmapDto = {
-  ramo: { codigo: string; nombre: string; departamento: string };
-  curso: { id: string; anio: number; semestre: number };
+  course: { code: string; name: string; department: string };
+  courseOffering: { id: string; year: number; semester: number };
   roadmap: { id: string };
-  tipos: RoadmapType[];
-  nodos: RoadmapNode[];
-  dependencias: RoadmapDependency[];
+  nodeTypes: NodeType[];
+  nodes: RoadmapNode[];
+  dependencies: RoadmapDependency[];
 };
 
-export type CourseRoute = {
-  ramo: string;
-  anio: number;
-  semestre: number;
-};
-
-export function roadmapUrl(route: CourseRoute, suffix = ''): string {
-  return `/api/cursos/${encodeURIComponent(route.ramo)}/${route.anio}/${route.semestre}/roadmap${suffix}`;
+export function roadmapUrl(identifier: CourseOfferingIdentifier, suffix = ''): string {
+  return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap${suffix}`;
 }

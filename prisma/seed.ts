@@ -9,27 +9,27 @@ if (!connectionString) {
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
-const predefinedTypes = [
-  { id: '00000000-0000-4000-8000-000000000001', nombre: 'Contenido', color: '#024AD8' },
-  { id: '00000000-0000-4000-8000-000000000002', nombre: 'Evaluación', color: '#FF5050' },
-  { id: '00000000-0000-4000-8000-000000000003', nombre: 'Material extra', color: '#356373' },
+const predefinedNodeTypes = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Contenido', color: '#024AD8' },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Evaluación', color: '#FF5050' },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Material extra', color: '#356373' },
 ];
 
 async function main() {
-  for (const tipo of predefinedTypes) {
-    await prisma.tipoNodo.upsert({
-      where: { id: tipo.id },
+  for (const nodeType of predefinedNodeTypes) {
+    await prisma.nodeType.upsert({
+      where: { id: nodeType.id },
       update: {
-        nombre: tipo.nombre,
-        nombreNormalizado: tipo.nombre.trim().toLocaleLowerCase('es-CL'),
-        color: tipo.color,
-        predefinido: true,
+        name: nodeType.name,
+        normalizedName: nodeType.name.trim().toLocaleLowerCase('es-CL'),
+        color: nodeType.color,
+        isPredefined: true,
         roadmapId: null,
       },
       create: {
-        ...tipo,
-        nombreNormalizado: tipo.nombre.trim().toLocaleLowerCase('es-CL'),
-        predefinido: true,
+        ...nodeType,
+        normalizedName: nodeType.name.trim().toLocaleLowerCase('es-CL'),
+        isPredefined: true,
       },
     });
   }

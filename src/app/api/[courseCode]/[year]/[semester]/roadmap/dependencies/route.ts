@@ -5,22 +5,22 @@ import {
   apiErrorResponse,
   ApiError,
   findCycle,
-  parseCoursePath,
+  parseCourseOfferingIdentifier,
   parseJson,
   requireNodeInRoadmap,
   requireRoadmap,
   requireUuid,
   handlePrismaError,
 } from '@/lib/roadmap-api';
-import { requireCourseTeacher } from '@/lib/auth';
+import { requireCourseOfferingTeacher } from '@/lib/auth';
 
-type Context = { params: Promise<{ ramo: string; anio: string; semestre: string }> };
+type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
 export async function POST(request: Request, context: Context) {
   try {
-    const path = parseCoursePath(await context.params);
-    await requireCourseTeacher(path);
-    const roadmap = await requireRoadmap(path);
+    const identifier = parseCourseOfferingIdentifier(await context.params);
+    await requireCourseOfferingTeacher(identifier);
+    const roadmap = await requireRoadmap(identifier);
     const body = await parseJson(request);
     const sourceNodeId = requireUuid(body.sourceNodeId, 'sourceNodeId');
     const targetNodeId = requireUuid(body.targetNodeId, 'targetNodeId');
@@ -31,7 +31,7 @@ export async function POST(request: Request, context: Context) {
     await requireNodeInRoadmap(targetNodeId, roadmap.id);
     const dependency = await prisma.$transaction(
       async (transaction) => {
-        const dependencies = await transaction.dependencia.findMany({
+        const dependencies = await transaction.dependency.findMany({
           where: { sourceNode: { roadmapId: roadmap.id } },
           select: { sourceNodeId: true, targetNodeId: true },
         });
@@ -46,12 +46,12 @@ export async function POST(request: Request, context: Context) {
         if (findCycle(dependencies, sourceNodeId, targetNodeId)) {
           throw new ApiError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
         }
-        return transaction.dependencia.create({ data: { sourceNodeId, targetNodeId } });
+        return transaction.dependency.create({ data: { sourceNodeId, targetNodeId } });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
     return NextResponse.json(
-      { dependencia: { id: dependency.id, sourceNodeId, targetNodeId } },
+      { dependency: { id: dependency.id, sourceNodeId, targetNodeId } },
       { status: 201 },
     );
   } catch (error) {

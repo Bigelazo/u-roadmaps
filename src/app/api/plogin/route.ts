@@ -29,7 +29,7 @@ function isHttps(request: Request) {
   return configuredUrl
     ? configuredUrl.startsWith('https://')
     : request.headers.get('x-forwarded-proto') === 'https' ||
-        new URL(request.url).protocol === 'https:';
+    new URL(request.url).protocol === 'https:';
 }
 
 const sessionMaxAge = 30 * 24 * 60 * 60;
@@ -70,10 +70,10 @@ export async function GET(request: Request) {
 
     const user = await prisma.$transaction(
       async (transaction) => {
-        const byEmail = await transaction.usuario.findFirst({
-          where: { correoInstitucional: { equals: email, mode: 'insensitive' } },
+        const byEmail = await transaction.user.findFirst({
+          where: { institutionalEmail: { equals: email, mode: 'insensitive' } },
         });
-        const byRut = await transaction.usuario.findUnique({ where: { rut: identification } });
+        const byRut = await transaction.user.findUnique({ where: { rut: identification } });
         if (byEmail && byRut && byEmail.id !== byRut.id) {
           throw new ApiError(
             400,
@@ -91,13 +91,13 @@ export async function GET(request: Request) {
 
         const existing = byEmail ?? byRut;
         if (!existing)
-          return transaction.usuario.create({
-            data: { nombre: name, correoInstitucional: email, rut: identification },
+          return transaction.user.create({
+            data: { name, institutionalEmail: email, rut: identification },
           });
-        return transaction.usuario.update({
+        return transaction.user.update({
           where: { id: existing.id },
           data: {
-            ...(existing.nombre !== name ? { nombre: name } : {}),
+            ...(existing.name !== name ? { name } : {}),
             ...(existing.rut ? {} : { rut: identification }),
           },
         });

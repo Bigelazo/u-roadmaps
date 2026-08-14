@@ -1,6 +1,6 @@
 import { getServerSession, type NextAuthOptions, type Session } from 'next-auth';
 import { prisma } from '@/lib/db';
-import { ApiError } from '@/lib/roadmap-api';
+import { ApiError, type CourseOfferingIdentifier } from '@/lib/roadmap-api';
 
 const sessionSecret = process.env.NEXTAUTH_SECRET;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -30,7 +30,7 @@ export async function getApplicationSession(): Promise<Session | null> {
 export async function resolveSessionUser(session: Session | null) {
   const userId = session?.user?.id;
   if (!userId || !uuidPattern.test(userId)) return null;
-  return prisma.usuario.findUnique({ where: { id: userId } });
+  return prisma.user.findUnique({ where: { id: userId } });
 }
 
 export async function requireAuthenticatedUser() {
@@ -39,54 +39,55 @@ export async function requireAuthenticatedUser() {
   return user;
 }
 
-export async function requireCourseParticipation(
-  path: { ramo: string; anio: number; semestre: number },
-  allowedFunctions: Array<'ESTUDIANTE' | 'DOCENTE'>,
+export async function requireCourseOfferingParticipation(
+  identifier: CourseOfferingIdentifier,
+  allowedRoles: Array<'STUDENT' | 'TEACHER'>,
 ) {
   const user = await requireAuthenticatedUser();
-  const course = await prisma.curso.findUnique({
+  const courseOffering = await prisma.courseOffering.findUnique({
     where: {
-      ramoCodigo_anio_semestre: { ramoCodigo: path.ramo, anio: path.anio, semestre: path.semestre },
+      courseCode_year_semester: identifier,
     },
     include: { roadmap: true },
   });
-  if (!course)
+  if (!courseOffering)
     throw new ApiError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
     );
-  const participation = await prisma.participacion.findFirst({
+  const participation = await prisma.participation.findFirst({
     where: {
-      usuarioId: user.id,
-      cursoId: course.id,
-      vigente: true,
-      funcion: { in: allowedFunctions },
+      userId: user.id,
+      courseOfferingId: courseOffering.id,
+      isActive: true,
+      role: { in: allowedRoles },
     },
   });
   if (!participation)
     throw new ApiError(403, 'FORBIDDEN', 'No tienes participación vigente para esta operación.');
-  return { user, course, participation };
+  return { user, courseOffering, participation };
 }
 
-export async function requireCourseTeacher(path: { ramo: string; anio: number; semestre: number }) {
-  return requireCourseParticipation(path, ['DOCENTE']);
+export async function requireCourseOfferingTeacher(identifier: CourseOfferingIdentifier) {
+  return requireCourseOfferingParticipation(identifier, ['TEACHER']);
 }
 
-export async function requireRoadmapCreationAccess(path: {
-  ramo: string;
-  anio: number;
-  semestre: number;
-}) {
+export async function requireRoadmapCreationAccess(identifier: CourseOfferingIdentifier) {
   const user = await requireAuthenticatedUser();
-  const course = await prisma.curso.findUnique({
+  const courseOffering = await prisma.courseOffering.findUnique({
     where: {
-      ramoCodigo_anio_semestre: { ramoCodigo: path.ramo, anio: path.anio, semestre: path.semestre },
+      courseCode_year_semester: identifier,
     },
   });
-  if (!course) return { user, course: null };
-  const participation = await prisma.participacion.findFirst({
-    where: { usuarioId: user.id, cursoId: course.id, vigente: true, funcion: 'DOCENTE' },
+  if (!courseOffering) return { user, courseOffering: null };
+  const participation = await prisma.participation.findFirst({
+    where: {
+      userId: user.id,
+      courseOfferingId: courseOffering.id,
+      isActive: true,
+      role: 'TEACHER',
+    },
   });
   if (!participation)
     throw new ApiError(
@@ -94,5 +95,5 @@ export async function requireRoadmapCreationAccess(path: {
       'FORBIDDEN',
       'No tienes participación docente vigente para esta operación.',
     );
-  return { user, course };
+  return { user, courseOffering };
 }

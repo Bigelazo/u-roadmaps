@@ -1,129 +1,125 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TYPE "TipoRecurso" AS ENUM ('ARCHIVO', 'ENLACE', 'VIDEO');
-CREATE TYPE "FuncionParticipacion" AS ENUM ('ESTUDIANTE', 'DOCENTE');
+CREATE TYPE "ResourceType" AS ENUM ('FILE', 'LINK', 'VIDEO');
+CREATE TYPE "ParticipationRole" AS ENUM ('STUDENT', 'TEACHER');
 
-CREATE TABLE "Ramo" (
-    "codigo" VARCHAR(20) NOT NULL,
-    "nombre" VARCHAR(200) NOT NULL,
-    "departamento" VARCHAR(200) NOT NULL,
-    CONSTRAINT "Ramo_pkey" PRIMARY KEY ("codigo")
+CREATE TABLE "Course" (
+    "code" VARCHAR(20) NOT NULL,
+    "name" VARCHAR(200) NOT NULL,
+    "department" VARCHAR(200) NOT NULL,
+    CONSTRAINT "Course_pkey" PRIMARY KEY ("code")
 );
 
-CREATE TABLE "Curso" (
+CREATE TABLE "CourseOffering" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "ramoCodigo" VARCHAR(20) NOT NULL,
-    "anio" INTEGER NOT NULL,
-    "semestre" INTEGER NOT NULL,
-    CONSTRAINT "Curso_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "Curso_academic_period_check" CHECK ("anio" > 0 AND "semestre" IN (1, 2))
+    "courseCode" VARCHAR(20) NOT NULL,
+    "year" INTEGER NOT NULL,
+    "semester" INTEGER NOT NULL,
+    CONSTRAINT "CourseOffering_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "CourseOffering_academic_term_check" CHECK ("year" > 0 AND "semester" IN (1, 2))
 );
 
 CREATE TABLE "Roadmap" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "cursoId" UUID NOT NULL,
+    "courseOfferingId" UUID NOT NULL,
     CONSTRAINT "Roadmap_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "TipoNodo" (
+CREATE TABLE "NodeType" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "nombre" VARCHAR(120) NOT NULL,
-    "nombreNormalizado" VARCHAR(120) NOT NULL,
+    "name" VARCHAR(120) NOT NULL,
+    "normalizedName" VARCHAR(120) NOT NULL,
     "color" VARCHAR(7) NOT NULL,
-    "predefinido" BOOLEAN NOT NULL DEFAULT false,
+    "isPredefined" BOOLEAN NOT NULL DEFAULT false,
     "roadmapId" UUID,
-    CONSTRAINT "TipoNodo_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "TipoNodo_color_check" CHECK ("color" ~ '^#[0-9A-Fa-f]{6}$'),
-    CONSTRAINT "TipoNodo_scope_check" CHECK (
-        ("predefinido" = true AND "roadmapId" IS NULL)
-        OR ("predefinido" = false AND "roadmapId" IS NOT NULL)
-    )
+    CONSTRAINT "NodeType_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "NodeType_color_check" CHECK ("color" ~ '^#[0-9A-Fa-f]{6}$'),
+    CONSTRAINT "NodeType_scope_check" CHECK (("isPredefined" = true AND "roadmapId" IS NULL) OR ("isPredefined" = false AND "roadmapId" IS NOT NULL))
 );
 
-CREATE TABLE "Nodo" (
+CREATE TABLE "RoadmapNode" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "roadmapId" UUID NOT NULL,
-    "tipoNodoId" UUID NOT NULL,
-    "titulo" VARCHAR(240) NOT NULL,
-    "descripcion" TEXT,
-    "posX" DOUBLE PRECISION NOT NULL,
-    "posY" DOUBLE PRECISION NOT NULL,
-    "visible" BOOLEAN NOT NULL DEFAULT true,
-    CONSTRAINT "Nodo_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "Nodo_position_check" CHECK (
-        "posX" < 'Infinity'::double precision AND "posX" > '-Infinity'::double precision
-        AND "posY" < 'Infinity'::double precision AND "posY" > '-Infinity'::double precision
-    )
+    "nodeTypeId" UUID NOT NULL,
+    "title" VARCHAR(240) NOT NULL,
+    "description" TEXT,
+    "positionX" DOUBLE PRECISION NOT NULL,
+    "positionY" DOUBLE PRECISION NOT NULL,
+    "isVisible" BOOLEAN NOT NULL DEFAULT true,
+    CONSTRAINT "RoadmapNode_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "RoadmapNode_position_check" CHECK ("positionX" < 'Infinity'::double precision AND "positionX" > '-Infinity'::double precision AND "positionY" < 'Infinity'::double precision AND "positionY" > '-Infinity'::double precision)
 );
 
-CREATE TABLE "Dependencia" (
+CREATE TABLE "Dependency" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "sourceNodeId" UUID NOT NULL,
     "targetNodeId" UUID NOT NULL,
-    CONSTRAINT "Dependencia_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "Dependencia_self_check" CHECK ("sourceNodeId" <> "targetNodeId")
+    CONSTRAINT "Dependency_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "Dependency_self_check" CHECK ("sourceNodeId" <> "targetNodeId")
 );
 
-CREATE TABLE "Recurso" (
+CREATE TABLE "Resource" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "nodoId" UUID NOT NULL,
-    "titulo" VARCHAR(240) NOT NULL,
+    "roadmapNodeId" UUID NOT NULL,
+    "title" VARCHAR(240) NOT NULL,
     "url" TEXT NOT NULL,
-    "tipo" "TipoRecurso" NOT NULL,
-    "creadoEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "actualizadoEn" TIMESTAMP(3) NOT NULL,
-    CONSTRAINT "Recurso_pkey" PRIMARY KEY ("id")
+    "type" "ResourceType" NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Resource_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "Usuario" (
+CREATE TABLE "User" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "nombre" VARCHAR(200) NOT NULL,
-    "correoInstitucional" VARCHAR(320) NOT NULL,
-    CONSTRAINT "Usuario_pkey" PRIMARY KEY ("id")
+    "name" VARCHAR(200) NOT NULL,
+    "institutionalEmail" VARCHAR(320) NOT NULL,
+    "rut" VARCHAR(20),
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "Participacion" (
+CREATE TABLE "Participation" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "usuarioId" UUID NOT NULL,
-    "cursoId" UUID NOT NULL,
-    "funcion" "FuncionParticipacion" NOT NULL,
-    "vigente" BOOLEAN NOT NULL DEFAULT true,
-    CONSTRAINT "Participacion_pkey" PRIMARY KEY ("id")
+    "userId" UUID NOT NULL,
+    "courseOfferingId" UUID NOT NULL,
+    "role" "ParticipationRole" NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    CONSTRAINT "Participation_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "Completacion" (
+CREATE TABLE "Completion" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "usuarioId" UUID NOT NULL,
-    "nodoId" UUID NOT NULL,
-    "completadaEn" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Completacion_pkey" PRIMARY KEY ("id")
+    "userId" UUID NOT NULL,
+    "roadmapNodeId" UUID NOT NULL,
+    "completedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Completion_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "Curso_ramoCodigo_anio_semestre_key" ON "Curso"("ramoCodigo", "anio", "semestre");
-CREATE INDEX "Curso_ramoCodigo_idx" ON "Curso"("ramoCodigo");
-CREATE UNIQUE INDEX "Roadmap_cursoId_key" ON "Roadmap"("cursoId");
-CREATE UNIQUE INDEX "TipoNodo_roadmapId_nombreNormalizado_key" ON "TipoNodo"("roadmapId", "nombreNormalizado");
-CREATE INDEX "TipoNodo_predefinido_idx" ON "TipoNodo"("predefinido");
-CREATE INDEX "Nodo_roadmapId_idx" ON "Nodo"("roadmapId");
-CREATE INDEX "Nodo_tipoNodoId_idx" ON "Nodo"("tipoNodoId");
-CREATE UNIQUE INDEX "Dependencia_sourceNodeId_targetNodeId_key" ON "Dependencia"("sourceNodeId", "targetNodeId");
-CREATE INDEX "Dependencia_targetNodeId_idx" ON "Dependencia"("targetNodeId");
-CREATE INDEX "Recurso_nodoId_idx" ON "Recurso"("nodoId");
-CREATE UNIQUE INDEX "Usuario_correoInstitucional_key" ON "Usuario"("correoInstitucional");
-CREATE UNIQUE INDEX "Participacion_usuarioId_cursoId_key" ON "Participacion"("usuarioId", "cursoId");
-CREATE INDEX "Participacion_cursoId_funcion_idx" ON "Participacion"("cursoId", "funcion");
-CREATE UNIQUE INDEX "Completacion_usuarioId_nodoId_key" ON "Completacion"("usuarioId", "nodoId");
-CREATE INDEX "Completacion_nodoId_idx" ON "Completacion"("nodoId");
+CREATE UNIQUE INDEX "CourseOffering_courseCode_year_semester_key" ON "CourseOffering"("courseCode", "year", "semester");
+CREATE INDEX "CourseOffering_courseCode_idx" ON "CourseOffering"("courseCode");
+CREATE UNIQUE INDEX "Roadmap_courseOfferingId_key" ON "Roadmap"("courseOfferingId");
+CREATE UNIQUE INDEX "NodeType_roadmapId_normalizedName_key" ON "NodeType"("roadmapId", "normalizedName");
+CREATE INDEX "NodeType_isPredefined_idx" ON "NodeType"("isPredefined");
+CREATE INDEX "RoadmapNode_roadmapId_idx" ON "RoadmapNode"("roadmapId");
+CREATE INDEX "RoadmapNode_nodeTypeId_idx" ON "RoadmapNode"("nodeTypeId");
+CREATE UNIQUE INDEX "Dependency_sourceNodeId_targetNodeId_key" ON "Dependency"("sourceNodeId", "targetNodeId");
+CREATE INDEX "Dependency_targetNodeId_idx" ON "Dependency"("targetNodeId");
+CREATE INDEX "Resource_roadmapNodeId_idx" ON "Resource"("roadmapNodeId");
+CREATE UNIQUE INDEX "User_institutionalEmail_key" ON "User"("institutionalEmail");
+CREATE UNIQUE INDEX "User_rut_key" ON "User"("rut");
+CREATE UNIQUE INDEX "Participation_userId_courseOfferingId_key" ON "Participation"("userId", "courseOfferingId");
+CREATE INDEX "Participation_courseOfferingId_role_idx" ON "Participation"("courseOfferingId", "role");
+CREATE UNIQUE INDEX "Completion_userId_roadmapNodeId_key" ON "Completion"("userId", "roadmapNodeId");
+CREATE INDEX "Completion_roadmapNodeId_idx" ON "Completion"("roadmapNodeId");
 
-ALTER TABLE "Curso" ADD CONSTRAINT "Curso_ramoCodigo_fkey" FOREIGN KEY ("ramoCodigo") REFERENCES "Ramo"("codigo") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Roadmap" ADD CONSTRAINT "Roadmap_cursoId_fkey" FOREIGN KEY ("cursoId") REFERENCES "Curso"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "TipoNodo" ADD CONSTRAINT "TipoNodo_roadmapId_fkey" FOREIGN KEY ("roadmapId") REFERENCES "Roadmap"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Nodo" ADD CONSTRAINT "Nodo_roadmapId_fkey" FOREIGN KEY ("roadmapId") REFERENCES "Roadmap"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Nodo" ADD CONSTRAINT "Nodo_tipoNodoId_fkey" FOREIGN KEY ("tipoNodoId") REFERENCES "TipoNodo"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "Dependencia" ADD CONSTRAINT "Dependencia_sourceNodeId_fkey" FOREIGN KEY ("sourceNodeId") REFERENCES "Nodo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Dependencia" ADD CONSTRAINT "Dependencia_targetNodeId_fkey" FOREIGN KEY ("targetNodeId") REFERENCES "Nodo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Recurso" ADD CONSTRAINT "Recurso_nodoId_fkey" FOREIGN KEY ("nodoId") REFERENCES "Nodo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Participacion" ADD CONSTRAINT "Participacion_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "Usuario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Participacion" ADD CONSTRAINT "Participacion_cursoId_fkey" FOREIGN KEY ("cursoId") REFERENCES "Curso"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Completacion" ADD CONSTRAINT "Completacion_usuarioId_fkey" FOREIGN KEY ("usuarioId") REFERENCES "Usuario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Completacion" ADD CONSTRAINT "Completacion_nodoId_fkey" FOREIGN KEY ("nodoId") REFERENCES "Nodo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "CourseOffering" ADD CONSTRAINT "CourseOffering_courseCode_fkey" FOREIGN KEY ("courseCode") REFERENCES "Course"("code") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Roadmap" ADD CONSTRAINT "Roadmap_courseOfferingId_fkey" FOREIGN KEY ("courseOfferingId") REFERENCES "CourseOffering"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "NodeType" ADD CONSTRAINT "NodeType_roadmapId_fkey" FOREIGN KEY ("roadmapId") REFERENCES "Roadmap"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "RoadmapNode" ADD CONSTRAINT "RoadmapNode_roadmapId_fkey" FOREIGN KEY ("roadmapId") REFERENCES "Roadmap"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "RoadmapNode" ADD CONSTRAINT "RoadmapNode_nodeTypeId_fkey" FOREIGN KEY ("nodeTypeId") REFERENCES "NodeType"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Dependency" ADD CONSTRAINT "Dependency_sourceNodeId_fkey" FOREIGN KEY ("sourceNodeId") REFERENCES "RoadmapNode"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Dependency" ADD CONSTRAINT "Dependency_targetNodeId_fkey" FOREIGN KEY ("targetNodeId") REFERENCES "RoadmapNode"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Resource" ADD CONSTRAINT "Resource_roadmapNodeId_fkey" FOREIGN KEY ("roadmapNodeId") REFERENCES "RoadmapNode"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Participation" ADD CONSTRAINT "Participation_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Participation" ADD CONSTRAINT "Participation_courseOfferingId_fkey" FOREIGN KEY ("courseOfferingId") REFERENCES "CourseOffering"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Completion" ADD CONSTRAINT "Completion_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Completion" ADD CONSTRAINT "Completion_roadmapNodeId_fkey" FOREIGN KEY ("roadmapNodeId") REFERENCES "RoadmapNode"("id") ON DELETE CASCADE ON UPDATE CASCADE;

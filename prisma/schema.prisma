@@ -7,133 +7,133 @@ datasource db {
   provider = "postgresql"
 }
 
-model Ramo {
-  codigo       String   @id @db.VarChar(20)
-  nombre       String   @db.VarChar(200)
-  departamento String   @db.VarChar(200)
-  cursos       Curso[]
+model Course {
+  code            String           @id @db.VarChar(20)
+  name            String           @db.VarChar(200)
+  department      String           @db.VarChar(200)
+  courseOfferings CourseOffering[]
 }
 
-model Curso {
-  id         String    @id @default(uuid()) @db.Uuid
-  ramoCodigo String    @db.VarChar(20)
-  anio       Int
-  semestre   Int
-  ramo       Ramo      @relation(fields: [ramoCodigo], references: [codigo], onDelete: Cascade)
-  roadmap    Roadmap?
-  usuarios   Participacion[]
+model CourseOffering {
+  id           String          @id @default(uuid()) @db.Uuid
+  courseCode   String          @db.VarChar(20)
+  year         Int
+  semester     Int
+  course       Course          @relation(fields: [courseCode], references: [code], onDelete: Cascade)
+  roadmap      Roadmap?
+  participants Participation[]
 
-  @@unique([ramoCodigo, anio, semestre])
-  @@index([ramoCodigo])
+  @@unique([courseCode, year, semester])
+  @@index([courseCode])
 }
 
 model Roadmap {
-  id       String     @id @default(uuid()) @db.Uuid
-  cursoId  String     @unique @db.Uuid
-  curso    Curso      @relation(fields: [cursoId], references: [id], onDelete: Cascade)
-  tipos    TipoNodo[]
-  nodos    Nodo[]
+  id               String       @id @default(uuid()) @db.Uuid
+  courseOfferingId String       @unique @db.Uuid
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  nodeTypes        NodeType[]
+  roadmapNodes     RoadmapNode[]
 }
 
-model TipoNodo {
-  id                String   @id @default(uuid()) @db.Uuid
-  nombre            String   @db.VarChar(120)
-  nombreNormalizado String   @db.VarChar(120)
-  color             String   @db.VarChar(7)
-  predefinido       Boolean  @default(false)
-  roadmapId         String?  @db.Uuid
-  roadmap           Roadmap? @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  nodos             Nodo[]
+model NodeType {
+  id             String        @id @default(uuid()) @db.Uuid
+  name           String        @db.VarChar(120)
+  normalizedName String        @db.VarChar(120)
+  color          String        @db.VarChar(7)
+  isPredefined   Boolean       @default(false)
+  roadmapId      String?       @db.Uuid
+  roadmap        Roadmap?      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  nodes          RoadmapNode[]
 
-  @@unique([roadmapId, nombreNormalizado])
-  @@index([predefinido])
+  @@unique([roadmapId, normalizedName])
+  @@index([isPredefined])
 }
 
-model Nodo {
-  id          String         @id @default(uuid()) @db.Uuid
-  roadmapId   String         @db.Uuid
-  tipoNodoId  String         @db.Uuid
-  titulo      String         @db.VarChar(240)
-  descripcion String?
-  posX        Float
-  posY        Float
-  visible     Boolean        @default(true)
-  roadmap     Roadmap        @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  tipoNodo    TipoNodo       @relation(fields: [tipoNodoId], references: [id], onDelete: Restrict)
-  dependenciasSalientes Dependencia[] @relation("DependenciasSalientes")
-  dependenciasEntrantes Dependencia[] @relation("DependenciasEntrantes")
-  recursos    Recurso[]
-  completaciones Completacion[]
+model RoadmapNode {
+  id                   String       @id @default(uuid()) @db.Uuid
+  roadmapId            String       @db.Uuid
+  nodeTypeId           String       @db.Uuid
+  title                String       @db.VarChar(240)
+  description          String?
+  positionX            Float
+  positionY            Float
+  isVisible            Boolean      @default(true)
+  roadmap              Roadmap      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  nodeType             NodeType     @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
+  outgoingDependencies Dependency[] @relation("OutgoingDependencies")
+  incomingDependencies Dependency[] @relation("IncomingDependencies")
+  resources            Resource[]
+  completions          Completion[]
 
   @@index([roadmapId])
-  @@index([tipoNodoId])
+  @@index([nodeTypeId])
 }
 
-model Dependencia {
-  id           String @id @default(uuid()) @db.Uuid
-  sourceNodeId String @db.Uuid
-  targetNodeId String @db.Uuid
-  sourceNode   Nodo   @relation("DependenciasSalientes", fields: [sourceNodeId], references: [id], onDelete: Cascade)
-  targetNode   Nodo   @relation("DependenciasEntrantes", fields: [targetNodeId], references: [id], onDelete: Cascade)
+model Dependency {
+  id           String      @id @default(uuid()) @db.Uuid
+  sourceNodeId String      @db.Uuid
+  targetNodeId String      @db.Uuid
+  sourceNode   RoadmapNode @relation("OutgoingDependencies", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode   RoadmapNode @relation("IncomingDependencies", fields: [targetNodeId], references: [id], onDelete: Cascade)
 
   @@unique([sourceNodeId, targetNodeId])
   @@index([targetNodeId])
 }
 
-model Recurso {
-  id        String      @id @default(uuid()) @db.Uuid
-  nodoId    String      @db.Uuid
-  titulo    String      @db.VarChar(240)
-  url       String
-  tipo      TipoRecurso
-  nodo      Nodo        @relation(fields: [nodoId], references: [id], onDelete: Cascade)
-  creadoEn  DateTime    @default(now())
-  actualizadoEn DateTime @updatedAt
+model Resource {
+  id            String      @id @default(uuid()) @db.Uuid
+  roadmapNodeId String      @db.Uuid
+  title         String      @db.VarChar(240)
+  url           String
+  type          ResourceType
+  roadmapNode   RoadmapNode @relation(fields: [roadmapNodeId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  @@index([nodoId])
+  @@index([roadmapNodeId])
 }
 
-model Usuario {
-  id                   String           @id @default(uuid()) @db.Uuid
-  nombre               String           @db.VarChar(200)
-  correoInstitucional  String           @unique @db.VarChar(320)
-  rut                  String?          @unique @db.VarChar(20)
-  participaciones Participacion[]
-  completaciones  Completacion[]
+model User {
+  id                 String          @id @default(uuid()) @db.Uuid
+  name               String          @db.VarChar(200)
+  institutionalEmail String          @unique @db.VarChar(320)
+  rut                String?         @unique @db.VarChar(20)
+  participations     Participation[]
+  completions        Completion[]
 }
 
-model Participacion {
-  id        String              @id @default(uuid()) @db.Uuid
-  usuarioId String              @db.Uuid
-  cursoId   String              @db.Uuid
-  funcion   FuncionParticipacion
-  vigente   Boolean             @default(true)
-  usuario   Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  curso     Curso               @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+model Participation {
+  id               String            @id @default(uuid()) @db.Uuid
+  userId           String            @db.Uuid
+  courseOfferingId String            @db.Uuid
+  role             ParticipationRole
+  isActive         Boolean           @default(true)
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseOffering   CourseOffering    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
 
-  @@unique([usuarioId, cursoId])
-  @@index([cursoId, funcion])
+  @@unique([userId, courseOfferingId])
+  @@index([courseOfferingId, role])
 }
 
-model Completacion {
-  id         String   @id @default(uuid()) @db.Uuid
-  usuarioId  String   @db.Uuid
-  nodoId     String   @db.Uuid
-  completadaEn DateTime @default(now())
-  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  nodo       Nodo     @relation(fields: [nodoId], references: [id], onDelete: Cascade)
+model Completion {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @db.Uuid
+  roadmapNodeId String      @db.Uuid
+  completedAt   DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roadmapNode   RoadmapNode @relation(fields: [roadmapNodeId], references: [id], onDelete: Cascade)
 
-  @@unique([usuarioId, nodoId])
-  @@index([nodoId])
+  @@unique([userId, roadmapNodeId])
+  @@index([roadmapNodeId])
 }
 
-enum TipoRecurso {
-  ARCHIVO
-  ENLACE
+enum ResourceType {
+  FILE
+  LINK
   VIDEO
 }
 
-enum FuncionParticipacion {
-  ESTUDIANTE
-  DOCENTE
+enum ParticipationRole {
+  STUDENT
+  TEACHER
 }

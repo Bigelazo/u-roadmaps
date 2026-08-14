@@ -1,20 +1,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { apiErrorResponse, parseCoursePath, requireRoadmap, requireUuid } from '@/lib/roadmap-api';
-import { requireCourseTeacher } from '@/lib/auth';
+import {
+  apiErrorResponse,
+  parseCourseOfferingIdentifier,
+  requireRoadmap,
+  requireUuid,
+} from '@/lib/roadmap-api';
+import { requireCourseOfferingTeacher } from '@/lib/auth';
 
 type Context = {
-  params: Promise<{ ramo: string; anio: string; semestre: string; dependencyId: string }>;
+  params: Promise<{ courseCode: string; year: string; semester: string; dependencyId: string }>;
 };
 
 export async function DELETE(_request: Request, context: Context) {
   try {
     const params = await context.params;
-    const path = parseCoursePath(params);
-    await requireCourseTeacher(path);
-    const roadmap = await requireRoadmap(path);
+    const identifier = parseCourseOfferingIdentifier(params);
+    await requireCourseOfferingTeacher(identifier);
+    const roadmap = await requireRoadmap(identifier);
     const dependencyId = requireUuid(params.dependencyId, 'dependencyId');
-    const dependency = await prisma.dependencia.findFirst({
+    const dependency = await prisma.dependency.findFirst({
       where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
     });
     if (!dependency) {
@@ -28,7 +33,7 @@ export async function DELETE(_request: Request, context: Context) {
         { status: 404 },
       );
     }
-    await prisma.dependencia.delete({ where: { id: dependency.id } });
+    await prisma.dependency.delete({ where: { id: dependency.id } });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return apiErrorResponse(error);

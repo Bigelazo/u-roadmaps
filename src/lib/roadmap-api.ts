@@ -2,10 +2,10 @@ import { Prisma } from '@/generated/prisma/client';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
-export type CoursePath = {
-  ramo: string;
-  anio: number;
-  semestre: number;
+export type CourseOfferingIdentifier = {
+  courseCode: string;
+  year: number;
+  semester: number;
 };
 
 type JsonObject = Record<string, unknown>;
@@ -68,21 +68,21 @@ export function apiErrorResponse(error: unknown): NextResponse {
   );
 }
 
-export function parseCoursePath(params: {
-  ramo: string;
-  anio: string;
-  semestre: string;
-}): CoursePath {
-  const anio = Number(params.anio);
-  const semestre = Number(params.semestre);
+export function parseCourseOfferingIdentifier(params: {
+  courseCode: string;
+  year: string;
+  semester: string;
+}): CourseOfferingIdentifier {
+  const year = Number(params.year);
+  const semester = Number(params.semester);
 
   if (
-    !params.ramo.trim() ||
-    params.ramo.trim().length > 20 ||
-    !Number.isInteger(anio) ||
-    anio < 1 ||
-    !Number.isInteger(semestre) ||
-    ![1, 2].includes(semestre)
+    !params.courseCode.trim() ||
+    params.courseCode.trim().length > 20 ||
+    !Number.isInteger(year) ||
+    year < 1 ||
+    !Number.isInteger(semester) ||
+    ![1, 2].includes(semester)
   ) {
     throw new ApiError(
       400,
@@ -91,7 +91,7 @@ export function parseCoursePath(params: {
     );
   }
 
-  return { ramo: params.ramo.trim(), anio, semestre };
+  return { courseCode: params.courseCode.trim(), year, semester };
 }
 
 export function normalizeName(name: string): string {
@@ -150,9 +150,9 @@ export function requireColor(value: unknown): string {
   return color.toUpperCase();
 }
 
-export function requireResourceType(value: unknown): 'ARCHIVO' | 'ENLACE' | 'VIDEO' {
-  if (value !== 'ARCHIVO' && value !== 'ENLACE' && value !== 'VIDEO') {
-    throw new ApiError(400, 'INVALID_RESOURCE_TYPE', 'tipo debe ser ARCHIVO, ENLACE o VIDEO.');
+export function requireResourceType(value: unknown): 'FILE' | 'LINK' | 'VIDEO' {
+  if (value !== 'FILE' && value !== 'LINK' && value !== 'VIDEO') {
+    throw new ApiError(400, 'INVALID_RESOURCE_TYPE', 'type debe ser FILE, LINK o VIDEO.');
   }
   return value;
 }
@@ -182,10 +182,10 @@ export async function parseJson(request: Request): Promise<JsonObject> {
   return body as JsonObject;
 }
 
-export async function requireRoadmap(path: CoursePath) {
+export async function requireRoadmap(identifier: CourseOfferingIdentifier) {
   const roadmap = await prisma.roadmap.findFirst({
     where: {
-      curso: { ramoCodigo: path.ramo, anio: path.anio, semestre: path.semestre },
+      courseOffering: identifier,
     },
   });
   if (!roadmap) {
@@ -199,14 +199,14 @@ export async function requireRoadmap(path: CoursePath) {
 }
 
 export async function requireNodeInRoadmap(nodeId: string, roadmapId: string) {
-  const node = await prisma.nodo.findFirst({ where: { id: nodeId, roadmapId } });
+  const node = await prisma.roadmapNode.findFirst({ where: { id: nodeId, roadmapId } });
   if (!node) throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   return node;
 }
 
 export async function requireTypeInRoadmap(typeId: string, roadmapId: string) {
-  const type = await prisma.tipoNodo.findFirst({
-    where: { id: typeId, OR: [{ predefinido: true }, { roadmapId }] },
+  const type = await prisma.nodeType.findFirst({
+    where: { id: typeId, OR: [{ isPredefined: true }, { roadmapId }] },
   });
   if (!type)
     throw new ApiError(
@@ -218,8 +218,8 @@ export async function requireTypeInRoadmap(typeId: string, roadmapId: string) {
 }
 
 export async function requireResourceInRoadmap(resourceId: string, roadmapId: string) {
-  const resource = await prisma.recurso.findFirst({
-    where: { id: resourceId, nodo: { roadmapId } },
+  const resource = await prisma.resource.findFirst({
+    where: { id: resourceId, roadmapNode: { roadmapId } },
   });
   if (!resource)
     throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
@@ -228,21 +228,21 @@ export async function requireResourceInRoadmap(resourceId: string, roadmapId: st
 
 export function nodeDto(node: {
   id: string;
-  titulo: string;
-  descripcion: string | null;
-  posX: number;
-  posY: number;
-  tipoNodoId: string;
-  visible: boolean;
+  title: string;
+  description: string | null;
+  positionX: number;
+  positionY: number;
+  nodeTypeId: string;
+  isVisible: boolean;
 }) {
   return {
     id: node.id,
-    titulo: node.titulo,
-    descripcion: node.descripcion,
-    posX: node.posX,
-    posY: node.posY,
-    typeId: node.tipoNodoId,
-    visible: node.visible,
+    title: node.title,
+    description: node.description,
+    positionX: node.positionX,
+    positionY: node.positionY,
+    nodeTypeId: node.nodeTypeId,
+    isVisible: node.isVisible,
   };
 }
 
@@ -251,10 +251,10 @@ export async function ensureTypeNameAvailable(
   roadmapId: string,
   excludedTypeId?: string,
 ) {
-  const existing = await prisma.tipoNodo.findFirst({
+  const existing = await prisma.nodeType.findFirst({
     where: {
-      nombreNormalizado: normalizeName(name),
-      OR: [{ predefinido: true }, { roadmapId }],
+      normalizedName: normalizeName(name),
+      OR: [{ isPredefined: true }, { roadmapId }],
       ...(excludedTypeId ? { NOT: { id: excludedTypeId } } : {}),
     },
   });
@@ -268,14 +268,14 @@ export async function ensureTypeNameAvailable(
 
 export async function getAvailableTypes(roadmapId: string) {
   const [predefined, custom] = await Promise.all([
-    prisma.tipoNodo.findMany({ where: { predefinido: true }, orderBy: { nombre: 'asc' } }),
-    prisma.tipoNodo.findMany({ where: { roadmapId }, orderBy: { nombre: 'asc' } }),
+    prisma.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
+    prisma.nodeType.findMany({ where: { roadmapId }, orderBy: { name: 'asc' } }),
   ]);
   return [...predefined, ...custom].map((type) => ({
     id: type.id,
-    nombre: type.nombre,
+    name: type.name,
     color: type.color,
-    predefinido: type.predefinido,
+    isPredefined: type.isPredefined,
   }));
 }
 
@@ -295,15 +295,15 @@ export function handlePrismaError(error: unknown): never {
   throw error;
 }
 
-export async function getRoadmapDto(path: CoursePath, includeHidden = true) {
+export async function getRoadmapDto(identifier: CourseOfferingIdentifier, includeHidden = true) {
   const roadmap = await prisma.roadmap.findFirst({
-    where: { curso: { ramoCodigo: path.ramo, anio: path.anio, semestre: path.semestre } },
+    where: { courseOffering: identifier },
     include: {
-      curso: { include: { ramo: true } },
-      tipos: { orderBy: [{ predefinido: 'desc' }, { nombre: 'asc' }] },
-      nodos: {
-        orderBy: { titulo: 'asc' },
-        include: { recursos: { orderBy: { titulo: 'asc' } } },
+      courseOffering: { include: { course: true } },
+      nodeTypes: { orderBy: [{ isPredefined: 'desc' }, { name: 'asc' }] },
+      roadmapNodes: {
+        orderBy: { title: 'asc' },
+        include: { resources: { orderBy: { title: 'asc' } } },
       },
     },
   });
@@ -314,36 +314,38 @@ export async function getRoadmapDto(path: CoursePath, includeHidden = true) {
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
     );
-  const dependencias = await prisma.dependencia.findMany({
+  const dependencies = await prisma.dependency.findMany({
     where: { sourceNode: { roadmapId: roadmap.id } },
     orderBy: { id: 'asc' },
   });
 
-  const nodes = includeHidden ? roadmap.nodos : roadmap.nodos.filter((node) => node.visible);
+  const nodes = includeHidden
+    ? roadmap.roadmapNodes
+    : roadmap.roadmapNodes.filter((node) => node.isVisible);
   const visibleNodeIds = new Set(nodes.map((node) => node.id));
   return {
-    ramo: {
-      codigo: roadmap.curso.ramo.codigo,
-      nombre: roadmap.curso.ramo.nombre,
-      departamento: roadmap.curso.ramo.departamento,
+    course: {
+      code: roadmap.courseOffering.course.code,
+      name: roadmap.courseOffering.course.name,
+      department: roadmap.courseOffering.course.department,
     },
-    curso: {
-      id: roadmap.curso.id,
-      anio: roadmap.curso.anio,
-      semestre: roadmap.curso.semestre,
+    courseOffering: {
+      id: roadmap.courseOffering.id,
+      year: roadmap.courseOffering.year,
+      semester: roadmap.courseOffering.semester,
     },
     roadmap: { id: roadmap.id },
-    tipos: await getAvailableTypes(roadmap.id),
-    nodos: nodes.map((node) => ({
+    nodeTypes: await getAvailableTypes(roadmap.id),
+    nodes: nodes.map((node) => ({
       ...nodeDto(node),
-      recursos: node.recursos.map((resource) => ({
+      resources: node.resources.map((resource) => ({
         id: resource.id,
-        titulo: resource.titulo,
+        title: resource.title,
         url: resource.url,
-        tipo: resource.tipo,
+        type: resource.type,
       })),
     })),
-    dependencias: dependencias
+    dependencies: dependencies
       .filter(
         (dependency) =>
           includeHidden ||
@@ -358,43 +360,37 @@ export async function getRoadmapDto(path: CoursePath, includeHidden = true) {
   };
 }
 
-export async function createRoadmap(path: CoursePath, body: JsonObject) {
-  const ramoBody =
-    body.ramo && typeof body.ramo === 'object' && !Array.isArray(body.ramo)
-      ? (body.ramo as JsonObject)
+export async function createRoadmap(identifier: CourseOfferingIdentifier, body: JsonObject) {
+  const courseBody =
+    body.course && typeof body.course === 'object' && !Array.isArray(body.course)
+      ? (body.course as JsonObject)
       : undefined;
-  const nombre = requireString(ramoBody?.nombre ?? body.nombreRamo, 'nombreRamo', 200);
-  const departamento = requireString(
-    ramoBody?.departamento ?? body.departamento,
-    'departamento',
-    200,
-  );
+  const name = requireString(courseBody?.name, 'name', 200);
+  const department = requireString(courseBody?.department, 'department', 200);
 
   try {
     const roadmap = await prisma.$transaction(async (transaction) => {
-      const existingCourse = await transaction.curso.findUnique({
+      const existingCourseOffering = await transaction.courseOffering.findUnique({
         where: {
-          ramoCodigo_anio_semestre: {
-            ramoCodigo: path.ramo,
-            anio: path.anio,
-            semestre: path.semestre,
-          },
+          courseCode_year_semester: identifier,
         },
         include: { roadmap: true },
       });
-      if (existingCourse?.roadmap)
+      if (existingCourseOffering?.roadmap)
         throw new ApiError(409, 'ROADMAP_CONFLICT', 'Ya existe un roadmap para este curso.');
-      const ramo = await transaction.ramo.upsert({
-        where: { codigo: path.ramo },
-        update: { nombre, departamento },
-        create: { codigo: path.ramo, nombre, departamento },
+      const course = await transaction.course.upsert({
+        where: { code: identifier.courseCode },
+        update: { name, department },
+        create: { code: identifier.courseCode, name, department },
       });
-      const materializedCourse =
-        existingCourse ??
-        (await transaction.curso.create({
-          data: { ramoCodigo: ramo.codigo, anio: path.anio, semestre: path.semestre },
+      const materializedCourseOffering =
+        existingCourseOffering ??
+        (await transaction.courseOffering.create({
+          data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
         }));
-      return transaction.roadmap.create({ data: { cursoId: materializedCourse.id } });
+      return transaction.roadmap.create({
+        data: { courseOfferingId: materializedCourseOffering.id },
+      });
     });
     return roadmap;
   } catch (error) {
