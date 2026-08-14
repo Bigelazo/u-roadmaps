@@ -2,7 +2,12 @@ import 'next-auth';
 import 'next-auth/jwt';
 
 type VtiClaimValue =
-  string | number | boolean | null | VtiClaimValue[] | { [key: string]: VtiClaimValue };
+  | string
+  | number
+  | boolean
+  | null
+  | VtiClaimValue[]
+  | { [key: string]: VtiClaimValue };
 
 declare module 'next-auth' {
   interface Session {

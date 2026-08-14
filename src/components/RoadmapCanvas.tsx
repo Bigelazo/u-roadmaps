@@ -107,9 +107,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false }: Props) {
 
   useEffect(() => {
     // The request synchronizes this client component with the selected roadmap.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identifier.courseCode, identifier.year, identifier.semester]);
 
   async function mutate(url: string, init: RequestInit) {

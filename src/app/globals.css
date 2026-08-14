@@ -1,4 +1,4 @@
-@import 'reactflow/dist/style.css';
+@import "reactflow/dist/style.css";
 
 :root {
   --background: #f7f7f7;
@@ -6,7 +6,7 @@
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+  font-family: "Plus Jakarta Sans", Arial, sans-serif;
   overflow-x: hidden;
 }
 
