@@ -752,12 +752,15 @@ serialTest('VTI callback uses the secure cookie contract behind HTTPS', async ()
   assert.match(cookie, /Secure/);
 });
 
-serialTest('login page exposes the configured institutional redirect', async () => {
+serialTest('login page and start endpoint expose the configured institutional redirect', async () => {
   const response = await fetch(`${baseUrl}/auth/signin`);
   assert.equal(response.status, 200);
   const body = await response.text();
   assert.match(body, /Autenticarse con U-Pasaporte \/ VTI/);
-  assert.match(body, /vti\.example\.test/);
+  const start = await fetch(`${baseUrl}/api/plogin/start`, { redirect: 'manual' });
+  assert.equal(start.status, 307);
+  assert.match(start.headers.get('location') ?? '', /vti\.example\.test/);
+  assert.match(start.headers.get('location') ?? '', /state=/);
 
   const errorResponse = await fetch(`${baseUrl}/auth/signin?error=Authentication`);
   assert.equal(errorResponse.status, 200);
@@ -855,7 +858,16 @@ serialTest(
 );
 
 serialTest('VTI callback rejects missing, incorrectly signed, and non-HS256 tokens', async () => {
-  assert.equal((await fetch(`${baseUrl}/api/plogin`, { redirect: 'manual' })).status, 307);
+  assert.equal(
+    (
+      await fetch(`${baseUrl}/api/plogin`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      })
+    ).status,
+    307,
+  );
   const wrongSecret = await signVtiToken(
     { identification: '12345678-5', email: `wrong-${suffix}@uchile.cl`, name: 'Wrong' },
     'wrong-secret',

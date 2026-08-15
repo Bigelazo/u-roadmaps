@@ -12,6 +12,12 @@
       "command": ["npx", "-y", "@mui/mcp@latest"],
       "enabled": true,
       "environment": {}
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["pnpm", "exec", "playwright-mcp"],
+      "enabled": true,
+      "environment": {}
     }
   }
 }
