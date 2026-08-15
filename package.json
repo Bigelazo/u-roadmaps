@@ -11,7 +11,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm run typecheck && pnpm run test:integration",
+    "test:unit": "vitest run",
+    "test": "pnpm run typecheck && pnpm run test:unit && pnpm run test:integration",
     "test:integration": "sh -c 'docker compose -f docker-compose.test.yml up -d --wait && trap \"docker compose -f docker-compose.test.yml down -v\" EXIT; DATABASE_URL=postgresql://roadmap_test_user:roadmap_test_password@localhost:5433/roadmap_test_db prisma migrate deploy && DATABASE_URL=postgresql://roadmap_test_user:roadmap_test_password@localhost:5433/roadmap_test_db prisma db seed && NEXTAUTH_SECRET=integration-nextauth-secret VTI_JWT_SECRET=integration-vti-secret VTI_JWT_ISSUER=https://vti.example.test VTI_JWT_AUDIENCE=u-roadmaps NEXT_PUBLIC_VTI_LOGIN_URL=https://vti.example.test/login DATABASE_URL=postgresql://roadmap_test_user:roadmap_test_password@localhost:5433/roadmap_test_db tsx --test tests/roadmap-completion.integration.ts tests/roadmap-editor.integration.ts tests/roadmap-api.integration.ts tests/vti.unit.ts tests/development-data.command.test.ts'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
@@ -32,27 +33,31 @@
     "@prisma/client": "^7.9.1",
     "jose": "^6.2.8",
     "lucide-react": "^1.31.0",
+    "neverthrow": "^8.2.0",
     "next": "^16.3.0",
     "next-auth": "^4.24.15",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "reactflow": "^11.11.4",
-    "neverthrow": "^8.2.0"
+    "reactflow": "^11.11.4"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
-    "@typescript-eslint/parser": "^8.39.1",
     "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.4",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@typescript-eslint/parser": "^8.39.1",
     "dotenv": "^17.4.2",
     "eslint": "^8.57.1",
     "eslint-plugin-neverthrow": "^1.1.4",
+    "jsdom": "^30.0.1",
     "postcss": "^8.5.26",
     "prisma": "^7.9.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.12",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   }
 }
