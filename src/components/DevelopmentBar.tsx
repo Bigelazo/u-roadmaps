@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Button, MenuItem, Paper, Select, Stack, Typography } from '@mui/material';
+import { Fab, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { UsersRound } from 'lucide-react';
 
 type Persona = { id: string; label: string };
 
@@ -15,8 +15,9 @@ export default function DevelopmentBar({
   hideOnPersonaPage?: boolean;
 }) {
   const pathname = usePathname();
-  const [userId, setUserId] = useState(personas[0]?.id ?? '');
-  async function assumePersona() {
+  const [anchorElement, setAnchorElement] = useState<HTMLElement | null>(null);
+
+  async function assumePersona(userId: string) {
     const response = await fetch('/api/development/session', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -24,47 +25,51 @@ export default function DevelopmentBar({
     });
     if (response.ok) window.location.assign('/academic-overview');
   }
+
   if (hideOnPersonaPage && pathname === '/development/personas') return null;
+
   return (
-    <Paper
-      square
-      sx={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 1300,
-        px: 2,
-        py: 1,
-        bgcolor: '#1a1a1a',
-        color: 'common.white',
-      }}
-    >
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1}
-        sx={{ alignItems: { sm: 'center' } }}
-      >
-        <Typography variant="caption" sx={{ fontWeight: 700 }}>
-          DESARROLLO
-        </Typography>
-        <Select
-          size="small"
-          value={userId}
-          onChange={(event) => setUserId(event.target.value)}
-          sx={{ bgcolor: 'common.white', minWidth: 260 }}
+    <>
+      <Tooltip title="Cambiar perfil de desarrollo" placement="right">
+        <Fab
+          aria-label="Cambiar perfil de desarrollo"
+          color="primary"
+          onClick={(event) => setAnchorElement(event.currentTarget)}
+          size="medium"
+          sx={{
+            position: 'fixed',
+            bottom: { xs: 16, sm: 24 },
+            left: { xs: 16, sm: 24 },
+            zIndex: 1300,
+          }}
         >
-          {personas.map((persona) => (
-            <MenuItem key={persona.id} value={persona.id}>
-              {persona.label}
-            </MenuItem>
-          ))}
-        </Select>
-        <Button size="small" variant="contained" onClick={() => void assumePersona()}>
-          Cambiar identidad
-        </Button>
-        <Button component={Link} href="/development/personas" size="small" color="inherit">
-          Ver personas
-        </Button>
-      </Stack>
-    </Paper>
+          <UsersRound />
+        </Fab>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorElement}
+        anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+        onClose={() => setAnchorElement(null)}
+        open={Boolean(anchorElement)}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Typography
+          sx={{ px: 2, pt: 1.5, pb: 0.5, fontSize: 12, fontWeight: 700, color: 'text.secondary' }}
+        >
+          CAMBIAR PERFIL
+        </Typography>
+        {personas.map((persona) => (
+          <MenuItem
+            key={persona.id}
+            onClick={() => {
+              setAnchorElement(null);
+              void assumePersona(persona.id);
+            }}
+          >
+            {persona.label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
   );
 }

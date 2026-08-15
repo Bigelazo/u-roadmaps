@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 import { Box, Container, Paper, Stack, Typography } from '@mui/material';
-import DevelopmentBar from '@/components/DevelopmentBar';
 import { developmentEnvironmentEnabled, developmentPersonas } from '@/lib/development';
 
 export default function DevelopmentPersonasPage() {
@@ -15,9 +14,11 @@ export default function DevelopmentPersonasPage() {
             </Typography>
             <Typography variant="h3">Seleccionar persona</Typography>
             <Typography color="text.secondary">
-              Alterna entre los casos representativos del escenario ficticio.
+              Alterna entre los casos representativos usando la barra DESARROLLO.
             </Typography>
-            <DevelopmentBar personas={developmentPersonas} />
+            {developmentPersonas.map((persona) => (
+              <Typography key={persona.id}>{persona.label}</Typography>
+            ))}
           </Stack>
         </Paper>
       </Container>

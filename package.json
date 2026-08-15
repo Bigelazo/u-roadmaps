@@ -22,11 +22,13 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.9.1",
+    "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^9.3.1",
+    "@mui/material-nextjs": "^9.3.0",
     "@mui/material-pigment-css": "^9.3.0",
+    "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "jose": "^6.2.8",
     "lucide-react": "^1.31.0",
@@ -37,16 +39,16 @@
     "reactflow": "^11.11.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.8",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@biomejs/biome": "2.5.8",
+    "dotenv": "^17.4.2",
     "postcss": "^8.5.26",
     "prisma": "^7.9.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.12",
-    "typescript": "^6.0.3",
-    "dotenv": "^17.4.2"
+    "typescript": "^6.0.3"
   }
 }

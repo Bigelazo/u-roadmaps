@@ -1,73 +1,132 @@
-import { GraduationCap } from 'lucide-react';
 import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
-import Link from 'next/link';
-import SessionButton from '@/components/SessionButton';
-import VtiInformation from '@/components/VtiInformation';
-import { getApplicationSession } from '@/lib/auth';
+import { ArrowRight, BookOpen, ListChecks, Map as MapIcon } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import Link from '@/components/Link';
+import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 
 export default async function Home() {
-  const session = await getApplicationSession();
+  const user = await resolveSessionUser(await getApplicationSession());
+  if (user) redirect('/academic-overview');
+
   return (
-    <Box component="main" sx={{ minHeight: '100vh' }}>
-      <Box
-        component="header"
-        sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
-      >
-        <Container
-          maxWidth="xl"
-          sx={{ height: 64, display: 'flex', alignItems: 'center', px: { xs: 2, sm: 3 } }}
-        >
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+    <Box component="main" sx={{ minHeight: '100vh', bgcolor: '#f7f7f7' }}>
+      <Container maxWidth="xl" sx={{ py: { xs: 4, sm: 8 } }}>
+        <Stack spacing={{ xs: 5, sm: 8 }}>
+          <Paper
+            sx={{
+              position: 'relative',
+              overflow: 'hidden',
+              p: { xs: 4, sm: 7 },
+              bgcolor: '#1a1a1a',
+              color: 'common.white',
+            }}
+          >
+            <Box
+              aria-hidden
+              sx={{
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                width: { xs: 72, sm: 160 },
+                height: '100%',
+                bgcolor: '#024ad8',
+              }}
+            />
+            <Stack spacing={3} sx={{ position: 'relative', maxWidth: 700 }}>
+              <Typography variant="overline" sx={{ color: '#c9e0fc', letterSpacing: '0.16em' }}>
+                U-ROADMAPS · DCC
+              </Typography>
+              <Typography
+                component="h1"
+                sx={{ fontSize: { xs: 38, sm: 56 }, fontWeight: 500, lineHeight: 1 }}
+              >
+                Entiende el camino antes de recorrerlo.
+              </Typography>
+              <Typography
+                sx={{
+                  maxWidth: 590,
+                  color: '#e8e8e8',
+                  fontSize: { xs: 17, sm: 20 },
+                  lineHeight: 1.5,
+                }}
+              >
+                U-Roadmaps muestra cómo se conectan los contenidos de tus cursos para que puedas
+                preparar cada unidad con una visión clara de sus requisitos y recursos.
+              </Typography>
+              <Button
+                component={Link}
+                href="/auth/signin"
+                variant="contained"
+                endIcon={<ArrowRight size={18} />}
+                sx={{ alignSelf: 'start', px: 3 }}
+              >
+                Ingresar con U-Pasaporte
+              </Button>
+            </Stack>
+          </Paper>
+
+          <Box>
+            <Typography variant="overline" color="primary" sx={{ letterSpacing: '0.14em' }}>
+              UNA RUTA PARA CADA CURSO
+            </Typography>
+            <Typography
+              component="h2"
+              sx={{ mt: 1, fontSize: { xs: 28, sm: 36 }, fontWeight: 500 }}
+            >
+              Lo importante, en el orden que importa.
+            </Typography>
             <Box
               sx={{
                 display: 'grid',
-                placeItems: 'center',
-                p: 1,
-                borderRadius: 2,
-                bgcolor: '#c9e0fc',
-                color: 'primary.main',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+                gap: 2,
+                mt: 3,
               }}
             >
-              <GraduationCap size={24} />
+              {[
+                {
+                  icon: MapIcon,
+                  title: 'Explora el mapa del curso',
+                  description:
+                    'Visualiza unidades, evaluaciones y materiales complementarios en una sola ruta.',
+                },
+                {
+                  icon: ListChecks,
+                  title: 'Sigue tu avance',
+                  description:
+                    'Identifica qué contenidos ya completaste y cuáles debes preparar antes de continuar.',
+                },
+                {
+                  icon: BookOpen,
+                  title: 'Encuentra recursos a tiempo',
+                  description:
+                    'Accede a lecturas, archivos y enlaces asociados directamente a cada tema.',
+                },
+              ].map(({ icon: Icon, title, description }) => (
+                <Paper key={title} variant="outlined" sx={{ p: 3, minHeight: 220 }}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      placeItems: 'center',
+                      width: 44,
+                      height: 44,
+                      mb: 3,
+                      bgcolor: '#c9e0fc',
+                      color: '#024ad8',
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Icon size={23} strokeWidth={2} />
+                  </Box>
+                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
+                    {title}
+                  </Typography>
+                  <Typography color="text.secondary">{description}</Typography>
+                </Paper>
+              ))}
             </Box>
-            <Box>
-              <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                FCFM - Universidad de Chile
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Departamento de Ciencias de la Computación
-              </Typography>
-            </Box>
-          </Stack>
-          <Box sx={{ ml: 'auto' }}>
-            <SessionButton isAuthenticated={Boolean(session)} />
           </Box>
-        </Container>
-      </Box>
-      <Container maxWidth="xl" sx={{ py: 6 }}>
-        <Paper sx={{ p: { xs: 4, sm: 6 }, bgcolor: '#1a1a1a', color: 'common.white' }}>
-          <Stack spacing={2} sx={{ maxWidth: 'md' }}>
-            <Typography variant="overline" sx={{ color: '#c9e0fc', letterSpacing: '0.16em' }}>
-              U-roadmaps
-            </Typography>
-            {session && (
-              <Button
-                component={Link}
-                href="/academic-overview"
-                variant="contained"
-                sx={{ alignSelf: 'start' }}
-              >
-                Ver mis cursos
-              </Button>
-            )}
-            <Typography variant="h2">Rutas de aprendizaje para cursos universitarios</Typography>
-            <Typography variant="body1" sx={{ color: '#c2c2c2', fontSize: '1.125rem' }}>
-              Los roadmaps se identifican por ramo y período académico. La integración con U-Campus
-              mediante Mufasa materializará aquí los cursos que necesiten una ruta.
-            </Typography>
-          </Stack>
-        </Paper>
-        {session?.vtiClaims && <VtiInformation claims={session.vtiClaims} />}
+        </Stack>
       </Container>
       <Box
         component="footer"

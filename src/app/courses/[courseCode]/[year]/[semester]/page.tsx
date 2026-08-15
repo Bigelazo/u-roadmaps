@@ -1,7 +1,7 @@
 import RoadmapCanvas from '@/components/RoadmapCanvas';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { Box, Container, Paper, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 
 type Props = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
@@ -14,6 +14,7 @@ export default async function CoursePage({ params }: Props) {
     ? await prisma.courseOffering.findUnique({
         where: { courseCode_year_semester: { courseCode, year, semester } },
         include: {
+          course: true,
           participants: {
             where: { userId: user.id, isActive: true, role: 'TEACHER' },
           },
@@ -21,23 +22,16 @@ export default async function CoursePage({ params }: Props) {
       })
     : null;
   const canEdit = Boolean(user && courseOffering?.participants.length);
+  const courseName = courseOffering?.course.name ?? courseCode;
 
   return (
-    <Box component="main" sx={{ minHeight: '100vh', py: 4 }}>
-      <Container maxWidth={false} sx={{ maxWidth: 1366, display: 'grid', gap: 3 }}>
-        <Paper component="header" sx={{ p: 4, bgcolor: '#1a1a1a', color: 'common.white' }}>
-          <Typography variant="overline" sx={{ color: '#c9e0fc', letterSpacing: '0.16em' }}>
-            Curso
-          </Typography>
-          <Typography variant="h3" sx={{ mt: 1 }}>
-            {courseCode}
-          </Typography>
-          <Typography color="#c2c2c2" sx={{ mt: 1 }}>
-            {year}, semestre {semester}
-          </Typography>
-        </Paper>
-        <RoadmapCanvas identifier={{ courseCode, year, semester }} canEdit={canEdit} />
-      </Container>
+    <Box component="main" sx={{ minHeight: '100vh', bgcolor: '#f8f8f9' }}>
+      <RoadmapCanvas
+        identifier={{ courseCode, year, semester }}
+        canEdit={canEdit}
+        title={courseName}
+        subtitle={`${courseCode} · ${year}, semestre ${semester}${canEdit ? ' · Modo edición' : ''}`}
+      />
     </Box>
   );
 }

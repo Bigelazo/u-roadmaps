@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
@@ -43,11 +42,7 @@ export default async function AcademicOverviewPage() {
               {courseOffering.course.department}
             </Typography>
           </Box>
-          <Button
-            component={Link}
-            href={href}
-            variant={courseOffering.roadmap ? 'contained' : 'outlined'}
-          >
+          <Button href={href} variant={courseOffering.roadmap ? 'contained' : 'outlined'}>
             {courseOffering.roadmap ? 'Abrir roadmap' : 'Ver curso'}
           </Button>
         </Stack>
