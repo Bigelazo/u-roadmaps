@@ -3,7 +3,7 @@ import test from 'node:test';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { completeNode, readRoadmapForParticipant } from '../src/lib/roadmap-completion';
-import { ApiError } from '../src/lib/roadmap-api';
+import { throwApiError } from '../src/lib/roadmap-api';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -81,7 +81,10 @@ test('student Roadmap interface returns Completion state and conceals hidden Nod
   });
   await prisma.completion.create({ data: { userId: user.id, roadmapNodeId: completed.id } });
 
-  const result = await readRoadmapForParticipant({ userId: user.id, identifier });
+  const result = await readRoadmapForParticipant({ userId: user.id, identifier }).match(
+    (value) => value,
+    throwApiError,
+  );
 
   assert.deepEqual(
     result.nodes.map(({ id, isCompleted, canComplete }) => ({ id, isCompleted, canComplete })),
@@ -94,10 +97,11 @@ test('student Roadmap interface returns Completion state and conceals hidden Nod
   assert.equal(result.dependencies.length, 1);
   assert.equal(result.dependencies[0]?.sourceNodeId, available.id);
   assert.equal(result.dependencies[0]?.targetNodeId, locked.id);
-  await assert.rejects(
-    completeNode({ userId: user.id, identifier, nodeId: hidden.id }),
-    (error) => error instanceof ApiError && error.code === 'NODE_NOT_FOUND',
+  const hiddenError = await completeNode({ userId: user.id, identifier, nodeId: hidden.id }).match(
+    () => null,
+    (error) => error,
   );
+  assert.equal(hiddenError?.code, 'NODE_NOT_FOUND');
 });
 
 test('completing a visible Node is idempotent and preserves the original Completion', async () => {
@@ -142,8 +146,14 @@ test('completing a visible Node is idempotent and preserves the original Complet
   });
 
   const [first, repeated] = await Promise.all([
-    completeNode({ userId: user.id, identifier: idempotentIdentifier, nodeId: node.id }),
-    completeNode({ userId: user.id, identifier: idempotentIdentifier, nodeId: node.id }),
+    completeNode({ userId: user.id, identifier: idempotentIdentifier, nodeId: node.id }).match(
+      (value) => value,
+      throwApiError,
+    ),
+    completeNode({ userId: user.id, identifier: idempotentIdentifier, nodeId: node.id }).match(
+      (value) => value,
+      throwApiError,
+    ),
   ]);
   const laterPrerequisite = await prisma.roadmapNode.create({
     data: {
@@ -161,7 +171,7 @@ test('completing a visible Node is idempotent and preserves the original Complet
     userId: user.id,
     identifier: idempotentIdentifier,
     nodeId: node.id,
-  });
+  }).match((value) => value, throwApiError);
 
   assert.equal(repeated.id, first.id);
   assert.deepEqual(repeated.completedAt, first.completedAt);
@@ -234,21 +244,26 @@ test('Completion requires every visible prerequisite and ignores hidden prerequi
     ],
   });
 
-  await assert.rejects(
-    completeNode({ userId: user.id, identifier: prerequisiteIdentifier, nodeId: target.id }),
-    (error) => error instanceof ApiError && error.code === 'PREREQUISITES_PENDING',
+  const prerequisiteError = await completeNode({
+    userId: user.id,
+    identifier: prerequisiteIdentifier,
+    nodeId: target.id,
+  }).match(
+    () => null,
+    (error) => error,
   );
+  assert.equal(prerequisiteError?.code, 'PREREQUISITES_PENDING');
   await completeNode({
     userId: user.id,
     identifier: prerequisiteIdentifier,
     nodeId: visiblePrerequisite.id,
-  });
+  }).match((value) => value, throwApiError);
 
   const completion = await completeNode({
     userId: user.id,
     identifier: prerequisiteIdentifier,
     nodeId: target.id,
-  });
+  }).match((value) => value, throwApiError);
   assert.equal(completion.roadmapNodeId, target.id);
 });
 
@@ -308,9 +323,14 @@ test('Completion creation requires an active student Participation', async () =>
   });
 
   for (const userId of [teacher.id, inactiveStudent.id]) {
-    await assert.rejects(
-      completeNode({ userId, identifier: participationIdentifier, nodeId: node.id }),
-      (error) => error instanceof ApiError && error.code === 'FORBIDDEN',
+    const error = await completeNode({
+      userId,
+      identifier: participationIdentifier,
+      nodeId: node.id,
+    }).match(
+      () => null,
+      (failure) => failure,
     );
+    assert.equal(error?.code, 'FORBIDDEN');
   }
 });

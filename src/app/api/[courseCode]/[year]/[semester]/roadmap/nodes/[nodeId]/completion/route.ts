@@ -1,22 +1,22 @@
 import { NextResponse } from 'next/server';
 import { requireAuthenticatedUser } from '@/lib/auth';
 import { completeNode } from '@/lib/roadmap-completion';
-import { apiErrorResponse, parseCourseOfferingIdentifier } from '@/lib/roadmap-api';
+import { handleApiResult, parseCourseOfferingIdentifier, throwApiError } from '@/lib/roadmap-api';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
 };
 
 export async function POST(_request: Request, context: Context) {
-  try {
+  return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser();
+    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
     const completion = await completeNode({
       userId: user.id,
       identifier,
       nodeId: params.nodeId,
-    });
+    }).match((value) => value, throwApiError);
     return NextResponse.json({
       completion: {
         id: completion.id,
@@ -24,7 +24,5 @@ export async function POST(_request: Request, context: Context) {
         completedAt: completion.completedAt,
       },
     });
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }

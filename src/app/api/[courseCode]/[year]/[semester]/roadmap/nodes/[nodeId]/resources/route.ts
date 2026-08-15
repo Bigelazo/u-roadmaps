@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import {
   ApiError,
-  apiErrorResponse,
+  handleApiResult,
   parseCourseOfferingIdentifier,
   parseJson,
   requireNodeInRoadmap,
   requireRoadmap,
   requireUuid,
+  throwApiError,
 } from '@/lib/roadmap-api';
 import { requireAuthenticatedUser, requireCourseOfferingParticipation } from '@/lib/auth';
 import { createRoadmapResource } from '@/lib/roadmap-editor';
@@ -17,32 +18,30 @@ type Context = {
 };
 
 export async function POST(request: Request, context: Context) {
-  try {
+  return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
     const body = await parseJson(request);
-    const user = await requireAuthenticatedUser();
+    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
     const resource = await createRoadmapResource({
       userId: user.id,
       identifier,
       id: params.nodeId,
       input: body,
-    });
+    }).match((value) => value, throwApiError);
     return NextResponse.json({ resource }, { status: 201 });
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }
 
 export async function GET(_request: Request, context: Context) {
-  try {
+  return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
     const { participation } = await requireCourseOfferingParticipation(identifier, [
       'STUDENT',
       'TEACHER',
-    ]);
-    const roadmap = await requireRoadmap(identifier);
+    ]).match((value) => value, throwApiError);
+    const roadmap = await requireRoadmap(identifier).match((value) => value, throwApiError);
     const nodeId = requireUuid(params.nodeId, 'nodeId');
     const node = await requireNodeInRoadmap(nodeId, roadmap.id);
     if (participation.role === 'STUDENT' && !node.isVisible) {
@@ -60,7 +59,5 @@ export async function GET(_request: Request, context: Context) {
         type: resource.type,
       })),
     });
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }

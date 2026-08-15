@@ -52,8 +52,8 @@ import {
 } from '@mui/material';
 import { roadmapUrl, type Resource, type RoadmapDto, type RoadmapNode } from '@/lib/roadmap-types';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
+import { err, ok, ResultAsync } from 'neverthrow';
 
-type ApiErrorBody = { error?: { code?: string; message?: string } };
 type Props = {
   identifier: CourseOfferingIdentifier;
   canEdit?: boolean;
@@ -62,6 +62,24 @@ type Props = {
 };
 type NodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 type CanvasNodeData = { title: string; typeName: string; status: NodeStatus };
+
+function isRoadmapDto(value: unknown): value is RoadmapDto {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'nodes' in value &&
+    Array.isArray(value.nodes) &&
+    'nodeTypes' in value &&
+    Array.isArray(value.nodeTypes)
+  );
+}
+
+function apiErrorMessage(value: unknown) {
+  if (typeof value !== 'object' || value === null || !('error' in value)) return undefined;
+  const error = value.error;
+  if (typeof error !== 'object' || error === null || !('message' in error)) return undefined;
+  return typeof error.message === 'string' ? error.message : undefined;
+}
 
 function RoadmapCard({ data }: NodeProps<CanvasNodeData>) {
   const completed = data.status === 'completed';
@@ -193,87 +211,106 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
     );
   }
 
-  async function load() {
-    const response = await fetch(roadmapUrl(identifier));
-    const body = (await response.json()) as RoadmapDto | ApiErrorBody;
-    if (!response.ok || !('nodes' in body)) {
-      setError(
-        ('error' in body ? body.error?.message : undefined) ?? 'No se pudo cargar el roadmap.',
+  function requestError(response: Response, fallback: string) {
+    return ResultAsync.fromPromise(response.json() as Promise<unknown>, () => fallback).andThen(
+      (body) => err(apiErrorMessage(body) ?? fallback),
+    );
+  }
+
+  function load() {
+    return ResultAsync.fromPromise(
+      fetch(roadmapUrl(identifier)),
+      () => 'No se pudo cargar el roadmap.',
+    )
+      .andThen((response) =>
+        response.ok
+          ? ResultAsync.fromPromise(
+              response.json() as Promise<unknown>,
+              () => 'No se pudo cargar el roadmap.',
+            ).andThen((body) =>
+              isRoadmapDto(body) ? ok(body) : err('No se pudo cargar el roadmap.'),
+            )
+          : requestError(response, 'No se pudo cargar el roadmap.'),
+      )
+      .match(
+        (body) => {
+          setDto(body);
+          setFlow(body);
+          setNewTypeId(body.nodeTypes[0]?.id ?? '');
+          setError(null);
+        },
+        (message) => {
+          setError(message);
+          setDto(null);
+        },
       );
-      setDto(null);
-      return;
-    }
-    setDto(body);
-    setFlow(body);
-    setNewTypeId(body.nodeTypes[0]?.id ?? '');
-    setError(null);
   }
 
   useEffect(() => {
     void load();
   }, [identifier.courseCode, identifier.year, identifier.semester]);
 
-  async function mutate(url: string, init: RequestInit) {
-    const response = await fetch(url, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
-    });
-    if (!response.ok) {
-      const body = (await response.json()) as ApiErrorBody;
-      throw new Error(body.error?.message ?? 'La operación no pudo completarse.');
-    }
+  function mutate(url: string, init: RequestInit) {
+    return ResultAsync.fromPromise(
+      fetch(url, {
+        ...init,
+        headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+      }),
+      () => 'La operación no pudo completarse.',
+    ).andThen((response) =>
+      response.ok ? ok(undefined) : requestError(response, 'La operación no pudo completarse.'),
+    );
   }
 
-  function report(operationError: unknown, fallback: string) {
-    setError(operationError instanceof Error ? operationError.message : fallback);
+  function report(message: string, fallback: string) {
+    setError(message || fallback);
   }
 
   async function addNode(event: React.FormEvent) {
     event.preventDefault();
     if (!newTitle.trim() || !newTypeId) return;
-    try {
-      await mutate(roadmapUrl(identifier, '/nodes'), {
-        method: 'POST',
-        body: JSON.stringify({
-          title: newTitle,
-          description: newDescription || null,
-          nodeTypeId: newTypeId,
-          positionX: 160,
-          positionY: 160,
-          isVisible: newVisible,
-        }),
-      });
-      setNewTitle('');
-      setNewDescription('');
-      await load();
-    } catch (operationError) {
-      report(operationError, 'No se pudo crear el nodo.');
-    }
+    await mutate(roadmapUrl(identifier, '/nodes'), {
+      method: 'POST',
+      body: JSON.stringify({
+        title: newTitle,
+        description: newDescription || null,
+        nodeTypeId: newTypeId,
+        positionX: 160,
+        positionY: 160,
+        isVisible: newVisible,
+      }),
+    }).match(
+      async () => {
+        setNewTitle('');
+        setNewDescription('');
+        await load();
+      },
+      (message) => report(message, 'No se pudo crear el nodo.'),
+    );
   }
 
   const persistPosition: NodeDragHandler = async (_event, node) => {
-    try {
-      await mutate(roadmapUrl(identifier, `/nodes/${node.id}`), {
-        method: 'PATCH',
-        body: JSON.stringify({ positionX: node.position.x, positionY: node.position.y }),
-      });
-    } catch (operationError) {
-      report(operationError, 'No se pudo guardar la posición.');
-      await load();
-    }
+    await mutate(roadmapUrl(identifier, `/nodes/${node.id}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ positionX: node.position.x, positionY: node.position.y }),
+    }).match(
+      () => undefined,
+      async (message) => {
+        report(message, 'No se pudo guardar la posición.');
+        await load();
+      },
+    );
   };
 
   async function connect(connection: Connection) {
     if (!connection.source || !connection.target) return;
-    try {
-      await mutate(roadmapUrl(identifier, '/dependencies'), {
-        method: 'POST',
-        body: JSON.stringify({ sourceNodeId: connection.source, targetNodeId: connection.target }),
-      });
-      await load();
-    } catch (operationError) {
-      report(operationError, 'No se pudo crear la dependencia.');
-    }
+    await mutate(roadmapUrl(identifier, '/dependencies'), {
+      method: 'POST',
+      body: JSON.stringify({ sourceNodeId: connection.source, targetNodeId: connection.target }),
+    }).match(
+      () => load(),
+      (message) => report(message, 'No se pudo crear la dependencia.'),
+    );
   }
 
   function selectNode(nodeId: string) {
@@ -288,75 +325,72 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
   async function updateNode(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedNodeId || !editTitle.trim()) return;
-    try {
-      await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}`), {
-        method: 'PATCH',
-        body: JSON.stringify({
-          title: editTitle,
-          description: editDescription || null,
-          nodeTypeId: editTypeId,
-        }),
-      });
-      await load();
-    } catch (operationError) {
-      report(operationError, 'No se pudo guardar el nodo.');
-    }
+    await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}`), {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: editTitle,
+        description: editDescription || null,
+        nodeTypeId: editTypeId,
+      }),
+    }).match(
+      () => load(),
+      (message) => report(message, 'No se pudo guardar el nodo.'),
+    );
   }
 
   async function toggleVisibility() {
     const node = dto?.nodes.find((item) => item.id === selectedNodeId);
     if (!node) return;
-    try {
-      await mutate(roadmapUrl(identifier, `/nodes/${node.id}`), {
-        method: 'PATCH',
-        body: JSON.stringify({ isVisible: !node.isVisible }),
-      });
-      await load();
-    } catch (operationError) {
-      report(operationError, 'No se pudo cambiar la visibilidad.');
-    }
+    await mutate(roadmapUrl(identifier, `/nodes/${node.id}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ isVisible: !node.isVisible }),
+    }).match(
+      () => load(),
+      (message) => report(message, 'No se pudo cambiar la visibilidad.'),
+    );
   }
 
   async function deleteNode() {
     if (!selectedNodeId || !window.confirm('¿Eliminar este nodo y sus dependencias y recursos?'))
       return;
-    try {
-      await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}`), { method: 'DELETE' });
-      setSelectedNodeId(null);
-      await load();
-    } catch (operationError) {
-      report(operationError, 'No se pudo eliminar el nodo.');
-    }
+    await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}`), {
+      method: 'DELETE',
+    }).match(
+      async () => {
+        setSelectedNodeId(null);
+        await load();
+      },
+      (message) => report(message, 'No se pudo eliminar el nodo.'),
+    );
   }
 
   async function addResource(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedNodeId || !resourceTitle.trim() || !resourceUrl.trim()) return;
-    try {
-      await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}/resources`), {
-        method: 'POST',
-        body: JSON.stringify({ title: resourceTitle, url: resourceUrl, type: resourceType }),
-      });
-      setResourceTitle('');
-      setResourceUrl('');
-      await load();
-    } catch (operationError) {
-      report(operationError, 'No se pudo agregar el recurso.');
-    }
+    await mutate(roadmapUrl(identifier, `/nodes/${selectedNodeId}/resources`), {
+      method: 'POST',
+      body: JSON.stringify({ title: resourceTitle, url: resourceUrl, type: resourceType }),
+    }).match(
+      async () => {
+        setResourceTitle('');
+        setResourceUrl('');
+        await load();
+      },
+      (message) => report(message, 'No se pudo agregar el recurso.'),
+    );
   }
 
   async function completeNode(node: RoadmapNode) {
     if (!node.canComplete) return;
-    try {
-      await mutate(roadmapUrl(identifier, `/nodes/${node.id}/completion`), { method: 'POST' });
-      await load();
-    } catch (operationError) {
-      try {
+    await mutate(roadmapUrl(identifier, `/nodes/${node.id}/completion`), {
+      method: 'POST',
+    }).match(
+      () => load(),
+      async (message) => {
         await load();
-      } finally {
-        report(operationError, 'No se pudo completar el nodo.');
-      }
-    }
+        report(message, 'No se pudo completar el nodo.');
+      },
+    );
   }
 
   if (error && !dto)

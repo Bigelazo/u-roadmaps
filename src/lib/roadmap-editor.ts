@@ -2,6 +2,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import {
   ApiError,
+  apiResult,
   findCycle,
   nodeDto,
   normalizeName,
@@ -136,7 +137,7 @@ function typeDto(nodeType: { id: string; name: string; color: string; isPredefin
   };
 }
 
-export async function createRoadmapNode({ input, ...editor }: WithInput) {
+async function createRoadmapNodeUnsafe({ input, ...editor }: WithInput) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const title = requireString(input.title, 'title', 240);
@@ -163,7 +164,7 @@ export async function createRoadmapNode({ input, ...editor }: WithInput) {
   });
 }
 
-export async function updateRoadmapNode({ id, input, ...editor }: WithId & { input: JsonObject }) {
+async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { input: JsonObject }) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
@@ -196,7 +197,7 @@ export async function updateRoadmapNode({ id, input, ...editor }: WithId & { inp
   });
 }
 
-export async function deleteRoadmapNode({ id, ...editor }: WithId) {
+async function deleteRoadmapNodeUnsafe({ id, ...editor }: WithId) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
@@ -204,7 +205,7 @@ export async function deleteRoadmapNode({ id, ...editor }: WithId) {
   });
 }
 
-export async function createRoadmapNodeType({ input, ...editor }: WithInput) {
+async function createRoadmapNodeTypeUnsafe({ input, ...editor }: WithInput) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const name = requireString(input.name, 'name', 120);
@@ -224,7 +225,7 @@ export async function createRoadmapNodeType({ input, ...editor }: WithInput) {
   });
 }
 
-export async function updateRoadmapNodeType({
+async function updateRoadmapNodeTypeUnsafe({
   id,
   input,
   ...editor
@@ -245,7 +246,7 @@ export async function updateRoadmapNodeType({
   });
 }
 
-export async function deleteRoadmapNodeType({ id, ...editor }: WithId) {
+async function deleteRoadmapNodeTypeUnsafe({ id, ...editor }: WithId) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const nodeType = await requireCustomType(transaction, requireUuid(id, 'typeId'), roadmap.id);
@@ -260,7 +261,7 @@ export async function deleteRoadmapNodeType({ id, ...editor }: WithId) {
   });
 }
 
-export async function createRoadmapDependency({ input, ...editor }: WithInput) {
+async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(
@@ -314,7 +315,7 @@ export async function createRoadmapDependency({ input, ...editor }: WithInput) {
   throw new Error('Dependency transaction retry limit reached.');
 }
 
-export async function deleteRoadmapDependency({ id, ...editor }: WithId) {
+async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const dependencyId = requireUuid(id, 'dependencyId');
@@ -327,7 +328,7 @@ export async function deleteRoadmapDependency({ id, ...editor }: WithId) {
   });
 }
 
-export async function createRoadmapResource({
+async function createRoadmapResourceUnsafe({
   id,
   input,
   ...editor
@@ -344,7 +345,7 @@ export async function createRoadmapResource({
   });
 }
 
-export async function updateRoadmapResource({
+async function updateRoadmapResourceUnsafe({
   id,
   input,
   ...editor
@@ -362,10 +363,54 @@ export async function updateRoadmapResource({
   });
 }
 
-export async function deleteRoadmapResource({ id, ...editor }: WithId) {
+async function deleteRoadmapResourceUnsafe({ id, ...editor }: WithId) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
     await transaction.resource.delete({ where: { id: resource.id } });
   });
+}
+
+export function createRoadmapNode(input: WithInput) {
+  return apiResult(() => createRoadmapNodeUnsafe(input));
+}
+
+export function updateRoadmapNode(input: WithId & { input: JsonObject }) {
+  return apiResult(() => updateRoadmapNodeUnsafe(input));
+}
+
+export function deleteRoadmapNode(input: WithId) {
+  return apiResult(() => deleteRoadmapNodeUnsafe(input));
+}
+
+export function createRoadmapNodeType(input: WithInput) {
+  return apiResult(() => createRoadmapNodeTypeUnsafe(input));
+}
+
+export function updateRoadmapNodeType(input: WithId & { input: JsonObject }) {
+  return apiResult(() => updateRoadmapNodeTypeUnsafe(input));
+}
+
+export function deleteRoadmapNodeType(input: WithId) {
+  return apiResult(() => deleteRoadmapNodeTypeUnsafe(input));
+}
+
+export function createRoadmapDependency(input: WithInput) {
+  return apiResult(() => createRoadmapDependencyUnsafe(input));
+}
+
+export function deleteRoadmapDependency(input: WithId) {
+  return apiResult(() => deleteRoadmapDependencyUnsafe(input));
+}
+
+export function createRoadmapResource(input: WithId & { input: JsonObject }) {
+  return apiResult(() => createRoadmapResourceUnsafe(input));
+}
+
+export function updateRoadmapResource(input: WithId & { input: JsonObject }) {
+  return apiResult(() => updateRoadmapResourceUnsafe(input));
+}
+
+export function deleteRoadmapResource(input: WithId) {
+  return apiResult(() => deleteRoadmapResourceUnsafe(input));
 }

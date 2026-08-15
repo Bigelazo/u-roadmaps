@@ -2,6 +2,7 @@ import RoadmapCanvas from '@/components/RoadmapCanvas';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Box } from '@mui/material';
+import { notFound } from 'next/navigation';
 
 type Props = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
@@ -9,18 +10,18 @@ export default async function CoursePage({ params }: Props) {
   const { courseCode, year: yearParameter, semester: semesterParameter } = await params;
   const year = Number(yearParameter);
   const semester = Number(semesterParameter);
+  if (!courseCode.trim() || !Number.isInteger(year) || year < 1 || ![1, 2].includes(semester)) {
+    notFound();
+  }
   const user = await resolveSessionUser(await getApplicationSession());
-  const courseOffering = user
-    ? await prisma.courseOffering.findUnique({
-        where: { courseCode_year_semester: { courseCode, year, semester } },
-        include: {
-          course: true,
-          participants: {
-            where: { userId: user.id, isActive: true, role: 'TEACHER' },
-          },
-        },
-      })
-    : null;
+  const courseOffering = await prisma.courseOffering.findUnique({
+    where: { courseCode_year_semester: { courseCode, year, semester } },
+    include: {
+      course: true,
+      participants: user ? { where: { userId: user.id, isActive: true, role: 'TEACHER' } } : false,
+    },
+  });
+  if (!courseOffering) notFound();
   const canEdit = Boolean(user && courseOffering?.participants.length);
   const courseName = courseOffering?.course.name ?? courseCode;
 

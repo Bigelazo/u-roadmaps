@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth';
 import { developmentEnvironmentEnabled, developmentPersonas } from '@/lib/development';
 import { prisma } from '@/lib/db';
-import { ApiError, apiErrorResponse, parseJson, requireUuid } from '@/lib/roadmap-api';
+import { ApiError, handleApiResult, parseJson, requireUuid } from '@/lib/roadmap-api';
 
 export async function POST(request: Request) {
-  try {
+  return handleApiResult(async () => {
     if (!developmentEnvironmentEnabled()) {
       throw new ApiError(404, 'NOT_FOUND', 'El recurso solicitado no existe.');
     }
@@ -40,7 +40,5 @@ export async function POST(request: Request) {
       maxAge: 30 * 24 * 60 * 60,
     });
     return response;
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }

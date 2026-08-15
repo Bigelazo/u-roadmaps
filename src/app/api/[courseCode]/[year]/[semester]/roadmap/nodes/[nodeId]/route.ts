@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { apiErrorResponse, parseCourseOfferingIdentifier, parseJson } from '@/lib/roadmap-api';
+import {
+  handleApiResult,
+  parseCourseOfferingIdentifier,
+  parseJson,
+  throwApiError,
+} from '@/lib/roadmap-api';
 import { requireAuthenticatedUser } from '@/lib/auth';
 import { deleteRoadmapNode, updateRoadmapNode } from '@/lib/roadmap-editor';
 
@@ -8,31 +13,30 @@ type Context = {
 };
 
 export async function PATCH(request: Request, context: Context) {
-  try {
+  return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
     const body = await parseJson(request);
-    const user = await requireAuthenticatedUser();
+    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
     const node = await updateRoadmapNode({
       userId: user.id,
       identifier,
       id: params.nodeId,
       input: body,
-    });
+    }).match((value) => value, throwApiError);
     return NextResponse.json({ node });
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }
 
 export async function DELETE(_request: Request, context: Context) {
-  try {
+  return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser();
-    await deleteRoadmapNode({ userId: user.id, identifier, id: params.nodeId });
+    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    await deleteRoadmapNode({ userId: user.id, identifier, id: params.nodeId }).match(
+      (value) => value,
+      throwApiError,
+    );
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }

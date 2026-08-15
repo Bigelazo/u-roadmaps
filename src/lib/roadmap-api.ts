@@ -1,4 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
+import { ResultAsync } from 'neverthrow';
+import { unstable_rethrow } from 'next/navigation';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
@@ -10,61 +12,136 @@ export type CourseOfferingIdentifier = {
 
 type JsonObject = Record<string, unknown>;
 
+export type ApiErrorCode =
+  | 'AUTH_CONFIGURATION_ERROR'
+  | 'CONFLICT'
+  | 'DEPENDENCY_CONFLICT'
+  | 'DEPENDENCY_CYCLE'
+  | 'DEPENDENCY_NOT_FOUND'
+  | 'DEVELOPMENT_PERSONA_NOT_FOUND'
+  | 'FORBIDDEN'
+  | 'INTERNAL_ERROR'
+  | 'INVALID_ACADEMIC_IDENTITY'
+  | 'INVALID_AUTH_CALLBACK'
+  | 'INVALID_COLOR'
+  | 'INVALID_JSON'
+  | 'INVALID_REQUEST'
+  | 'INVALID_RESOURCE_TYPE'
+  | 'INVALID_URL'
+  | 'INVALID_VTI_CLAIMS'
+  | 'NODE_NOT_FOUND'
+  | 'NODE_TYPE_IN_USE'
+  | 'NODE_TYPE_NAME_CONFLICT'
+  | 'NODE_TYPE_NOT_FOUND'
+  | 'NOT_FOUND'
+  | 'PREREQUISITES_PENDING'
+  | 'PREDEFINED_TYPE_IMMUTABLE'
+  | 'RESOURCE_NOT_FOUND'
+  | 'ROADMAP_CONFLICT'
+  | 'ROADMAP_NOT_FOUND'
+  | 'SELF_DEPENDENCY'
+  | 'UNAUTHENTICATED';
+
+const httpStatusByErrorCode = {
+  AUTH_CONFIGURATION_ERROR: 500,
+  CONFLICT: 409,
+  DEPENDENCY_CONFLICT: 409,
+  DEPENDENCY_CYCLE: 409,
+  DEPENDENCY_NOT_FOUND: 404,
+  DEVELOPMENT_PERSONA_NOT_FOUND: 404,
+  FORBIDDEN: 403,
+  INTERNAL_ERROR: 500,
+  INVALID_ACADEMIC_IDENTITY: 400,
+  INVALID_AUTH_CALLBACK: 400,
+  INVALID_COLOR: 400,
+  INVALID_JSON: 400,
+  INVALID_REQUEST: 400,
+  INVALID_RESOURCE_TYPE: 400,
+  INVALID_URL: 400,
+  INVALID_VTI_CLAIMS: 400,
+  NODE_NOT_FOUND: 404,
+  NODE_TYPE_IN_USE: 409,
+  NODE_TYPE_NAME_CONFLICT: 409,
+  NODE_TYPE_NOT_FOUND: 404,
+  NOT_FOUND: 404,
+  PREREQUISITES_PENDING: 409,
+  PREDEFINED_TYPE_IMMUTABLE: 409,
+  RESOURCE_NOT_FOUND: 404,
+  ROADMAP_CONFLICT: 409,
+  ROADMAP_NOT_FOUND: 404,
+  SELF_DEPENDENCY: 409,
+  UNAUTHENTICATED: 401,
+} as const satisfies Record<ApiErrorCode, ApiError['status']>;
+
 export class ApiError extends Error {
   constructor(
     readonly status: 400 | 401 | 403 | 404 | 409 | 500,
-    readonly code: string,
+    readonly code: ApiErrorCode,
     message: string,
     readonly details?: Record<string, unknown>,
+    readonly source?: 'P2003',
   ) {
     super(message);
   }
 }
 
-export function apiErrorResponse(error: unknown): NextResponse {
-  if (error instanceof ApiError) {
-    return NextResponse.json(
-      {
-        error: {
-          code: error.code,
-          message: error.message,
-          ...(error.details ? { details: error.details } : {}),
-        },
-      },
-      { status: error.status },
-    );
-  }
-
+function normalizeApiError(error: unknown): ApiError {
+  unstable_rethrow(error);
+  if (error instanceof ApiError) return error;
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    const prismaError: {
-      status: 404 | 409;
-      code: string;
-      message: string;
-    } = {
-      status: 409,
-      code: 'CONFLICT',
-      message: 'La operación entra en conflicto con un recurso existente.',
-    };
     if (error.code === 'P2025') {
-      prismaError.status = 404;
-      prismaError.code = 'NOT_FOUND';
-      prismaError.message = 'El recurso solicitado no existe.';
-    } else if (error.code === 'P2003') {
-      prismaError.message = 'La operación entra en conflicto con datos relacionados.';
-    } else if (error.code !== 'P2002' && error.code !== 'P2034') {
-      console.error(error);
-      return NextResponse.json(
-        { error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error inesperado.' } },
-        { status: 500 },
+      return new ApiError(404, 'NOT_FOUND', 'El recurso solicitado no existe.');
+    }
+    if (error.code === 'P2003') {
+      return new ApiError(
+        409,
+        'CONFLICT',
+        'La operación entra en conflicto con datos relacionados.',
+        undefined,
+        'P2003',
       );
     }
-    return NextResponse.json({ error: prismaError }, { status: prismaError.status });
+    if (error.code === 'P2002' || error.code === 'P2034') {
+      return new ApiError(
+        409,
+        'CONFLICT',
+        'La operación entra en conflicto con un recurso existente.',
+      );
+    }
   }
 
   console.error(error);
+  return new ApiError(500, 'INTERNAL_ERROR', 'Ocurrió un error inesperado.');
+}
+
+export function apiErrorResponse(error: ApiError): NextResponse {
   return NextResponse.json(
-    { error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error inesperado.' } },
-    { status: 500 },
+    {
+      error: {
+        code: error.code,
+        message: error.message,
+        ...(error.details ? { details: error.details } : {}),
+      },
+    },
+    { status: httpStatusByErrorCode[error.code] },
+  );
+}
+
+export function apiResult<T>(operation: () => Promise<T>): ResultAsync<T, ApiError> {
+  return ResultAsync.fromPromise(Promise.resolve().then(operation), normalizeApiError);
+}
+
+export function throwApiError(error: ApiError): never {
+  throw error;
+}
+
+export function handleApiResult<T extends Response>(
+  operation: () => Promise<T>,
+  onError: (error: ApiError) => Response = apiErrorResponse,
+): Promise<Response> {
+  return apiResult(operation).match(
+    (response) => response,
+    (error) => onError(error),
   );
 }
 
@@ -182,7 +259,7 @@ export async function parseJson(request: Request): Promise<JsonObject> {
   return body as JsonObject;
 }
 
-export async function requireRoadmap(identifier: CourseOfferingIdentifier) {
+async function requireRoadmapUnsafe(identifier: CourseOfferingIdentifier) {
   const roadmap = await prisma.roadmap.findFirst({
     where: {
       courseOffering: identifier,
@@ -295,12 +372,11 @@ export function handlePrismaError(error: unknown): never {
   throw error;
 }
 
-export async function getRoadmapDto(identifier: CourseOfferingIdentifier, includeHidden = true) {
+async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, includeHidden = true) {
   const roadmap = await prisma.roadmap.findFirst({
     where: { courseOffering: identifier },
     include: {
       courseOffering: { include: { course: true } },
-      nodeTypes: { orderBy: [{ isPredefined: 'desc' }, { name: 'asc' }] },
       roadmapNodes: {
         orderBy: { title: 'asc' },
         include: { resources: { orderBy: { title: 'asc' } } },
@@ -360,7 +436,7 @@ export async function getRoadmapDto(identifier: CourseOfferingIdentifier, includ
   };
 }
 
-export async function createRoadmap(identifier: CourseOfferingIdentifier, body: JsonObject) {
+async function createRoadmapUnsafe(identifier: CourseOfferingIdentifier, body: JsonObject) {
   const courseBody =
     body.course && typeof body.course === 'object' && !Array.isArray(body.course)
       ? (body.course as JsonObject)
@@ -419,4 +495,16 @@ export function findCycle(
     pending.push(...(outgoing.get(current) ?? []));
   }
   return false;
+}
+
+export function requireRoadmap(identifier: CourseOfferingIdentifier) {
+  return apiResult(() => requireRoadmapUnsafe(identifier));
+}
+
+export function getRoadmapDto(identifier: CourseOfferingIdentifier, includeHidden = true) {
+  return apiResult(() => getRoadmapDtoUnsafe(identifier, includeHidden));
+}
+
+export function createRoadmap(identifier: CourseOfferingIdentifier, body: JsonObject) {
+  return apiResult(() => createRoadmapUnsafe(identifier, body));
 }

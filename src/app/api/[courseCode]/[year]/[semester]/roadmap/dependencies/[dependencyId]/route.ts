@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { apiErrorResponse, parseCourseOfferingIdentifier } from '@/lib/roadmap-api';
+import { handleApiResult, parseCourseOfferingIdentifier, throwApiError } from '@/lib/roadmap-api';
 import { requireAuthenticatedUser } from '@/lib/auth';
 import { deleteRoadmapDependency } from '@/lib/roadmap-editor';
 
@@ -8,13 +8,15 @@ type Context = {
 };
 
 export async function DELETE(_request: Request, context: Context) {
-  try {
+  return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser();
-    await deleteRoadmapDependency({ userId: user.id, identifier, id: params.dependencyId });
+    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    await deleteRoadmapDependency({
+      userId: user.id,
+      identifier,
+      id: params.dependencyId,
+    }).match((value) => value, throwApiError);
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }

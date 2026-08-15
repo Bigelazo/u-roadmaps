@@ -1,6 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
-import { ApiError, type CourseOfferingIdentifier, nodeDto } from '@/lib/roadmap-api';
+import { ApiError, apiResult, type CourseOfferingIdentifier, nodeDto } from '@/lib/roadmap-api';
 
 type ParticipantRoadmapInput = {
   userId: string;
@@ -43,7 +43,7 @@ async function requireParticipantRoadmap(
   return { courseOffering, participation, roadmap: courseOffering.roadmap };
 }
 
-export async function readRoadmapForParticipant({ userId, identifier }: ParticipantRoadmapInput) {
+async function readRoadmapForParticipantUnsafe({ userId, identifier }: ParticipantRoadmapInput) {
   return prisma.$transaction(
     async (transaction) => {
       const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
@@ -143,7 +143,7 @@ export async function readRoadmapForParticipant({ userId, identifier }: Particip
   );
 }
 
-export async function completeNode({ userId, identifier, nodeId }: CompleteNodeInput) {
+async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeInput) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction(
@@ -202,4 +202,12 @@ export async function completeNode({ userId, identifier, nodeId }: CompleteNodeI
     }
   }
   throw new Error('Completion transaction retry limit reached.');
+}
+
+export function readRoadmapForParticipant(input: ParticipantRoadmapInput) {
+  return apiResult(() => readRoadmapForParticipantUnsafe(input));
+}
+
+export function completeNode(input: CompleteNodeInput) {
+  return apiResult(() => completeNodeUnsafe(input));
 }

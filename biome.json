@@ -43,6 +43,9 @@
         "noUnusedFunctionParameters": "off",
         "useExhaustiveDependencies": "off"
       },
+      "nursery": {
+        "noFloatingPromises": "error"
+      },
       "suspicious": {
         "noImplicitAnyLet": "off"
       }

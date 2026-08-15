@@ -102,6 +102,13 @@ model User {
   completions        Completion[]
 }
 
+model VtiLoginTransaction {
+  state     String   @id @db.Uuid
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
 model Participation {
   id               String            @id @default(uuid()) @db.Uuid
   userId           String            @db.Uuid

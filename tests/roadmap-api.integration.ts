@@ -15,6 +15,8 @@ const progressCourseOffering = { courseCode: `CP${suffix}`, year: 2026, semester
 const predefinedNodeTypeId = '00000000-0000-4000-8000-000000000001';
 const authSecret = process.env.NEXTAUTH_SECRET ?? 'integration-nextauth-secret';
 const vtiSecret = process.env.VTI_JWT_SECRET ?? 'integration-vti-secret';
+const vtiIssuer = process.env.VTI_JWT_ISSUER ?? 'https://vti.example.test';
+const vtiAudience = process.env.VTI_JWT_AUDIENCE ?? 'u-roadmaps';
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
@@ -73,7 +75,23 @@ async function signVtiToken(
     .setProtectedHeader({ alg: algorithm })
     .setIssuedAt()
     .setExpirationTime('5m')
+    .setIssuer(vtiIssuer)
+    .setAudience(vtiAudience)
     .sign(new TextEncoder().encode(secret));
+}
+
+async function vtiCallback(token: string) {
+  const start = await fetch(`${baseUrl}/api/plogin/start`, { redirect: 'manual' });
+  assert.equal(start.status, 307);
+  const state = new URL(start.headers.get('location') ?? '').searchParams.get('state');
+  assert.ok(state);
+  const cookie = start.headers.get('set-cookie')?.split(';', 1)[0];
+  return fetch(`${baseUrl}/api/plogin`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { cookie: cookie ?? '', 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ jwt: token, state }).toString(),
+  });
 }
 
 function startServer(nextAuthUrl = baseUrl) {
@@ -674,9 +692,7 @@ serialTest('VTI callback creates a local user and a compatible session cookie', 
     name: 'Persona VTI',
     preferred_username: 'persona.vti',
   });
-  const response = await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(token)}`, {
-    redirect: 'manual',
-  });
+  const response = await vtiCallback(token);
   assert.equal(response.status, 307);
   assert.equal(new URL(response.headers.get('location') ?? '').pathname, '/');
   assert.match(response.headers.get('set-cookie') ?? '', /next-auth\.session-token=/);
@@ -702,6 +718,22 @@ serialTest('VTI callback creates a local user and a compatible session cookie', 
   assert.equal(await prisma.participation.count({ where: { userId: user.id } }), 0);
 });
 
+serialTest('VTI callback rejects a valid assertion without its login state', async () => {
+  const token = await signVtiToken({
+    identification: '000012345680-5',
+    email: `missing-state-${suffix}@uchile.cl`,
+    name: 'Sin estado',
+  });
+  const response = await fetch(`${baseUrl}/api/plogin`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ jwt: token }).toString(),
+  });
+  assert.equal(response.status, 307);
+  assert.match(response.headers.get('location') ?? '', /error=Authentication/);
+});
+
 serialTest('VTI callback uses the secure cookie contract behind HTTPS', async () => {
   const stopped = new Promise<void>((resolve) => server.once('exit', () => resolve()));
   server.kill('SIGTERM');
@@ -713,9 +745,7 @@ serialTest('VTI callback uses the secure cookie contract behind HTTPS', async ()
     email: `https-${suffix}@uchile.cl`,
     name: 'Persona HTTPS',
   });
-  const response = await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(token)}`, {
-    redirect: 'manual',
-  });
+  const response = await vtiCallback(token);
   assert.equal(response.status, 307);
   const cookie = response.headers.get('set-cookie') ?? '';
   assert.match(cookie, /__Secure-next-auth\.session-token=/);
@@ -752,10 +782,7 @@ serialTest(
       email: `EXISTING-EMAIL-${suffix}@uchile.cl`,
       name: 'Nombre actualizado',
     });
-    const emailResponse = await fetch(
-      `${baseUrl}/api/plogin?jwt=${encodeURIComponent(emailToken)}`,
-      { redirect: 'manual' },
-    );
+    const emailResponse = await vtiCallback(emailToken);
     assert.equal(emailResponse.status, 307);
     assert.equal(
       (await prisma.user.findUniqueOrThrow({ where: { id: byEmail.id } })).name,
@@ -776,9 +803,7 @@ serialTest(
     });
     assert.equal(
       (
-        await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(rutToken)}`, {
-          redirect: 'manual',
-        })
+        await vtiCallback(rutToken)
       ).status,
       307,
     );
@@ -814,9 +839,7 @@ serialTest(
     });
     assert.equal(
       (
-        await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(conflictToken)}`, {
-          redirect: 'manual',
-        })
+        await vtiCallback(conflictToken)
       ).status,
       307,
     );
@@ -839,9 +862,7 @@ serialTest('VTI callback rejects missing, incorrectly signed, and non-HS256 toke
   );
   assert.equal(
     (
-      await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(wrongSecret)}`, {
-        redirect: 'manual',
-      })
+      await vtiCallback(wrongSecret)
     ).status,
     307,
   );
@@ -852,9 +873,7 @@ serialTest('VTI callback rejects missing, incorrectly signed, and non-HS256 toke
   );
   assert.equal(
     (
-      await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(wrongAlgorithm)}`, {
-        redirect: 'manual',
-      })
+      await vtiCallback(wrongAlgorithm)
     ).status,
     307,
   );
@@ -866,9 +885,7 @@ serialTest('VTI callback rejects missing, incorrectly signed, and non-HS256 toke
     const missingClaim = await signVtiToken(claims);
     assert.equal(
       (
-        await fetch(`${baseUrl}/api/plogin?jwt=${encodeURIComponent(missingClaim)}`, {
-          redirect: 'manual',
-        })
+        await vtiCallback(missingClaim)
       ).status,
       307,
     );

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
 import { createRoadmapNode } from '../src/lib/roadmap-editor';
-import { ApiError } from '../src/lib/roadmap-api';
+import { throwApiError } from '../src/lib/roadmap-api';
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -41,7 +41,7 @@ test('teacher Roadmap editor interface creates a Node in its authorized Roadmap'
       positionX: 20,
       positionY: 40,
     },
-  });
+  }).match((value) => value, throwApiError);
 
   assert.deepEqual(node, {
     title: 'Introducción',
@@ -69,17 +69,18 @@ test('student cannot mutate a Roadmap through the editor interface', async () =>
     data: { userId: student.id, courseOfferingId: courseOffering.id, role: 'STUDENT' },
   });
 
-  await assert.rejects(
-    createRoadmapNode({
-      userId: student.id,
-      identifier,
-      input: {
-        title: 'No autorizado',
-        nodeTypeId: predefinedNodeTypeId,
-        positionX: 0,
-        positionY: 0,
-      },
-    }),
-    (error) => error instanceof ApiError && error.code === 'FORBIDDEN',
+  const error = await createRoadmapNode({
+    userId: student.id,
+    identifier,
+    input: {
+      title: 'No autorizado',
+      nodeTypeId: predefinedNodeTypeId,
+      positionX: 0,
+      positionY: 0,
+    },
+  }).match(
+    () => null,
+    (failure) => failure,
   );
+  assert.equal(error?.code, 'FORBIDDEN');
 });

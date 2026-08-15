@@ -6,7 +6,6 @@ type Props = { searchParams: Promise<{ error?: string }> };
 
 export default async function SignInPage({ searchParams }: Props) {
   if (await getApplicationSession()) redirect('/');
-  const loginUrl = process.env.NEXT_PUBLIC_VTI_LOGIN_URL;
   const { error: authenticationError } = await searchParams;
   const error = authenticationError
     ? 'No fue posible completar la autenticación institucional. Inténtalo nuevamente.'
@@ -40,8 +39,8 @@ export default async function SignInPage({ searchParams }: Props) {
             Ingresa con tu identidad de Universidad de Chile mediante U-Pasaporte / VTI.
           </Typography>
           {error && <Alert severity="error">{error}</Alert>}
-          {loginUrl ? (
-            <Button component="a" href={loginUrl} variant="contained" fullWidth>
+          {process.env.NEXT_PUBLIC_VTI_LOGIN_URL ? (
+            <Button component="a" href="/api/plogin/start" variant="contained" fullWidth>
               Autenticarse con U-Pasaporte / VTI
             </Button>
           ) : (

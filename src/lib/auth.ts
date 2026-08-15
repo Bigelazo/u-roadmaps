@@ -1,6 +1,6 @@
 import { getServerSession, type NextAuthOptions, type Session } from 'next-auth';
 import { prisma } from '@/lib/db';
-import { ApiError, type CourseOfferingIdentifier } from '@/lib/roadmap-api';
+import { ApiError, apiResult, type CourseOfferingIdentifier } from '@/lib/roadmap-api';
 
 const sessionSecret = process.env.NEXTAUTH_SECRET;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -16,7 +16,6 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user && token.sub) session.user.id = token.sub;
-      if (token.vtiClaims) session.vtiClaims = token.vtiClaims;
       return session;
     },
   },
@@ -34,17 +33,17 @@ export async function resolveSessionUser(session: Session | null) {
   return prisma.user.findUnique({ where: { id: userId } });
 }
 
-export async function requireAuthenticatedUser() {
+async function requireAuthenticatedUserUnsafe() {
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) throw new ApiError(401, 'UNAUTHENTICATED', 'Debes iniciar sesión para continuar.');
   return user;
 }
 
-export async function requireCourseOfferingParticipation(
+async function requireCourseOfferingParticipationUnsafe(
   identifier: CourseOfferingIdentifier,
   allowedRoles: Array<'STUDENT' | 'TEACHER'>,
 ) {
-  const user = await requireAuthenticatedUser();
+  const user = await requireAuthenticatedUserUnsafe();
   const courseOffering = await prisma.courseOffering.findUnique({
     where: {
       courseCode_year_semester: identifier,
@@ -70,12 +69,12 @@ export async function requireCourseOfferingParticipation(
   return { user, courseOffering, participation };
 }
 
-export async function requireCourseOfferingTeacher(identifier: CourseOfferingIdentifier) {
-  return requireCourseOfferingParticipation(identifier, ['TEACHER']);
+async function requireCourseOfferingTeacherUnsafe(identifier: CourseOfferingIdentifier) {
+  return requireCourseOfferingParticipationUnsafe(identifier, ['TEACHER']);
 }
 
-export async function requireRoadmapCreationAccess(identifier: CourseOfferingIdentifier) {
-  const user = await requireAuthenticatedUser();
+async function requireRoadmapCreationAccessUnsafe(identifier: CourseOfferingIdentifier) {
+  const user = await requireAuthenticatedUserUnsafe();
   const courseOffering = await prisma.courseOffering.findUnique({
     where: {
       courseCode_year_semester: identifier,
@@ -97,4 +96,23 @@ export async function requireRoadmapCreationAccess(identifier: CourseOfferingIde
       'No tienes participación docente vigente para esta operación.',
     );
   return { user, courseOffering };
+}
+
+export function requireAuthenticatedUser() {
+  return apiResult(requireAuthenticatedUserUnsafe);
+}
+
+export function requireCourseOfferingParticipation(
+  identifier: CourseOfferingIdentifier,
+  allowedRoles: Array<'STUDENT' | 'TEACHER'>,
+) {
+  return apiResult(() => requireCourseOfferingParticipationUnsafe(identifier, allowedRoles));
+}
+
+export function requireCourseOfferingTeacher(identifier: CourseOfferingIdentifier) {
+  return apiResult(() => requireCourseOfferingTeacherUnsafe(identifier));
+}
+
+export function requireRoadmapCreationAccess(identifier: CourseOfferingIdentifier) {
+  return apiResult(() => requireRoadmapCreationAccessUnsafe(identifier));
 }

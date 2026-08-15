@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { apiErrorResponse } from '@/lib/roadmap-api';
+import { handleApiResult } from '@/lib/roadmap-api';
 import { resetDevelopmentData } from '../../../../../prisma/development-data';
 import { developmentEnvironmentEnabled } from '@/lib/development';
 
 export async function POST() {
-  try {
+  return handleApiResult(async () => {
     if (!developmentEnvironmentEnabled()) {
       return NextResponse.json(
         { error: { code: 'NOT_FOUND', message: 'El recurso solicitado no existe.' } },
@@ -13,7 +13,5 @@ export async function POST() {
     }
     await resetDevelopmentData();
     return NextResponse.json({ reset: true });
-  } catch (error) {
-    return apiErrorResponse(error);
-  }
+  });
 }
