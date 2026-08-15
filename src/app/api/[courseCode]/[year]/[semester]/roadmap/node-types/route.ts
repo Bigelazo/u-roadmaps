@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import {
   apiErrorResponse,
-  ensureTypeNameAvailable,
   getAvailableTypes,
-  normalizeName,
   parseCourseOfferingIdentifier,
   parseJson,
-  requireColor,
   requireRoadmap,
-  requireString,
 } from '@/lib/roadmap-api';
-import { requireCourseOfferingParticipation, requireCourseOfferingTeacher } from '@/lib/auth';
+import { requireAuthenticatedUser, requireCourseOfferingParticipation } from '@/lib/auth';
+import { createRoadmapNodeType } from '@/lib/roadmap-editor';
 
 type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
@@ -31,32 +27,10 @@ export async function POST(request: Request, context: Context) {
   try {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    await requireCourseOfferingTeacher(identifier);
-    const roadmap = await requireRoadmap(identifier);
     const body = await parseJson(request);
-    const name = requireString(body.name, 'name', 120);
-    const color = requireColor(body.color);
-    await ensureTypeNameAvailable(name, roadmap.id);
-    const nodeType = await prisma.nodeType.create({
-      data: {
-        roadmapId: roadmap.id,
-        name,
-        normalizedName: normalizeName(name),
-        color,
-        isPredefined: false,
-      },
-    });
-    return NextResponse.json(
-      {
-        nodeType: {
-          id: nodeType.id,
-          name: nodeType.name,
-          color: nodeType.color,
-          isPredefined: false,
-        },
-      },
-      { status: 201 },
-    );
+    const user = await requireAuthenticatedUser();
+    const nodeType = await createRoadmapNodeType({ userId: user.id, identifier, input: body });
+    return NextResponse.json({ nodeType }, { status: 201 });
   } catch (error) {
     return apiErrorResponse(error);
   }

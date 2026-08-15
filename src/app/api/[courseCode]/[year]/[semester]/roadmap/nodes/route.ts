@@ -1,49 +1,22 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import {
   apiErrorResponse,
   getRoadmapDto,
   parseCourseOfferingIdentifier,
   parseJson,
-  requireBoolean,
-  requireFiniteNumber,
-  requireRoadmap,
-  requireString,
-  requireTypeInRoadmap,
-  nodeDto,
-  optionalString,
-  requireUuid,
 } from '@/lib/roadmap-api';
-import { requireCourseOfferingParticipation, requireCourseOfferingTeacher } from '@/lib/auth';
+import { requireAuthenticatedUser, requireCourseOfferingParticipation } from '@/lib/auth';
+import { createRoadmapNode } from '@/lib/roadmap-editor';
 
 type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
 export async function POST(request: Request, context: Context) {
   try {
     const identifier = parseCourseOfferingIdentifier(await context.params);
-    await requireCourseOfferingTeacher(identifier);
-    const roadmap = await requireRoadmap(identifier);
     const body = await parseJson(request);
-    const title = requireString(body.title, 'title', 240);
-    const description = optionalString(body.description, 'description');
-    const nodeTypeId = requireUuid(body.nodeTypeId, 'nodeTypeId');
-    const positionX = requireFiniteNumber(body.positionX, 'positionX');
-    const positionY = requireFiniteNumber(body.positionY, 'positionY');
-    const isVisible =
-      body.isVisible === undefined ? true : requireBoolean(body.isVisible, 'isVisible');
-    await requireTypeInRoadmap(nodeTypeId, roadmap.id);
-    const node = await prisma.roadmapNode.create({
-      data: {
-        roadmapId: roadmap.id,
-        nodeTypeId,
-        title,
-        description,
-        positionX,
-        positionY,
-        isVisible,
-      },
-    });
-    return NextResponse.json({ node: nodeDto(node) }, { status: 201 });
+    const user = await requireAuthenticatedUser();
+    const node = await createRoadmapNode({ userId: user.id, identifier, input: body });
+    return NextResponse.json({ node }, { status: 201 });
   } catch (error) {
     return apiErrorResponse(error);
   }
