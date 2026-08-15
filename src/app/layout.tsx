@@ -14,7 +14,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body>
         <ThemeRegistry>
-          {developmentEnvironmentEnabled() && <DevelopmentBar personas={developmentPersonas} />}
+          {developmentEnvironmentEnabled() && (
+            <DevelopmentBar personas={developmentPersonas} hideOnPersonaPage />
+          )}
           {children}
         </ThemeRegistry>
       </body>

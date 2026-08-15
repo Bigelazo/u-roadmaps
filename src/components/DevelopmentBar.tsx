@@ -2,11 +2,19 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button, MenuItem, Paper, Select, Stack, Typography } from '@mui/material';
 
 type Persona = { id: string; label: string };
 
-export default function DevelopmentBar({ personas }: { personas: Persona[] }) {
+export default function DevelopmentBar({
+  personas,
+  hideOnPersonaPage = false,
+}: {
+  personas: Persona[];
+  hideOnPersonaPage?: boolean;
+}) {
+  const pathname = usePathname();
   const [userId, setUserId] = useState(personas[0]?.id ?? '');
   async function assumePersona() {
     const response = await fetch('/api/development/session', {
@@ -16,6 +24,7 @@ export default function DevelopmentBar({ personas }: { personas: Persona[] }) {
     });
     if (response.ok) window.location.assign('/academic-overview');
   }
+  if (hideOnPersonaPage && pathname === '/development/personas') return null;
   return (
     <Paper
       square
