@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: roadmap_dev_user
+      POSTGRES_PASSWORD: roadmap_dev_password
+      POSTGRES_DB: roadmap_dev_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - roadmap-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roadmap_dev_user -d roadmap_dev_db"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  roadmap-dev-data:

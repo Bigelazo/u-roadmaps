@@ -22,6 +22,7 @@ export type RoadmapNode = {
   positionY: number;
   nodeTypeId: string;
   isVisible: boolean;
+  isCompleted?: boolean;
   resources: Resource[];
 };
 

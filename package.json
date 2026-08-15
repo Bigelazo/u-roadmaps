@@ -17,6 +17,8 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "prisma:prepare": "prisma generate && prisma migrate deploy && prisma db seed",
+    "dev:db": "docker compose -f docker-compose.dev.yml up -d --wait",
+    "dev:data:reset": "NODE_ENV=development U_ROADMAPS_DEV_DATA=true prisma db seed && NODE_ENV=development U_ROADMAPS_DEV_DATA=true tsx prisma/development-data.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

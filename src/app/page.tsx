@@ -1,5 +1,6 @@
 import { GraduationCap } from 'lucide-react';
-import { Box, Container, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
+import Link from 'next/link';
 import SessionButton from '@/components/SessionButton';
 import VtiInformation from '@/components/VtiInformation';
 import { getApplicationSession } from '@/lib/auth';
@@ -49,6 +50,16 @@ export default async function Home() {
             <Typography variant="overline" sx={{ color: '#c9e0fc', letterSpacing: '0.16em' }}>
               U-roadmaps
             </Typography>
+            {session && (
+              <Button
+                component={Link}
+                href="/academic-overview"
+                variant="contained"
+                sx={{ alignSelf: 'start' }}
+              >
+                Ver mis cursos
+              </Button>
+            )}
             <Typography variant="h2">Rutas de aprendizaje para cursos universitarios</Typography>
             <Typography variant="body1" sx={{ color: '#c2c2c2', fontSize: '1.125rem' }}>
               Los roadmaps se identifican por ramo y período académico. La integración con U-Campus

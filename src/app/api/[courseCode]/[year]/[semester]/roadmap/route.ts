@@ -13,11 +13,17 @@ type Context = { params: Promise<{ courseCode: string; year: string; semester: s
 export async function GET(_request: Request, context: Context) {
   try {
     const identifier = parseCourseOfferingIdentifier(await context.params);
-    const { participation } = await requireCourseOfferingParticipation(identifier, [
+    const { participation, user } = await requireCourseOfferingParticipation(identifier, [
       'STUDENT',
       'TEACHER',
     ]);
-    return NextResponse.json(await getRoadmapDto(identifier, participation.role === 'TEACHER'));
+    return NextResponse.json(
+      await getRoadmapDto(
+        identifier,
+        participation.role === 'TEACHER',
+        participation.role === 'STUDENT' ? user.id : undefined,
+      ),
+    );
   } catch (error) {
     return apiErrorResponse(error);
   }

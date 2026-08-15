@@ -362,6 +362,17 @@ export default function RoadmapCanvas({ identifier, canEdit = false }: Props) {
     }
   }
 
+  async function completeNode(node: RoadmapNode) {
+    try {
+      await mutate(roadmapUrl(identifier, `/nodes/${node.id}/completion`), { method: 'POST' });
+      await load();
+    } catch (operationError) {
+      setError(
+        operationError instanceof Error ? operationError.message : 'No se pudo completar el nodo.',
+      );
+    }
+  }
+
   if (error && !dto)
     return (
       <Alert severity="error">
@@ -676,6 +687,26 @@ export default function RoadmapCanvas({ identifier, canEdit = false }: Props) {
         </Box>
       )}
       <Box sx={{ minHeight: '70vh' }}>
+        {!canEdit && error && (
+          <Alert severity="error" sx={{ m: 2 }}>
+            {error}
+          </Alert>
+        )}
+        {!canEdit && (
+          <Stack direction="row" spacing={1} sx={{ p: 2, flexWrap: 'wrap' }}>
+            {dto.nodes.map((node) => (
+              <Button
+                key={node.id}
+                size="small"
+                disabled={node.isCompleted}
+                variant={node.isCompleted ? 'outlined' : 'contained'}
+                onClick={() => void completeNode(node)}
+              >
+                {node.isCompleted ? `${node.title}: completado` : `Completar: ${node.title}`}
+              </Button>
+            ))}
+          </Stack>
+        )}
         <ReactFlow
           nodes={nodes}
           edges={edges}

@@ -11,6 +11,7 @@ const baseUrl = `http://localhost:${port}`;
 const suffix = Date.now().toString();
 const courseOffering = { courseCode: `CC${suffix}`, year: 2026, semester: 1 };
 const otherCourseOffering = { courseCode: `CI${suffix}`, year: 2026, semester: 1 };
+const progressCourseOffering = { courseCode: `CP${suffix}`, year: 2026, semester: 1 };
 const predefinedNodeTypeId = '00000000-0000-4000-8000-000000000001';
 const authSecret = process.env.NEXTAUTH_SECRET ?? 'integration-nextauth-secret';
 const vtiSecret = process.env.VTI_JWT_SECRET ?? 'integration-vti-secret';
@@ -557,6 +558,102 @@ serialTest('student sessions read only visible nodes and cannot mutate', async (
   );
   assert.equal(forbiddenMutation.status, 403);
 });
+
+serialTest(
+  'student completions enforce visible prerequisites and appear in the roadmap',
+  async () => {
+    const created = await request(roadmapUrl(progressCourseOffering), 'POST', {
+      course: { name: 'Curso de progreso', department: 'DCC' },
+    });
+    assert.equal(created.status, 201);
+    const offering = await prisma.courseOffering.findUniqueOrThrow({
+      where: { courseCode_year_semester: progressCourseOffering },
+    });
+    const teacher = await prisma.user.findUniqueOrThrow({
+      where: { institutionalEmail: `docente-${suffix}@uchile.cl` },
+    });
+    await prisma.participation.create({
+      data: { userId: teacher.id, courseOfferingId: offering.id, role: 'TEACHER' },
+    });
+    const prerequisite = await request(roadmapUrl(progressCourseOffering, '/nodes'), 'POST', {
+      title: 'Base',
+      nodeTypeId: predefinedNodeTypeId,
+      positionX: 0,
+      positionY: 0,
+    });
+    const target = await request(roadmapUrl(progressCourseOffering, '/nodes'), 'POST', {
+      title: 'Siguiente',
+      nodeTypeId: predefinedNodeTypeId,
+      positionX: 120,
+      positionY: 0,
+    });
+    const prerequisiteNode = (await prerequisite.json()).node;
+    const targetNode = (await target.json()).node;
+    await request(roadmapUrl(progressCourseOffering, '/dependencies'), 'POST', {
+      sourceNodeId: prerequisiteNode.id,
+      targetNodeId: targetNode.id,
+    });
+    const student = await prisma.user.create({
+      data: {
+        name: 'Estudiante de progreso',
+        institutionalEmail: `progreso-${suffix}@uchile.cl`,
+        rut: `5${suffix}`,
+      },
+    });
+    await prisma.participation.create({
+      data: { userId: student.id, courseOfferingId: offering.id, role: 'STUDENT' },
+    });
+    const cookie = await sessionCookie(student.id);
+    const completionUrl = (nodeId: string) =>
+      roadmapUrl(progressCourseOffering, `/nodes/${nodeId}/completion`);
+    assert.equal(
+      (await request(completionUrl(targetNode.id), 'POST', undefined, cookie)).status,
+      409,
+    );
+    assert.equal(
+      (await request(completionUrl(prerequisiteNode.id), 'POST', undefined, cookie)).status,
+      201,
+    );
+    assert.equal(
+      (await request(completionUrl(targetNode.id), 'POST', undefined, cookie)).status,
+      201,
+    );
+    assert.equal(
+      (await request(completionUrl(targetNode.id), 'POST', undefined, cookie)).status,
+      409,
+    );
+    const roadmap = await (
+      await fetch(roadmapUrl(progressCourseOffering), { headers: { cookie } })
+    ).json();
+    assert.equal(
+      roadmap.nodes.every((node: { isCompleted: boolean }) => node.isCompleted),
+      true,
+    );
+  },
+);
+
+serialTest(
+  'academic overview excludes inactive participations and development routes reject test configuration',
+  async () => {
+    const overview = await fetch(`${baseUrl}/api/academic-overview`, {
+      headers: { cookie: studentCookie },
+    });
+    assert.equal(overview.status, 200);
+    assert.equal(
+      (await overview.json()).offerings.some(
+        (offering: { courseCode: string }) => offering.courseCode === courseOffering.courseCode,
+      ),
+      true,
+    );
+    const developmentSession = await fetch(`${baseUrl}/api/development/session`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: '20000000-0000-4000-8000-000000000001' }),
+    });
+    assert.equal(developmentSession.status, 404);
+    assert.equal((await fetch(`${baseUrl}/api/development/reset`, { method: 'POST' })).status, 404);
+  },
+);
 
 serialTest('VTI callback creates a local user and a compatible session cookie', async () => {
   const token = await signVtiToken({
