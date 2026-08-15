@@ -295,11 +295,7 @@ export function handlePrismaError(error: unknown): never {
   throw error;
 }
 
-export async function getRoadmapDto(
-  identifier: CourseOfferingIdentifier,
-  includeHidden = true,
-  completionUserId?: string,
-) {
+export async function getRoadmapDto(identifier: CourseOfferingIdentifier, includeHidden = true) {
   const roadmap = await prisma.roadmap.findFirst({
     where: { courseOffering: identifier },
     include: {
@@ -327,16 +323,6 @@ export async function getRoadmapDto(
     ? roadmap.roadmapNodes
     : roadmap.roadmapNodes.filter((node) => node.isVisible);
   const visibleNodeIds = new Set(nodes.map((node) => node.id));
-  const completedNodeIds = completionUserId
-    ? new Set(
-        (
-          await prisma.completion.findMany({
-            where: { userId: completionUserId, roadmapNode: { roadmapId: roadmap.id } },
-            select: { roadmapNodeId: true },
-          })
-        ).map((completion) => completion.roadmapNodeId),
-      )
-    : new Set<string>();
   return {
     course: {
       code: roadmap.courseOffering.course.code,
@@ -352,7 +338,6 @@ export async function getRoadmapDto(
     nodeTypes: await getAvailableTypes(roadmap.id),
     nodes: nodes.map((node) => ({
       ...nodeDto(node),
-      ...(completionUserId ? { isCompleted: completedNodeIds.has(node.id) } : {}),
       resources: node.resources.map((resource) => ({
         id: resource.id,
         title: resource.title,

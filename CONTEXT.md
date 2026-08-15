@@ -69,7 +69,7 @@ The fact that a participant completed a successful VTI login after joining a cou
 _Avoid_: Roster import, node completion, roadmap visit
 
 **Node (Nodo)**:
-An element of a roadmap that holds pedagogical information, has exactly one node type, and can be visible or hidden from students. Confirmed deletion also removes its dependencies, resources, and completions.
+An element of a roadmap that holds pedagogical information, has exactly one node type, and can be visible or hidden from students. A hidden node is absent from a student's roadmap and cannot be completed by that student. Confirmed deletion also removes its dependencies, resources, and completions.
 _Avoid_: Learning unit
 
 **Node type (Tipo de nodo)**:
@@ -93,7 +93,7 @@ A unique, directed relationship between distinct nodes in the same roadmap where
 _Avoid_: Link, visual connection
 
 **Completion (Completación)**:
-The dated fact that a participating student completed a node in their course offering's roadmap. Only current visible prerequisites must be complete; a student cannot reverse it, and later roadmap changes do not invalidate it, though it disappears if a teacher deletes the node. Its absence means the node is pending.
+The dated fact that a participating student completed a node in their course offering's roadmap. Only current visible prerequisites must be complete; a student cannot reverse it, and repeated completion attempts preserve the original fact and date. Later roadmap changes do not invalidate it, though it disappears if a teacher deletes the node. Its absence means the node is pending.
 _Avoid_: Progress state, mutable progress
 
 **Resource (Recurso)**:

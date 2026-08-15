@@ -2,28 +2,19 @@ import { NextResponse } from 'next/server';
 import {
   apiErrorResponse,
   createRoadmap,
-  getRoadmapDto,
   parseCourseOfferingIdentifier,
   parseJson,
 } from '@/lib/roadmap-api';
-import { requireCourseOfferingParticipation, requireRoadmapCreationAccess } from '@/lib/auth';
+import { requireAuthenticatedUser, requireRoadmapCreationAccess } from '@/lib/auth';
+import { readRoadmapForParticipant } from '@/lib/roadmap-completion';
 
 type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
 export async function GET(_request: Request, context: Context) {
   try {
     const identifier = parseCourseOfferingIdentifier(await context.params);
-    const { participation, user } = await requireCourseOfferingParticipation(identifier, [
-      'STUDENT',
-      'TEACHER',
-    ]);
-    return NextResponse.json(
-      await getRoadmapDto(
-        identifier,
-        participation.role === 'TEACHER',
-        participation.role === 'STUDENT' ? user.id : undefined,
-      ),
-    );
+    const user = await requireAuthenticatedUser();
+    return NextResponse.json(await readRoadmapForParticipant({ userId: user.id, identifier }));
   } catch (error) {
     return apiErrorResponse(error);
   }

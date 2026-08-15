@@ -606,21 +606,33 @@ serialTest(
     const cookie = await sessionCookie(student.id);
     const completionUrl = (nodeId: string) =>
       roadmapUrl(progressCourseOffering, `/nodes/${nodeId}/completion`);
+    const initialRoadmap = await (
+      await fetch(roadmapUrl(progressCourseOffering), { headers: { cookie } })
+    ).json();
+    assert.equal(
+      initialRoadmap.nodes.find((node: { id: string }) => node.id === prerequisiteNode.id)
+        .canComplete,
+      true,
+    );
+    assert.equal(
+      initialRoadmap.nodes.find((node: { id: string }) => node.id === targetNode.id).canComplete,
+      false,
+    );
     assert.equal(
       (await request(completionUrl(targetNode.id), 'POST', undefined, cookie)).status,
       409,
     );
     assert.equal(
       (await request(completionUrl(prerequisiteNode.id), 'POST', undefined, cookie)).status,
-      201,
+      200,
     );
     assert.equal(
       (await request(completionUrl(targetNode.id), 'POST', undefined, cookie)).status,
-      201,
+      200,
     );
     assert.equal(
       (await request(completionUrl(targetNode.id), 'POST', undefined, cookie)).status,
-      409,
+      200,
     );
     const roadmap = await (
       await fetch(roadmapUrl(progressCourseOffering), { headers: { cookie } })

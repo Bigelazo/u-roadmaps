@@ -153,17 +153,10 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
   const [error, setError] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(true);
 
-  function nodeStatus(node: RoadmapNode, roadmap: RoadmapDto): NodeStatus {
+  function nodeStatus(node: RoadmapNode): NodeStatus {
     if (canEdit) return 'editing';
     if (node.isCompleted) return 'completed';
-    const prerequisites = roadmap.dependencies.filter(
-      (dependency) => dependency.targetNodeId === node.id,
-    );
-    const ready = prerequisites.every((dependency) => {
-      const prerequisite = roadmap.nodes.find((item) => item.id === dependency.sourceNodeId);
-      return !prerequisite?.isVisible || prerequisite.isCompleted;
-    });
-    return ready ? 'available' : 'locked';
+    return node.canComplete ? 'available' : 'locked';
   }
 
   function setFlow(roadmap: RoadmapDto) {
@@ -175,7 +168,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
         data: {
           title: node.title,
           typeName: types.get(node.nodeTypeId) ?? 'Contenido',
-          status: nodeStatus(node, roadmap),
+          status: nodeStatus(node),
         },
         position: { x: node.positionX, y: node.positionY },
         hidden: !node.isVisible,
@@ -353,12 +346,16 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
   }
 
   async function completeNode(node: RoadmapNode) {
-    if (!dto || nodeStatus(node, dto) === 'locked') return;
+    if (!node.canComplete) return;
     try {
       await mutate(roadmapUrl(identifier, `/nodes/${node.id}/completion`), { method: 'POST' });
       await load();
     } catch (operationError) {
-      report(operationError, 'No se pudo completar el nodo.');
+      try {
+        await load();
+      } finally {
+        report(operationError, 'No se pudo completar el nodo.');
+      }
     }
   }
 
@@ -371,7 +368,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
   if (!dto) return <Paper sx={{ m: 4, p: 4, color: 'text.secondary' }}>Cargando roadmap...</Paper>;
 
   const selectedNode = dto.nodes.find((node) => node.id === selectedNodeId);
-  const selectedStatus = selectedNode ? nodeStatus(selectedNode, dto) : null;
+  const selectedStatus = selectedNode ? nodeStatus(selectedNode) : null;
   return (
     <Box>
       {error && (
