@@ -4,6 +4,10 @@ This context describes the learning paths of university course offerings and the
 
 ## Language (Lenguaje)
 
+**U-Roadmaps (U-Roadmaps)**:
+The university learning-path platform where participants navigate and manage the roadmaps of their course offerings. Its canonical product name always uses this capitalization and hyphenation; “university roadmaps” describes its subject but is not an alternative name.
+_Avoid_: U-roadmaps, u-roadmaps, U Roadmaps, Roadmaps universitarios
+
 **Course (Ramo)**:
 A stable academic-catalog subject, globally identified by its code and independent of when or how often it is offered.
 _Avoid_: Course offering, subject instance
