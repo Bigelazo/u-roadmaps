@@ -16,7 +16,12 @@ const ids = {
   algebraRoadmap: '40000000-0000-4000-8000-000000000003',
   practiceType: '50000000-0000-4000-8000-000000000001',
 };
-const courseCodes = ['CC1001', 'MA1001', 'FI1001', 'MA1002'];
+const fixtureOfferingIds = [ids.programming, ids.calculus, ids.physics, ids.algebra];
+const predefinedNodeTypes = [
+  { id: '00000000-0000-4000-8000-000000000001', name: 'Contenido', color: '#024AD8' },
+  { id: '00000000-0000-4000-8000-000000000002', name: 'Evaluación', color: '#FF5050' },
+  { id: '00000000-0000-4000-8000-000000000003', name: 'Material extra', color: '#356373' },
+];
 const nodeId = (number: number) => `60000000-0000-4000-8000-${number.toString().padStart(12, '0')}`;
 const studentId = (number: number) =>
   `20000000-0000-4000-8000-${number.toString().padStart(12, '0')}`;
@@ -24,7 +29,7 @@ const studentId = (number: number) =>
 export async function resetDevelopmentData() {
   requireDevelopmentEnvironment();
   await prisma.$transaction(async (transaction) => {
-    await transaction.course.deleteMany({ where: { code: { in: courseCodes } } });
+    await transaction.courseOffering.deleteMany({ where: { id: { in: fixtureOfferingIds } } });
     await transaction.user.deleteMany({
       where: {
         id: {
@@ -38,6 +43,7 @@ export async function resetDevelopmentData() {
     });
 
     await transaction.course.createMany({
+      skipDuplicates: true,
       data: [
         {
           code: 'CC1001',
@@ -49,6 +55,23 @@ export async function resetDevelopmentData() {
         { code: 'MA1002', name: 'Álgebra I', department: 'Departamento de Ingeniería Matemática' },
       ],
     });
+    for (const nodeType of predefinedNodeTypes) {
+      await transaction.nodeType.upsert({
+        where: { id: nodeType.id },
+        update: {
+          name: nodeType.name,
+          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+          color: nodeType.color,
+          isPredefined: true,
+          roadmapId: null,
+        },
+        create: {
+          ...nodeType,
+          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+          isPredefined: true,
+        },
+      });
+    }
     await transaction.courseOffering.createMany({
       data: [
         { id: ids.programming, courseCode: 'CC1001', year: 2026, semester: 2 },

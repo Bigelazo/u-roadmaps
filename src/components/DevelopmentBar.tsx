@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Button, MenuItem, Paper, Select, Stack, Typography } from '@mui/material';
 
 type Persona = { id: string; label: string };
@@ -50,6 +51,9 @@ export default function DevelopmentBar({ personas }: { personas: Persona[] }) {
         </Select>
         <Button size="small" variant="contained" onClick={() => void assumePersona()}>
           Cambiar identidad
+        </Button>
+        <Button component={Link} href="/development/personas" size="small" color="inherit">
+          Ver personas
         </Button>
       </Stack>
     </Paper>
