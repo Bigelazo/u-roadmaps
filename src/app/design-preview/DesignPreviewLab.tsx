@@ -208,7 +208,15 @@ function Candidate({
       </header>
       {children}
       <div className={styles.candidateDecision}>
-        <p>{decision === 'request' ? 'Solicitud de aprobación pendiente del propietario.' : 'Decisión de revisión local'}</p>
+        <p>
+          {decision === 'request'
+            ? 'Solicitud de aprobación pendiente del propietario.'
+            : decision === 'discard'
+              ? 'Candidato marcado para descarte durante esta revisión.'
+              : decision === 'iterate'
+                ? 'Candidato marcado para una nueva iteración.'
+                : 'Decisión de revisión local'}
+        </p>
         <div>
           <button onClick={() => setDecision('discard')} type="button">Descartar</button>
           <button onClick={() => setDecision('iterate')} type="button">Iterar</button>
@@ -309,7 +317,7 @@ function FeatureCardsDemo() {
 function SignInCard({ state }: { state: 'ready' | 'error' | 'unconfigured' }) {
   return (
     <div className={styles.signInCard}>
-      <p className={styles.productionOverline}>U-roadmaps</p>
+      <p className={styles.productionOverline}>U-Roadmaps</p>
       <h3>Acceso institucional</h3>
       <p>Ingresa con tu identidad de Universidad de Chile mediante U-Pasaporte / VTI.</p>
       {state === 'error' ? (
@@ -520,7 +528,7 @@ function NodeDetailCandidate({ mobile = false }: { mobile?: boolean }) {
   );
 }
 
-async function acceptMutation() {
+async function simulateSuccessfulMutation() {
   return true;
 }
 
@@ -533,11 +541,11 @@ function RoadmapEditorDemo() {
         isOpen
         onToggle={() => undefined}
         onClose={() => undefined}
-        onAddNode={acceptMutation}
-        onUpdateNode={acceptMutation}
-        onToggleVisibility={acceptMutation}
-        onDeleteNode={acceptMutation}
-        onAddResource={acceptMutation}
+        onAddNode={simulateSuccessfulMutation}
+        onUpdateNode={simulateSuccessfulMutation}
+        onToggleVisibility={simulateSuccessfulMutation}
+        onDeleteNode={simulateSuccessfulMutation}
+        onAddResource={simulateSuccessfulMutation}
       />
     </div>
   );
@@ -757,7 +765,7 @@ export default function DesignPreviewLab({ fontClassName }: { fontClassName: str
           <Specimen
             id="courses"
             index="03"
-            title="Tarjetas de course offering"
+            title="Tarjetas de ofertas de curso"
             description="Entrada desde el resumen académico a cada impartición vigente o histórica."
             coverage={[
               'estudiante',
