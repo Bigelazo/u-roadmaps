@@ -752,23 +752,26 @@ serialTest('VTI callback uses the secure cookie contract behind HTTPS', async ()
   assert.match(cookie, /Secure/);
 });
 
-serialTest('login page and start endpoint expose the configured institutional redirect', async () => {
-  const response = await fetch(`${baseUrl}/auth/signin`);
-  assert.equal(response.status, 200);
-  const body = await response.text();
-  assert.match(body, /Autenticarse con U-Pasaporte \/ VTI/);
-  const start = await fetch(`${baseUrl}/api/plogin/start`, { redirect: 'manual' });
-  assert.equal(start.status, 307);
-  assert.match(start.headers.get('location') ?? '', /vti\.example\.test/);
-  assert.match(start.headers.get('location') ?? '', /state=/);
+serialTest(
+  'login page and start endpoint expose the configured institutional redirect',
+  async () => {
+    const response = await fetch(`${baseUrl}/auth/signin`);
+    assert.equal(response.status, 200);
+    const body = await response.text();
+    assert.match(body, /Autenticarse con U-Pasaporte \/ VTI/);
+    const start = await fetch(`${baseUrl}/api/plogin/start`, { redirect: 'manual' });
+    assert.equal(start.status, 307);
+    assert.match(start.headers.get('location') ?? '', /vti\.example\.test/);
+    assert.match(start.headers.get('location') ?? '', /state=/);
 
-  const errorResponse = await fetch(`${baseUrl}/auth/signin?error=Authentication`);
-  assert.equal(errorResponse.status, 200);
-  assert.match(
-    await errorResponse.text(),
-    /No fue posible completar la autenticación institucional/,
-  );
-});
+    const errorResponse = await fetch(`${baseUrl}/auth/signin?error=Authentication`);
+    assert.equal(errorResponse.status, 200);
+    assert.match(
+      await errorResponse.text(),
+      /No fue posible completar la autenticación institucional/,
+    );
+  },
+);
 
 serialTest(
   'VTI callback reuses email and RUT identities and rejects conflicts atomically',
@@ -804,12 +807,7 @@ serialTest(
       email: `new-email-${suffix}@uchile.cl`,
       name: 'Nombre desde RUT',
     });
-    assert.equal(
-      (
-        await vtiCallback(rutToken)
-      ).status,
-      307,
-    );
+    assert.equal((await vtiCallback(rutToken)).status, 307);
     assert.equal(
       (await prisma.user.findUniqueOrThrow({ where: { id: byRut.id } })).institutionalEmail,
       `existing-rut-${suffix}@uchile.cl`,
@@ -840,12 +838,7 @@ serialTest(
       email: emailConflict.institutionalEmail,
       name: 'No debe persistir',
     });
-    assert.equal(
-      (
-        await vtiCallback(conflictToken)
-      ).status,
-      307,
-    );
+    assert.equal((await vtiCallback(conflictToken)).status, 307);
     assert.equal(
       (await prisma.user.findUniqueOrThrow({ where: { id: emailConflict.id } })).name,
       'Correo en conflicto',
@@ -872,34 +865,19 @@ serialTest('VTI callback rejects missing, incorrectly signed, and non-HS256 toke
     { identification: '12345678-5', email: `wrong-${suffix}@uchile.cl`, name: 'Wrong' },
     'wrong-secret',
   );
-  assert.equal(
-    (
-      await vtiCallback(wrongSecret)
-    ).status,
-    307,
-  );
+  assert.equal((await vtiCallback(wrongSecret)).status, 307);
   const wrongAlgorithm = await signVtiToken(
     { identification: '12345678-5', email: `algorithm-${suffix}@uchile.cl`, name: 'Algorithm' },
     vtiSecret,
     'HS384',
   );
-  assert.equal(
-    (
-      await vtiCallback(wrongAlgorithm)
-    ).status,
-    307,
-  );
+  assert.equal((await vtiCallback(wrongAlgorithm)).status, 307);
   for (const claims of [
     { email: `missing-identification-${suffix}@uchile.cl`, name: 'Missing identification' },
     { identification: '12345678-5', name: 'Missing email' },
     { identification: '12345678-5', email: `missing-name-${suffix}@uchile.cl` },
   ]) {
     const missingClaim = await signVtiToken(claims);
-    assert.equal(
-      (
-        await vtiCallback(missingClaim)
-      ).status,
-      307,
-    );
+    assert.equal((await vtiCallback(missingClaim)).status, 307);
   }
 });

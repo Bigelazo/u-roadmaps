@@ -20,10 +20,11 @@ test('rapid course-offering navigation aborts the stale roadmap load', async () 
   const requests: Array<{ signal: AbortSignal; resolve: (response: Response) => void }> = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn((_url: string, init: RequestInit) =>
-      new Promise<Response>((resolve) => {
-        requests.push({ signal: init.signal as AbortSignal, resolve });
-      }),
+    vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((resolve) => {
+          requests.push({ signal: init.signal as AbortSignal, resolve });
+        }),
     ),
   );
 

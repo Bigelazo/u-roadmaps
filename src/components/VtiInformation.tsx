@@ -4,12 +4,7 @@ import { useEffect } from 'react';
 import { Paper, Stack, Typography } from '@mui/material';
 
 type VtiClaimValue =
-  | string
-  | number
-  | boolean
-  | null
-  | VtiClaimValue[]
-  | { [key: string]: VtiClaimValue };
+  string | number | boolean | null | VtiClaimValue[] | { [key: string]: VtiClaimValue };
 
 type Props = { claims: Record<string, VtiClaimValue> };
 

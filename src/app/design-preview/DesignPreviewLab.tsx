@@ -192,7 +192,9 @@ function Candidate({
   coverage: string[];
   children: React.ReactNode;
 }) {
-  const [decision, setDecision] = useState<'undecided' | 'discard' | 'iterate' | 'request'>('undecided');
+  const [decision, setDecision] = useState<'undecided' | 'discard' | 'iterate' | 'request'>(
+    'undecided',
+  );
 
   return (
     <section className={styles.candidate} aria-label={`Candidato experimental: ${title}`}>
@@ -218,9 +220,15 @@ function Candidate({
                 : 'Decisión de revisión local'}
         </p>
         <div>
-          <button onClick={() => setDecision('discard')} type="button">Descartar</button>
-          <button onClick={() => setDecision('iterate')} type="button">Iterar</button>
-          <button onClick={() => setDecision('request')} type="button">Solicitar aprobación</button>
+          <button onClick={() => setDecision('discard')} type="button">
+            Descartar
+          </button>
+          <button onClick={() => setDecision('iterate')} type="button">
+            Iterar
+          </button>
+          <button onClick={() => setDecision('request')} type="button">
+            Solicitar aprobación
+          </button>
         </div>
       </div>
     </section>
@@ -294,8 +302,16 @@ const featureCards = [
     'Explora el mapa del curso',
     'Visualiza unidades, evaluaciones y materiales en una sola ruta.',
   ],
-  ['checklist', 'Sigue tu avance', 'Identifica qué contenidos completaste y cuáles debes preparar.'],
-  ['menu_book', 'Encuentra recursos a tiempo', 'Accede a lecturas y enlaces asociados a cada tema.'],
+  [
+    'checklist',
+    'Sigue tu avance',
+    'Identifica qué contenidos completaste y cuáles debes preparar.',
+  ],
+  [
+    'menu_book',
+    'Encuentra recursos a tiempo',
+    'Accede a lecturas y enlaces asociados a cada tema.',
+  ],
 ] as const;
 
 function FeatureCardsDemo() {
@@ -322,7 +338,8 @@ function SignInCard({ state }: { state: 'ready' | 'error' | 'unconfigured' }) {
       <p>Ingresa con tu identidad de Universidad de Chile mediante U-Pasaporte / VTI.</p>
       {state === 'error' ? (
         <div className={styles.productionAlert}>
-          <MaterialSymbol>warning</MaterialSymbol> No fue posible completar la autenticación institucional.
+          <MaterialSymbol>warning</MaterialSymbol> No fue posible completar la autenticación
+          institucional.
         </div>
       ) : null}
       {state === 'unconfigured' ? (
@@ -348,7 +365,12 @@ type CourseCardProps = {
   mobile?: boolean;
 };
 
-function CourseCard({ participationRole, hasRoadmap, historical = false, mobile = false }: CourseCardProps) {
+function CourseCard({
+  participationRole,
+  hasRoadmap,
+  historical = false,
+  mobile = false,
+}: CourseCardProps) {
   return (
     <article className={`${styles.courseCard} ${mobile ? styles.courseCardMobile : ''}`}>
       <div>
@@ -367,9 +389,17 @@ function CourseCard({ participationRole, hasRoadmap, historical = false, mobile 
   );
 }
 
-function CourseRouteCandidate({ mobile = false, withoutRoadmap = false }: { mobile?: boolean; withoutRoadmap?: boolean }) {
+function CourseRouteCandidate({
+  mobile = false,
+  withoutRoadmap = false,
+}: {
+  mobile?: boolean;
+  withoutRoadmap?: boolean;
+}) {
   return (
-    <article className={`${styles.courseRouteCandidate} ${mobile ? styles.courseRouteCandidateMobile : ''}`}>
+    <article
+      className={`${styles.courseRouteCandidate} ${mobile ? styles.courseRouteCandidateMobile : ''}`}
+    >
       <div className={styles.courseRouteTrace} aria-hidden="true">
         <span />
         <span />
@@ -404,7 +434,9 @@ function CourseRouteCandidate({ mobile = false, withoutRoadmap = false }: { mobi
           >
             <span />
           </div>
-          <p>Sigue con <strong>Caminos mínimos</strong></p>
+          <p>
+            Sigue con <strong>Caminos mínimos</strong>
+          </p>
           <button className={styles.primaryAction} type="button">
             Continuar ruta
           </button>
@@ -477,13 +509,16 @@ function NodeDetailCandidate({ mobile = false }: { mobile?: boolean }) {
     completed: {
       label: 'Completado el 12 de agosto',
       title: 'Grafos y recorridos',
-      description: 'Tu avance se registró y las rutas que dependen de este nodo siguen disponibles.',
+      description:
+        'Tu avance se registró y las rutas que dependen de este nodo siguen disponibles.',
       action: 'Revisar recursos',
     },
   }[status];
 
   return (
-    <div className={`${styles.nodeDetailCandidate} ${mobile ? styles.nodeDetailCandidateMobile : ''}`}>
+    <div
+      className={`${styles.nodeDetailCandidate} ${mobile ? styles.nodeDetailCandidateMobile : ''}`}
+    >
       <fieldset className={styles.nodeStatusTabs}>
         <legend className={styles.screenReaderOnly}>Estado simulado del nodo</legend>
         {(['available', 'blocked', 'completed'] as const).map((option) => (
@@ -494,7 +529,11 @@ function NodeDetailCandidate({ mobile = false }: { mobile?: boolean }) {
             onClick={() => setStatus(option)}
             type="button"
           >
-            {option === 'available' ? 'Disponible' : option === 'blocked' ? 'Bloqueado' : 'Completado'}
+            {option === 'available'
+              ? 'Disponible'
+              : option === 'blocked'
+                ? 'Bloqueado'
+                : 'Completado'}
           </button>
         ))}
       </fieldset>
@@ -519,7 +558,10 @@ function NodeDetailCandidate({ mobile = false }: { mobile?: boolean }) {
             <button type="button">Guía de ejercicios 4</button>
             <button type="button">Demostración de Dijkstra</button>
           </section>
-          <button className={status === 'blocked' ? styles.secondaryAction : styles.primaryAction} type="button">
+          <button
+            className={status === 'blocked' ? styles.secondaryAction : styles.primaryAction}
+            type="button"
+          >
             {detail.action}
           </button>
         </motion.div>
@@ -579,7 +621,10 @@ type FeedbackState = 'loading' | 'empty' | 'recoverable' | 'fatal' | 'success';
 function FeedbackCandidate() {
   const [state, setState] = useState<FeedbackState>('empty');
   const reduceMotion = useReducedMotion();
-  const content: Record<FeedbackState, { label: string; title: string; description: string; action?: string }> = {
+  const content: Record<
+    FeedbackState,
+    { label: string; title: string; description: string; action?: string }
+  > = {
     loading: {
       label: 'Cargando',
       title: 'Estamos preparando tu ruta',
@@ -636,13 +681,22 @@ function FeedbackCandidate() {
           key={state}
           transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
         >
-          <span aria-hidden="true">{state === 'success' ? '01' : state === 'fatal' ? '!' : '·'}</span>
+          <span aria-hidden="true">
+            {state === 'success' ? '01' : state === 'fatal' ? '!' : '·'}
+          </span>
           <div>
             <p>{current.label}</p>
             <h4>{current.title}</h4>
             <p>{current.description}</p>
             {current.action ? (
-              <button className={state === 'recoverable' || state === 'fatal' ? styles.secondaryAction : styles.primaryAction} type="button">
+              <button
+                className={
+                  state === 'recoverable' || state === 'fatal'
+                    ? styles.secondaryAction
+                    : styles.primaryAction
+                }
+                type="button"
+              >
                 {current.action}
               </button>
             ) : null}
@@ -790,7 +844,12 @@ export default function DesignPreviewLab({ fontClassName }: { fontClassName: str
               </Frame>
               <Candidate
                 title="Tarjeta de ruta"
-                coverage={['estudiante con roadmap', 'personal docente sin roadmap', 'desktop', 'móvil']}
+                coverage={[
+                  'estudiante con roadmap',
+                  'personal docente sin roadmap',
+                  'desktop',
+                  'móvil',
+                ]}
               >
                 <div className={styles.candidateFrameGrid}>
                   <Frame label="Estudiante · desktop" width="desktop">
@@ -1018,7 +1077,10 @@ export default function DesignPreviewLab({ fontClassName }: { fontClassName: str
           <MaterialSymbol>task_alt</MaterialSymbol>
           <span>Línea base y tres candidatos disponibles</span>
         </div>
-        <p>Compara cada candidata con su línea base antes de decidir si descartarla, iterarla o aprobarla.</p>
+        <p>
+          Compara cada candidata con su línea base antes de decidir si descartarla, iterarla o
+          aprobarla.
+        </p>
       </footer>
     </main>
   );

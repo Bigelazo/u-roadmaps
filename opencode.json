@@ -3,21 +3,32 @@
   "mcp": {
     "next-devtools": {
       "type": "local",
-      "command": ["npx", "-y", "next-devtools-mcp@latest"],
-      "enabled": true,
-      "environment": {}
-    },
-    "mui-mcp": {
-      "type": "local",
-      "command": ["npx", "-y", "@mui/mcp@latest"],
+      "command": [
+        "npx",
+        "-y",
+        "next-devtools-mcp@latest"
+      ],
       "enabled": true,
       "environment": {}
     },
     "playwright": {
       "type": "local",
-      "command": ["pnpm", "exec", "playwright-mcp"],
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright-mcp"
+      ],
       "enabled": true,
       "environment": {}
+    },
+    "shadcn": {
+      "type": "local",
+      "command": [
+        "npx",
+        "shadcn@latest",
+        "mcp"
+      ],
+      "enabled": true
     }
   }
 }

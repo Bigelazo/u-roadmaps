@@ -9,17 +9,21 @@ const users = {
 
 async function authenticateAs(page: Page, userId: string) {
   const value = await encode({ token: { sub: userId }, secret: 'e2e-nextauth-secret' });
-  await page.context().addCookies([
-    { name: 'next-auth.session-token', value, domain: 'localhost', path: '/' },
-  ]);
+  await page
+    .context()
+    .addCookies([{ name: 'next-auth.session-token', value, domain: 'localhost', path: '/' }]);
 }
 
 test('public entry and institutional sign-in expose the expected navigation', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entiende el camino antes de recorrerlo.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Entiende el camino antes de recorrerlo.' }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Ingresar con U-Pasaporte' }).click();
   await expect(page.getByRole('heading', { name: 'Acceso institucional' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Autenticarse con U-Pasaporte / VTI' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Autenticarse con U-Pasaporte / VTI' }),
+  ).toBeVisible();
 });
 
 test('teacher can add a roadmap node from the editor', async ({ page }) => {

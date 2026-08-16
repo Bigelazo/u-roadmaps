@@ -1,0 +1,13 @@
+.agents/
+.next/
+DESIGN.md
+Dockerfile
+coverage/
+docs/
+node_modules/
+docker-compose*.yml
+next-env.d.ts
+playwright-report/
+pnpm-lock.yaml
+src/generated/prisma/
+test-results/

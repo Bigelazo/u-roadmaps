@@ -19,7 +19,7 @@
     linear-gradient(rgb(2 74 216 / 3.5%) 1px, transparent 1px), #f8f9fa;
   background-size: 32px 32px;
   color: var(--ink);
-  font-family: var(--font-plus-jakarta), "Plus Jakarta Sans", Arial, sans-serif;
+  font-family: var(--font-plus-jakarta), 'Plus Jakarta Sans', Arial, sans-serif;
 }
 
 .lab *,
@@ -57,7 +57,7 @@
   border: 38px solid var(--blue);
   border-top: 0;
   border-radius: 0 0 300px 300px;
-  content: "";
+  content: '';
   opacity: 0.76;
   transform: rotate(-8deg);
 }
@@ -85,9 +85,9 @@
 .heroCopy h1 {
   max-width: 850px;
   margin: 20px 0 24px;
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: clamp(3.1rem, 6.4vw, 6.5rem);
-  font-variation-settings: "wdth" 87.5;
+  font-variation-settings: 'wdth' 87.5;
   font-weight: 650;
   letter-spacing: -0.06em;
   line-height: 0.91;
@@ -117,9 +117,9 @@
 
 .heroLedger strong {
   color: var(--jade);
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: 2.2rem;
-  font-variation-settings: "wdth" 87.5;
+  font-variation-settings: 'wdth' 87.5;
 }
 
 .heroLedger span {
@@ -217,9 +217,9 @@
 
 .sectionIndex {
   color: var(--blue);
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: 2.25rem;
-  font-variation-settings: "wdth" 87.5;
+  font-variation-settings: 'wdth' 87.5;
   font-weight: 650;
   line-height: 1;
 }
@@ -255,9 +255,9 @@
 
 .specimenTitle h2 {
   margin: 0;
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: clamp(2rem, 3.6vw, 3.5rem);
-  font-variation-settings: "wdth" 87.5;
+  font-variation-settings: 'wdth' 87.5;
   font-weight: 650;
   letter-spacing: -0.05em;
   line-height: 0.98;
@@ -320,9 +320,9 @@
 
 .candidateHeader h3 {
   margin: 0;
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: 1.7rem;
-  font-variation-settings: "wdth" 87.5;
+  font-variation-settings: 'wdth' 87.5;
   letter-spacing: -0.04em;
 }
 
@@ -504,7 +504,7 @@
 
 .materialSymbol {
   display: inline-block;
-  font-family: "Material Symbols Rounded", sans-serif;
+  font-family: 'Material Symbols Rounded', sans-serif;
   font-size: 24px;
   font-style: normal;
   font-weight: normal;
@@ -808,9 +808,9 @@
 
 .courseRouteHeading h4 {
   margin: 10px 0 10px;
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: clamp(1.7rem, 3vw, 2.4rem);
-  font-variation-settings: "wdth" 87.5;
+  font-variation-settings: 'wdth' 87.5;
   letter-spacing: -0.04em;
   line-height: 0.98;
 }
@@ -947,9 +947,9 @@
 .nodeCandidateContent h4,
 .feedbackMessage h4 {
   margin: 0;
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: 2rem;
-  font-variation-settings: "wdth" 87.5;
+  font-variation-settings: 'wdth' 87.5;
   letter-spacing: -0.04em;
   line-height: 0.98;
 }
@@ -1132,7 +1132,7 @@
   min-height: 520px;
   background: radial-gradient(circle at 1px 1px, #dfe3eb 1px, transparent 0), #fdfdfe;
   background-size: 20px 20px;
-  content: "Canvas";
+  content: 'Canvas';
   padding: 40px;
   color: #8a909c;
 }
@@ -1226,7 +1226,7 @@
   border: 2px solid var(--blue);
   border-radius: 50%;
   color: var(--blue-deep);
-  font-family: var(--font-archivo), "Arial Narrow", Arial, sans-serif;
+  font-family: var(--font-archivo), 'Arial Narrow', Arial, sans-serif;
   font-size: 1.2rem;
   font-weight: 700;
 }

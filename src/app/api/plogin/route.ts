@@ -64,12 +64,20 @@ export async function POST(request: Request) {
         .get('cookie')
         ?.match(new RegExp(`(?:^|;\\s*)${loginStateCookieName}=([^;]+)`))?.[1];
       if (typeof state !== 'string' || !expectedState || state !== expectedState)
-        throw new ApiError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.');
+        throw new ApiError(
+          400,
+          'INVALID_AUTH_CALLBACK',
+          'No fue posible completar la autenticación.',
+        );
       const consumed = await prisma.vtiLoginTransaction.deleteMany({
         where: { state, expiresAt: { gt: new Date() } },
       });
       if (consumed.count !== 1)
-        throw new ApiError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.');
+        throw new ApiError(
+          400,
+          'INVALID_AUTH_CALLBACK',
+          'No fue posible completar la autenticación.',
+        );
       if (typeof rawToken !== 'string' || !rawToken.trim())
         throw new ApiError(
           400,

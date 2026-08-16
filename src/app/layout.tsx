@@ -6,6 +6,10 @@ import DevelopmentBar from '@/components/DevelopmentBar';
 import GlobalNavigation from '@/components/GlobalNavigation';
 import { getApplicationSession } from '@/lib/auth';
 import { developmentEnvironmentEnabled, developmentPersonas } from '@/lib/development';
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: 'Roadmaps Interactivos DCC - Universidad de Chile',
@@ -16,7 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const session = await getApplicationSession();
 
   return (
-    <html lang="es">
+    <html lang="es" className={cn("font-sans", geist.variable)}>
       <body>
         <AppRouterCacheProvider>
           <ThemeRegistry>
