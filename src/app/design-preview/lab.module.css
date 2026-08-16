@@ -6,6 +6,8 @@
   --jade: #35a779;
   --jade-deep: #176245;
   --jade-soft: #ddf2e9;
+  --progress-deep: #176245;
+  --error: #b3262b;
   --ink: #12213a;
   --graphite: #5a6474;
   --fog: #dce1e8;
@@ -306,7 +308,7 @@
   border: 1px solid var(--blue);
   border-left: 6px solid var(--jade);
   border-radius: 16px;
-  background: linear-gradient(135deg, rgb(221 242 233 / 68%), rgb(255 255 255 / 92%) 52%);
+  background: var(--cloud);
 }
 
 .candidateHeader {
@@ -331,6 +333,39 @@
   font-size: 12px;
   line-height: 1.55;
   text-align: right;
+}
+
+.candidateDecision {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--fog);
+}
+
+.candidateDecision p {
+  margin: 0;
+  color: var(--graphite);
+  font-size: 12px;
+}
+
+.candidateDecision > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.candidateDecision button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--blue);
+  border-radius: 4px;
+  background: white;
+  color: var(--blue-deep);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .candidateFrameGrid {
@@ -362,7 +397,7 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid #cfd6df;
-  border-radius: 12px;
+  border-radius: 16px;
   background: white;
   box-shadow: 0 12px 34px rgb(18 33 58 / 6%);
 }
@@ -465,6 +500,16 @@
   background: var(--blue);
   color: white;
   box-shadow: 0 5px 12px rgb(2 74 216 / 28%);
+}
+
+.materialSymbol {
+  display: inline-block;
+  font-family: "Material Symbols Rounded", sans-serif;
+  font-size: 24px;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .personaMenu {
@@ -870,7 +915,7 @@
 
 .nodeStatusTabs button,
 .feedbackControls button {
-  min-height: 36px;
+  min-height: 44px;
   padding: 7px 10px;
   border: 0;
   border-radius: 4px;
@@ -945,7 +990,7 @@
 }
 
 .nodeCandidateResources button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 8px 12px;
   border: 1px solid var(--fog);
   border-radius: 4px;
@@ -998,8 +1043,8 @@
   right: 16px;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   background: transparent;
   color: var(--blue);
@@ -1030,7 +1075,7 @@
   margin-top: 10px;
   padding: 11px;
   border: 1px solid #e2e3e8;
-  border-radius: 5px;
+  border-radius: 8px;
   color: var(--blue);
 }
 
@@ -1116,8 +1161,8 @@
 .closedEditor button {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border: 1px solid #d7dbe6;
   border-radius: 4px;
   background: white;
@@ -1336,6 +1381,11 @@
 
   .candidateHeader > p {
     text-align: left;
+  }
+
+  .candidateDecision {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .coverage {

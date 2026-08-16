@@ -16,5 +16,13 @@ const archivo = Archivo({
 export default function DesignPreviewPage() {
   if (process.env.NODE_ENV !== 'development') notFound();
 
-  return <DesignPreviewLab fontClassName={`${plusJakarta.variable} ${archivo.variable}`} />;
+  return (
+    <>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        rel="stylesheet"
+      />
+      <DesignPreviewLab fontClassName={`${plusJakarta.variable} ${archivo.variable}`} />
+    </>
+  );
 }

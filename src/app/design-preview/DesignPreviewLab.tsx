@@ -2,23 +2,6 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import {
-  AlertTriangle,
-  ArrowRight,
-  BookOpen,
-  Check,
-  CheckCircle2,
-  ChevronRight,
-  Circle,
-  FileText,
-  ListChecks,
-  Map as MapIcon,
-  Network,
-  PanelLeftOpen,
-  UsersRound,
-  Video,
-  X,
-} from 'lucide-react';
 import { Box } from '@mui/material';
 import VtiInformation from '@/components/VtiInformation';
 import { RoadmapEditor } from '@/components/roadmap/RoadmapEditor';
@@ -129,6 +112,18 @@ function StatusBadge({ children, tone }: { children: React.ReactNode; tone: 'blu
   return <span className={`${styles.statusBadge} ${styles[tone]}`}>{children}</span>;
 }
 
+function MaterialSymbol({ children, filled = false }: { children: string; filled?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={styles.materialSymbol}
+      style={{ fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' 500, 'GRAD' 0, 'opsz' 24` }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function Specimen({
   id,
   index,
@@ -197,6 +192,8 @@ function Candidate({
   coverage: string[];
   children: React.ReactNode;
 }) {
+  const [decision, setDecision] = useState<'undecided' | 'discard' | 'iterate' | 'request'>('undecided');
+
   return (
     <section className={styles.candidate} aria-label={`Candidato experimental: ${title}`}>
       <header className={styles.candidateHeader}>
@@ -210,6 +207,14 @@ function Candidate({
         <p>{coverage.join(' · ')}</p>
       </header>
       {children}
+      <div className={styles.candidateDecision}>
+        <p>{decision === 'request' ? 'Solicitud de aprobación pendiente del propietario.' : 'Decisión de revisión local'}</p>
+        <div>
+          <button onClick={() => setDecision('discard')} type="button">Descartar</button>
+          <button onClick={() => setDecision('iterate')} type="button">Iterar</button>
+          <button onClick={() => setDecision('request')} type="button">Solicitar aprobación</button>
+        </div>
+      </div>
     </section>
   );
 }
@@ -218,7 +223,7 @@ function NavigationDemo({ authenticated = false, mobile = false }) {
   return (
     <nav className={`${styles.productionNavigation} ${mobile ? styles.compactNavigation : ''}`}>
       <span className={styles.productionWordmark}>
-        <Network size={22} strokeWidth={2.5} /> U-Roadmaps
+        <MaterialSymbol>account_tree</MaterialSymbol> U-Roadmaps
       </span>
       <button type="button">{authenticated ? 'Cerrar sesión' : 'Autenticarse'}</button>
     </nav>
@@ -237,7 +242,7 @@ function DevelopmentMenuDemo() {
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
-        <UsersRound size={20} />
+        <MaterialSymbol>group</MaterialSymbol>
       </button>
       <AnimatePresence initial={false}>
         {open ? (
@@ -269,7 +274,7 @@ function LandingHeroDemo() {
         cada unidad con una visión clara de sus requisitos y recursos.
       </p>
       <button type="button">
-        Ingresar con U-Pasaporte <ArrowRight size={17} />
+        Ingresar con U-Pasaporte <MaterialSymbol>arrow_forward</MaterialSymbol>
       </button>
     </div>
   );
@@ -277,21 +282,21 @@ function LandingHeroDemo() {
 
 const featureCards = [
   [
-    MapIcon,
+    'map',
     'Explora el mapa del curso',
     'Visualiza unidades, evaluaciones y materiales en una sola ruta.',
   ],
-  [ListChecks, 'Sigue tu avance', 'Identifica qué contenidos completaste y cuáles debes preparar.'],
-  [BookOpen, 'Encuentra recursos a tiempo', 'Accede a lecturas y enlaces asociados a cada tema.'],
+  ['checklist', 'Sigue tu avance', 'Identifica qué contenidos completaste y cuáles debes preparar.'],
+  ['menu_book', 'Encuentra recursos a tiempo', 'Accede a lecturas y enlaces asociados a cada tema.'],
 ] as const;
 
 function FeatureCardsDemo() {
   return (
     <div className={styles.featureGrid}>
-      {featureCards.map(([Icon, title, description]) => (
+      {featureCards.map(([icon, title, description]) => (
         <article key={title}>
           <span>
-            <Icon size={22} />
+            <MaterialSymbol>{icon}</MaterialSymbol>
           </span>
           <h4>{title}</h4>
           <p>{description}</p>
@@ -309,12 +314,12 @@ function SignInCard({ state }: { state: 'ready' | 'error' | 'unconfigured' }) {
       <p>Ingresa con tu identidad de Universidad de Chile mediante U-Pasaporte / VTI.</p>
       {state === 'error' ? (
         <div className={styles.productionAlert}>
-          <AlertTriangle size={18} /> No fue posible completar la autenticación institucional.
+          <MaterialSymbol>warning</MaterialSymbol> No fue posible completar la autenticación institucional.
         </div>
       ) : null}
       {state === 'unconfigured' ? (
         <div className={styles.productionAlert}>
-          <AlertTriangle size={18} /> El acceso institucional no está configurado.
+          <MaterialSymbol>warning</MaterialSymbol> El acceso institucional no está configurado.
         </div>
       ) : (
         <button className={styles.primaryAction} type="button">
@@ -405,37 +410,37 @@ function NodeDetailReplica({ mobile = false }: { mobile?: boolean }) {
   return (
     <aside className={`${styles.nodeDetailReplica} ${mobile ? styles.nodeDetailMobile : ''}`}>
       <button aria-label="Cerrar detalle" className={styles.closeButton} type="button">
-        <X size={18} />
+        <MaterialSymbol>close</MaterialSymbol>
       </button>
       <header>
         <p className={styles.productionOverline}>Nodo del roadmap</p>
         <h3>Caminos mínimos</h3>
         <button className={styles.primaryAction} type="button">
-          <CheckCircle2 size={16} /> Completar
+          <MaterialSymbol>task_alt</MaterialSymbol> Completar
         </button>
       </header>
       <div className={styles.detailContent}>
         <h4>
-          <FileText size={18} /> Descripción
+          <MaterialSymbol>description</MaterialSymbol> Descripción
         </h4>
         <p>Compara Dijkstra, Bellman-Ford y Floyd-Warshall según las propiedades del grafo.</p>
         <hr />
         <h4>
-          <BookOpen size={18} /> Recursos
+          <MaterialSymbol>menu_book</MaterialSymbol> Recursos
         </h4>
         {(
           [
-            [FileText, 'Guía de ejercicios 4', 'Archivo descargable'],
-            [Video, 'Demostración de Dijkstra', 'Video'],
+            ['description', 'Guía de ejercicios 4', 'Archivo descargable'],
+            ['videocam', 'Demostración de Dijkstra', 'Video'],
           ] as const
-        ).map(([Icon, title, type]) => (
+        ).map(([icon, title, type]) => (
           <article className={styles.resourceCard} key={title as string}>
-            <Icon size={19} />
+            <MaterialSymbol>{icon}</MaterialSymbol>
             <span>
               <strong>{title}</strong>
               <small>{type}</small>
             </span>
-            <ChevronRight size={17} />
+            <MaterialSymbol>chevron_right</MaterialSymbol>
           </article>
         ))}
       </div>
@@ -543,18 +548,18 @@ function CanvasState({ state }: { state: 'loading' | 'fatal' | 'recoverable' | '
   if (state === 'fatal')
     return (
       <div className={styles.errorState}>
-        <AlertTriangle size={19} /> No fue posible cargar el roadmap.
+        <MaterialSymbol>warning</MaterialSymbol> No fue posible cargar el roadmap.
       </div>
     );
   if (state === 'recoverable')
     return (
       <div className={styles.errorState}>
-        <AlertTriangle size={19} /> No fue posible guardar el cambio.
+        <MaterialSymbol>warning</MaterialSymbol> No fue posible guardar el cambio.
       </div>
     );
   return (
     <div className={styles.pendingState}>
-      <Circle size={28} />
+      <MaterialSymbol>circle</MaterialSymbol>
       <strong>Estado aún no diseñado</strong>
       <span>La línea base no define una experiencia para un roadmap sin nodos.</span>
     </div>
@@ -641,24 +646,17 @@ function FeedbackCandidate() {
 }
 
 export default function DesignPreviewLab({ fontClassName }: { fontClassName: string }) {
-  const reduceMotion = useReducedMotion();
-
   return (
     <main className={`${styles.lab} ${fontClassName}`}>
       <header className={styles.hero}>
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className={styles.heroCopy}
-          initial={reduceMotion ? false : { opacity: 0, y: 18 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        >
+        <div className={styles.heroCopy}>
           <span>Laboratorio visual · Baseline 01</span>
           <h1>El estado actual, puesto sobre la mesa.</h1>
           <p>
             Inventario panorámico de las unidades visuales que existen hoy en U-Roadmaps. Nada en
             esta página constituye todavía un candidato de reemplazo.
           </p>
-        </motion.div>
+        </div>
         <div className={styles.heroLedger}>
           <div>
             <strong>08</strong>
@@ -673,13 +671,7 @@ export default function DesignPreviewLab({ fontClassName }: { fontClassName: str
             <span>diseños aprobados</span>
           </div>
         </div>
-        <motion.div
-          aria-hidden
-          className={styles.routeTrace}
-          initial={reduceMotion ? false : { scaleX: 0 }}
-          animate={{ scaleX: 1 }}
-          transition={{ duration: 0.9, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-        />
+        <div aria-hidden className={styles.routeTrace} />
       </header>
 
       <div className={styles.atlasLayout}>
@@ -801,6 +793,9 @@ export default function DesignPreviewLab({ fontClassName }: { fontClassName: str
                   </Frame>
                   <Frame label="Estudiante · móvil" width="mobile">
                     <CourseRouteCandidate mobile />
+                  </Frame>
+                  <Frame label="Personal docente · móvil" width="mobile">
+                    <CourseRouteCandidate mobile withoutRoadmap />
                   </Frame>
                 </div>
               </Candidate>
@@ -936,7 +931,7 @@ export default function DesignPreviewLab({ fontClassName }: { fontClassName: str
               <Frame label="Panel cerrado">
                 <div className={styles.closedEditor}>
                   <button type="button">
-                    <PanelLeftOpen size={19} />
+                    <MaterialSymbol>dock_to_left</MaterialSymbol>
                   </button>
                   <span>El canvas ocupa el espacio disponible.</span>
                 </div>
@@ -1012,7 +1007,7 @@ export default function DesignPreviewLab({ fontClassName }: { fontClassName: str
 
       <footer className={styles.labFooter}>
         <div>
-          <Check size={20} />
+          <MaterialSymbol>task_alt</MaterialSymbol>
           <span>Línea base y tres candidatos disponibles</span>
         </div>
         <p>Compara cada candidata con su línea base antes de decidir si descartarla, iterarla o aprobarla.</p>
