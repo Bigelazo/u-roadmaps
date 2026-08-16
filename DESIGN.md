@@ -174,13 +174,19 @@ Route traces may simplify or disappear on mobile when they stop communicating us
 
 Meet WCAG AA contrast for text and interactive states. Preserve visible keyboard focus, semantic heading order, accessible names, and browser zoom. Never rely on color, opacity, or motion alone to communicate state.
 
-Use motion only to explain movement, connection, or a state transition. Prefer one deliberate transition over scattered ambient effects. Respect `prefers-reduced-motion`; roadmap content and status must remain understandable with motion disabled.
+Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation. Respect `prefers-reduced-motion`; content, status, and interaction must remain understandable with motion reduced or disabled.
 
 ## Reference Implementation
 
-The temporary `/design-preview` route is the accepted visual reference for the Jade + Archivo SemiCondensed direction. Keep its structures available for reuse while implementing the production interface, especially its course header, progress treatment, roadmap framing, responsive composition, and typography pairing.
+The temporary, development-only `/design-preview` route is the visual laboratory for the interface. It presents reusable visual units and their relevant states on one page, including pieces that remain embedded in production pages. It is not a catalog of every React wrapper or of complete application pages.
 
-The route is not itself a production screen, and its experimental logo is excluded from approval. Production components should extract and deepen the useful structures rather than depend on preview-specific selectors or duplicate the complete page.
+Each visual specimen records two independent facts: its design maturity (`baseline`, `experimental`, or `approved for implementation`) and its production adoption (`not implemented`, `partial`, or `implemented`). Only explicit owner approval can mark a complete specimen and all its required states as approved. These specimen metadata are the canonical status record.
+
+The laboratory uses deterministic static fixtures and local simulated interactions. It must not depend on authentication, backend requests, navigation side effects, or persistent mutations. Relevant desktop and mobile presentations appear in labeled frames, and all specimens remain rendered for panoramic manual review.
+
+Production baselines should render the real production component when practical; tightly coupled UI may use a faithful visual specimen instead. Experimental and approved designs remain laboratory-owned references that production implementations copy and deepen with the functional variables and behavior the product requires. Keep the current approved design and at most one replacement candidate visible; Git retains older iterations.
+
+The laboratory is reviewed manually and has no dedicated unit, integration, end-to-end, or visual-regression tests. It is never a production screen, must not be exposed outside development, and will be removed before the final production delivery. The experimental route symbol remains excluded from approval and must not be promoted to application metadata, navigation, or distributed assets.
 
 ## Do and Don't
 
