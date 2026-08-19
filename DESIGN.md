@@ -138,27 +138,25 @@ Use flat surfaces and 1px hairlines by default. Apply restrained shadows such as
 
 ## Iconography
 
-Use **Material Symbols Rounded** as the only general-purpose interface icon system. Use outlined symbols by default and the `FILL` axis for active, selected, or completed states. A change from outline to fill must reinforce a real state change.
+Use **Lucide** as the only general-purpose interface icon system. Its rounded line caps and joins support the wayfinding language while integrating directly with the shadcn component foundation without an additional icon-font dependency. Use the outlined icons at their default stroke weight unless a specific control needs stronger visual emphasis.
 
-Use optical size 24 for standard controls, weight around 500, grade 0, and a visible label whenever the action is not universally understood. Icon-only controls require an accessible name and a minimum 44px touch target.
+Use a 24px icon for standard controls and a visible label whenever the action is not universally understood. Icon-only controls require an accessible name and a minimum 44px touch target. Because Lucide does not provide a universal filled variant, reinforce active, selected, and completed states with text, shape, container treatment, or another non-color cue.
 
-Do not mix Material Symbols Rounded with Lucide, Material Icons, or unrelated pictogram sets in the production interface. A future custom brand symbol is the only planned exception.
+Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram sets in the production interface. A future custom brand symbol is the only planned exception.
 
 ## Components
 
-- **Primary button**: blue surface, white sentence-case label, minimum 44px height, and a direct verb. Add a rounded Material Symbol only when it clarifies direction or outcome.
+- **Primary button**: blue surface, white sentence-case label, minimum 44px height, and a direct verb. Add a Lucide icon only when it clarifies direction or outcome.
 - **Secondary button**: white or cloud surface with blue or ink border. It must not compete with the primary action.
 - **Course header**: compact context label, Archivo course name, supporting term/code information, and visible progress when applicable.
 - **Progress track**: neutral base with Jade completion fill, a numeric value, and a textual completed/total description.
 - **Roadmap node**: white 8px-radius card with pedagogical title, node type, status label, and direct resource affordance. The current node uses a Jade border or marker; completed nodes use a filled completion symbol plus text.
 - **Dependency**: blue directional structure. It remains distinguishable from Jade progress and from custom node-type colors.
-- **Resource card**: compact title, resource type, and Material Symbol with an explicit external or download affordance.
+- **Resource card**: compact title, resource type, and Lucide icon with an explicit external or download affordance.
 - **Teacher panel**: denser authoring surface that uses Ink and Blue for structure. Jade appears only when teacher actions affect or report participant progress.
 - **Institutional provenance**: “Universidad de Chile” appears on sign-in surfaces and in the global footer, separate from the U-Roadmaps wordmark.
 
 ## Logo and Favicon Status
-
-The production logo and favicon are **not approved**. The U-shaped route symbol shown in `/design-preview` is an exploration and must not be promoted to application metadata, navigation, or distributed assets.
 
 Future logo work must retain the approved brand attributes—orientation, advancement, student-first clarity, Blue/Jade compatibility, and recognition from favicon to primary lockup—but may replace the U-route metaphor entirely. The logo requires a separate visual iteration and explicit approval before this section defines production geometry, clear space, lockups, or monochrome variants.
 
@@ -177,8 +175,6 @@ Meet WCAG AA contrast for text and interactive states. Preserve visible keyboard
 Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation. Respect `prefers-reduced-motion`; content, status, and interaction must remain understandable with motion reduced or disabled.
 
 ## Reference Implementation
-
-The temporary, development-only `/design-preview` route is the visual laboratory for the interface. It presents reusable visual units and their relevant states on one page, including pieces that remain embedded in production pages. It is not a catalog of every React wrapper or of complete application pages.
 
 Each visual specimen records two independent facts: its design maturity (`baseline`, `experimental`, or `approved for implementation`) and its production adoption (`not implemented`, `partial`, or `implemented`). Only explicit owner approval can mark a complete specimen and all its required states as approved. These specimen metadata are the canonical status record.
 
