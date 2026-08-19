@@ -31,7 +31,11 @@ export type RoadmapDependency = {
   id: string;
   sourceNodeId: string;
   targetNodeId: string;
+  sourceHandle: DependencyHandle;
+  targetHandle: DependencyHandle;
 };
+
+export type DependencyHandle = 'top' | 'right' | 'bottom' | 'left';
 
 export type RoadmapDto = {
   course: { code: string; name: string; department: string };

@@ -1,7 +1,7 @@
 @import 'reactflow/dist/style.css';
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,6 +50,23 @@ body {
   height: 8px;
   background-color: #024ad8 !important;
   border: 2px solid #ffffff !important;
+}
+
+.react-flow__edge {
+  cursor: pointer;
+}
+
+.react-flow__edge-path {
+  transition:
+    stroke 160ms ease,
+    stroke-width 160ms ease,
+    filter 160ms ease;
+}
+
+.react-flow__edge:hover .react-flow__edge-path,
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #024ad8 !important;
+  filter: drop-shadow(0 0 3px rgb(2 74 216 / 35%));
 }
 
 .react-flow__background {

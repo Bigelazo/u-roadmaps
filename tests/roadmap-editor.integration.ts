@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client';
-import { createRoadmapNode } from '../src/lib/roadmap-editor';
+import {
+  createRoadmapDependency,
+  createRoadmapNode,
+  deleteRoadmapDependency,
+} from '../src/lib/roadmap-editor';
 import { throwApiError } from '../src/lib/roadmap-api';
 
 const prisma = new PrismaClient({
@@ -83,4 +87,49 @@ test('student cannot mutate a Roadmap through the editor interface', async () =>
     (failure) => failure,
   );
   assert.equal(error?.code, 'FORBIDDEN');
+});
+
+test('teacher creates and deletes a dependency in its authorized Roadmap', async () => {
+  const teacher = await prisma.user.findUniqueOrThrow({
+    where: { institutionalEmail: `editor-${suffix}@uchile.cl` },
+  });
+  const [sourceNode, targetNode] = await Promise.all(
+    ['Origen', 'Destino'].map((title, index) =>
+      createRoadmapNode({
+        userId: teacher.id,
+        identifier,
+        input: {
+          title,
+          nodeTypeId: predefinedNodeTypeId,
+          positionX: index * 100,
+          positionY: 0,
+        },
+      }).match((value) => value, throwApiError),
+    ),
+  );
+  const dependency = await createRoadmapDependency({
+    userId: teacher.id,
+    identifier,
+    input: {
+      sourceNodeId: sourceNode.id,
+      targetNodeId: targetNode.id,
+      sourceHandle: 'bottom',
+      targetHandle: 'top',
+    },
+  }).match((value) => value, throwApiError);
+
+  assert.deepEqual(
+    await prisma.dependency.findUniqueOrThrow({
+      where: { id: dependency.id },
+      select: { sourceHandle: true, targetHandle: true },
+    }),
+    { sourceHandle: 'bottom', targetHandle: 'top' },
+  );
+
+  await deleteRoadmapDependency({ userId: teacher.id, identifier, id: dependency.id }).match(
+    (value) => value,
+    throwApiError,
+  );
+
+  assert.equal(await prisma.dependency.count({ where: { id: dependency.id } }), 0);
 });

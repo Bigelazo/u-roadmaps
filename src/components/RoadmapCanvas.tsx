@@ -19,8 +19,10 @@ type Props = {
 
 export default function RoadmapCanvas({ identifier, canEdit = false, title, subtitle }: Props) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedDependencyId, setSelectedDependencyId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(true);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
+  const graphRef = useRef<HTMLDivElement | null>(null);
   const {
     roadmap,
     error,
@@ -28,6 +30,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
     updateNode,
     moveNode,
     connectNodes,
+    deleteDependency,
     toggleVisibility,
     deleteNode,
     addResource,
@@ -36,11 +39,17 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
 
   useEffect(() => {
     setSelectedNodeId(null);
+    setSelectedDependencyId(null);
   }, [identifier.courseCode, identifier.year, identifier.semester]);
 
   function closeSelectedNode() {
     setSelectedNodeId(null);
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
+  }
+
+  function closeSelectedDependency() {
+    setSelectedDependencyId(null);
+    requestAnimationFrame(() => graphRef.current?.focus());
   }
 
   if (error && !roadmap)
@@ -53,6 +62,9 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
     return <Paper sx={{ m: 4, p: 4, color: 'text.secondary' }}>Cargando roadmap...</Paper>;
 
   const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
+  const selectedDependency = roadmap.dependencies.find(
+    (dependency) => dependency.id === selectedDependencyId,
+  );
   return (
     <Box>
       {error && (
@@ -69,28 +81,17 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
           display: 'grid',
           gridTemplateColumns: {
             xs: '1fr',
-            lg: canEdit && isEditorOpen ? '318px minmax(0, 1fr)' : 'minmax(0, 1fr)',
+            lg: canEdit && isEditorOpen ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)',
           },
           borderColor: '#e5e6ea',
           boxShadow: '0 2px 9px rgba(26,26,26,.05)',
           position: 'relative',
         }}
       >
-        {canEdit && (
-          <RoadmapEditor
-            roadmap={roadmap}
-            selectedNode={selectedNode}
-            isOpen={isEditorOpen}
-            onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
-            onClose={closeSelectedNode}
-            onAddNode={addNode}
-            onUpdateNode={updateNode}
-            onToggleVisibility={toggleVisibility}
-            onDeleteNode={deleteNode}
-            onAddResource={addResource}
-          />
-        )}
         <Box
+          ref={graphRef}
+          tabIndex={-1}
+          aria-label="Lienzo del roadmap"
           sx={{
             minHeight: { xs: 540, lg: 'calc(100vh - 64px)' },
             position: 'relative',
@@ -102,7 +103,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
               position: 'absolute',
               zIndex: 4,
               top: 24,
-              left: canEdit ? 66 : 24,
+              left: 24,
               pointerEvents: 'none',
             }}
           >
@@ -145,14 +146,45 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
             onSelectNode={(nodeId, trigger) => {
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
+              setSelectedDependencyId(null);
             }}
             onMoveNode={(_event, node) => void moveNode(node.id, node.position)}
             onConnectNodes={(connection) => {
               if (connection.source && connection.target)
-                void connectNodes(connection.source, connection.target);
+                void connectNodes(
+                  connection.source,
+                  connection.target,
+                  connection.sourceHandle ?? undefined,
+                  connection.targetHandle ?? undefined,
+                );
+            }}
+            onSelectDependency={(dependencyId) => {
+              setSelectedDependencyId(dependencyId);
+              setSelectedNodeId(null);
+            }}
+            onDeleteDependencies={(dependencyIds) => {
+              for (const dependencyId of dependencyIds) void deleteDependency(dependencyId);
             }}
           />
         </Box>
+        {canEdit && (
+          <RoadmapEditor
+            roadmap={roadmap}
+            selectedNode={selectedNode}
+            selectedDependency={selectedDependency}
+            isOpen={isEditorOpen}
+            onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
+            onClose={closeSelectedNode}
+            onAddNode={addNode}
+            onUpdateNode={updateNode}
+            onToggleVisibility={toggleVisibility}
+            onDeleteNode={deleteNode}
+            onAddDependency={connectNodes}
+            onDeleteDependency={deleteDependency}
+            onCloseDependency={closeSelectedDependency}
+            onAddResource={addResource}
+          />
+        )}
         {!canEdit && (
           <StudentNodeDetail
             node={selectedNode}

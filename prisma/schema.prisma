@@ -73,6 +73,8 @@ model Dependency {
   id           String      @id @default(uuid()) @db.Uuid
   sourceNodeId String      @db.Uuid
   targetNodeId String      @db.Uuid
+  sourceHandle String      @default("right") @db.VarChar(6)
+  targetHandle String      @default("left") @db.VarChar(6)
   sourceNode   RoadmapNode @relation("OutgoingDependencies", fields: [sourceNodeId], references: [id], onDelete: Cascade)
   targetNode   RoadmapNode @relation("IncomingDependencies", fields: [targetNodeId], references: [id], onDelete: Cascade)
 

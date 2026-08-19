@@ -22,6 +22,14 @@ type EditorInput = { userId: string; identifier: CourseOfferingIdentifier };
 type WithInput = EditorInput & { input: JsonObject };
 type WithId = EditorInput & { id: string };
 
+function dependencyHandle(value: unknown, field: string, fallback: string) {
+  const handle = optionalString(value, field, 6) ?? fallback;
+  if (!['top', 'right', 'bottom', 'left'].includes(handle)) {
+    throw new ApiError(400, 'INVALID_REQUEST', `${field} debe ser un punto válido del nodo.`);
+  }
+  return handle;
+}
+
 async function requireEditorRoadmap(transaction: Prisma.TransactionClient, input: EditorInput) {
   const courseOffering = await transaction.courseOffering.findUnique({
     where: { courseCode_year_semester: input.identifier },
@@ -269,6 +277,8 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
           const roadmap = await requireEditorRoadmap(transaction, editor);
           const sourceNodeId = requireUuid(input.sourceNodeId, 'sourceNodeId');
           const targetNodeId = requireUuid(input.targetNodeId, 'targetNodeId');
+          const sourceHandle = dependencyHandle(input.sourceHandle, 'sourceHandle', 'right');
+          const targetHandle = dependencyHandle(input.targetHandle, 'targetHandle', 'left');
           if (sourceNodeId === targetNodeId)
             throw new ApiError(409, 'SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
           await requireNode(transaction, sourceNodeId, roadmap.id);
@@ -289,9 +299,9 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
           if (findCycle(dependencies, sourceNodeId, targetNodeId))
             throw new ApiError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
           const dependency = await transaction.dependency.create({
-            data: { sourceNodeId, targetNodeId },
+            data: { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
           });
-          return { id: dependency.id, sourceNodeId, targetNodeId };
+          return { id: dependency.id, sourceNodeId, targetNodeId, sourceHandle, targetHandle };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );

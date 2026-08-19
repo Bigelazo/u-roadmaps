@@ -432,6 +432,8 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
         id: dependency.id,
         sourceNodeId: dependency.sourceNodeId,
         targetNodeId: dependency.targetNodeId,
+        sourceHandle: dependency.sourceHandle,
+        targetHandle: dependency.targetHandle,
       })),
   };
 }

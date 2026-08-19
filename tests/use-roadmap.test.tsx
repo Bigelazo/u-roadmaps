@@ -44,3 +44,47 @@ test('rapid course-offering navigation aborts the stale roadmap load', async () 
   requests[1].resolve(Response.json(roadmap('current')));
   await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('current'));
 });
+
+test('deleting a dependency persists the change and reloads the roadmap', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('before-delete')))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json(roadmap('after-delete')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before-delete'));
+
+  await expect(result.current.deleteDependency('dependency-1')).resolves.toBe(true);
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    '/api/MAT101/2026/1/roadmap/dependencies/dependency-1',
+    expect.objectContaining({ method: 'DELETE' }),
+  );
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-delete'));
+});
+
+test('a failed dependency deletion keeps the roadmap and exposes the error', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(roadmap('before-delete')))
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { message: 'No se puede eliminar la dependencia.' } },
+          { status: 409 },
+        ),
+      ),
+  );
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before-delete'));
+
+  await expect(result.current.deleteDependency('dependency-1')).resolves.toBe(false);
+
+  expect(result.current.roadmap?.roadmap.id).toBe('before-delete');
+  await waitFor(() => expect(result.current.error).toBe('No se puede eliminar la dependencia.'));
+});

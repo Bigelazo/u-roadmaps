@@ -196,11 +196,32 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
   );
 
   const connectNodes = useCallback(
-    async (sourceNodeId: string, targetNodeId: string) => {
+    async (
+      sourceNodeId: string,
+      targetNodeId: string,
+      sourceHandle?: string,
+      targetHandle?: string,
+    ) => {
       const succeeded = await mutate(
         roadmapUrl(identifier, '/dependencies'),
-        { method: 'POST', body: JSON.stringify({ sourceNodeId, targetNodeId }) },
+        {
+          method: 'POST',
+          body: JSON.stringify({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }),
+        },
         'No se pudo crear la dependencia.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
+  const deleteDependency = useCallback(
+    async (dependencyId: string) => {
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/dependencies/${dependencyId}`),
+        { method: 'DELETE' },
+        'No se pudo eliminar la dependencia.',
       );
       if (succeeded) await load();
       return succeeded;
@@ -271,6 +292,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     updateNode,
     moveNode,
     connectNodes,
+    deleteDependency,
     toggleVisibility,
     deleteNode,
     addResource,
