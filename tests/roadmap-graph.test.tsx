@@ -18,7 +18,14 @@ const roadmap: RoadmapDto = {
       isVisible: false,
       isCompleted: false,
       canComplete: false,
-      resources: [],
+      resources: [
+        {
+          id: 'resource-1',
+          title: 'Guía de preparación',
+          url: 'https://example.test/guide',
+          type: 'FILE',
+        },
+      ],
     },
   ],
   dependencies: [
@@ -38,6 +45,8 @@ test('keeps hidden nodes on the teacher graph and marks them as hidden from stud
 
   expect(teacherNode.hidden).toBe(false);
   expect(teacherNode.data.isHidden).toBe(true);
+  expect(teacherNode.data.typeColor).toBe('#024AD8');
+  expect(teacherNode.data.resourceCount).toBe(1);
   expect(studentNode.hidden).toBe(true);
 });
 

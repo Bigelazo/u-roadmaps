@@ -1,14 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Box, Paper, Typography } from '@mui/material';
+import dynamic from 'next/dynamic';
 import { Circle, LockKeyhole } from 'lucide-react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
-import { RoadmapEditor } from '@/components/roadmap/RoadmapEditor';
 import { RoadmapGraph } from '@/components/roadmap/RoadmapGraph';
 import { StudentNodeDetail } from '@/components/roadmap/StudentNodeDetail';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
 import { useRoadmap } from '@/components/roadmap/useRoadmap';
+
+// The authoring workflow remains in its separate migration slice, so student consultation does not load MUI.
+const RoadmapEditor = dynamic(
+  () => import('@/components/roadmap/RoadmapEditor').then(({ RoadmapEditor }) => RoadmapEditor),
+  { ssr: false },
+);
 
 type Props = {
   identifier: CourseOfferingIdentifier;
@@ -54,92 +59,55 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
 
   if (error && !roadmap)
     return (
-      <Alert severity="error" sx={{ m: 4 }}>
+      <p
+        role="alert"
+        className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+      >
         {error}
-      </Alert>
+      </p>
     );
   if (!roadmap)
-    return <Paper sx={{ m: 4, p: 4, color: 'text.secondary' }}>Cargando roadmap...</Paper>;
+    return (
+      <p className="m-4 rounded-xl border bg-card p-8 text-muted-foreground">Cargando roadmap...</p>
+    );
 
   const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
   const selectedDependency = roadmap.dependencies.find(
     (dependency) => dependency.id === selectedDependencyId,
   );
   return (
-    <Box>
+    <div>
       {error && (
-        <Alert severity="error" sx={{ mb: 1.25 }}>
+        <p
+          role="alert"
+          className="mb-5 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           {error}
-        </Alert>
+        </p>
       )}
-      <Paper
-        variant="outlined"
-        sx={{
-          minHeight: 'calc(100vh - 64px)',
-          overflow: 'hidden',
-          borderRadius: { xs: 0, sm: 1.5 },
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            lg: canEdit && isEditorOpen ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)',
-          },
-          borderColor: '#e5e6ea',
-          boxShadow: '0 2px 9px rgba(26,26,26,.05)',
-          position: 'relative',
-        }}
+      <section
+        className={`relative grid min-h-[calc(100vh-64px)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] sm:rounded-xl ${canEdit && isEditorOpen ? 'lg:grid-cols-[minmax(0,1fr)_360px]' : 'lg:grid-cols-1'}`}
       >
-        <Box
+        <div
           ref={graphRef}
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
-          sx={{
-            minHeight: { xs: 540, lg: 'calc(100vh - 64px)' },
-            position: 'relative',
-            bgcolor: '#fdfdfe',
-          }}
+          className="relative min-h-[540px] bg-[#fdfdfe] lg:min-h-[calc(100vh-64px)]"
         >
-          <Box
-            sx={{
-              position: 'absolute',
-              zIndex: 4,
-              top: 24,
-              left: 24,
-              pointerEvents: 'none',
-            }}
-          >
-            <Typography
-              component="h1"
-              sx={{ fontSize: { xs: 23, sm: 30 }, fontWeight: 600, letterSpacing: '-0.045em' }}
-            >
+          <header className="pointer-events-none absolute top-6 left-6 z-[4]">
+            <h1 className="font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] sm:text-[30px]">
               {title}
-            </Typography>
-            <Typography sx={{ mt: 0.5, color: 'text.secondary', fontSize: 14 }}>
-              {subtitle}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              position: 'absolute',
-              zIndex: 4,
-              bottom: 18,
-              left: 20,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              bgcolor: 'rgba(255,255,255,.92)',
-              px: 1.25,
-              py: 0.75,
-              border: '1px solid #e4e6ed',
-              borderRadius: 1,
-            }}
-          >
-            <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: '#0347bf' }} />
-            <Typography variant="caption">Completado</Typography>
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+          </header>
+          <div className="absolute bottom-[18px] left-5 z-[4] flex items-center gap-2 rounded-lg border border-border bg-white/92 px-2.5 py-1.5 text-xs">
+            <span className="size-2.5 rounded-full bg-progress" />
+            <span>Completado</span>
             <Circle size={12} color="#6d7180" fill="#fff" />
-            <Typography variant="caption">Disponible</Typography>
+            <span>Disponible</span>
             <LockKeyhole size={13} color="#777b8c" />
-            <Typography variant="caption">Bloqueado</Typography>
-          </Box>
+            <span>Bloqueado</span>
+          </div>
           <RoadmapGraph
             roadmap={roadmap}
             canEdit={canEdit}
@@ -166,7 +134,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
               for (const dependencyId of dependencyIds) void deleteDependency(dependencyId);
             }}
           />
-        </Box>
+        </div>
         {canEdit && (
           <RoadmapEditor
             roadmap={roadmap}
@@ -193,7 +161,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
             onComplete={(node) => void completeNode(node.id)}
           />
         )}
-      </Paper>
-    </Box>
+      </section>
+    </div>
   );
 }

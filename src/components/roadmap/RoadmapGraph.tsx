@@ -18,8 +18,7 @@ import ReactFlow, {
   type NodeProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { CheckCircle2, Circle, EyeOff, LockKeyhole } from 'lucide-react';
-import { Box, Typography } from '@mui/material';
+import { CheckCircle2, Circle, EyeOff, LockKeyhole, Paperclip } from 'lucide-react';
 import type { RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
 
@@ -27,6 +26,8 @@ type NodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 type CanvasNodeData = {
   title: string;
   typeName: string;
+  typeColor: string;
+  resourceCount: number;
   status: NodeStatus;
   isHidden: boolean;
 };
@@ -42,87 +43,69 @@ function RoadmapCard({ data }: NodeProps<CanvasNodeData>) {
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
   const accent = completed
-    ? '#0347bf'
+    ? '#176245'
     : locked
       ? '#9294a2'
       : data.status === 'available'
         ? '#181812'
         : '#0347bf';
   return (
-    <Box
-      className="roadmap-card"
-      sx={{
-        minWidth: 170,
-        border: '2px solid',
-        borderColor: accent,
-        borderStyle: hidden ? 'dashed' : 'solid',
-        borderRadius: '8px',
-        bgcolor: hidden ? '#f3f5f7' : locked ? '#fbfaff' : '#fff',
-        color: locked ? '#9294a2' : '#171720',
-        px: 2,
-        py: 1.5,
-        boxShadow: locked ? 'none' : '0 4px 10px rgba(22, 29, 58, 0.10)',
-        opacity: locked ? 0.88 : 1,
-      }}
+    <div
+      className={`min-w-[170px] cursor-pointer rounded-lg border-2 px-4 py-3 transition-[border-color,transform,box-shadow] hover:translate-y-[-2px] hover:!border-[#296ef9] hover:shadow-[0_0_0_4px_rgb(41_110_249_/_16%),0_9px_18px_rgb(2_74_216_/_18%)] ${hidden ? 'bg-cloud' : locked ? 'bg-[#fbfaff] opacity-[0.88] shadow-none' : 'bg-card shadow-[0_4px_10px_rgb(18_33_58_/_7%)]'}`}
+      style={{ borderColor: accent }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1,
-          mb: 1.25,
-        }}
-      >
+      <div className="mb-5 flex items-center justify-between gap-2.5">
         {hidden ? (
           <EyeOff size={19} color="#5a6474" aria-hidden="true" />
         ) : completed ? (
-          <CheckCircle2 size={20} color="#0347bf" fill="#0347bf" stroke="#fff" />
+          <CheckCircle2 size={20} color="#176245" fill="#176245" stroke="#fff" />
         ) : locked ? (
           <LockKeyhole size={18} />
         ) : (
           <Circle size={19} fill="#fff4bd" stroke={accent} />
         )}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 0.5 }}>
+        <div className="flex flex-wrap justify-end gap-1">
           {hidden ? (
-            <Box
-              sx={{
-                borderRadius: 999,
-                bgcolor: '#dce1e8',
-                color: '#5a6474',
-                px: 1,
-                py: 0.15,
-                fontSize: 12,
-                lineHeight: 1.35,
-              }}
-            >
+            <span className="rounded-full bg-fog px-2 py-0.5 text-xs leading-[1.35] text-graphite">
               Oculto para estudiantes
-            </Box>
+            </span>
           ) : null}
-          <Box
-            sx={{
-              borderRadius: 999,
-              bgcolor: completed ? '#e1eaff' : locked ? '#eff0f5' : '#f1edfd',
-              color: accent,
-              px: 1,
-              py: 0.15,
-              fontSize: 12,
-              lineHeight: 1.35,
-            }}
+          <span
+            className={
+              completed
+                ? 'rounded-full bg-progress-soft px-2 py-0.5 text-xs leading-[1.35] text-progress-deep'
+                : locked
+                  ? 'rounded-full bg-cloud px-2 py-0.5 text-xs leading-[1.35] text-graphite'
+                  : 'bg-primary-soft rounded-full px-2 py-0.5 text-xs leading-[1.35] text-primary-deep'
+            }
           >
-            {completed ? 'Completado' : locked ? 'Bloqueado' : data.typeName}
-          </Box>
-        </Box>
-      </Box>
-      <Typography sx={{ fontSize: 15.5, fontWeight: 500, lineHeight: 1.25 }}>
-        {data.title}
-      </Typography>
-      {([
-        ['top', Position.Top],
-        ['right', Position.Right],
-        ['bottom', Position.Bottom],
-        ['left', Position.Left],
-      ] as const).map(([id, position]) => (
+            {completed ? 'Completado' : locked ? 'Bloqueado' : editing ? 'Edición' : 'Disponible'}
+          </span>
+        </div>
+      </div>
+      <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="size-2 rounded-full" style={{ backgroundColor: data.typeColor }} />
+        <span>{data.typeName}</span>
+        {data.resourceCount ? (
+          <button
+            type="button"
+            className="nodrag ml-auto flex min-h-11 items-center gap-1 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            aria-label={`Ver ${data.resourceCount} ${data.resourceCount === 1 ? 'recurso' : 'recursos'}`}
+          >
+            <Paperclip size={14} aria-hidden="true" />
+            {data.resourceCount} {data.resourceCount === 1 ? 'recurso' : 'recursos'}
+          </button>
+        ) : null}
+      </div>
+      <p className="text-[15.5px] leading-[1.25] font-medium text-ink">{data.title}</p>
+      {(
+        [
+          ['top', Position.Top],
+          ['right', Position.Right],
+          ['bottom', Position.Bottom],
+          ['left', Position.Left],
+        ] as const
+      ).map(([id, position]) => (
         <Handle
           key={id}
           id={id}
@@ -137,7 +120,7 @@ function RoadmapCard({ data }: NodeProps<CanvasNodeData>) {
           }}
         />
       ))}
-    </Box>
+    </div>
   );
 }
 
@@ -157,14 +140,16 @@ function updateEdgeAppearance(edge: Edge, isHovered = false): Edge {
 }
 
 export function mapRoadmapGraph(roadmap: RoadmapDto, canEdit: boolean) {
-  const typeNames = new Map(roadmap.nodeTypes.map((type) => [type.id, type.name]));
+  const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
   const nodes: Node<CanvasNodeData>[] = roadmap.nodes.map((node) => ({
     id: node.id,
     type: 'roadmap',
     data: {
       title: node.title,
-      typeName: typeNames.get(node.nodeTypeId) ?? 'Contenido',
+      typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Contenido',
+      typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? '#024ad8',
+      resourceCount: node.resources.length,
       status: nodeStatus(node, canEdit),
       isHidden: !node.isVisible,
     },

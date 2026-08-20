@@ -1,7 +1,6 @@
 import RoadmapCanvas from '@/components/RoadmapCanvas';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { Box } from '@mui/material';
 import { notFound, redirect } from 'next/navigation';
 
 type Props = { params: Promise<{ courseCode: string; year: string; semester: string }> };
@@ -27,13 +26,13 @@ export default async function CoursePage({ params }: Props) {
   const courseName = courseOffering?.course.name ?? courseCode;
 
   return (
-    <Box component="main" sx={{ minHeight: '100vh', bgcolor: '#f8f8f9' }}>
+    <main className="min-h-screen bg-cloud">
       <RoadmapCanvas
         identifier={{ courseCode, year, semester }}
         canEdit={canEdit}
         title={courseName}
         subtitle={`${courseCode} · ${year}, semestre ${semester}${canEdit ? ' · Modo edición' : ''}`}
       />
-    </Box>
+    </main>
   );
 }

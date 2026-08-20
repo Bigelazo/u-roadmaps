@@ -1,12 +1,12 @@
 'use client';
 
-import { useMediaQuery, useTheme } from '@mui/material';
-import { Box, Button, Dialog, Divider, Link as MuiLink, Stack, Typography } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Dialog } from '@base-ui/react/dialog';
 import {
   Check,
   CheckCircle2,
-  ChevronRight,
   Download,
+  ExternalLink,
   FileCode2,
   FileText,
   LockKeyhole,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { Resource, RoadmapNode } from '@/lib/roadmap-types';
 import type { StudentNodeStatus } from '@/components/roadmap/node-status';
+import { Button } from '@/components/ui/button';
 
 function resourceIcon(type: Resource['type']) {
   return type === 'VIDEO' ? <FileCode2 size={20} /> : <FileText size={20} />;
@@ -21,6 +22,14 @@ function resourceIcon(type: Resource['type']) {
 
 function resourceTypeLabel(type: Resource['type']) {
   return type === 'FILE' ? 'Archivo descargable' : type === 'VIDEO' ? 'Video' : 'Enlace externo';
+}
+
+function resourceActionIcon(type: Resource['type']) {
+  return type === 'FILE' ? (
+    <Download size={18} aria-hidden="true" />
+  ) : (
+    <ExternalLink size={18} aria-hidden="true" />
+  );
 }
 
 type ContentProps = {
@@ -33,93 +42,80 @@ type ContentProps = {
 function StudentNodeDetailContent({ node, status, onClose, onComplete }: ContentProps) {
   return (
     <>
-      <Box sx={{ px: 3, pt: 2.75, pb: 2.5, borderBottom: '1px solid #e5e6ea' }}>
+      <header className="relative border-b border-border px-6 pt-7 pb-6">
         <Button
           aria-label="Cerrar detalle"
           onClick={onClose}
-          size="small"
-          sx={{ position: 'absolute', top: 16, right: 16, minWidth: 36, p: 0 }}
+          variant="ghost"
+          size="icon"
+          className="absolute top-4 right-4"
         >
           <X size={18} />
         </Button>
-        <Typography variant="overline" color="primary" sx={{ fontWeight: 700 }}>
+        <p className="text-xs font-bold tracking-[1.2px] text-primary uppercase">
           Nodo del roadmap
-        </Typography>
-        <Typography
+        </p>
+        <h2
           id="student-node-detail-title"
-          sx={{ mt: 0.5, fontSize: 24, fontWeight: 700, letterSpacing: '-0.035em' }}
+          className="mt-1 font-heading text-2xl font-semibold tracking-[-0.035em]"
         >
           {node.title}
-        </Typography>
+        </h2>
         {status === 'completed' ? (
-          <Button disabled variant="contained" sx={{ mt: 2 }} startIcon={<Check size={16} />}>
+          <Button disabled className="mt-5">
+            <Check size={16} />
             Completado
           </Button>
         ) : (
-          <Button
-            variant="contained"
-            sx={{ mt: 2 }}
-            disabled={status === 'locked'}
-            onClick={() => onComplete(node)}
-            startIcon={status === 'locked' ? <LockKeyhole size={16} /> : <CheckCircle2 size={16} />}
-          >
+          <Button className="mt-5" disabled={status === 'locked'} onClick={() => onComplete(node)}>
+            {status === 'locked' ? <LockKeyhole size={16} /> : <CheckCircle2 size={16} />}
             {status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
           </Button>
         )}
-      </Box>
-      <Box sx={{ px: 3, py: 2.5, overflowY: 'auto' }}>
-        <Typography sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+        {status === 'locked' ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Este nodo se desbloquea cuando completes sus prerrequisitos.
+          </p>
+        ) : null}
+      </header>
+      <div className="overflow-y-auto px-6 py-6">
+        <h3 className="flex items-center gap-2 font-semibold">
           <FileText size={18} /> Descripción
-        </Typography>
-        <Typography
-          color="text.secondary"
-          sx={{ mt: 1.25, whiteSpace: 'pre-line', lineHeight: 1.62 }}
-        >
+        </h3>
+        <p className="mt-5 leading-[1.62] whitespace-pre-line text-muted-foreground">
           {node.description || 'Este nodo no tiene una descripción disponible.'}
-        </Typography>
-        <Divider sx={{ my: 3 }} />
-        <Typography sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
+        </p>
+        <hr className="my-6 border-border" />
+        <h3 className="flex items-center gap-2 font-semibold">
           <Download size={18} /> Recursos
-        </Typography>
-        <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+        </h3>
+        <div className="mt-6 space-y-5">
           {node.resources.length ? (
             node.resources.map((resource) => (
-              <MuiLink
+              <a
                 key={resource.id}
                 href={resource.url}
                 target="_blank"
                 rel="noreferrer"
-                underline="none"
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.25,
-                  p: 1.25,
-                  border: '1px solid #e2e3e8',
-                  borderRadius: 1.25,
-                  color: 'text.primary',
-                  '&:hover': { borderColor: 'primary.main', bgcolor: '#f8faff' },
-                }}
+                className="flex items-center gap-5 rounded-lg border border-border p-5 text-foreground transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
-                <Box sx={{ color: 'primary.main' }}>{resourceIcon(resource.type)}</Box>
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography noWrap sx={{ fontSize: 14, fontWeight: 600 }}>
-                    {resource.title}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                <span className="text-primary">{resourceIcon(resource.type)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{resource.title}</span>
+                  <span className="block text-xs text-muted-foreground">
                     {resourceTypeLabel(resource.type)}
-                  </Typography>
-                </Box>
-                <ChevronRight size={18} color="#777b8c" />
-              </MuiLink>
+                  </span>
+                </span>
+                <span className="text-primary">{resourceActionIcon(resource.type)}</span>
+              </a>
             ))
           ) : (
-            <Typography variant="body2" color="text.secondary">
+            <p className="text-sm text-muted-foreground">
               No hay recursos adjuntos para este nodo.
-            </Typography>
+            </p>
           )}
-        </Stack>
-      </Box>
+        </div>
+      </div>
     </>
   );
 }
@@ -129,33 +125,37 @@ type Props = Omit<ContentProps, 'node' | 'status'> & {
   status: StudentNodeStatus | null;
 };
 
+function useMobileLayout() {
+  const query = '(max-width: 767px)';
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window === 'undefined' ? false : (window.matchMedia?.(query).matches ?? true),
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia?.(query);
+    if (!media) return;
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return isMobile;
+}
+
 export function StudentNodeDetail({ node, status, onClose, onComplete }: Props) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMobile = useMobileLayout();
   if (!node || !status) {
     if (isMobile) return null;
     return (
-      <Box
-        component="aside"
-        sx={{
-          position: 'absolute',
-          zIndex: 6,
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 426,
-          bgcolor: '#fff',
-          borderLeft: '1px solid #e5e6ea',
-          boxShadow: '-8px 0 24px rgba(24, 31, 54, 0.10)',
-        }}
-      >
-        <Box sx={{ p: 3, mt: { lg: 8 } }}>
-          <Typography sx={{ fontSize: 20, fontWeight: 600 }}>Selecciona un nodo</Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
+      <aside className="absolute top-0 right-0 bottom-0 z-[6] w-[426px] border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58_/_10%)]">
+        <div className="mt-0 p-6 lg:mt-8">
+          <h2 className="font-heading text-xl font-semibold">Selecciona un nodo</h2>
+          <p className="mt-4 text-muted-foreground">
             Revisa su descripción, materiales y estado de avance desde este panel.
-          </Typography>
-        </Box>
-      </Box>
+          </p>
+        </div>
+      </aside>
     );
   }
   const content = (
@@ -169,37 +169,29 @@ export function StudentNodeDetail({ node, status, onClose, onComplete }: Props) 
 
   if (isMobile) {
     return (
-      <Dialog
-        open
-        aria-labelledby="student-node-detail-title"
-        onClose={onClose}
-        fullScreen
-        scroll="paper"
-      >
-        {content}
-      </Dialog>
+      <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-40 bg-ink/30" />
+          <Dialog.Viewport className="fixed inset-0 z-50 overflow-y-auto">
+            <Dialog.Popup
+              className="min-h-full bg-card"
+              aria-labelledby="student-node-detail-title"
+              aria-modal="true"
+            >
+              {content}
+            </Dialog.Popup>
+          </Dialog.Viewport>
+        </Dialog.Portal>
+      </Dialog.Root>
     );
   }
 
   return (
-    <Box
-      component="aside"
+    <aside
       aria-labelledby="student-node-detail-title"
-      sx={{
-        position: 'absolute',
-        zIndex: 6,
-        top: 0,
-        right: 0,
-        bottom: 0,
-        width: 426,
-        bgcolor: '#fff',
-        borderLeft: '1px solid #e5e6ea',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: '-8px 0 24px rgba(24, 31, 54, 0.10)',
-      }}
+      className="absolute top-0 right-0 bottom-0 z-[6] flex w-[426px] flex-col border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58_/_10%)]"
     >
       {content}
-    </Box>
+    </aside>
   );
 }
