@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { usePathname } from 'next/navigation';
-import { Fab, Menu, MenuItem, Tooltip, Typography } from '@mui/material';
+import { usePathname, useRouter } from 'next/navigation';
+import { Menu } from '@base-ui/react/menu';
 import { UsersRound } from 'lucide-react';
 
 type Persona = { id: string; label: string };
@@ -15,7 +15,8 @@ export default function DevelopmentBar({
   hideOnPersonaPage?: boolean;
 }) {
   const pathname = usePathname();
-  const [anchorElement, setAnchorElement] = useState<HTMLElement | null>(null);
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
 
   async function assumePersona(userId: string) {
     const response = await fetch('/api/development/session', {
@@ -23,53 +24,44 @@ export default function DevelopmentBar({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
-    if (response.ok) window.location.assign('/academic-overview');
+    if (response.ok) {
+      router.replace('/academic-overview');
+      router.refresh();
+    }
   }
 
   if (hideOnPersonaPage && pathname === '/development/personas') return null;
 
   return (
-    <>
-      <Tooltip title="Cambiar perfil de desarrollo" placement="right">
-        <Fab
-          aria-label="Cambiar perfil de desarrollo"
-          color="primary"
-          onClick={(event) => setAnchorElement(event.currentTarget)}
-          size="medium"
-          sx={{
-            position: 'fixed',
-            bottom: { xs: 16, sm: 24 },
-            left: { xs: 16, sm: 24 },
-            zIndex: 1300,
-          }}
-        >
-          <UsersRound />
-        </Fab>
-      </Tooltip>
-      <Menu
-        anchorEl={anchorElement}
-        anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
-        onClose={() => setAnchorElement(null)}
-        open={Boolean(anchorElement)}
-        transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+    <Menu.Root onOpenChange={setIsOpen} open={isOpen}>
+      <Menu.Trigger
+        aria-label="Cambiar perfil de desarrollo"
+        className="fixed bottom-4 left-4 z-30 grid size-11 place-items-center rounded-full bg-[#024ad8] text-white shadow-[0_18px_50px_rgb(18_33_58_/_8%)] transition-colors hover:bg-[#0e3191] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#024ad8] sm:bottom-6 sm:left-6"
+        onClick={() => setIsOpen((open) => !open)}
+        title="Cambiar perfil de desarrollo"
       >
-        <Typography
-          sx={{ px: 2, pt: 1.5, pb: 0.5, fontSize: 12, fontWeight: 700, color: 'text.secondary' }}
-        >
-          CAMBIAR PERFIL
-        </Typography>
-        {personas.map((persona) => (
-          <MenuItem
-            key={persona.id}
-            onClick={() => {
-              setAnchorElement(null);
-              void assumePersona(persona.id);
-            }}
-          >
-            {persona.label}
-          </MenuItem>
-        ))}
-      </Menu>
-    </>
+        <UsersRound aria-hidden="true" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner align="start" side="top" sideOffset={12}>
+          <Menu.Popup className="z-40 min-w-64 rounded-[var(--radius-lg)] border border-[#dce1e8] bg-white p-2 shadow-[0_18px_50px_rgb(18_33_58_/_8%)] outline-none">
+            <Menu.Group>
+              <Menu.GroupLabel className="px-2 py-1.5 text-xs font-bold tracking-[0.08em] text-[#5a6474]">
+                CAMBIAR PERFIL
+              </Menu.GroupLabel>
+              {personas.map((persona) => (
+                <Menu.Item
+                  className="flex min-h-11 w-full items-center rounded-[var(--radius-md)] px-2 text-left text-sm outline-none data-[highlighted]:bg-[#f3f5f7] data-[highlighted]:text-[#12213a]"
+                  key={persona.id}
+                  onClick={() => void assumePersona(persona.id)}
+                >
+                  {persona.label}
+                </Menu.Item>
+              ))}
+            </Menu.Group>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }

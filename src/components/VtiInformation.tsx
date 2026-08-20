@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Paper, Stack, Typography } from '@mui/material';
 
 type VtiClaimValue =
   string | number | boolean | null | VtiClaimValue[] | { [key: string]: VtiClaimValue };
@@ -18,30 +17,23 @@ export default function VtiInformation({ claims }: Props) {
   }, [claims]);
 
   return (
-    <Paper component="section" variant="outlined" sx={{ p: { xs: 3, sm: 4 } }}>
-      <Stack spacing={2}>
-        <Typography variant="h3">Información institucional</Typography>
-        <Typography color="text.secondary">
-          Datos recibidos desde el inicio de sesión institucional.
-        </Typography>
-        <Stack component="dl" spacing={1.5} sx={{ m: 0 }}>
+    <section className="rounded-[var(--radius-xl)] border border-[#dce1e8] bg-white p-6 sm:p-8">
+      <div className="space-y-5">
+        <h2 className="font-heading text-3xl font-semibold tracking-[-0.03em]">
+          Información institucional
+        </h2>
+        <p className="text-[#5a6474]">Datos recibidos desde el inicio de sesión institucional.</p>
+        <dl className="space-y-4">
           {Object.entries(claims).map(([key, value]) => (
-            <Stack component="div" key={key} spacing={0.25}>
-              <Typography
-                component="dt"
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 700 }}
-              >
+            <div key={key}>
+              <dt className="text-xs font-bold tracking-[0.08em] text-[#5a6474] uppercase">
                 {key}
-              </Typography>
-              <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: 'anywhere' }}>
-                {formatClaim(value)}
-              </Typography>
-            </Stack>
+              </dt>
+              <dd className="mt-1 text-sm wrap-anywhere">{formatClaim(value)}</dd>
+            </div>
           ))}
-        </Stack>
-      </Stack>
-    </Paper>
+        </dl>
+      </div>
+    </section>
   );
 }
