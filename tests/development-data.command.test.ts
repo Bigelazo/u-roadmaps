@@ -1,8 +1,7 @@
-import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import test from 'node:test';
+import { expect, it } from 'vitest';
 
-test('development reset command rejects a non-local database before it can seed data', () => {
+it('rejects a non-local database before loading fixture data', () => {
   const result = spawnSync('pnpm', ['exec', 'tsx', 'prisma/development-data.ts'], {
     cwd: process.cwd(),
     env: {
@@ -13,6 +12,6 @@ test('development reset command rejects a non-local database before it can seed 
     },
     encoding: 'utf8',
   });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /local roadmap_dev_db database/);
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toMatch(/local roadmap_dev_db or roadmap_e2e_db database/);
 });

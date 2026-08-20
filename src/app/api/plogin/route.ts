@@ -4,8 +4,13 @@ import { jwtVerify } from 'jose';
 import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import { authOptions } from '@/lib/auth';
-import { ApiError, apiErrorResponse, handleApiResult, throwApiError } from '@/lib/roadmap-api';
-import { normalizeInstitutionalEmail, parseVtiIdentification, requireVtiClaim } from '@/lib/vti';
+import { ApiError, apiErrorResponse, handleApiResult } from '@/lib/roadmap-api';
+import {
+  invalidVtiClaims,
+  normalizeInstitutionalEmail,
+  parseVtiIdentification,
+  requireVtiClaim,
+} from '@/lib/vti-claims';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,15 +102,22 @@ export async function POST(request: Request) {
           'No fue posible completar la autenticación.',
         );
       }
+      const invalidClaimsError = (): never => {
+        throw new ApiError(
+          400,
+          invalidVtiClaims,
+          'No fue posible validar la identidad institucional.',
+        );
+      };
       const identification = parseVtiIdentification(payload.identification).match(
         (value) => value,
-        throwApiError,
+        invalidClaimsError,
       );
       const email = normalizeInstitutionalEmail(payload.email).match(
         (value) => value,
-        throwApiError,
+        invalidClaimsError,
       );
-      const name = requireVtiClaim(payload.name).match((value) => value, throwApiError);
+      const name = requireVtiClaim(payload.name).match((value) => value, invalidClaimsError);
       const preferredUsername =
         typeof payload.preferred_username === 'string'
           ? payload.preferred_username.trim().slice(0, 320)

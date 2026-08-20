@@ -1,6 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, ResourceType } from '../src/generated/prisma/client';
-import { requireDevelopmentEnvironment } from '../src/lib/development';
+import { requireFixtureEnvironment } from '../src/lib/development';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL must be set to load development data.');
@@ -27,7 +27,7 @@ const studentId = (number: number) =>
   `20000000-0000-4000-8000-${number.toString().padStart(12, '0')}`;
 
 export async function resetDevelopmentData() {
-  requireDevelopmentEnvironment();
+  requireFixtureEnvironment();
   await prisma.$transaction(async (transaction) => {
     await transaction.courseOffering.deleteMany({ where: { id: { in: fixtureOfferingIds } } });
     await transaction.user.deleteMany({

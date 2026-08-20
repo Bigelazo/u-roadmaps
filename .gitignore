@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-e2e/
 coverage/
 playwright-report/
 test-results/
@@ -8,6 +9,7 @@ test-results/
 .env.*
 !.env.example
 !.env.development.example
+!.env.e2e.example
 .DS_Store
 tsconfig.tsbuildinfo
 src/generated/prisma/

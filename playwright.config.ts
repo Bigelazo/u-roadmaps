@@ -11,7 +11,13 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'pnpm exec next dev -p 3200',
+    command: 'pnpm exec next start -p 3200',
+    env: {
+      ...process.env,
+      DATABASE_URL: process.env.E2E_DATABASE_URL ?? '',
+      NEXTAUTH_URL: 'http://localhost:3200',
+      NEXT_DIST_DIR: '.next-e2e',
+    },
     url: 'http://localhost:3200',
     reuseExistingServer: false,
     timeout: 30_000,
