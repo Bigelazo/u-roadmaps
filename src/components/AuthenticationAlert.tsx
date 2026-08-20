@@ -13,7 +13,7 @@ export default function AuthenticationAlert() {
 
   return (
     <div
-      className="border-b border-red-200 bg-red-50 text-[#8d2024]"
+      className="border-b border-[#b3262b] bg-[#fce8e8] text-[#b3262b]"
       role="alert"
       aria-label="No fue posible completar la autenticación institucional."
     >
@@ -21,7 +21,7 @@ export default function AuthenticationAlert() {
         <p>No fue posible completar la autenticación institucional. Inténtalo nuevamente.</p>
         <Button
           aria-label="Cerrar alerta"
-          className="ml-auto text-[#8d2024] hover:bg-red-100 hover:text-[#8d2024]"
+          className="ml-auto text-[#b3262b] hover:bg-[#f4d6d6] hover:text-[#b3262b]"
           onClick={() => router.replace('/')}
           size="icon"
           variant="ghost"

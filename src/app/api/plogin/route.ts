@@ -192,6 +192,7 @@ export async function POST(request: Request) {
     (error) =>
       error.code === 'INVALID_AUTH_CALLBACK' ||
       error.code === 'INVALID_VTI_CLAIMS' ||
+      error.code === 'AUTH_CONFIGURATION_ERROR' ||
       (error.code === 'CONFLICT' && error.source !== 'P2003')
         ? authenticationErrorResponse(request)
         : apiErrorResponse(error),

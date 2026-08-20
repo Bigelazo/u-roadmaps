@@ -397,6 +397,35 @@ test('landing access starts VTI and dismisses authentication failures without re
   expect(protectedRoute.headers().location).toContain('/api/plogin/start');
 });
 
+test('Firefox 1440px visual references cover the public shell states', async ({
+  page,
+}, testInfo) => {
+  expect(testInfo.project.name).toBe('firefox');
+  await page.setViewportSize({ width: 1440, height: 960 });
+  expect(page.viewportSize()).toEqual({ width: 1440, height: 960 });
+
+  await page.goto('/');
+  await testInfo.attach('anonymous-landing', {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: 'image/png',
+  });
+
+  await page.goto('/?error=Authentication');
+  await expect(page.getByRole('alert')).toBeVisible();
+  await testInfo.attach('authentication-error-landing', {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: 'image/png',
+  });
+
+  await authenticateAs(page.context(), fixture.studentWithoutProgress);
+  await page.goto('/academic-overview');
+  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
+  await testInfo.attach('authenticated-navigation', {
+    body: await page.screenshot({ fullPage: true }),
+    contentType: 'image/png',
+  });
+});
+
 test('VTI callback issues a session after validating its one-time state', async ({ request }) => {
   const start = await request.get('/api/plogin/start', { maxRedirects: 0 });
   expect(start.status()).toBe(307);
