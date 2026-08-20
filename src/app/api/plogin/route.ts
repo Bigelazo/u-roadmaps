@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose';
 import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import { authOptions } from '@/lib/auth';
-import { ApiError, handleApiResult } from '@/lib/roadmap-api';
+import { ApiError, apiErrorResponse, handleApiResult } from '@/lib/roadmap-api';
 import {
   invalidVtiClaims,
   normalizeInstitutionalEmail,
@@ -189,6 +189,12 @@ export async function POST(request: Request) {
       response.cookies.delete(loginStateCookieName);
       return response;
     },
-    () => authenticationErrorResponse(request),
+    (error) =>
+      error.code === 'INVALID_AUTH_CALLBACK' ||
+      error.code === 'INVALID_VTI_CLAIMS' ||
+      error.code === 'AUTH_CONFIGURATION_ERROR' ||
+      (error.code === 'CONFLICT' && error.source !== 'P2003')
+        ? authenticationErrorResponse(request)
+        : apiErrorResponse(error),
   );
 }
