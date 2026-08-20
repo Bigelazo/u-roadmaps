@@ -88,3 +88,44 @@ test('a failed dependency deletion keeps the roadmap and exposes the error', asy
   expect(result.current.roadmap?.roadmap.id).toBe('before-delete');
   await waitFor(() => expect(result.current.error).toBe('No se puede eliminar la dependencia.'));
 });
+
+test('resource and custom node-type mutations persist and reload the roadmap', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('initial')))
+    .mockResolvedValueOnce(Response.json({ resource: {} }))
+    .mockResolvedValueOnce(Response.json(roadmap('after-resource-update')))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json(roadmap('after-resource-delete')))
+    .mockResolvedValueOnce(Response.json({ nodeType: {} }))
+    .mockResolvedValueOnce(Response.json(roadmap('after-type-update')))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json(roadmap('after-type-delete')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('initial'));
+
+  await expect(
+    result.current.updateResource('resource-1', {
+      title: 'Guia actualizada',
+      url: 'https://example.test/guide',
+      type: 'VIDEO',
+    }),
+  ).resolves.toBe(true);
+  await expect(result.current.deleteResource('resource-1')).resolves.toBe(true);
+  await expect(
+    result.current.updateNodeType('type-1', { name: 'Laboratorio', color: '#123456' }),
+  ).resolves.toBe(true);
+  await expect(result.current.deleteNodeType('type-1')).resolves.toBe(true);
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/MAT101/2026/1/roadmap/resources/resource-1',
+    expect.objectContaining({ method: 'PATCH' }),
+  );
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/MAT101/2026/1/roadmap/node-types/type-1',
+    expect.objectContaining({ method: 'PATCH' }),
+  );
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-type-delete'));
+});

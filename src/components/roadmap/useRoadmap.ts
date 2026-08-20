@@ -13,6 +13,8 @@ type NewNode = {
 
 type NodeUpdate = { title: string; description: string; nodeTypeId: string };
 type NewResource = { title: string; url: string; type: Resource['type'] };
+type ResourceUpdate = NewResource;
+type NodeTypeInput = { name: string; color: string };
 
 function identifierKey(identifier: CourseOfferingIdentifier) {
   return `${identifier.courseCode}:${identifier.year}:${identifier.semester}`;
@@ -268,6 +270,71 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier, load, mutate],
   );
 
+  const updateResource = useCallback(
+    async (resourceId: string, resource: ResourceUpdate) => {
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/resources/${resourceId}`),
+        { method: 'PATCH', body: JSON.stringify(resource) },
+        'No se pudo guardar el recurso.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
+  const deleteResource = useCallback(
+    async (resourceId: string) => {
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/resources/${resourceId}`),
+        { method: 'DELETE' },
+        'No se pudo eliminar el recurso.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
+  const addNodeType = useCallback(
+    async (nodeType: NodeTypeInput) => {
+      const succeeded = await mutate(
+        roadmapUrl(identifier, '/node-types'),
+        { method: 'POST', body: JSON.stringify(nodeType) },
+        'No se pudo crear el tipo de nodo.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
+  const updateNodeType = useCallback(
+    async (nodeTypeId: string, nodeType: NodeTypeInput) => {
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/node-types/${nodeTypeId}`),
+        { method: 'PATCH', body: JSON.stringify(nodeType) },
+        'No se pudo guardar el tipo de nodo.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
+  const deleteNodeType = useCallback(
+    async (nodeTypeId: string) => {
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/node-types/${nodeTypeId}`),
+        { method: 'DELETE' },
+        'No se pudo eliminar el tipo de nodo.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
   const completeNode = useCallback(
     async (nodeId: string) => {
       const succeeded = await mutate(
@@ -296,6 +363,11 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     toggleVisibility,
     deleteNode,
     addResource,
+    updateResource,
+    deleteResource,
+    addNodeType,
+    updateNodeType,
+    deleteNodeType,
     completeNode,
   };
 }

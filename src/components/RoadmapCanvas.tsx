@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Circle, LockKeyhole } from 'lucide-react';
+import { AlertDialog } from '@base-ui/react/alert-dialog';
+import { Circle, LockKeyhole, Trash2 } from 'lucide-react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
 import { RoadmapGraph } from '@/components/roadmap/RoadmapGraph';
 import { StudentNodeDetail } from '@/components/roadmap/StudentNodeDetail';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
 import { useRoadmap } from '@/components/roadmap/useRoadmap';
+import { Button } from '@/components/ui/button';
 
-// The authoring workflow remains in its separate migration slice, so student consultation does not load MUI.
 const RoadmapEditor = dynamic(
   () => import('@/components/roadmap/RoadmapEditor').then(({ RoadmapEditor }) => RoadmapEditor),
   { ssr: false },
@@ -26,6 +27,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedDependencyId, setSelectedDependencyId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(true);
+  const [pendingDependencyIds, setPendingDependencyIds] = useState<string[] | null>(null);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const graphRef = useRef<HTMLDivElement | null>(null);
   const {
@@ -39,6 +41,11 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
     toggleVisibility,
     deleteNode,
     addResource,
+    updateResource,
+    deleteResource,
+    addNodeType,
+    updateNodeType,
+    deleteNodeType,
     completeNode,
   } = useRoadmap(identifier);
 
@@ -130,9 +137,7 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
               setSelectedDependencyId(dependencyId);
               setSelectedNodeId(null);
             }}
-            onDeleteDependencies={(dependencyIds) => {
-              for (const dependencyId of dependencyIds) void deleteDependency(dependencyId);
-            }}
+            onDeleteDependencies={setPendingDependencyIds}
           />
         </div>
         {canEdit && (
@@ -151,6 +156,11 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
             onDeleteDependency={deleteDependency}
             onCloseDependency={closeSelectedDependency}
             onAddResource={addResource}
+            onUpdateResource={updateResource}
+            onDeleteResource={deleteResource}
+            onAddNodeType={addNodeType}
+            onUpdateNodeType={updateNodeType}
+            onDeleteNodeType={deleteNodeType}
           />
         )}
         {!canEdit && (
@@ -162,6 +172,47 @@ export default function RoadmapCanvas({ identifier, canEdit = false, title, subt
           />
         )}
       </section>
+      <AlertDialog.Root
+        open={Boolean(pendingDependencyIds?.length)}
+        onOpenChange={(open) => !open && setPendingDependencyIds(null)}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-ink/30" />
+          <AlertDialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-4">
+            <AlertDialog.Popup className="w-full max-w-md rounded-xl bg-card p-6 shadow-[0_18px_50px_rgb(18_33_58_/_18%)]">
+              <AlertDialog.Title className="font-heading text-xl font-semibold">
+                Confirmar eliminación
+              </AlertDialog.Title>
+              <AlertDialog.Description className="mt-3 text-sm leading-6 text-muted-foreground">
+                Eliminarás{' '}
+                {pendingDependencyIds?.length === 1 ? 'esta dependencia' : 'estas dependencias'}.
+                Esta acción no se puede deshacer.
+              </AlertDialog.Description>
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPendingDependencyIds(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => {
+                    for (const dependencyId of pendingDependencyIds ?? [])
+                      void deleteDependency(dependencyId);
+                    setPendingDependencyIds(null);
+                  }}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Eliminar
+                </Button>
+              </div>
+            </AlertDialog.Popup>
+          </AlertDialog.Viewport>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </div>
   );
 }
