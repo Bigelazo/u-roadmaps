@@ -14,12 +14,28 @@ function localFixtureDatabaseName() {
   }
 }
 
+function localPrismaDevDatabase() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return false;
+
+  try {
+    const url = new URL(databaseUrl);
+    return (
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1') &&
+      url.port === '51214' &&
+      url.pathname === '/template1'
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function developmentEnvironmentEnabled() {
   if (process.env.NODE_ENV !== 'development' || process.env.U_ROADMAPS_DEV_DATA !== 'true') {
     return false;
   }
 
-  return localFixtureDatabaseName() === developmentDatabaseName;
+  return localFixtureDatabaseName() === developmentDatabaseName || localPrismaDevDatabase();
 }
 
 export function requireDevelopmentEnvironment() {

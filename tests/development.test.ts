@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fixtureEnvironmentEnabled, requireFixtureEnvironment } from '@/lib/development';
+import {
+  developmentEnvironmentEnabled,
+  fixtureEnvironmentEnabled,
+  requireFixtureEnvironment,
+} from '@/lib/development';
 
 const originalEnvironment = { ...process.env };
 
@@ -15,6 +19,14 @@ describe('fixture environment', () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://local:local@localhost:5432/roadmap_dev_db');
 
     expect(fixtureEnvironmentEnabled()).toBe(true);
+  });
+
+  it('allows Prisma Dev in development mode', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('U_ROADMAPS_DEV_DATA', 'true');
+    vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:51214/template1');
+
+    expect(developmentEnvironmentEnabled()).toBe(true);
   });
 
   it('allows the local E2E database only when E2E fixture loading is enabled', () => {

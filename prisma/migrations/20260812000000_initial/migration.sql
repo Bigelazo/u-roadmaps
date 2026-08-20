@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
 CREATE TYPE "ResourceType" AS ENUM ('FILE', 'LINK', 'VIDEO');
 CREATE TYPE "ParticipationRole" AS ENUM ('STUDENT', 'TEACHER');
 
