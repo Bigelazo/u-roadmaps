@@ -19,7 +19,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
     "prisma:prepare": "prisma generate && prisma migrate deploy && prisma db seed",
-    "dev:data:reset": "sh -c 'set -a; . ./.env.development.local; set +a; export NODE_ENV=development; prisma migrate deploy && tsx prisma/development-data.ts'",
+    "dev:data:reset": "sh -c 'set -a; . ./.env.development.local; set +a; export NODE_ENV=development; tsx -e \"import { requireFixtureEnvironment } from \\\"./src/lib/development\\\"; requireFixtureEnvironment()\" && prisma migrate deploy && tsx prisma/development-data.ts'",
     "postinstall": "prisma generate"
   },
   "dependencies": {
