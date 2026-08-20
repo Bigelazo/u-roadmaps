@@ -7,12 +7,17 @@ if (!connectionString) {
   throw new Error('DATABASE_URL must be set to initialize Prisma.');
 }
 
-const adapter = new PrismaPg({ connectionString });
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+  prismaConnectionString?: string;
+};
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
+export const prisma =
+  globalForPrisma.prisma && globalForPrisma.prismaConnectionString === connectionString
+    ? globalForPrisma.prisma
+    : new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
+  globalForPrisma.prismaConnectionString = connectionString;
 }
