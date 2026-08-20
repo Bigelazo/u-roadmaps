@@ -14,6 +14,8 @@ export const fixture = {
     secondNode: '60000000-0000-4000-8000-000000000002',
     hiddenNode: '60000000-0000-4000-8000-000000000018',
   },
+  calculus: { courseCode: 'MA1001', year: 2026, semester: 2 },
+  physics: { courseCode: 'FI1001', year: 2026, semester: 2 },
 } as const;
 
 const sessionCookieName = 'next-auth.session-token';
@@ -22,6 +24,13 @@ const sessionSecret = process.env.NEXTAUTH_SECRET ?? 'e2e-nextauth-secret';
 export function roadmapPath(suffix = '') {
   const { courseCode, year, semester } = fixture.programming;
   return `/api/${courseCode}/${year}/${semester}/roadmap${suffix}`;
+}
+
+export function fixtureRoadmapPath(
+  identifier: { courseCode: string; year: number; semester: number },
+  suffix = '',
+) {
+  return `/api/${identifier.courseCode}/${identifier.year}/${identifier.semester}/roadmap${suffix}`;
 }
 
 export async function sessionCookie(userId: string) {
