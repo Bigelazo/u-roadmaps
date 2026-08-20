@@ -198,6 +198,7 @@ test('completion ignores hidden prerequisites and requires an active student par
     extraHTTPHeaders: { cookie: await sessionCookie(fixture.inactiveStudent) },
   });
   let hiddenId: string | undefined;
+  let prerequisiteId: string | undefined;
   let targetId: string | undefined;
   let dependencyId: string | undefined;
   try {
@@ -222,12 +223,30 @@ test('completion ignores hidden prerequisites and requires an active student par
     expect(target.status()).toBe(201);
     hiddenId = (await hidden.json()).node.id;
     targetId = (await target.json()).node.id;
+    const prerequisite = await teacher.post(roadmapPath('/nodes'), {
+      data: {
+        title: uniqueName('Prerequisito visible E2E'),
+        nodeTypeId: '00000000-0000-4000-8000-000000000001',
+        positionX: 60,
+        positionY: 0,
+      },
+    });
+    expect(prerequisite.status()).toBe(201);
+    prerequisiteId = (await prerequisite.json()).node.id;
     const dependency = await teacher.post(roadmapPath('/dependencies'), {
       data: { sourceNodeId: hiddenId, targetNodeId: targetId },
     });
     expect(dependency.status()).toBe(201);
     dependencyId = (await dependency.json()).dependency.id;
+    const visibleDependency = await teacher.post(roadmapPath('/dependencies'), {
+      data: { sourceNodeId: prerequisiteId, targetNodeId: targetId },
+    });
+    expect(visibleDependency.status()).toBe(201);
     expect((await student.post(roadmapPath(`/nodes/${hiddenId}/completion`))).status()).toBe(404);
+    expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(409);
+    expect((await student.post(roadmapPath(`/nodes/${prerequisiteId}/completion`))).status()).toBe(
+      200,
+    );
     expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
     expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
     expect(
@@ -243,6 +262,7 @@ test('completion ignores hidden prerequisites and requires an active student par
   } finally {
     await deleteIfPresent(teacher, dependencyId && roadmapPath(`/dependencies/${dependencyId}`));
     await deleteIfPresent(teacher, targetId && roadmapPath(`/nodes/${targetId}`));
+    await deleteIfPresent(teacher, prerequisiteId && roadmapPath(`/nodes/${prerequisiteId}`));
     await deleteIfPresent(teacher, hiddenId && roadmapPath(`/nodes/${hiddenId}`));
     await Promise.all([teacher.dispose(), student.dispose(), inactive.dispose()]);
   }
@@ -290,9 +310,10 @@ test('teacher and student workflows render against the shared fixture', async ({
 async function vtiToken(
   claims: Record<string, unknown>,
   secret = process.env.VTI_JWT_SECRET ?? 'e2e-vti-secret',
+  algorithm = 'HS256',
 ) {
   return new SignJWT(claims)
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: algorithm })
     .setIssuedAt()
     .setExpirationTime('5m')
     .setIssuer(process.env.VTI_JWT_ISSUER ?? 'https://vti.example.test')
@@ -325,7 +346,21 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
       },
       'wrong-secret',
     ),
+    await vtiToken(
+      {
+        identification: `0000${Date.now()}-5`,
+        email: `${crypto.randomUUID()}@example.test`,
+        name: 'Algoritmo inválido',
+      },
+      process.env.VTI_JWT_SECRET ?? 'e2e-vti-secret',
+      'HS384',
+    ),
     await vtiToken({ email: `${crypto.randomUUID()}@example.test`, name: 'Sin identificación' }),
+    await vtiToken({ identification: `0000${Date.now()}-5`, name: 'Sin correo' }),
+    await vtiToken({
+      identification: `0000${Date.now()}-5`,
+      email: `${crypto.randomUUID()}@example.test`,
+    }),
   ]) {
     const start = await request.get('/api/plogin/start', { maxRedirects: 0 });
     const state = new URL(start.headers().location).searchParams.get('state');
@@ -340,19 +375,13 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
   }
 });
 
-test('VTI callback issues a session after validating its one-time state', async ({
-  request,
-}, testInfo) => {
+test('VTI callback issues a session after validating its one-time state', async ({ request }) => {
   const start = await request.get('/api/plogin/start', { maxRedirects: 0 });
   expect(start.status()).toBe(307);
   const state = new URL(start.headers().location).searchParams.get('state');
   expect(state).toBeTruthy();
   const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
-  const token = await vtiToken({
-    identification: `0000${Date.now()}${testInfo.retry}-5`,
-    email: `${crypto.randomUUID()}@example.test`,
-    name: 'Persona VTI E2E',
-  });
+  const token = await vtiToken(fixture.studentWithoutProgressVtiClaims);
   const callback = await request.post('/api/plogin', {
     maxRedirects: 0,
     headers: { cookie: stateCookie, 'content-type': 'application/x-www-form-urlencoded' },
@@ -365,6 +394,6 @@ test('VTI callback issues a session after validating its one-time state', async 
     headers: { cookie: sessionCookieValue },
   });
   expect(await session.json()).toEqual(
-    expect.objectContaining({ user: expect.objectContaining({ name: 'Persona VTI E2E' }) }),
+    expect.objectContaining({ user: expect.objectContaining({ name: 'Estudiante 01' }) }),
   );
 });

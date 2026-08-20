@@ -34,4 +34,14 @@ describe('fixture environment', () => {
       /local roadmap_dev_db or roadmap_e2e_db database/,
     );
   });
+
+  it('rejects an unapproved local database name', () => {
+    vi.stubEnv('U_ROADMAPS_E2E_DATA', 'true');
+    vi.stubEnv('DATABASE_URL', 'postgresql://local:local@localhost:5432/other_db');
+
+    expect(fixtureEnvironmentEnabled()).toBe(false);
+    expect(() => requireFixtureEnvironment()).toThrow(
+      /local roadmap_dev_db or roadmap_e2e_db database/,
+    );
+  });
 });

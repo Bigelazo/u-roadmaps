@@ -6,6 +6,11 @@ export const fixture = {
   studentWithoutProgress: '20000000-0000-4000-8000-000000000001',
   studentWithProgress: '20000000-0000-4000-8000-000000000002',
   inactiveStudent: '20000000-0000-4000-8000-000000000051',
+  studentWithoutProgressVtiClaims: {
+    identification: '000020000001-5',
+    email: 'estudiante01@example.test',
+    name: 'Estudiante 01',
+  },
   programming: {
     courseCode: 'CC1001',
     year: 2026,
