@@ -11,7 +11,7 @@ import { Archivo, Plus_Jakarta_Sans } from 'next/font/google';
 import { cn } from '@/lib/utils';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
-const archivo = Archivo({ subsets: ['latin'], variable: '--font-heading' });
+const archivo = Archivo({ axes: ['wdth'], subsets: ['latin'], variable: '--font-heading' });
 
 export const metadata: Metadata = {
   title: 'Roadmaps Interactivos DCC - Universidad de Chile',
