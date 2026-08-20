@@ -1,7 +1,7 @@
-import { Box, Button, Container, Paper, Stack, Typography } from '@mui/material';
 import { ArrowRight, BookOpen, ListChecks, Map as MapIcon } from 'lucide-react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import Link from '@/components/Link';
+import { buttonVariants } from '@/components/ui/button';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 
 export default async function Home() {
@@ -9,135 +9,99 @@ export default async function Home() {
   if (user) redirect('/academic-overview');
 
   return (
-    <Box component="main" sx={{ minHeight: '100vh', bgcolor: '#f7f7f7' }}>
-      <Container maxWidth="xl" sx={{ py: { xs: 4, sm: 8 } }}>
-        <Stack spacing={{ xs: 5, sm: 8 }}>
-          <Paper
-            sx={{
-              position: 'relative',
-              overflow: 'hidden',
-              p: { xs: 4, sm: 7 },
-              bgcolor: '#1a1a1a',
-              color: 'common.white',
-            }}
+    <main className="min-h-screen bg-[#f3f5f7] text-[#12213a]">
+      <div className="mx-auto max-w-[1440px] px-6 py-10 md:py-20">
+        <section className="overflow-hidden rounded-[var(--radius-xl)] bg-[#12213a] p-8 text-white md:grid md:grid-cols-[minmax(0,1fr)_420px] md:gap-12 md:p-14">
+          <div className="max-w-2xl">
+            <p className="mb-5 text-xs font-bold tracking-[0.1em] text-[#c9e0fc] uppercase">
+              U-Roadmaps
+            </p>
+            <h1 className="font-heading text-5xl leading-[0.98] font-semibold tracking-[-0.05em] md:text-7xl">
+              Cada curso, una ruta clara.
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-[#e5eaf2]">
+              U-Roadmaps muestra cómo se conectan los contenidos de tus cursos para que puedas
+              preparar cada unidad con una visión clara de sus requisitos y recursos.
+            </p>
+            <Link
+              className={buttonVariants({ className: 'mt-8', size: 'lg' })}
+              href="/api/plogin/start"
+            >
+              Ingresar con U-Pasaporte <ArrowRight aria-hidden="true" />
+            </Link>
+          </div>
+          <div
+            aria-label="Ruta de aprendizaje de ejemplo"
+            className="relative mt-10 min-h-72 md:mt-0"
           >
-            <Box
-              aria-hidden
-              sx={{
-                position: 'absolute',
-                right: 0,
-                top: 0,
-                width: { xs: 72, sm: 160 },
-                height: '100%',
-                bgcolor: '#024ad8',
-              }}
-            />
-            <Stack spacing={3} sx={{ position: 'relative', maxWidth: 700 }}>
-              <Typography variant="overline" sx={{ color: '#c9e0fc', letterSpacing: '0.16em' }}>
-                U-ROADMAPS · DCC
-              </Typography>
-              <Typography
-                component="h1"
-                sx={{ fontSize: { xs: 38, sm: 56 }, fontWeight: 500, lineHeight: 1 }}
-              >
-                Entiende el camino antes de recorrerlo.
-              </Typography>
-              <Typography
-                sx={{
-                  maxWidth: 590,
-                  color: '#e8e8e8',
-                  fontSize: { xs: 17, sm: 20 },
-                  lineHeight: 1.5,
-                }}
-              >
-                U-Roadmaps muestra cómo se conectan los contenidos de tus cursos para que puedas
-                preparar cada unidad con una visión clara de sus requisitos y recursos.
-              </Typography>
-              <Button
-                component={Link}
-                href="/auth/signin"
-                variant="contained"
-                endIcon={<ArrowRight size={18} />}
-                sx={{ alignSelf: 'start', px: 3 }}
-              >
-                Ingresar con U-Pasaporte
-              </Button>
-            </Stack>
-          </Paper>
+            <div className="absolute top-10 right-0 left-6 h-px bg-[#296ef9]" />
+            <div className="absolute top-10 left-6 size-4 rounded-full border-4 border-[#12213a] bg-[#35a779]" />
+            <div className="absolute top-10 left-[48%] size-4 rounded-full border-4 border-[#12213a] bg-[#c9e0fc]" />
+            <div className="absolute top-10 right-0 size-4 rounded-full border-4 border-[#12213a] bg-[#c9e0fc]" />
+            <div className="absolute top-20 left-0 w-44 rounded-lg border border-[#296ef9] bg-white p-4 text-[#12213a] shadow-[0_4px_10px_rgb(18_33_58_/_7%)]">
+              <p className="text-xs font-bold text-[#176245]">Completado</p>
+              <p className="font-heading mt-1 text-lg font-semibold">Variables</p>
+            </div>
+            <div className="absolute top-32 left-[42%] w-44 rounded-lg border-2 border-[#35a779] bg-[#ddf2e9] p-4 text-[#12213a]">
+              <p className="text-xs font-bold text-[#176245]">Estás aquí</p>
+              <p className="font-heading mt-1 text-lg font-semibold">Funciones</p>
+            </div>
+            <div className="absolute top-52 right-0 w-44 rounded-lg border border-[#dce1e8] bg-white p-4 text-[#12213a]">
+              <p className="text-xs font-bold text-[#5a6474]">Siguiente</p>
+              <p className="font-heading mt-1 text-lg font-semibold">Estructuras</p>
+            </div>
+          </div>
+        </section>
 
-          <Box>
-            <Typography variant="overline" color="primary" sx={{ letterSpacing: '0.14em' }}>
-              UNA RUTA PARA CADA CURSO
-            </Typography>
-            <Typography
-              component="h2"
-              sx={{ mt: 1, fontSize: { xs: 28, sm: 36 }, fontWeight: 500 }}
-            >
-              Lo importante, en el orden que importa.
-            </Typography>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-                gap: 2,
-                mt: 3,
-              }}
-            >
-              {[
-                {
-                  icon: MapIcon,
-                  title: 'Explora el mapa del curso',
-                  description:
-                    'Visualiza unidades, evaluaciones y materiales complementarios en una sola ruta.',
-                },
-                {
-                  icon: ListChecks,
-                  title: 'Sigue tu avance',
-                  description:
-                    'Identifica qué contenidos ya completaste y cuáles debes preparar antes de continuar.',
-                },
-                {
-                  icon: BookOpen,
-                  title: 'Encuentra recursos a tiempo',
-                  description:
-                    'Accede a lecturas, archivos y enlaces asociados directamente a cada tema.',
-                },
-              ].map(({ icon: Icon, title, description }) => (
-                <Paper key={title} variant="outlined" sx={{ p: 3, minHeight: 220 }}>
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      placeItems: 'center',
-                      width: 44,
-                      height: 44,
-                      mb: 3,
-                      bgcolor: '#c9e0fc',
-                      color: '#024ad8',
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Icon size={23} strokeWidth={2} />
-                  </Box>
-                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-                    {title}
-                  </Typography>
-                  <Typography color="text.secondary">{description}</Typography>
-                </Paper>
-              ))}
-            </Box>
-          </Box>
-        </Stack>
-      </Container>
-      <Box
-        component="footer"
-        sx={{ borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper', py: 3 }}
-      >
-        <Container maxWidth="xl">
-          <Typography variant="caption" color="text.secondary">
-            © 2026 Propuesta de Memoria DCC - Universidad de Chile.
-          </Typography>
-        </Container>
-      </Box>
-    </Box>
+        <section className="mt-16">
+          <p className="text-xs font-bold tracking-[0.1em] text-[#024ad8] uppercase">
+            Una ruta para cada curso
+          </p>
+          <h2 className="font-heading mt-2 text-4xl font-semibold tracking-[-0.04em]">
+            Lo importante, en el orden que importa.
+          </h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {[
+              {
+                icon: MapIcon,
+                title: 'Explora el mapa del curso',
+                description:
+                  'Visualiza unidades, evaluaciones y materiales complementarios en una sola ruta.',
+              },
+              {
+                icon: ListChecks,
+                title: 'Sigue tu avance',
+                description:
+                  'Identifica qué contenidos ya completaste y cuáles debes preparar antes de continuar.',
+              },
+              {
+                icon: BookOpen,
+                title: 'Encuentra recursos a tiempo',
+                description:
+                  'Accede a lecturas, archivos y enlaces asociados directamente a cada tema.',
+              },
+            ].map(({ icon: Icon, title, description }) => (
+              <article
+                className="min-h-52 rounded-[var(--radius-xl)] border border-[#dce1e8] bg-white p-6"
+                key={title}
+              >
+                <div className="grid size-11 place-items-center rounded-[var(--radius-md)] bg-[#c9e0fc] text-[#024ad8]">
+                  <Icon aria-hidden="true" size={23} />
+                </div>
+                <h3 className="font-heading mt-6 text-2xl font-semibold tracking-[-0.02em]">
+                  {title}
+                </h3>
+                <p className="mt-2 leading-relaxed text-[#5a6474]">{description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+      <footer className="border-t border-[#dce1e8] bg-white">
+        <div className="mx-auto max-w-[1440px] px-6 py-5 text-sm text-[#5a6474]">
+          Universidad de Chile
+        </div>
+      </footer>
+    </main>
   );
 }

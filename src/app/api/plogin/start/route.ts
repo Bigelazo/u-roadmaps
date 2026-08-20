@@ -14,8 +14,7 @@ function isHttps(request: Request) {
 
 export async function GET(request: Request) {
   const loginUrl = process.env.NEXT_PUBLIC_VTI_LOGIN_URL;
-  if (!loginUrl)
-    return NextResponse.redirect(new URL('/auth/signin?error=Authentication', request.url));
+  if (!loginUrl) return NextResponse.redirect(new URL('/?error=Authentication', request.url));
 
   const state = crypto.randomUUID();
   await prisma.vtiLoginTransaction.create({

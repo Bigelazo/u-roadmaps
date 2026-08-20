@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 
 export default async function AcademicOverviewPage() {
   const user = await resolveSessionUser(await getApplicationSession());
-  if (!user) redirect('/auth/signin');
+  if (!user) redirect('/api/plogin/start');
   const participations = await prisma.participation.findMany({
     where: { userId: user.id, isActive: true },
     include: { courseOffering: { include: { course: true, roadmap: true } } },

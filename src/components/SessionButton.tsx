@@ -1,18 +1,19 @@
 'use client';
 
-import { Button } from '@mui/material';
 import { signOut } from 'next-auth/react';
+import Link from 'next/link';
+import { Button, buttonVariants } from '@/components/ui/button';
 
 export default function SessionButton({ isAuthenticated }: { isAuthenticated: boolean }) {
   if (!isAuthenticated)
     return (
-      <Button href="/auth/signin" variant="outlined">
+      <Link className={buttonVariants({ variant: 'outline' })} href="/api/plogin/start">
         Autenticarse
-      </Button>
+      </Link>
     );
 
   return (
-    <Button variant="outlined" color="inherit" onClick={() => void signOut({ callbackUrl: '/' })}>
+    <Button variant="outline" onClick={() => void signOut({ callbackUrl: '/' })}>
       Cerrar sesión
     </Button>
   );

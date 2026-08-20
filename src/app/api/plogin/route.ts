@@ -54,7 +54,7 @@ function isHttps(request: Request) {
 const sessionMaxAge = 30 * 24 * 60 * 60;
 
 function authenticationErrorResponse(request: Request) {
-  const response = NextResponse.redirect(new URL('/auth/signin?error=Authentication', request.url));
+  const response = NextResponse.redirect(new URL('/?error=Authentication', request.url));
   response.cookies.delete(loginStateCookieName);
   return response;
 }

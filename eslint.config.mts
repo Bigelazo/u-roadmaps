@@ -17,6 +17,7 @@ const sourceFiles = ['**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'];
 export default defineConfig([
   globalIgnores([
     '.next/**',
+    '.next-e2e/**',
     'build/**',
     'coverage/**',
     'node_modules/**',
@@ -79,6 +80,7 @@ export default defineConfig([
     rules: {
       ...css.configs.recommended.rules,
       'css/no-important': 'off',
+      'css/no-invalid-at-rules': 'off',
       'css/no-invalid-properties': 'off',
       'css/use-baseline': 'off',
     },

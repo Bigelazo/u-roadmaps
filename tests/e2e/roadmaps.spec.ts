@@ -273,6 +273,7 @@ test('teacher and student workflows render against the shared fixture', async ({
 }, testInfo) => {
   await authenticateAs(page.context(), fixture.teacher);
   await page.goto('/courses/CC1001/2026/2');
+  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Programación I' })).toBeVisible();
   const nodeTitle = uniqueName('Nodo creado desde E2E');
   const api = await apiRequest.newContext({
@@ -334,7 +335,7 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
     form: { jwt: validToken },
   });
   expect(missingState.status()).toBe(307);
-  expect(missingState.headers().location).toContain('/auth/signin?error=Authentication');
+  expect(missingState.headers().location).toContain('/?error=Authentication');
 
   for (const token of [
     'not-a-jwt',
@@ -371,8 +372,29 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
       form: { jwt: token, state: state ?? '' },
     });
     expect(callback.status()).toBe(307);
-    expect(callback.headers().location).toContain('/auth/signin?error=Authentication');
+    expect(callback.headers().location).toContain('/?error=Authentication');
   }
+});
+
+test('landing access starts VTI and dismisses authentication failures without reloading', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/?error=Authentication');
+  await expect(
+    page.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Ingresar con U-Pasaporte' })).toHaveAttribute(
+    'href',
+    '/api/plogin/start',
+  );
+  await page.getByRole('button', { name: 'Cerrar alerta' }).click();
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+
+  const protectedRoute = await request.get('/academic-overview', { maxRedirects: 0 });
+  expect(protectedRoute.status()).toBe(307);
+  expect(protectedRoute.headers().location).toContain('/api/plogin/start');
 });
 
 test('VTI callback issues a session after validating its one-time state', async ({ request }) => {

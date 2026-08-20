@@ -2,7 +2,7 @@ import RoadmapCanvas from '@/components/RoadmapCanvas';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Box } from '@mui/material';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 type Props = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
@@ -14,6 +14,7 @@ export default async function CoursePage({ params }: Props) {
     notFound();
   }
   const user = await resolveSessionUser(await getApplicationSession());
+  if (!user) redirect('/api/plogin/start');
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: { courseCode, year, semester } },
     include: {

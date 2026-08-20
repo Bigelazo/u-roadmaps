@@ -19,7 +19,6 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  pages: { signIn: '/auth/signin' },
 };
 
 export async function getApplicationSession(): Promise<Session | null> {
