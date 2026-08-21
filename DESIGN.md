@@ -54,7 +54,7 @@ The canonical product name is **U-Roadmaps**. Its primary promise is **“Cada c
 
 The brand is student-first and gives teaching staff a denser authoring mode within the same visual system. Its personality is orientation and advancement: clear, encouraging, precise, and never childish. U-Roadmaps should feel like a capable guide through university learning rather than another administrative portal.
 
-U-Roadmaps has its own identity. Universidad de Chile establishes provenance on sign-in surfaces and in the global footer, but its name, the DCC name, and institutional marks are not part of the U-Roadmaps logo.
+U-Roadmaps has its own identity. Universidad de Chile establishes provenance in the global footer, but its name, the DCC name, and institutional marks are not part of the U-Roadmaps logo.
 
 ## Visual Thesis
 
@@ -154,7 +154,7 @@ Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram 
 - **Dependency**: blue directional structure. It remains distinguishable from Jade progress and from custom node-type colors.
 - **Resource card**: compact title, resource type, and Lucide icon with an explicit external or download affordance.
 - **Teacher panel**: denser authoring surface that uses Ink and Blue for structure. Jade appears only when teacher actions affect or report participant progress.
-- **Institutional provenance**: “Universidad de Chile” appears on sign-in surfaces and in the global footer, separate from the U-Roadmaps wordmark.
+- **Institutional provenance**: “Universidad de Chile” appears in the global footer, separate from the U-Roadmaps wordmark.
 
 ## Logo and Favicon Status
 
@@ -172,7 +172,7 @@ Route traces may simplify or disappear on mobile when they stop communicating us
 
 Meet WCAG AA contrast for text and interactive states. Preserve visible keyboard focus, semantic heading order, accessible names, and browser zoom. Never rely on color, opacity, or motion alone to communicate state.
 
-Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation. Respect `prefers-reduced-motion`; content, status, and interaction must remain understandable with motion reduced or disabled.
+Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation.
 
 ## Reference Implementation
 

@@ -12,7 +12,7 @@
 - `src/lib/vti.ts`: normalización de correo y parser puro de `identification`.
 - `src/lib/auth.ts`: configuración JWT de NextAuth, sesión y autorización por `Participation`.
 - `src/app/api/plogin/route.ts`: validación HS256, vinculación de identidad y cookie de sesión.
-- `src/app/auth/signin/page.tsx`: acceso visual institucional.
+- `src/app/api/plogin/start/route.ts`: inicio del flujo de acceso institucional VTI.
 - `src/app/api/auth/[...nextauth]/route.ts`: handlers de NextAuth.
 - `prisma/schema.prisma`: persistencia opcional del RUT.
 - `docs/MUFASA_INTEGRATION.md`: contrato observado, limitaciones de la referencia y diseño acordado para la integración académica.
