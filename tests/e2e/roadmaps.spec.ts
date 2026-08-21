@@ -284,7 +284,7 @@ test('teacher and student workflows render against the shared fixture', async ({
   try {
     await page.getByLabel('Título del nodo').fill(nodeTitle);
     await page.getByRole('button', { name: 'Agregar nodo' }).click();
-    await expect(page.getByText(nodeTitle)).toBeVisible();
+    await expect(page.locator('p', { hasText: nodeTitle })).toBeVisible();
     const roadmap = await api.get(roadmapPath());
     nodeId = (await roadmap.json()).nodes.find(
       (node: { title: string }) => node.title === nodeTitle,
@@ -295,6 +295,17 @@ test('teacher and student workflows render against the shared fixture', async ({
     await authenticateAs(page.context(), fixture.studentWithProgress);
     await page.goto('/academic-overview');
     await expect(page.getByRole('heading', { name: 'Hola, Estudiante 02' })).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Cursos actuales' }).getByRole('listitem'),
+    ).toHaveCount(3);
+    await expect(
+      page.getByRole('region', { name: 'Historial académico' }).getByRole('listitem'),
+    ).toHaveCount(1);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(page.getByRole('link', { name: 'Abrir roadmap' }).first()).toBeVisible();
+    expect(
+      await page.locator('main').evaluate((main) => main.scrollWidth <= main.clientWidth),
+    ).toBe(true);
     await page.getByRole('link', { name: 'Abrir roadmap' }).first().click();
     await page.getByText('Variables y tipos').click();
     await expect(page.getByRole('link', { name: 'Guía de variables' })).toHaveAttribute(
@@ -306,6 +317,18 @@ test('teacher and student workflows render against the shared fixture', async ({
     await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
     await api.dispose();
   }
+});
+
+test('academic overview explains when there are no active course participations', async ({
+  page,
+}) => {
+  await authenticateAs(page.context(), fixture.inactiveStudent);
+  await page.goto('/academic-overview');
+
+  await expect(page.getByRole('heading', { name: 'Hola, Estudiante 51' })).toBeVisible();
+  await expect(page.getByText('No hay cursos para mostrar', { exact: true })).toBeVisible();
+  await expect(page.getByText('No tienes participaciones activas en cursos.')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Abrir roadmap|Ver curso/ })).toHaveCount(0);
 });
 
 async function vtiToken(
@@ -388,19 +411,22 @@ test('landing access starts VTI and dismisses authentication failures without re
     'href',
     '/api/plogin/start',
   );
+  await expect(page.getByRole('list', { name: 'Ruta de aprendizaje de ejemplo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Funciones', level: 2 })).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar alerta' }).click();
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(
+    page.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
+  ).toHaveCount(0);
 
   const protectedRoute = await request.get('/academic-overview', { maxRedirects: 0 });
   expect(protectedRoute.status()).toBe(307);
   expect(protectedRoute.headers().location).toContain('/api/plogin/start');
 });
 
-test('Firefox 1440px visual references cover the public shell states', async ({
+test('1440px visual references cover the public shell states in each browser', async ({
   page,
 }, testInfo) => {
-  expect(testInfo.project.name).toBe('firefox');
   await page.setViewportSize({ width: 1440, height: 960 });
   expect(page.viewportSize()).toEqual({ width: 1440, height: 960 });
 
@@ -411,7 +437,9 @@ test('Firefox 1440px visual references cover the public shell states', async ({
   });
 
   await page.goto('/?error=Authentication');
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(
+    page.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
+  ).toBeVisible();
   await testInfo.attach('authentication-error-landing', {
     body: await page.screenshot({ fullPage: true }),
     contentType: 'image/png',
@@ -426,7 +454,9 @@ test('Firefox 1440px visual references cover the public shell states', async ({
   });
 });
 
-test('VTI callback issues a session after validating its one-time state', async ({ request }) => {
+test('VTI callback issues a session after validating its one-time state', async ({
+  request,
+}, testInfo) => {
   const start = await request.get('/api/plogin/start', { maxRedirects: 0 });
   expect(start.status()).toBe(307);
   const state = new URL(start.headers().location).searchParams.get('state');
@@ -439,12 +469,16 @@ test('VTI callback issues a session after validating its one-time state', async 
     form: { jwt: token, state: state ?? '' },
   });
   expect(callback.status()).toBe(307);
-  expect(callback.headers().location).toBe('/');
+  expect(callback.headers().location).toBe(
+    new URL('/', testInfo.project.use.baseURL as string).toString(),
+  );
   const sessionCookieValue = callback.headers()['set-cookie'].split(';', 1)[0];
   const session = await request.get('/api/auth/session', {
     headers: { cookie: sessionCookieValue },
   });
   expect(await session.json()).toEqual(
-    expect.objectContaining({ user: expect.objectContaining({ name: 'Estudiante 01' }) }),
+    expect.objectContaining({
+      user: expect.objectContaining({ id: fixture.studentWithoutProgress }),
+    }),
   );
 });
