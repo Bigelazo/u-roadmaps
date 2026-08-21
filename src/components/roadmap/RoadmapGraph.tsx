@@ -21,6 +21,8 @@ import 'reactflow/dist/style.css';
 import { CheckCircle2, Circle, EyeOff, LockKeyhole, Paperclip } from 'lucide-react';
 import type { RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 type NodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 type CanvasNodeData = {
@@ -43,58 +45,78 @@ function RoadmapCard({ data }: NodeProps<CanvasNodeData>) {
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
   const accent = completed
-    ? '#176245'
+    ? 'var(--progress-deep)'
     : locked
-      ? '#9294a2'
+      ? 'var(--steel)'
       : data.status === 'available'
-        ? '#181812'
-        : '#0347bf';
+        ? 'var(--ink)'
+        : 'var(--primary)';
+  const statusLabel = completed
+    ? 'Completado'
+    : locked
+      ? 'Bloqueado'
+      : editing
+        ? 'Edición'
+        : 'Disponible';
   return (
     <div
-      className={`min-w-[170px] cursor-pointer rounded-lg border-2 px-4 py-3 transition-[border-color,transform,box-shadow] hover:translate-y-[-2px] hover:!border-[#296ef9] hover:shadow-[0_0_0_4px_rgb(41_110_249_/_16%),0_9px_18px_rgb(2_74_216_/_18%)] ${hidden ? 'bg-cloud' : locked ? 'bg-[#fbfaff] opacity-[0.88] shadow-none' : 'bg-card shadow-[0_4px_10px_rgb(18_33_58_/_7%)]'}`}
+      data-slot="roadmap-card"
+      className={cn(
+        'min-w-[170px] cursor-pointer rounded-lg border-2 px-4 py-3 transition-[border-color,transform,box-shadow] hover:translate-y-[-2px] hover:!border-primary-bright hover:shadow-[var(--shadow-roadmap-node-hover)] motion-reduce:transform-none motion-reduce:transition-none',
+        hidden
+          ? 'bg-cloud'
+          : locked
+            ? 'bg-cloud opacity-[0.88] shadow-none'
+            : 'bg-card shadow-[var(--shadow-roadmap-node)]',
+      )}
       style={{ borderColor: accent }}
     >
       <div className="mb-5 flex items-center justify-between gap-2.5">
         {hidden ? (
-          <EyeOff size={19} color="#5a6474" aria-hidden="true" />
+          <EyeOff size={19} color="var(--graphite)" aria-hidden="true" />
         ) : completed ? (
-          <CheckCircle2 size={20} color="#176245" fill="#176245" stroke="#fff" />
+          <CheckCircle2
+            size={20}
+            color="var(--progress-deep)"
+            fill="var(--progress-deep)"
+            stroke="var(--card)"
+          />
         ) : locked ? (
           <LockKeyhole size={18} />
         ) : (
-          <Circle size={19} fill="#fff4bd" stroke={accent} />
+          <Circle size={19} fill="var(--primary-soft)" stroke={accent} />
         )}
         <div className="flex flex-wrap justify-end gap-1">
           {hidden ? (
-            <span className="rounded-full bg-fog px-2 py-0.5 text-xs leading-[1.35] text-graphite">
+            <Badge variant="secondary" className="bg-fog text-graphite">
               Oculto para estudiantes
-            </span>
+            </Badge>
           ) : null}
-          <span
+          <Badge
             className={
               completed
-                ? 'rounded-full bg-progress-soft px-2 py-0.5 text-xs leading-[1.35] text-progress-deep'
+                ? 'bg-progress-soft text-progress-deep'
                 : locked
-                  ? 'rounded-full bg-cloud px-2 py-0.5 text-xs leading-[1.35] text-graphite'
-                  : 'bg-primary-soft rounded-full px-2 py-0.5 text-xs leading-[1.35] text-primary-deep'
+                  ? 'bg-cloud text-graphite'
+                  : 'bg-primary-soft text-primary-deep'
             }
           >
-            {completed ? 'Completado' : locked ? 'Bloqueado' : editing ? 'Edición' : 'Disponible'}
-          </span>
+            {statusLabel}
+          </Badge>
         </div>
       </div>
       <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
         <span className="size-2 rounded-full" style={{ backgroundColor: data.typeColor }} />
         <span>{data.typeName}</span>
         {data.resourceCount ? (
-          <button
-            type="button"
-            className="nodrag ml-auto flex min-h-11 items-center gap-1 text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            aria-label={`Ver ${data.resourceCount} ${data.resourceCount === 1 ? 'recurso' : 'recursos'}`}
+          <Badge
+            variant="link"
+            className="nodrag ml-auto h-auto min-h-5 text-right whitespace-normal"
           >
-            <Paperclip size={14} aria-hidden="true" />
+            <Paperclip data-icon="inline-start" aria-hidden="true" />
+            <span className="sr-only">Ver </span>
             {data.resourceCount} {data.resourceCount === 1 ? 'recurso' : 'recursos'}
-          </button>
+          </Badge>
         ) : null}
       </div>
       <p className="text-[15.5px] leading-[1.25] font-medium text-ink">{data.title}</p>
@@ -114,8 +136,8 @@ function RoadmapCard({ data }: NodeProps<CanvasNodeData>) {
           style={{
             width: 12,
             height: 12,
-            background: '#024ad8',
-            border: '2px solid #fff',
+            background: 'var(--primary)',
+            border: '2px solid var(--card)',
             visibility: editing ? 'visible' : 'hidden',
           }}
         />
@@ -125,11 +147,11 @@ function RoadmapCard({ data }: NodeProps<CanvasNodeData>) {
 }
 
 const nodeTypes = { roadmap: RoadmapCard };
-const selectedEdgeColor = '#024ad8';
+const selectedEdgeColor = 'var(--primary)';
 
 function updateEdgeAppearance(edge: Edge, isHovered = false): Edge {
   const defaultStroke =
-    typeof edge.data?.defaultStroke === 'string' ? edge.data.defaultStroke : '#aeb9d4';
+    typeof edge.data?.defaultStroke === 'string' ? edge.data.defaultStroke : 'var(--steel)';
   const isHighlighted = edge.selected || isHovered;
   const stroke = isHighlighted ? selectedEdgeColor : defaultStroke;
   return {
@@ -148,7 +170,7 @@ export function mapRoadmapGraph(roadmap: RoadmapDto, canEdit: boolean) {
     data: {
       title: node.title,
       typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Contenido',
-      typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? '#024ad8',
+      typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
       resourceCount: node.resources.length,
       status: nodeStatus(node, canEdit),
       isHidden: !node.isVisible,
@@ -159,7 +181,7 @@ export function mapRoadmapGraph(roadmap: RoadmapDto, canEdit: boolean) {
   }));
   const edges: Edge[] = roadmap.dependencies.map((dependency) => {
     const isSourceCompleted = nodesById.get(dependency.sourceNodeId)?.isCompleted;
-    const stroke = isSourceCompleted ? '#171720' : '#aeb9d4';
+    const stroke = isSourceCompleted ? 'var(--ink)' : 'var(--steel)';
     return {
       id: dependency.id,
       source: dependency.sourceNodeId,
@@ -265,7 +287,7 @@ export function RoadmapGraph({
       fitViewOptions={{ padding: 0.28 }}
       proOptions={{ hideAttribution: true }}
     >
-      <Background color="#e8eaf1" gap={20} size={1} />
+      <Background color="var(--fog)" gap={20} size={1} />
     </ReactFlow>
   );
 }

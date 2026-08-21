@@ -16,14 +16,17 @@ export default async function CoursePage({ params }: Props) {
   if (!user) redirect('/api/plogin/start');
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: { courseCode, year, semester } },
-    include: {
-      course: true,
-      participants: user ? { where: { userId: user.id, isActive: true, role: 'TEACHER' } } : false,
+    select: {
+      course: { select: { name: true } },
+      participants: {
+        where: { userId: user.id, isActive: true, role: 'TEACHER' },
+        select: { id: true },
+      },
     },
   });
   if (!courseOffering) notFound();
-  const canEdit = Boolean(user && courseOffering?.participants.length);
-  const courseName = courseOffering?.course.name ?? courseCode;
+  const canEdit = courseOffering.participants.length > 0;
+  const courseName = courseOffering.course.name ?? courseCode;
 
   return (
     <main className="min-h-screen bg-cloud">
@@ -31,7 +34,9 @@ export default async function CoursePage({ params }: Props) {
         identifier={{ courseCode, year, semester }}
         canEdit={canEdit}
         title={courseName}
-        subtitle={`${courseCode} · ${year}, semestre ${semester}${canEdit ? ' · Modo edición' : ''}`}
+        courseCode={courseCode}
+        year={year}
+        semester={semester}
       />
     </main>
   );

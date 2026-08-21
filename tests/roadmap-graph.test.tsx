@@ -64,3 +64,23 @@ test('keeps the selected source and target handles on dependency arrows', () => 
   expect(edge.sourceHandle).toBe('bottom');
   expect(edge.targetHandle).toBe('top');
 });
+
+test('uses semantic theme variables for graph structure', () => {
+  const { nodes, edges } = mapRoadmapGraph(roadmap, true);
+
+  expect(nodes[0].data.typeColor).toBe('#024AD8');
+  expect(edges[0].style).toMatchObject({ stroke: 'var(--steel)', strokeWidth: 1.5 });
+  expect(edges[0].markerEnd).toMatchObject({ color: 'var(--steel)' });
+});
+
+test('preserves the teacher and student node-status mapping', () => {
+  const completedRoadmap = structuredClone(roadmap);
+  completedRoadmap.nodes[0].isCompleted = true;
+  const availableRoadmap = structuredClone(roadmap);
+  availableRoadmap.nodes[0].canComplete = true;
+
+  expect(mapRoadmapGraph(roadmap, true).nodes[0].data.status).toBe('editing');
+  expect(mapRoadmapGraph(roadmap, false).nodes[0].data.status).toBe('locked');
+  expect(mapRoadmapGraph(completedRoadmap, false).nodes[0].data.status).toBe('completed');
+  expect(mapRoadmapGraph(availableRoadmap, false).nodes[0].data.status).toBe('available');
+});
