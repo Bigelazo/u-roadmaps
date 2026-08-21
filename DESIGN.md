@@ -134,7 +134,7 @@ Preserve the established radius hierarchy:
 - `{rounded.xl}` for cards, page sections, side panels, and major framed canvases.
 - `{rounded.pill}` only for progress tracks, global filters, or values whose shape encodes continuity.
 
-Use flat surfaces and 1px hairlines by default. Apply restrained shadows such as `0 4px 10px rgb(18 33 58 / 7%)` to draggable nodes and `0 18px 50px rgb(18 33 58 / 8%)` only to major demonstration or floating surfaces. Hierarchy should come from structure and contrast before elevation.
+Use flat surfaces and 1px hairlines by default. Apply restrained shadows such as `0 4px 10px rgb(18 33 58 / 7%)` to draggable nodes and `0 18px 50px rgb(18 33 58 / 8%)` only to major demonstration or floating surfaces. The reusable roadmap-node elevation and its hover/focus treatments are exposed as `--shadow-roadmap-node`, `--shadow-roadmap-node-hover`, and `--shadow-roadmap-node-focus`; use them only for React Flow roadmap nodes. Hierarchy should come from structure and contrast before elevation.
 
 ## Iconography
 
@@ -148,6 +148,7 @@ Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram 
 
 - **Primary button**: blue surface, white sentence-case label, minimum 44px height, and a direct verb. Add a Lucide icon only when it clarifies direction or outcome.
 - **Secondary button**: white or cloud surface with blue or ink border. It must not compete with the primary action.
+- **Progress badge**: use the shared `progress` Badge variant for concise completion or current-position labels. It pairs `{colors.progress-soft}` with `{colors.progress-deep}` and must retain a textual state.
 - **Course header**: compact context label, Archivo course name, supporting term/code information, and visible progress when applicable.
 - **Progress track**: neutral base with Jade completion fill, a numeric value, and a textual completed/total description.
 - **Roadmap node**: white 8px-radius card with pedagogical title, node type, status label, and direct resource affordance. The current node uses a Jade border or marker; completed nodes use a filled completion symbol plus text.
