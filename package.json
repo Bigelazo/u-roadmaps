@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run",
     "test": "pnpm run typecheck && pnpm run test:unit && pnpm run test:e2e",
-    "test:e2e": "dotenv -o -e .env.development -- sh -c 'export DATABASE_URL=\"$E2E_DATABASE_URL\"; tsx -e \"import { requireFixtureEnvironment } from \\\"./src/lib/development\\\"; requireFixtureEnvironment()\" && prisma migrate reset --force && tsx prisma/development-data.ts && NEXT_DIST_DIR=.next-e2e pnpm exec next build && playwright test'",
+    "test:e2e": "playwright test",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "dotenv -o -e .env.development -- prisma migrate deploy",
     "prisma:migrate": "dotenv -o -e .env.production -- prisma migrate deploy",

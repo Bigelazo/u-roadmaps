@@ -13,3 +13,4 @@ test-results/
 .DS_Store
 tsconfig.tsbuildinfo
 src/generated/prisma/
+.playwright-mcp/
