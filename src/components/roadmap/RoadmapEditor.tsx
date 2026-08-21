@@ -1,11 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertDialog } from '@base-ui/react/alert-dialog';
 import { PanelRightClose, PanelRightOpen, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import type { Resource, RoadmapDependency, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -47,30 +57,21 @@ type Props = {
 };
 
 const inputClassName = 'h-11';
-const selectClassName =
-  'h-11 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5 text-sm font-semibold text-ink">
-      {label}
-      {children}
-    </label>
-  );
-}
 
 function NodeTypeSelect({
+  id,
   nodeTypes,
   value,
   onValueChange,
 }: {
+  id: string;
   nodeTypes: RoadmapDto['nodeTypes'];
   value: string;
   onValueChange: (value: string) => void;
 }) {
   return (
     <Select value={value} onValueChange={(nextValue) => nextValue && onValueChange(nextValue)}>
-      <SelectTrigger className="h-11 w-full">
+      <SelectTrigger id={id} className="h-11 w-full">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -230,34 +231,43 @@ export function RoadmapEditor(props: Props) {
             }}
           >
             <h3 className="font-semibold">Nuevo nodo</h3>
-            <Field label="Título del nodo">
-              <Input
-                className={inputClassName}
-                value={newNode.title}
-                onChange={(event) => setNewNode({ ...newNode, title: event.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Descripción">
-              <Textarea
-                value={newNode.description}
-                onChange={(event) => setNewNode({ ...newNode, description: event.target.value })}
-              />
-            </Field>
-            <Field label="Tipo">
-              <NodeTypeSelect
-                nodeTypes={roadmap.nodeTypes}
-                value={newNode.nodeTypeId}
-                onValueChange={(nodeTypeId) => setNewNode({ ...newNode, nodeTypeId })}
-              />
-            </Field>
-            <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
-              <Checkbox
-                checked={newNode.isVisible}
-                onCheckedChange={(checked) => setNewNode({ ...newNode, isVisible: checked })}
-              />
-              Visible para estudiantes
-            </label>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="new-node-title">Título del nodo</FieldLabel>
+                <Input
+                  id="new-node-title"
+                  className={inputClassName}
+                  value={newNode.title}
+                  onChange={(event) => setNewNode({ ...newNode, title: event.target.value })}
+                  required
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="new-node-description">Descripción</FieldLabel>
+                <Textarea
+                  id="new-node-description"
+                  value={newNode.description}
+                  onChange={(event) => setNewNode({ ...newNode, description: event.target.value })}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="new-node-type">Tipo</FieldLabel>
+                <NodeTypeSelect
+                  id="new-node-type"
+                  nodeTypes={roadmap.nodeTypes}
+                  value={newNode.nodeTypeId}
+                  onValueChange={(nodeTypeId) => setNewNode({ ...newNode, nodeTypeId })}
+                />
+              </Field>
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="new-node-visible"
+                  checked={newNode.isVisible}
+                  onCheckedChange={(checked) => setNewNode({ ...newNode, isVisible: checked })}
+                />
+                <FieldLabel htmlFor="new-node-visible">Visible para estudiantes</FieldLabel>
+              </Field>
+            </FieldGroup>
             <Button type="submit">
               <Plus data-icon="inline-start" />
               Agregar nodo
@@ -286,40 +296,56 @@ export function RoadmapEditor(props: Props) {
                   await onAddDependency(dependency.sourceNodeId, dependency.targetNodeId);
               }}
             >
-              <Field label="Desde">
-                <select
-                  className={selectClassName}
-                  value={dependency.sourceNodeId}
-                  onChange={(event) =>
-                    setDependency({ ...dependency, sourceNodeId: event.target.value })
-                  }
-                >
-                  {roadmap.nodes.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {node.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Hacia">
-                <select
-                  className={selectClassName}
-                  value={dependency.targetNodeId}
-                  onChange={(event) =>
-                    setDependency({ ...dependency, targetNodeId: event.target.value })
-                  }
-                >
-                  {roadmap.nodes.map((node) => (
-                    <option
-                      key={node.id}
-                      value={node.id}
-                      disabled={node.id === dependency.sourceNodeId}
-                    >
-                      {node.title}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="dependency-source">Desde</FieldLabel>
+                  <Select
+                    value={dependency.sourceNodeId}
+                    onValueChange={(sourceNodeId) =>
+                      sourceNodeId && setDependency({ ...dependency, sourceNodeId })
+                    }
+                  >
+                    <SelectTrigger id="dependency-source" className="h-11 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {roadmap.nodes.map((node) => (
+                          <SelectItem key={node.id} value={node.id}>
+                            {node.title}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="dependency-target">Hacia</FieldLabel>
+                  <Select
+                    value={dependency.targetNodeId}
+                    onValueChange={(targetNodeId) =>
+                      targetNodeId && setDependency({ ...dependency, targetNodeId })
+                    }
+                  >
+                    <SelectTrigger id="dependency-target" className="h-11 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {roadmap.nodes.map((node) => (
+                          <SelectItem
+                            key={node.id}
+                            value={node.id}
+                            disabled={node.id === dependency.sourceNodeId}
+                          >
+                            {node.title}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </FieldGroup>
               <Button
                 type="submit"
                 variant="outline"
@@ -357,23 +383,29 @@ export function RoadmapEditor(props: Props) {
                   closeNodeTypeEditor();
               }}
             >
-              <Field label="Nombre">
-                <Input
-                  className={inputClassName}
-                  value={nodeType.name}
-                  onChange={(event) => setNodeType({ ...nodeType, name: event.target.value })}
-                  required
-                />
-              </Field>
-              <Field label="Color">
-                <Input
-                  className={inputClassName}
-                  type="color"
-                  value={nodeType.color}
-                  onChange={(event) => setNodeType({ ...nodeType, color: event.target.value })}
-                  required
-                />
-              </Field>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="node-type-name">Nombre</FieldLabel>
+                  <Input
+                    id="node-type-name"
+                    className={inputClassName}
+                    value={nodeType.name}
+                    onChange={(event) => setNodeType({ ...nodeType, name: event.target.value })}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="node-type-color">Color</FieldLabel>
+                  <Input
+                    id="node-type-color"
+                    className={inputClassName}
+                    type="color"
+                    value={nodeType.color}
+                    onChange={(event) => setNodeType({ ...nodeType, color: event.target.value })}
+                    required
+                  />
+                </Field>
+              </FieldGroup>
               <div className="flex flex-wrap gap-2">
                 <Button type="submit">
                   {editingNodeTypeId ? (
@@ -502,37 +534,39 @@ export function RoadmapEditor(props: Props) {
                     if (editNode.title.trim()) await onUpdateNode(selectedNode.id, editNode);
                   }}
                 >
-                  <Field label="Título">
-                    <Input
-                      className={inputClassName}
-                      value={editNode.title}
-                      onChange={(event) => setEditNode({ ...editNode, title: event.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field label="Descripción">
-                    <Textarea
-                      value={editNode.description}
-                      onChange={(event) =>
-                        setEditNode({ ...editNode, description: event.target.value })
-                      }
-                    />
-                  </Field>
-                  <Field label="Tipo">
-                    <select
-                      className={selectClassName}
-                      value={editNode.nodeTypeId}
-                      onChange={(event) =>
-                        setEditNode({ ...editNode, nodeTypeId: event.target.value })
-                      }
-                    >
-                      {roadmap.nodeTypes.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="edit-node-title">Título</FieldLabel>
+                      <Input
+                        id="edit-node-title"
+                        className={inputClassName}
+                        value={editNode.title}
+                        onChange={(event) =>
+                          setEditNode({ ...editNode, title: event.target.value })
+                        }
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="edit-node-description">Descripción</FieldLabel>
+                      <Textarea
+                        id="edit-node-description"
+                        value={editNode.description}
+                        onChange={(event) =>
+                          setEditNode({ ...editNode, description: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="edit-node-type">Tipo</FieldLabel>
+                      <NodeTypeSelect
+                        id="edit-node-type"
+                        nodeTypes={roadmap.nodeTypes}
+                        value={editNode.nodeTypeId}
+                        onValueChange={(nodeTypeId) => setEditNode({ ...editNode, nodeTypeId })}
+                      />
+                    </Field>
+                  </FieldGroup>
                   <Button type="submit">
                     <Save data-icon="inline-start" />
                     Guardar cambios
@@ -584,36 +618,51 @@ export function RoadmapEditor(props: Props) {
                   <h3 className="font-semibold">
                     {editingResourceId ? 'Editar recurso' : 'Agregar recurso'}
                   </h3>
-                  <Field label="Recurso">
-                    <Input
-                      className={inputClassName}
-                      value={resource.title}
-                      onChange={(event) => setResource({ ...resource, title: event.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field label="URL">
-                    <Input
-                      className={inputClassName}
-                      type="url"
-                      value={resource.url}
-                      onChange={(event) => setResource({ ...resource, url: event.target.value })}
-                      required
-                    />
-                  </Field>
-                  <Field label="Tipo">
-                    <select
-                      className={selectClassName}
-                      value={resource.type}
-                      onChange={(event) =>
-                        setResource({ ...resource, type: event.target.value as Resource['type'] })
-                      }
-                    >
-                      <option value="FILE">Archivo</option>
-                      <option value="LINK">Enlace</option>
-                      <option value="VIDEO">Video</option>
-                    </select>
-                  </Field>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="resource-title">Recurso</FieldLabel>
+                      <Input
+                        id="resource-title"
+                        className={inputClassName}
+                        value={resource.title}
+                        onChange={(event) =>
+                          setResource({ ...resource, title: event.target.value })
+                        }
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="resource-url">URL</FieldLabel>
+                      <Input
+                        id="resource-url"
+                        className={inputClassName}
+                        type="url"
+                        value={resource.url}
+                        onChange={(event) => setResource({ ...resource, url: event.target.value })}
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="resource-type">Tipo</FieldLabel>
+                      <Select
+                        value={resource.type}
+                        onValueChange={(type) =>
+                          type && setResource({ ...resource, type: type as Resource['type'] })
+                        }
+                      >
+                        <SelectTrigger id="resource-type" className="h-11 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="FILE">Archivo</SelectItem>
+                            <SelectItem value="LINK">Enlace</SelectItem>
+                            <SelectItem value="VIDEO">Video</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </FieldGroup>
                   <div className="flex flex-wrap gap-2">
                     <Button type="submit">
                       {editingResourceId ? (
@@ -679,41 +728,36 @@ export function RoadmapEditor(props: Props) {
         </div>
       </details>
 
-      <AlertDialog.Root
+      <AlertDialog
         open={Boolean(pendingDeletion)}
         onOpenChange={(open) => !open && setPendingDeletion(null)}
       >
-        <AlertDialog.Portal>
-          <AlertDialog.Backdrop className="fixed inset-0 z-50 bg-ink/30" />
-          <AlertDialog.Viewport className="fixed inset-0 z-50 grid place-items-center p-4">
-            <AlertDialog.Popup className="w-full max-w-md rounded-xl bg-card p-6 shadow-[0_18px_50px_rgb(18_33_58_/_18%)]">
-              <AlertDialog.Title className="font-heading text-xl font-semibold">
-                Confirmar eliminación
-              </AlertDialog.Title>
-              <AlertDialog.Description className="mt-3 text-sm leading-6 text-muted-foreground">
-                Eliminarás {pendingDeletion?.label}. Esta acción no se puede deshacer.
-              </AlertDialog.Description>
-              <div className="mt-6 flex flex-wrap justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => setPendingDeletion(null)}>
-                  Cancelar
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() =>
-                    void pendingDeletion?.onConfirm().then((deleted) => {
-                      if (deleted) setPendingDeletion(null);
-                    })
-                  }
-                >
-                  <Trash2 data-icon="inline-start" />
-                  Eliminar
-                </Button>
-              </div>
-            </AlertDialog.Popup>
-          </AlertDialog.Viewport>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">
+              Confirmar eliminación
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Eliminarás {pendingDeletion?.label}. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              onClick={() =>
+                void pendingDeletion?.onConfirm().then((deleted) => {
+                  if (deleted) setPendingDeletion(null);
+                })
+              }
+            >
+              <Trash2 data-icon="inline-start" />
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }
