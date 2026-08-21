@@ -40,15 +40,15 @@ export default async function Home() {
             <div className="absolute top-10 right-0 size-4 rounded-full border-4 border-[#12213a] bg-[#c9e0fc]" />
             <div className="absolute top-20 left-0 w-44 rounded-lg border border-[#296ef9] bg-white p-4 text-[#12213a] shadow-[0_4px_10px_rgb(18_33_58_/_7%)]">
               <p className="text-xs font-bold text-[#176245]">Completado</p>
-              <p className="font-heading mt-1 text-lg font-semibold">Variables</p>
+              <p className="mt-1 font-heading text-lg font-semibold">Variables</p>
             </div>
             <div className="absolute top-32 left-[42%] w-44 rounded-lg border-2 border-[#35a779] bg-[#ddf2e9] p-4 text-[#12213a]">
               <p className="text-xs font-bold text-[#176245]">Estás aquí</p>
-              <p className="font-heading mt-1 text-lg font-semibold">Funciones</p>
+              <p className="mt-1 font-heading text-lg font-semibold">Funciones</p>
             </div>
             <div className="absolute top-52 right-0 w-44 rounded-lg border border-[#dce1e8] bg-white p-4 text-[#12213a]">
               <p className="text-xs font-bold text-[#5a6474]">Siguiente</p>
-              <p className="font-heading mt-1 text-lg font-semibold">Estructuras</p>
+              <p className="mt-1 font-heading text-lg font-semibold">Estructuras</p>
             </div>
           </div>
         </section>
@@ -57,7 +57,7 @@ export default async function Home() {
           <p className="text-xs font-bold tracking-[0.1em] text-[#024ad8] uppercase">
             Una ruta para cada curso
           </p>
-          <h2 className="font-heading mt-2 text-4xl font-semibold tracking-[-0.04em]">
+          <h2 className="mt-2 font-heading text-4xl font-semibold tracking-[-0.04em]">
             Lo importante, en el orden que importa.
           </h2>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -88,7 +88,7 @@ export default async function Home() {
                 <div className="grid size-11 place-items-center rounded-[var(--radius-md)] bg-[#c9e0fc] text-[#024ad8]">
                   <Icon aria-hidden="true" size={23} />
                 </div>
-                <h3 className="font-heading mt-6 text-2xl font-semibold tracking-[-0.02em]">
+                <h3 className="mt-6 font-heading text-2xl font-semibold tracking-[-0.02em]">
                   {title}
                 </h3>
                 <p className="mt-2 leading-relaxed text-[#5a6474]">{description}</p>
