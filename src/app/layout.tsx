@@ -12,7 +12,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--fon
 const archivo = Archivo({ axes: ['wdth'], subsets: ['latin'], variable: '--font-archivo' });
 
 export const metadata: Metadata = {
-  title: 'Roadmaps Interactivos DCC - Universidad de Chile',
+  title: 'U-Roadmaps',
   description: 'Visualizador y gestor de rutas pedagógicas y asignaturas universitarias.',
 };
 
