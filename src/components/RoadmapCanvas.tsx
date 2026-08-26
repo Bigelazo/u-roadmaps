@@ -48,11 +48,9 @@ export default function RoadmapCanvas({
   semester,
 }: Props) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [selectedDependencyId, setSelectedDependencyId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(true);
   const [pendingDependencyIds, setPendingDependencyIds] = useState<string[] | null>(null);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
-  const graphRef = useRef<HTMLDivElement | null>(null);
   const {
     roadmap,
     error,
@@ -75,17 +73,11 @@ export default function RoadmapCanvas({
 
   useEffect(() => {
     setSelectedNodeId(null);
-    setSelectedDependencyId(null);
   }, [identifier.courseCode, identifier.year, identifier.semester]);
 
   function closeSelectedNode() {
     setSelectedNodeId(null);
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
-  }
-
-  function closeSelectedDependency() {
-    setSelectedDependencyId(null);
-    requestAnimationFrame(() => graphRef.current?.focus());
   }
 
   if (error && !roadmap) {
@@ -111,9 +103,6 @@ export default function RoadmapCanvas({
   }
 
   const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
-  const selectedDependency = roadmap.dependencies.find(
-    (dependency) => dependency.id === selectedDependencyId,
-  );
   return (
     <div>
       <section
@@ -123,7 +112,6 @@ export default function RoadmapCanvas({
         )}
       >
         <div
-          ref={graphRef}
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
           className="relative min-h-[540px] bg-background lg:min-h-[calc(100vh-64px)]"
@@ -140,6 +128,14 @@ export default function RoadmapCanvas({
               {year}, semestre {semester}
             </p>
           </header>
+          {canEdit ? (
+            <p className="pointer-events-none absolute right-5 bottom-[18px] z-[4] max-w-xs rounded-lg border border-border bg-card/92 px-3 py-2 text-xs leading-relaxed text-muted-foreground shadow-sm">
+              Arrastra desde un punto de un nodo a otro para crear una dependencia. Selecciona una
+              flecha para eliminarla con el botón{' '}
+              <kbd className="rounded border bg-background px-1">X</kbd> o{' '}
+              <kbd className="rounded border bg-background px-1">Supr</kbd>.
+            </p>
+          ) : null}
           <section
             aria-label="Estados del roadmap"
             className="absolute bottom-[18px] left-5 z-[4] flex items-center gap-2 rounded-lg border border-border bg-card/92 px-2.5 py-1.5 text-xs shadow-sm"
@@ -158,7 +154,6 @@ export default function RoadmapCanvas({
             onSelectNode={(nodeId, trigger) => {
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
-              setSelectedDependencyId(null);
             }}
             onMoveNode={(_event, node) => void moveNode(node.id, node.position)}
             onConnectNodes={(connection) => {
@@ -170,10 +165,6 @@ export default function RoadmapCanvas({
                   connection.targetHandle ?? undefined,
                 );
             }}
-            onSelectDependency={(dependencyId) => {
-              setSelectedDependencyId(dependencyId);
-              setSelectedNodeId(null);
-            }}
             onDeleteDependencies={setPendingDependencyIds}
           />
         </div>
@@ -181,7 +172,6 @@ export default function RoadmapCanvas({
           <RoadmapEditor
             roadmap={roadmap}
             selectedNode={selectedNode}
-            selectedDependency={selectedDependency}
             isOpen={isEditorOpen}
             onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
             onClose={closeSelectedNode}
@@ -189,9 +179,6 @@ export default function RoadmapCanvas({
             onUpdateNode={updateNode}
             onToggleVisibility={toggleVisibility}
             onDeleteNode={deleteNode}
-            onAddDependency={connectNodes}
-            onDeleteDependency={deleteDependency}
-            onCloseDependency={closeSelectedDependency}
             onAddResource={addResource}
             onUpdateResource={updateResource}
             onDeleteResource={deleteResource}

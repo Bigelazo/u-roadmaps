@@ -101,6 +101,9 @@ test('separates the course context, term, and teacher state in the canvas header
   expect(screen.getByText('CC1001')).toBeTruthy();
   expect(screen.getByText('2026, semestre 2')).toBeTruthy();
   expect(screen.getByText('Modo edición')).toBeTruthy();
+  expect(
+    screen.getByText(/Arrastra desde un punto de un nodo a otro para crear una dependencia/),
+  ).toBeTruthy();
 });
 
 test('confirms, cancels, and deletes every selected dependency', async () => {

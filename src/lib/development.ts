@@ -14,10 +14,7 @@ export function requireDevelopmentEnvironment() {
 }
 
 export function fixtureEnvironmentEnabled() {
-  return (
-    developmentEnvironmentEnabled() ||
-    (process.env.U_ROADMAPS_E2E_DATA === 'true')
-  );
+  return developmentEnvironmentEnabled() || process.env.U_ROADMAPS_E2E_DATA === 'true';
 }
 
 export function requireFixtureEnvironment() {

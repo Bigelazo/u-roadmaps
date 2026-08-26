@@ -111,7 +111,7 @@ interface MufasaPersona {
 }
 ```
 
-La referencia consulta hasta 50 RUT por solicitud para evitar URLs demasiado largas. El campo `i` contiene una fotografía. U-Roadmaps conservará RUT normalizado, nombre y correo institucional, pero descartará la fotografía.
+La referencia consulta hasta 50 RUT por solicitud para evitar URLs demasiado largas. El campo `i` contiene una fotografía. U-Roadmaps conservará todos los datos.
 
 ## Cargos observados
 

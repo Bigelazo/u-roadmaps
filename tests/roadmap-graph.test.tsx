@@ -56,6 +56,7 @@ test('allows teachers, but not students, to delete dependency arrows', () => {
 
   expect(teacherEdge.deletable).toBe(true);
   expect(studentEdge.deletable).toBe(false);
+  expect(teacherEdge.type).toBe('dependency');
 });
 
 test('keeps the selected source and target handles on dependency arrows', () => {
