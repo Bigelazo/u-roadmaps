@@ -1,11 +1,20 @@
 import { X } from 'lucide-react';
-import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, type EdgeProps } from '@xyflow/react';
+import {
+  BaseEdge,
+  EdgeLabelRenderer,
+  getSmoothStepPath,
+  type Edge,
+  type EdgeProps,
+  type EdgeTypes,
+} from '@xyflow/react';
 import { Button } from '@/components/ui/button';
 
-export type RoadmapDependencyEdgeData = {
+export type RoadmapDependencyEdgeData = Record<string, unknown> & {
   defaultStroke: string;
   onDelete?: (dependencyId: string) => void;
 };
+
+export type RoadmapFlowEdge = Edge<RoadmapDependencyEdgeData, 'dependency'>;
 
 function RoadmapDependencyEdge({
   id,
@@ -19,7 +28,7 @@ function RoadmapDependencyEdge({
   selected,
   style,
   data,
-}: EdgeProps<RoadmapDependencyEdgeData>) {
+}: EdgeProps<RoadmapFlowEdge>) {
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -57,4 +66,4 @@ function RoadmapDependencyEdge({
   );
 }
 
-export const roadmapEdgeTypes = { dependency: RoadmapDependencyEdge };
+export const roadmapEdgeTypes = { dependency: RoadmapDependencyEdge } as EdgeTypes;

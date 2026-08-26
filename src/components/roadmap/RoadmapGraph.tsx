@@ -10,23 +10,21 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
-  type Edge,
   type EdgeChange,
-  type Node,
   type NodeChange,
-  type NodeDragHandler,
+  type OnNodeDrag,
 } from '@xyflow/react';
 import { roadmapGridSize } from '@/lib/roadmap-geometry';
 import type { RoadmapDto, RoadmapNode as RoadmapDomainNode } from '@/lib/roadmap-types';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
 import {
   roadmapNodeTypes,
-  type RoadmapNodeData,
+  type RoadmapFlowNode,
   type RoadmapNodeStatus,
 } from '@/components/roadmap/RoadmapNode';
 import {
   roadmapEdgeTypes,
-  type RoadmapDependencyEdgeData,
+  type RoadmapFlowEdge,
 } from '@/components/roadmap/RoadmapDependencyEdge';
 
 function nodeStatus(node: RoadmapDomainNode, canEdit: boolean): RoadmapNodeStatus {
@@ -36,7 +34,7 @@ function nodeStatus(node: RoadmapDomainNode, canEdit: boolean): RoadmapNodeStatu
 
 const selectedEdgeColor = 'var(--primary)';
 
-function updateEdgeAppearance(edge: Edge, isHovered = false): Edge {
+function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
   const defaultStroke =
     typeof edge.data?.defaultStroke === 'string' ? edge.data.defaultStroke : 'var(--steel)';
   const isHighlighted = edge.selected || isHovered;
@@ -55,7 +53,7 @@ export function mapRoadmapGraph(
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
-  const nodes: Node<RoadmapNodeData>[] = roadmap.nodes.map((node) => ({
+  const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => ({
     id: node.id,
     type: 'roadmap',
     data: {
@@ -70,7 +68,7 @@ export function mapRoadmapGraph(
     hidden: !canEdit && !node.isVisible,
     deletable: false,
   }));
-  const edges: Edge<RoadmapDependencyEdgeData>[] = roadmap.dependencies.map((dependency) => {
+  const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
     const isSourceCompleted = nodesById.get(dependency.sourceNodeId)?.isCompleted;
     const stroke = isSourceCompleted ? 'var(--ink)' : 'var(--steel)';
     return {
@@ -93,7 +91,7 @@ type Props = {
   roadmap: RoadmapDto;
   canEdit: boolean;
   onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
-  onMoveNode: NodeDragHandler;
+  onMoveNode: OnNodeDrag<RoadmapFlowNode>;
   onConnectNodes: (connection: Connection) => void;
   onDeleteDependencies: (dependencyIds: string[]) => void;
 };
@@ -117,7 +115,7 @@ export function RoadmapGraph({
   }, [roadmap, canEdit, onDeleteDependencies]);
 
   return (
-    <ReactFlow
+    <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
       nodes={flow.nodes}
       edges={flow.edges}
       nodeTypes={roadmapNodeTypes}
@@ -130,7 +128,7 @@ export function RoadmapGraph({
       nodesFocusable
       elementsSelectable
       deleteKeyCode={['Backspace', 'Delete']}
-      onNodesChange={(changes: NodeChange[]) =>
+      onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) =>
         setFlow((current) => ({
           ...current,
           nodes: applyNodeChanges(
@@ -139,7 +137,7 @@ export function RoadmapGraph({
           ),
         }))
       }
-      onEdgesChange={(changes: EdgeChange[]) =>
+      onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
         setFlow((current) => ({
           ...current,
           edges: applyEdgeChanges(

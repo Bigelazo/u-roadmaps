@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { Position } from 'reactflow';
+import { Position } from '@xyflow/react';
 import {
   floatingEdgeGeometry,
   nearestSide,

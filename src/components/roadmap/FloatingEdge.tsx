@@ -7,14 +7,15 @@ import {
   useStore,
   type EdgeProps,
   type ReactFlowState,
-} from 'reactflow';
+} from '@xyflow/react';
 import { floatingEdgeGeometry, type NodeRect } from '@/lib/roadmap-geometry';
 
 function nodeRect(state: ReactFlowState, nodeId: string): NodeRect | null {
-  const node = state.nodeInternals.get(nodeId);
-  if (!node?.width || !node.height) return null;
-  const { x, y } = node.positionAbsolute ?? node.position;
-  return { x, y, width: node.width, height: node.height };
+  const node = state.nodeLookup.get(nodeId);
+  const { width, height } = node?.measured ?? {};
+  if (!node || !width || !height) return null;
+  const { x, y } = node.internals.positionAbsolute;
+  return { x, y, width, height };
 }
 
 function sameRect(a: NodeRect | null, b: NodeRect | null) {

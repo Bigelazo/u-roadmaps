@@ -1,4 +1,4 @@
-import { Position } from 'reactflow';
+import { Position } from '@xyflow/react';
 
 export type NodeRect = { x: number; y: number; width: number; height: number };
 export type Point = { x: number; y: number };

@@ -1,10 +1,10 @@
 import { CheckCircle2, Circle, EyeOff, LockKeyhole, Paperclip } from 'lucide-react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
-export type RoadmapNodeData = {
+export type RoadmapNodeData = Record<string, unknown> & {
   title: string;
   typeName: string;
   typeColor: string;
@@ -13,7 +13,9 @@ export type RoadmapNodeData = {
   isHidden: boolean;
 };
 
-export function RoadmapNode({ data }: NodeProps<RoadmapNodeData>) {
+export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
+
+export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
   const completed = data.status === 'completed';
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
@@ -120,4 +122,4 @@ export function RoadmapNode({ data }: NodeProps<RoadmapNodeData>) {
   );
 }
 
-export const roadmapNodeTypes = { roadmap: RoadmapNode };
+export const roadmapNodeTypes = { roadmap: RoadmapNode } as NodeTypes;
