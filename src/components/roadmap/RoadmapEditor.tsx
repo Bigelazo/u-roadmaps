@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PanelRightClose, PanelRightOpen, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
-import type { Resource, RoadmapDependency, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
+import type { Resource, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +37,6 @@ type PendingDeletion = { label: string; onConfirm: () => Promise<boolean> } | nu
 type Props = {
   roadmap: RoadmapDto;
   selectedNode: RoadmapNode | undefined;
-  selectedDependency: RoadmapDependency | undefined;
   isOpen: boolean;
   onToggle: () => void;
   onClose: () => void;
@@ -45,9 +44,6 @@ type Props = {
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
   onDeleteNode: (nodeId: string) => Promise<boolean>;
-  onAddDependency: (sourceNodeId: string, targetNodeId: string) => Promise<boolean>;
-  onDeleteDependency: (dependencyId: string) => Promise<boolean>;
-  onCloseDependency: () => void;
   onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onDeleteResource: (resourceId: string) => Promise<boolean>;
@@ -91,7 +87,6 @@ export function RoadmapEditor(props: Props) {
   const {
     roadmap,
     selectedNode,
-    selectedDependency,
     isOpen,
     onToggle,
     onClose,
@@ -99,9 +94,6 @@ export function RoadmapEditor(props: Props) {
     onUpdateNode,
     onToggleVisibility,
     onDeleteNode,
-    onAddDependency,
-    onDeleteDependency,
-    onCloseDependency,
     onAddResource,
     onUpdateResource,
     onDeleteResource,
@@ -124,10 +116,6 @@ export function RoadmapEditor(props: Props) {
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
   const [nodeType, setNodeType] = useState<NodeTypeInput>({ name: '', color: '#024ad8' });
   const [editingNodeTypeId, setEditingNodeTypeId] = useState<string | null>(null);
-  const [dependency, setDependency] = useState({
-    sourceNodeId: roadmap.nodes[0]?.id ?? '',
-    targetNodeId: roadmap.nodes[0]?.id ?? '',
-  });
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
   const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
 
@@ -149,17 +137,6 @@ export function RoadmapEditor(props: Props) {
     setEditingResourceId(null);
   }, [selectedNode]);
   useEffect(() => {
-    const firstNodeId = roadmap.nodes[0]?.id ?? '';
-    setDependency((current) => ({
-      sourceNodeId: roadmap.nodes.some((node) => node.id === current.sourceNodeId)
-        ? current.sourceNodeId
-        : firstNodeId,
-      targetNodeId: roadmap.nodes.some((node) => node.id === current.targetNodeId)
-        ? current.targetNodeId
-        : firstNodeId,
-    }));
-  }, [roadmap.nodes]);
-  useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
     const update = () => setIsMobileEditorExpanded(media.matches);
     update();
@@ -167,8 +144,6 @@ export function RoadmapEditor(props: Props) {
     return () => media.removeEventListener('change', update);
   }, []);
 
-  const sourceNode = roadmap.nodes.find((node) => node.id === selectedDependency?.sourceNodeId);
-  const targetNode = roadmap.nodes.find((node) => node.id === selectedDependency?.targetNodeId);
   const closeNodeTypeEditor = () => {
     setNodeType({ name: '', color: '#024ad8' });
     setEditingNodeTypeId(null);
@@ -273,92 +248,6 @@ export function RoadmapEditor(props: Props) {
               Agregar nodo
             </Button>
           </form>
-
-          <Separator />
-          <section className="flex flex-col gap-4" aria-labelledby="dependency-heading">
-            <div>
-              <h3 id="dependency-heading" className="font-semibold">
-                Dependencias
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Conecta el orden pedagógico desde el mapa o define una relación aquí.
-              </p>
-            </div>
-            <form
-              className="flex flex-col gap-3"
-              onSubmit={async (event) => {
-                event.preventDefault();
-                if (
-                  dependency.sourceNodeId &&
-                  dependency.targetNodeId &&
-                  dependency.sourceNodeId !== dependency.targetNodeId
-                )
-                  await onAddDependency(dependency.sourceNodeId, dependency.targetNodeId);
-              }}
-            >
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="dependency-source">Desde</FieldLabel>
-                  <Select
-                    value={dependency.sourceNodeId}
-                    onValueChange={(sourceNodeId) =>
-                      sourceNodeId && setDependency({ ...dependency, sourceNodeId })
-                    }
-                  >
-                    <SelectTrigger id="dependency-source" className="h-11 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {roadmap.nodes.map((node) => (
-                          <SelectItem key={node.id} value={node.id}>
-                            {node.title}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="dependency-target">Hacia</FieldLabel>
-                  <Select
-                    value={dependency.targetNodeId}
-                    onValueChange={(targetNodeId) =>
-                      targetNodeId && setDependency({ ...dependency, targetNodeId })
-                    }
-                  >
-                    <SelectTrigger id="dependency-target" className="h-11 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        {roadmap.nodes.map((node) => (
-                          <SelectItem
-                            key={node.id}
-                            value={node.id}
-                            disabled={node.id === dependency.sourceNodeId}
-                          >
-                            {node.title}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </FieldGroup>
-              <Button
-                type="submit"
-                variant="outline"
-                disabled={
-                  !dependency.sourceNodeId ||
-                  !dependency.targetNodeId ||
-                  dependency.sourceNodeId === dependency.targetNodeId
-                }
-              >
-                Crear dependencia
-              </Button>
-            </form>
-          </section>
 
           <Separator />
           <section className="flex flex-col gap-4" aria-labelledby="node-type-heading">
@@ -468,51 +357,6 @@ export function RoadmapEditor(props: Props) {
               ))}
             </ul>
           </section>
-
-          {selectedDependency && (
-            <>
-              <Separator />
-              <section
-                className="flex flex-col gap-3"
-                aria-labelledby="selected-dependency-heading"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 id="selected-dependency-heading" className="font-semibold">
-                    Dependencia seleccionada
-                  </h3>
-                  <Button type="button" size="sm" variant="ghost" onClick={onCloseDependency}>
-                    <X data-icon="inline-start" />
-                    Cerrar
-                  </Button>
-                </div>
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Desde: </span>
-                  {sourceNode?.title ?? 'Nodo eliminado'}
-                </p>
-                <p className="text-sm">
-                  <span className="text-muted-foreground">Hacia: </span>
-                  {targetNode?.title ?? 'Nodo eliminado'}
-                </p>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() =>
-                    setPendingDeletion({
-                      label: 'esta dependencia',
-                      onConfirm: async () => {
-                        const deleted = await onDeleteDependency(selectedDependency.id);
-                        if (deleted) onCloseDependency();
-                        return deleted;
-                      },
-                    })
-                  }
-                >
-                  <Trash2 data-icon="inline-start" />
-                  Eliminar dependencia
-                </Button>
-              </section>
-            </>
-          )}
 
           {selectedNode && (
             <>
