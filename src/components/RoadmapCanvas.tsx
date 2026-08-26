@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Circle, CircleAlert, LockKeyhole, Trash2 } from 'lucide-react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
+import { RoadmapErrorToast } from '@/components/roadmap/RoadmapErrorToast';
 import { RoadmapGraph } from '@/components/roadmap/RoadmapGraph';
 import { StudentNodeDetail } from '@/components/roadmap/StudentNodeDetail';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
@@ -55,6 +56,7 @@ export default function RoadmapCanvas({
   const {
     roadmap,
     error,
+    dismissError,
     addNode,
     updateNode,
     moveNode,
@@ -114,13 +116,6 @@ export default function RoadmapCanvas({
   );
   return (
     <div>
-      {error && (
-        <Alert variant="destructive" className="mb-5">
-          <CircleAlert aria-hidden="true" />
-          <AlertTitle>Error al actualizar el roadmap</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
       <section
         className={cn(
           'relative grid min-h-[calc(100vh-64px)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] sm:rounded-xl',
@@ -133,14 +128,12 @@ export default function RoadmapCanvas({
           aria-label="Lienzo del roadmap"
           className="relative min-h-[540px] bg-background lg:min-h-[calc(100vh-64px)]"
         >
-          <header
-            className="pointer-events-none absolute top-4 left-4 z-[4] max-w-[calc(100%-2rem)] sm:top-6 sm:left-6 sm:max-w-md"
-          >
+          <header className="pointer-events-none absolute top-4 left-4 z-[4] max-w-[calc(100%-2rem)] sm:top-6 sm:left-6 sm:max-w-md">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{courseCode}</Badge>
               {canEdit ? <Badge variant="secondary">Modo edición</Badge> : null}
             </div>
-            <h1 className="mt-2 text-balance font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] sm:text-[30px]">
+            <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
               {title}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -158,6 +151,7 @@ export default function RoadmapCanvas({
             <LockKeyhole className="size-3 text-graphite" aria-hidden="true" />
             <span>Bloqueado</span>
           </section>
+          {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
           <RoadmapGraph
             roadmap={roadmap}
             canEdit={canEdit}

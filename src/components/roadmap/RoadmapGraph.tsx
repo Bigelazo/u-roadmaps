@@ -21,6 +21,7 @@ import 'reactflow/dist/style.css';
 import { CheckCircle2, Circle, EyeOff, LockKeyhole, Paperclip } from 'lucide-react';
 import type { RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
+import { FloatingEdge } from '@/components/roadmap/FloatingEdge';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -147,6 +148,7 @@ function RoadmapCard({ data }: NodeProps<CanvasNodeData>) {
 }
 
 const nodeTypes = { roadmap: RoadmapCard };
+const edgeTypes = { floating: FloatingEdge };
 const selectedEdgeColor = 'var(--primary)';
 
 function updateEdgeAppearance(edge: Edge, isHovered = false): Edge {
@@ -188,7 +190,7 @@ export function mapRoadmapGraph(roadmap: RoadmapDto, canEdit: boolean) {
       target: dependency.targetNodeId,
       sourceHandle: dependency.sourceHandle,
       targetHandle: dependency.targetHandle,
-      type: 'smoothstep',
+      type: 'floating',
       deletable: canEdit,
       data: { defaultStroke: stroke },
       style: { stroke, strokeWidth: 1.5 },
@@ -228,6 +230,7 @@ export function RoadmapGraph({
       nodes={flow.nodes}
       edges={flow.edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       nodesDraggable={canEdit}
       nodesConnectable={canEdit}
       connectionMode={ConnectionMode.Loose}

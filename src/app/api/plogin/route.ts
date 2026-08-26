@@ -27,18 +27,6 @@ function vtiSecret() {
   return new TextEncoder().encode(secret);
 }
 
-function vtiVerificationOptions() {
-  const issuer = process.env.VTI_JWT_ISSUER;
-  const audience = process.env.VTI_JWT_AUDIENCE;
-  if (!issuer || !audience)
-    throw new ApiError(
-      500,
-      'AUTH_CONFIGURATION_ERROR',
-      'La autenticación institucional no está disponible.',
-    );
-  return { algorithms: ['HS256'], issuer, audience };
-}
-
 function sessionCookieName(request: Request) {
   return isHttps(request) ? '__Secure-next-auth.session-token' : 'next-auth.session-token';
 }
@@ -59,16 +47,17 @@ function authenticationErrorResponse(request: Request) {
   return response;
 }
 
-export async function POST(request: Request) {
+// El portal VTI devuelve el token por redirección GET, sin repetir el `state`
+// ni emitir `iss`, `aud` o `exp`. La transacción de un solo uso creada por
+// `/api/plogin/start` acota la ventana de reuso a diez minutos.
+export async function GET(request: Request) {
   return handleApiResult(
     async () => {
-      const body = await request.formData();
-      const rawToken = body.get('jwt');
-      const state = body.get('state');
-      const expectedState = request.headers
+      const rawToken = new URL(request.url).searchParams.get('jwt');
+      const state = request.headers
         .get('cookie')
         ?.match(new RegExp(`(?:^|;\\s*)${loginStateCookieName}=([^;]+)`))?.[1];
-      if (typeof state !== 'string' || !expectedState || state !== expectedState)
+      if (!state)
         throw new ApiError(
           400,
           'INVALID_AUTH_CALLBACK',
@@ -93,8 +82,7 @@ export async function POST(request: Request) {
       const verificationSecret = vtiSecret();
       let payload;
       try {
-        ({ payload } = await jwtVerify(rawToken, verificationSecret, vtiVerificationOptions()));
-        if (typeof payload.exp !== 'number') throw new Error('Missing expiration');
+        ({ payload } = await jwtVerify(rawToken, verificationSecret, { algorithms: ['HS256'] }));
       } catch {
         throw new ApiError(
           400,
