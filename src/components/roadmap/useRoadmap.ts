@@ -120,6 +120,12 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     };
   }, [load]);
 
+  const dismissError = useCallback(() => {
+    lastMutationErrorRef.current = null;
+    setError(null);
+    setErrorKey(null);
+  }, []);
+
   const mutate = useCallback(
     async (url: string, init: RequestInit, fallback: string) => {
       const requestKey = identifierKey(identifier);
@@ -355,6 +361,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
   return {
     roadmap: roadmapKey === key ? roadmap : null,
     error: errorKey === key ? error : null,
+    dismissError,
     addNode,
     updateNode,
     moveNode,

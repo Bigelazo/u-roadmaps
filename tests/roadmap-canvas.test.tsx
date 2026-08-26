@@ -36,6 +36,7 @@ function roadmapActions(overrides = {}) {
   return {
     roadmap,
     error: null,
+    dismissError: vi.fn(),
     addNode: vi.fn(),
     updateNode: vi.fn(),
     moveNode: vi.fn(),
@@ -124,4 +125,20 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
   expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
   expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
+});
+
+test('surfaces a mutation error as a dismissible toast over the canvas', async () => {
+  const user = userEvent.setup();
+  const dismissError = vi.fn();
+  useRoadmapMock.mockReturnValue(
+    roadmapActions({ error: 'La dependencia ya existe.', dismissError }),
+  );
+  renderCanvas(true);
+
+  expect(screen.getByRole('alert', { name: 'La dependencia ya existe.' }).textContent).toBe(
+    'La dependencia ya existe.',
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Cerrar alerta' }));
+  expect(dismissError).toHaveBeenCalled();
 });

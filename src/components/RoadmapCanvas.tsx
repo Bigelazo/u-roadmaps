@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Circle, CircleAlert, LockKeyhole, Trash2 } from 'lucide-react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
+import { RoadmapErrorToast } from '@/components/roadmap/RoadmapErrorToast';
 import { RoadmapGraph } from '@/components/roadmap/RoadmapGraph';
 import { StudentNodeDetail } from '@/components/roadmap/StudentNodeDetail';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
@@ -53,6 +54,7 @@ export default function RoadmapCanvas({
   const {
     roadmap,
     error,
+    dismissError,
     addNode,
     updateNode,
     moveNode,
@@ -103,13 +105,6 @@ export default function RoadmapCanvas({
   const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
   return (
     <div>
-      {error && (
-        <Alert variant="destructive" className="mb-5">
-          <CircleAlert aria-hidden="true" />
-          <AlertTitle>Error al actualizar el roadmap</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
       <section
         className={cn(
           'relative grid min-h-[calc(100vh-64px)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] sm:rounded-xl',
@@ -152,6 +147,7 @@ export default function RoadmapCanvas({
             <LockKeyhole className="size-3 text-graphite" aria-hidden="true" />
             <span>Bloqueado</span>
           </section>
+          {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
           <RoadmapGraph
             roadmap={roadmap}
             canEdit={canEdit}

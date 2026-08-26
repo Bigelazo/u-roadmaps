@@ -338,10 +338,6 @@ async function vtiToken(
 ) {
   return new SignJWT(claims)
     .setProtectedHeader({ alg: algorithm })
-    .setIssuedAt()
-    .setExpirationTime('5m')
-    .setIssuer(process.env.VTI_JWT_ISSUER ?? 'https://vti.example.test')
-    .setAudience(process.env.VTI_JWT_AUDIENCE ?? 'u-roadmaps')
     .sign(new TextEncoder().encode(secret));
 }
 
@@ -353,10 +349,10 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
     email: `${crypto.randomUUID()}@example.test`,
     name: 'Persona VTI inválida',
   });
-  const missingState = await request.post('/api/plogin', {
-    maxRedirects: 0,
-    form: { jwt: validToken },
-  });
+  const missingState = await request.get(
+    `/api/plogin?jwt=${encodeURIComponent(validToken)}`,
+    { maxRedirects: 0 },
+  );
   expect(missingState.status()).toBe(307);
   expect(missingState.headers().location).toContain('/?error=Authentication');
 
@@ -387,12 +383,10 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
     }),
   ]) {
     const start = await request.get('/api/plogin/start', { maxRedirects: 0 });
-    const state = new URL(start.headers().location).searchParams.get('state');
     const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
-    const callback = await request.post('/api/plogin', {
+    const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
       maxRedirects: 0,
-      headers: { cookie: stateCookie, 'content-type': 'application/x-www-form-urlencoded' },
-      form: { jwt: token, state: state ?? '' },
+      headers: { cookie: stateCookie },
     });
     expect(callback.status()).toBe(307);
     expect(callback.headers().location).toContain('/?error=Authentication');
@@ -463,10 +457,9 @@ test('VTI callback issues a session after validating its one-time state', async 
   expect(state).toBeTruthy();
   const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
   const token = await vtiToken(fixture.studentWithoutProgressVtiClaims);
-  const callback = await request.post('/api/plogin', {
+  const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
     maxRedirects: 0,
-    headers: { cookie: stateCookie, 'content-type': 'application/x-www-form-urlencoded' },
-    form: { jwt: token, state: state ?? '' },
+    headers: { cookie: stateCookie },
   });
   expect(callback.status()).toBe(307);
   expect(callback.headers().location).toBe(
