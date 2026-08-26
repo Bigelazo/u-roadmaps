@@ -3,6 +3,17 @@ import { Position } from 'reactflow';
 export type NodeRect = { x: number; y: number; width: number; height: number };
 export type Point = { x: number; y: number };
 
+/** Tamaño, en píxeles del lienzo, de cada celda del roadmap. */
+export const roadmapGridSize = 20;
+
+/** Ajusta una posición a la intersección más cercana de la cuadrícula del roadmap. */
+export function snapToRoadmapGrid(position: Point): Point {
+  return {
+    x: Math.round(position.x / roadmapGridSize) * roadmapGridSize,
+    y: Math.round(position.y / roadmapGridSize) * roadmapGridSize,
+  };
+}
+
 export function nodeCenter(rect: NodeRect): Point {
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
   Background,
+  BackgroundVariant,
   ConnectionMode,
   MarkerType,
   ReactFlow,
@@ -15,6 +16,7 @@ import {
   type NodeChange,
   type NodeDragHandler,
 } from '@xyflow/react';
+import { roadmapGridSize } from '@/lib/roadmap-geometry';
 import type { RoadmapDto, RoadmapNode as RoadmapDomainNode } from '@/lib/roadmap-types';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
 import {
@@ -122,6 +124,8 @@ export function RoadmapGraph({
       edgeTypes={roadmapEdgeTypes}
       nodesDraggable={canEdit}
       nodesConnectable={canEdit}
+      snapToGrid
+      snapGrid={[roadmapGridSize, roadmapGridSize]}
       connectionMode={ConnectionMode.Loose}
       nodesFocusable
       elementsSelectable
@@ -178,7 +182,13 @@ export function RoadmapGraph({
       fitViewOptions={{ padding: 0.28 }}
       proOptions={{ hideAttribution: true }}
     >
-      <Background color="var(--fog)" gap={20} size={1} />
+      <Background
+        aria-label="Cuadrícula del lienzo"
+        variant={BackgroundVariant.Lines}
+        color="var(--fog)"
+        gap={roadmapGridSize}
+        size={1}
+      />
     </ReactFlow>
   );
 }

@@ -1,6 +1,12 @@
 import { expect, it } from 'vitest';
 import { Position } from 'reactflow';
-import { floatingEdgeGeometry, nearestSide, sideAnchor } from '@/lib/roadmap-geometry';
+import {
+  floatingEdgeGeometry,
+  nearestSide,
+  roadmapGridSize,
+  sideAnchor,
+  snapToRoadmapGrid,
+} from '@/lib/roadmap-geometry';
 
 const card = (x: number, y: number) => ({ x, y, width: 190, height: 120 });
 
@@ -49,4 +55,10 @@ it('gives the two ends opposing sides', () => {
 
 it('ignores ties in favour of the vertical axis', () => {
   expect(nearestSide({ x: 0, y: 0 }, { x: 100, y: 100 })).toBe(Position.Bottom);
+});
+
+it('snaps node positions to the roadmap grid before saving them', () => {
+  expect(roadmapGridSize).toBe(20);
+  expect(snapToRoadmapGrid({ x: 149, y: 151 })).toEqual({ x: 140, y: 160 });
+  expect(snapToRoadmapGrid({ x: -31, y: -29 })).toEqual({ x: -40, y: -20 });
 });

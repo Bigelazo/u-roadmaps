@@ -9,6 +9,7 @@ import { RoadmapGraph } from '@/components/roadmap/RoadmapGraph';
 import { StudentNodeDetail } from '@/components/roadmap/StudentNodeDetail';
 import { studentNodeStatus } from '@/components/roadmap/node-status';
 import { useRoadmap } from '@/components/roadmap/useRoadmap';
+import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -155,7 +156,9 @@ export default function RoadmapCanvas({
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
             }}
-            onMoveNode={(_event, node) => void moveNode(node.id, node.position)}
+            onMoveNode={(_event, node) =>
+              void moveNode(node.id, snapToRoadmapGrid(node.position))
+            }
             onConnectNodes={(connection) => {
               if (connection.source && connection.target)
                 void connectNodes(
