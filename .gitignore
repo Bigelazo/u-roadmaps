@@ -14,3 +14,4 @@ test-results/
 tsconfig.tsbuildinfo
 src/generated/prisma/
 .playwright-mcp/
+.pnpm-store/
