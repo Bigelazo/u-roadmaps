@@ -72,6 +72,16 @@ El RUT usado por la referencia es el cuerpo sin puntos, guion ni dígito verific
 
 Este es el único endpoint observado para descubrir cursos. Su uso demuestra cursos **dictados** por una persona; no demuestra que permita listar cursos actuales o históricos tomados por un estudiante.
 
+### Cursos inscritos
+
+El resumen académico consulta los cursos inscritos de la persona autenticada con:
+
+```http
+GET /cursos_inscritos?rut=<cuerpo-del-rut>&id_periodo=todos
+```
+
+La aplicación proyecta los campos `codigo`, `nombre`, `ano`, `periodo` y `seccion`, valida que cada curso pertenezca a un período académico válido y los agrupa por año y semestre en la interfaz. Si la respuesta está incompleta, es inválida o la consulta falla, conserva la disponibilidad del resumen usando únicamente las participaciones locales vigentes, indicadas como desactualizadas. Esta proyección no materializa participaciones.
+
 ### Integrantes
 
 ```http
@@ -217,6 +227,7 @@ La integración requerirá, además de la configuración VTI existente:
 
 ```dotenv
 MUFASA_TOKEN=
+MUFASA_BASE_URL=https://apps.dcc.uchile.cl/servicios/puente/ucampus/api/fcfm_mufasa
 ```
 
 No debe existir un valor predeterminado ni exponerse en variables `NEXT_PUBLIC_*`, logs, HTML o respuestas. La URL base debería configurarse en el servidor para permitir ambientes de prueba sin modificar código.
@@ -258,7 +269,6 @@ La adaptación debe cubrir:
 
 ## Preguntas abiertas
 
-- ¿Qué endpoint de Mufasa permite obtener los cursos actuales e históricos tomados por un estudiante?
 - ¿Cómo distingue ese contrato cursos aprobados, cursados, retirados y actualmente inscritos?
 - ¿Cómo se descubren todas las secciones coordinadas si `cursos_dictados` solo devuelve las asociadas al RUT consultado?
 - ¿Qué límites de tasa, tamaño, timeout y disponibilidad garantiza el puente?
