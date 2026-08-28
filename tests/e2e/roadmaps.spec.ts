@@ -282,8 +282,10 @@ test('teacher and student workflows render against the shared fixture', async ({
   });
   let nodeId: string | undefined;
   try {
-    await page.getByLabel('Título del nodo').fill(nodeTitle);
     await page.getByRole('button', { name: 'Agregar nodo' }).click();
+    const createNodeDialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+    await createNodeDialog.getByLabel('Título').fill(nodeTitle);
+    await createNodeDialog.getByRole('button', { name: 'Agregar nodo' }).click();
     await expect(page.locator('p', { hasText: nodeTitle })).toBeVisible();
     const roadmap = await api.get(roadmapPath());
     nodeId = (await roadmap.json()).nodes.find(
@@ -295,12 +297,15 @@ test('teacher and student workflows render against the shared fixture', async ({
     await authenticateAs(page.context(), fixture.studentWithProgress);
     await page.goto('/academic-overview');
     await expect(page.getByRole('heading', { name: 'Hola, Estudiante 02' })).toBeVisible();
-    await expect(
-      page.getByRole('region', { name: 'Cursos actuales' }).getByRole('listitem'),
-    ).toHaveCount(3);
-    await expect(
-      page.getByRole('region', { name: 'Historial académico' }).getByRole('listitem'),
-    ).toHaveCount(1);
+    await expect(page.getByRole('region', { name: '2026' }).getByRole('listitem')).toHaveCount(4);
+    await expect(page.getByRole('heading', { name: 'Primavera 2026' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Otoño 2026' })).toBeVisible();
+    await expect(page.getByText('Tu período actual')).toHaveCount(0);
+    const physicsRow = page
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('heading', { name: 'Física I' }) });
+    await expect(physicsRow).toContainText('Sin roadmap');
+    await expect(physicsRow.getByRole('link')).toHaveCount(0);
     await page.setViewportSize({ width: 375, height: 812 });
     await expect(page.getByRole('link', { name: 'Abrir roadmap' }).first()).toBeVisible();
     expect(
@@ -349,10 +354,9 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
     email: `${crypto.randomUUID()}@example.test`,
     name: 'Persona VTI inválida',
   });
-  const missingState = await request.get(
-    `/api/plogin?jwt=${encodeURIComponent(validToken)}`,
-    { maxRedirects: 0 },
-  );
+  const missingState = await request.get(`/api/plogin?jwt=${encodeURIComponent(validToken)}`, {
+    maxRedirects: 0,
+  });
   expect(missingState.status()).toBe(307);
   expect(missingState.headers().location).toContain('/?error=Authentication');
 
@@ -416,6 +420,28 @@ test('landing access starts VTI and dismisses authentication failures without re
   const protectedRoute = await request.get('/academic-overview', { maxRedirects: 0 });
   expect(protectedRoute.status()).toBe(307);
   expect(protectedRoute.headers().location).toContain('/api/plogin/start');
+});
+
+test('logout requires confirmation and removes the application session', async ({ page }) => {
+  await authenticateAs(page.context(), fixture.studentWithoutProgress);
+  await page.goto('/academic-overview');
+
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+  const dialog = page.getByRole('alertdialog', { name: '¿Cerrar sesión?' });
+  await expect(dialog).toContainText('Tendrás que autenticarte nuevamente para ingresar.');
+
+  await dialog.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+  await dialog.getByRole('button', { name: 'Cerrar sesión' }).click();
+
+  await expect(page).toHaveURL('/');
+  await expect(page.getByRole('link', { name: 'Autenticarse' })).toBeVisible();
+  await expect(page.context().cookies()).resolves.not.toContainEqual(
+    expect.objectContaining({ name: 'next-auth.session-token' }),
+  );
 });
 
 test('1440px visual references cover the public shell states in each browser', async ({
