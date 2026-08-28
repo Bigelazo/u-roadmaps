@@ -1,31 +1,42 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import RoadmapCanvas from '../src/components/RoadmapCanvas';
+import RoadmapCanvas from '../src/features/roadmap/RoadmapCanvas';
 
 const { useRoadmapMock } = vi.hoisted(() => ({ useRoadmapMock: vi.fn() }));
 
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
 
-vi.mock('@/components/roadmap/RoadmapGraph', () => ({
-  RoadmapGraph: ({ onDeleteDependencies }: { onDeleteDependencies: (ids: string[]) => void }) => (
-    <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
-      Solicitar eliminación de dependencias
-    </button>
+vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
+  RoadmapGraph: ({
+    onDeleteDependencies,
+    onToggleNodeVisibility,
+  }: {
+    onDeleteDependencies: (ids: string[]) => void;
+    onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
+  }) => (
+    <>
+      <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
+        Solicitar eliminación de dependencias
+      </button>
+      <button type="button" onClick={() => onToggleNodeVisibility('node-1', false)}>
+        Ocultar para estudiantes
+      </button>
+    </>
   ),
 }));
 
-vi.mock('@/components/roadmap/StudentNodeDetail', () => ({
+vi.mock('@/features/roadmap/student/NodeDetail', () => ({
   StudentNodeDetail: () => null,
 }));
 
-vi.mock('@/components/roadmap/useRoadmap', () => ({ useRoadmap: useRoadmapMock }));
+vi.mock('@/features/roadmap/useRoadmap', () => ({ useRoadmap: useRoadmapMock }));
 
 const roadmap = {
   course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
-  nodeTypes: [],
+  nodeTypes: [{ id: 'content', name: 'Contenido', color: '#024AD8', isPredefined: true }],
   nodes: [],
   dependencies: [],
 };
@@ -101,9 +112,33 @@ test('separates the course context, term, and teacher state in the canvas header
   expect(screen.getByText('CC1001')).toBeTruthy();
   expect(screen.getByText('2026, semestre 2')).toBeTruthy();
   expect(screen.getByText('Modo edición')).toBeTruthy();
+  expect(screen.getByRole('region', { name: 'Leyenda del roadmap' }).textContent).toContain(
+    'TiposContenido',
+  );
   expect(
     screen.getByText(/Arrastra desde un punto de un nodo a otro para crear una dependencia/),
   ).toBeTruthy();
+});
+
+test('creates nodes from the floating canvas button', async () => {
+  const user = userEvent.setup();
+  const addNode = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ addNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Agregar nodo' }));
+  const dialog = screen.getByRole('dialog', { name: 'Agregar al mapa' });
+  expect(within(dialog).getByRole('combobox', { name: 'Tipo' }).textContent).toContain('Contenido');
+  await user.type(within(dialog).getByLabelText('Título'), 'Repasar límites');
+  await user.click(within(dialog).getByRole('button', { name: 'Agregar nodo' }));
+
+  expect(addNode).toHaveBeenCalledWith({
+    title: 'Repasar límites',
+    description: '',
+    nodeTypeId: 'content',
+    isVisible: true,
+  });
+  expect(screen.queryByRole('dialog')).toBeNull();
 });
 
 test('confirms, cancels, and deletes every selected dependency', async () => {
@@ -125,6 +160,16 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
   expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
   expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
+});
+
+test('connects the node visibility action to the roadmap mutation', async () => {
+  const user = userEvent.setup();
+  const toggleVisibility = vi.fn();
+  useRoadmapMock.mockReturnValue(roadmapActions({ toggleVisibility }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
+  expect(toggleVisibility).toHaveBeenCalledWith('node-1', false);
 });
 
 test('surfaces a mutation error as a dismissible toast over the canvas', async () => {

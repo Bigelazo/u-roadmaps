@@ -1,4 +1,4 @@
-import RoadmapCanvas from '@/components/RoadmapCanvas';
+import RoadmapCanvas from '@/features/roadmap/RoadmapCanvas';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notFound, redirect } from 'next/navigation';

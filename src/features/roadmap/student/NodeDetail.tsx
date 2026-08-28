@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Resource, RoadmapNode } from '@/lib/roadmap-types';
-import type { StudentNodeStatus } from '@/components/roadmap/node-status';
+import type { StudentNodeStatus } from '@/features/roadmap/student/node-status';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import {

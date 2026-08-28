@@ -16,29 +16,28 @@ import {
 } from '@xyflow/react';
 import { roadmapGridSize } from '@/lib/roadmap-geometry';
 import type { RoadmapDto, RoadmapNode as RoadmapDomainNode } from '@/lib/roadmap-types';
-import { studentNodeStatus } from '@/components/roadmap/node-status';
+import { studentNodeStatus } from '@/features/roadmap/student/node-status';
 import {
   roadmapNodeTypes,
   type RoadmapFlowNode,
   type RoadmapNodeStatus,
-} from '@/components/roadmap/RoadmapNode';
+} from '@/features/roadmap/graph/RoadmapNode';
 import {
   roadmapEdgeTypes,
   type RoadmapFlowEdge,
-} from '@/components/roadmap/RoadmapDependencyEdge';
+} from '@/features/roadmap/graph/DependencyEdge';
 
 function nodeStatus(node: RoadmapDomainNode, canEdit: boolean): RoadmapNodeStatus {
   if (canEdit) return 'editing';
   return studentNodeStatus(node);
 }
 
+const studentEdgeStroke = 'var(--ink)';
 const selectedEdgeColor = 'var(--primary)';
 
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
-  const defaultStroke =
-    typeof edge.data?.defaultStroke === 'string' ? edge.data.defaultStroke : 'var(--steel)';
-  const isHighlighted = edge.selected || isHovered;
-  const stroke = isHighlighted ? selectedEdgeColor : defaultStroke;
+  const defaultStroke = edge.data?.defaultStroke ?? 'var(--steel)';
+  const stroke = edge.selected || isHovered ? selectedEdgeColor : defaultStroke;
   return {
     ...edge,
     style: { ...edge.style, stroke, strokeWidth: 1.5 },
@@ -50,6 +49,7 @@ export function mapRoadmapGraph(
   roadmap: RoadmapDto,
   canEdit: boolean,
   onDeleteDependency?: (dependencyId: string) => void,
+  onToggleNodeVisibility?: (nodeId: string, isVisible: boolean) => void,
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
@@ -58,19 +58,23 @@ export function mapRoadmapGraph(
     type: 'roadmap',
     data: {
       title: node.title,
-      typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Contenido',
       typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
-      resourceCount: node.resources.length,
       status: nodeStatus(node, canEdit),
       isHidden: !node.isVisible,
+      onToggleVisibility: canEdit
+        ? () => onToggleNodeVisibility?.(node.id, node.isVisible)
+        : undefined,
     },
     position: { x: node.positionX, y: node.positionY },
     hidden: !canEdit && !node.isVisible,
     deletable: false,
   }));
   const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
-    const isSourceCompleted = nodesById.get(dependency.sourceNodeId)?.isCompleted;
-    const stroke = isSourceCompleted ? 'var(--ink)' : 'var(--steel)';
+    const defaultStroke = canEdit
+      ? nodesById.get(dependency.sourceNodeId)?.isCompleted
+        ? 'var(--ink)'
+        : 'var(--steel)'
+      : studentEdgeStroke;
     return {
       id: dependency.id,
       source: dependency.sourceNodeId,
@@ -79,9 +83,14 @@ export function mapRoadmapGraph(
       targetHandle: dependency.targetHandle,
       type: 'dependency',
       deletable: canEdit,
-      data: { defaultStroke: stroke, onDelete: onDeleteDependency },
-      style: { stroke, strokeWidth: 1.5 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 18, height: 18 },
+      selectable: canEdit,
+      focusable: canEdit,
+      interactionWidth: canEdit ? undefined : 0,
+      domAttributes: canEdit ? undefined : { pointerEvents: 'none' },
+      className: canEdit ? 'roadmap-edge--editable' : 'roadmap-edge--student',
+      data: { defaultStroke, onDelete: canEdit ? onDeleteDependency : undefined },
+      style: { stroke: defaultStroke, strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: defaultStroke, width: 18, height: 18 },
     };
   });
   return { nodes, edges };
@@ -94,6 +103,7 @@ type Props = {
   onMoveNode: OnNodeDrag<RoadmapFlowNode>;
   onConnectNodes: (connection: Connection) => void;
   onDeleteDependencies: (dependencyIds: string[]) => void;
+  onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
 };
 
 export function RoadmapGraph({
@@ -103,16 +113,27 @@ export function RoadmapGraph({
   onMoveNode,
   onConnectNodes,
   onDeleteDependencies,
+  onToggleNodeVisibility,
 }: Props) {
   const [flow, setFlow] = useState(() =>
-    mapRoadmapGraph(roadmap, canEdit, (dependencyId) => onDeleteDependencies([dependencyId])),
+    mapRoadmapGraph(
+      roadmap,
+      canEdit,
+      (dependencyId) => onDeleteDependencies([dependencyId]),
+      onToggleNodeVisibility,
+    ),
   );
 
   useEffect(() => {
     setFlow(
-      mapRoadmapGraph(roadmap, canEdit, (dependencyId) => onDeleteDependencies([dependencyId])),
+      mapRoadmapGraph(
+        roadmap,
+        canEdit,
+        (dependencyId) => onDeleteDependencies([dependencyId]),
+        onToggleNodeVisibility,
+      ),
     );
-  }, [roadmap, canEdit, onDeleteDependencies]);
+  }, [roadmap, canEdit, onDeleteDependencies, onToggleNodeVisibility]);
 
   return (
     <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
@@ -143,7 +164,7 @@ export function RoadmapGraph({
           edges: applyEdgeChanges(
             changes.filter((change) => change.type !== 'remove'),
             current.edges,
-          ).map((edge) => updateEdgeAppearance(edge)),
+          ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
         }))
       }
       onNodeClick={(event, node) => onSelectNode(node.id, event.currentTarget as HTMLElement)}

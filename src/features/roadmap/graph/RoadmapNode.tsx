@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, EyeOff, LockKeyhole, Paperclip } from 'lucide-react';
+import { CheckCircle2, Circle, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -6,11 +6,10 @@ import { cn } from '@/lib/utils';
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> & {
   title: string;
-  typeName: string;
   typeColor: string;
-  resourceCount: number;
   status: RoadmapNodeStatus;
   isHidden: boolean;
+  onToggleVisibility?: () => void;
 };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
@@ -27,28 +26,43 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       : data.status === 'available'
         ? 'var(--ink)'
         : 'var(--primary)';
-  const statusLabel = completed
-    ? 'Completado'
-    : locked
-      ? 'Bloqueado'
-      : editing
-        ? 'Edición'
-        : 'Disponible';
+  const surface = hidden || locked ? 'var(--cloud)' : 'var(--card)';
+  const statusLabel = completed ? 'Completado' : locked ? 'Bloqueado' : 'Disponible';
   return (
     <div
       data-slot="roadmap-card"
       className={cn(
-        'min-w-[170px] cursor-pointer rounded-lg border-2 px-4 py-3 transition-[border-color,transform,box-shadow] hover:translate-y-[-2px] hover:!border-primary-bright hover:shadow-[var(--shadow-roadmap-node-hover)] motion-reduce:transform-none motion-reduce:transition-none',
+        'min-w-[170px] cursor-pointer rounded-lg border-2 border-transparent px-4 py-3 transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)] motion-reduce:transform-none motion-reduce:transition-none',
         hidden
-          ? 'bg-cloud'
+          ? ''
           : locked
-            ? 'bg-cloud opacity-[0.88] shadow-none'
-            : 'bg-card shadow-[var(--shadow-roadmap-node)]',
+            ? 'opacity-[0.88] shadow-none'
+            : 'shadow-[var(--shadow-roadmap-node)]',
       )}
-      style={{ borderColor: accent }}
+      style={{
+        backgroundImage: `linear-gradient(${surface}, ${surface}), linear-gradient(45deg, ${accent}, ${data.typeColor})`,
+        backgroundOrigin: 'border-box',
+        backgroundClip: 'padding-box, border-box',
+      }}
     >
-      <div className="mb-5 flex items-center justify-between gap-2.5">
-        {hidden ? (
+      <div className={cn('flex items-center justify-between gap-2.5', editing ? 'mb-3' : 'mb-5')}>
+        {editing ? (
+          <button
+            type="button"
+            className={cn(
+              'nodrag nopan flex size-9 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+              hidden && 'border-graphite/25 bg-fog text-graphite',
+            )}
+            aria-label={hidden ? 'Mostrar a estudiantes' : 'Ocultar para estudiantes'}
+            title={hidden ? 'Mostrar a estudiantes' : 'Ocultar para estudiantes'}
+            onClick={(event) => {
+              event.stopPropagation();
+              data.onToggleVisibility?.();
+            }}
+          >
+            {hidden ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+          </button>
+        ) : hidden ? (
           <EyeOff size={19} color="var(--graphite)" aria-hidden="true" />
         ) : completed ? (
           <CheckCircle2
@@ -68,32 +82,20 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
               Oculto para estudiantes
             </Badge>
           ) : null}
-          <Badge
-            className={
-              completed
-                ? 'bg-progress-soft text-progress-deep'
-                : locked
-                  ? 'bg-cloud text-graphite'
-                  : 'bg-primary-soft text-primary-deep'
-            }
-          >
-            {statusLabel}
-          </Badge>
+          {!editing ? (
+            <Badge
+              className={
+                completed
+                  ? 'bg-progress-soft text-progress-deep'
+                  : locked
+                    ? 'bg-cloud text-graphite'
+                    : 'bg-primary-soft text-primary-deep'
+              }
+            >
+              {statusLabel}
+            </Badge>
+          ) : null}
         </div>
-      </div>
-      <div className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="size-2 rounded-full" style={{ backgroundColor: data.typeColor }} />
-        <span>{data.typeName}</span>
-        {data.resourceCount ? (
-          <Badge
-            variant="link"
-            className="nodrag ml-auto h-auto min-h-5 text-right whitespace-normal"
-          >
-            <Paperclip data-icon="inline-start" aria-hidden="true" />
-            <span className="sr-only">Ver </span>
-            {data.resourceCount} {data.resourceCount === 1 ? 'recurso' : 'recursos'}
-          </Badge>
-        ) : null}
       </div>
       <p className="text-[15.5px] leading-[1.25] font-medium text-ink">{data.title}</p>
       {(

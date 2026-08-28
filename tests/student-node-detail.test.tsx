@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { StudentNodeDetail } from '../src/components/roadmap/StudentNodeDetail';
+import { StudentNodeDetail } from '../src/features/roadmap/student/NodeDetail';
 
 const node = {
   id: 'node-1',

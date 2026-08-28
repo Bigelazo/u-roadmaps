@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Circle, CircleAlert, LockKeyhole, Trash2 } from 'lucide-react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
-import { RoadmapErrorToast } from '@/components/roadmap/RoadmapErrorToast';
-import { RoadmapGraph } from '@/components/roadmap/RoadmapGraph';
-import { StudentNodeDetail } from '@/components/roadmap/StudentNodeDetail';
-import { studentNodeStatus } from '@/components/roadmap/node-status';
-import { useRoadmap } from '@/components/roadmap/useRoadmap';
+import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
+import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
+import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
+import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
+import { studentNodeStatus } from '@/features/roadmap/student/node-status';
+import { useRoadmap } from '@/features/roadmap/useRoadmap';
 import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -27,7 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const RoadmapEditor = dynamic(
-  () => import('@/components/roadmap/RoadmapEditor').then(({ RoadmapEditor }) => RoadmapEditor),
+  () => import('@/features/roadmap/editor/RoadmapEditor').then(({ RoadmapEditor }) => RoadmapEditor),
   { ssr: false },
 );
 
@@ -39,6 +40,44 @@ type Props = {
   year: number;
   semester: number;
 };
+
+function RoadmapLegend({
+  nodeTypes,
+}: {
+  nodeTypes: { id: string; name: string; color: string }[];
+}) {
+  return (
+    <section
+      aria-label="Leyenda del roadmap"
+      className="absolute bottom-[18px] left-5 z-[4] flex max-w-[calc(100%-2.5rem)] flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card/92 px-3 py-2 text-xs shadow-sm"
+    >
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <span className="font-semibold text-foreground">Estado</span>
+        <span className="size-2.5 rounded-full bg-progress" aria-hidden="true" />
+        <span>Completado</span>
+        <Circle className="size-3 fill-card text-graphite" aria-hidden="true" />
+        <span>Disponible</span>
+        <LockKeyhole className="size-3 text-graphite" aria-hidden="true" />
+        <span>Bloqueado</span>
+      </div>
+      {nodeTypes.length ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-l border-border pl-3">
+          <span className="font-semibold text-foreground">Tipos</span>
+          {nodeTypes.map((type) => (
+            <span key={type.id} className="inline-flex items-center gap-1 whitespace-nowrap">
+              <span
+                className="size-2.5 rounded-sm"
+                style={{ backgroundColor: type.color }}
+                aria-hidden="true"
+              />
+              {type.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 export default function RoadmapCanvas({
   identifier,
@@ -137,17 +176,10 @@ export default function RoadmapCanvas({
               <kbd className="rounded border bg-background px-1">Supr</kbd>.
             </p>
           ) : null}
-          <section
-            aria-label="Estados del roadmap"
-            className="absolute bottom-[18px] left-5 z-[4] flex items-center gap-2 rounded-lg border border-border bg-card/92 px-2.5 py-1.5 text-xs shadow-sm"
-          >
-            <span className="size-2.5 rounded-full bg-progress" />
-            <span>Completado</span>
-            <Circle className="size-3 fill-card text-graphite" aria-hidden="true" />
-            <span>Disponible</span>
-            <LockKeyhole className="size-3 text-graphite" aria-hidden="true" />
-            <span>Bloqueado</span>
-          </section>
+          {canEdit ? (
+            <NodeCreator nodeTypes={roadmap.nodeTypes} onSubmit={addNode} />
+          ) : null}
+          <RoadmapLegend nodeTypes={roadmap.nodeTypes} />
           {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
           <RoadmapGraph
             roadmap={roadmap}
@@ -156,9 +188,7 @@ export default function RoadmapCanvas({
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
             }}
-            onMoveNode={(_event, node) =>
-              void moveNode(node.id, snapToRoadmapGrid(node.position))
-            }
+            onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
             onConnectNodes={(connection) => {
               if (connection.source && connection.target)
                 void connectNodes(
@@ -169,6 +199,7 @@ export default function RoadmapCanvas({
                 );
             }}
             onDeleteDependencies={setPendingDependencyIds}
+            onToggleNodeVisibility={(nodeId, isVisible) => void toggleVisibility(nodeId, isVisible)}
           />
         </div>
         {canEdit && (
@@ -178,7 +209,6 @@ export default function RoadmapCanvas({
             isOpen={isEditorOpen}
             onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
             onClose={closeSelectedNode}
-            onAddNode={addNode}
             onUpdateNode={updateNode}
             onToggleVisibility={toggleVisibility}
             onDeleteNode={deleteNode}

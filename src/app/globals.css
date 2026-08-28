@@ -24,25 +24,12 @@ body {
   box-shadow: var(--shadow-roadmap-node-focus);
 }
 
-.react-flow__edge {
+.react-flow__edge.roadmap-edge--editable {
   cursor: pointer;
 }
 
-.react-flow__edge-path {
-  transition:
-    stroke 160ms ease,
-    stroke-width 160ms ease,
-    filter 160ms ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .react-flow__edge-path {
-    transition: none;
-  }
-}
-
-.react-flow__edge:hover .react-flow__edge-path,
-.react-flow__edge.selected .react-flow__edge-path {
+.react-flow__edge.roadmap-edge--editable:hover .react-flow__edge-path,
+.react-flow__edge.roadmap-edge--editable.selected .react-flow__edge-path {
   stroke: var(--primary) !important;
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--primary) 35%, transparent));
 }
