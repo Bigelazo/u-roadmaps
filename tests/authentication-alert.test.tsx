@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
-import AuthenticationAlert from '@/components/AuthenticationAlert';
+import AuthenticationAlert from '@/components/app-shell/AuthenticationAlert';
 
 const navigation = vi.hoisted(() => ({
   error: 'Authentication',

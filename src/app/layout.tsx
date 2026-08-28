@@ -1,8 +1,8 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import AuthenticationAlert from '@/components/AuthenticationAlert';
-import DevelopmentBar from '@/components/DevelopmentBar';
-import GlobalNavigation from '@/components/GlobalNavigation';
+import AuthenticationAlert from '@/components/app-shell/AuthenticationAlert';
+import DevelopmentBar from '@/components/app-shell/DevelopmentBar';
+import GlobalNavigation from '@/components/app-shell/GlobalNavigation';
 import { getApplicationSession } from '@/lib/auth';
 import { developmentEnvironmentEnabled, developmentPersonas } from '@/lib/development';
 import { Archivo, Plus_Jakarta_Sans } from 'next/font/google';

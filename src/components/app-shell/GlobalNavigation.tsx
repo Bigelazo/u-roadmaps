@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Network } from 'lucide-react';
-import SessionButton from '@/components/SessionButton';
+import SessionButton from '@/components/app-shell/SessionButton';
 
 type GlobalNavigationProps = Readonly<{
   isAuthenticated: boolean;
