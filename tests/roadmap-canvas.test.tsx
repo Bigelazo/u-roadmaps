@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
@@ -11,16 +12,27 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
     onDeleteDependencies,
     onToggleNodeVisibility,
+    onAutoLayout,
+    topRightActions,
   }: {
     onDeleteDependencies: (ids: string[]) => void;
     onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
+    onAutoLayout: (nodes: { id: string; position: { x: number; y: number } }[]) => void;
+    topRightActions?: ReactNode;
   }) => (
     <>
+      {topRightActions}
       <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
         Solicitar eliminación de dependencias
       </button>
       <button type="button" onClick={() => onToggleNodeVisibility('node-1', false)}>
         Ocultar para estudiantes
+      </button>
+      <button
+        type="button"
+        onClick={() => onAutoLayout([{ id: 'node-1', position: { x: 40, y: 80 } }])}
+      >
+        Ordenar mapa
       </button>
     </>
   ),
@@ -104,13 +116,14 @@ test('announces the loading state and renders a named error when the roadmap can
   );
 });
 
-test('separates the course context, term, and teacher state in the canvas header', () => {
+test('shows the course code and localized term together in the canvas header', () => {
   useRoadmapMock.mockReturnValue(roadmapActions());
   renderCanvas(true);
 
   expect(screen.getByRole('heading', { name: 'Programación I' })).toBeTruthy();
-  expect(screen.getByText('CC1001')).toBeTruthy();
-  expect(screen.getByText('2026, semestre 2')).toBeTruthy();
+  const courseCode = screen.getByText('CC1001');
+  expect(courseCode.parentElement?.textContent).toBe('CC1001·Primavera 2026');
+  expect(screen.getByText('Primavera 2026')).toBeTruthy();
   expect(screen.getByText('Modo edición')).toBeTruthy();
   expect(screen.getByRole('region', { name: 'Leyenda del roadmap' }).textContent).toContain(
     'TiposContenido',
@@ -118,6 +131,25 @@ test('separates the course context, term, and teacher state in the canvas header
   expect(
     screen.getByText(/Arrastra desde un punto de un nodo a otro para crear una dependencia/),
   ).toBeTruthy();
+  const canvas = screen.getByLabelText('Lienzo del roadmap');
+  expect(canvas.className).toContain('lg:min-h-0');
+  expect(canvas.parentElement?.className).toContain('lg:grid-rows-[minmax(0,1fr)]');
+  expect(canvas.parentElement?.parentElement?.className).toContain('lg:h-full');
+});
+
+test('uses Otoño for first-semester roadmaps', () => {
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  render(
+    <RoadmapCanvas
+      identifier={{ ...identifier, semester: 1 }}
+      title="Programación I"
+      courseCode="CC1001"
+      year={2026}
+      semester={1}
+    />,
+  );
+
+  expect(screen.getByText('Otoño 2026')).toBeTruthy();
 });
 
 test('creates nodes from the floating canvas button', async () => {
@@ -126,7 +158,13 @@ test('creates nodes from the floating canvas button', async () => {
   useRoadmapMock.mockReturnValue(roadmapActions({ addNode }));
   renderCanvas(true);
 
-  await user.click(screen.getByRole('button', { name: 'Agregar nodo' }));
+  const floatingButton = screen.getByRole('button', { name: 'Crear en el mapa' });
+  expect(floatingButton.className).toContain('rounded-full');
+  expect(floatingButton.className).toContain('cursor-pointer');
+  await user.pointer({ keys: '[MouseLeft>]', target: floatingButton });
+  await user.pointer({ keys: '[/MouseLeft]' });
+  expect(screen.getByRole('menuitem', { name: 'Crear nodo' })).toBeTruthy();
+  await user.click(screen.getByRole('menuitem', { name: 'Crear nodo' }));
   const dialog = screen.getByRole('dialog', { name: 'Agregar al mapa' });
   expect(within(dialog).getByRole('combobox', { name: 'Tipo' }).textContent).toContain('Contenido');
   await user.type(within(dialog).getByLabelText('Título'), 'Repasar límites');
@@ -139,6 +177,62 @@ test('creates nodes from the floating canvas button', async () => {
     isVisible: true,
   });
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('manages node types from the floating canvas button', async () => {
+  const user = userEvent.setup();
+  const addNodeType = vi.fn().mockResolvedValue(true);
+  const updateNodeType = vi.fn().mockResolvedValue(true);
+  const deleteNodeType = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ addNodeType, updateNodeType, deleteNodeType }));
+  const { unmount } = renderCanvas(true);
+
+  const floatingButton = screen.getByRole('button', { name: 'Crear en el mapa' });
+  await user.pointer({ keys: '[MouseLeft>]', target: floatingButton });
+  await user.pointer({ keys: '[/MouseLeft]' });
+  expect(screen.getByRole('menuitem', { name: 'Gestionar tipos de nodo' })).toBeTruthy();
+  await user.click(screen.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }));
+  const dialog = screen.getByRole('dialog', { name: 'Tipos de nodo' });
+  await user.type(within(dialog).getByLabelText('Nombre'), 'Laboratorio');
+  await user.click(within(dialog).getByRole('button', { name: 'Crear tipo' }));
+
+  expect(addNodeType).toHaveBeenCalledWith({ name: 'Laboratorio', color: '#024ad8' });
+  expect(screen.getByRole('dialog', { name: 'Tipos de nodo' })).toBeTruthy();
+
+  const customType = { id: 'lab', name: 'Laboratorio', color: '#024ad8', isPredefined: false };
+  unmount();
+  useRoadmapMock.mockReturnValue(
+    roadmapActions({
+      roadmap: { ...roadmap, nodeTypes: [...roadmap.nodeTypes, customType] },
+      updateNodeType,
+      deleteNodeType,
+    }),
+  );
+  renderCanvas(true);
+  await user.pointer({
+    keys: '[MouseLeft>]',
+    target: screen.getByRole('button', { name: 'Crear en el mapa' }),
+  });
+  await user.pointer({ keys: '[/MouseLeft]' });
+  await user.click(screen.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }));
+  const managementDialog = screen.getByRole('dialog', { name: 'Tipos de nodo' });
+  await user.click(
+    within(managementDialog).getByRole('button', { name: 'Editar tipo Laboratorio' }),
+  );
+  const nameInput = within(managementDialog).getByLabelText('Nombre');
+  await user.clear(nameInput);
+  await user.type(nameInput, 'Laboratorio de código');
+  await user.click(within(managementDialog).getByRole('button', { name: 'Guardar tipo' }));
+  expect(updateNodeType).toHaveBeenCalledWith('lab', {
+    name: 'Laboratorio de código',
+    color: '#024ad8',
+  });
+
+  await user.click(
+    within(managementDialog).getByRole('button', { name: 'Eliminar tipo Laboratorio' }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+  expect(deleteNodeType).toHaveBeenCalledWith('lab');
 });
 
 test('confirms, cancels, and deletes every selected dependency', async () => {
@@ -170,6 +264,16 @@ test('connects the node visibility action to the roadmap mutation', async () => 
 
   await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
   expect(toggleVisibility).toHaveBeenCalledWith('node-1', false);
+});
+
+test('persists every repositioned node after ordering the map', async () => {
+  const user = userEvent.setup();
+  const moveNode = vi.fn();
+  useRoadmapMock.mockReturnValue(roadmapActions({ moveNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Ordenar mapa' }));
+  expect(moveNode).toHaveBeenCalledWith('node-1', { x: 40, y: 80 });
 });
 
 test('surfaces a mutation error as a dismissible toast over the canvas', async () => {

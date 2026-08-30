@@ -49,6 +49,7 @@ test('keeps hidden nodes on the teacher graph and marks them as hidden from stud
   expect(teacherNode.hidden).toBe(false);
   expect(teacherNode.data.isHidden).toBe(true);
   expect(teacherNode.data.typeColor).toBe('#024AD8');
+  expect(teacherNode.data.typeName).toBe('Contenido');
   teacherNode.data.onToggleVisibility?.();
   expect(onToggleNodeVisibility).toHaveBeenCalledWith('hidden-node', false);
   expect(studentNode.data.onToggleVisibility).toBeUndefined();

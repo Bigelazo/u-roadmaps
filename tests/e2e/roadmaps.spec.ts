@@ -184,6 +184,41 @@ test('teacher API manages a node type, resources, and dependencies through their
   }
 });
 
+test('teacher uploads a file resource through the protected multipart endpoint', async ({}, testInfo) => {
+  const api = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.teacher) },
+  });
+  let resourceId: string | undefined;
+
+  try {
+    const response = await api.post(
+      roadmapPath(`/nodes/${fixture.programming.firstNode}/resources`),
+      {
+        multipart: {
+          file: {
+            name: 'guia-e2e.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF-1.4 E2E guide'),
+          },
+        },
+      },
+    );
+
+    expect(response.status()).toBe(201);
+    const body = await response.json();
+    resourceId = body.resource.id;
+    expect(body.resource).toMatchObject({
+      title: 'guia-e2e.pdf',
+      type: 'FILE',
+      url: expect.stringContaining(`/resources/${resourceId}/file`),
+    });
+  } finally {
+    await deleteIfPresent(api, resourceId && roadmapPath(`/resources/${resourceId}`));
+    await api.dispose();
+  }
+});
+
 test('completion ignores hidden prerequisites and requires an active student participation', async ({}, testInfo) => {
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
@@ -282,8 +317,11 @@ test('teacher and student workflows render against the shared fixture', async ({
   });
   let nodeId: string | undefined;
   try {
-    await page.getByRole('button', { name: 'Agregar nodo' }).click();
+    await page.getByRole('button', { name: 'Crear en el mapa' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Crear nodo' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
     const createNodeDialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+    await expect(createNodeDialog).toBeVisible();
     await createNodeDialog.getByLabel('Título').fill(nodeTitle);
     await createNodeDialog.getByRole('button', { name: 'Agregar nodo' }).click();
     await expect(page.locator('p', { hasText: nodeTitle })).toBeVisible();
@@ -296,10 +334,16 @@ test('teacher and student workflows render against the shared fixture', async ({
     await page.context().clearCookies();
     await authenticateAs(page.context(), fixture.studentWithProgress);
     await page.goto('/academic-overview');
-    await expect(page.getByRole('heading', { name: 'Hola, Estudiante 02' })).toBeVisible();
-    await expect(page.getByRole('region', { name: '2026' }).getByRole('listitem')).toHaveCount(4);
+    await expect(page.getByRole('heading', { name: 'Resumen académico' })).toBeVisible();
+    await expect(page.getByRole('listitem')).toHaveCount(3);
     await expect(page.getByRole('heading', { name: 'Primavera 2026' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Otoño 2026' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Semestres anteriores/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Otoño 2026/ })).toHaveCount(0);
+    await page.getByRole('button', { name: /Semestres anteriores/ }).click();
+    await expect(page.getByRole('button', { name: /Otoño 2026/ })).toBeVisible();
+    await expect(page.getByRole('listitem')).toHaveCount(3);
+    await page.getByRole('button', { name: /Otoño 2026/ }).click();
+    await expect(page.getByRole('listitem')).toHaveCount(4);
     await expect(page.getByText('Tu período actual')).toHaveCount(0);
     const physicsRow = page
       .getByRole('listitem')

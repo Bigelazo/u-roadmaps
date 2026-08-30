@@ -96,3 +96,22 @@ test('student cannot complete a locked node and is told why', () => {
     screen.getByText('Este nodo se desbloquea cuando completes sus prerrequisitos.'),
   ).toBeTruthy();
 });
+
+test('does not render a desktop detail sidebar when no node is selected', () => {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+
+  render(
+    <StudentNodeDetail node={undefined} status={null} onClose={vi.fn()} onComplete={vi.fn()} />,
+  );
+
+  expect(screen.queryByText('Selecciona un nodo')).toBeNull();
+});

@@ -129,3 +129,25 @@ test('resource and custom node-type mutations persist and reload the roadmap', a
   );
   await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-type-delete'));
 });
+
+test('uploads a file resource as multipart form data and reloads the roadmap', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('initial')))
+    .mockResolvedValueOnce(Response.json({ resource: {} }, { status: 201 }))
+    .mockResolvedValueOnce(Response.json(roadmap('after-upload')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('initial'));
+
+  const file = new File(['guía'], 'guia.pdf', { type: 'application/pdf' });
+  await expect(result.current.uploadResource('node-1', file)).resolves.toBe(true);
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    '/api/MAT101/2026/1/roadmap/nodes/node-1/resources',
+    expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+  );
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-upload'));
+});
