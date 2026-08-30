@@ -53,7 +53,7 @@ const institutionalPositionDetails: Record<
     priority: 2,
   },
   AUXILIARY_PROFESSOR: {
-    label: 'Profesor auxiliar',
+    label: 'Auxiliar',
     accentClass: 'border-l-[#f0195c]',
     priority: 3,
   },
@@ -238,26 +238,26 @@ export default async function AcademicOverviewPage() {
   const courses =
     mufasa.source === 'MUFASA'
       ? uniqueCourses(
-          mufasa.courses.map((course) => {
-            const localCourse = localCoursesByKey.get(courseKey(course));
-            return {
-              courseCode: course.courseCode,
-              name: course.name,
-              year: course.year,
-              semester: course.semester,
-              section: course.section,
-              department: localCourse?.department ?? null,
-              role:
-                course.isTeaching ||
+        mufasa.courses.map((course) => {
+          const localCourse = localCoursesByKey.get(courseKey(course));
+          return {
+            courseCode: course.courseCode,
+            name: course.name,
+            year: course.year,
+            semester: course.semester,
+            section: course.section,
+            department: localCourse?.department ?? null,
+            role:
+              course.isTeaching ||
                 (course.institutionalPosition !== null &&
                   course.institutionalPosition !== 'OBSERVER')
-                  ? 'TEACHER'
-                  : (localCourse?.role ?? 'STUDENT'),
-              institutionalPosition: course.institutionalPosition,
-              hasRoadmap: localCourse?.hasRoadmap ?? false,
-            };
-          }),
-        )
+                ? 'TEACHER'
+                : (localCourse?.role ?? 'STUDENT'),
+            institutionalPosition: course.institutionalPosition,
+            hasRoadmap: localCourse?.hasRoadmap ?? false,
+          };
+        }),
+      )
       : uniqueCourses(localCourses);
   const courseTerms = groupCoursesByAcademicTerm(courses);
   const [currentTerm, ...previousTerms] = courseTerms;

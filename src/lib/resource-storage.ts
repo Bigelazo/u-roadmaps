@@ -25,3 +25,10 @@ export async function readUploadedFile(fileKey: string) {
 export async function deleteUploadedFile(fileKey: string) {
   await rm(storagePath(fileKey), { force: true });
 }
+
+export async function replaceFixtureUploadedFiles(
+  files: readonly { fileKey: string; bytes: Buffer }[],
+) {
+  await mkdir(storageDirectory, { recursive: true });
+  await Promise.all(files.map(({ fileKey, bytes }) => writeFile(storagePath(fileKey), bytes)));
+}

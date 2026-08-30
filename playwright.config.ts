@@ -13,7 +13,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      'pnpm exec dotenv -e .env.development -- sh -c \'export DATABASE_URL="$E2E_DATABASE_URL" NEXT_DIST_DIR=".next-e2e" NEXTAUTH_URL="http://localhost:3200" NEXTAUTH_SECRET="e2e-nextauth-secret" VTI_JWT_SECRET="e2e-vti-secret" U_ROADMAPS_E2E_DATA="true"; pnpm exec prisma migrate deploy && pnpm exec tsx prisma/development-data.ts && pnpm exec next build && pnpm exec next start -p 3200\'',
+      'pnpm exec dotenv -e .env.development -- sh -c \'export DATABASE_URL="$E2E_DATABASE_URL" NEXT_DIST_DIR=".next-e2e" NEXTAUTH_URL="http://localhost:3200" NEXTAUTH_SECRET="e2e-nextauth-secret" VTI_JWT_SECRET="e2e-vti-secret" U_ROADMAPS_E2E_DATA="true"; pnpm exec prisma migrate deploy && for fixture_reset in 1 2; do pnpm exec tsx prisma/development-data.ts; done && pnpm exec next build && pnpm exec next start -p 3200\'',
     env: {
       ...process.env,
       NEXTAUTH_URL: 'http://localhost:3200',

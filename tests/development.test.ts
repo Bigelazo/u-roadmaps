@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   developmentEnvironmentEnabled,
+  developmentPersonas,
   fixtureEnvironmentEnabled,
   isDevelopmentPersona,
   requireFixtureEnvironment,
@@ -36,6 +37,11 @@ describe('fixture environment', () => {
 
     expect(isDevelopmentPersona('10000000-0000-4000-8000-000000000001')).toBe(true);
     expect(isDevelopmentPersona('30000000-0000-4000-8000-000000000001')).toBe(false);
+    expect(developmentPersonas).toEqual([
+      { id: '10000000-0000-4000-8000-000000000001', label: 'Daniela Rojas Mella' },
+      { id: '10000000-0000-4000-8000-000000000002', label: 'Nicolás Fuentes Arancibia' },
+      { id: '20000000-0000-4000-8000-000000000051', label: 'Camila Morales Soto' },
+    ]);
   });
 
   it('allows the local E2E database only when E2E fixture loading is enabled', () => {

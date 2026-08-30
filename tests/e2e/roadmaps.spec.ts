@@ -1,4 +1,10 @@
-import { expect, request as apiRequest, test, type APIRequestContext } from '@playwright/test';
+import {
+  expect,
+  request as apiRequest,
+  test,
+  type APIRequestContext,
+  type Page,
+} from '@playwright/test';
 import { SignJWT } from 'jose';
 import { authenticateAs, fixture, fixtureRoadmapPath, roadmapPath, sessionCookie } from './helpers';
 
@@ -10,6 +16,34 @@ async function deleteIfPresent(api: APIRequestContext, path: string | undefined)
   if (path) await api.delete(path);
 }
 
+async function panRoadmapNodeIntoView(page: Page, nodeId: string) {
+  const pane = page.locator('.react-flow__pane');
+  const node = page.locator(`.react-flow__node[data-id="${nodeId}"]`);
+
+  await expect(node).toBeAttached();
+  await expect(pane).toBeVisible();
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const [nodeBox, paneBox] = await Promise.all([node.boundingBox(), pane.boundingBox()]);
+    if (!nodeBox || !paneBox) throw new Error('No se pudo ubicar el nodo dentro del lienzo.');
+
+    const paneCenter = { x: paneBox.x + paneBox.width / 2, y: paneBox.y + paneBox.height / 2 };
+    const nodeCenter = { x: nodeBox.x + nodeBox.width / 2, y: nodeBox.y + nodeBox.height / 2 };
+    const offsetX = paneCenter.x - nodeCenter.x;
+    const offsetY = paneCenter.y - nodeCenter.y;
+    if (Math.abs(offsetX) < 1 && Math.abs(offsetY) < 1) break;
+
+    await page.mouse.move(paneCenter.x, paneCenter.y);
+    await page.mouse.down();
+    await page.mouse.move(
+      paneCenter.x + Math.max(-100, Math.min(100, offsetX)),
+      paneCenter.y + Math.max(-100, Math.min(100, offsetY)),
+      { steps: 4 },
+    );
+    await page.mouse.up();
+  }
+  await expect(node).toBeInViewport();
+}
+
 test('fixture participants receive their authorized roadmap representation', async ({
   request,
 }, testInfo) => {
@@ -18,29 +52,31 @@ test('fixture participants receive their authorized roadmap representation', asy
 
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.teacher) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
   });
   const teacherRoadmap = await teacher.get(roadmapPath());
   expect(teacherRoadmap.status()).toBe(200);
   expect(await teacherRoadmap.json()).toEqual(
     expect.objectContaining({
-      course: expect.objectContaining({ code: 'CC1001', name: 'Programación I' }),
-      nodes: expect.arrayContaining([expect.objectContaining({ title: 'Cierre del curso' })]),
+      course: expect.objectContaining({ code: 'CC1002', name: 'Introducción a la Programación' }),
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ title: 'Proyecto de datos con archivos' }),
+      ]),
     }),
   );
   await teacher.dispose();
 
   const student = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.studentWithoutProgress) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
   });
   const studentRoadmap = await student.get(roadmapPath());
   expect(studentRoadmap.status()).toBe(200);
   const studentDto = await studentRoadmap.json();
   expect(studentDto.nodes).not.toEqual(
-    expect.arrayContaining([expect.objectContaining({ id: fixture.programming.hiddenNode })]),
+    expect.arrayContaining([expect.objectContaining({ id: fixture.cc1002.hiddenNode })]),
   );
-  const mutation = await student.patch(roadmapPath(`/nodes/${fixture.programming.firstNode}`), {
+  const mutation = await student.patch(roadmapPath(`/nodes/${fixture.cc1002.firstNode}`), {
     data: { title: 'No autorizado' },
   });
   expect(mutation.status()).toBe(403);
@@ -48,7 +84,7 @@ test('fixture participants receive their authorized roadmap representation', asy
 
   const inactive = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.inactiveStudent) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002WithdrawnStudent) },
   });
   expect((await inactive.get(roadmapPath())).status()).toBe(403);
   await inactive.dispose();
@@ -59,24 +95,32 @@ test('roadmap creation rejects conflicts and preserves authorization and cross-r
 }, testInfo) => {
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.teacher) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
   });
   const conflict = await teacher.post(roadmapPath(), {
-    data: { course: { name: 'Programación I', department: 'DCC' } },
+    data: { course: { name: 'Introducción a la Programación', department: 'DCC' } },
   });
   expect(conflict.status()).toBe(409);
   expect((await conflict.json()).error.code).toBe('ROADMAP_CONFLICT');
-  expect((await teacher.post(fixtureRoadmapPath(fixture.physics))).status()).toBe(403);
   await teacher.dispose();
+
+  const teachingAssistant = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.nicolas) },
+  });
+  expect((await teachingAssistant.post(fixtureRoadmapPath(fixture.fi1001Current))).status()).toBe(
+    403,
+  );
+  await teachingAssistant.dispose();
 
   const student = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.studentWithoutProgress) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
   });
-  expect((await student.get(fixtureRoadmapPath(fixture.physics))).status()).toBe(404);
+  expect((await student.get(fixtureRoadmapPath(fixture.fi1001Current))).status()).toBe(404);
   expect((await student.post(roadmapPath())).status()).toBe(403);
   const foreignResource = await student.get(
-    fixtureRoadmapPath(fixture.calculus, `/nodes/${fixture.programming.firstNode}/resources`),
+    fixtureRoadmapPath(fixture.ma1001, `/nodes/${fixture.cc1002.firstNode}/resources`),
   );
   expect(foreignResource.status()).toBe(404);
   expect((await foreignResource.json()).error.code).toBe('NODE_NOT_FOUND');
@@ -87,7 +131,7 @@ test('roadmap creation rejects conflicts and preserves authorization and cross-r
 test('teacher API manages a node type, resources, and dependencies through their lifecycle', async ({}, testInfo) => {
   const api = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.teacher) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
   });
   const typeName = uniqueName('Laboratorio E2E');
   let typeId: string | undefined;
@@ -187,23 +231,20 @@ test('teacher API manages a node type, resources, and dependencies through their
 test('teacher uploads a file resource through the protected multipart endpoint', async ({}, testInfo) => {
   const api = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.teacher) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
   });
   let resourceId: string | undefined;
 
   try {
-    const response = await api.post(
-      roadmapPath(`/nodes/${fixture.programming.firstNode}/resources`),
-      {
-        multipart: {
-          file: {
-            name: 'guia-e2e.pdf',
-            mimeType: 'application/pdf',
-            buffer: Buffer.from('%PDF-1.4 E2E guide'),
-          },
+    const response = await api.post(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/resources`), {
+      multipart: {
+        file: {
+          name: 'guia-e2e.pdf',
+          mimeType: 'application/pdf',
+          buffer: Buffer.from('%PDF-1.4 E2E guide'),
         },
       },
-    );
+    });
 
     expect(response.status()).toBe(201);
     const body = await response.json();
@@ -222,15 +263,15 @@ test('teacher uploads a file resource through the protected multipart endpoint',
 test('completion ignores hidden prerequisites and requires an active student participation', async ({}, testInfo) => {
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.teacher) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
   });
   const student = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.studentWithoutProgress) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
   });
   const inactive = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.inactiveStudent) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002WithdrawnStudent) },
   });
   let hiddenId: string | undefined;
   let prerequisiteId: string | undefined;
@@ -285,14 +326,10 @@ test('completion ignores hidden prerequisites and requires an active student par
     expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
     expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
     expect(
-      (
-        await teacher.post(roadmapPath(`/nodes/${fixture.programming.firstNode}/completion`))
-      ).status(),
+      (await teacher.post(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/completion`))).status(),
     ).toBe(403);
     expect(
-      (
-        await inactive.post(roadmapPath(`/nodes/${fixture.programming.firstNode}/completion`))
-      ).status(),
+      (await inactive.post(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/completion`))).status(),
     ).toBe(403);
   } finally {
     await deleteIfPresent(teacher, dependencyId && roadmapPath(`/dependencies/${dependencyId}`));
@@ -306,14 +343,14 @@ test('completion ignores hidden prerequisites and requires an active student par
 test('teacher and student workflows render against the shared fixture', async ({
   page,
 }, testInfo) => {
-  await authenticateAs(page.context(), fixture.teacher);
-  await page.goto('/courses/CC1001/2026/2');
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
   await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Programación I' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
   const nodeTitle = uniqueName('Nodo creado desde E2E');
   const api = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.teacher) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
   });
   let nodeId: string | undefined;
   try {
@@ -332,7 +369,7 @@ test('teacher and student workflows render against the shared fixture', async ({
     expect(nodeId).toBeTruthy();
 
     await page.context().clearCookies();
-    await authenticateAs(page.context(), fixture.studentWithProgress);
+    await authenticateAs(page.context(), fixture.cc1002StudentWithoutProgress);
     await page.goto('/academic-overview');
     await expect(page.getByRole('heading', { name: 'Resumen académico' })).toBeVisible();
     await expect(page.getByRole('listitem')).toHaveCount(3);
@@ -347,7 +384,8 @@ test('teacher and student workflows render against the shared fixture', async ({
     await expect(page.getByText('Tu período actual')).toHaveCount(0);
     const physicsRow = page
       .getByRole('listitem')
-      .filter({ has: page.getByRole('heading', { name: 'Física I' }) });
+      .filter({ hasText: 'FI1001' })
+      .filter({ hasText: 'Sin roadmap' });
     await expect(physicsRow).toContainText('Sin roadmap');
     await expect(physicsRow.getByRole('link')).toHaveCount(0);
     await page.setViewportSize({ width: 375, height: 812 });
@@ -356,11 +394,11 @@ test('teacher and student workflows render against the shared fixture', async ({
       await page.locator('main').evaluate((main) => main.scrollWidth <= main.clientWidth),
     ).toBe(true);
     await page.getByRole('link', { name: 'Abrir roadmap' }).first().click();
-    await page.getByText('Variables y tipos').click();
-    await expect(page.getByRole('link', { name: 'Guía de variables' })).toHaveAttribute(
-      'href',
-      'https://example.test/programacion/variables',
-    );
+    await panRoadmapNodeIntoView(page, fixture.cc1002.firstNode);
+    await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+    await expect(
+      page.getByRole('link', { name: 'Programa y herramientas del curso' }),
+    ).toHaveAttribute('href', 'https://ucampus.uchile.cl/');
     await expect(page.getByRole('button', { name: 'Completar' })).toBeEnabled();
   } finally {
     await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
@@ -368,16 +406,14 @@ test('teacher and student workflows render against the shared fixture', async ({
   }
 });
 
-test('academic overview explains when there are no active course participations', async ({
-  page,
-}) => {
-  await authenticateAs(page.context(), fixture.inactiveStudent);
+test('withdrawn participations remain local to their course offering', async ({ page }) => {
+  await authenticateAs(page.context(), fixture.camila);
   await page.goto('/academic-overview');
 
-  await expect(page.getByRole('heading', { name: 'Hola, Estudiante 51' })).toBeVisible();
-  await expect(page.getByText('No hay cursos para mostrar', { exact: true })).toBeVisible();
-  await expect(page.getByText('No tienes participaciones activas en cursos.')).toBeVisible();
-  await expect(page.getByRole('link', { name: /Abrir roadmap|Ver curso/ })).toHaveCount(0);
+  await expect(page.getByRole('listitem')).toHaveCount(2);
+  await expect(page.getByRole('listitem').filter({ hasText: 'CC1002' })).toHaveCount(1);
+  await expect(page.getByRole('listitem').filter({ hasText: 'MA1001' })).toHaveCount(1);
+  await expect(page.getByText('Sin roadmap')).toHaveCount(0);
 });
 
 async function vtiToken(
@@ -467,7 +503,7 @@ test('landing access starts VTI and dismisses authentication failures without re
 });
 
 test('logout requires confirmation and removes the application session', async ({ page }) => {
-  await authenticateAs(page.context(), fixture.studentWithoutProgress);
+  await authenticateAs(page.context(), fixture.cc1002StudentWithoutProgress);
   await page.goto('/academic-overview');
 
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
@@ -509,7 +545,7 @@ test('1440px visual references cover the public shell states in each browser', a
     contentType: 'image/png',
   });
 
-  await authenticateAs(page.context(), fixture.studentWithoutProgress);
+  await authenticateAs(page.context(), fixture.cc1002StudentWithoutProgress);
   await page.goto('/academic-overview');
   await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
   await testInfo.attach('authenticated-navigation', {
@@ -526,7 +562,7 @@ test('VTI callback issues a session after validating its one-time state', async 
   const state = new URL(start.headers().location).searchParams.get('state');
   expect(state).toBeTruthy();
   const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
-  const token = await vtiToken(fixture.studentWithoutProgressVtiClaims);
+  const token = await vtiToken(fixture.cc1002StudentWithoutProgressVtiClaims);
   const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
     maxRedirects: 0,
     headers: { cookie: stateCookie },
@@ -541,7 +577,7 @@ test('VTI callback issues a session after validating its one-time state', async 
   });
   expect(await session.json()).toEqual(
     expect.objectContaining({
-      user: expect.objectContaining({ id: fixture.studentWithoutProgress }),
+      user: expect.objectContaining({ id: fixture.cc1002StudentWithoutProgress }),
     }),
   );
 });

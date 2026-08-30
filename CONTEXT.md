@@ -32,6 +32,10 @@ _Avoid_: Public profile, current roster
 A student's read-only view of current and historical U-Campus courses, with current courses emphasized. Courses can appear before they have a roadmap; opening one then explains that no roadmap exists. Appearance in this view alone does not create a U-roadmaps participation.
 _Avoid_: Participation, roster synchronization
 
+**Student progress tracking (Seguimiento de estudiantes)**:
+The teaching staff's offering-scoped view of student Participations, combining basic institutional identity, Course section, participation activity, latest Platform entry, and a summary of Roadmap Completions.
+_Avoid_: Student list, course roster, public profile
+
 **Roadmap (Roadmap)**:
 The optional, unique learning path of a course offering, created at a course professor's initiative and composed of nodes and their dependencies. It is one semester's version in the course's roadmap lineage. Its creation materializes the offering, all its coordinated sections, and their rosters from U-Campus. Academic-calendar closure freezes the version; copying it with fresh identities for a new offering creates a successor, excluding participants and completions.
 _Avoid_: Curriculum, course version

@@ -7,7 +7,9 @@ Los datos ficticios nunca forman parte del seed general ni de la configuración 
 3. Ejecuta `pnpm dev:data:reset`. El comando aplica las migraciones y carga los datos ficticios, incluidos los tipos de nodo predefinidos.
 4. Ejecuta `pnpm dev`; Next.js carga `.env.development`.
 
-El reset instala dos docentes, 50 estudiantes activos, cinco estudiantes retirados, cuatro ofertas académicas y roadmaps representativos. La barra `DESARROLLO` permite alternar entre las siete personas destacadas. Repetir `dev:data:reset` restaura únicamente los identificadores reservados del escenario.
+El reset instala un catálogo determinista con las Ofertas académicas CC1002 2026-2, MA1001 2026-2, FI1001 2026-1 y FI1001 2026-2. Las tres primeras tienen Roadmap y la última representa una Oferta sin Roadmap. Cada Roadmap contiene 15 Nodos, un Tipo de nodo personalizado, dependencias acíclicas, progreso estudiantil y Recursos de enlace, video y descarga protegida.
+
+La barra `DESARROLLO` permite alternar únicamente entre Daniela Rojas Mella, Nicolás Fuentes Arancibia y Camila Morales Soto. El catálogo también conserva Secciones, cargos institucionales, Participaciones retiradas y la candidata histórica de copia de FI1001 para funcionalidades futuras; el adaptador sólo persiste los campos que el esquema actual soporta. Repetir `dev:data:reset` restaura únicamente los identificadores y archivos reservados del escenario, sin limpiar datos locales ajenos.
 
 La carga y las rutas de desarrollo requieren las tres condiciones: `NODE_ENV=development`, `U_ROADMAPS_DEV_DATA=true` y una URL local para la base llamada exactamente `roadmap_dev_db`.
 

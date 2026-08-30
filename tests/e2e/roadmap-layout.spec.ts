@@ -33,27 +33,29 @@ test('roadmap fits the viewport for teachers and students without residual verti
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await authenticateAs(page.context(), fixture.teacher);
-  await page.goto('/courses/CC1001/2026/2');
-  await expect(page.getByRole('heading', { name: 'Programación I' })).toBeVisible();
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
+  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
   await expectViewportFitsPage(page);
 
   await page.context().clearCookies();
-  await authenticateAs(page.context(), fixture.studentWithProgress);
-  await page.goto('/courses/CC1001/2026/2');
-  await expect(page.getByRole('heading', { name: 'Programación I' })).toBeVisible();
+  await authenticateAs(page.context(), fixture.cc1002StudentWithProgress);
+  await page.goto('/courses/CC1002/2026/2');
+  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
   await expectViewportFitsPage(page);
 });
 
-test('uploading a resource preserves the roadmap viewport and sends multipart data', async ({ page }) => {
+test('uploading a resource preserves the roadmap viewport and sends multipart data', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1870, height: 939 });
-  await authenticateAs(page.context(), fixture.teacher);
-  await page.goto('/courses/CC1001/2026/2');
-  await expect(page.getByRole('heading', { name: 'Programación I' })).toBeVisible();
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
+  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
 
-  await page.locator('.react-flow__node').first().click();
-  await page.getByRole('button', { name: 'Recurso' }).click();
-  await page.getByLabel('Archivo').setInputFiles({
+  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await page.getByRole('button', { name: 'Recurso', exact: true }).click();
+  await page.getByLabel('Archivo', { exact: true }).setInputFiles({
     name: 'guia-viewport.pdf',
     mimeType: 'application/pdf',
     buffer: Buffer.from('%PDF-1.4 viewport guide'),
@@ -63,22 +65,22 @@ test('uploading a resource preserves the roadmap viewport and sends multipart da
     page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
-        response.url().includes(roadmapPath(`/nodes/${fixture.programming.firstNode}/resources`)),
+        response.url().includes(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/resources`)),
     ),
     page.getByRole('button', { name: 'Subir archivo' }).click(),
   ]).then(([response]) => response);
 
   expect(uploadResponse.status()).toBe(201);
   const body = await uploadResponse.json();
-  await expect(page.getByRole('heading', { name: 'Programación I' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
   await expectViewportFitsPage(page);
   await page.request.delete(roadmapPath(`/resources/${body.resource.id}`));
 });
 
 test('groups editing controls without visual overlap on narrow viewports', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await authenticateAs(page.context(), fixture.teacher);
-  await page.goto('/courses/CC1001/2026/2');
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
   await page.getByRole('button', { name: 'Ocultar panel de edición' }).click();
   await expect(page.getByRole('button', { name: 'Mostrar panel de edición' })).toBeVisible();
 
