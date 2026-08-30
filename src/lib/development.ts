@@ -34,3 +34,9 @@ export const developmentPersonas = [
   { id: '20000000-0000-4000-8000-000000000004', label: 'Estudiante: casi completo' },
   { id: '20000000-0000-4000-8000-000000000051', label: 'Estudiante: retirado' },
 ];
+
+export function isDevelopmentPersona(userId: string) {
+  return (
+    developmentEnvironmentEnabled() && developmentPersonas.some((persona) => persona.id === userId)
+  );
+}

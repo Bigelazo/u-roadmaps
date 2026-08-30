@@ -20,6 +20,11 @@ colors:
   steel: "#aeb7c3"
   graphite: "#5a6474"
   error: "#b3262b"
+  teaching-assistant: "#933D8A"
+  auxiliary-professor: "#f0195c"
+  course-professor: "#1d3193"
+  coordinating-professor: "#9acc24"
+  enrolled-student: "#f4ce62"
 
 typography:
   display-lg: { fontFamily: Archivo SemiCondensed, fontSize: 56px, fontWeight: 650, lineHeight: 0.98, letterSpacing: -2.8px }
@@ -91,6 +96,16 @@ Never place white body text on `{colors.progress}`; the contrast is insufficient
 - **Error** (`{colors.error}`): destructive actions and validation errors only.
 
 Do not use green alone to communicate completion or current position. Pair it with a label, icon, shape, or change in fill.
+
+### Institutional course positions
+
+Academic-overview course cards use a 4px left border to describe the person's relationship with the course. This marker always pairs with a textual position; it never conveys a teaching position by color alone.
+
+- **Teaching assistant** (`{colors.teaching-assistant}`): Ayudante.
+- **Auxiliary professor** (`{colors.auxiliary-professor}`): Auxiliar.
+- **Course professor** (`{colors.course-professor}`): Profesor de cátedra.
+- **Coordinating professor** (`{colors.coordinating-professor}`): Profesor coordinador.
+- **Enrolled student** (`{colors.enrolled-student}`): Inscrito como estudiante.
 
 ## Typography
 

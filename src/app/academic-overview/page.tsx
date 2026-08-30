@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpRight, BookOpen, MapPinned, Route } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, BookOpen, ChevronDown, MapPinned, Route } from 'lucide-react';
 import type { Prisma } from '@prisma/client';
 import { redirect } from 'next/navigation';
 import {
@@ -9,9 +9,18 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getMufasaEnrolledCourses } from '@/lib/mufasa';
+import { isDevelopmentPersona } from '@/lib/development';
+import { getMufasaAcademicCourses, type MufasaInstitutionalCoursePosition } from '@/lib/mufasa';
+import { Separator } from '@/components/ui/separator';
 
 type ParticipationWithCourse = Prisma.ParticipacionGetPayload<{
   include: { courseOffering: { include: { course: true; roadmap: true } } };
@@ -25,8 +34,32 @@ type OverviewCourse = Readonly<{
   semester: number;
   section: string | null;
   role: 'STUDENT' | 'TEACHER';
+  institutionalPosition: MufasaInstitutionalCoursePosition | null;
   hasRoadmap: boolean;
 }>;
+
+const institutionalPositionDetails: Record<
+  MufasaInstitutionalCoursePosition,
+  Readonly<{ label: string; accentClass: string; priority: number }>
+> = {
+  COORDINATING_PROFESSOR: {
+    label: 'Profesor coordinador',
+    accentClass: 'border-l-[#9acc24]',
+    priority: 1,
+  },
+  COURSE_PROFESSOR: {
+    label: 'Profesor de cátedra',
+    accentClass: 'border-l-[#1d3193]',
+    priority: 2,
+  },
+  AUXILIARY_PROFESSOR: {
+    label: 'Profesor auxiliar',
+    accentClass: 'border-l-[#f0195c]',
+    priority: 3,
+  },
+  TEACHING_ASSISTANT: { label: 'Ayudante', accentClass: 'border-l-[#933D8A]', priority: 4 },
+  OBSERVER: { label: 'Oyente', accentClass: 'border-l-[#6f7a8a]', priority: 6 },
+};
 
 function termLabel({ year, semester }: Pick<OverviewCourse, 'year' | 'semester'>) {
   return `${semester === 1 ? 'Otoño' : 'Primavera'} ${year}`;
@@ -41,6 +74,7 @@ function localOverviewCourse({ role, courseOffering }: ParticipationWithCourse):
     semester: courseOffering.semester,
     section: null,
     role,
+    institutionalPosition: null,
     hasRoadmap: Boolean(courseOffering.roadmap),
   };
 }
@@ -49,20 +83,40 @@ function courseKey(course: Pick<OverviewCourse, 'courseCode' | 'year' | 'semeste
   return `${course.courseCode}:${course.year}:${course.semester}`;
 }
 
+function coursePriority(course: OverviewCourse) {
+  if (course.institutionalPosition) {
+    return institutionalPositionDetails[course.institutionalPosition].priority;
+  }
+  return course.role === 'TEACHER' ? 4 : 5;
+}
+
 function uniqueCourses(courses: OverviewCourse[]) {
-  return Array.from(
-    new Map(courses.map((course) => [courseKey(course), course])).values(),
-  ).toSorted(
+  const coursesByKey = new Map<string, OverviewCourse>();
+  for (const course of courses) {
+    const existing = coursesByKey.get(courseKey(course));
+    if (!existing || coursePriority(course) < coursePriority(existing)) {
+      coursesByKey.set(courseKey(course), course);
+    }
+  }
+
+  return Array.from(coursesByKey.values()).toSorted(
     (left, right) =>
       right.year - left.year ||
       right.semester - left.semester ||
+      coursePriority(left) - coursePriority(right) ||
       left.courseCode.localeCompare(right.courseCode, 'es-CL'),
   );
 }
 
 function CourseRow({ course }: Readonly<{ course: OverviewCourse }>) {
+  const position = course.institutionalPosition
+    ? institutionalPositionDetails[course.institutionalPosition]
+    : course.role === 'TEACHER'
+      ? { label: 'Equipo docente', accentClass: 'border-l-[#1d3193]' }
+      : { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' };
+
   return (
-    <li className="min-w-0">
+    <li className={`min-w-0 border-l-4 ${position.accentClass}`}>
       <div className="grid gap-4 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold tracking-[0.08em] text-muted-foreground uppercase">
@@ -78,7 +132,7 @@ function CourseRow({ course }: Readonly<{ course: OverviewCourse }>) {
             {course.name}
           </h4>
           <p className="mt-2 text-sm text-muted-foreground">
-            {course.role === 'TEACHER' ? 'Equipo docente' : 'Inscrito como estudiante'}
+            {position.label}
             {course.department ? ` · ${course.department}` : ''}
           </p>
         </div>
@@ -119,27 +173,31 @@ type TermGroup = Readonly<{
   courses: OverviewCourse[];
 }>;
 
-type YearGroup = Readonly<{
-  year: number;
-  terms: TermGroup[];
-}>;
-
-function groupCoursesByAcademicTerm(courses: OverviewCourse[]): YearGroup[] {
-  const years = new Map<number, TermGroup[]>();
+function groupCoursesByAcademicTerm(courses: OverviewCourse[]): TermGroup[] {
+  const termsByKey = new Map<string, TermGroup>();
 
   for (const course of courses) {
-    const terms = years.get(course.year) ?? [];
-    const term = terms.find((candidate) => candidate.semester === course.semester);
+    const key = `${course.year}-${course.semester}`;
+    const term = termsByKey.get(key);
 
     if (term) {
       term.courses.push(course);
     } else {
-      terms.push({ year: course.year, semester: course.semester, courses: [course] });
-      years.set(course.year, terms);
+      termsByKey.set(key, { year: course.year, semester: course.semester, courses: [course] });
     }
   }
 
-  return Array.from(years, ([year, terms]) => ({ year, terms }));
+  return Array.from(termsByKey.values());
+}
+
+function CourseList({ term }: Readonly<{ term: TermGroup }>) {
+  return (
+    <ul className="divide-y divide-fog overflow-hidden rounded-xl border border-fog bg-card">
+      {term.courses.map((course) => (
+        <CourseRow course={course} key={courseKey(course)} />
+      ))}
+    </ul>
+  );
 }
 
 function AcademicTermSection({ term }: Readonly<{ term: TermGroup }>) {
@@ -158,11 +216,7 @@ function AcademicTermSection({ term }: Readonly<{ term: TermGroup }>) {
           {term.courses.length} {term.courses.length === 1 ? 'curso' : 'cursos'}
         </p>
       </div>
-      <ul className="divide-y divide-fog overflow-hidden rounded-xl border border-fog bg-card">
-        {term.courses.map((course) => (
-          <CourseRow course={course} key={courseKey(course)} />
-        ))}
-      </ul>
+      <CourseList term={term} />
     </section>
   );
 }
@@ -172,7 +226,7 @@ export default async function AcademicOverviewPage() {
   if (!user) redirect('/api/plogin/start');
 
   const [mufasa, participations] = await Promise.all([
-    getMufasaEnrolledCourses(user.rut),
+    getMufasaAcademicCourses(user.rut, { useLocalFixtureData: isDevelopmentPersona(user.id) }),
     prisma.participation.findMany({
       where: { userId: user.id, isActive: true },
       include: { courseOffering: { include: { course: true, roadmap: true } } },
@@ -193,28 +247,29 @@ export default async function AcademicOverviewPage() {
               semester: course.semester,
               section: course.section,
               department: localCourse?.department ?? null,
-              role: localCourse?.role ?? 'STUDENT',
+              role:
+                course.isTeaching ||
+                (course.institutionalPosition !== null &&
+                  course.institutionalPosition !== 'OBSERVER')
+                  ? 'TEACHER'
+                  : (localCourse?.role ?? 'STUDENT'),
+              institutionalPosition: course.institutionalPosition,
               hasRoadmap: localCourse?.hasRoadmap ?? false,
             };
           }),
         )
       : uniqueCourses(localCourses);
-  const coursesByYear = groupCoursesByAcademicTerm(courses);
+  const courseTerms = groupCoursesByAcademicTerm(courses);
+  const [currentTerm, ...previousTerms] = courseTerms;
 
   return (
     <main className="min-h-screen bg-cloud py-10 text-foreground md:py-16">
       <div className="mx-auto max-w-[1440px] px-6">
         <div className="flex flex-col gap-10 md:gap-16">
           <header className="max-w-3xl">
-            <p className="text-xs font-bold tracking-[0.1em] text-primary uppercase">
+            <h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
               Resumen académico
-            </p>
-            <h1 className="mt-2 font-heading text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
-              Hola, {user.name}
             </h1>
-            <p className="mt-4 text-base leading-7 text-muted-foreground md:text-lg">
-              Tus cursos inscritos y el acceso a sus roadmaps, ordenados por período académico.
-            </p>
           </header>
 
           {mufasa.source === 'LOCAL' ? (
@@ -244,31 +299,58 @@ export default async function AcademicOverviewPage() {
                 <EmptyDescription>
                   {mufasa.source === 'LOCAL'
                     ? 'No tienes participaciones activas en cursos.'
-                    : 'No hay cursos inscritos disponibles para este resumen académico.'}
+                    : 'No hay cursos inscritos ni docentes disponibles para este resumen académico.'}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
             <div className="flex flex-col gap-12 md:gap-16">
-              {coursesByYear.map(({ year, terms }) => (
-                <section
-                  aria-labelledby={`year-${year}`}
-                  className="flex flex-col gap-6"
-                  key={year}
-                >
-                  <h2
-                    className="border-b border-primary pb-3 font-heading text-3xl font-semibold tracking-[-0.03em]"
-                    id={`year-${year}`}
-                  >
-                    {year}
-                  </h2>
-                  <div className="flex flex-col gap-8">
-                    {terms.map((term) => (
-                      <AcademicTermSection key={`${term.year}-${term.semester}`} term={term} />
-                    ))}
+              {currentTerm ? <AcademicTermSection term={currentTerm} /> : null}
+              {previousTerms.length > 0 ? (
+                <Collapsible>
+                  <div className="flex flex-col items-start gap-1">
+                    <CollapsibleTrigger className="group/previous-terms inline-flex cursor-pointer items-center gap-2 text-left font-heading text-3xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+                      <span>Semestres anteriores</span>
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="shrink-0 transition-transform group-data-panel-open/previous-terms:rotate-180"
+                        size={20}
+                      />
+                    </CollapsibleTrigger>
+                    <span className="text-sm text-muted-foreground">
+                      {previousTerms.length} {previousTerms.length === 1 ? 'semestre' : 'semestres'}
+                    </span>
                   </div>
-                </section>
-              ))}
+                  <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+                    <div className="pt-6">
+                      <Separator />
+                      <Accordion className="pt-4" multiple>
+                        {previousTerms.map((term, index) => (
+                          <AccordionItem
+                            className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:[&>[data-slot=accordion-content]]:col-start-2 md:[&>[data-slot=separator]]:col-span-2"
+                            key={`${term.year}-${term.semester}`}
+                            value={`${term.year}-${term.semester}`}
+                          >
+                            {index > 0 ? <Separator /> : null}
+                            <div className="flex flex-col items-start gap-1 pb-4">
+                              <AccordionTrigger className="w-fit flex-none cursor-pointer gap-2 py-0 font-heading text-2xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50">
+                                <span>{termLabel(term)}</span>
+                              </AccordionTrigger>
+                              <span className="text-sm text-muted-foreground">
+                                {term.courses.length}{' '}
+                                {term.courses.length === 1 ? 'curso' : 'cursos'}
+                              </span>
+                            </div>
+                            <AccordionContent className="pb-4">
+                              <CourseList term={term} />
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : null}
             </div>
           )}
         </div>

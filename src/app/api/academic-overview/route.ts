@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { requireAuthenticatedUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getMufasaEnrolledCourses } from '@/lib/mufasa';
+import { isDevelopmentPersona } from '@/lib/development';
+import { getMufasaAcademicCourses } from '@/lib/mufasa';
 import { handleApiResult, throwApiError } from '@/lib/roadmap-api';
 
 export async function GET() {
   return handleApiResult(async () => {
     const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
     const [mufasa, participations] = await Promise.all([
-      getMufasaEnrolledCourses(user.rut),
+      getMufasaAcademicCourses(user.rut, { useLocalFixtureData: isDevelopmentPersona(user.id) }),
       prisma.participation.findMany({
         where: { userId: user.id, isActive: true },
         include: { courseOffering: { include: { course: true, roadmap: true } } },
@@ -24,7 +25,9 @@ export async function GET() {
     const offerings =
       mufasa.source === 'MUFASA'
         ? mufasa.courses.map((course) => {
-            const local = localOfferings.get(`${course.courseCode}:${course.year}:${course.semester}`);
+            const local = localOfferings.get(
+              `${course.courseCode}:${course.year}:${course.semester}`,
+            );
             return {
               courseCode: course.courseCode,
               name: course.name,
@@ -32,7 +35,13 @@ export async function GET() {
               semester: course.semester,
               section: course.section,
               department: local?.courseOffering.course.department ?? null,
-              role: local?.role ?? 'STUDENT',
+              role:
+                course.isTeaching ||
+                (course.institutionalPosition !== null &&
+                  course.institutionalPosition !== 'OBSERVER')
+                  ? 'TEACHER'
+                  : (local?.role ?? 'STUDENT'),
+              institutionalPosition: course.institutionalPosition,
               hasRoadmap: Boolean(local?.courseOffering.roadmap),
             };
           })
@@ -44,6 +53,7 @@ export async function GET() {
             semester: courseOffering.semester,
             section: null,
             role,
+            institutionalPosition: null,
             hasRoadmap: Boolean(courseOffering.roadmap),
           }));
     return NextResponse.json({

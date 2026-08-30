@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   developmentEnvironmentEnabled,
   fixtureEnvironmentEnabled,
+  isDevelopmentPersona,
   requireFixtureEnvironment,
 } from '@/lib/development';
 
@@ -27,6 +28,14 @@ describe('fixture environment', () => {
     vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:51214/template1');
 
     expect(developmentEnvironmentEnabled()).toBe(true);
+  });
+
+  it('identifies development personas only when development data is enabled', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('U_ROADMAPS_DEV_DATA', 'true');
+
+    expect(isDevelopmentPersona('10000000-0000-4000-8000-000000000001')).toBe(true);
+    expect(isDevelopmentPersona('30000000-0000-4000-8000-000000000001')).toBe(false);
   });
 
   it('allows the local E2E database only when E2E fixture loading is enabled', () => {
