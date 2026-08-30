@@ -14,8 +14,10 @@ import {
   requireString,
   requireUrl,
   requireUuid,
+  resourceDto,
   type CourseOfferingIdentifier,
 } from '@/lib/roadmap-api';
+import { deleteUploadedFile } from '@/lib/resource-storage';
 
 type JsonObject = Record<string, unknown>;
 type EditorInput = { userId: string; identifier: CourseOfferingIdentifier };
@@ -127,15 +129,6 @@ async function ensureTypeNameAvailable(
   }
 }
 
-function resourceDto(resource: {
-  id: string;
-  title: string;
-  url: string;
-  type: 'FILE' | 'LINK' | 'VIDEO';
-}) {
-  return { id: resource.id, title: resource.title, url: resource.url, type: resource.type };
-}
-
 function typeDto(nodeType: { id: string; name: string; color: string; isPredefined: boolean }) {
   return {
     id: nodeType.id,
@@ -201,16 +194,25 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
       data,
       include: { resources: { orderBy: { title: 'asc' } } },
     });
-    return { ...nodeDto(updated), resources: updated.resources.map(resourceDto) };
+    return {
+      ...nodeDto(updated),
+      resources: updated.resources.map((resource) => resourceDto(resource, editor.identifier)),
+    };
   });
 }
 
 async function deleteRoadmapNodeUnsafe({ id, ...editor }: WithId) {
-  return prisma.$transaction(async (transaction) => {
+  const fileKeys = await prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
+    const resources = await transaction.resource.findMany({
+      where: { roadmapNodeId: node.id, fileKey: { not: null } },
+      select: { fileKey: true },
+    });
     await transaction.roadmapNode.delete({ where: { id: node.id } });
+    return resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : []));
   });
+  await Promise.all(fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)));
 }
 
 async function createRoadmapNodeTypeUnsafe({ input, ...editor }: WithInput) {
@@ -351,6 +353,7 @@ async function createRoadmapResourceUnsafe({
     const type = requireResourceType(input.type);
     return resourceDto(
       await transaction.resource.create({ data: { roadmapNodeId: node.id, title, url, type } }),
+      editor.identifier,
     );
   });
 }
@@ -369,16 +372,52 @@ async function updateRoadmapResourceUnsafe({
     if ('type' in input) data.type = requireResourceType(input.type);
     if (Object.keys(data).length === 0)
       throw new ApiError(400, 'INVALID_REQUEST', 'Debe indicar al menos un campo para actualizar.');
-    return resourceDto(await transaction.resource.update({ where: { id: resource.id }, data }));
+    return resourceDto(
+      await transaction.resource.update({ where: { id: resource.id }, data }),
+      editor.identifier,
+    );
+  });
+}
+
+type UploadedResourceInput = EditorInput & {
+  id: string;
+  title: string;
+  fileKey: string;
+  fileContentType: string | null;
+};
+
+async function createUploadedRoadmapResourceUnsafe({
+  id,
+  title,
+  fileKey,
+  fileContentType,
+  ...editor
+}: UploadedResourceInput) {
+  return prisma.$transaction(async (transaction) => {
+    const roadmap = await requireEditorRoadmap(transaction, editor);
+    const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
+    const resource = await transaction.resource.create({
+      data: {
+        roadmapNodeId: node.id,
+        title: requireString(title, 'title', 240),
+        url: `https://files.u-roadmaps.invalid/${requireUuid(fileKey, 'fileKey')}`,
+        type: 'FILE',
+        fileKey,
+        fileContentType,
+      },
+    });
+    return resourceDto(resource, editor.identifier);
   });
 }
 
 async function deleteRoadmapResourceUnsafe({ id, ...editor }: WithId) {
-  return prisma.$transaction(async (transaction) => {
+  const fileKey = await prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
     await transaction.resource.delete({ where: { id: resource.id } });
+    return resource.fileKey;
   });
+  if (fileKey) await deleteUploadedFile(fileKey).catch(() => undefined);
 }
 
 export function createRoadmapNode(input: WithInput) {
@@ -415,6 +454,10 @@ export function deleteRoadmapDependency(input: WithId) {
 
 export function createRoadmapResource(input: WithId & { input: JsonObject }) {
   return apiResult(() => createRoadmapResourceUnsafe(input));
+}
+
+export function createUploadedRoadmapResource(input: UploadedResourceInput) {
+  return apiResult(() => createUploadedRoadmapResourceUnsafe(input));
 }
 
 export function updateRoadmapResource(input: WithId & { input: JsonObject }) {

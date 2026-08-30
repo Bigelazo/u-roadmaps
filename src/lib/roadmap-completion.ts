@@ -1,6 +1,12 @@
 import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
-import { ApiError, apiResult, type CourseOfferingIdentifier, nodeDto } from '@/lib/roadmap-api';
+import {
+  ApiError,
+  apiResult,
+  type CourseOfferingIdentifier,
+  nodeDto,
+  resourceDto,
+} from '@/lib/roadmap-api';
 
 type ParticipantRoadmapInput = {
   userId: string;
@@ -124,12 +130,7 @@ async function readRoadmapForParticipantUnsafe({ userId, identifier }: Participa
                     prerequisites.every((prerequisiteId) => completedNodeIds.has(prerequisiteId)),
                 }
               : {}),
-            resources: node.resources.map((resource) => ({
-              id: resource.id,
-              title: resource.title,
-              url: resource.url,
-              type: resource.type,
-            })),
+            resources: node.resources.map((resource) => resourceDto(resource, identifier)),
           };
         }),
         dependencies: visibleDependencies.map((dependency) => ({

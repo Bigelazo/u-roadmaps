@@ -1,19 +1,11 @@
-import { ExternalLink, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { ExternalLink, FileUp, Link2, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import type { Resource, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { EditorSection, inputClassName, NodeTypeSelect } from './primitives';
+import { inputClassName, NodeTypeSelect } from './primitives';
 import type { NodeUpdate, ResourceInput } from './types';
 
 type Props = {
@@ -27,6 +19,7 @@ type Props = {
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
   onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
+  onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onStartEditingResource: (resource: Resource) => void;
   onCancelResource: () => void;
@@ -46,6 +39,7 @@ export function NodeDetailsEditor({
   onUpdateNode,
   onToggleVisibility,
   onAddResource,
+  onUploadResource,
   onUpdateResource,
   onStartEditingResource,
   onCancelResource,
@@ -54,100 +48,129 @@ export function NodeDetailsEditor({
   onClose,
 }: Props) {
   const [isResourceComposerOpen, setIsResourceComposerOpen] = useState(false);
+  const [resourceMode, setResourceMode] = useState<'file' | 'link'>('file');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const type = nodeTypes.find((nodeType) => nodeType.id === node.nodeTypeId);
   const isEditingResource = Boolean(editingResourceId);
   const closeResourceComposer = () => {
     setIsResourceComposerOpen(false);
+    setSelectedFile(null);
     onCancelResource();
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <EditorSection
-        eyebrow="Nodo seleccionado"
-        title={node.title}
-        description={type ? `Tipo: ${type.name}` : 'Configura este hito del mapa.'}
-      >
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-cloud px-3 py-2.5 text-sm">
-          <span className="flex min-w-0 items-center gap-2 font-medium">
-            <span
-              className={`size-2.5 shrink-0 rounded-full ${node.isVisible ? 'bg-progress' : 'bg-steel'}`}
-            />
-            {node.isVisible ? 'Visible para estudiantes' : 'Oculto para estudiantes'}
-          </span>
-          <Button type="button" size="xs" variant="ghost" onClick={onClose}>
-            <X data-icon="inline-start" />
-            Deseleccionar
-          </Button>
+    <div>
+      <header className="flex items-start justify-between gap-3 border-b border-border pb-5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
+            Nodo seleccionado
+          </p>
+          <h2 className="mt-1 truncate font-heading text-2xl font-semibold tracking-[-0.035em]">
+            {node.title}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {type ? type.name : 'Configura este hito del mapa.'}
+          </p>
         </div>
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            if (nodeValue.title.trim()) await onUpdateNode(node.id, nodeValue);
-          }}
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Deseleccionar nodo"
+          title="Deseleccionar nodo"
+          onClick={onClose}
         >
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="edit-node-title">Título</FieldLabel>
-              <Input
-                id="edit-node-title"
-                className={inputClassName}
-                value={nodeValue.title}
-                onChange={(event) => onNodeChange({ ...nodeValue, title: event.target.value })}
-                required
+          <X />
+        </Button>
+      </header>
+      <form
+        className="flex flex-col gap-4 py-5"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (nodeValue.title.trim()) await onUpdateNode(node.id, nodeValue);
+        }}
+      >
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="edit-node-title">Título</FieldLabel>
+            <Input
+              id="edit-node-title"
+              className={inputClassName}
+              value={nodeValue.title}
+              onChange={(event) => onNodeChange({ ...nodeValue, title: event.target.value })}
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="edit-node-description">
+              Descripción <span className="font-normal text-muted-foreground">(opcional)</span>
+            </FieldLabel>
+            <Textarea
+              id="edit-node-description"
+              value={nodeValue.description}
+              onChange={(event) => onNodeChange({ ...nodeValue, description: event.target.value })}
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="edit-node-type">Tipo</FieldLabel>
+            <NodeTypeSelect
+              id="edit-node-type"
+              nodeTypes={nodeTypes}
+              value={nodeValue.nodeTypeId}
+              onValueChange={(nodeTypeId) => onNodeChange({ ...nodeValue, nodeTypeId })}
+            />
+          </Field>
+        </FieldGroup>
+        <Button type="submit" className="w-full">
+          <Save data-icon="inline-start" />
+          Guardar cambios
+        </Button>
+      </form>
+
+      <section className="border-t border-border py-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-heading text-base font-semibold">Disponibilidad</h3>
+            <p className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
+              <span
+                className={`size-2 shrink-0 rounded-full ${node.isVisible ? 'bg-progress' : 'bg-steel'}`}
               />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="edit-node-description">
-                Descripción <span className="font-normal text-muted-foreground">(opcional)</span>
-              </FieldLabel>
-              <Textarea
-                id="edit-node-description"
-                value={nodeValue.description}
-                onChange={(event) =>
-                  onNodeChange({ ...nodeValue, description: event.target.value })
-                }
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="edit-node-type">Tipo</FieldLabel>
-              <NodeTypeSelect
-                id="edit-node-type"
-                nodeTypes={nodeTypes}
-                value={nodeValue.nodeTypeId}
-                onValueChange={(nodeTypeId) => onNodeChange({ ...nodeValue, nodeTypeId })}
-              />
-            </Field>
-          </FieldGroup>
-          <Button type="submit" className="w-full">
-            <Save data-icon="inline-start" />
-            Guardar cambios
-          </Button>
-        </form>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {node.isVisible ? 'Visible para estudiantes' : 'Oculto para estudiantes'}
+            </p>
+          </div>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => void onToggleVisibility(node.id, node.isVisible)}
           >
-            {node.isVisible ? 'Ocultar a estudiantes' : 'Mostrar a estudiantes'}
-          </Button>
-          <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteNode(node)}>
-            <Trash2 data-icon="inline-start" />
-            Eliminar nodo
+            {node.isVisible ? 'Ocultar' : 'Mostrar'}
           </Button>
         </div>
-      </EditorSection>
+      </section>
 
-      <section className="overflow-hidden rounded-xl border border-border bg-background">
-        <div className="flex items-center gap-3 border-b border-border bg-cloud/70 px-4 py-3">
-          <div className="min-w-0 flex-1">
+      <section className="border-t border-border py-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-bold tracking-[0.12em] text-destructive uppercase">
+              Zona de peligro
+            </p>
+            <h3 className="mt-0.5 font-heading text-base font-semibold">Eliminar este nodo</h3>
+          </div>
+          <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteNode(node)}>
+            <Trash2 data-icon="inline-start" />
+            Eliminar
+          </Button>
+        </div>
+      </section>
+
+      <section className="border-t border-border pt-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
             <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
               Material de apoyo
             </p>
-            <h3 className="font-heading text-lg font-semibold tracking-[-0.02em]">
+            <h3 className="mt-0.5 font-heading text-lg font-semibold tracking-[-0.02em]">
               Recursos <span className="text-muted-foreground">({node.resources.length})</span>
             </h3>
           </div>
@@ -157,6 +180,7 @@ export function NodeDetailsEditor({
               size="sm"
               onClick={() => {
                 onCancelResource();
+                setResourceMode('file');
                 setIsResourceComposerOpen(true);
               }}
             >
@@ -165,20 +189,23 @@ export function NodeDetailsEditor({
             </Button>
           )}
         </div>
-        <div className="p-4">
+        <div className="pt-4 pb-6">
           {isResourceComposerOpen && (
             <form
-              className="mb-4 flex flex-col gap-3 rounded-lg border border-dashed border-border bg-cloud/60 p-3"
+              className="mb-4 flex flex-col gap-3 border-y border-dashed border-border py-4"
               onSubmit={async (event) => {
                 event.preventDefault();
-                if (
-                  resourceValue.title.trim() &&
-                  resourceValue.url.trim() &&
-                  (isEditingResource
-                    ? await onUpdateResource(editingResourceId!, resourceValue)
-                    : await onAddResource(node.id, resourceValue))
-                )
+                const saved =
+                  resourceMode === 'file' && !isEditingResource
+                    ? selectedFile && (await onUploadResource(node.id, selectedFile))
+                    : resourceValue.title.trim() &&
+                      resourceValue.url.trim() &&
+                      (isEditingResource
+                        ? await onUpdateResource(editingResourceId!, resourceValue)
+                        : await onAddResource(node.id, { ...resourceValue, type: 'LINK' }));
+                if (saved) {
                   closeResourceComposer();
+                }
               }}
             >
               <div className="flex items-center justify-between gap-2">
@@ -195,60 +222,105 @@ export function NodeDetailsEditor({
                   <X />
                 </Button>
               </div>
-              <FieldGroup className="gap-3">
-                <Field>
-                  <FieldLabel htmlFor="resource-title">Nombre</FieldLabel>
-                  <Input
-                    id="resource-title"
-                    className={inputClassName}
-                    placeholder="Ej. Guía de ejercicios"
-                    value={resourceValue.title}
-                    onChange={(event) =>
-                      onResourceChange({ ...resourceValue, title: event.target.value })
-                    }
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="resource-url">Enlace</FieldLabel>
-                  <Input
-                    id="resource-url"
-                    className={inputClassName}
-                    type="url"
-                    placeholder="https://"
-                    value={resourceValue.url}
-                    onChange={(event) =>
-                      onResourceChange({ ...resourceValue, url: event.target.value })
-                    }
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="resource-type">Formato</FieldLabel>
-                  <Select
-                    value={resourceValue.type}
-                    onValueChange={(itemType) =>
-                      itemType &&
-                      onResourceChange({ ...resourceValue, type: itemType as Resource['type'] })
-                    }
+              {!isEditingResource && (
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-cloud p-1" role="tablist">
+                  <Button
+                    type="button"
+                    role="tab"
+                    aria-selected={resourceMode === 'file'}
+                    variant={resourceMode === 'file' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setResourceMode('file')}
                   >
-                    <SelectTrigger id="resource-type" className={inputClassName}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="FILE">Archivo</SelectItem>
-                        <SelectItem value="LINK">Enlace</SelectItem>
-                        <SelectItem value="VIDEO">Video</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
+                    <FileUp data-icon="inline-start" />
+                    Archivo
+                  </Button>
+                  <Button
+                    type="button"
+                    role="tab"
+                    aria-selected={resourceMode === 'link'}
+                    variant={resourceMode === 'link' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setResourceMode('link')}
+                  >
+                    <Link2 data-icon="inline-start" />
+                    Enlace
+                  </Button>
+                </div>
+              )}
+              {resourceMode === 'file' && !isEditingResource ? (
+                <Field>
+                  <FieldLabel htmlFor="resource-file">Archivo</FieldLabel>
+                  <label
+                    htmlFor="resource-file"
+                    className="mt-1 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center transition-colors focus-within:ring-3 focus-within:ring-ring/50 hover:bg-primary/10"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setSelectedFile(event.dataTransfer.files.item(0));
+                    }}
+                  >
+                    <FileUp className="mb-2 size-5 text-primary" />
+                    <span className="text-sm font-semibold">
+                      {selectedFile ? selectedFile.name : 'Arrastra un archivo aquí'}
+                    </span>
+                    <span className="mt-1 text-xs text-muted-foreground">
+                      {selectedFile ? 'Listo para subir' : 'o selecciónalo desde tu computador'}
+                    </span>
+                    <input
+                      id="resource-file"
+                      className="sr-only"
+                      type="file"
+                      onChange={(event) => setSelectedFile(event.target.files?.item(0) ?? null)}
+                    />
+                  </label>
+                  <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
                 </Field>
-              </FieldGroup>
+              ) : (
+                <FieldGroup className="gap-3">
+                  <Field>
+                    <FieldLabel htmlFor="resource-title">Título</FieldLabel>
+                    <Input
+                      id="resource-title"
+                      className={inputClassName}
+                      placeholder="Ej. Guía de ejercicios"
+                      value={resourceValue.title}
+                      onChange={(event) =>
+                        onResourceChange({ ...resourceValue, title: event.target.value })
+                      }
+                      required
+                    />
+                  </Field>
+                  {resourceMode === 'link' && (
+                    <Field>
+                      <FieldLabel htmlFor="resource-url">Enlace</FieldLabel>
+                      <Input
+                        id="resource-url"
+                        className={inputClassName}
+                        type="url"
+                        placeholder="https://"
+                        value={resourceValue.url}
+                        onChange={(event) =>
+                          onResourceChange({ ...resourceValue, url: event.target.value })
+                        }
+                        required
+                      />
+                    </Field>
+                  )}
+                </FieldGroup>
+              )}
               <div className="flex gap-2">
-                <Button type="submit" size="sm">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={resourceMode === 'file' && !isEditingResource && !selectedFile}
+                >
                   <Save data-icon="inline-start" />
-                  {isEditingResource ? 'Guardar recurso' : 'Agregar recurso'}
+                  {isEditingResource
+                    ? 'Guardar recurso'
+                    : resourceMode === 'file'
+                      ? 'Subir archivo'
+                      : 'Agregar enlace'}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={closeResourceComposer}>
                   Cancelar
@@ -257,8 +329,8 @@ export function NodeDetailsEditor({
             </form>
           )}
           {node.resources.length === 0 ? (
-            <p className="rounded-lg bg-cloud px-3 py-3 text-sm leading-snug text-muted-foreground">
-              Aún no hay recursos. Agrega lecturas, videos o archivos para este hito.
+            <p className="border-l-2 border-border pl-3 text-sm leading-snug text-muted-foreground">
+              Aún no hay recursos. Sube archivos o agrega enlaces para este hito.
             </p>
           ) : (
             <ul className="flex flex-col divide-y divide-border" aria-label="Recursos del nodo">
@@ -290,6 +362,7 @@ export function NodeDetailsEditor({
                     aria-label={`Editar recurso ${item.title}`}
                     onClick={() => {
                       onStartEditingResource(item);
+                      setResourceMode(item.type === 'FILE' ? 'file' : 'link');
                       setIsResourceComposerOpen(true);
                     }}
                   >

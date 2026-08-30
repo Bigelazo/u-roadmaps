@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Background,
   BackgroundVariant,
   ConnectionMode,
   MarkerType,
+  Panel,
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
@@ -14,7 +15,9 @@ import {
   type NodeChange,
   type OnNodeDrag,
 } from '@xyflow/react';
+import { LayoutTemplate } from 'lucide-react';
 import { roadmapGridSize } from '@/lib/roadmap-geometry';
+import { Button } from '@/components/ui/button';
 import type { RoadmapDto, RoadmapNode as RoadmapDomainNode } from '@/lib/roadmap-types';
 import { studentNodeStatus } from '@/features/roadmap/student/node-status';
 import {
@@ -22,10 +25,11 @@ import {
   type RoadmapFlowNode,
   type RoadmapNodeStatus,
 } from '@/features/roadmap/graph/RoadmapNode';
+import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import {
-  roadmapEdgeTypes,
-  type RoadmapFlowEdge,
-} from '@/features/roadmap/graph/DependencyEdge';
+  layoutRoadmapGraph,
+  type RoadmapLayoutDirection,
+} from '@/features/roadmap/graph/dagre-layout';
 
 function nodeStatus(node: RoadmapDomainNode, canEdit: boolean): RoadmapNodeStatus {
   if (canEdit) return 'editing';
@@ -59,6 +63,7 @@ export function mapRoadmapGraph(
     data: {
       title: node.title,
       typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
+      typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
       status: nodeStatus(node, canEdit),
       isHidden: !node.isVisible,
       onToggleVisibility: canEdit
@@ -104,6 +109,8 @@ type Props = {
   onConnectNodes: (connection: Connection) => void;
   onDeleteDependencies: (dependencyIds: string[]) => void;
   onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
+  onAutoLayout: (nodes: RoadmapFlowNode[]) => void;
+  topRightActions?: ReactNode;
 };
 
 export function RoadmapGraph({
@@ -114,7 +121,10 @@ export function RoadmapGraph({
   onConnectNodes,
   onDeleteDependencies,
   onToggleNodeVisibility,
+  onAutoLayout,
+  topRightActions,
 }: Props) {
+  const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const [flow, setFlow] = useState(() =>
     mapRoadmapGraph(
       roadmap,
@@ -134,6 +144,14 @@ export function RoadmapGraph({
       ),
     );
   }, [roadmap, canEdit, onDeleteDependencies, onToggleNodeVisibility]);
+
+  const applyAutoLayout = useCallback(() => {
+    const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
+    const nodes = layoutRoadmapGraph(flow.nodes, flow.edges, direction);
+    setFlow((current) => ({ ...current, nodes }));
+    setLayoutDirection(direction);
+    onAutoLayout(nodes);
+  }, [flow.edges, flow.nodes, layoutDirection, onAutoLayout]);
 
   return (
     <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
@@ -201,6 +219,26 @@ export function RoadmapGraph({
       fitViewOptions={{ padding: 0.28 }}
       proOptions={{ hideAttribution: true }}
     >
+      {canEdit ? (
+        <Panel position="top-right" className="mt-5 mr-5">
+          <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="justify-start sm:justify-center"
+              disabled={flow.nodes.length < 2}
+              onClick={applyAutoLayout}
+            >
+              <LayoutTemplate data-icon="inline-start" />
+              Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
+            </Button>
+            {topRightActions ? (
+              <div className="flex justify-end gap-1.5">{topRightActions}</div>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
       <Background
         aria-label="Cuadrícula del lienzo"
         variant={BackgroundVariant.Lines}

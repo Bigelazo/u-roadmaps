@@ -176,23 +176,7 @@ function useMobileLayout() {
 
 export function StudentNodeDetail({ node, status, onClose, onComplete }: Props) {
   const isMobile = useMobileLayout();
-  if (!node || !status) {
-    if (isMobile) return null;
-    return (
-      <aside className="absolute top-0 right-0 bottom-0 z-[6] w-[426px] border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58_/_10%)]">
-        <Empty className="mt-0 h-full border-0 p-6 lg:mt-8 lg:p-8">
-          <EmptyHeader>
-            <EmptyTitle className="font-heading text-xl font-semibold">
-              Selecciona un nodo
-            </EmptyTitle>
-            <EmptyDescription>
-              Revisa su descripción, materiales y estado de avance desde este panel.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </aside>
-    );
-  }
+  if (!node || !status) return null;
   if (isMobile) {
     return (
       <Sheet open onOpenChange={(open) => !open && onClose()}>

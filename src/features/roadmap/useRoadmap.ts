@@ -132,7 +132,10 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       try {
         const response = await fetch(url, {
           ...init,
-          headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+          headers:
+            init.body instanceof FormData
+              ? init.headers
+              : { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
         });
         if (response.ok) return true;
         const message = await responseError(response, fallback);
@@ -276,6 +279,21 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier, load, mutate],
   );
 
+  const uploadResource = useCallback(
+    async (nodeId: string, file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/nodes/${nodeId}/resources`),
+        { method: 'POST', body: formData },
+        'No se pudo subir el archivo.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
   const updateResource = useCallback(
     async (resourceId: string, resource: ResourceUpdate) => {
       const succeeded = await mutate(
@@ -370,6 +388,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     toggleVisibility,
     deleteNode,
     addResource,
+    uploadResource,
     updateResource,
     deleteResource,
     addNodeType,

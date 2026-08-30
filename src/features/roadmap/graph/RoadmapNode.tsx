@@ -7,6 +7,7 @@ export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing'
 export type RoadmapNodeData = Record<string, unknown> & {
   title: string;
   typeColor: string;
+  typeName: string;
   status: RoadmapNodeStatus;
   isHidden: boolean;
   onToggleVisibility?: () => void;
@@ -33,14 +34,10 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       data-slot="roadmap-card"
       className={cn(
         'min-w-[170px] cursor-pointer rounded-lg border-2 border-transparent px-4 py-3 transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)] motion-reduce:transform-none motion-reduce:transition-none',
-        hidden
-          ? ''
-          : locked
-            ? 'opacity-[0.88] shadow-none'
-            : 'shadow-[var(--shadow-roadmap-node)]',
+        hidden ? '' : locked ? 'opacity-[0.88] shadow-none' : 'shadow-[var(--shadow-roadmap-node)]',
       )}
       style={{
-        backgroundImage: `linear-gradient(${surface}, ${surface}), linear-gradient(45deg, ${accent}, ${data.typeColor})`,
+        backgroundImage: `linear-gradient(${surface}, ${surface}), linear-gradient(45deg, ${accent} 0 48%, ${data.typeColor} 52% 100%)`,
         backgroundOrigin: 'border-box',
         backgroundClip: 'padding-box, border-box',
       }}
@@ -60,21 +57,30 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
               data.onToggleVisibility?.();
             }}
           >
-            {hidden ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
+            {hidden ? (
+              <EyeOff className="size-4" aria-hidden="true" />
+            ) : (
+              <Eye className="size-4" aria-hidden="true" />
+            )}
           </button>
         ) : hidden ? (
-          <EyeOff size={19} color="var(--graphite)" aria-hidden="true" />
-        ) : completed ? (
-          <CheckCircle2
-            size={20}
-            color="var(--progress-deep)"
-            fill="var(--progress-deep)"
-            stroke="var(--card)"
-          />
-        ) : locked ? (
-          <LockKeyhole size={18} />
+          <EyeOff size={20} color="var(--graphite)" aria-hidden="true" />
         ) : (
-          <Circle size={19} fill="var(--primary-soft)" stroke={accent} />
+          <span role="img" aria-label={statusLabel}>
+            {completed ? (
+              <CheckCircle2
+                size={24}
+                color="var(--progress-deep)"
+                fill="var(--progress-deep)"
+                stroke="var(--card)"
+                aria-hidden="true"
+              />
+            ) : locked ? (
+              <LockKeyhole size={20} aria-hidden="true" />
+            ) : (
+              <Circle size={20} fill="var(--primary-soft)" stroke={accent} aria-hidden="true" />
+            )}
+          </span>
         )}
         <div className="flex flex-wrap justify-end gap-1">
           {hidden ? (
@@ -82,19 +88,15 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
               Oculto para estudiantes
             </Badge>
           ) : null}
-          {!editing ? (
-            <Badge
-              className={
-                completed
-                  ? 'bg-progress-soft text-progress-deep'
-                  : locked
-                    ? 'bg-cloud text-graphite'
-                    : 'bg-primary-soft text-primary-deep'
-              }
-            >
-              {statusLabel}
-            </Badge>
-          ) : null}
+          <Badge
+            className="border border-current/15"
+            style={{
+              backgroundColor: `color-mix(in srgb, ${data.typeColor} 16%, var(--card))`,
+              color: `color-mix(in srgb, ${data.typeColor} 76%, var(--ink))`,
+            }}
+          >
+            {data.typeName}
+          </Badge>
         </div>
       </div>
       <p className="text-[15.5px] leading-[1.25] font-medium text-ink">{data.title}</p>

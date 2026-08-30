@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Circle, CircleAlert, LockKeyhole, Trash2 } from 'lucide-react';
+import { Circle, CircleAlert, LockKeyhole, PanelRightOpen, Trash2 } from 'lucide-react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
@@ -25,10 +25,12 @@ import {
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const RoadmapEditor = dynamic(
-  () => import('@/features/roadmap/editor/RoadmapEditor').then(({ RoadmapEditor }) => RoadmapEditor),
+  () =>
+    import('@/features/roadmap/editor/RoadmapEditor').then(({ RoadmapEditor }) => RoadmapEditor),
   { ssr: false },
 );
 
@@ -103,6 +105,7 @@ export default function RoadmapCanvas({
     toggleVisibility,
     deleteNode,
     addResource,
+    uploadResource,
     updateResource,
     deleteResource,
     addNodeType,
@@ -144,28 +147,29 @@ export default function RoadmapCanvas({
 
   const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
   return (
-    <div>
+    <div className="lg:h-full">
       <section
         className={cn(
-          'relative grid min-h-[calc(100vh-64px)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] sm:rounded-xl',
+          'relative box-border grid min-h-[calc(100dvh-4rem)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
           canEdit && isEditorOpen ? 'lg:grid-cols-[minmax(0,1fr)_360px]' : 'lg:grid-cols-1',
         )}
       >
         <div
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
-          className="relative min-h-[540px] bg-background lg:min-h-[calc(100vh-64px)]"
+          className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
           <header className="pointer-events-none absolute top-4 left-4 z-[4] max-w-[calc(100%-2rem)] sm:top-6 sm:left-6 sm:max-w-md">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{courseCode}</Badge>
               {canEdit ? <Badge variant="secondary">Modo edición</Badge> : null}
             </div>
             <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
               {title}
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {year}, semestre {semester}
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+              <span>{courseCode}</span>
+              <span aria-hidden="true">·</span>
+              <span>{semester === 1 ? 'Otoño' : 'Primavera'} {year}</span>
             </p>
           </header>
           {canEdit ? (
@@ -175,9 +179,6 @@ export default function RoadmapCanvas({
               <kbd className="rounded border bg-background px-1">X</kbd> o{' '}
               <kbd className="rounded border bg-background px-1">Supr</kbd>.
             </p>
-          ) : null}
-          {canEdit ? (
-            <NodeCreator nodeTypes={roadmap.nodeTypes} onSubmit={addNode} />
           ) : null}
           <RoadmapLegend nodeTypes={roadmap.nodeTypes} />
           {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
@@ -200,6 +201,36 @@ export default function RoadmapCanvas({
             }}
             onDeleteDependencies={setPendingDependencyIds}
             onToggleNodeVisibility={(nodeId, isVisible) => void toggleVisibility(nodeId, isVisible)}
+            onAutoLayout={(nodes) => {
+              void Promise.all(
+                nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
+              );
+            }}
+            topRightActions={
+              canEdit ? (
+                <>
+                  <NodeCreator
+                    nodeTypes={roadmap.nodeTypes}
+                    onSubmit={addNode}
+                    onCreateNodeType={addNodeType}
+                    onUpdateNodeType={updateNodeType}
+                    onDeleteNodeType={deleteNodeType}
+                  />
+                  {!isEditorOpen ? (
+                    <Button
+                      aria-label="Mostrar panel de edición"
+                      title="Mostrar panel de edición"
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => setIsEditorOpen(true)}
+                    >
+                      <PanelRightOpen />
+                    </Button>
+                  ) : null}
+                </>
+              ) : undefined
+            }
           />
         </div>
         {canEdit && (
@@ -213,11 +244,9 @@ export default function RoadmapCanvas({
             onToggleVisibility={toggleVisibility}
             onDeleteNode={deleteNode}
             onAddResource={addResource}
+            onUploadResource={uploadResource}
             onUpdateResource={updateResource}
             onDeleteResource={deleteResource}
-            onAddNodeType={addNodeType}
-            onUpdateNodeType={updateNodeType}
-            onDeleteNodeType={deleteNodeType}
           />
         )}
         {!canEdit && (

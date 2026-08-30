@@ -29,7 +29,7 @@ export default async function CoursePage({ params }: Props) {
   const courseName = courseOffering.course.name ?? courseCode;
 
   return (
-    <main className="min-h-screen bg-cloud">
+    <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
       <RoadmapCanvas
         identifier={{ courseCode, year, semester }}
         canEdit={canEdit}

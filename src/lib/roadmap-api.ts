@@ -246,6 +246,29 @@ export function requireUrl(value: unknown): string {
   return url;
 }
 
+export function resourceDownloadUrl(identifier: CourseOfferingIdentifier, resourceId: string) {
+  return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap/resources/${resourceId}/file`;
+}
+
+export function resourceDto(
+  resource: {
+    id: string;
+    title: string;
+    url: string;
+    type: 'FILE' | 'LINK' | 'VIDEO';
+    fileKey?: string | null;
+  },
+  identifier?: CourseOfferingIdentifier,
+) {
+  return {
+    id: resource.id,
+    title: resource.title,
+    url:
+      resource.fileKey && identifier ? resourceDownloadUrl(identifier, resource.id) : resource.url,
+    type: resource.type,
+  };
+}
+
 export async function parseJson(request: Request): Promise<JsonObject> {
   let body: unknown;
   try {
@@ -414,12 +437,7 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
     nodeTypes: await getAvailableTypes(roadmap.id),
     nodes: nodes.map((node) => ({
       ...nodeDto(node),
-      resources: node.resources.map((resource) => ({
-        id: resource.id,
-        title: resource.title,
-        url: resource.url,
-        type: resource.type,
-      })),
+      resources: node.resources.map((resource) => resourceDto(resource, identifier)),
     })),
     dependencies: dependencies
       .filter(

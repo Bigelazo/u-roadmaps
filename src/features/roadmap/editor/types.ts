@@ -27,9 +27,7 @@ export type RoadmapEditorProps = {
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
   onDeleteNode: (nodeId: string) => Promise<boolean>;
   onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
+  onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onDeleteResource: (resourceId: string) => Promise<boolean>;
-  onAddNodeType: (nodeType: NodeTypeInput) => Promise<boolean>;
-  onUpdateNodeType: (nodeTypeId: string, nodeType: NodeTypeInput) => Promise<boolean>;
-  onDeleteNodeType: (nodeTypeId: string) => Promise<boolean>;
 };

@@ -42,6 +42,8 @@ services:
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET must be set}
       VTI_JWT_SECRET: ${VTI_JWT_SECRET:?VTI_JWT_SECRET must be set}
       NEXT_PUBLIC_VTI_LOGIN_URL: ${NEXT_PUBLIC_VTI_LOGIN_URL:?NEXT_PUBLIC_VTI_LOGIN_URL must be set}
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -50,3 +52,5 @@ volumes:
   pgdata:
     # Preserve the volume used by the original Compose configuration.
     name: roadmap-pgdata-v2
+  uploads:
+    name: roadmap-uploads-v1
