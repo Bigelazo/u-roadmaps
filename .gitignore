@@ -15,3 +15,6 @@ tsconfig.tsbuildinfo
 src/generated/prisma/
 .playwright-mcp/
 .pnpm-store/
+uploads/
+next-env.d.ts
+graphify-out/
