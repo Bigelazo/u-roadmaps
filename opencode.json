@@ -18,5 +18,6 @@
       "command": ["npx", "shadcn@latest", "mcp"],
       "enabled": true
     }
-  }
+  },
+  "plugin": ["@mohak34/opencode-notifier@latest"]
 }
