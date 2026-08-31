@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,9 +16,11 @@ import {
 export default function SessionButton({ isAuthenticated }: { isAuthenticated: boolean }) {
   if (!isAuthenticated)
     return (
-      <Link className={buttonVariants({ variant: 'outline' })} href="/api/plogin/start">
-        Autenticarse
-      </Link>
+      <form action="/api/plogin/start" method="post">
+        <Button type="submit" variant="outline">
+          Autenticarse
+        </Button>
+      </form>
     );
 
   return (

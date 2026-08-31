@@ -466,13 +466,14 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
       email: `${crypto.randomUUID()}@example.test`,
     }),
   ]) {
-    const start = await request.get('/api/plogin/start', { maxRedirects: 0 });
+    const start = await request.post('/api/plogin/start', { maxRedirects: 0 });
     const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
-    const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
+    const callback = await request.post('/api/plogin', {
+      form: { jwt: token },
       maxRedirects: 0,
       headers: { cookie: stateCookie },
     });
-    expect(callback.status()).toBe(307);
+    expect(callback.status()).toBe(303);
     expect(callback.headers().location).toContain('/?error=Authentication');
   }
 });
@@ -485,10 +486,7 @@ test('landing access starts VTI and dismisses authentication failures without re
   await expect(
     page.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Ingresar con U-Pasaporte' })).toHaveAttribute(
-    'href',
-    '/api/plogin/start',
-  );
+  await expect(page.getByRole('button', { name: 'Ingresar con U-Pasaporte' })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Ruta de aprendizaje de ejemplo' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Funciones', level: 2 })).toBeVisible();
   await page.getByRole('button', { name: 'Cerrar alerta' }).click();
@@ -518,7 +516,7 @@ test('logout requires confirmation and removes the application session', async (
   await dialog.getByRole('button', { name: 'Cerrar sesión' }).click();
 
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('link', { name: 'Autenticarse' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Autenticarse' })).toBeVisible();
   await expect(page.context().cookies()).resolves.not.toContainEqual(
     expect.objectContaining({ name: 'next-auth.session-token' }),
   );
@@ -557,17 +555,18 @@ test('1440px visual references cover the public shell states in each browser', a
 test('VTI callback issues a session after validating its one-time state', async ({
   request,
 }, testInfo) => {
-  const start = await request.get('/api/plogin/start', { maxRedirects: 0 });
-  expect(start.status()).toBe(307);
+  const start = await request.post('/api/plogin/start', { maxRedirects: 0 });
+  expect(start.status()).toBe(303);
   const state = new URL(start.headers().location).searchParams.get('state');
   expect(state).toBeTruthy();
   const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
   const token = await vtiToken(fixture.cc1002StudentWithoutProgressVtiClaims);
-  const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
+  const callback = await request.post('/api/plogin', {
+    form: { jwt: token },
     maxRedirects: 0,
     headers: { cookie: stateCookie },
   });
-  expect(callback.status()).toBe(307);
+  expect(callback.status()).toBe(303);
   expect(callback.headers().location).toBe(
     new URL('/', testInfo.project.use.baseURL as string).toString(),
   );

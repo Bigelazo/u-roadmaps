@@ -1,8 +1,7 @@
 import { ArrowRight, BookOpen, ListChecks, Map as MapIcon } from 'lucide-react';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -61,12 +60,11 @@ export default async function Home() {
               U-Roadmaps muestra cómo se conectan los contenidos de tus cursos para que puedas
               preparar cada unidad con una visión clara de sus requisitos y recursos.
             </p>
-            <Link
-              className={buttonVariants({ className: 'mt-8', size: 'lg' })}
-              href="/api/plogin/start"
-            >
-              Ingresar con U-Pasaporte <ArrowRight aria-hidden="true" data-icon="inline-end" />
-            </Link>
+            <form action="/api/plogin/start" method="post" className="mt-8">
+              <Button size="lg" type="submit">
+                Ingresar con U-Pasaporte <ArrowRight aria-hidden="true" data-icon="inline-end" />
+              </Button>
+            </form>
           </div>
           <ol
             aria-label="Ruta de aprendizaje de ejemplo"

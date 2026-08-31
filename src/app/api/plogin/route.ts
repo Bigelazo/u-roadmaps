@@ -39,24 +39,62 @@ function isHttps(request: Request) {
         new URL(request.url).protocol === 'https:';
 }
 
+function isCrossSiteRequest(request: Request) {
+  const origin = request.headers.get('origin');
+  return (
+    origin !== null &&
+    origin !== `${isHttps(request) ? 'https' : 'http'}://${new URL(request.url).host}`
+  );
+}
+
+function loginState(request: Request) {
+  return request.headers
+    .get('cookie')
+    ?.match(new RegExp(`(?:^|;\\s*)${loginStateCookieName}=([^;]+)`))?.[1];
+}
+
 const sessionMaxAge = 30 * 24 * 60 * 60;
 
 function authenticationErrorResponse(request: Request) {
-  const response = NextResponse.redirect(new URL('/?error=Authentication', request.url));
+  const response = NextResponse.redirect(new URL('/?error=Authentication', request.url), 303);
   response.cookies.delete(loginStateCookieName);
   return response;
 }
 
 // El portal VTI devuelve el token por redirección GET, sin repetir el `state`
-// ni emitir `iss`, `aud` o `exp`. La transacción de un solo uso creada por
+// ni emitir `iss`, `aud` o `exp`. Este GET no muta estado: valida el estado
+// pendiente y delega en la página de acceso institucional, cuyo formulario
+// ejecuta el intercambio en el POST. La transacción de un solo uso creada por
 // `/api/plogin/start` acota la ventana de reuso a diez minutos.
 export async function GET(request: Request) {
+  const rawToken = new URL(request.url).searchParams.get('jwt');
+  if (!loginState(request) || typeof rawToken !== 'string' || !rawToken.trim())
+    return NextResponse.redirect(new URL('/?error=Authentication', request.url));
+  const target = new URL('/acceso-institucional', request.url);
+  target.searchParams.set('jwt', rawToken);
+  return NextResponse.redirect(target);
+}
+
+export async function POST(request: Request) {
   return handleApiResult(
     async () => {
-      const rawToken = new URL(request.url).searchParams.get('jwt');
-      const state = request.headers
-        .get('cookie')
-        ?.match(new RegExp(`(?:^|;\\s*)${loginStateCookieName}=([^;]+)`))?.[1];
+      if (isCrossSiteRequest(request))
+        throw new ApiError(
+          403,
+          'INVALID_AUTH_CALLBACK',
+          'No fue posible completar la autenticación.',
+        );
+      let rawToken: FormDataEntryValue | null;
+      try {
+        rawToken = (await request.formData()).get('jwt');
+      } catch {
+        throw new ApiError(
+          400,
+          'INVALID_AUTH_CALLBACK',
+          'No fue posible completar la autenticación.',
+        );
+      }
+      const state = loginState(request);
       if (!state)
         throw new ApiError(
           400,
@@ -113,10 +151,12 @@ export async function GET(request: Request) {
 
       const user = await prisma.$transaction(
         async (transaction) => {
-          const byEmail = await transaction.user.findFirst({
-            where: { institutionalEmail: { equals: email, mode: 'insensitive' } },
-          });
-          const byRut = await transaction.user.findUnique({ where: { rut: identification } });
+          const [byEmail, byRut] = await Promise.all([
+            transaction.user.findFirst({
+              where: { institutionalEmail: { equals: email, mode: 'insensitive' } },
+            }),
+            transaction.user.findUnique({ where: { rut: identification } }),
+          ]);
           if (byEmail && byRut && byEmail.id !== byRut.id) {
             throw new ApiError(
               400,
@@ -163,7 +203,7 @@ export async function GET(request: Request) {
         secret,
         maxAge: sessionMaxAge,
       });
-      const response = NextResponse.redirect(new URL('/', request.url));
+      const response = NextResponse.redirect(new URL('/', request.url), 303);
       response.cookies.set({
         name: sessionCookieName(request),
         value: sessionToken,
