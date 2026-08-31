@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { AlertTriangle, ArrowUpRight, BookOpen, ChevronDown, MapPinned, Route } from 'lucide-react';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { redirect } from 'next/navigation';
 import {
   Empty,
@@ -22,7 +22,7 @@ import { isDevelopmentPersona } from '@/lib/development';
 import { getMufasaAcademicCourses, type MufasaInstitutionalCoursePosition } from '@/lib/mufasa';
 import { Separator } from '@/components/ui/separator';
 
-type ParticipationWithCourse = Prisma.ParticipacionGetPayload<{
+type ParticipationWithCourse = Prisma.ParticipationGetPayload<{
   include: { courseOffering: { include: { course: true; roadmap: true } } };
 }>;
 
