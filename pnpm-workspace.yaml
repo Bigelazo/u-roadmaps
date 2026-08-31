@@ -1,3 +1,14 @@
+minimumReleaseAge: 10080
+
+trustPolicy: no-downgrade
+
+# Legacy transitive versions pinned by their parents
+# (eslint-config-next, next-auth@4) that predate their provenance baseline.
+trustPolicyExclude:
+  - 'eslint-import-resolver-typescript@3.10.1'
+  - 'jose@4.15.9'
+  - 'semver@6.3.1'
+
 allowBuilds:
   '@prisma/engines': true
   esbuild: true
