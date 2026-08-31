@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest';
-import { mapRoadmapGraph } from '../src/features/roadmap/graph/RoadmapGraph';
+import { mapRoadmapGraph } from '../src/features/roadmap/graph/map-roadmap-graph';
 import { roadmapEdgeTypes } from '../src/features/roadmap/graph/DependencyEdge';
 import { FloatingEdge } from '../src/features/roadmap/graph/FloatingEdge';
 import type { RoadmapDto } from '../src/lib/roadmap-types';

@@ -1,0 +1,64 @@
+import { MarkerType } from '@xyflow/react';
+import type { RoadmapDto, RoadmapNode as RoadmapDomainNode } from '@/lib/roadmap-types';
+import { studentNodeStatus } from '@/features/roadmap/student/node-status';
+import type { RoadmapFlowNode, RoadmapNodeStatus } from '@/features/roadmap/graph/RoadmapNode';
+import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
+
+const studentEdgeStroke = 'var(--ink)';
+
+function nodeStatus(node: RoadmapDomainNode, canEdit: boolean): RoadmapNodeStatus {
+  if (canEdit) return 'editing';
+  return studentNodeStatus(node);
+}
+
+export function mapRoadmapGraph(
+  roadmap: RoadmapDto,
+  canEdit: boolean,
+  onDeleteDependency?: (dependencyId: string) => void,
+  onToggleNodeVisibility?: (nodeId: string, isVisible: boolean) => void,
+) {
+  const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
+  const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
+  const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => ({
+    id: node.id,
+    type: 'roadmap',
+    data: {
+      title: node.title,
+      typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
+      typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
+      status: nodeStatus(node, canEdit),
+      isHidden: !node.isVisible,
+      onToggleVisibility: canEdit
+        ? () => onToggleNodeVisibility?.(node.id, node.isVisible)
+        : undefined,
+    },
+    position: { x: node.positionX, y: node.positionY },
+    hidden: !canEdit && !node.isVisible,
+    deletable: false,
+  }));
+  const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
+    const defaultStroke = canEdit
+      ? nodesById.get(dependency.sourceNodeId)?.isCompleted
+        ? 'var(--ink)'
+        : 'var(--steel)'
+      : studentEdgeStroke;
+    return {
+      id: dependency.id,
+      source: dependency.sourceNodeId,
+      target: dependency.targetNodeId,
+      sourceHandle: dependency.sourceHandle,
+      targetHandle: dependency.targetHandle,
+      type: 'dependency',
+      deletable: canEdit,
+      selectable: canEdit,
+      focusable: canEdit,
+      interactionWidth: canEdit ? undefined : 0,
+      domAttributes: canEdit ? undefined : { pointerEvents: 'none' },
+      className: canEdit ? 'roadmap-edge--editable' : 'roadmap-edge--student',
+      data: { defaultStroke, onDelete: canEdit ? onDeleteDependency : undefined },
+      style: { stroke: defaultStroke, strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: defaultStroke, width: 18, height: 18 },
+    };
+  });
+  return { nodes, edges };
+}

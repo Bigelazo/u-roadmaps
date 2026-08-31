@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, Eye, EyeOff, LockKeyhole } from 'lucide-react';
-import { Handle, Position, type Node, type NodeProps, type NodeTypes } from '@xyflow/react';
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -125,5 +125,3 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
     </div>
   );
 }
-
-export const roadmapNodeTypes = { roadmap: RoadmapNode } as NodeTypes;
