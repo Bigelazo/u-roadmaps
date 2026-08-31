@@ -1,4 +1,5 @@
 import RoadmapCanvas from '@/features/roadmap/RoadmapCanvas';
+import { synchronizeParticipation } from '@/lib/academic-participation';
 import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { notFound, redirect } from 'next/navigation';
@@ -14,18 +15,24 @@ export default async function CoursePage({ params }: Props) {
   }
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
+  const identifier = { courseCode, year, semester };
   const courseOffering = await prisma.courseOffering.findUnique({
-    where: { courseCode_year_semester: { courseCode, year, semester } },
+    where: { courseCode_year_semester: identifier },
     select: {
       course: { select: { name: true } },
       participants: {
-        where: { userId: user.id, isActive: true, role: 'TEACHER' },
-        select: { id: true },
+        where: { userId: user.id, isActive: true },
+        select: { role: true },
       },
     },
   });
   if (!courseOffering) notFound();
-  const canEdit = courseOffering.participants.length > 0;
+  // U-Campus manda sobre el cargo: quien nunca abrió el curso obtiene su
+  // participación al entrar. Con una participación vigente, la vista evita el
+  // viaje a U-Campus y el cargo se actualiza en la siguiente operación.
+  const participation =
+    courseOffering.participants[0] ?? (await synchronizeParticipation(user, identifier));
+  const canEdit = participation?.role === 'TEACHER';
   const courseName = courseOffering.course.name ?? courseCode;
 
   return (

@@ -422,24 +422,35 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
   };
 }
 
+// El curso puede llegar sin descripción cuando ya está materializado desde
+// U-Campus. En ese caso conserva el nombre y el departamento registrados.
 async function createRoadmapUnsafe(identifier: CourseOfferingIdentifier, body: JsonObject) {
   const courseBody =
     body.course && typeof body.course === 'object' && !Array.isArray(body.course)
       ? (body.course as JsonObject)
       : undefined;
-  const name = requireString(courseBody?.name, 'name', 200);
-  const department = requireString(courseBody?.department, 'department', 200);
 
   try {
     const roadmap = await prisma.$transaction(async (transaction) => {
-      const existingCourseOffering = await transaction.courseOffering.findUnique({
-        where: {
-          courseCode_year_semester: identifier,
-        },
-        include: { roadmap: true },
-      });
+      const [existingCourse, existingCourseOffering] = await Promise.all([
+        transaction.course.findUnique({ where: { code: identifier.courseCode } }),
+        transaction.courseOffering.findUnique({
+          where: {
+            courseCode_year_semester: identifier,
+          },
+          include: { roadmap: true },
+        }),
+      ]);
       if (existingCourseOffering?.roadmap)
         throw new ApiError(409, 'ROADMAP_CONFLICT', 'Ya existe un roadmap para este curso.');
+      const name =
+        courseBody?.name === undefined && existingCourse
+          ? existingCourse.name
+          : requireString(courseBody?.name, 'name', 200);
+      const department =
+        courseBody?.department === undefined && existingCourse
+          ? existingCourse.department
+          : requireString(courseBody?.department, 'department', 200);
       const course = await transaction.course.upsert({
         where: { code: identifier.courseCode },
         update: { name, department },

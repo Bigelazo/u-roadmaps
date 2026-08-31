@@ -20,6 +20,8 @@ import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { isDevelopmentPersona } from '@/lib/development';
 import { getMufasaAcademicCourses, type MufasaInstitutionalCoursePosition } from '@/lib/mufasa';
+import { isRoadmapCreationPosition } from '@/lib/academic-participation';
+import CreateRoadmapButton from '@/components/app-shell/CreateRoadmapButton';
 import { Separator } from '@/components/ui/separator';
 
 type ParticipationWithCourse = Prisma.ParticipationGetPayload<{
@@ -36,6 +38,7 @@ type OverviewCourse = Readonly<{
   role: 'STUDENT' | 'TEACHER';
   institutionalPosition: MufasaInstitutionalCoursePosition | null;
   hasRoadmap: boolean;
+  canCreateRoadmap: boolean;
 }>;
 
 const institutionalPositionDetails: Record<
@@ -76,6 +79,9 @@ function localOverviewCourse({ role, courseOffering }: ParticipationWithCourse):
     role,
     institutionalPosition: null,
     hasRoadmap: Boolean(courseOffering.roadmap),
+    // Sin respuesta de U-Campus, la participación docente vigente sostiene el
+    // permiso, igual que en la ruta de creación.
+    canCreateRoadmap: role === 'TEACHER',
   };
 }
 
@@ -160,6 +166,13 @@ function CourseRow({ course }: Readonly<{ course: OverviewCourse }>) {
               Abrir roadmap
               <ArrowUpRight aria-hidden="true" size={16} />
             </Link>
+          ) : course.canCreateRoadmap ? (
+            <CreateRoadmapButton
+              courseCode={course.courseCode}
+              courseName={course.name}
+              semester={course.semester}
+              year={course.year}
+            />
           ) : null}
         </div>
       </div>
@@ -238,26 +251,27 @@ export default async function AcademicOverviewPage() {
   const courses =
     mufasa.source === 'MUFASA'
       ? uniqueCourses(
-        mufasa.courses.map((course) => {
-          const localCourse = localCoursesByKey.get(courseKey(course));
-          return {
-            courseCode: course.courseCode,
-            name: course.name,
-            year: course.year,
-            semester: course.semester,
-            section: course.section,
-            department: localCourse?.department ?? null,
-            role:
-              course.isTeaching ||
+          mufasa.courses.map((course) => {
+            const localCourse = localCoursesByKey.get(courseKey(course));
+            return {
+              courseCode: course.courseCode,
+              name: course.name,
+              year: course.year,
+              semester: course.semester,
+              section: course.section,
+              department: localCourse?.department ?? null,
+              role:
+                course.isTeaching ||
                 (course.institutionalPosition !== null &&
                   course.institutionalPosition !== 'OBSERVER')
-                ? 'TEACHER'
-                : (localCourse?.role ?? 'STUDENT'),
-            institutionalPosition: course.institutionalPosition,
-            hasRoadmap: localCourse?.hasRoadmap ?? false,
-          };
-        }),
-      )
+                  ? 'TEACHER'
+                  : (localCourse?.role ?? 'STUDENT'),
+              institutionalPosition: course.institutionalPosition,
+              hasRoadmap: localCourse?.hasRoadmap ?? false,
+              canCreateRoadmap: isRoadmapCreationPosition(course.institutionalPosition),
+            };
+          }),
+        )
       : uniqueCourses(localCourses);
   const courseTerms = groupCoursesByAcademicTerm(courses);
   const [currentTerm, ...previousTerms] = courseTerms;
