@@ -37,3 +37,18 @@ test('a plain request without proxy headers keeps its own origin', () => {
   );
   expect(isHttps(request)).toBe(false);
 });
+
+test('a proxy terminating TLS upgrades a public URL configured over http', () => {
+  process.env.NEXTAUTH_URL = 'http://roadmaps.example.test';
+  const request = internalRequest({ 'x-forwarded-proto': 'https' });
+
+  expect(siteOrigin(request).origin).toBe('https://roadmaps.example.test');
+  expect(isHttps(request)).toBe(true);
+});
+
+test('a request that the proxy reports as http keeps its scheme', () => {
+  process.env.NEXTAUTH_URL = 'http://roadmaps.example.test';
+  const request = internalRequest({ 'x-forwarded-proto': 'http' });
+
+  expect(siteOrigin(request).origin).toBe('http://roadmaps.example.test');
+});

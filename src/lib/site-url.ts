@@ -32,8 +32,23 @@ function forwardedOrigin(request: Request): URL | null {
   }
 }
 
+// El proxy termina TLS, así que un `NEXTAUTH_URL` con esquema `http` degradaría
+// las cookies de sesión y haría fallar la comprobación de origen contra la
+// cabecera `Origin`, que el navegador envía como `https`.
+function upgradedToProxyProtocol(origin: URL, request: Request): URL {
+  if (
+    origin.protocol === 'http:' &&
+    firstHeaderValue(request.headers.get('x-forwarded-proto')) === 'https'
+  )
+    origin.protocol = 'https:';
+  return origin;
+}
+
 export function siteOrigin(request: Request): URL {
-  return configuredOrigin() ?? forwardedOrigin(request) ?? new URL(request.url);
+  return upgradedToProxyProtocol(
+    configuredOrigin() ?? forwardedOrigin(request) ?? new URL(request.url),
+    request,
+  );
 }
 
 export function siteUrl(path: string, request: Request): URL {
