@@ -73,11 +73,13 @@ export async function GET(_request: Request, context: Context) {
   return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    const { participation } = await requireCourseOfferingParticipation(identifier, [
-      'STUDENT',
-      'TEACHER',
-    ]).match((value) => value, throwApiError);
-    const roadmap = await requireRoadmap(identifier).match((value) => value, throwApiError);
+    const [{ participation }, roadmap] = await Promise.all([
+      requireCourseOfferingParticipation(identifier, ['STUDENT', 'TEACHER']).match(
+        (value) => value,
+        throwApiError,
+      ),
+      requireRoadmap(identifier).match((value) => value, throwApiError),
+    ]);
     const nodeId = requireUuid(params.nodeId, 'nodeId');
     const node = await requireNodeInRoadmap(nodeId, roadmap.id);
     if (participation.role === 'STUDENT' && !node.isVisible) {

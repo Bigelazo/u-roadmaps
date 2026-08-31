@@ -30,30 +30,34 @@ export async function resetDevelopmentData() {
     });
     await transaction.user.deleteMany({ where: { id: { in: reservedFixtureUserIds } } });
 
-    for (const course of developmentFixtureCourses) {
-      await transaction.course.upsert({
-        where: { code: course.code },
-        update: { name: course.name, department: course.department },
-        create: course,
-      });
-    }
-    for (const nodeType of predefinedNodeTypes) {
-      await transaction.nodeType.upsert({
-        where: { id: nodeType.id },
-        update: {
-          name: nodeType.name,
-          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
-          color: nodeType.color,
-          isPredefined: true,
-          roadmapId: null,
-        },
-        create: {
-          ...nodeType,
-          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
-          isPredefined: true,
-        },
-      });
-    }
+    await Promise.all(
+      developmentFixtureCourses.map((course) =>
+        transaction.course.upsert({
+          where: { code: course.code },
+          update: { name: course.name, department: course.department },
+          create: course,
+        }),
+      ),
+    );
+    await Promise.all(
+      predefinedNodeTypes.map((nodeType) =>
+        transaction.nodeType.upsert({
+          where: { id: nodeType.id },
+          update: {
+            name: nodeType.name,
+            normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+            color: nodeType.color,
+            isPredefined: true,
+            roadmapId: null,
+          },
+          create: {
+            ...nodeType,
+            normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+            isPredefined: true,
+          },
+        }),
+      ),
+    );
 
     await transaction.courseOffering.createMany({
       data: developmentFixtureOfferings.map(({ id, courseCode, year, semester }) => ({

@@ -16,23 +16,25 @@ const predefinedNodeTypes = [
 ];
 
 async function main() {
-  for (const nodeType of predefinedNodeTypes) {
-    await prisma.nodeType.upsert({
-      where: { id: nodeType.id },
-      update: {
-        name: nodeType.name,
-        normalizedName: nodeType.name.trim().toLocaleLowerCase('es-CL'),
-        color: nodeType.color,
-        isPredefined: true,
-        roadmapId: null,
-      },
-      create: {
-        ...nodeType,
-        normalizedName: nodeType.name.trim().toLocaleLowerCase('es-CL'),
-        isPredefined: true,
-      },
-    });
-  }
+  await Promise.all(
+    predefinedNodeTypes.map((nodeType) =>
+      prisma.nodeType.upsert({
+        where: { id: nodeType.id },
+        update: {
+          name: nodeType.name,
+          normalizedName: nodeType.name.trim().toLocaleLowerCase('es-CL'),
+          color: nodeType.color,
+          isPredefined: true,
+          roadmapId: null,
+        },
+        create: {
+          ...nodeType,
+          normalizedName: nodeType.name.trim().toLocaleLowerCase('es-CL'),
+          isPredefined: true,
+        },
+      }),
+    ),
+  );
 }
 
 main()

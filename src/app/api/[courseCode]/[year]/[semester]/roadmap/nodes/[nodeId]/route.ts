@@ -16,8 +16,10 @@ export async function PATCH(request: Request, context: Context) {
   return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    const body = await parseJson(request);
-    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    const [body, user] = await Promise.all([
+      parseJson(request),
+      requireAuthenticatedUser().match((value) => value, throwApiError),
+    ]);
     const node = await updateRoadmapNode({
       userId: user.id,
       identifier,

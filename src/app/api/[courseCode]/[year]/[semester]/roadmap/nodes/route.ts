@@ -14,8 +14,10 @@ type Context = { params: Promise<{ courseCode: string; year: string; semester: s
 export async function POST(request: Request, context: Context) {
   return handleApiResult(async () => {
     const identifier = parseCourseOfferingIdentifier(await context.params);
-    const body = await parseJson(request);
-    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    const [body, user] = await Promise.all([
+      parseJson(request),
+      requireAuthenticatedUser().match((value) => value, throwApiError),
+    ]);
     const node = await createRoadmapNode({ userId: user.id, identifier, input: body }).match(
       (value) => value,
       throwApiError,
