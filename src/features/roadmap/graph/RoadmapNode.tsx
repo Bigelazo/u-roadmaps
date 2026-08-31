@@ -27,27 +27,33 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       : data.status === 'available'
         ? 'var(--ink)'
         : 'var(--primary)';
-  const surface = hidden || locked ? 'var(--cloud)' : 'var(--card)';
   const statusLabel = completed ? 'Completado' : locked ? 'Bloqueado' : 'Disponible';
+  // El tipo se lee en el color de la tarjeta: el borde lo lleva saturado y el
+  // fondo la misma tinta sobre la superficie, sin gastar una línea en una
+  // etiqueta. Las tarjetas bloqueadas y ocultas apagan la superficie.
+  const surface = hidden || locked ? 'var(--cloud)' : 'var(--card)';
   return (
     <div
       data-slot="roadmap-card"
       className={cn(
-        'min-w-[170px] cursor-pointer rounded-lg border-2 border-transparent px-4 py-3 transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)] motion-reduce:transform-none motion-reduce:transition-none',
+        'max-w-[240px] min-w-[170px] cursor-pointer rounded-lg border-2 px-4 py-3 transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)] motion-reduce:transform-none motion-reduce:transition-none',
         hidden ? '' : locked ? 'opacity-[0.88] shadow-none' : 'shadow-[var(--shadow-roadmap-node)]',
       )}
       style={{
-        backgroundImage: `linear-gradient(${surface}, ${surface}), linear-gradient(45deg, ${accent} 0 48%, ${data.typeColor} 52% 100%)`,
-        backgroundOrigin: 'border-box',
-        backgroundClip: 'padding-box, border-box',
+        backgroundColor: `color-mix(in srgb, ${data.typeColor} 14%, ${surface})`,
+        borderColor:
+          hidden || locked
+            ? `color-mix(in srgb, ${data.typeColor} 55%, ${surface})`
+            : data.typeColor,
       }}
     >
-      <div className={cn('flex items-center justify-between gap-2.5', editing ? 'mb-3' : 'mb-5')}>
+      <span className="sr-only">{data.typeName}</span>
+      <div className="flex items-center gap-2.5">
         {editing ? (
           <button
             type="button"
             className={cn(
-              'nodrag nopan flex size-9 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
+              'nodrag nopan flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
               hidden && 'border-graphite/25 bg-fog text-graphite',
             )}
             aria-label={hidden ? 'Mostrar a estudiantes' : 'Ocultar para estudiantes'}
@@ -64,9 +70,9 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
             )}
           </button>
         ) : hidden ? (
-          <EyeOff size={20} color="var(--graphite)" aria-hidden="true" />
+          <EyeOff className="shrink-0" size={20} color="var(--graphite)" aria-hidden="true" />
         ) : (
-          <span role="img" aria-label={statusLabel}>
+          <span className="shrink-0" role="img" aria-label={statusLabel}>
             {completed ? (
               <CheckCircle2
                 size={24}
@@ -82,24 +88,13 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
             )}
           </span>
         )}
-        <div className="flex flex-wrap justify-end gap-1">
-          {hidden ? (
-            <Badge variant="secondary" className="bg-fog text-graphite">
-              Oculto para estudiantes
-            </Badge>
-          ) : null}
-          <Badge
-            className="border border-current/15"
-            style={{
-              backgroundColor: `color-mix(in srgb, ${data.typeColor} 16%, var(--card))`,
-              color: `color-mix(in srgb, ${data.typeColor} 76%, var(--ink))`,
-            }}
-          >
-            {data.typeName}
-          </Badge>
-        </div>
+        <p className="text-[15.5px] leading-[1.25] font-medium text-ink">{data.title}</p>
       </div>
-      <p className="text-[15.5px] leading-[1.25] font-medium text-ink">{data.title}</p>
+      {hidden ? (
+        <Badge variant="secondary" className="mt-2.5 bg-fog text-graphite">
+          Oculto para estudiantes
+        </Badge>
+      ) : null}
       {(
         [
           ['top', Position.Top],
