@@ -304,28 +304,6 @@ export async function requireNodeInRoadmap(nodeId: string, roadmapId: string) {
   return node;
 }
 
-export async function requireTypeInRoadmap(typeId: string, roadmapId: string) {
-  const type = await prisma.nodeType.findFirst({
-    where: { id: typeId, OR: [{ isPredefined: true }, { roadmapId }] },
-  });
-  if (!type)
-    throw new ApiError(
-      404,
-      'NODE_TYPE_NOT_FOUND',
-      'El tipo no existe o no está disponible en este roadmap.',
-    );
-  return type;
-}
-
-export async function requireResourceInRoadmap(resourceId: string, roadmapId: string) {
-  const resource = await prisma.resource.findFirst({
-    where: { id: resourceId, roadmapNode: { roadmapId } },
-  });
-  if (!resource)
-    throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
-  return resource;
-}
-
 export function nodeDto(node: {
   id: string;
   title: string;
@@ -344,26 +322,6 @@ export function nodeDto(node: {
     nodeTypeId: node.nodeTypeId,
     isVisible: node.isVisible,
   };
-}
-
-export async function ensureTypeNameAvailable(
-  name: string,
-  roadmapId: string,
-  excludedTypeId?: string,
-) {
-  const existing = await prisma.nodeType.findFirst({
-    where: {
-      normalizedName: normalizeName(name),
-      OR: [{ isPredefined: true }, { roadmapId }],
-      ...(excludedTypeId ? { NOT: { id: excludedTypeId } } : {}),
-    },
-  });
-  if (existing)
-    throw new ApiError(
-      409,
-      'NODE_TYPE_NAME_CONFLICT',
-      'Ya existe un tipo disponible con ese nombre.',
-    );
 }
 
 export async function getAvailableTypes(roadmapId: string) {
@@ -422,6 +380,27 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
     ? roadmap.roadmapNodes
     : roadmap.roadmapNodes.filter((node) => node.isVisible);
   const visibleNodeIds = new Set(nodes.map((node) => node.id));
+  const visibleDependencies: {
+    id: string;
+    sourceNodeId: string;
+    targetNodeId: string;
+    sourceHandle: string;
+    targetHandle: string;
+  }[] = [];
+  for (const dependency of dependencies) {
+    if (
+      includeHidden ||
+      (visibleNodeIds.has(dependency.sourceNodeId) && visibleNodeIds.has(dependency.targetNodeId))
+    ) {
+      visibleDependencies.push({
+        id: dependency.id,
+        sourceNodeId: dependency.sourceNodeId,
+        targetNodeId: dependency.targetNodeId,
+        sourceHandle: dependency.sourceHandle,
+        targetHandle: dependency.targetHandle,
+      });
+    }
+  }
   return {
     course: {
       code: roadmap.courseOffering.course.code,
@@ -439,20 +418,7 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
       ...nodeDto(node),
       resources: node.resources.map((resource) => resourceDto(resource, identifier)),
     })),
-    dependencies: dependencies
-      .filter(
-        (dependency) =>
-          includeHidden ||
-          (visibleNodeIds.has(dependency.sourceNodeId) &&
-            visibleNodeIds.has(dependency.targetNodeId)),
-      )
-      .map((dependency) => ({
-        id: dependency.id,
-        sourceNodeId: dependency.sourceNodeId,
-        targetNodeId: dependency.targetNodeId,
-        sourceHandle: dependency.sourceHandle,
-        targetHandle: dependency.targetHandle,
-      })),
+    dependencies: visibleDependencies,
   };
 }
 

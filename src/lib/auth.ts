@@ -69,10 +69,6 @@ async function requireCourseOfferingParticipationUnsafe(
   return { user, courseOffering, participation };
 }
 
-async function requireCourseOfferingTeacherUnsafe(identifier: CourseOfferingIdentifier) {
-  return requireCourseOfferingParticipationUnsafe(identifier, ['TEACHER']);
-}
-
 async function requireRoadmapCreationAccessUnsafe(identifier: CourseOfferingIdentifier) {
   const user = await requireAuthenticatedUserUnsafe();
   const courseOffering = await prisma.courseOffering.findUnique({
@@ -107,10 +103,6 @@ export function requireCourseOfferingParticipation(
   allowedRoles: Array<'STUDENT' | 'TEACHER'>,
 ) {
   return apiResult(() => requireCourseOfferingParticipationUnsafe(identifier, allowedRoles));
-}
-
-export function requireCourseOfferingTeacher(identifier: CourseOfferingIdentifier) {
-  return apiResult(() => requireCourseOfferingTeacherUnsafe(identifier));
 }
 
 export function requireRoadmapCreationAccess(identifier: CourseOfferingIdentifier) {

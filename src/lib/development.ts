@@ -20,14 +20,6 @@ function approvedFixtureDatabase() {
   }
 }
 
-export function requireDevelopmentEnvironment() {
-  if (!developmentEnvironmentEnabled()) {
-    throw new Error(
-      `Development data requires NODE_ENV=development, U_ROADMAPS_DEV_DATA=true, and a local database.`,
-    );
-  }
-}
-
 export function fixtureEnvironmentEnabled() {
   return (
     (developmentEnvironmentEnabled() || process.env.U_ROADMAPS_E2E_DATA === 'true') &&
