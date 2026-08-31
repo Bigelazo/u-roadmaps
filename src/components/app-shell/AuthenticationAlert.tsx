@@ -1,11 +1,12 @@
 'use client';
 
+import { Suspense } from 'react';
 import { CircleAlert, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-export default function AuthenticationAlert() {
+function AuthenticationAlertContent() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,5 +40,13 @@ export default function AuthenticationAlert() {
         </AlertAction>
       </div>
     </Alert>
+  );
+}
+
+export default function AuthenticationAlert() {
+  return (
+    <Suspense fallback={null}>
+      <AuthenticationAlertContent />
+    </Suspense>
   );
 }
