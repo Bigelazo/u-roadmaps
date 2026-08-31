@@ -9,12 +9,12 @@ vi.mock('@/components/app-shell/SessionButton', () => ({
 }));
 
 test.each([
-  [true, 'Cerrar sesión'],
-  [false, 'Autenticarse'],
+  [true, 'María Pérez González', 'Cerrar sesión'],
+  [false, null, 'Autenticarse'],
 ])(
   'preserves the home destination and authentication action when authenticated is %s',
-  (isAuthenticated, actionName) => {
-    render(<GlobalNavigation isAuthenticated={isAuthenticated} />);
+  (isAuthenticated, userName, actionName) => {
+    render(<GlobalNavigation isAuthenticated={isAuthenticated} userName={userName} />);
 
     expect(screen.getByRole('banner')).not.toBeNull();
     expect(screen.getByRole('link', { name: 'U-Roadmaps' })).toHaveProperty(
@@ -24,3 +24,9 @@ test.each([
     expect(screen.getByRole('button', { name: actionName })).not.toBeNull();
   },
 );
+
+test('shows the first name and two surnames of the authenticated person', () => {
+  render(<GlobalNavigation isAuthenticated userName="María José Pérez González" />);
+
+  expect(screen.getByText('María Pérez González')).not.toBeNull();
+});

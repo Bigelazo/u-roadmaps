@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import AuthenticationAlert from '@/components/app-shell/AuthenticationAlert';
 import DevelopmentBar from '@/components/app-shell/DevelopmentBar';
 import GlobalNavigation from '@/components/app-shell/GlobalNavigation';
-import { getApplicationSession } from '@/lib/auth';
+import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
 import { developmentEnvironmentEnabled, developmentPersonas } from '@/lib/development';
 import { Archivo, Plus_Jakarta_Sans } from 'next/font/google';
 import { cn } from '@/lib/utils';
@@ -18,11 +18,12 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getApplicationSession();
+  const user = await resolveSessionUser(session);
 
   return (
     <html lang="es" className={cn('font-sans', plusJakartaSans.variable, archivo.variable)}>
       <body>
-        <GlobalNavigation isAuthenticated={Boolean(session)} />
+        <GlobalNavigation isAuthenticated={Boolean(session)} userName={user?.name ?? null} />
         <AuthenticationAlert />
         {developmentEnvironmentEnabled() && <DevelopmentBar personas={developmentPersonas} />}
         {children}
