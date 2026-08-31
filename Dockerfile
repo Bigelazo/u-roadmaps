@@ -27,23 +27,19 @@ FROM dependencies AS migrate
 COPY . .
 CMD ["pnpm", "prisma", "migrate", "deploy"]
 
-FROM node:24-alpine AS runner
-
-WORKDIR /app
+FROM base AS runner
 
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
-COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=build --chown=nextjs:nodejs /app ./
 RUN mkdir /app/uploads && chown nextjs:nodejs /app/uploads
 
 USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["pnpm", "start"]
