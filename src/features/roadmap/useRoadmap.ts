@@ -53,10 +53,13 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const requestVersionRef = useRef(0);
-  const activeIdentifierRef = useRef(identifierKey(identifier));
+  const activeIdentifierRef = useRef<string | null>(null);
   const lastMutationErrorRef = useRef<string | null>(null);
   const key = identifierKey(identifier);
-  activeIdentifierRef.current = key;
+
+  useEffect(() => {
+    activeIdentifierRef.current = key;
+  }, [key]);
 
   const load = useCallback(async () => {
     const requestKey = identifierKey(identifier);

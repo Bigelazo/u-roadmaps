@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Circle, CircleAlert, LockKeyhole, PanelRightOpen, Trash2 } from 'lucide-react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
@@ -114,10 +114,6 @@ export default function RoadmapCanvas({
     completeNode,
   } = useRoadmap(identifier);
 
-  useEffect(() => {
-    setSelectedNodeId(null);
-  }, [identifier.courseCode, identifier.year, identifier.semester]);
-
   function closeSelectedNode() {
     setSelectedNodeId(null);
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
@@ -169,7 +165,9 @@ export default function RoadmapCanvas({
             <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
               <span>{courseCode}</span>
               <span aria-hidden="true">·</span>
-              <span>{semester === 1 ? 'Otoño' : 'Primavera'} {year}</span>
+              <span>
+                {semester === 1 ? 'Otoño' : 'Primavera'} {year}
+              </span>
             </p>
           </header>
           {canEdit ? (

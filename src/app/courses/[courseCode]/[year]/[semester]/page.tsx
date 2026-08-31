@@ -31,6 +31,7 @@ export default async function CoursePage({ params }: Props) {
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
       <RoadmapCanvas
+        key={`${courseCode}-${year}-${semester}`}
         identifier={{ courseCode, year, semester }}
         canEdit={canEdit}
         title={courseName}
