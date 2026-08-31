@@ -124,7 +124,14 @@ function StudentNodeDetailContent({
                 <Item
                   key={resource.id}
                   variant="outline"
-                  render={<a href={resource.url} target="_blank" rel="noreferrer" />}
+                  render={
+                    <a
+                      href={resource.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={resource.title}
+                    />
+                  }
                 >
                   <ItemMedia variant="icon" className="text-primary">
                     {resourceIcon(resource.type)}

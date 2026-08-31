@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PanelRightClose, Trash2 } from 'lucide-react';
-import type { Resource } from '@/lib/roadmap-types';
+import type { Resource, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,72 @@ import type { NodeUpdate, ResourceInput, RoadmapEditorProps } from './types';
 
 type PendingDeletion = { label: string; onConfirm: () => Promise<boolean> } | null;
 
+type SelectedNodeEditorProps = {
+  node: RoadmapNode;
+  nodeTypes: RoadmapDto['nodeTypes'];
+  onUpdateNode: RoadmapEditorProps['onUpdateNode'];
+  onToggleVisibility: RoadmapEditorProps['onToggleVisibility'];
+  onAddResource: RoadmapEditorProps['onAddResource'];
+  onUploadResource: RoadmapEditorProps['onUploadResource'];
+  onUpdateResource: RoadmapEditorProps['onUpdateResource'];
+  onDeleteNode: (node: RoadmapNode) => void;
+  onDeleteResource: (resource: Resource) => void;
+  onClose: () => void;
+};
+
+function SelectedNodeEditor({
+  node,
+  nodeTypes,
+  onUpdateNode,
+  onToggleVisibility,
+  onAddResource,
+  onUploadResource,
+  onUpdateResource,
+  onDeleteNode,
+  onDeleteResource,
+  onClose,
+}: SelectedNodeEditorProps) {
+  const [editNode, setEditNode] = useState<NodeUpdate>(() => ({
+    title: node.title,
+    description: node.description ?? '',
+    nodeTypeId: node.nodeTypeId,
+  }));
+  const [resource, setResource] = useState<ResourceInput>({ title: '', url: '', type: 'LINK' });
+  const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
+
+  const cancelResourceEditor = () => {
+    setResource({ title: '', url: '', type: 'LINK' });
+    setEditingResourceId(null);
+  };
+
+  const startEditingResource = (item: Resource) => {
+    setEditingResourceId(item.id);
+    setResource({ title: item.title, url: item.url, type: item.type });
+  };
+
+  return (
+    <NodeDetailsEditor
+      node={node}
+      nodeTypes={nodeTypes}
+      nodeValue={editNode}
+      resourceValue={resource}
+      editingResourceId={editingResourceId}
+      onNodeChange={setEditNode}
+      onResourceChange={setResource}
+      onUpdateNode={onUpdateNode}
+      onToggleVisibility={onToggleVisibility}
+      onAddResource={onAddResource}
+      onUploadResource={onUploadResource}
+      onUpdateResource={onUpdateResource}
+      onStartEditingResource={startEditingResource}
+      onCancelResource={cancelResourceEditor}
+      onDeleteNode={onDeleteNode}
+      onDeleteResource={onDeleteResource}
+      onClose={onClose}
+    />
+  );
+}
+
 export function RoadmapEditor({
   roadmap,
   selectedNode,
@@ -33,25 +99,8 @@ export function RoadmapEditor({
   onUpdateResource,
   onDeleteResource,
 }: RoadmapEditorProps) {
-  const [editNode, setEditNode] = useState<NodeUpdate>({
-    title: '',
-    description: '',
-    nodeTypeId: '',
-  });
-  const [resource, setResource] = useState<ResourceInput>({ title: '', url: '', type: 'LINK' });
-  const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
   const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
-
-  useEffect(() => {
-    setEditNode({
-      title: selectedNode?.title ?? '',
-      description: selectedNode?.description ?? '',
-      nodeTypeId: selectedNode?.nodeTypeId ?? '',
-    });
-    setResource({ title: '', url: '', type: 'LINK' });
-    setEditingResourceId(null);
-  }, [selectedNode]);
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
@@ -60,16 +109,6 @@ export function RoadmapEditor({
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
-
-  const cancelResourceEditor = () => {
-    setResource({ title: '', url: '', type: 'LINK' });
-    setEditingResourceId(null);
-  };
-
-  const startEditingResource = (item: Resource) => {
-    setEditingResourceId(item.id);
-    setResource({ title: item.title, url: item.url, type: item.type });
-  };
 
   if (!isOpen) {
     return null;
@@ -101,22 +140,15 @@ export function RoadmapEditor({
           </header>
 
           {selectedNode ? (
-            <NodeDetailsEditor
+            <SelectedNodeEditor
               key={selectedNode.id}
               node={selectedNode}
               nodeTypes={roadmap.nodeTypes}
-              nodeValue={editNode}
-              resourceValue={resource}
-              editingResourceId={editingResourceId}
-              onNodeChange={setEditNode}
-              onResourceChange={setResource}
               onUpdateNode={onUpdateNode}
               onToggleVisibility={onToggleVisibility}
               onAddResource={onAddResource}
               onUploadResource={onUploadResource}
               onUpdateResource={onUpdateResource}
-              onStartEditingResource={startEditingResource}
-              onCancelResource={cancelResourceEditor}
               onDeleteNode={(node) =>
                 setPendingDeletion({
                   label: `el nodo ${node.title} y sus dependencias y recursos`,

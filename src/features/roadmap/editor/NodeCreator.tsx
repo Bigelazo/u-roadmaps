@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import { CirclePlus, Plus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/lib/roadmap-types';
@@ -47,15 +47,9 @@ export function NodeCreator({
     isVisible: true,
   }));
   const hasNodeTypes = nodeTypes.length > 0;
-
-  useEffect(() => {
-    setValue((current) => ({
-      ...current,
-      nodeTypeId: nodeTypes.some((type) => type.id === current.nodeTypeId)
-        ? current.nodeTypeId
-        : (nodeTypes[0]?.id ?? ''),
-    }));
-  }, [nodeTypes]);
+  const selectedNodeTypeId = nodeTypes.some((type) => type.id === value.nodeTypeId)
+    ? value.nodeTypeId
+    : (nodeTypes[0]?.id ?? '');
 
   return (
     <>
@@ -103,9 +97,12 @@ export function NodeCreator({
           </DialogHeader>
           <form
             className="flex flex-col gap-4"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              if (value.title.trim() && value.nodeTypeId && (await onSubmit(value))) {
+            action={async () => {
+              if (
+                value.title.trim() &&
+                selectedNodeTypeId &&
+                (await onSubmit({ ...value, nodeTypeId: selectedNodeTypeId }))
+              ) {
                 setValue((current) => ({ ...current, title: '', description: '' }));
                 setIsNodeDialogOpen(false);
               }
@@ -143,7 +140,7 @@ export function NodeCreator({
                 <NodeTypeSelect
                   id="new-node-type"
                   nodeTypes={nodeTypes}
-                  value={value.nodeTypeId}
+                  value={selectedNodeTypeId}
                   onValueChange={(nodeTypeId) =>
                     setValue((current) => ({ ...current, nodeTypeId }))
                   }
