@@ -5,6 +5,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/lib/db';
 import { authOptions } from '@/lib/auth';
 import { ApiError, apiErrorResponse, handleApiResult } from '@/lib/roadmap-api';
+import { isHttps, siteOrigin, siteUrl } from '@/lib/site-url';
 import {
   invalidVtiClaims,
   normalizeInstitutionalEmail,
@@ -31,20 +32,9 @@ function sessionCookieName(request: Request) {
   return isHttps(request) ? '__Secure-next-auth.session-token' : 'next-auth.session-token';
 }
 
-function isHttps(request: Request) {
-  const configuredUrl = process.env.NEXTAUTH_URL;
-  return configuredUrl
-    ? configuredUrl.startsWith('https://')
-    : request.headers.get('x-forwarded-proto') === 'https' ||
-        new URL(request.url).protocol === 'https:';
-}
-
 function isCrossSiteRequest(request: Request) {
   const origin = request.headers.get('origin');
-  return (
-    origin !== null &&
-    origin !== `${isHttps(request) ? 'https' : 'http'}://${new URL(request.url).host}`
-  );
+  return origin !== null && origin !== siteOrigin(request).origin;
 }
 
 function loginState(request: Request) {
@@ -56,7 +46,7 @@ function loginState(request: Request) {
 const sessionMaxAge = 30 * 24 * 60 * 60;
 
 function authenticationErrorResponse(request: Request) {
-  const response = NextResponse.redirect(new URL('/?error=Authentication', request.url), 303);
+  const response = NextResponse.redirect(siteUrl('/?error=Authentication', request), 303);
   response.cookies.delete(loginStateCookieName);
   return response;
 }
@@ -69,8 +59,8 @@ function authenticationErrorResponse(request: Request) {
 export async function GET(request: Request) {
   const rawToken = new URL(request.url).searchParams.get('jwt');
   if (!loginState(request) || typeof rawToken !== 'string' || !rawToken.trim())
-    return NextResponse.redirect(new URL('/?error=Authentication', request.url));
-  const target = new URL('/acceso-institucional', request.url);
+    return NextResponse.redirect(siteUrl('/?error=Authentication', request));
+  const target = siteUrl('/acceso-institucional', request);
   target.searchParams.set('jwt', rawToken);
   return NextResponse.redirect(target);
 }
@@ -203,7 +193,7 @@ export async function POST(request: Request) {
         secret,
         maxAge: sessionMaxAge,
       });
-      const response = NextResponse.redirect(new URL('/', request.url), 303);
+      const response = NextResponse.redirect(siteUrl('/', request), 303);
       response.cookies.set({
         name: sessionCookieName(request),
         value: sessionToken,

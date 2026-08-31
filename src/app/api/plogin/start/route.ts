@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { isHttps, siteUrl } from '@/lib/site-url';
 
 const loginStateCookieName = 'u-roadmaps-vti-state';
 const loginStateMaxAge = 10 * 60;
-
-function isHttps(request: Request) {
-  const configuredUrl = process.env.NEXTAUTH_URL;
-  return configuredUrl
-    ? configuredUrl.startsWith('https://')
-    : request.headers.get('x-forwarded-proto') === 'https' ||
-        new URL(request.url).protocol === 'https:';
-}
 
 function parseLoginUrl(value: string | undefined): URL | null {
   if (!value) return null;
@@ -25,13 +18,12 @@ function parseLoginUrl(value: string | undefined): URL | null {
 // `signIn` de NextAuth) aterrizan aquí y delegan en la página de acceso
 // institucional, cuyo formulario inicia el flujo con POST.
 export async function GET(request: Request) {
-  return NextResponse.redirect(new URL('/acceso-institucional', request.url));
+  return NextResponse.redirect(siteUrl('/acceso-institucional', request));
 }
 
 export async function POST(request: Request) {
   const loginTarget = parseLoginUrl(process.env.NEXT_PUBLIC_VTI_LOGIN_URL);
-  if (!loginTarget)
-    return NextResponse.redirect(new URL('/?error=Authentication', request.url), 303);
+  if (!loginTarget) return NextResponse.redirect(siteUrl('/?error=Authentication', request), 303);
 
   const state = crypto.randomUUID();
   await prisma.vtiLoginTransaction.create({

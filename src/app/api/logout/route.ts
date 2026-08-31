@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { siteUrl } from '@/lib/site-url';
 
 const authenticationCookieNames = [
   'next-auth.session-token',
@@ -10,7 +11,7 @@ const authenticationCookieNames = [
 ];
 
 export function POST(request: Request) {
-  const response = NextResponse.redirect(new URL('/', request.url), 303);
+  const response = NextResponse.redirect(siteUrl('/', request), 303);
 
   for (const name of authenticationCookieNames) response.cookies.delete(name);
 
