@@ -45,7 +45,8 @@ function loginState(request: Request) {
 
 const sessionMaxAge = 30 * 24 * 60 * 60;
 
-function authenticationErrorResponse(request: Request) {
+function authenticationErrorResponse(request: Request, error: ApiError) {
+  console.error('[plogin] autenticación rechazada', error.code, error.details ?? {});
   const response = NextResponse.redirect(siteUrl('/?error=Authentication', request), 303);
   response.cookies.delete(loginStateCookieName);
   return response;
@@ -73,6 +74,11 @@ export async function POST(request: Request) {
           403,
           'INVALID_AUTH_CALLBACK',
           'No fue posible completar la autenticación.',
+          {
+            reason: 'cross-site-origin',
+            origin: request.headers.get('origin'),
+            expected: siteOrigin(request).origin,
+          },
         );
       let rawToken: FormDataEntryValue | null;
       try {
@@ -82,6 +88,7 @@ export async function POST(request: Request) {
           400,
           'INVALID_AUTH_CALLBACK',
           'No fue posible completar la autenticación.',
+          { reason: 'unreadable-form-body' },
         );
       }
       const state = loginState(request);
@@ -90,6 +97,7 @@ export async function POST(request: Request) {
           400,
           'INVALID_AUTH_CALLBACK',
           'No fue posible completar la autenticación.',
+          { reason: 'missing-state-cookie' },
         );
       const consumed = await prisma.vtiLoginTransaction.deleteMany({
         where: { state, expiresAt: { gt: new Date() } },
@@ -99,12 +107,14 @@ export async function POST(request: Request) {
           400,
           'INVALID_AUTH_CALLBACK',
           'No fue posible completar la autenticación.',
+          { reason: 'unknown-or-expired-state' },
         );
       if (typeof rawToken !== 'string' || !rawToken.trim())
         throw new ApiError(
           400,
           'INVALID_AUTH_CALLBACK',
           'No fue posible completar la autenticación.',
+          { reason: 'missing-token' },
         );
 
       const verificationSecret = vtiSecret();
@@ -116,24 +126,29 @@ export async function POST(request: Request) {
           400,
           'INVALID_AUTH_CALLBACK',
           'No fue posible completar la autenticación.',
+          { reason: 'invalid-token-signature' },
         );
       }
-      const invalidClaimsError = (): never => {
+      const invalidClaimsError = (claim: string): never => {
         throw new ApiError(
           400,
           invalidVtiClaims,
           'No fue posible validar la identidad institucional.',
+          { reason: 'invalid-claim', claim },
         );
       };
       const identification = parseVtiIdentification(payload.identification).match(
         (value) => value,
-        invalidClaimsError,
+        () => invalidClaimsError('identification'),
       );
       const email = normalizeInstitutionalEmail(payload.email).match(
         (value) => value,
-        invalidClaimsError,
+        () => invalidClaimsError('email'),
       );
-      const name = requireVtiClaim(payload.name).match((value) => value, invalidClaimsError);
+      const name = requireVtiClaim(payload.name).match(
+        (value) => value,
+        () => invalidClaimsError('name'),
+      );
       const preferredUsername =
         typeof payload.preferred_username === 'string'
           ? payload.preferred_username.trim().slice(0, 320)
@@ -152,6 +167,7 @@ export async function POST(request: Request) {
               400,
               'INVALID_AUTH_CALLBACK',
               'No fue posible completar la autenticación.',
+              { reason: 'identity-already-linked' },
             );
           }
           if (byEmail?.rut && byEmail.rut !== identification) {
@@ -159,6 +175,7 @@ export async function POST(request: Request) {
               400,
               'INVALID_AUTH_CALLBACK',
               'No fue posible completar la autenticación.',
+              { reason: 'identification-mismatch' },
             );
           }
 
@@ -212,7 +229,7 @@ export async function POST(request: Request) {
       error.code === 'INVALID_VTI_CLAIMS' ||
       error.code === 'AUTH_CONFIGURATION_ERROR' ||
       (error.code === 'CONFLICT' && error.source !== 'P2003')
-        ? authenticationErrorResponse(request)
+        ? authenticationErrorResponse(request, error)
         : apiErrorResponse(error),
   );
 }

@@ -1,3 +1,4 @@
+import InstitutionalCallbackForm from '@/components/app-shell/InstitutionalCallbackForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
@@ -18,15 +19,18 @@ export default async function InstitutionalAccessPage({ searchParams }: Props) {
         <CardContent>
           <p className="leading-relaxed text-muted-foreground">
             {pendingToken
-              ? 'Confirma para completar tu ingreso con la cuenta institucional.'
+              ? 'Estamos completando tu ingreso con la cuenta institucional.'
               : 'Ingresa con tu cuenta institucional U-Pasaporte.'}
           </p>
-          <form action={pendingToken ? '/api/plogin' : '/api/plogin/start'} method="post">
-            {pendingToken ? <input name="jwt" type="hidden" value={pendingToken} /> : null}
-            <Button className="mt-6" size="lg" type="submit">
-              {pendingToken ? 'Continuar' : 'Ingresar con U-Pasaporte'}
-            </Button>
-          </form>
+          {pendingToken ? (
+            <InstitutionalCallbackForm token={pendingToken} />
+          ) : (
+            <form action="/api/plogin/start" method="post">
+              <Button className="mt-6" size="lg" type="submit">
+                Ingresar con U-Pasaporte
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </main>
