@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
-import { roadmapUrl, type Resource, type RoadmapDto } from '@/lib/roadmap-types';
+import {
+  roadmapUrl,
+  type Resource,
+  type RoadmapDependency,
+  type RoadmapDto,
+} from '@/lib/roadmap-types';
 
 type NewNode = {
   title: string;
@@ -36,6 +41,35 @@ function apiErrorMessage(value: unknown) {
   const error = value.error;
   if (typeof error !== 'object' || error === null || !('message' in error)) return undefined;
   return typeof error.message === 'string' ? error.message : undefined;
+}
+
+function isDependency(value: unknown): value is RoadmapDependency {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'sourceNodeId' in value &&
+    typeof value.sourceNodeId === 'string' &&
+    'targetNodeId' in value &&
+    typeof value.targetNodeId === 'string'
+  );
+}
+
+async function createdDependency(response: Response) {
+  try {
+    const body: unknown = await response.json();
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'dependency' in body &&
+      isDependency(body.dependency)
+    )
+      return body.dependency;
+  } catch {
+    // Una respuesta ilegible cae en la recarga completa.
+  }
+  return null;
 }
 
 async function responseError(response: Response, fallback: string) {
@@ -130,7 +164,12 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
   }, []);
 
   const mutate = useCallback(
-    async (url: string, init: RequestInit, fallback: string) => {
+    async (
+      url: string,
+      init: RequestInit,
+      fallback: string,
+      onSuccess?: (response: Response) => Promise<void>,
+    ) => {
       const requestKey = identifierKey(identifier);
       try {
         const response = await fetch(url, {
@@ -140,7 +179,10 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
               ? init.headers
               : { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
         });
-        if (response.ok) return true;
+        if (response.ok) {
+          await onSuccess?.(response);
+          return true;
+        }
         const message = await responseError(response, fallback);
         if (activeIdentifierRef.current === requestKey) {
           lastMutationErrorRef.current = message;
@@ -209,6 +251,9 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier, load, mutate],
   );
 
+  // La respuesta trae la dependencia creada, así que el lienzo la incorpora sin
+  // una segunda vuelta al servidor. La recarga queda para los casos en que la
+  // respuesta no se puede leer o la operación falla.
   const connectNodes = useCallback(
     async (
       sourceNodeId: string,
@@ -216,6 +261,8 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       sourceHandle?: string,
       targetHandle?: string,
     ) => {
+      const requestKey = identifierKey(identifier);
+      let applied = false;
       const succeeded = await mutate(
         roadmapUrl(identifier, '/dependencies'),
         {
@@ -223,8 +270,24 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
           body: JSON.stringify({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }),
         },
         'No se pudo crear la dependencia.',
+        async (response) => {
+          const dependency = await createdDependency(response);
+          if (!dependency || activeIdentifierRef.current !== requestKey) return;
+          setRoadmap((current) =>
+            current && !current.dependencies.some(({ id }) => id === dependency.id)
+              ? { ...current, dependencies: [...current.dependencies, dependency] }
+              : current,
+          );
+          applied = true;
+        },
       );
-      if (succeeded) await load();
+      if (!applied) {
+        await load();
+        if (!succeeded && activeIdentifierRef.current === requestKey) {
+          setError(lastMutationErrorRef.current ?? 'No se pudo crear la dependencia.');
+          setErrorKey(requestKey);
+        }
+      }
       return succeeded;
     },
     [identifier, load, mutate],
@@ -232,15 +295,24 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
 
   const deleteDependency = useCallback(
     async (dependencyId: string) => {
+      const requestKey = identifierKey(identifier);
       const succeeded = await mutate(
         roadmapUrl(identifier, `/dependencies/${dependencyId}`),
         { method: 'DELETE' },
         'No se pudo eliminar la dependencia.',
       );
-      if (succeeded) await load();
+      if (succeeded && activeIdentifierRef.current === requestKey)
+        setRoadmap((current) =>
+          current
+            ? {
+                ...current,
+                dependencies: current.dependencies.filter(({ id }) => id !== dependencyId),
+              }
+            : current,
+        );
       return succeeded;
     },
-    [identifier, load, mutate],
+    [identifier, mutate],
   );
 
   const toggleVisibility = useCallback(

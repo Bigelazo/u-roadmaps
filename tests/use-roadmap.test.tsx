@@ -45,16 +45,23 @@ test('rapid course-offering navigation aborts the stale roadmap load', async () 
   await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('current'));
 });
 
-test('deleting a dependency persists the change and reloads the roadmap', async () => {
+const dependency = {
+  id: 'dependency-1',
+  sourceNodeId: 'node-1',
+  targetNodeId: 'node-2',
+  sourceHandle: 'right',
+  targetHandle: 'left',
+};
+
+test('deleting a dependency drops it from the roadmap without reloading', async () => {
   const fetchMock = vi
     .fn()
-    .mockResolvedValueOnce(Response.json(roadmap('before-delete')))
-    .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    .mockResolvedValueOnce(Response.json(roadmap('after-delete')));
+    .mockResolvedValueOnce(Response.json({ ...roadmap('cargado'), dependencies: [dependency] }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
   vi.stubGlobal('fetch', fetchMock);
 
   const { result } = renderHook(() => useRoadmap(firstOffering));
-  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before-delete'));
+  await waitFor(() => expect(result.current.roadmap?.dependencies).toHaveLength(1));
 
   await expect(result.current.deleteDependency('dependency-1')).resolves.toBe(true);
 
@@ -63,7 +70,45 @@ test('deleting a dependency persists the change and reloads the roadmap', async 
     '/api/MAT101/2026/1/roadmap/dependencies/dependency-1',
     expect.objectContaining({ method: 'DELETE' }),
   );
-  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-delete'));
+  await waitFor(() => expect(result.current.roadmap?.dependencies).toHaveLength(0));
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test('creating a dependency adds the one the server returns without reloading', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('cargado')))
+    .mockResolvedValueOnce(Response.json({ dependency }, { status: 201 }));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('cargado'));
+
+  await expect(result.current.connectNodes('node-1', 'node-2', 'right', 'left')).resolves.toBe(
+    true,
+  );
+
+  await waitFor(() => expect(result.current.roadmap?.dependencies).toEqual([dependency]));
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+test('a failed dependency creation reloads the roadmap and exposes the error', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('cargado')))
+    .mockResolvedValueOnce(
+      Response.json({ error: { message: 'La dependencia crea un ciclo.' } }, { status: 409 }),
+    )
+    .mockResolvedValueOnce(Response.json(roadmap('recargado')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('cargado'));
+
+  await expect(result.current.connectNodes('node-1', 'node-2')).resolves.toBe(false);
+
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('recargado'));
+  expect(result.current.error).toBe('La dependencia crea un ciclo.');
 });
 
 test('a failed dependency deletion keeps the roadmap and exposes the error', async () => {

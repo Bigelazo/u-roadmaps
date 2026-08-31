@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -8,6 +8,7 @@ import {
   MarkerType,
   Panel,
   ReactFlow,
+  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
@@ -64,25 +65,57 @@ export function RoadmapGraph({
   topRightActions,
 }: Props) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
+  // El lienzo guarda las posiciones que el arrastre todavía no ha recargado, de
+  // modo que solo un roadmap nuevo puede reemplazarlas. Las devoluciones viven
+  // en una referencia para que un render del contenedor no rehaga el grafo.
+  const handlers = useRef({ onDeleteDependencies, onToggleNodeVisibility });
+  handlers.current = { onDeleteDependencies, onToggleNodeVisibility };
+  const deleteDependency = useCallback(
+    (dependencyId: string) => handlers.current.onDeleteDependencies([dependencyId]),
+    [],
+  );
+  const toggleNodeVisibility = useCallback(
+    (nodeId: string, isVisible: boolean) =>
+      handlers.current.onToggleNodeVisibility(nodeId, isVisible),
+    [],
+  );
   const [flow, setFlow] = useState(() =>
-    mapRoadmapGraph(
-      roadmap,
-      canEdit,
-      (dependencyId) => onDeleteDependencies([dependencyId]),
-      onToggleNodeVisibility,
-    ),
+    mapRoadmapGraph(roadmap, canEdit, deleteDependency, toggleNodeVisibility),
   );
 
   useEffect(() => {
-    setFlow(
-      mapRoadmapGraph(
-        roadmap,
-        canEdit,
-        (dependencyId) => onDeleteDependencies([dependencyId]),
-        onToggleNodeVisibility,
-      ),
-    );
-  }, [roadmap, canEdit, onDeleteDependencies, onToggleNodeVisibility]);
+    setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency, toggleNodeVisibility));
+  }, [roadmap, canEdit, deleteDependency, toggleNodeVisibility]);
+
+  // La arista aparece apenas se suelta la conexión; la respuesta del servidor la
+  // reemplaza con su identificador definitivo.
+  const connectNodes = useCallback(
+    (connection: Connection) => {
+      setFlow((current) => ({
+        ...current,
+        edges: addEdge(
+          {
+            ...connection,
+            id: `pendiente-${connection.source}-${connection.target}-${connection.sourceHandle ?? ''}-${connection.targetHandle ?? ''}`,
+            type: 'dependency',
+            deletable: false,
+            selectable: false,
+            data: { defaultStroke: 'var(--steel)' },
+            style: { stroke: 'var(--steel)', strokeWidth: 1.5 },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: 'var(--steel)',
+              width: 18,
+              height: 18,
+            },
+          },
+          current.edges,
+        ),
+      }));
+      onConnectNodes(connection);
+    },
+    [onConnectNodes],
+  );
 
   const applyAutoLayout = useCallback(() => {
     const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
@@ -104,6 +137,8 @@ export function RoadmapGraph({
       snapGrid={[roadmapGridSize, roadmapGridSize]}
       connectionMode={ConnectionMode.Loose}
       nodesFocusable
+      nodeDragThreshold={5}
+      nodeClickDistance={6}
       elementsSelectable
       deleteKeyCode={['Backspace', 'Delete']}
       onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) =>
@@ -150,7 +185,7 @@ export function RoadmapGraph({
           : undefined
       }
       onNodeDragStop={canEdit ? onMoveNode : undefined}
-      onConnect={canEdit ? onConnectNodes : undefined}
+      onConnect={canEdit ? connectNodes : undefined}
       onEdgesDelete={
         canEdit ? (edges) => onDeleteDependencies(edges.map((edge) => edge.id)) : undefined
       }
