@@ -24,6 +24,7 @@ type SelectedNodeEditorProps = {
   nodeTypes: RoadmapDto['nodeTypes'];
   onUpdateNode: RoadmapEditorProps['onUpdateNode'];
   onToggleVisibility: RoadmapEditorProps['onToggleVisibility'];
+  onRequestTeacherBlock: RoadmapEditorProps['onRequestTeacherBlock'];
   onAddResource: RoadmapEditorProps['onAddResource'];
   onUploadResource: RoadmapEditorProps['onUploadResource'];
   onUpdateResource: RoadmapEditorProps['onUpdateResource'];
@@ -37,6 +38,7 @@ function SelectedNodeEditor({
   nodeTypes,
   onUpdateNode,
   onToggleVisibility,
+  onRequestTeacherBlock,
   onAddResource,
   onUploadResource,
   onUpdateResource,
@@ -73,6 +75,7 @@ function SelectedNodeEditor({
       onResourceChange={setResource}
       onUpdateNode={onUpdateNode}
       onToggleVisibility={onToggleVisibility}
+      onRequestTeacherBlock={onRequestTeacherBlock}
       onAddResource={onAddResource}
       onUploadResource={onUploadResource}
       onUpdateResource={onUpdateResource}
@@ -93,6 +96,7 @@ export function RoadmapEditor({
   onClose,
   onUpdateNode,
   onToggleVisibility,
+  onRequestTeacherBlock,
   onDeleteNode,
   onAddResource,
   onUploadResource,
@@ -146,6 +150,7 @@ export function RoadmapEditor({
               nodeTypes={roadmap.nodeTypes}
               onUpdateNode={onUpdateNode}
               onToggleVisibility={onToggleVisibility}
+              onRequestTeacherBlock={onRequestTeacherBlock}
               onAddResource={onAddResource}
               onUploadResource={onUploadResource}
               onUpdateResource={onUpdateResource}

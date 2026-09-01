@@ -38,6 +38,7 @@ export function mapRoadmapGraph(
       },
       position: { x: node.positionX, y: node.positionY },
       hidden: !canEdit && isHidden,
+      connectable: canEdit && !isHidden,
       deletable: false,
       selectable: canEdit || !blockReason,
       focusable: true,

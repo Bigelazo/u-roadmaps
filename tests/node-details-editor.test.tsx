@@ -28,6 +28,7 @@ function renderEditor(overrides: Partial<ComponentProps<typeof NodeDetailsEditor
     onResourceChange: vi.fn(),
     onUpdateNode: vi.fn(),
     onToggleVisibility: vi.fn(),
+    onRequestTeacherBlock: vi.fn(),
     onAddResource: vi.fn().mockResolvedValue(true),
     onUploadResource: vi.fn().mockResolvedValue(true),
     onUpdateResource: vi.fn(),
@@ -54,6 +55,34 @@ test('uploads a resource selected from the computer', async () => {
 
   expect(props.onUploadResource).toHaveBeenCalledWith(node.id, file);
   expect(props.onUpdateNode).not.toHaveBeenCalled();
+});
+
+test('shows the teacher-block state without restricting node editing', async () => {
+  const user = userEvent.setup();
+  const onRequestTeacherBlock = vi.fn();
+  renderEditor({ onRequestTeacherBlock });
+
+  expect(screen.getByText('Sin bloqueo docente')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
+  expect(onRequestTeacherBlock).toHaveBeenCalledWith(node.id, 'BLOCK');
+  expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeTruthy();
+});
+
+test('offers individual and branch unlock actions for a teacher-blocked node', async () => {
+  const user = userEvent.setup();
+  const onRequestTeacherBlock = vi.fn();
+  renderEditor({
+    node: { ...node, isTeacherBlocked: true },
+    onRequestTeacherBlock,
+  });
+
+  expect(screen.getByText('Bloqueado por docencia')).toBeTruthy();
+  expect(screen.getByText(/no podrá desbloquearse de forma individual/)).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Desbloquear este nodo' }));
+  await user.click(screen.getByRole('button', { name: 'Desbloquear rama' }));
+
+  expect(onRequestTeacherBlock).toHaveBeenNthCalledWith(1, node.id, 'UNBLOCK');
+  expect(onRequestTeacherBlock).toHaveBeenNthCalledWith(2, node.id, 'BRANCH_UNLOCK');
 });
 
 test('adds an external link with its title', async () => {

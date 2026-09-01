@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
-import { roadmapUrl, type Resource, type AnyRoadmapDto } from '@/lib/roadmap-types';
+import {
+  roadmapUrl,
+  type Resource,
+  type AnyRoadmapDto,
+  type TeacherBlockImpact,
+  type TeacherBlockOperation,
+} from '@/lib/roadmap-types';
 
 type NewNode = {
   title: string;
@@ -20,7 +26,7 @@ export type StructuralDependency = {
   sourceNodeId: string;
   targetNodeId: string;
 };
-export type TeacherBlockImpact = { id: string; title: string };
+export type { TeacherBlockImpact, TeacherBlockOperation } from '@/lib/roadmap-types';
 
 function identifierKey(identifier: CourseOfferingIdentifier) {
   return `${identifier.courseCode}:${identifier.year}:${identifier.semester}`;
@@ -385,6 +391,32 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier, preview],
   );
 
+  const previewTeacherBlock = useCallback(
+    async (nodeId: string, operation: TeacherBlockOperation) => {
+      const result = await preview(
+        roadmapUrl(identifier, `/nodes/${nodeId}/teacher-block?operation=${operation}`),
+        isDependencyPreview,
+        'No se pudo calcular el impacto del bloqueo docente.',
+      );
+      return result?.nodes ?? null;
+    },
+    [identifier, preview],
+  );
+
+  const changeTeacherBlock = useCallback(
+    async (nodeId: string, operation: TeacherBlockOperation) => {
+      const method = operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH';
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/nodes/${nodeId}/teacher-block`),
+        { method },
+        'No se pudo cambiar el bloqueo docente.',
+      );
+      if (succeeded) await load();
+      return succeeded;
+    },
+    [identifier, load, mutate],
+  );
+
   const deleteNode = useCallback(
     async (nodeId: string) => {
       const succeeded = await mutate(
@@ -517,6 +549,8 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     moveNode,
     connectNodes,
     previewRoadmapDependency,
+    previewTeacherBlock,
+    changeTeacherBlock,
     deleteDependency,
     toggleVisibility,
     previewNodeVisibility,

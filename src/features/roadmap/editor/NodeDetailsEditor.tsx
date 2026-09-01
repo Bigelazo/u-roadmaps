@@ -1,5 +1,5 @@
-import { Save, Trash2, X } from 'lucide-react';
-import type { Resource, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
+import { LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
+import type { Resource, RoadmapDto, RoadmapNode, TeacherBlockOperation } from '@/lib/roadmap-types';
 import { Button } from '@/components/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ type Props = {
   onResourceChange: (value: ResourceInput) => void;
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
+  onRequestTeacherBlock: (nodeId: string, operation: TeacherBlockOperation) => void;
   onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
   onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
@@ -141,6 +142,66 @@ function NodeAvailability({
   );
 }
 
+function NodeTeacherBlock({
+  node,
+  onRequestTeacherBlock,
+}: Pick<Props, 'node' | 'onRequestTeacherBlock'>) {
+  if (!node.isVisible) return null;
+
+  return (
+    <section className="border-t border-border py-5">
+      <div className="flex flex-col gap-3">
+        <div>
+          <h3 className="font-heading text-base font-semibold">Acceso de estudiantes</h3>
+          <p className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
+            {node.isTeacherBlocked ? (
+              <LockKeyhole aria-hidden="true" />
+            ) : (
+              <LockKeyholeOpen aria-hidden="true" />
+            )}
+            {node.isTeacherBlocked ? 'Bloqueado por docencia' : 'Sin bloqueo docente'}
+          </p>
+        </div>
+        {node.isTeacherBlocked ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onRequestTeacherBlock(node.id, 'UNBLOCK')}
+              >
+                <LockKeyholeOpen className="size-6" data-icon="inline-start" />
+                Desbloquear este nodo
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onRequestTeacherBlock(node.id, 'BRANCH_UNLOCK')}
+              >
+                <LockKeyholeOpen className="size-6" data-icon="inline-start" />
+                Desbloquear rama
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Si conserva un prerrequisito con bloqueo docente, no podrá desbloquearse de forma
+              individual.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <Button type="button" size="sm" onClick={() => onRequestTeacherBlock(node.id, 'BLOCK')}>
+              <LockKeyhole className="size-6" data-icon="inline-start" />
+              Bloquear acceso
+            </Button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function NodeDangerZone({ node, onDeleteNode }: Pick<Props, 'node' | 'onDeleteNode'>) {
   return (
     <section className="border-t border-border py-5">
@@ -170,6 +231,7 @@ export function NodeDetailsEditor({
   onResourceChange,
   onUpdateNode,
   onToggleVisibility,
+  onRequestTeacherBlock,
   onAddResource,
   onUploadResource,
   onUpdateResource,
@@ -190,6 +252,7 @@ export function NodeDetailsEditor({
         onUpdateNode={onUpdateNode}
       />
       <NodeAvailability node={node} onToggleVisibility={onToggleVisibility} />
+      <NodeTeacherBlock node={node} onRequestTeacherBlock={onRequestTeacherBlock} />
       <NodeDangerZone node={node} onDeleteNode={onDeleteNode} />
       <NodeResources
         node={node}

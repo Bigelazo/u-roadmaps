@@ -116,7 +116,7 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
           {blockMessage}
         </p>
       ) : null}
-      {editing
+      {editing && !hidden
         ? (
             [
               ['top', Position.Top],
@@ -128,6 +128,7 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
             <Handle
               key={id}
               id={id}
+              data-testid="roadmap-node-handle"
               type="source"
               position={position}
               style={{

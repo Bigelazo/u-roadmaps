@@ -1,12 +1,27 @@
 import { type ReactNode } from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import RoadmapCanvas from '../src/features/roadmap/RoadmapCanvas';
 
 const { useRoadmapMock } = vi.hoisted(() => ({ useRoadmapMock: vi.fn() }));
 
-vi.mock('next/dynamic', () => ({ default: () => () => null }));
+vi.mock('next/dynamic', () => ({
+  default:
+    () =>
+    ({
+      selectedNode,
+      onRequestTeacherBlock,
+    }: {
+      selectedNode?: { id: string; isTeacherBlocked: boolean };
+      onRequestTeacherBlock: (nodeId: string, operation: 'BLOCK' | 'UNBLOCK') => void;
+    }) =>
+      selectedNode ? (
+        <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
+          Bloquear acceso
+        </button>
+      ) : null,
+}));
 
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
@@ -36,6 +51,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         onClick={() => onSelectNode('blocked-node', document.createElement('div'))}
       >
         Activar nodo bloqueado
+      </button>
+      <button type="button" onClick={() => onSelectNode('node-1', document.createElement('div'))}>
+        Activar nodo docente
       </button>
       <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
         Solicitar eliminación de dependencias
@@ -78,7 +96,19 @@ const roadmap = {
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [{ id: 'content', name: 'Contenido', color: '#024AD8', isPredefined: true }],
-  nodes: [],
+  nodes: [
+    {
+      id: 'node-1',
+      title: 'Límites',
+      description: null,
+      nodeTypeId: 'content',
+      positionX: 0,
+      positionY: 0,
+      isVisible: true,
+      isTeacherBlocked: false,
+      resources: [],
+    },
+  ],
   dependencies: [],
 };
 
@@ -94,6 +124,8 @@ function roadmapActions(overrides = {}) {
     moveNode: vi.fn(),
     connectNodes: vi.fn(),
     previewRoadmapDependency: vi.fn().mockResolvedValue([]),
+    previewTeacherBlock: vi.fn().mockResolvedValue([]),
+    changeTeacherBlock: vi.fn(),
     deleteDependency: vi.fn(),
     toggleVisibility: vi.fn(),
     previewNodeVisibility: vi.fn().mockResolvedValue([]),
@@ -299,7 +331,8 @@ test('previews and confirms the node visibility action before changing it', asyn
   await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
   expect(dialog.textContent).toContain('1 dependencia');
-  expect(dialog.textContent).toContain('node-1 → node-2');
+  expect(dialog.textContent).toContain('Límites → node-2');
+  expect(dialog.textContent).toContain('no se restaurarán al volver a mostrar el nodo');
   await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
   expect(toggleVisibility).not.toHaveBeenCalled();
 
@@ -307,6 +340,68 @@ test('previews and confirms the node visibility action before changing it', asyn
   const confirmation = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
   await user.click(within(confirmation).getByRole('button', { name: 'Ocultar' }));
   expect(toggleVisibility).toHaveBeenCalledWith('node-1', true);
+});
+
+test('confirms a teacher block from the most recent preview before mutating', async () => {
+  const user = userEvent.setup();
+  const previewTeacherBlock = vi.fn().mockResolvedValue([
+    { id: 'node-1', title: 'Límites' },
+    { id: 'node-2', title: 'Continuidad' },
+  ]);
+  const changeTeacherBlock = vi.fn();
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo docente' });
+  expect(previewTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK');
+  expect(dialog.textContent).toContain('Bloquearás 2 nodos.');
+  expect(dialog.textContent).toContain('Límites');
+  expect(dialog.textContent).toContain('Continuidad');
+  expect(dialog.textContent).toContain('puede afectar el acceso y progreso estudiantil');
+
+  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+  expect(changeTeacherBlock).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
+  await user.click(
+    within(await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo docente' })).getByRole(
+      'button',
+      { name: 'Bloquear acceso' },
+    ),
+  );
+  await waitFor(() => expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK'));
+});
+
+test('requires a renewed confirmation when the teacher-block preview changed', async () => {
+  const user = userEvent.setup();
+  const previewTeacherBlock = vi
+    .fn()
+    .mockResolvedValueOnce([{ id: 'node-1', title: 'Límites' }])
+    .mockResolvedValueOnce([
+      { id: 'node-1', title: 'Límites' },
+      { id: 'node-3', title: 'Derivadas' },
+    ])
+    .mockResolvedValueOnce([
+      { id: 'node-1', title: 'Límites' },
+      { id: 'node-3', title: 'Derivadas' },
+    ]);
+  const changeTeacherBlock = vi.fn();
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo docente' });
+  await user.click(within(dialog).getByRole('button', { name: 'Bloquear acceso' }));
+
+  expect(changeTeacherBlock).not.toHaveBeenCalled();
+  expect(dialog.textContent).toContain('Bloquearás 2 nodos.');
+  expect(dialog.textContent).toContain('Derivadas');
+
+  await user.click(within(dialog).getByRole('button', { name: 'Bloquear acceso' }));
+  await waitFor(() => expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK'));
 });
 
 test('previews and confirms a dependency that propagates teacher blocks', async () => {
@@ -352,6 +447,21 @@ test('surfaces a mutation error as a dismissible toast over the canvas', async (
 
   await user.click(screen.getByRole('button', { name: 'Cerrar alerta' }));
   expect(dismissError).toHaveBeenCalled();
+});
+
+test('surfaces a concurrent hidden-node dependency error over the canvas', async () => {
+  const dismissError = vi.fn();
+  useRoadmapMock.mockReturnValue(
+    roadmapActions({
+      error: 'No se pueden crear dependencias con nodos ocultos.',
+      dismissError,
+    }),
+  );
+  renderCanvas(true);
+
+  expect(
+    screen.getByRole('alert', { name: 'No se pueden crear dependencias con nodos ocultos.' }),
+  ).toBeTruthy();
 });
 
 test('does not select a blocked student node', async () => {

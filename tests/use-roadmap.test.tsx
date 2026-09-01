@@ -168,6 +168,57 @@ test('previews the structural impact before hiding a node or connecting a blocke
   );
 });
 
+test('previews and applies teacher-block actions with a server refresh', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('before')))
+    .mockResolvedValueOnce(Response.json({ nodes: [{ id: 'node-1', title: 'Límites' }] }))
+    .mockResolvedValueOnce(Response.json({ nodes: [{ id: 'node-1', title: 'Límites' }] }))
+    .mockResolvedValueOnce(Response.json(roadmap('after')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before'));
+
+  await expect(result.current.previewTeacherBlock('node-1', 'BLOCK')).resolves.toEqual([
+    { id: 'node-1', title: 'Límites' },
+  ]);
+  await expect(result.current.changeTeacherBlock('node-1', 'BLOCK')).resolves.toBe(true);
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    '/api/MAT101/2026/1/roadmap/nodes/node-1/teacher-block?operation=BLOCK',
+  );
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    3,
+    '/api/MAT101/2026/1/roadmap/nodes/node-1/teacher-block',
+    expect.objectContaining({ method: 'POST' }),
+  );
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after'));
+});
+
+test('reloads the canvas and explains a concurrent hidden-node dependency error', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('before')))
+    .mockResolvedValueOnce(
+      Response.json(
+        { error: { message: 'No se pueden crear dependencias con nodos ocultos.' } },
+        { status: 403 },
+      ),
+    )
+    .mockResolvedValueOnce(Response.json(roadmap('after-concurrent-hide')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before'));
+
+  await expect(result.current.connectNodes('node-1', 'node-2')).resolves.toBe(false);
+
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-concurrent-hide'));
+  expect(result.current.error).toBe('No se pueden crear dependencias con nodos ocultos.');
+});
+
 test('a failed dependency creation reloads the roadmap and exposes the error', async () => {
   const fetchMock = vi
     .fn()

@@ -14,7 +14,12 @@ import {
   type StructuralDependency,
   type TeacherBlockImpact,
 } from '@/features/roadmap/useRoadmap';
-import type { RoadmapDto, RoadmapNode, StudentRoadmapNode } from '@/lib/roadmap-types';
+import type {
+  RoadmapDto,
+  RoadmapNode,
+  StudentRoadmapNode,
+  TeacherBlockOperation,
+} from '@/lib/roadmap-types';
 import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -61,6 +66,44 @@ type PendingDependencyChange = {
   targetHandle?: string;
   nodes: TeacherBlockImpact[];
 };
+
+type PendingTeacherBlockChange = {
+  nodeId: string;
+  operation: TeacherBlockOperation;
+  nodes: TeacherBlockImpact[];
+};
+
+function teacherBlockConfirmation(operation: TeacherBlockOperation, count: number) {
+  const nodes = count === 1 ? 'nodo' : 'nodos';
+  if (operation === 'BLOCK') {
+    return {
+      title: 'Confirmar bloqueo docente',
+      description: `Bloquearás ${count} ${nodes}.`,
+      action: 'Bloquear acceso',
+    };
+  }
+  if (operation === 'UNBLOCK') {
+    return {
+      title: 'Confirmar desbloqueo',
+      description: `Desbloquearás ${count} ${nodes}.`,
+      action: 'Desbloquear este nodo',
+    };
+  }
+  return {
+    title: 'Confirmar desbloqueo de rama',
+    description: `Desbloquearás ${count} ${nodes} elegibles de la rama.`,
+    action: 'Desbloquear rama',
+  };
+}
+
+function sameTeacherBlockImpact(first: TeacherBlockImpact[], second: TeacherBlockImpact[]) {
+  return (
+    first.length === second.length &&
+    first.every(
+      (node, index) => node.id === second[index]?.id && node.title === second[index]?.title,
+    )
+  );
+}
 
 function RoadmapLegend({
   nodeTypes,
@@ -115,6 +158,8 @@ export default function RoadmapCanvas({
     useState<PendingVisibilityChange | null>(null);
   const [pendingDependencyChange, setPendingDependencyChange] =
     useState<PendingDependencyChange | null>(null);
+  const [pendingTeacherBlockChange, setPendingTeacherBlockChange] =
+    useState<PendingTeacherBlockChange | null>(null);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const {
     roadmap,
@@ -125,6 +170,8 @@ export default function RoadmapCanvas({
     moveNode,
     connectNodes,
     previewRoadmapDependency,
+    previewTeacherBlock,
+    changeTeacherBlock,
     deleteDependency,
     toggleVisibility,
     previewNodeVisibility,
@@ -183,6 +230,29 @@ export default function RoadmapCanvas({
     });
   }
 
+  async function requestTeacherBlockChange(nodeId: string, operation: TeacherBlockOperation) {
+    const nodes = await previewTeacherBlock(nodeId, operation);
+    if (nodes) setPendingTeacherBlockChange({ nodeId, operation, nodes });
+  }
+
+  async function confirmTeacherBlockChange() {
+    if (!pendingTeacherBlockChange) return;
+    const latestNodes = await previewTeacherBlock(
+      pendingTeacherBlockChange.nodeId,
+      pendingTeacherBlockChange.operation,
+    );
+    if (!latestNodes) {
+      setPendingTeacherBlockChange(null);
+      return;
+    }
+    if (!sameTeacherBlockImpact(pendingTeacherBlockChange.nodes, latestNodes)) {
+      setPendingTeacherBlockChange({ ...pendingTeacherBlockChange, nodes: latestNodes });
+      return;
+    }
+    setPendingTeacherBlockChange(null);
+    await changeTeacherBlock(pendingTeacherBlockChange.nodeId, pendingTeacherBlockChange.operation);
+  }
+
   if (error && !roadmap) {
     return (
       <Alert variant="destructive" className="m-4 max-w-2xl">
@@ -206,6 +276,12 @@ export default function RoadmapCanvas({
   }
 
   const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
+  const teacherBlockDialog = pendingTeacherBlockChange
+    ? teacherBlockConfirmation(
+        pendingTeacherBlockChange.operation,
+        pendingTeacherBlockChange.nodes.length,
+      )
+    : null;
   return (
     <div className="lg:h-full">
       <section
@@ -300,6 +376,9 @@ export default function RoadmapCanvas({
             onClose={closeSelectedNode}
             onUpdateNode={updateNode}
             onToggleVisibility={requestVisibilityChange}
+            onRequestTeacherBlock={(nodeId, operation) =>
+              void requestTeacherBlockChange(nodeId, operation)
+            }
             onDeleteNode={deleteNode}
             onAddResource={addResource}
             onUploadResource={uploadResource}
@@ -364,6 +443,9 @@ export default function RoadmapCanvas({
                 : 'dependencias relacionadas'}
               .
             </AlertDialogDescription>
+            <p className="text-sm text-muted-foreground">
+              Estas dependencias no se restaurarán al volver a mostrar el nodo.
+            </p>
             <ul className="list-disc pl-5 text-sm text-muted-foreground">
               {pendingVisibilityChange?.dependencies.map((dependency) => {
                 const source = roadmap.nodes.find((node) => node.id === dependency.sourceNodeId);
@@ -404,8 +486,13 @@ export default function RoadmapCanvas({
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-semibold">Confirmar bloqueo</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta dependencia bloqueará persistentemente los siguientes nodos.
+              Esta dependencia bloqueará persistentemente{' '}
+              {pendingDependencyChange?.nodes.length ?? 0}{' '}
+              {(pendingDependencyChange?.nodes.length ?? 0) === 1 ? 'nodo' : 'nodos'}.
             </AlertDialogDescription>
+            <p className="text-sm text-muted-foreground">
+              Bloquear u ordenar dependencias puede afectar el acceso y progreso estudiantil.
+            </p>
             <ul className="list-disc pl-5 text-sm text-muted-foreground">
               {pendingDependencyChange?.nodes.map((node) => (
                 <li key={node.id}>{node.title}</li>
@@ -428,6 +515,33 @@ export default function RoadmapCanvas({
               }}
             >
               Conectar y bloquear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(pendingTeacherBlockChange)}
+        onOpenChange={(open) => !open && setPendingTeacherBlockChange(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">
+              {teacherBlockDialog?.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{teacherBlockDialog?.description}</AlertDialogDescription>
+            <p className="text-sm text-muted-foreground">
+              Esta acción puede afectar el acceso y progreso estudiantil.
+            </p>
+            <ul className="list-disc pl-5 text-sm text-muted-foreground">
+              {pendingTeacherBlockChange?.nodes.map((node) => (
+                <li key={node.id}>{node.title}</li>
+              ))}
+            </ul>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={() => void confirmTeacherBlockChange()}>
+              {teacherBlockDialog?.action}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,4 +1,4 @@
-import type { Resource, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
+import type { Resource, RoadmapDto, RoadmapNode, TeacherBlockOperation } from '@/lib/roadmap-types';
 
 export type NodeInput = {
   title: string;
@@ -25,6 +25,7 @@ export type RoadmapEditorProps = {
   onClose: () => void;
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
+  onRequestTeacherBlock: (nodeId: string, operation: TeacherBlockOperation) => void;
   onDeleteNode: (nodeId: string) => Promise<boolean>;
   onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
   onUploadResource: (nodeId: string, file: File) => Promise<boolean>;

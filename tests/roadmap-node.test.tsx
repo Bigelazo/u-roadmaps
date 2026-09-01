@@ -82,6 +82,40 @@ test('the editing visibility control uses a pointer cursor', () => {
   );
 });
 
+test('does not render connection handles for a hidden teacher node', () => {
+  const onToggleVisibility = vi.fn();
+  const props = {
+    id: 'hidden-node',
+    type: 'roadmap',
+    data: {
+      title: 'Material de coordinación',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      status: 'editing',
+      isHidden: true,
+      onToggleVisibility,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: false,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  expect(screen.queryAllByTestId('roadmap-node-handle')).toHaveLength(0);
+  expect(screen.getByRole('button', { name: 'Mostrar a estudiantes' })).toBeTruthy();
+});
+
 test('uses the node type as its label instead of repeating its available status', () => {
   const props = {
     id: 'node-2',

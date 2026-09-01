@@ -69,6 +69,10 @@ export type RoadmapDependency = {
 
 export type DependencyHandle = 'top' | 'right' | 'bottom' | 'left';
 
+export type TeacherBlockOperation = 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK';
+
+export type TeacherBlockImpact = { id: string; title: string };
+
 type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
   course: { code: string; name: string; department: string };
   courseOffering: { id: string; year: number; semester: number };
