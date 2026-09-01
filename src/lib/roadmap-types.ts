@@ -1,4 +1,5 @@
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
+import type { StudentNodeAccess } from '@/lib/roadmap-access';
 
 export type Resource = {
   id: string;
@@ -14,18 +15,48 @@ export type NodeType = {
   isPredefined: boolean;
 };
 
-export type RoadmapNode = {
+type RoadmapNodeSummary = {
   id: string;
   title: string;
-  description: string | null;
   positionX: number;
   positionY: number;
   nodeTypeId: string;
-  isVisible: boolean;
+};
+
+type RoadmapNodeDetails = RoadmapNodeSummary & {
+  description: string | null;
   isCompleted?: boolean;
   canComplete?: boolean;
   resources: Resource[];
 };
+
+export type VisibleRoadmapNode = RoadmapNodeDetails & {
+  isVisible: true;
+  isTeacherBlocked: boolean;
+};
+
+export type HiddenRoadmapNode = RoadmapNodeDetails & {
+  isVisible: false;
+  isTeacherBlocked: false;
+};
+
+export type RoadmapNode = VisibleRoadmapNode | HiddenRoadmapNode;
+
+export type StudentAccessibleRoadmapNode = RoadmapNodeSummary & {
+  isVisible: true;
+  access: Extract<StudentNodeAccess, { status: 'ACCESSIBLE' }>;
+  description: string | null;
+  isCompleted: boolean;
+  canComplete: boolean;
+  resources: Resource[];
+};
+
+export type StudentBlockedRoadmapNode = RoadmapNodeSummary & {
+  isVisible: true;
+  access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>;
+};
+
+export type StudentRoadmapNode = StudentAccessibleRoadmapNode | StudentBlockedRoadmapNode;
 
 export type RoadmapDependency = {
   id: string;

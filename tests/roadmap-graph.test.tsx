@@ -18,6 +18,7 @@ const roadmap: RoadmapDto = {
       positionY: 0,
       nodeTypeId: 'content',
       isVisible: false,
+      isTeacherBlocked: false,
       isCompleted: false,
       canComplete: false,
       resources: [

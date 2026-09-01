@@ -2,8 +2,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { StudentNodeDetail } from '../src/features/roadmap/student/NodeDetail';
+import type { RoadmapNode } from '../src/lib/roadmap-types';
 
-const node = {
+const node: RoadmapNode = {
   id: 'node-1',
   title: 'Introduccion a algoritmos',
   description: 'Conceptos basicos',
@@ -11,6 +12,7 @@ const node = {
   positionX: 0,
   positionY: 0,
   isVisible: true,
+  isTeacherBlocked: false,
   isCompleted: false,
   canComplete: true,
   resources: [],

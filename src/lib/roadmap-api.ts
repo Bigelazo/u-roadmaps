@@ -3,6 +3,7 @@ import { ResultAsync } from 'neverthrow';
 import { unstable_rethrow } from 'next/navigation';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+export { wouldCreateDependencyCycle as findCycle } from '@/lib/roadmap-access';
 
 export type CourseOfferingIdentifier = {
   courseCode: string;
@@ -312,6 +313,7 @@ export function nodeDto(node: {
   positionY: number;
   nodeTypeId: string;
   isVisible: boolean;
+  isTeacherBlocked: boolean;
 }) {
   return {
     id: node.id,
@@ -321,6 +323,7 @@ export function nodeDto(node: {
     positionY: node.positionY,
     nodeTypeId: node.nodeTypeId,
     isVisible: node.isVisible,
+    isTeacherBlocked: node.isTeacherBlocked,
   };
 }
 
@@ -469,29 +472,6 @@ async function createRoadmapUnsafe(identifier: CourseOfferingIdentifier, body: J
   } catch (error) {
     handlePrismaError(error);
   }
-}
-
-export function findCycle(
-  dependencies: Array<{ sourceNodeId: string; targetNodeId: string }>,
-  sourceNodeId: string,
-  targetNodeId: string,
-): boolean {
-  const outgoing = new Map<string, string[]>();
-  for (const dependency of dependencies) {
-    const targets = outgoing.get(dependency.sourceNodeId) ?? [];
-    targets.push(dependency.targetNodeId);
-    outgoing.set(dependency.sourceNodeId, targets);
-  }
-  const pending = [targetNodeId];
-  const visited = new Set<string>();
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (!current || visited.has(current)) continue;
-    if (current === sourceNodeId) return true;
-    visited.add(current);
-    pending.push(...(outgoing.get(current) ?? []));
-  }
-  return false;
 }
 
 export function requireRoadmap(identifier: CourseOfferingIdentifier) {

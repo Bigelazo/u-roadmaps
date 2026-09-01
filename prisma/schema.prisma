@@ -58,6 +58,7 @@ model RoadmapNode {
   positionX            Float
   positionY            Float
   isVisible            Boolean      @default(true)
+  isTeacherBlocked     Boolean      @default(false)
   roadmap              Roadmap      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   nodeType             NodeType     @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
   outgoingDependencies Dependency[] @relation("OutgoingDependencies")
