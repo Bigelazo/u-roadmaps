@@ -260,6 +260,161 @@ test('teacher uploads a file resource through the protected multipart endpoint',
   }
 });
 
+test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testInfo) => {
+  const teacher = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  });
+  const student = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
+  });
+  const createdNodeIds: string[] = [];
+  const dependencyIds: string[] = [];
+
+  try {
+    const roadmap = await teacher.get(roadmapPath());
+    expect(roadmap.status()).toBe(200);
+    const contentTypeId = (await roadmap.json()).nodeTypes.find(
+      (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
+    ).id;
+    const nodeNames = ['Raíz', 'Izquierdo', 'Derecho', 'Unión', 'Hoja', 'Externo'];
+    const nodes = await Promise.all(
+      nodeNames.map(async (name, index) => {
+        const response = await teacher.post(roadmapPath('/nodes'), {
+          data: {
+            title: uniqueName(`Bloqueo ${name}`),
+            nodeTypeId: contentTypeId,
+            positionX: index * 100,
+            positionY: 0,
+          },
+        });
+        expect(response.status()).toBe(201);
+        const node = (await response.json()).node as { id: string; title: string };
+        createdNodeIds.push(node.id);
+        return node;
+      }),
+    );
+    const [root, left, right, join, leaf, external] = nodes;
+    const dependencies = [
+      [root, left],
+      [root, right],
+      [left, join],
+      [right, join],
+      [join, leaf],
+      [external, join],
+    ] as const;
+    for (const [source, target] of dependencies) {
+      const response = await teacher.post(roadmapPath('/dependencies'), {
+        data: { sourceNodeId: source.id, targetNodeId: target.id },
+      });
+      expect(response.status()).toBe(201);
+      dependencyIds.push((await response.json()).dependency.id);
+    }
+
+    const teacherBlockPath = (nodeId: string) => roadmapPath(`/nodes/${nodeId}/teacher-block`);
+    expect((await student.post(teacherBlockPath(root.id))).status()).toBe(403);
+    const preview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`);
+    expect(preview.status()).toBe(200);
+    expect((await preview.json()).nodes).toEqual(
+      expect.arrayContaining(
+        [root, left, right, join, leaf].map(({ id, title }) => ({ id, title })),
+      ),
+    );
+
+    const beforeBlock = await teacher.get(roadmapPath());
+    expect(
+      (await beforeBlock.json()).nodes.find((node: { id: string }) => node.id === root.id)
+        .isTeacherBlocked,
+    ).toBe(false);
+
+    const resource = await teacher.post(roadmapPath(`/nodes/${root.id}/resources`), {
+      data: { title: 'Recurso que se conserva', url: 'https://example.test/kept', type: 'LINK' },
+    });
+    expect(resource.status()).toBe(201);
+    expect((await student.post(roadmapPath(`/nodes/${root.id}/completion`))).status()).toBe(200);
+
+    const block = await teacher.post(teacherBlockPath(root.id));
+    expect(block.status()).toBe(200);
+    expect((await block.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
+      expect.arrayContaining([root.id, left.id, right.id, join.id, leaf.id]),
+    );
+    const teacherRoadmap = await teacher.get(roadmapPath());
+    expect(
+      (await teacherRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
+    ).toMatchObject({ isTeacherBlocked: true, resources: [{ title: 'Recurso que se conserva' }] });
+
+    const individualPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=UNBLOCK`);
+    expect(individualPreview.status()).toBe(200);
+    expect((await individualPreview.json()).nodes).toEqual([{ id: root.id, title: root.title }]);
+    const prerequisiteStillBlocked = await teacher.delete(teacherBlockPath(left.id));
+    expect(prerequisiteStillBlocked.status()).toBe(409);
+    expect((await prerequisiteStillBlocked.json()).error.code).toBe('TEACHER_BLOCKED_PREREQUISITE');
+    expect((await teacher.delete(teacherBlockPath(root.id))).status()).toBe(200);
+    const studentRoadmap = await student.get(roadmapPath());
+    expect(
+      (await studentRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
+    ).toMatchObject({ isCompleted: true });
+
+    expect((await teacher.post(teacherBlockPath(external.id))).status()).toBe(200);
+    const branchPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BRANCH_UNLOCK`);
+    expect(branchPreview.status()).toBe(200);
+    expect((await branchPreview.json()).nodes).toEqual(
+      expect.arrayContaining([left, right].map(({ id, title }) => ({ id, title }))),
+    );
+    const beforeBranchUnlock = await teacher.get(roadmapPath());
+    const beforeBranchUnlockByNodeId = new Map(
+      (await beforeBranchUnlock.json()).nodes.map(
+        (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
+      ),
+    );
+    expect(beforeBranchUnlockByNodeId.get(left.id)).toBe(true);
+    expect(beforeBranchUnlockByNodeId.get(right.id)).toBe(true);
+    const branchUnlock = await teacher.patch(teacherBlockPath(root.id));
+    expect(branchUnlock.status()).toBe(200);
+    expect((await branchUnlock.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
+      expect.arrayContaining([left.id, right.id]),
+    );
+    const afterBranchUnlock = await teacher.get(roadmapPath());
+    const teacherBlockByNodeId = new Map(
+      (await afterBranchUnlock.json()).nodes.map(
+        (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
+      ),
+    );
+    expect(teacherBlockByNodeId.get(root.id)).toBe(false);
+    expect(teacherBlockByNodeId.get(left.id)).toBe(false);
+    expect(teacherBlockByNodeId.get(right.id)).toBe(false);
+    expect(teacherBlockByNodeId.get(join.id)).toBe(true);
+    expect(teacherBlockByNodeId.get(leaf.id)).toBe(true);
+    expect(teacherBlockByNodeId.get(external.id)).toBe(true);
+
+    const hiddenBlock = await teacher.post(teacherBlockPath(fixture.cc1002.hiddenNode));
+    expect(hiddenBlock.status()).toBe(409);
+    expect((await hiddenBlock.json()).error.code).toBe('HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN');
+
+    const concurrentBlocks = await Promise.all([
+      teacher.post(teacherBlockPath(root.id)),
+      teacher.post(teacherBlockPath(root.id)),
+    ]);
+    expect(concurrentBlocks.map((response) => response.status())).toEqual([200, 200]);
+    const afterConcurrentBlocks = await teacher.get(roadmapPath());
+    const concurrentBlockByNodeId = new Map(
+      (await afterConcurrentBlocks.json()).nodes.map(
+        (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
+      ),
+    );
+    expect(
+      [root, left, right, join, leaf].every((node) => concurrentBlockByNodeId.get(node.id)),
+    ).toBe(true);
+  } finally {
+    for (const dependencyId of dependencyIds)
+      await deleteIfPresent(teacher, roadmapPath(`/dependencies/${dependencyId}`));
+    for (const nodeId of createdNodeIds)
+      await deleteIfPresent(teacher, roadmapPath(`/nodes/${nodeId}`));
+    await Promise.all([teacher.dispose(), student.dispose()]);
+  }
+});
+
 test('completion ignores hidden prerequisites and requires an active student participation', async ({}, testInfo) => {
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
@@ -319,7 +474,9 @@ test('completion ignores hidden prerequisites and requires an active student par
     });
     expect(visibleDependency.status()).toBe(201);
     expect((await student.post(roadmapPath(`/nodes/${hiddenId}/completion`))).status()).toBe(404);
-    expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(409);
+    const blockedTarget = await student.post(roadmapPath(`/nodes/${targetId}/completion`));
+    expect(blockedTarget.status()).toBe(403);
+    expect((await blockedTarget.json()).error.code).toBe('PREREQUISITE_BLOCK');
     expect((await student.post(roadmapPath(`/nodes/${prerequisiteId}/completion`))).status()).toBe(
       200,
     );

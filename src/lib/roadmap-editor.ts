@@ -17,12 +17,23 @@ import {
   resourceDto,
   type CourseOfferingIdentifier,
 } from '@/lib/roadmap-api';
+import {
+  eligibleBranchUnlockNodeIds,
+  transitiveDependentNodeIds,
+  transitivePrerequisiteNodeIds,
+} from '@/lib/roadmap-access';
 import { deleteUploadedFile } from '@/lib/resource-storage';
 
 type JsonObject = Record<string, unknown>;
 type EditorInput = { userId: string; identifier: CourseOfferingIdentifier };
 type WithInput = EditorInput & { input: JsonObject };
 type WithId = EditorInput & { id: string };
+
+export type TeacherBlockOperation = 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK';
+
+type TeacherBlockPreview = {
+  nodes: Array<{ id: string; title: string }>;
+};
 
 function dependencyHandle(value: unknown, field: string, fallback: string) {
   const handle = optionalString(value, field, 6) ?? fallback;
@@ -105,6 +116,32 @@ async function requireResource(
   if (!resource)
     throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
   return resource;
+}
+
+async function withSerializableTransaction<T>(
+  operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  concurrentModification: () => ApiError,
+) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      if (
+        attempt < 2 &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        continue;
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        throw concurrentModification();
+      }
+      throw error;
+    }
+  }
+  throw new Error('Serializable transaction retry limit reached.');
 }
 
 async function ensureTypeNameAvailable(
@@ -272,59 +309,43 @@ async function deleteRoadmapNodeTypeUnsafe({ id, ...editor }: WithId) {
 }
 
 async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await prisma.$transaction(
-        async (transaction) => {
-          const roadmap = await requireEditorRoadmap(transaction, editor);
-          const sourceNodeId = requireUuid(input.sourceNodeId, 'sourceNodeId');
-          const targetNodeId = requireUuid(input.targetNodeId, 'targetNodeId');
-          const sourceHandle = dependencyHandle(input.sourceHandle, 'sourceHandle', 'right');
-          const targetHandle = dependencyHandle(input.targetHandle, 'targetHandle', 'left');
-          if (sourceNodeId === targetNodeId)
-            throw new ApiError(409, 'SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
-          await requireNode(transaction, sourceNodeId, roadmap.id);
-          await requireNode(transaction, targetNodeId, roadmap.id);
-          const dependencies = await transaction.dependency.findMany({
-            where: { sourceNode: { roadmapId: roadmap.id } },
-            select: { sourceNodeId: true, targetNodeId: true },
-          });
-          if (
-            dependencies.some(
-              (dependency) =>
-                dependency.sourceNodeId === sourceNodeId &&
-                dependency.targetNodeId === targetNodeId,
-            )
-          ) {
-            throw new ApiError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
-          }
-          if (findCycle(dependencies, sourceNodeId, targetNodeId))
-            throw new ApiError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
-          const dependency = await transaction.dependency.create({
-            data: { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
-          });
-          return { id: dependency.id, sourceNodeId, targetNodeId, sourceHandle, targetHandle };
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    } catch (error) {
+  return withSerializableTransaction(
+    async (transaction) => {
+      const roadmap = await requireEditorRoadmap(transaction, editor);
+      const sourceNodeId = requireUuid(input.sourceNodeId, 'sourceNodeId');
+      const targetNodeId = requireUuid(input.targetNodeId, 'targetNodeId');
+      const sourceHandle = dependencyHandle(input.sourceHandle, 'sourceHandle', 'right');
+      const targetHandle = dependencyHandle(input.targetHandle, 'targetHandle', 'left');
+      if (sourceNodeId === targetNodeId)
+        throw new ApiError(409, 'SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
+      await requireNode(transaction, sourceNodeId, roadmap.id);
+      await requireNode(transaction, targetNodeId, roadmap.id);
+      const dependencies = await transaction.dependency.findMany({
+        where: { sourceNode: { roadmapId: roadmap.id } },
+        select: { sourceNodeId: true, targetNodeId: true },
+      });
       if (
-        attempt < 2 &&
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
-      )
-        continue;
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-        throw new ApiError(
-          409,
-          'DEPENDENCY_CONFLICT',
-          'La dependencia entra en conflicto con otra modificación.',
-        );
+        dependencies.some(
+          (dependency) =>
+            dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId,
+        )
+      ) {
+        throw new ApiError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
       }
-      throw error;
-    }
-  }
-  throw new Error('Dependency transaction retry limit reached.');
+      if (findCycle(dependencies, sourceNodeId, targetNodeId))
+        throw new ApiError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
+      const dependency = await transaction.dependency.create({
+        data: { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
+      });
+      return { id: dependency.id, sourceNodeId, targetNodeId, sourceHandle, targetHandle };
+    },
+    () =>
+      new ApiError(
+        409,
+        'DEPENDENCY_CONFLICT',
+        'La dependencia entra en conflicto con otra modificación.',
+      ),
+  );
 }
 
 async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
@@ -420,6 +441,95 @@ async function deleteRoadmapResourceUnsafe({ id, ...editor }: WithId) {
   if (fileKey) await deleteUploadedFile(fileKey).catch(() => undefined);
 }
 
+async function teacherBlockPreview(
+  transaction: Prisma.TransactionClient,
+  { id, ...editor }: WithId & { operation: TeacherBlockOperation },
+) {
+  const roadmap = await requireEditorRoadmap(transaction, editor);
+  const nodeId = requireUuid(id, 'nodeId');
+  const [nodes, dependencies] = await Promise.all([
+    transaction.roadmapNode.findMany({
+      where: { roadmapId: roadmap.id },
+      select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
+      orderBy: { title: 'asc' },
+    }),
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId: roadmap.id } },
+      select: { sourceNodeId: true, targetNodeId: true },
+    }),
+  ]);
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const selectedNode = nodeById.get(nodeId);
+  if (!selectedNode)
+    throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!selectedNode.isVisible) {
+    throw new ApiError(
+      409,
+      'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
+      'Un nodo oculto no puede tener un bloqueo docente.',
+    );
+  }
+
+  let changedNodeIds: Set<string>;
+  if (editor.operation === 'BLOCK') {
+    changedNodeIds = new Set(
+      [nodeId, ...transitiveDependentNodeIds(dependencies, nodeId)].filter((candidateNodeId) => {
+        const node = nodeById.get(candidateNodeId);
+        return node?.isVisible && !node.isTeacherBlocked;
+      }),
+    );
+  } else if (editor.operation === 'UNBLOCK') {
+    if (!selectedNode.isTeacherBlocked) return { nodes: [] };
+    const hasTeacherBlockedPrerequisite = [
+      ...transitivePrerequisiteNodeIds(dependencies, nodeId),
+    ].some((prerequisiteNodeId) => nodeById.get(prerequisiteNodeId)?.isTeacherBlocked);
+    if (hasTeacherBlockedPrerequisite) {
+      throw new ApiError(
+        409,
+        'TEACHER_BLOCKED_PREREQUISITE',
+        'No se puede desbloquear el nodo mientras conserve un prerrequisito con bloqueo docente.',
+      );
+    }
+    changedNodeIds = new Set([nodeId]);
+  } else {
+    changedNodeIds = eligibleBranchUnlockNodeIds({
+      dependencies,
+      teacherBlockedNodeIds: new Set(
+        nodes.filter((node) => node.isTeacherBlocked).map((node) => node.id),
+      ),
+      rootNodeId: nodeId,
+    });
+  }
+
+  return {
+    nodes: nodes
+      .filter((node) => changedNodeIds.has(node.id))
+      .map(({ id: changedNodeId, title }) => ({ id: changedNodeId, title })),
+  } satisfies TeacherBlockPreview;
+}
+
+async function previewTeacherBlockUnsafe(input: WithId & { operation: TeacherBlockOperation }) {
+  return prisma.$transaction((transaction) => teacherBlockPreview(transaction, input), {
+    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+  });
+}
+
+async function changeTeacherBlockUnsafe(input: WithId & { operation: TeacherBlockOperation }) {
+  return withSerializableTransaction(
+    async (transaction) => {
+      const preview = await teacherBlockPreview(transaction, input);
+      if (preview.nodes.length > 0) {
+        await transaction.roadmapNode.updateMany({
+          where: { id: { in: preview.nodes.map((node) => node.id) } },
+          data: { isTeacherBlocked: input.operation === 'BLOCK' },
+        });
+      }
+      return preview;
+    },
+    () => new ApiError(409, 'CONFLICT', 'La operación entra en conflicto con otra modificación.'),
+  );
+}
+
 export function createRoadmapNode(input: WithInput) {
   return apiResult(() => createRoadmapNodeUnsafe(input));
 }
@@ -466,4 +576,12 @@ export function updateRoadmapResource(input: WithId & { input: JsonObject }) {
 
 export function deleteRoadmapResource(input: WithId) {
   return apiResult(() => deleteRoadmapResourceUnsafe(input));
+}
+
+export function previewTeacherBlock(input: WithId & { operation: TeacherBlockOperation }) {
+  return apiResult(() => previewTeacherBlockUnsafe(input));
+}
+
+export function changeTeacherBlock(input: WithId & { operation: TeacherBlockOperation }) {
+  return apiResult(() => changeTeacherBlockUnsafe(input));
 }
