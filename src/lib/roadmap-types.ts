@@ -57,6 +57,8 @@ export type StudentBlockedRoadmapNode = RoadmapNodeSummary & {
 
 export type StudentRoadmapNode = StudentAccessibleRoadmapNode | StudentBlockedRoadmapNode;
 
+export type RoadmapNodeDto = RoadmapNode | StudentRoadmapNode;
+
 export type RoadmapDependency = {
   id: string;
   sourceNodeId: string;
@@ -67,14 +69,18 @@ export type RoadmapDependency = {
 
 export type DependencyHandle = 'top' | 'right' | 'bottom' | 'left';
 
-export type RoadmapDto = {
+type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
   course: { code: string; name: string; department: string };
   courseOffering: { id: string; year: number; semester: number };
   roadmap: { id: string };
   nodeTypes: NodeType[];
-  nodes: RoadmapNode[];
+  nodes: Node[];
   dependencies: RoadmapDependency[];
 };
+
+export type RoadmapDto = RoadmapDtoBase<RoadmapNode>;
+export type StudentRoadmapDto = RoadmapDtoBase<StudentRoadmapNode>;
+export type AnyRoadmapDto = RoadmapDto | StudentRoadmapDto;
 
 export function roadmapUrl(identifier: CourseOfferingIdentifier, suffix = ''): string {
   return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap${suffix}`;

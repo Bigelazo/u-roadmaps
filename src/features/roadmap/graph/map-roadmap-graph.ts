@@ -1,18 +1,18 @@
 import { MarkerType } from '@xyflow/react';
-import type { RoadmapDto, RoadmapNode as RoadmapDomainNode } from '@/lib/roadmap-types';
-import { studentNodeStatus } from '@/features/roadmap/student/node-status';
+import type { AnyRoadmapDto, RoadmapNodeDto } from '@/lib/roadmap-types';
+import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import type { RoadmapFlowNode, RoadmapNodeStatus } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 
 const studentEdgeStroke = 'var(--ink)';
 
-function nodeStatus(node: RoadmapDomainNode, canEdit: boolean): RoadmapNodeStatus {
+function nodeStatus(node: RoadmapNodeDto, canEdit: boolean): RoadmapNodeStatus {
   if (canEdit) return 'editing';
   return studentNodeStatus(node);
 }
 
 export function mapRoadmapGraph(
-  roadmap: RoadmapDto,
+  roadmap: AnyRoadmapDto,
   canEdit: boolean,
   onDeleteDependency?: (dependencyId: string) => void,
   onToggleNodeVisibility?: (nodeId: string, isVisible: boolean) => void,
@@ -21,6 +21,7 @@ export function mapRoadmapGraph(
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
+    const blockReason = canEdit ? undefined : studentNodeBlockReason(node);
     return {
       id: node.id,
       type: 'roadmap',
@@ -30,18 +31,26 @@ export function mapRoadmapGraph(
         typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
         status: nodeStatus(node, canEdit),
         isHidden,
+        blockReason,
         onToggleVisibility: canEdit
-          ? () => onToggleNodeVisibility?.(node.id, node.isVisible)
+          ? () => 'isVisible' in node && onToggleNodeVisibility?.(node.id, node.isVisible)
           : undefined,
       },
       position: { x: node.positionX, y: node.positionY },
       hidden: !canEdit && isHidden,
       deletable: false,
+      selectable: canEdit || !blockReason,
+      focusable: true,
+      ariaRole: blockReason ? 'button' : undefined,
+      domAttributes: blockReason ? { 'aria-disabled': true } : undefined,
     };
   });
   const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
     const defaultStroke = canEdit
-      ? nodesById.get(dependency.sourceNodeId)?.isCompleted
+      ? (() => {
+          const sourceNode = nodesById.get(dependency.sourceNodeId);
+          return sourceNode && 'isCompleted' in sourceNode && sourceNode.isCompleted;
+        })()
         ? 'var(--ink)'
         : 'var(--steel)'
       : studentEdgeStroke;

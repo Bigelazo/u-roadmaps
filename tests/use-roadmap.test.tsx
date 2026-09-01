@@ -196,3 +196,43 @@ test('uploads a file resource as multipart form data and reloads the roadmap', a
   );
   await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-upload'));
 });
+
+test('reloads the effective blocked state after a concurrent completion rejection', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('before-block')))
+    .mockResolvedValueOnce(
+      Response.json(
+        { error: { code: 'TEACHER_BLOCK', message: 'Bloqueado por el equipo docente' } },
+        { status: 403 },
+      ),
+    )
+    .mockResolvedValueOnce(
+      Response.json({
+        ...roadmap('after-block'),
+        nodes: [
+          {
+            id: 'node-1',
+            title: 'Nodo bloqueado',
+            nodeTypeId: 'type-1',
+            positionX: 0,
+            positionY: 0,
+            access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
+          },
+        ],
+      }),
+    );
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before-block'));
+
+  await expect(result.current.completeNode('node-1')).resolves.toBe(false);
+
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-block'));
+  expect(result.current.roadmap?.nodes[0]).toMatchObject({
+    access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
+  });
+  expect(result.current.error).toBe('Bloqueado por el equipo docente');
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});

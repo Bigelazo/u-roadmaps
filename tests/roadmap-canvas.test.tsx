@@ -10,11 +10,13 @@ vi.mock('next/dynamic', () => ({ default: () => () => null }));
 
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
+    onSelectNode,
     onDeleteDependencies,
     onToggleNodeVisibility,
     onAutoLayout,
     topRightActions,
   }: {
+    onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
     onDeleteDependencies: (ids: string[]) => void;
     onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
     onAutoLayout: (nodes: { id: string; position: { x: number; y: number } }[]) => void;
@@ -22,6 +24,12 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   }) => (
     <>
       {topRightActions}
+      <button
+        type="button"
+        onClick={() => onSelectNode('blocked-node', document.createElement('div'))}
+      >
+        Activar nodo bloqueado
+      </button>
       <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
         Solicitar eliminación de dependencias
       </button>
@@ -39,7 +47,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
 }));
 
 vi.mock('@/features/roadmap/student/NodeDetail', () => ({
-  StudentNodeDetail: () => null,
+  StudentNodeDetail: ({ node }: { node?: { title: string } }) =>
+    node ? <div data-testid="student-detail">{node.title}</div> : null,
 }));
 
 vi.mock('@/features/roadmap/useRoadmap', () => ({ useRoadmap: useRoadmapMock }));
@@ -290,4 +299,30 @@ test('surfaces a mutation error as a dismissible toast over the canvas', async (
 
   await user.click(screen.getByRole('button', { name: 'Cerrar alerta' }));
   expect(dismissError).toHaveBeenCalled();
+});
+
+test('does not select a blocked student node', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(
+    roadmapActions({
+      roadmap: {
+        ...roadmap,
+        nodes: [
+          {
+            id: 'blocked-node',
+            title: 'Nodo bloqueado',
+            nodeTypeId: 'content',
+            positionX: 0,
+            positionY: 0,
+            access: { status: 'BLOCKED', reason: 'PREREQUISITE_BLOCK' },
+          },
+        ],
+      },
+    }),
+  );
+  renderCanvas();
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo bloqueado' }));
+
+  expect(screen.queryByTestId('student-detail')).toBeNull();
 });

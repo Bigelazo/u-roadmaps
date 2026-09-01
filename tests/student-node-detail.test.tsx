@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { StudentNodeDetail } from '../src/features/roadmap/student/NodeDetail';
-import type { RoadmapNode } from '../src/lib/roadmap-types';
+import type { RoadmapNode, StudentBlockedRoadmapNode } from '../src/lib/roadmap-types';
 
 const node: RoadmapNode = {
   id: 'node-1',
@@ -34,6 +34,15 @@ const nodeWithResources = {
       url: 'https://example.com/class',
     },
   ],
+};
+
+const blockedNode: StudentBlockedRoadmapNode = {
+  id: 'blocked-node',
+  title: 'Contenido bloqueado',
+  nodeTypeId: 'type-1',
+  positionX: 0,
+  positionY: 0,
+  access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
 };
 
 test('student can close a named mobile node-detail dialog with Escape or its close control', async () => {
@@ -98,6 +107,24 @@ test('student cannot complete a locked node and is told why', () => {
     screen.getByText('Este nodo se desbloquea cuando completes sus prerrequisitos.'),
   ).toBeTruthy();
 });
+
+test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(
+  'does not open a detail surface for a %s node',
+  (reason) => {
+    render(
+      <StudentNodeDetail
+        node={{ ...blockedNode, access: { status: 'BLOCKED', reason } }}
+        status="locked"
+        onClose={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText(blockedNode.title)).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
+  },
+);
 
 test('does not render a desktop detail sidebar when no node is selected', () => {
   window.matchMedia = ((query: string) => ({

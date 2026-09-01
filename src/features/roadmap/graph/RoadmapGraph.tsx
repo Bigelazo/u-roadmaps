@@ -19,7 +19,7 @@ import {
 import { LayoutTemplate } from 'lucide-react';
 import { roadmapGridSize } from '@/lib/roadmap-geometry';
 import { Button } from '@/components/ui/button';
-import type { RoadmapDto } from '@/lib/roadmap-types';
+import type { AnyRoadmapDto } from '@/lib/roadmap-types';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
 import { mapRoadmapGraph } from '@/features/roadmap/graph/map-roadmap-graph';
@@ -42,7 +42,7 @@ function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): Roadmap
 }
 
 type Props = {
-  roadmap: RoadmapDto;
+  roadmap: AnyRoadmapDto;
   canEdit: boolean;
   onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
   onMoveNode: OnNodeDrag<RoadmapFlowNode>;
@@ -159,7 +159,10 @@ export function RoadmapGraph({
           ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
         }))
       }
-      onNodeClick={(event, node) => onSelectNode(node.id, event.currentTarget as HTMLElement)}
+      onNodeClick={(event, node) => {
+        if (node.data.blockReason) return;
+        onSelectNode(node.id, event.currentTarget as HTMLElement);
+      }}
       onEdgeMouseEnter={
         canEdit
           ? (_event, edge) =>

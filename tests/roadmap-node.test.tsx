@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { RoadmapNode, type RoadmapFlowNode } from '../src/features/roadmap/graph/RoadmapNode';
+import type { StudentNodeBlockReason } from '../src/lib/roadmap-access';
 
 function mountEditingNode(onToggleVisibility = vi.fn()) {
   const props = {
@@ -33,6 +34,36 @@ function mountEditingNode(onToggleVisibility = vi.fn()) {
     </ReactFlowProvider>,
   );
   return onToggleVisibility;
+}
+
+function mountBlockedNode(blockReason: StudentNodeBlockReason) {
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode
+        {...({
+          id: `node-${blockReason}`,
+          type: 'roadmap',
+          data: {
+            title: 'Contenido bloqueado',
+            typeColor: '#024AD8',
+            typeName: 'Contenido',
+            status: 'locked',
+            blockReason,
+            isHidden: false,
+          },
+          selected: false,
+          selectable: false,
+          draggable: false,
+          dragging: false,
+          deletable: false,
+          isConnectable: false,
+          positionAbsoluteX: 0,
+          positionAbsoluteY: 0,
+          zIndex: 0,
+        } as NodeProps<RoadmapFlowNode>)}
+      />
+    </ReactFlowProvider>,
+  );
 }
 
 test('the editing visibility control triggers the node visibility action', async () => {
@@ -126,4 +157,20 @@ test('labels completed and available status icons for assistive technology', () 
 
   expect(screen.getByRole('img', { name: 'Completado' })).toBeTruthy();
   expect(screen.getByRole('img', { name: 'Disponible' })).toBeTruthy();
+});
+
+test.each([
+  ['TEACHER_BLOCK', 'Bloqueado por el equipo docente'],
+  ['PREREQUISITE_BLOCK', 'Completa los prerrequisitos'],
+] as const)('shows the %s block reason without hiding node identity', (reason, message) => {
+  mountBlockedNode(reason);
+
+  expect(screen.getByText('Contenido bloqueado')).toBeTruthy();
+  expect(screen.getByText('Contenido')).toBeTruthy();
+  expect(screen.getByText(message)).toBeTruthy();
+  expect(screen.getByRole('img', { name: message })).toBeTruthy();
+  const card = screen.getByTestId('roadmap-card');
+  expect(card.className).toContain('cursor-not-allowed');
+  expect(card.getAttribute('aria-disabled')).toBe('true');
+  expect(screen.queryByRole('button')).toBeNull();
 });

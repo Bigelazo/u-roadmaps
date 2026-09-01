@@ -1,6 +1,8 @@
 import { CheckCircle2, Circle, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
+import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
+import type { StudentNodeBlockReason } from '@/lib/roadmap-access';
 import { cn } from '@/lib/utils';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
@@ -10,6 +12,7 @@ export type RoadmapNodeData = Record<string, unknown> & {
   typeName: string;
   status: RoadmapNodeStatus;
   isHidden: boolean;
+  blockReason?: StudentNodeBlockReason;
   onToggleVisibility?: () => void;
 };
 
@@ -20,6 +23,7 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
+  const blockMessage = data.blockReason ? studentNodeBlockMessages[data.blockReason] : undefined;
   const accent = completed
     ? 'var(--progress-deep)'
     : locked
@@ -27,7 +31,11 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       : data.status === 'available'
         ? 'var(--ink)'
         : 'var(--primary)';
-  const statusLabel = completed ? 'Completado' : locked ? 'Bloqueado' : 'Disponible';
+  const statusLabel = completed
+    ? 'Completado'
+    : locked
+      ? (blockMessage ?? 'Bloqueado')
+      : 'Disponible';
   // El tipo se lee en el color de la tarjeta: el borde lo lleva saturado y el
   // fondo la misma tinta sobre la superficie, sin gastar una línea en una
   // etiqueta. Las tarjetas bloqueadas y ocultas apagan la superficie.
@@ -35,9 +43,16 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
   return (
     <div
       data-slot="roadmap-card"
+      data-testid="roadmap-card"
+      aria-disabled={locked ? true : undefined}
       className={cn(
-        'max-w-[240px] min-w-[170px] cursor-pointer rounded-lg border-2 px-4 py-3 transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)] motion-reduce:transform-none motion-reduce:transition-none',
-        hidden ? '' : locked ? 'opacity-[0.88] shadow-none' : 'shadow-[var(--shadow-roadmap-node)]',
+        'max-w-[240px] min-w-[170px] rounded-lg border-2 px-4 py-3 motion-reduce:transform-none motion-reduce:transition-none',
+        locked
+          ? 'cursor-not-allowed opacity-[0.88] shadow-none'
+          : cn(
+              'cursor-pointer transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)]',
+              !hidden && 'shadow-[var(--shadow-roadmap-node)]',
+            ),
       )}
       style={{
         backgroundColor: `color-mix(in srgb, ${data.typeColor} 14%, ${surface})`,
@@ -95,28 +110,35 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
           Oculto para estudiantes
         </Badge>
       ) : null}
-      {(
-        [
-          ['top', Position.Top],
-          ['right', Position.Right],
-          ['bottom', Position.Bottom],
-          ['left', Position.Left],
-        ] as const
-      ).map(([id, position]) => (
-        <Handle
-          key={id}
-          id={id}
-          type="source"
-          position={position}
-          style={{
-            width: 12,
-            height: 12,
-            background: 'var(--primary)',
-            border: '2px solid var(--card)',
-            visibility: editing ? 'visible' : 'hidden',
-          }}
-        />
-      ))}
+      {blockMessage ? (
+        <p className="mt-2.5 flex items-center gap-1.5 text-xs leading-snug font-semibold text-graphite">
+          <LockKeyhole className="size-3.5 shrink-0" aria-hidden="true" />
+          {blockMessage}
+        </p>
+      ) : null}
+      {editing
+        ? (
+            [
+              ['top', Position.Top],
+              ['right', Position.Right],
+              ['bottom', Position.Bottom],
+              ['left', Position.Left],
+            ] as const
+          ).map(([id, position]) => (
+            <Handle
+              key={id}
+              id={id}
+              type="source"
+              position={position}
+              style={{
+                width: 12,
+                height: 12,
+                background: 'var(--primary)',
+                border: '2px solid var(--card)',
+              }}
+            />
+          ))
+        : null}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import {
   roadmapUrl,
   type Resource,
   type RoadmapDependency,
-  type RoadmapDto,
+  type AnyRoadmapDto,
 } from '@/lib/roadmap-types';
 
 type NewNode = {
@@ -25,7 +25,7 @@ function identifierKey(identifier: CourseOfferingIdentifier) {
   return `${identifier.courseCode}:${identifier.year}:${identifier.semester}`;
 }
 
-function isRoadmapDto(value: unknown): value is RoadmapDto {
+function isRoadmapDto(value: unknown): value is AnyRoadmapDto {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -81,7 +81,7 @@ async function responseError(response: Response, fallback: string) {
 }
 
 export function useRoadmap(identifier: CourseOfferingIdentifier) {
-  const [roadmap, setRoadmap] = useState<RoadmapDto | null>(null);
+  const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);

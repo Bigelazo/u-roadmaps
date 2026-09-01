@@ -11,13 +11,12 @@ import {
   LockKeyhole,
   X,
 } from 'lucide-react';
-import type {
-  Resource,
-  RoadmapNode,
-  StudentBlockedRoadmapNode,
-  StudentRoadmapNode,
-} from '@/lib/roadmap-types';
-import type { StudentNodeStatus } from '@/features/roadmap/student/node-status';
+import type { Resource, RoadmapNode, StudentRoadmapNode } from '@/lib/roadmap-types';
+import {
+  isStudentBlockedNode,
+  studentNodeBlockMessages,
+  type StudentNodeStatus,
+} from '@/features/roadmap/student/node-status';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import {
@@ -56,12 +55,6 @@ type ContentProps = {
   isModal?: boolean;
 };
 
-function isBlockedNode(
-  node: RoadmapNode | StudentRoadmapNode,
-): node is StudentBlockedRoadmapNode {
-  return 'access' in node && node.access.status === 'BLOCKED';
-}
-
 function StudentNodeDetailContent({
   node,
   status,
@@ -69,7 +62,7 @@ function StudentNodeDetailContent({
   onComplete,
   isModal = false,
 }: ContentProps) {
-  const blocked = isBlockedNode(node);
+  const blocked = isStudentBlockedNode(node);
   return (
     <>
       <header className="relative border-b border-border px-6 pt-7 pb-6">
@@ -114,62 +107,64 @@ function StudentNodeDetailContent({
         )}
         {status === 'locked' ? (
           <p className="mt-3 text-sm text-muted-foreground">
-            {blocked && node.access.reason === 'TEACHER_BLOCK'
-              ? 'El equipo docente bloqueó este nodo.'
+            {blocked
+              ? studentNodeBlockMessages[node.access.reason]
               : 'Este nodo se desbloquea cuando completes sus prerrequisitos.'}
           </p>
         ) : null}
       </header>
-      {!blocked ? <div className="overflow-y-auto px-6 py-6">
-        <h3 className="flex items-center gap-2 font-semibold">
-          <FileText size={18} /> Descripción
-        </h3>
-        <p className="mt-5 leading-[1.62] whitespace-pre-line text-muted-foreground">
-          {node.description || 'Este nodo no tiene una descripción disponible.'}
-        </p>
-        <Separator className="my-6" />
-        <h3 className="flex items-center gap-2 font-semibold">
-          <Download size={18} /> Recursos
-        </h3>
-        <div className="mt-6">
-          {node.resources.length ? (
-            <ItemGroup>
-              {node.resources.map((resource) => (
-                <Item
-                  key={resource.id}
-                  variant="outline"
-                  render={
-                    <a
-                      href={resource.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={resource.title}
-                    />
-                  }
-                >
-                  <ItemMedia variant="icon" className="text-primary">
-                    {resourceIcon(resource.type)}
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>{resource.title}</ItemTitle>
-                    <ItemDescription>{resourceTypeLabel(resource.type)}</ItemDescription>
-                  </ItemContent>
-                  <ItemActions className="text-primary">
-                    {resourceActionIcon(resource.type)}
-                  </ItemActions>
-                </Item>
-              ))}
-            </ItemGroup>
-          ) : (
-            <Empty className="py-8">
-              <EmptyHeader>
-                <EmptyTitle>No hay recursos adjuntos</EmptyTitle>
-                <EmptyDescription>No hay recursos adjuntos para este nodo.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          )}
+      {!blocked ? (
+        <div className="overflow-y-auto px-6 py-6">
+          <h3 className="flex items-center gap-2 font-semibold">
+            <FileText size={18} /> Descripción
+          </h3>
+          <p className="mt-5 leading-[1.62] whitespace-pre-line text-muted-foreground">
+            {node.description || 'Este nodo no tiene una descripción disponible.'}
+          </p>
+          <Separator className="my-6" />
+          <h3 className="flex items-center gap-2 font-semibold">
+            <Download size={18} /> Recursos
+          </h3>
+          <div className="mt-6">
+            {node.resources.length ? (
+              <ItemGroup>
+                {node.resources.map((resource) => (
+                  <Item
+                    key={resource.id}
+                    variant="outline"
+                    render={
+                      <a
+                        href={resource.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={resource.title}
+                      />
+                    }
+                  >
+                    <ItemMedia variant="icon" className="text-primary">
+                      {resourceIcon(resource.type)}
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>{resource.title}</ItemTitle>
+                      <ItemDescription>{resourceTypeLabel(resource.type)}</ItemDescription>
+                    </ItemContent>
+                    <ItemActions className="text-primary">
+                      {resourceActionIcon(resource.type)}
+                    </ItemActions>
+                  </Item>
+                ))}
+              </ItemGroup>
+            ) : (
+              <Empty className="py-8">
+                <EmptyHeader>
+                  <EmptyTitle>No hay recursos adjuntos</EmptyTitle>
+                  <EmptyDescription>No hay recursos adjuntos para este nodo.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </div>
         </div>
-      </div> : null}
+      ) : null}
     </>
   );
 }
@@ -197,7 +192,7 @@ function useMobileLayout() {
 
 export function StudentNodeDetail({ node, status, onClose, onComplete }: Props) {
   const isMobile = useMobileLayout();
-  if (!node || !status) return null;
+  if (!node || !status || isStudentBlockedNode(node)) return null;
   if (isMobile) {
     return (
       <Sheet open onOpenChange={(open) => !open && onClose()}>

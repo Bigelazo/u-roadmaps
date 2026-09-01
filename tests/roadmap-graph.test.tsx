@@ -2,7 +2,7 @@ import { expect, test, vi } from 'vitest';
 import { mapRoadmapGraph } from '../src/features/roadmap/graph/map-roadmap-graph';
 import { roadmapEdgeTypes } from '../src/features/roadmap/graph/DependencyEdge';
 import { FloatingEdge } from '../src/features/roadmap/graph/FloatingEdge';
-import type { RoadmapDto } from '../src/lib/roadmap-types';
+import type { RoadmapDto, StudentRoadmapDto } from '../src/lib/roadmap-types';
 
 const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },
@@ -123,4 +123,64 @@ test('preserves the teacher and student node-status mapping', () => {
   expect(mapRoadmapGraph(roadmap, false).nodes[0].data.status).toBe('locked');
   expect(mapRoadmapGraph(completedRoadmap, false).nodes[0].data.status).toBe('completed');
   expect(mapRoadmapGraph(availableRoadmap, false).nodes[0].data.status).toBe('available');
+});
+
+test('maps each blocked reason to a disabled, non-selectable student node', () => {
+  const studentRoadmap: StudentRoadmapDto = {
+    ...roadmap,
+    nodes: [
+      {
+        id: 'teacher-blocked',
+        title: 'Contenido bloqueado por docencia',
+        positionX: 40,
+        positionY: 80,
+        nodeTypeId: 'content',
+        access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
+      },
+      {
+        id: 'prerequisite-blocked',
+        title: 'Contenido con prerrequisitos pendientes',
+        positionX: 160,
+        positionY: 80,
+        nodeTypeId: 'content',
+        access: { status: 'BLOCKED', reason: 'PREREQUISITE_BLOCK' },
+      },
+      {
+        id: 'released-completed',
+        title: 'Contenido completado tras desbloquear',
+        positionX: 280,
+        positionY: 80,
+        nodeTypeId: 'content',
+        isVisible: true,
+        access: { status: 'ACCESSIBLE' },
+        description: null,
+        isCompleted: true,
+        canComplete: false,
+        resources: [],
+      },
+    ],
+    dependencies: [],
+  };
+
+  const [teacherBlocked, prerequisiteBlocked, releasedCompleted] = mapRoadmapGraph(
+    studentRoadmap,
+    false,
+  ).nodes;
+
+  expect(teacherBlocked.data).toMatchObject({
+    status: 'locked',
+    blockReason: 'TEACHER_BLOCK',
+  });
+  expect(prerequisiteBlocked.data).toMatchObject({
+    status: 'locked',
+    blockReason: 'PREREQUISITE_BLOCK',
+  });
+  for (const blockedNode of [teacherBlocked, prerequisiteBlocked]) {
+    expect(blockedNode.selectable).toBe(false);
+    expect(blockedNode.focusable).toBe(true);
+    expect(blockedNode.ariaRole).toBe('button');
+    expect(blockedNode.domAttributes).toMatchObject({ 'aria-disabled': true });
+  }
+  expect(releasedCompleted.data.status).toBe('completed');
+  expect(releasedCompleted.selectable).toBe(true);
 });

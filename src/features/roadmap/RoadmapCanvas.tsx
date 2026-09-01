@@ -8,9 +8,9 @@ import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
-import { studentNodeStatus } from '@/features/roadmap/student/node-status';
+import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { useRoadmap } from '@/features/roadmap/useRoadmap';
-import type { RoadmapNode, StudentRoadmapNode } from '@/lib/roadmap-types';
+import type { RoadmapDto, RoadmapNode, StudentRoadmapNode } from '@/lib/roadmap-types';
 import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -185,6 +185,8 @@ export default function RoadmapCanvas({
             roadmap={roadmap}
             canEdit={canEdit}
             onSelectNode={(nodeId, trigger) => {
+              const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
+              if (!canEdit && isStudentBlockedNode(node)) return;
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
             }}
@@ -234,7 +236,7 @@ export default function RoadmapCanvas({
         </div>
         {canEdit && (
           <RoadmapEditor
-            roadmap={roadmap}
+            roadmap={roadmap as RoadmapDto}
             selectedNode={selectedNode as RoadmapNode | undefined}
             isOpen={isEditorOpen}
             onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
