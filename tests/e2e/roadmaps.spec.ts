@@ -415,7 +415,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testIn
   }
 });
 
-test('completion ignores hidden prerequisites and requires an active student participation', async ({}, testInfo) => {
+test('hidden dependencies are rejected and completion requires an active student participation', async ({}, testInfo) => {
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
     extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
@@ -464,15 +464,16 @@ test('completion ignores hidden prerequisites and requires an active student par
     });
     expect(prerequisite.status()).toBe(201);
     prerequisiteId = (await prerequisite.json()).node.id;
-    const dependency = await teacher.post(roadmapPath('/dependencies'), {
+    const hiddenDependency = await teacher.post(roadmapPath('/dependencies'), {
       data: { sourceNodeId: hiddenId, targetNodeId: targetId },
     });
-    expect(dependency.status()).toBe(201);
-    dependencyId = (await dependency.json()).dependency.id;
+    expect(hiddenDependency.status()).toBe(403);
+    expect((await hiddenDependency.json()).error.code).toBe('HIDDEN_NODE_DEPENDENCY_FORBIDDEN');
     const visibleDependency = await teacher.post(roadmapPath('/dependencies'), {
       data: { sourceNodeId: prerequisiteId, targetNodeId: targetId },
     });
     expect(visibleDependency.status()).toBe(201);
+    dependencyId = (await visibleDependency.json()).dependency.id;
     expect((await student.post(roadmapPath(`/nodes/${hiddenId}/completion`))).status()).toBe(404);
     const blockedTarget = await student.post(roadmapPath(`/nodes/${targetId}/completion`));
     expect(blockedTarget.status()).toBe(403);
