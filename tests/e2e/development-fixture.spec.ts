@@ -36,10 +36,7 @@ test('the reset fixture exposes the three complete roadmap scenarios', async ({}
     for (const [offering, course] of [
       [fixture.cc1002, { code: 'CC1002', name: 'Introducción a la Programación' }],
       [fixture.ma1001, { code: 'MA1001', name: 'Introducción al Cálculo' }],
-      [
-        fixture.fi1001Historical,
-        { code: 'FI1001', name: 'Introducción a la Física Newtoniana' },
-      ],
+      [fixture.fi1001Historical, { code: 'FI1001', name: 'Introducción a la Física Newtoniana' }],
     ] as const) {
       const response = await api.get(fixtureRoadmapPath(offering));
       expect(response.status()).toBe(200);

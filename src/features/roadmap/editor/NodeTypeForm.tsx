@@ -13,13 +13,7 @@ type Props = {
   onCancel?: () => void;
 };
 
-export function NodeTypeForm({
-  value,
-  isEditing = false,
-  onChange,
-  onSubmit,
-  onCancel,
-}: Props) {
+export function NodeTypeForm({ value, isEditing = false, onChange, onSubmit, onCancel }: Props) {
   return (
     <form
       className="flex flex-col gap-3"
