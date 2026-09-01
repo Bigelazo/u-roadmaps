@@ -37,7 +37,7 @@ The teaching staff's offering-scoped view of student Participations, combining b
 _Avoid_: Student list, course roster, public profile
 
 **Roadmap (Roadmap)**:
-The optional, unique learning path of a course offering, created at a course professor's initiative and composed of nodes and their dependencies. It is one semester's version in the course's roadmap lineage. Its creation materializes the offering, all its coordinated sections, and their rosters from U-Campus. Academic-calendar closure freezes the version; copying it with fresh identities for a new offering creates a successor, excluding participants and completions.
+The optional, unique learning path of a course offering, created at a course professor's initiative and composed of nodes and their dependencies. It is one semester's version in the course's roadmap lineage. Its creation materializes the offering, all its coordinated sections, and their rosters from U-Campus. Academic-calendar closure removes every teacher block and then freezes the version while preserving hidden nodes; copying it with fresh identities for a new offering creates a successor, excluding participants and completions.
 _Avoid_: Curriculum, course version
 
 **Roadmap lineage (Evolución del roadmap)**:
@@ -77,8 +77,24 @@ The fact that a participant completed a successful VTI login after joining a cou
 _Avoid_: Roster import, node completion, roadmap visit
 
 **Node (Nodo)**:
-An element of a roadmap that holds pedagogical information, has exactly one node type, and can be visible or hidden from students. A hidden node is absent from a student's roadmap and cannot be completed by that student. Confirmed deletion also removes its dependencies, resources, and completions.
+An element of a roadmap that holds pedagogical information, has exactly one node type, and can be visible or hidden from students. A hidden node is absent from a student's roadmap, cannot be completed by that student, is never blocked, has no dependencies, and cannot participate in one while hidden; hiding it removes its teacher block and every incoming and outgoing dependency after teaching staff confirm the impact. A visible node remains represented in the student's roadmap even when blocked. Confirmed deletion also removes its dependencies, resources, and completions.
 _Avoid_: Learning unit
+
+**Blocked node (Nodo bloqueado)**:
+A visible node to which a teacher block, a prerequisite block, or both apply. It remains represented in the student's roadmap but exposes neither its pedagogical details nor its resources and cannot be completed, even when that student completed it previously; the completion is retained and becomes effective again after every block is removed. When both reasons apply, the student is told only that teaching staff blocked it.
+_Avoid_: Hidden node, unavailable node
+
+**Teacher block (Bloqueo docente)**:
+An access restriction imposed by teaching staff on a visible node; it also applies persistently to every current or subsequently connected transitive dependent that can be blocked. Each resulting block persists until teaching staff remove it manually after unblocking all blocked transitive prerequisites, and it prevails over any prior completion without deleting it; academic-calendar closure removes every teacher block before freezing the roadmap.
+_Avoid_: Node visibility, prerequisite block
+
+**Branch unlock (Desbloqueo de rama)**:
+A teaching-staff action that atomically removes teacher blocks from a selected node and its eligible transitive dependents, regardless of when or why each block was imposed. A node remains blocked only when a blocked prerequisite outside the selected branch still prevents its release; block provenance is not retained.
+_Avoid_: Automatic unblock, reset roadmap
+
+**Prerequisite block (Bloqueo por prerrequisitos)**:
+A per-student access restriction derived from a pending prerequisite completion or from a prerequisite that is currently blocked. It propagates through transitive dependents and disappears when that student's entire prerequisite chain becomes completed and unblocked.
+_Avoid_: Teacher block, hidden node
 
 **Node type (Tipo de nodo)**:
 A named, hexadecimal-color category that expresses the kind of pedagogical information represented by a node, such as learning content or an assessment. It can be predefined or customized for a roadmap.
