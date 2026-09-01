@@ -11,12 +11,19 @@ vi.mock('next/dynamic', () => ({ default: () => () => null }));
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
     onSelectNode,
+    onConnectNodes,
     onDeleteDependencies,
     onToggleNodeVisibility,
     onAutoLayout,
     topRightActions,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
+    onConnectNodes: (connection: {
+      source: string | null;
+      target: string | null;
+      sourceHandle?: string | null;
+      targetHandle?: string | null;
+    }) => void;
     onDeleteDependencies: (ids: string[]) => void;
     onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
     onAutoLayout: (nodes: { id: string; position: { x: number; y: number } }[]) => void;
@@ -33,8 +40,21 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
         Solicitar eliminación de dependencias
       </button>
-      <button type="button" onClick={() => onToggleNodeVisibility('node-1', false)}>
+      <button type="button" onClick={() => onToggleNodeVisibility('node-1', true)}>
         Ocultar para estudiantes
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onConnectNodes({
+            source: 'source-node',
+            target: 'target-node',
+            sourceHandle: 'right',
+            targetHandle: 'left',
+          })
+        }
+      >
+        Conectar rama bloqueada
       </button>
       <button
         type="button"
@@ -73,8 +93,10 @@ function roadmapActions(overrides = {}) {
     updateNode: vi.fn(),
     moveNode: vi.fn(),
     connectNodes: vi.fn(),
+    previewRoadmapDependency: vi.fn().mockResolvedValue([]),
     deleteDependency: vi.fn(),
     toggleVisibility: vi.fn(),
+    previewNodeVisibility: vi.fn().mockResolvedValue([]),
     deleteNode: vi.fn(),
     addResource: vi.fn(),
     updateResource: vi.fn(),
@@ -265,14 +287,45 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
   expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
 });
 
-test('connects the node visibility action to the roadmap mutation', async () => {
+test('previews and confirms the node visibility action before changing it', async () => {
   const user = userEvent.setup();
   const toggleVisibility = vi.fn();
-  useRoadmapMock.mockReturnValue(roadmapActions({ toggleVisibility }));
+  const previewNodeVisibility = vi
+    .fn()
+    .mockResolvedValue([{ id: 'dependency-1', sourceNodeId: 'node-1', targetNodeId: 'node-2' }]);
+  useRoadmapMock.mockReturnValue(roadmapActions({ toggleVisibility, previewNodeVisibility }));
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
-  expect(toggleVisibility).toHaveBeenCalledWith('node-1', false);
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
+  expect(dialog.textContent).toContain('1 dependencia');
+  expect(dialog.textContent).toContain('node-1 → node-2');
+  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+  expect(toggleVisibility).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
+  const confirmation = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
+  await user.click(within(confirmation).getByRole('button', { name: 'Ocultar' }));
+  expect(toggleVisibility).toHaveBeenCalledWith('node-1', true);
+});
+
+test('previews and confirms a dependency that propagates teacher blocks', async () => {
+  const user = userEvent.setup();
+  const connectNodes = vi.fn();
+  const previewRoadmapDependency = vi.fn().mockResolvedValue([
+    { id: 'target-node', title: 'Destino afectado' },
+    { id: 'descendant-node', title: 'Descendiente afectado' },
+  ]);
+  useRoadmapMock.mockReturnValue(roadmapActions({ connectNodes, previewRoadmapDependency }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Conectar rama bloqueada' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo' });
+  expect(dialog.textContent).toContain('Destino afectado');
+  expect(dialog.textContent).toContain('Descendiente afectado');
+  await user.click(within(dialog).getByRole('button', { name: 'Conectar y bloquear' }));
+
+  expect(connectNodes).toHaveBeenCalledWith('source-node', 'target-node', 'right', 'left');
 });
 
 test('persists every repositioned node after ordering the map', async () => {

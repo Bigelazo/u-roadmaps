@@ -9,7 +9,11 @@ import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
-import { useRoadmap } from '@/features/roadmap/useRoadmap';
+import {
+  useRoadmap,
+  type StructuralDependency,
+  type TeacherBlockImpact,
+} from '@/features/roadmap/useRoadmap';
 import type { RoadmapDto, RoadmapNode, StudentRoadmapNode } from '@/lib/roadmap-types';
 import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -42,6 +46,20 @@ type Props = {
   courseCode: string;
   year: number;
   semester: number;
+};
+
+type PendingVisibilityChange = {
+  nodeId: string;
+  isVisible: boolean;
+  dependencies: StructuralDependency[];
+};
+
+type PendingDependencyChange = {
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+  nodes: TeacherBlockImpact[];
 };
 
 function RoadmapLegend({
@@ -93,6 +111,10 @@ export default function RoadmapCanvas({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(true);
   const [pendingDependencyIds, setPendingDependencyIds] = useState<string[] | null>(null);
+  const [pendingVisibilityChange, setPendingVisibilityChange] =
+    useState<PendingVisibilityChange | null>(null);
+  const [pendingDependencyChange, setPendingDependencyChange] =
+    useState<PendingDependencyChange | null>(null);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const {
     roadmap,
@@ -102,8 +124,10 @@ export default function RoadmapCanvas({
     updateNode,
     moveNode,
     connectNodes,
+    previewRoadmapDependency,
     deleteDependency,
     toggleVisibility,
+    previewNodeVisibility,
     deleteNode,
     addResource,
     uploadResource,
@@ -118,6 +142,45 @@ export default function RoadmapCanvas({
   function closeSelectedNode() {
     setSelectedNodeId(null);
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
+  }
+
+  async function requestVisibilityChange(nodeId: string, isVisible: boolean) {
+    if (!isVisible) return toggleVisibility(nodeId, isVisible);
+    const dependencies = await previewNodeVisibility(nodeId);
+    if (dependencies) setPendingVisibilityChange({ nodeId, isVisible, dependencies });
+    return false;
+  }
+
+  async function requestDependencyChange({
+    source,
+    target,
+    sourceHandle,
+    targetHandle,
+  }: {
+    source: string | null;
+    target: string | null;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+  }) {
+    if (!source || !target) return;
+    const nodes = await previewRoadmapDependency(
+      source,
+      target,
+      sourceHandle ?? undefined,
+      targetHandle ?? undefined,
+    );
+    if (!nodes) return;
+    if (nodes.length === 0) {
+      void connectNodes(source, target, sourceHandle ?? undefined, targetHandle ?? undefined);
+      return;
+    }
+    setPendingDependencyChange({
+      sourceNodeId: source,
+      targetNodeId: target,
+      sourceHandle: sourceHandle ?? undefined,
+      targetHandle: targetHandle ?? undefined,
+      nodes,
+    });
   }
 
   if (error && !roadmap) {
@@ -191,17 +254,11 @@ export default function RoadmapCanvas({
               setSelectedNodeId(nodeId);
             }}
             onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
-            onConnectNodes={(connection) => {
-              if (connection.source && connection.target)
-                void connectNodes(
-                  connection.source,
-                  connection.target,
-                  connection.sourceHandle ?? undefined,
-                  connection.targetHandle ?? undefined,
-                );
-            }}
+            onConnectNodes={(connection) => void requestDependencyChange(connection)}
             onDeleteDependencies={setPendingDependencyIds}
-            onToggleNodeVisibility={(nodeId, isVisible) => void toggleVisibility(nodeId, isVisible)}
+            onToggleNodeVisibility={(nodeId, isVisible) =>
+              void requestVisibilityChange(nodeId, isVisible)
+            }
             onAutoLayout={(nodes) => {
               void Promise.all(
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
@@ -242,7 +299,7 @@ export default function RoadmapCanvas({
             onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
             onClose={closeSelectedNode}
             onUpdateNode={updateNode}
-            onToggleVisibility={toggleVisibility}
+            onToggleVisibility={requestVisibilityChange}
             onDeleteNode={deleteNode}
             onAddResource={addResource}
             onUploadResource={uploadResource}
@@ -287,6 +344,90 @@ export default function RoadmapCanvas({
             >
               <Trash2 data-icon="inline-start" />
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(pendingVisibilityChange)}
+        onOpenChange={(open) => !open && setPendingVisibilityChange(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">
+              Confirmar ocultación
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Ocultarás el nodo y eliminarás {pendingVisibilityChange?.dependencies.length ?? 0}{' '}
+              {pendingVisibilityChange?.dependencies.length === 1
+                ? 'dependencia relacionada'
+                : 'dependencias relacionadas'}
+              .
+            </AlertDialogDescription>
+            <ul className="list-disc pl-5 text-sm text-muted-foreground">
+              {pendingVisibilityChange?.dependencies.map((dependency) => {
+                const source = roadmap.nodes.find((node) => node.id === dependency.sourceNodeId);
+                const target = roadmap.nodes.find((node) => node.id === dependency.targetNodeId);
+                return (
+                  <li key={dependency.id}>
+                    {source?.title ?? dependency.sourceNodeId} →{' '}
+                    {target?.title ?? dependency.targetNodeId}
+                  </li>
+                );
+              })}
+            </ul>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (pendingVisibilityChange)
+                  void toggleVisibility(
+                    pendingVisibilityChange.nodeId,
+                    pendingVisibilityChange.isVisible,
+                  );
+                setPendingVisibilityChange(null);
+              }}
+            >
+              Ocultar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(pendingDependencyChange)}
+        onOpenChange={(open) => !open && setPendingDependencyChange(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">Confirmar bloqueo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta dependencia bloqueará persistentemente los siguientes nodos.
+            </AlertDialogDescription>
+            <ul className="list-disc pl-5 text-sm text-muted-foreground">
+              {pendingDependencyChange?.nodes.map((node) => (
+                <li key={node.id}>{node.title}</li>
+              ))}
+            </ul>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => {
+                if (pendingDependencyChange)
+                  void connectNodes(
+                    pendingDependencyChange.sourceNodeId,
+                    pendingDependencyChange.targetNodeId,
+                    pendingDependencyChange.sourceHandle,
+                    pendingDependencyChange.targetHandle,
+                  );
+                setPendingDependencyChange(null);
+              }}
+            >
+              Conectar y bloquear
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

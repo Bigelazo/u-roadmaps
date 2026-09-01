@@ -2,12 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
-import {
-  roadmapUrl,
-  type Resource,
-  type RoadmapDependency,
-  type AnyRoadmapDto,
-} from '@/lib/roadmap-types';
+import { roadmapUrl, type Resource, type AnyRoadmapDto } from '@/lib/roadmap-types';
 
 type NewNode = {
   title: string;
@@ -20,6 +15,12 @@ type NodeUpdate = { title: string; description: string; nodeTypeId: string };
 type NewResource = { title: string; url: string; type: Resource['type'] };
 type ResourceUpdate = NewResource;
 type NodeTypeInput = { name: string; color: string };
+export type StructuralDependency = {
+  id: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+};
+export type TeacherBlockImpact = { id: string; title: string };
 
 function identifierKey(identifier: CourseOfferingIdentifier) {
   return `${identifier.courseCode}:${identifier.year}:${identifier.semester}`;
@@ -43,7 +44,7 @@ function apiErrorMessage(value: unknown) {
   return typeof error.message === 'string' ? error.message : undefined;
 }
 
-function isDependency(value: unknown): value is RoadmapDependency {
+function isStructuralDependency(value: unknown): value is StructuralDependency {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -56,20 +57,35 @@ function isDependency(value: unknown): value is RoadmapDependency {
   );
 }
 
-async function createdDependency(response: Response) {
-  try {
-    const body: unknown = await response.json();
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'dependency' in body &&
-      isDependency(body.dependency)
-    )
-      return body.dependency;
-  } catch {
-    // Una respuesta ilegible cae en la recarga completa.
-  }
-  return null;
+function isTeacherBlockImpact(value: unknown): value is TeacherBlockImpact {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'title' in value &&
+    typeof value.title === 'string'
+  );
+}
+
+function isVisibilityPreview(value: unknown): value is { dependencies: StructuralDependency[] } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'dependencies' in value &&
+    Array.isArray(value.dependencies) &&
+    value.dependencies.every(isStructuralDependency)
+  );
+}
+
+function isDependencyPreview(value: unknown): value is { nodes: TeacherBlockImpact[] } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'nodes' in value &&
+    Array.isArray(value.nodes) &&
+    value.nodes.every(isTeacherBlockImpact)
+  );
 }
 
 async function responseError(response: Response, fallback: string) {
@@ -201,6 +217,31 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier],
   );
 
+  const preview = useCallback(
+    async <T>(url: string, isPreview: (value: unknown) => value is T, fallback: string) => {
+      const requestKey = identifierKey(identifier);
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const body: unknown = await response.json();
+          if (isPreview(body)) return activeIdentifierRef.current === requestKey ? body : null;
+        }
+        const message = response.ok ? fallback : await responseError(response, fallback);
+        if (activeIdentifierRef.current === requestKey) {
+          setError(message);
+          setErrorKey(requestKey);
+        }
+      } catch {
+        if (activeIdentifierRef.current === requestKey) {
+          setError(fallback);
+          setErrorKey(requestKey);
+        }
+      }
+      return null;
+    },
+    [identifier],
+  );
+
   const addNode = useCallback(
     async (node: NewNode) => {
       const succeeded = await mutate(
@@ -251,9 +292,6 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier, load, mutate],
   );
 
-  // La respuesta trae la dependencia creada, así que el lienzo la incorpora sin
-  // una segunda vuelta al servidor. La recarga queda para los casos en que la
-  // respuesta no se puede leer o la operación falla.
   const connectNodes = useCallback(
     async (
       sourceNodeId: string,
@@ -261,8 +299,6 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       sourceHandle?: string,
       targetHandle?: string,
     ) => {
-      const requestKey = identifierKey(identifier);
-      let applied = false;
       const succeeded = await mutate(
         roadmapUrl(identifier, '/dependencies'),
         {
@@ -270,23 +306,12 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
           body: JSON.stringify({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }),
         },
         'No se pudo crear la dependencia.',
-        async (response) => {
-          const dependency = await createdDependency(response);
-          if (!dependency || activeIdentifierRef.current !== requestKey) return;
-          setRoadmap((current) =>
-            current && !current.dependencies.some(({ id }) => id === dependency.id)
-              ? { ...current, dependencies: [...current.dependencies, dependency] }
-              : current,
-          );
-          applied = true;
-        },
       );
-      if (!applied) {
-        await load();
-        if (!succeeded && activeIdentifierRef.current === requestKey) {
-          setError(lastMutationErrorRef.current ?? 'No se pudo crear la dependencia.');
-          setErrorKey(requestKey);
-        }
+      await load();
+      const requestKey = identifierKey(identifier);
+      if (!succeeded && activeIdentifierRef.current === requestKey) {
+        setError(lastMutationErrorRef.current ?? 'No se pudo crear la dependencia.');
+        setErrorKey(requestKey);
       }
       return succeeded;
     },
@@ -326,6 +351,38 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       return succeeded;
     },
     [identifier, load, mutate],
+  );
+
+  const previewNodeVisibility = useCallback(
+    async (nodeId: string) => {
+      const result = await preview(
+        roadmapUrl(identifier, `/nodes/${nodeId}?operation=HIDE`),
+        isVisibilityPreview,
+        'No se pudo calcular el impacto de ocultar el nodo.',
+      );
+      return result?.dependencies ?? null;
+    },
+    [identifier, preview],
+  );
+
+  const previewRoadmapDependency = useCallback(
+    async (
+      sourceNodeId: string,
+      targetNodeId: string,
+      sourceHandle?: string,
+      targetHandle?: string,
+    ) => {
+      const query = new URLSearchParams({ sourceNodeId, targetNodeId });
+      if (sourceHandle) query.set('sourceHandle', sourceHandle);
+      if (targetHandle) query.set('targetHandle', targetHandle);
+      const result = await preview(
+        roadmapUrl(identifier, `/dependencies?${query}`),
+        isDependencyPreview,
+        'No se pudo calcular el impacto de la dependencia.',
+      );
+      return result?.nodes ?? null;
+    },
+    [identifier, preview],
   );
 
   const deleteNode = useCallback(
@@ -459,8 +516,10 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     updateNode,
     moveNode,
     connectNodes,
+    previewRoadmapDependency,
     deleteDependency,
     toggleVisibility,
+    previewNodeVisibility,
     deleteNode,
     addResource,
     uploadResource,

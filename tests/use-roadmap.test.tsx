@@ -45,6 +45,33 @@ test('rapid course-offering navigation aborts the stale roadmap load', async () 
   await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('current'));
 });
 
+test('ignores a preview that resolves after navigating to another course offering', async () => {
+  let resolvePreview: (response: Response) => void;
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('first')))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvePreview = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(Response.json(roadmap('second')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result, rerender } = renderHook(({ identifier }) => useRoadmap(identifier), {
+    initialProps: { identifier: firstOffering },
+  });
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('first'));
+
+  const preview = result.current.previewNodeVisibility('node-1');
+  rerender({ identifier: secondOffering });
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('second'));
+  resolvePreview!(Response.json({ dependencies: [] }));
+
+  await expect(preview).resolves.toBeNull();
+});
+
 const dependency = {
   id: 'dependency-1',
   sourceNodeId: 'node-1',
@@ -74,11 +101,27 @@ test('deleting a dependency drops it from the roadmap without reloading', async 
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
-test('creating a dependency adds the one the server returns without reloading', async () => {
+test('creating a dependency reloads the effective blocked state returned by the server', async () => {
   const fetchMock = vi
     .fn()
     .mockResolvedValueOnce(Response.json(roadmap('cargado')))
-    .mockResolvedValueOnce(Response.json({ dependency }, { status: 201 }));
+    .mockResolvedValueOnce(Response.json({ dependency }, { status: 201 }))
+    .mockResolvedValueOnce(
+      Response.json({
+        ...roadmap('bloqueado'),
+        dependencies: [dependency],
+        nodes: [
+          {
+            id: 'node-2',
+            title: 'Nodo bloqueado',
+            nodeTypeId: 'type-1',
+            positionX: 0,
+            positionY: 0,
+            isTeacherBlocked: true,
+          },
+        ],
+      }),
+    );
   vi.stubGlobal('fetch', fetchMock);
 
   const { result } = renderHook(() => useRoadmap(firstOffering));
@@ -88,8 +131,41 @@ test('creating a dependency adds the one the server returns without reloading', 
     true,
   );
 
-  await waitFor(() => expect(result.current.roadmap?.dependencies).toEqual([dependency]));
-  expect(fetchMock).toHaveBeenCalledTimes(2);
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('bloqueado'));
+  expect(result.current.roadmap?.nodes[0]).toMatchObject({ isTeacherBlocked: true });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});
+
+test('previews the structural impact before hiding a node or connecting a blocked branch', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('cargado')))
+    .mockResolvedValueOnce(
+      Response.json({
+        dependencies: [{ id: 'dependency-1', sourceNodeId: 'node-1', targetNodeId: 'node-2' }],
+      }),
+    )
+    .mockResolvedValueOnce(Response.json({ nodes: [{ id: 'node-3', title: 'Nodo afectado' }] }));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('cargado'));
+
+  await expect(result.current.previewNodeVisibility('node-1')).resolves.toEqual([
+    { id: 'dependency-1', sourceNodeId: 'node-1', targetNodeId: 'node-2' },
+  ]);
+  await expect(
+    result.current.previewRoadmapDependency('node-1', 'node-3', 'right', 'left'),
+  ).resolves.toEqual([{ id: 'node-3', title: 'Nodo afectado' }]);
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    '/api/MAT101/2026/1/roadmap/nodes/node-1?operation=HIDE',
+  );
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    3,
+    '/api/MAT101/2026/1/roadmap/dependencies?sourceNodeId=node-1&targetNodeId=node-3&sourceHandle=right&targetHandle=left',
+  );
 });
 
 test('a failed dependency creation reloads the roadmap and exposes the error', async () => {

@@ -8,7 +8,6 @@ import {
   MarkerType,
   Panel,
   ReactFlow,
-  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
@@ -87,33 +86,8 @@ export function RoadmapGraph({
     setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency, toggleNodeVisibility));
   }, [roadmap, canEdit, deleteDependency, toggleNodeVisibility]);
 
-  // La arista aparece apenas se suelta la conexión; la respuesta del servidor la
-  // reemplaza con su identificador definitivo.
   const connectNodes = useCallback(
-    (connection: Connection) => {
-      setFlow((current) => ({
-        ...current,
-        edges: addEdge(
-          {
-            ...connection,
-            id: `pendiente-${connection.source}-${connection.target}-${connection.sourceHandle ?? ''}-${connection.targetHandle ?? ''}`,
-            type: 'dependency',
-            deletable: false,
-            selectable: false,
-            data: { defaultStroke: 'var(--steel)' },
-            style: { stroke: 'var(--steel)', strokeWidth: 1.5 },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: 'var(--steel)',
-              width: 18,
-              height: 18,
-            },
-          },
-          current.edges,
-        ),
-      }));
-      onConnectNodes(connection);
-    },
+    (connection: Connection) => onConnectNodes(connection),
     [onConnectNodes],
   );
 
