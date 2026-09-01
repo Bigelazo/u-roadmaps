@@ -99,7 +99,7 @@ test('fixture files are downloadable only through their authorized roadmap repre
   });
   const student = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentComplete) },
   });
 
   try {

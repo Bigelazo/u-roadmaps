@@ -19,23 +19,26 @@ export function mapRoadmapGraph(
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
-  const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => ({
-    id: node.id,
-    type: 'roadmap',
-    data: {
-      title: node.title,
-      typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
-      typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
-      status: nodeStatus(node, canEdit),
-      isHidden: !node.isVisible,
-      onToggleVisibility: canEdit
-        ? () => onToggleNodeVisibility?.(node.id, node.isVisible)
-        : undefined,
-    },
-    position: { x: node.positionX, y: node.positionY },
-    hidden: !canEdit && !node.isVisible,
-    deletable: false,
-  }));
+  const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
+    const isHidden = 'isVisible' in node && !node.isVisible;
+    return {
+      id: node.id,
+      type: 'roadmap',
+      data: {
+        title: node.title,
+        typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
+        typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
+        status: nodeStatus(node, canEdit),
+        isHidden,
+        onToggleVisibility: canEdit
+          ? () => onToggleNodeVisibility?.(node.id, node.isVisible)
+          : undefined,
+      },
+      position: { x: node.positionX, y: node.positionY },
+      hidden: !canEdit && isHidden,
+      deletable: false,
+    };
+  });
   const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
     const defaultStroke = canEdit
       ? nodesById.get(dependency.sourceNodeId)?.isCompleted

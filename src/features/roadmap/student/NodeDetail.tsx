@@ -11,7 +11,12 @@ import {
   LockKeyhole,
   X,
 } from 'lucide-react';
-import type { Resource, RoadmapNode } from '@/lib/roadmap-types';
+import type {
+  Resource,
+  RoadmapNode,
+  StudentBlockedRoadmapNode,
+  StudentRoadmapNode,
+} from '@/lib/roadmap-types';
 import type { StudentNodeStatus } from '@/features/roadmap/student/node-status';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
@@ -44,12 +49,18 @@ function resourceActionIcon(type: Resource['type']) {
 }
 
 type ContentProps = {
-  node: RoadmapNode;
+  node: RoadmapNode | StudentRoadmapNode;
   status: StudentNodeStatus;
   onClose: () => void;
-  onComplete: (node: RoadmapNode) => void;
+  onComplete: (node: RoadmapNode | StudentRoadmapNode) => void;
   isModal?: boolean;
 };
+
+function isBlockedNode(
+  node: RoadmapNode | StudentRoadmapNode,
+): node is StudentBlockedRoadmapNode {
+  return 'access' in node && node.access.status === 'BLOCKED';
+}
 
 function StudentNodeDetailContent({
   node,
@@ -58,6 +69,7 @@ function StudentNodeDetailContent({
   onComplete,
   isModal = false,
 }: ContentProps) {
+  const blocked = isBlockedNode(node);
   return (
     <>
       <header className="relative border-b border-border px-6 pt-7 pb-6">
@@ -102,11 +114,13 @@ function StudentNodeDetailContent({
         )}
         {status === 'locked' ? (
           <p className="mt-3 text-sm text-muted-foreground">
-            Este nodo se desbloquea cuando completes sus prerrequisitos.
+            {blocked && node.access.reason === 'TEACHER_BLOCK'
+              ? 'El equipo docente bloqueó este nodo.'
+              : 'Este nodo se desbloquea cuando completes sus prerrequisitos.'}
           </p>
         ) : null}
       </header>
-      <div className="overflow-y-auto px-6 py-6">
+      {!blocked ? <div className="overflow-y-auto px-6 py-6">
         <h3 className="flex items-center gap-2 font-semibold">
           <FileText size={18} /> Descripción
         </h3>
@@ -155,13 +169,13 @@ function StudentNodeDetailContent({
             </Empty>
           )}
         </div>
-      </div>
+      </div> : null}
     </>
   );
 }
 
 type Props = Omit<ContentProps, 'node' | 'status'> & {
-  node: RoadmapNode | undefined;
+  node: RoadmapNode | StudentRoadmapNode | undefined;
   status: StudentNodeStatus | null;
 };
 

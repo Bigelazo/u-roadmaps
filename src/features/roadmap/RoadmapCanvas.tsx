@@ -10,6 +10,7 @@ import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { useRoadmap } from '@/features/roadmap/useRoadmap';
+import type { RoadmapNode, StudentRoadmapNode } from '@/lib/roadmap-types';
 import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -234,7 +235,7 @@ export default function RoadmapCanvas({
         {canEdit && (
           <RoadmapEditor
             roadmap={roadmap}
-            selectedNode={selectedNode}
+            selectedNode={selectedNode as RoadmapNode | undefined}
             isOpen={isEditorOpen}
             onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
             onClose={closeSelectedNode}
@@ -249,7 +250,7 @@ export default function RoadmapCanvas({
         )}
         {!canEdit && (
           <StudentNodeDetail
-            node={selectedNode}
+            node={selectedNode as StudentRoadmapNode | undefined}
             status={selectedNode ? studentNodeStatus(selectedNode) : null}
             onClose={closeSelectedNode}
             onComplete={(node) => void completeNode(node.id)}

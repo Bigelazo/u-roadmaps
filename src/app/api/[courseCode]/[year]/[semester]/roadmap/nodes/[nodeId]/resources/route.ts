@@ -12,6 +12,7 @@ import {
   throwApiError,
 } from '@/lib/roadmap-api';
 import { requireAuthenticatedUser, requireCourseOfferingParticipation } from '@/lib/auth';
+import { requireStudentNodeAccess } from '@/lib/roadmap-completion';
 import { createRoadmapResource, createUploadedRoadmapResource } from '@/lib/roadmap-editor';
 import { deleteUploadedFile, saveUploadedFile, validateUploadedFile } from '@/lib/resource-storage';
 
@@ -84,6 +85,15 @@ export async function GET(_request: Request, context: Context) {
     const node = await requireNodeInRoadmap(nodeId, roadmap.id);
     if (participation.role === 'STUDENT' && !node.isVisible) {
       throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+    }
+    if (participation.role === 'STUDENT') {
+      await prisma.$transaction((transaction) =>
+        requireStudentNodeAccess(transaction, {
+          userId: participation.userId,
+          roadmapId: roadmap.id,
+          nodeId,
+        }),
+      );
     }
     const resources = await prisma.resource.findMany({
       where: { roadmapNodeId: nodeId },

@@ -7,6 +7,7 @@ import {
   nodeDto,
   resourceDto,
 } from '@/lib/roadmap-api';
+import { studentNodeAccessById, type StudentNodeAccess } from '@/lib/roadmap-access';
 
 type ParticipantRoadmapInput = {
   userId: string;
@@ -16,6 +17,56 @@ type ParticipantRoadmapInput = {
 type CompleteNodeInput = ParticipantRoadmapInput & {
   nodeId: string;
 };
+
+type StudentNodeAccessInput = {
+  userId: string;
+  roadmapId: string;
+  nodeId: string;
+};
+
+function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>) {
+  return new ApiError(
+    403,
+    access.reason,
+    access.reason === 'TEACHER_BLOCK'
+      ? 'El equipo docente bloqueó este nodo.'
+      : 'Este nodo permanece bloqueado por sus prerrequisitos.',
+  );
+}
+
+export async function requireStudentNodeAccess(
+  transaction: Prisma.TransactionClient,
+  { userId, roadmapId, nodeId }: StudentNodeAccessInput,
+) {
+  const [nodes, dependencies, completions] = await Promise.all([
+    transaction.roadmapNode.findMany({
+      where: { roadmapId, isVisible: true },
+      select: { id: true, isTeacherBlocked: true },
+    }),
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId } },
+      select: { sourceNodeId: true, targetNodeId: true },
+    }),
+    transaction.completion.findMany({
+      where: { userId, roadmapNode: { roadmapId } },
+      select: { roadmapNodeId: true },
+    }),
+  ]);
+  if (!nodes.some((node) => node.id === nodeId)) {
+    throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  }
+  const visibleNodeIds = new Set(nodes.map((node) => node.id));
+  const access = studentNodeAccessById({
+    nodes,
+    dependencies: dependencies.filter(
+      (dependency) =>
+        visibleNodeIds.has(dependency.sourceNodeId) && visibleNodeIds.has(dependency.targetNodeId),
+    ),
+    completedNodeIds: new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId)),
+  }).get(nodeId);
+  if (!access || access.status === 'ACCESSIBLE') return;
+  throw blockedNodeAccessError(access);
+}
 
 async function requireParticipantRoadmap(
   transaction: Prisma.TransactionClient,
@@ -92,12 +143,14 @@ async function readRoadmapForParticipantUnsafe({ userId, identifier }: Participa
             visibleNodeIds.has(dependency.targetNodeId)),
       );
       const completedNodeIds = new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId));
-      const prerequisiteIdsByTarget = new Map<string, string[]>();
-      for (const dependency of visibleDependencies) {
-        const prerequisites = prerequisiteIdsByTarget.get(dependency.targetNodeId) ?? [];
-        prerequisites.push(dependency.sourceNodeId);
-        prerequisiteIdsByTarget.set(dependency.targetNodeId, prerequisites);
-      }
+      const accessByNodeId =
+        participation.role === 'STUDENT'
+          ? studentNodeAccessById({
+              nodes,
+              dependencies: visibleDependencies,
+              completedNodeIds,
+            })
+          : undefined;
 
       return {
         course: {
@@ -119,15 +172,24 @@ async function readRoadmapForParticipantUnsafe({ userId, identifier }: Participa
         })),
         nodes: nodes.map((node) => {
           const isCompleted = completedNodeIds.has(node.id);
-          const prerequisites = prerequisiteIdsByTarget.get(node.id) ?? [];
+          const access = accessByNodeId?.get(node.id);
+          if (access?.status === 'BLOCKED') {
+            return {
+              id: node.id,
+              title: node.title,
+              positionX: node.positionX,
+              positionY: node.positionY,
+              nodeTypeId: node.nodeTypeId,
+              access,
+            };
+          }
           return {
             ...nodeDto(node),
             ...(participation.role === 'STUDENT'
               ? {
+                  access,
                   isCompleted,
-                  canComplete:
-                    !isCompleted &&
-                    prerequisites.every((prerequisiteId) => completedNodeIds.has(prerequisiteId)),
+                  canComplete: !isCompleted,
                 }
               : {}),
             resources: node.resources.map((resource) => resourceDto(resource, identifier)),
@@ -154,39 +216,16 @@ async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeIn
             { userId, identifier },
             'STUDENT',
           );
-          const node = await transaction.roadmapNode.findFirst({
-            where: { id: nodeId, roadmapId: roadmap.id, isVisible: true },
-          });
-          if (!node) {
-            throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
-          }
+          await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
           const existing = await transaction.completion.findUnique({
-            where: { userId_roadmapNodeId: { userId, roadmapNodeId: node.id } },
+            where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
           });
           if (existing) return existing;
 
-          const prerequisites = await transaction.dependency.findMany({
-            where: { targetNodeId: node.id, sourceNode: { isVisible: true } },
-            select: { sourceNodeId: true },
-          });
-          const completedPrerequisites = await transaction.completion.count({
-            where: {
-              userId,
-              roadmapNodeId: { in: prerequisites.map(({ sourceNodeId }) => sourceNodeId) },
-            },
-          });
-          if (completedPrerequisites !== prerequisites.length) {
-            throw new ApiError(
-              409,
-              'PREREQUISITES_PENDING',
-              'Debes completar los prerrequisitos visibles antes de este nodo.',
-            );
-          }
-
           return transaction.completion.upsert({
-            where: { userId_roadmapNodeId: { userId, roadmapNodeId: node.id } },
+            where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
             update: {},
-            create: { userId, roadmapNodeId: node.id },
+            create: { userId, roadmapNodeId: nodeId },
           });
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

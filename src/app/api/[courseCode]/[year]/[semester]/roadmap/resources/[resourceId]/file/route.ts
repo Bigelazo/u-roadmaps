@@ -9,6 +9,7 @@ import {
   throwApiError,
 } from '@/lib/roadmap-api';
 import { readUploadedFile } from '@/lib/resource-storage';
+import { requireStudentNodeAccess } from '@/lib/roadmap-completion';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; resourceId: string }>;
@@ -22,7 +23,8 @@ export async function GET(_request: Request, context: Context) {
       'STUDENT',
       'TEACHER',
     ]).match((value) => value, throwApiError);
-    if (!courseOffering.roadmap) {
+    const roadmap = courseOffering.roadmap;
+    if (!roadmap) {
       throw new ApiError(
         404,
         'ROADMAP_NOT_FOUND',
@@ -32,16 +34,24 @@ export async function GET(_request: Request, context: Context) {
     const resource = await prisma.resource.findFirst({
       where: {
         id: requireUuid(params.resourceId, 'resourceId'),
-        roadmapNode: { roadmapId: courseOffering.roadmap.id },
+        roadmapNode: { roadmapId: roadmap.id },
       },
       include: { roadmapNode: { select: { isVisible: true } } },
     });
-    if (
-      !resource ||
-      !resource.fileKey ||
-      (participation.role === 'STUDENT' && !resource.roadmapNode.isVisible)
-    ) {
+    if (!resource || !resource.fileKey) {
       throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
+    }
+    if (participation.role === 'STUDENT' && !resource.roadmapNode.isVisible) {
+      throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+    }
+    if (participation.role === 'STUDENT') {
+      await prisma.$transaction((transaction) =>
+        requireStudentNodeAccess(transaction, {
+          userId: participation.userId,
+          roadmapId: roadmap.id,
+          nodeId: resource.roadmapNodeId,
+        }),
+      );
     }
     let file: Buffer;
     try {

@@ -317,9 +317,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testIn
     const preview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`);
     expect(preview.status()).toBe(200);
     expect((await preview.json()).nodes).toEqual(
-      expect.arrayContaining(
-        [root, left, right, join, leaf].map(({ id, title }) => ({ id, title })),
-      ),
+      expect.arrayContaining([root, left, right, join, leaf]),
     );
 
     const beforeBlock = await teacher.get(roadmapPath());
@@ -360,7 +358,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testIn
     const branchPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BRANCH_UNLOCK`);
     expect(branchPreview.status()).toBe(200);
     expect((await branchPreview.json()).nodes).toEqual(
-      expect.arrayContaining([left, right].map(({ id, title }) => ({ id, title }))),
+      expect.arrayContaining([left, right]),
     );
     const beforeBranchUnlock = await teacher.get(roadmapPath());
     const beforeBranchUnlockByNodeId = new Map(

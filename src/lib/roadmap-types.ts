@@ -52,7 +52,6 @@ export type StudentAccessibleRoadmapNode = RoadmapNodeSummary & {
 };
 
 export type StudentBlockedRoadmapNode = RoadmapNodeSummary & {
-  isVisible: true;
   access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>;
 };
 
