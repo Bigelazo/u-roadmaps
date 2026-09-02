@@ -2,9 +2,9 @@
 
 ## Estado y alcance
 
-Esta propuesta responde el [issue #33](https://github.com/Bigelazo/u-roadmaps/issues/33). Combina la influencia principal de [`parity-deals-clone`](./parity-deals-structure.md), las [convenciones oficiales de Next.js](./nextjs-project-structure.md) y el [diagnóstico de la línea base estable](./current-u-roadmaps-structure.md). Su estado es **propuesto y pendiente de revisión HITL**: define la forma que deberá aprobarse antes de preparar la secuencia de migración del issue #34.
+Esta propuesta responde el [issue #33](https://github.com/Bigelazo/u-roadmaps/issues/33). Combina la influencia principal de [`parity-deals-clone`](./parity-deals-structure.md), las [convenciones oficiales de Next.js](./nextjs-project-structure.md) y el [diagnóstico de la línea base estable](./current-u-roadmaps-structure.md). Se revisó después de implementar visibilidad de Nodos, Dependencias pedagógicas, Bloqueos docentes, previsualizaciones de impacto y geometría variable de tarjetas. Su estado sigue siendo **propuesto y pendiente de revisión HITL**: define la forma que deberá aprobarse antes de preparar la secuencia de migración del issue #34.
 
-El objetivo no es maximizar carpetas ni aplicar una plantilla uniforme. Es recuperar **Locality** por capacidad y **Depth** en sus Interfaces: `app` y las pruebas deben poder ejercer casos de uso completos sin conocer Prisma, protocolos institucionales, almacenamiento, validadores ni detalles internos del grafo pedagógico.
+El objetivo no es maximizar carpetas ni aplicar una plantilla uniforme. Es recuperar **Locality** por capacidad y **Depth** en sus Interfaces: `app` y las pruebas deben poder ejercer casos de uso completos sin conocer Prisma, protocolos institucionales, almacenamiento, validadores, conversión de errores ni detalles internos del grafo pedagógico. Dentro de cada feature, la lógica de negocio se separa deliberadamente de la lógica de aplicación: las reglas puras no dependen de Next.js, Prisma, filesystem ni red; los casos de uso las coordinan sin duplicarlas entre Adapters.
 
 La propuesta conserva el lenguaje de [`CONTEXT.md`](../../CONTEXT.md) y no cambia las decisiones vigentes de los ADR. En particular:
 
@@ -71,28 +71,42 @@ u-roadmaps/
 │   │   ├── academic-overview/
 │   │   │   ├── index.ts                Interface cliente-segura
 │   │   │   ├── server.ts               Interface servidor, marcada server-only
-│   │   │   ├── contracts.ts            DTO propios, sin Prisma ni Next.js
+│   │   │   ├── types.ts                DTO y comandos propios, sin Prisma ni Next.js
 │   │   │   ├── components/**
-│   │   │   └── server/**                reconciliación, prioridad y consultas
+│   │   │   ├── application/**           caso de uso de reconciliación y lectura
+│   │   │   ├── domain/**                prioridad, agrupamiento y orden puros
+│   │   │   └── infrastructure/**        Adapter Mufasa y consultas Prisma propias
 │   │   ├── institutional-access/
 │   │   │   ├── index.ts
 │   │   │   ├── server.ts
+│   │   │   ├── types.ts
 │   │   │   ├── components/**
-│   │   │   └── server/**                login local, Usuario y transacción VTI
+│   │   │   ├── application/**           inicio/término de sesión y Usuario
+│   │   │   ├── domain/**                reglas puras de identidad local
+│   │   │   └── infrastructure/**        persistencia propia y sesión NextAuth
 │   │   └── roadmap/
 │   │       ├── index.ts                 RoadmapCanvas y contratos cliente-seguros
-│   │       ├── server.ts                casos de uso públicos de servidor
-│   │       ├── contracts.ts             identidad, comandos, DTO y errores propios
+│   │       ├── server.ts                Interface pública de aplicación servidor
+│   │       ├── types.ts                 identidad, comandos y DTO cliente-seguros
 │   │       ├── client/**                 carga y mutaciones HTTP
 │   │       ├── editor/**
 │   │       ├── graph/**
 │   │       ├── student/**
-│   │       └── server/
-│   │           ├── roadmap/**            lectura, creación y representación por Rol
-│   │           ├── editor/**             Nodo, Tipo de nodo y Dependencia
-│   │           ├── completion/**         invariantes de Completación
-│   │           ├── resources/**          autorización, bytes y compensación
-│   │           └── participation/**      autorización dentro del Curso
+│   │       ├── application/
+│   │       │   ├── roadmap/**            lectura, creación y representación por Rol
+│   │       │   ├── nodes/**              comandos de Nodo y Tipo de nodo
+│   │       │   ├── dependencies/**       crear, borrar y previsualizar impacto
+│   │       │   ├── completion/**         registrar y leer Completación
+│   │       │   ├── resources/**          coordinar autorización, bytes y compensación
+│   │       │   └── participation/**      cargar y aplicar autorización del Curso
+│   │       ├── domain/
+│   │       │   ├── dependencies/**       aciclicidad, visibilidad e impacto transitivo
+│   │       │   ├── access/**             acceso estudiantil y Bloqueos docentes
+│   │       │   ├── completion/**         invariantes de Completación
+│   │       │   └── types.ts              conceptos de negocio sin DTO ni Prisma
+│   │       └── infrastructure/
+│   │           ├── persistence/**        queries, transacciones y mapeo Prisma
+│   │           └── resources/**          Adapter de volumen protegido
 │   ├── integrations/
 │   │   ├── ucampus/
 │   │   │   ├── server.ts                Interface institucional normalizada
@@ -103,6 +117,10 @@ u-roadmaps/
 │   ├── shared/
 │   │   ├── academic/
 │   │   │   └── course-offering.ts       identidad neutral de Ramo/Curso/Período
+│   │   ├── errors/
+│   │   │   ├── types.ts                 error de aplicación y Result compartido
+│   │   │   ├── result.ts                constructores y normalización neverthrow
+│   │   │   └── server.ts                captura, log y normalización inesperada
 │   │   ├── ui/**                        primitives shadcn propias
 │   │   ├── lib/**                       utilidades puras y transversales
 │   │   └── server/
@@ -147,7 +165,7 @@ Un Adapter se considera demasiado profundo cuando su eliminación desplazaría a
 
 ### `src/features/<feature>`: Modules verticales de producto
 
-Una feature reúne presentación, contratos, reglas, casos de uso y queries que cambian por una misma capacidad del producto. La clasificación inicial es:
+Una feature reúne presentación, tipos, reglas, casos de uso e infraestructura que cambian por una misma capacidad del producto. La clasificación inicial es:
 
 - `roadmap`: experiencia del Roadmap completa, incluidos grafo, edición, representación por Rol de participación, Completación y ciclo de vida del Recurso;
 - `academic-overview`: representación canónica del Resumen académico, incluida la reconciliación entre U-Campus y datos locales, prioridad, agrupamiento y orden;
@@ -155,12 +173,33 @@ Una feature reúne presentación, contratos, reglas, casos de uso y queries que 
 
 Una feature expone como máximo dos puntos de entrada externos:
 
-- `index.ts`: Interface cliente-segura. Puede exportar componentes, DTO y tipos sin dependencias de servidor;
+- `index.ts`: Interface cliente-segura. Puede exportar componentes, DTO y tipos definidos en `types.ts`, sin dependencias de servidor;
 - `server.ts`: Interface de servidor, con `import "server-only"`, que exporta casos de uso completos.
 
-`app`, `development` y configuración raíz solo importan esos puntos de entrada. Un barrel público nunca reexporta Prisma, un Adapter externo ni un archivo `server/**`. Los imports profundos dentro de una feature están reservados a su propia Implementation y a sus pruebas colocadas.
+`app`, `development` y configuración raíz solo importan esos puntos de entrada. Un barrel público nunca reexporta Prisma, un Adapter externo ni archivos `application/**`, `domain/**` o `infrastructure/**`. Los imports profundos dentro de una feature están reservados a su propia Implementation y a sus pruebas colocadas.
 
-Esta separación evita convertir un nuevo `index.ts` en la misma Interface de 25 exports que hoy presenta `roadmap-api.ts`. El punto de entrada del servidor expone operaciones de aplicación, no parsers, serializers, queries auxiliares ni tipos de persistencia.
+Esta separación evita convertir un nuevo `index.ts` en la misma Interface de 25 exports que hoy presenta `roadmap-api.ts`. El punto de entrada del servidor expone operaciones de aplicación, no parsers, serializers, queries auxiliares ni tipos de persistencia. Dentro de `roadmap/application`, `nodes`, `dependencies`, `completion`, `resources` y `participation` nombran casos de uso; `editor` no se reutiliza fuera de la UI docente porque describe presentación, no negocio.
+
+### Capas internas de una feature: negocio separado de aplicación
+
+La división se aplica **dentro de cada feature**, no mediante carpetas globales que reúnan todo el dominio, toda la aplicación o toda la infraestructura del proyecto. Cada feature conserva así un Module vertical profundo y una única razón de cambio para su producto.
+
+```text
+app / route handler
+        │  llama la Interface pública
+        ▼
+feature/server.ts ──▶ application ──▶ domain
+                           │
+                           └──────────▶ infrastructure ──▶ Prisma / filesystem / integración
+```
+
+Las flechas internas expresan dependencia, no orden temporal: el dominio no conoce ni la aplicación ni la infraestructura.
+
+- `domain/**` contiene lógica de negocio pura: valores, reglas, invariantes y cálculos. En Roadmap incluye aciclicidad de Dependencias, restricciones de visibilidad, propagación de Bloqueos docentes, acceso del Estudiante y requisitos de Completación. No importa Next.js, React, Prisma, `shared/server`, filesystem, red ni `infrastructure`.
+- `application/**` contiene casos de uso: recibe un comando ya validado en el borde, obtiene los datos necesarios, aplica reglas de `domain`, autoriza, abre una transacción cuando corresponde, coordina Adapters y devuelve un `Result` de `neverthrow`. No formula por sí mismo la regla de negocio ni expone detalles de transporte.
+- `infrastructure/**` contiene Adapters concretos que la feature necesita: persistencia Prisma, volumen protegido de Recursos y mapeos entre entidades externas y tipos de la feature. Puede importar tipos de su propio dominio, pero nunca dirige un caso de uso ni decide una invariante.
+
+El `server.ts` de la feature es la Interface de aplicación: sus callers piden `createDependency`, `hideNode` o `completeNode`, no un repositorio Prisma ni una función de recorrido del grafo. Si se elimina un caso de uso, su coordinación debe reaparecer; si se elimina una regla de `domain`, la misma regla no debe reaparecer en varias rutas. Esta prueba de eliminación mantiene la Depth de la Interface y la Locality de las reglas.
 
 ### `src/integrations/<provider>`: Adapters externos
 
@@ -181,9 +220,25 @@ El Seam hacia una integración externa puede usar un port interno cuando exista 
 - no conocen features, integraciones, `app` ni desarrollo;
 - poseen una semántica estable por sí mismas.
 
-Aquí pertenecen las primitives shadcn propias, utilidades puras, la identidad neutral de un Curso y el acceso técnico compartido a sesión, entorno y cliente de base de datos. Las queries de negocio no pertenecen a `shared/server/db`: permanecen en la feature que posee la decisión que representan.
+Aquí pertenecen las primitives shadcn propias, utilidades puras, la identidad neutral de un Curso, la gestión transversal de errores y el acceso técnico compartido a sesión, entorno y cliente de base de datos. Las queries de negocio no pertenecen a `shared/server/db`: permanecen en la feature que posee la decisión que representan.
 
 El schema Prisma puede continuar centralizado porque la línea base usa una sola base y no se están declarando bounded contexts ni almacenamiento aislado. Esa elección no vuelve shared a todas las operaciones sobre sus tablas.
+
+### Tipos: un archivo de tipos por Module, props junto al componente
+
+`types.ts` es el único nombre reservado para declaraciones de tipos reutilizadas dentro de un Module. Cada feature conserva sus DTO, comandos y uniones de dominio cliente-seguros en su `types.ts`; un sub-Module con tipos propios, como `roadmap/editor` o `roadmap/graph`, puede tener su propio `types.ts`. Los `index.ts` públicos reexportan selectivamente esos tipos cuando forman parte de su Interface.
+
+No se usan `contracts.ts`, `models.ts`, `interfaces.ts`, `common.ts` ni archivos de tipos globales como nombres alternativos: ocultan la propiedad o separan artificialmente tipos que cambian junto a su Module. Un tipo que solo describe props de un React Component vive en el mismo `.tsx` que lo consume, no en el `types.ts` del directorio. Esto mantiene visible la Interface de presentación y evita que `types.ts` se convierta en un registro de props de toda la UI.
+
+Los tipos de Prisma, `Request`, `Response`, Mufasa o VTI no cruzan una Interface de feature. La Implementation los transforma a los tipos de su Module antes de exponerlos. Una importación de tipo también debe respetar estas reglas: TypeScript puede borrarla al emitir, pero sigue comunicando y acoplando conocimiento entre Modules.
+
+### `src/shared/errors`: gestión centralizada de errores con neverthrow
+
+`shared/errors` es el único Module transversal para representar y componer errores de aplicación. `types.ts` define una forma estable, cliente-segura y serializable de error —código, mensaje y detalles públicos opcionales— y el alias de `Result`/`ResultAsync`. `result.ts` concentra los constructores, el wrapping de promesas y las combinaciones de `neverthrow`; `server.ts`, marcado `server-only`, conserva la captura de errores inesperados, `unstable_rethrow` cuando Next.js lo exige y el logging. Ningún caller crea un `ResultAsync.fromPromise` con su propio `catch` ni convierte excepciones de Prisma a HTTP.
+
+Los códigos y mensajes que expresan reglas del Roadmap, del Resumen académico o del acceso institucional permanecen en el `types.ts` de la feature que los posee. La centralización define el protocolo y la mecánica, no un catálogo global que obligue a que cada cambio de una feature toque shared. Las Interfaces de servidor devuelven `ResultAsync<T, ApplicationError>`; las funciones internas pueden lanzar solo mientras están encapsuladas por el Module de errores. Así, `neverthrow` es el Seam explícito entre Implementation que puede fallar y callers que deben decidir el resultado.
+
+`app/_adapters` es el único lugar que traduce ese error serializable a `Response`/`NextResponse`, incluido el status HTTP. No pertenece a `shared/errors`: HTTP es una Interface de Next.js, no una propiedad universal de un error. Los Client Components consumen solo la carga de error cliente-segura; no conocen excepciones, Prisma ni `next/server`.
 
 ### `src/development`: soporte deliberado, no shared residual
 
@@ -204,12 +259,15 @@ Este Module puede consumir contratos públicos de features cuando el catálogo n
 Cada archivo nuevo se clasifica en este orden:
 
 1. Si Next.js exige su nombre o ubicación, vive en `src/app` y se mantiene como Adapter.
-2. Si implementa una regla, representación o caso de uso de una sola capacidad, vive en esa feature, aunque técnicamente sea UI, validación o persistencia.
-3. Si traduce un protocolo externo que U-Roadmaps no controla, vive en `integrations/<provider>`.
-4. Si es independiente de capacidades y ya tiene reutilización transversal real, vive en `shared`.
-5. Si solo existe para datos, UI o ejecución local/E2E, vive en `development` o `tests/e2e`, según quién lo ejecute.
-6. Si es generado, migración, seed, script o configuración, conserva su categoría explícita y no se presenta como biblioteca.
-7. Si ninguna categoría aplica, el archivo queda sin clasificar y el lint falla. No se crea una carpeta `lib` genérica para silenciar la decisión.
+2. Si implementa una regla pura de una capacidad, vive en `domain/**` de esa feature; si coordina una operación, vive en `application/**`; si habla con Prisma, filesystem o un protocolo concreto, vive en `infrastructure/**`.
+3. Si es presentación o estado cliente de una capacidad, vive directamente bajo la feature o en su sub-Module visual, no en sus capas servidor.
+4. Si traduce un protocolo externo que U-Roadmaps no controla, vive en `integrations/<provider>`.
+5. Si es independiente de capacidades y ya tiene reutilización transversal real, vive en `shared`.
+6. Si declara tipos reutilizados de ese Module, vive en su `types.ts`; los props exclusivos de un React Component permanecen en ese componente.
+7. Si representa o compone fallos de aplicación, usa `shared/errors`; la traducción HTTP queda en `app/_adapters` y los códigos propios en el `types.ts` del dueño.
+8. Si solo existe para datos, UI o ejecución local/E2E, vive en `development` o `tests/e2e`, según quién lo ejecute.
+9. Si es generado, migración, seed, script o configuración, conserva su categoría explícita y no se presenta como biblioteca.
+10. Si ninguna categoría aplica, el archivo queda sin clasificar y el lint falla. No se crea una carpeta `lib` genérica para silenciar la decisión.
 
 La promoción de una pieza desde una feature a `shared` exige al menos dos consumidores independientes y ausencia de conocimiento específico de la feature. Compartir una función entre dos archivos de la misma feature no satisface ese criterio.
 
@@ -228,12 +286,24 @@ La política es *deny by default*: toda arista no autorizada queda prohibida.
 | prueba colocada | lo permitido al Module dueño y sus propios internals | otra feature, `app`, entry points |
 | E2E | helpers E2E, aliases públicos de escenario, sistema vía HTTP/browser | internals de producción, Prisma generado |
 
+Dentro de una misma feature, la dirección también es *deny by default*:
+
+| Importador interno | Puede importar | No puede importar |
+| --- | --- | --- |
+| `domain` | su propio dominio y `shared` puramente funcional | `application`, `infrastructure`, `app`, Next.js, Prisma, red, filesystem |
+| `application` | su dominio, infraestructura propia, Interfaces públicas de integraciones y `shared` | UI cliente, otra feature, detalles de una integración |
+| `infrastructure` | su dominio/tipos, `shared/server/db` y `shared` técnico | `application`, UI cliente, otra feature |
+| UI/client de la feature | tipos cliente-seguros, su propia UI y cliente HTTP | `application`, `domain`, `infrastructure`, Prisma |
+
+`application → infrastructure` es una dependencia concreta deliberada mientras exista un solo Adapter real. Cuando haya dos Adapters que deban variar, la Interface del port se ubica junto a la aplicación o infraestructura de la feature que la necesita; no se publica una abstracción global por anticipación.
+
 Excepciones cerradas:
 
 1. `src/shared/server/db/** → src/generated/prisma/**` es la única entrada manual a Prisma generado.
 2. Los archivos especiales de `app` pueden importar `app/globals.css`, `app/_adapters/**` y `app/_components/**`; esos auxiliares nunca son importables fuera de `app`.
 3. La ruta local de reset y la composición visual del selector pueden importar las Interfaces públicas de `development`, siempre protegidas por las guardas de entorno existentes.
 4. Los archivos de declaración como `src/types/next-auth.d.ts` pueden ampliar el paquete que declaran, pero no se usan como Modules de aplicación.
+5. `app/_adapters/**` puede importar `shared/errors` para serializar un `ApplicationError`; ninguna feature, integración o shared importa `next/server` para traducir sus propios errores HTTP.
 
 No se permiten excepciones anchas como `shared → features/**`. Si una coordinación necesita cruzar features, `app` compone sus Interfaces públicas o se revisa la propiedad del conocimiento; no se transforma `shared` en un coordinador circular.
 
@@ -241,12 +311,12 @@ No se permiten excepciones anchas como `shared → features/**`. Si una coordina
 
 La carpeta comunica intención, pero el grafo real de módulos es la autoridad:
 
-- todo punto de entrada `server.ts` y todo acceso a Prisma, sesión, secretos, filesystem, Mufasa o VTI importa `server-only`;
+- todo punto de entrada `server.ts`, `application/**` o `infrastructure/**` y todo acceso a Prisma, sesión, secretos, filesystem, Mufasa o VTI importa `server-only`;
 - `'use client'` se coloca en la raíz interactiva más pequeña posible, no en el barrel completo de una feature;
 - módulos exclusivamente de navegador pueden usar `client-only` cuando su consumo incorrecto no sea evidente;
-- `index.ts` y `contracts.ts` de una feature no importan ni reexportan `server.ts`, `server/**`, Prisma, `next/server` o variables privadas;
-- un Client Component no importa módulos `server/**`, ni siquiera solo para reutilizar tipos; los contratos cliente-seguros viven fuera del subárbol servidor;
-- DTO cruzan el Seam; modelos Prisma, `fileKey`, secretos y objetos de transporte externos no lo cruzan;
+- `index.ts` y `types.ts` de una feature no importan ni reexportan `server.ts`, `application/**`, `domain/**`, `infrastructure/**`, Prisma, `next/server` o variables privadas;
+- un Client Component no importa módulos `application/**`, `domain/**` ni `infrastructure/**`, ni siquiera solo para reutilizar tipos; los contratos cliente-seguros viven fuera de esas capas;
+- DTO y errores serializables cruzan el Seam; modelos Prisma, `fileKey`, secretos y objetos de transporte externos no lo cruzan;
 - las reglas se aplican a imports por alias, relativos, dinámicos y de tipo.
 
 Estas invariantes complementan a Next.js: las carpetas `server` y `client` no sustituyen `'use client'`, `server-only` ni la comprobación del grafo de imports.
@@ -267,7 +337,57 @@ export const PATCH = authenticatedJsonRoute(async ({ actor, params, body }) =>
 );
 ```
 
-El Adapter conoce HTTP y la Interface pública. `updateNode` posee validación, autorización docente, pertenencia del Nodo, concurrencia y transacción. No se exportan por separado `parseCourseOffering`, `requireTeacher`, `throwApiError` ni la query Prisma.
+El Adapter conoce HTTP y la Interface pública. `authenticatedJsonRoute` resuelve sesión, parsea transporte y convierte el `ResultAsync` a HTTP; `updateNode` posee validación, autorización docente, pertenencia del Nodo, concurrencia y transacción. No se exportan por separado `parseCourseOffering`, `requireTeacher`, `throwApiError` ni la query Prisma.
+
+### Caso de uso e invariante de negocio no se mezclan
+
+```ts
+// src/features/roadmap/domain/dependencies/would-create-cycle.ts
+export function wouldCreateCycle(
+  dependencies: readonly Dependency[],
+  sourceNodeId: string,
+  targetNodeId: string,
+): boolean {
+  // Recorrido puro del grafo: sin Prisma, Next.js ni transacción.
+}
+
+// src/features/roadmap/application/dependencies/create-dependency.ts
+export function createDependency(command: CreateDependencyCommand) {
+  return dependencyStore.read(command.courseOffering).andThen((state) => {
+    if (wouldCreateCycle(state.dependencies, command.sourceNodeId, command.targetNodeId)) {
+      return err(roadmapError("DEPENDENCY_CYCLE"));
+    }
+    return dependencyStore.create(command);
+  });
+}
+```
+
+La regla puede ejercerse en Vitest sin preparar Next.js ni PostgreSQL. El caso de uso concentra carga, autorización, transacción, persistencia y el `Result`; todos los entry points que crean una Dependencia reciben el mismo comportamiento sin volver a implementar el recorrido ni la traducción del fallo.
+
+### Un único protocolo de error no filtra HTTP hacia las features
+
+```ts
+// src/features/roadmap/types.ts
+export type RoadmapErrorCode =
+  | "DEPENDENCY_CYCLE"
+  | "HIDDEN_NODE_DEPENDENCY_FORBIDDEN"
+  | "TEACHER_BLOCKED_PREREQUISITE";
+
+// src/features/roadmap/application/dependencies/create-dependency.ts
+export function createDependency(input: CreateDependencyInput) {
+  return withApplicationError(() => createDependencyUnsafe(input));
+}
+
+// src/app/_adapters/http.ts
+export function resultResponse(operation: () => ApplicationResult<Response>) {
+  return operation().match(
+    (response) => response,
+    (error) => applicationErrorResponse(error),
+  );
+}
+```
+
+El catálogo `RoadmapErrorCode` viaja dentro del `ApplicationError` común, pero pertenece a Roadmap y no a `shared`. La feature no importa `NextResponse` ni implementa `try/catch` HTTP; el Adapter no conoce ciclos, Nodos ocultos ni Bloqueos docentes. El mismo protocolo permite que el cliente muestre un mensaje seguro sin importar el Module servidor que lo produjo.
 
 ### Page y API comparten un Resumen académico canónico
 
@@ -303,12 +423,12 @@ Ambos callers reciben la misma reconciliación, prioridad, agrupamiento y orden.
 // src/features/roadmap/server.ts
 import "server-only";
 
-export { addResource } from "./server/resources/add-resource";
-export { downloadResource } from "./server/resources/download-resource";
-export { removeResource } from "./server/resources/remove-resource";
+export { addResource } from "./application/resources/add-resource";
+export { downloadResource } from "./application/resources/download-resource";
+export { removeResource } from "./application/resources/remove-resource";
 ```
 
-Las operaciones públicas son distintas porque corresponden a entry points distintos, pero su Implementation privada comparte autorización, almacenamiento protegido, transacciones y limpieza best-effort. El Adapter filesystem permanece dentro de `roadmap` mientras sea el único uso real; no se crea hoy un port público de almacenamiento hipotético.
+Las operaciones públicas son distintas porque corresponden a entry points distintos, pero su Implementation de aplicación comparte autorización, transacciones y limpieza best-effort. El Adapter filesystem de `infrastructure/resources` queda oculto detrás de esos casos de uso mientras sea el único Adapter real; no se crea hoy un port público de almacenamiento hipotético.
 
 ### VTI autentica; Roadmap autoriza
 
@@ -329,7 +449,7 @@ El Adapter extrae transporte HTTP sin validar identidad institucional. `institut
 
 La ubicación acompaña al Seam probado:
 
-- los tests Vitest se colocan junto al Module bajo `src/**` como `*.test.ts(x)`; siguen siendo puros y no requieren PostgreSQL ni Next.js, según ADR-0004;
+- los tests Vitest de `domain/**` se colocan junto a la regla y son siempre puros: no requieren PostgreSQL, Next.js, mocks de HTTP ni filesystem; los de `application/**` prueban coordinación observable con doubles locales solo cuando ese Seam varía, y toda prueba que use persistencia, HTTP, autenticación o filesystem permanece en E2E según ADR-0004;
 - una prueba colocada puede importar internals de su propio Module cuando verifica un Seam interno útil —por ejemplo, geometría o mapeo del grafo—, pero eso no convierte ese archivo en Interface pública para otros Modules;
 - los casos de uso se prueban prioritariamente por su Interface pública y por resultados observables; no se apilan tests equivalentes sobre cada helper privado;
 - toda prueba que ejerza persistencia, HTTP, autenticación o navegador permanece en `tests/e2e/**` con Playwright;
@@ -354,8 +474,11 @@ Las reglas estructurales se activarán al final de la migración, cuando el árb
 | Línea base | Dueño objetivo | Motivo |
 | --- | --- | --- |
 | `features/roadmap/**` | `features/roadmap/**` | Ya pertenece al slice Roadmap; se preserva el Seam estrecho de `RoadmapCanvas`. |
-| `lib/roadmap-{api,editor,completion,geometry,types}.ts` | `features/roadmap/**` | UI, contratos, invariantes y persistencia cambian por la misma capacidad. |
-| lógica de Recursos en routes, `roadmap-editor` y `resource-storage` | `features/roadmap/server/resources/**` | Recupera Locality para autorización, bytes, compensación y limpieza de ADR-0006. |
+| `lib/roadmap-{api,editor,completion,geometry,types,access}.ts` | `features/roadmap/{application,domain,infrastructure}/**` | Los casos de uso, invariantes de visibilidad/Bloqueo/Dependencia y Adapters se separan sin salir del dueño Roadmap. |
+| props hoy exportados desde `editor/types.ts` y tipos locales duplicados en `useRoadmap.ts` | su React Component o el `types.ts` de su sub-Module | Los props tienen dueño único en la presentación; tipos de inputs, DTO y grafo cambian con su Module reutilizable. |
+| `ApiError`, `apiResult`, `handleApiResult` y normalización de errores repartidos en `roadmap-api.ts` y routes | `shared/errors/**` + `app/_adapters/**` | Nunca se repite wrapping de `neverthrow`; los códigos del dominio siguen perteneciendo a la feature y HTTP queda fuera de ella. |
+| lógica de Recursos en routes, `roadmap-editor` y `resource-storage` | `features/roadmap/{application,infrastructure}/resources/**` | La aplicación coordina autorización, transacción y compensación; el Adapter de bytes queda reemplazable y local según ADR-0006. |
+| visibilidad, Dependencias, Bloqueos docentes y sus previsualizaciones de impacto | `features/roadmap/{domain,application}/{dependencies,access,completion}/**` | Las reglas pedagógicas puras no se mezclan con consultas ni transporte; los casos de uso las reutilizan. |
 | lógica duplicada de page/API de Resumen académico | `features/academic-overview/**` | Una Interface canónica elimina dos representaciones observables. |
 | `lib/mufasa.ts` | `integrations/ucampus/**` | Es un Adapter de un sistema externo, no shared residual. |
 | claims y protocolo VTI | `integrations/vti/**` | Traduce identidad institucional sin decidir sesión o autorización. |
@@ -375,6 +498,9 @@ Este mapa define propiedad, no una secuencia de movimientos. Los cambios que mez
 | Tema | Referencia | Decisión de U-Roadmaps | Razón |
 | --- | --- | --- | --- |
 | Shared | Seis carpetas técnicas globales tratadas como un solo tipo | Un `src/shared` explícito y pequeño | Evita que `lib` o `server` sean categorías residuales. |
+| Tipos | No establece una convención de propiedad para tipos reutilizados | Un `types.ts` por Module; props junto al React Component | Hace visible el dueño del tipo y evita barrels de props o nombres intercambiables. |
+| Errores | No modela resultados ni una traducción de fallos | `shared/errors` con `neverthrow`; HTTP solo en `app/_adapters` | Unifica composición y serialización sin convertir los errores de cada feature en shared. |
+| Dominio y aplicación | No separa reglas puras de coordinación con persistencia | Capas `domain`, `application` e `infrastructure` dentro de cada feature | Vuelve las invariantes extensibles y reutilizables sin perder la Locality del slice vertical. |
 | Interfaces de feature | `app` importa internals profundos | `index.ts` y `server.ts` son las únicas Interfaces entre categorías | Reduce conocimiento de callers y permite refactorizar la Implementation. |
 | Server/Client | No está expresado por la política | Entradas cliente-seguras, `server.ts`, `server-only` y reglas de grafo | U-Roadmaps ya mezcla código cliente con tipos provenientes de Modules servidor. |
 | Integraciones | No existe categoría propia | `integrations/ucampus` e `integrations/vti` | Ambos protocolos externos tienen traducción y fallos propios, pero no poseen casos de uso. |
@@ -402,8 +528,13 @@ La migración habrá alcanzado esta arquitectura cuando:
 8. cliente y servidor estén protegidos tanto por estructura como por el grafo real de imports;
 9. reset, seed y demás ejecutables consuman Modules y no sean importados;
 10. Vitest y Playwright respeten los Seams de ADR-0004;
-11. ESLint aplique la política completa con default `disallow` y falle ante archivos desconocidos;
-12. typecheck, lint, pruebas unitarias y E2E pertinentes pasen sin alterar URLs, contratos HTTP ni decisiones de los ADR.
+11. cada tipo reutilizado tenga un único `types.ts` dueño y ningún prop de React salga de su `.tsx`;
+12. cada Interface de servidor devuelva `neverthrow` con el protocolo de `shared/errors`, y solo `app/_adapters` traduzca el resultado a HTTP;
+13. toda regla de negocio de Roadmap viva en `domain/**`, sea ejercitable sin Next.js, Prisma, red ni filesystem, y no se repita en `application`, rutas o UI;
+14. los casos de uso de `application/**` coordinen autorización, transacciones y Adapters sin contener la implementación de invariantes de dominio;
+15. `infrastructure/**` sea la única capa de feature que use el Adapter compartido de Prisma y los Adapters concretos, sin iniciar por sí misma un caso de uso;
+16. ESLint aplique la política completa con default `disallow` y falle ante archivos desconocidos;
+17. typecheck, lint, pruebas unitarias y E2E pertinentes pasen sin alterar URLs, contratos HTTP ni decisiones de los ADR.
 
 ## Decisiones que pertenecen al plan de migración
 

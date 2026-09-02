@@ -52,6 +52,18 @@ Se ejecutó primero `graphify query` sobre el grafo existente para ubicar el flu
 
 El censo de imports recorrió los `import`, `export ... from` e `import()` internos de archivos TypeScript/TSX/MTS bajo `src`, `prisma` y `tests`; resolvió tanto `@/*` como rutas relativas y excluyó paquetes externos. Los recuentos de tamaño omiten `src/generated/prisma` salvo cuando se lo identifica explícitamente como código generado. Una arista representa una declaración de import, no llamadas en ejecución ni acceso indirecto a la misma tabla.
 
+## Actualización posterior a la línea base
+
+La fotografía anterior sigue siendo la evidencia histórica que abrió el issue #32. Después de publicar el árbol objetivo se incorporaron funcionalidades Roadmap que confirman —y precisan— su clasificación, sin alterar la conclusión de que el slice servidor aún está disperso en `src/lib`:
+
+- las Dependencias solo pueden unir Nodos visibles; ocultar un Nodo elimina sus Dependencias en la misma transacción y la migración `20260901000002_remove_hidden_node_dependencies` limpia las relaciones históricas inválidas;
+- los Bloqueos docentes y los prerrequisitos pasan a determinar el acceso del Estudiante, incluido el impacto transitivo de bloquear o desbloquear una rama;
+- antes de ocultar un Nodo, crear una Dependencia o modificar un Bloqueo docente, la UI obtiene una previsualización de las Dependencias o Nodos afectados y pide confirmación;
+- la representación React Flow ahora adapta la geometría de las tarjetas al título y conserva el layout del grafo;
+- se añadieron pruebas unitarias de geometría, tarjetas y canvas, y escenarios Playwright de visibilidad, Dependencias y acceso estudiantil.
+
+Estas reglas no crean features nuevas: pertenecen al Module `roadmap`. La revisión de [`target-project-structure.md`](./target-project-structure.md) las separa entre `domain` (invariantes puras), `application` (casos de uso) e `infrastructure` (Adapters), deja `student` como Implementation de presentación y conserva `nodes`, `dependencies`, `access` y `completion` como nombres de conocimiento. También hace explícita la extracción de los tipos reutilizados a `types.ts` por Module —con props de React junto a su componente— y la gestión transversal de errores con `neverthrow`.
+
 ## Estructura real
 
 El árbol semántico actual es el siguiente:
@@ -266,7 +278,9 @@ Este diagnóstico no elige todavía carpetas, pero el issue #33 debería demostr
 7. decidir si cada feature expone una Interface pública o permite internals concretos, incluyendo el efecto sobre tests;
 8. introducir un Seam con Adapters solo cuando haya variación real; un único Adapter no justifica abstracciones especulativas;
 9. adaptar las invariantes a ESLint 9 flat config y activarlas al final de la migración, no copiar las configuraciones de la referencia;
-10. preservar las decisiones de CONTEXT.md y ADR, incluidos los conceptos futuros que el fixture describe pero Prisma aún no persiste.
+10. conservar cada tipo reutilizado junto a su Module en un `types.ts`, sin extraer props exclusivos de React de su componente;
+11. extraer el protocolo de errores de `roadmap-api.ts` a un Module transversal basado en `neverthrow`, manteniendo los códigos propios en el Module dueño y la serialización HTTP en `app`;
+12. preservar las decisiones de CONTEXT.md y ADR, incluidos los conceptos futuros que el fixture describe pero Prisma aún no persiste.
 
 La prioridad arquitectónica no es reducir líneas ni maximizar carpetas. Es recuperar Depth: Interfaces pequeñas que den Leverage a `app` y a los tests, e Implementations con suficiente Locality para que autorización, reconciliación institucional, invariantes del Roadmap y ciclo de vida del Recurso cambien una sola vez.
 
