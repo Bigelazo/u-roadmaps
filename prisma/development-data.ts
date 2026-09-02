@@ -13,7 +13,7 @@ import {
   reservedFixtureUserIds,
 } from '../src/lib/development-fixtures';
 import { developmentFixtureFileContents } from '../src/lib/development-fixture-assets';
-import { requireFixtureEnvironment } from '../src/lib/development';
+import { requireFixtureEnvironment } from '../src/shared/server/environment/fixture-environment';
 import { replaceFixtureUploadedFiles } from '../src/lib/resource-storage';
 
 const connectionString = process.env.DATABASE_URL;
@@ -21,7 +21,7 @@ if (!connectionString) throw new Error('DATABASE_URL must be set to load develop
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 export async function resetDevelopmentData() {
-  requireFixtureEnvironment();
+  requireFixtureEnvironment(process.env);
   await replaceFixtureUploadedFiles(developmentFixtureFileContents());
 
   await prisma.$transaction(async (transaction) => {

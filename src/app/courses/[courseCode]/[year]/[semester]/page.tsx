@@ -1,7 +1,7 @@
 import RoadmapCanvas from '@/features/roadmap/RoadmapCanvas';
 import { synchronizeParticipation } from '@/lib/academic-participation';
-import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 
 type Props = { params: Promise<{ courseCode: string; year: string; semester: string }> };

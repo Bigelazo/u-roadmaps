@@ -1,10 +1,10 @@
 import { ArrowRight, BookOpen, ListChecks, Map as MapIcon } from 'lucide-react';
 import { redirect } from 'next/navigation';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
-import { cn } from '@/lib/utils';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { Card, CardContent, CardHeader } from '@/shared/ui/card';
+import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { cn } from '@/shared/lib/utils';
 
 const courseBenefits = [
   {

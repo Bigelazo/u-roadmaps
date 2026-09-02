@@ -1,3 +1,5 @@
+import 'server-only';
+
 // El servidor `standalone` escucha en `HOSTNAME`/`PORT` detrás de un proxy, de
 // modo que `request.url` apunta al origen interno (`0.0.0.0:5210`). Las
 // redirecciones y la comprobación de origen deben usar el origen público:

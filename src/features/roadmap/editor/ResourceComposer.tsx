@@ -1,8 +1,8 @@
 import { FileUp, Link2, Save, X } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/shared/ui/button';
+import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { Input } from '@/shared/ui/input';
 import { inputClassName } from './primitives';
 import type { ResourceInput } from './types';
 

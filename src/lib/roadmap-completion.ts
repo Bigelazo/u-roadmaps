@@ -1,5 +1,5 @@
 import { Prisma } from '@/generated/prisma/client';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/shared/server/db';
 import {
   ApiError,
   apiResult,

@@ -1,5 +1,5 @@
 import type { ParticipationRole } from '@/generated/prisma/client';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/shared/server/db';
 import { isDevelopmentPersona } from '@/lib/development';
 import { getMufasaAcademicCourses, type MufasaInstitutionalCoursePosition } from '@/lib/mufasa';
 import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';

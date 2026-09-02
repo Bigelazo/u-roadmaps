@@ -11,7 +11,7 @@ import {
   type ReactFlowState,
 } from '@xyflow/react';
 import { floatingEdgeGeometry, type NodeRect } from '@/lib/roadmap-geometry';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 
 function nodeRect(state: ReactFlowState, nodeId: string): NodeRect | null {
   const node = state.nodeLookup.get(nodeId);

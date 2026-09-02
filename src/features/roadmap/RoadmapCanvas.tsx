@@ -21,7 +21,7 @@ import type {
   TeacherBlockOperation,
 } from '@/lib/roadmap-types';
 import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,12 +31,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Spinner } from '@/components/ui/spinner';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+} from '@/shared/ui/alert-dialog';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
+import { Spinner } from '@/shared/ui/spinner';
+import { Badge } from '@/shared/ui/badge';
+import { Button } from '@/shared/ui/button';
+import { cn } from '@/shared/lib/utils';
 
 const RoadmapEditor = dynamic(
   () =>

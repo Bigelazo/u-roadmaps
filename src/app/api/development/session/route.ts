@@ -1,8 +1,9 @@
 import { encode } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
-import { authOptions } from '@/lib/auth';
-import { developmentEnvironmentEnabled, developmentPersonas } from '@/lib/development';
-import { prisma } from '@/lib/db';
+import { authOptions } from '@/shared/server/session';
+import { developmentEnvironmentEnabled } from '@/shared/server/environment/development';
+import { developmentPersonas } from '@/lib/development';
+import { prisma } from '@/shared/server/db';
 import { ApiError, handleApiResult, parseJson, requireUuid } from '@/lib/roadmap-api';
 
 export async function POST(request: Request) {

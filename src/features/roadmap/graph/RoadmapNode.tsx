@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
 import type { StudentNodeBlockReason } from '@/lib/roadmap-access';
 import { roadmapNodeSizeForTitle } from '@/lib/roadmap-geometry';
-import { cn } from '@/lib/utils';
+import { cn } from '@/shared/lib/utils';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> & {

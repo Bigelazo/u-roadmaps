@@ -2,10 +2,10 @@ import { encode } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { Prisma } from '@/generated/prisma/client';
-import { prisma } from '@/lib/db';
-import { authOptions } from '@/lib/auth';
+import { prisma } from '@/shared/server/db';
+import { authOptions } from '@/shared/server/session';
 import { ApiError, apiErrorResponse, handleApiResult } from '@/lib/roadmap-api';
-import { isHttps, siteOrigin, siteUrl } from '@/lib/site-url';
+import { isHttps, siteOrigin, siteUrl } from '@/shared/server/environment/site-url';
 import {
   invalidVtiClaims,
   normalizeInstitutionalEmail,

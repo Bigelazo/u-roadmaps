@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { siteUrl } from '@/lib/site-url';
+import { siteUrl } from '@/shared/server/environment/site-url';
 
 const authenticationCookieNames = [
   'next-auth.session-token',

@@ -10,8 +10,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+} from '@/shared/ui/alert-dialog';
+import { Button } from '@/shared/ui/button';
 import { NodeTypeForm } from './NodeTypeForm';
 import type { NodeTypeInput } from './types';
 

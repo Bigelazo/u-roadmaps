@@ -17,7 +17,7 @@ import {
 } from '@xyflow/react';
 import { LayoutTemplate } from 'lucide-react';
 import { roadmapGridSize } from '@/lib/roadmap-geometry';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import type { AnyRoadmapDto } from '@/lib/roadmap-types';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';

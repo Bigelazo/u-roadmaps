@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react';
 import { CircleAlert, X } from 'lucide-react';
-import { Alert, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle } from '@/shared/ui/alert';
+import { Button } from '@/shared/ui/button';
 
 const DISMISS_DELAY_MS = 6000;
 

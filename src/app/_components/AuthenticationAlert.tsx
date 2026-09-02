@@ -3,8 +3,8 @@
 import { Suspense } from 'react';
 import { CircleAlert, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/shared/ui/button';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 
 function AuthenticationAlertContent() {
   const pathname = usePathname();

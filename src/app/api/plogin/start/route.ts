@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { isHttps, siteUrl } from '@/lib/site-url';
+import { prisma } from '@/shared/server/db';
+import { isHttps, siteUrl } from '@/shared/server/environment/site-url';
 
 const loginStateCookieName = 'u-roadmaps-vti-state';
 const loginStateMaxAge = 10 * 60;

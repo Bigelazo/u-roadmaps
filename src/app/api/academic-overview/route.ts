@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuthenticatedUser } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/shared/server/db';
 import { isDevelopmentPersona } from '@/lib/development';
 import { getMufasaAcademicCourses } from '@/lib/mufasa';
 import { handleApiResult, throwApiError } from '@/lib/roadmap-api';

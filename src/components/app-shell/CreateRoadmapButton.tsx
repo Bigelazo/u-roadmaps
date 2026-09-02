@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/shared/ui/button';
 import { roadmapUrl } from '@/lib/roadmap-types';
 
 type Props = Readonly<{ courseCode: string; year: number; semester: number; courseName: string }>;

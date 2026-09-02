@@ -8,21 +8,21 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty';
+} from '@/shared/ui/empty';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { getApplicationSession, resolveSessionUser } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+} from '@/shared/ui/accordion';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
+import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { prisma } from '@/shared/server/db';
 import { isDevelopmentPersona } from '@/lib/development';
 import { getMufasaAcademicCourses, type MufasaInstitutionalCoursePosition } from '@/lib/mufasa';
 import { isRoadmapCreationPosition } from '@/lib/academic-participation';
 import CreateRoadmapButton from '@/components/app-shell/CreateRoadmapButton';
-import { Separator } from '@/components/ui/separator';
+import { Separator } from '@/shared/ui/separator';
 
 type ParticipationWithCourse = Prisma.ParticipationGetPayload<{
   include: { courseOffering: { include: { course: true; roadmap: true } } };

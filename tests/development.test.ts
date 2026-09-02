@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   developmentEnvironmentEnabled,
-  developmentPersonas,
   fixtureEnvironmentEnabled,
-  isDevelopmentPersona,
   requireFixtureEnvironment,
-} from '@/lib/development';
+} from '@/shared/server/environment/development';
+import { developmentPersonas, isDevelopmentPersona } from '@/lib/development';
 
 const originalEnvironment = { ...process.env };
 

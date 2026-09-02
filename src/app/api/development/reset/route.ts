@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { handleApiResult } from '@/lib/roadmap-api';
 import { resetDevelopmentData } from '../../../../../prisma/development-data';
-import { developmentEnvironmentEnabled } from '@/lib/development';
+import { developmentEnvironmentEnabled } from '@/shared/server/environment/development';
 
 export async function POST() {
   return handleApiResult(async () => {

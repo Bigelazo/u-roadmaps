@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 
 // La política de cargos no toca la base de datos; el cliente Prisma exige una
 // conexión al importarse.
-vi.mock('@/lib/db', () => ({ prisma: {} }));
+vi.mock('@/shared/server/db', () => ({ prisma: {} }));
 
 import {
   academicRole,

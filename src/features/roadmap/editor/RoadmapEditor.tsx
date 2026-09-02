@@ -12,8 +12,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+} from '@/shared/ui/alert-dialog';
+import { Button } from '@/shared/ui/button';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
 import type { NodeUpdate, ResourceInput, RoadmapEditorProps } from './types';
 

@@ -2,7 +2,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { ResultAsync } from 'neverthrow';
 import { unstable_rethrow } from 'next/navigation';
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/shared/server/db';
 export { wouldCreateDependencyCycle as findCycle } from '@/lib/roadmap-access';
 
 export type CourseOfferingIdentifier = {

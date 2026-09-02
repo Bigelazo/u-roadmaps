@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from 'vitest';
-import { isHttps, siteOrigin, siteUrl } from '@/lib/site-url';
+import { isHttps, siteOrigin, siteUrl } from '@/shared/server/environment/site-url';
 
 const internalRequest = (headers: Record<string, string>) =>
   new Request('http://0.0.0.0:5210/api/plogin?jwt=token', { headers });

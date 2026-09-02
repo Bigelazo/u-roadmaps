@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/shared/server/db';
 import { requireCourseOfferingParticipation } from '@/lib/auth';
 import {
   ApiError,

@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import { CirclePlus, Plus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/lib/roadmap-types';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/shared/ui/button';
+import { Checkbox } from '@/shared/ui/checkbox';
 import {
   Dialog,
   DialogClose,
@@ -14,10 +14,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+} from '@/shared/ui/dialog';
+import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { Input } from '@/shared/ui/input';
+import { Textarea } from '@/shared/ui/textarea';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeTypesEditor } from './NodeTypesEditor';
 import type { NodeInput, NodeTypeInput } from './types';

@@ -17,8 +17,8 @@ import {
   studentNodeBlockMessages,
   type StudentNodeStatus,
 } from '@/features/roadmap/student/node-status';
-import { Button } from '@/components/ui/button';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Button } from '@/shared/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/shared/ui/empty';
 import {
   Item,
   ItemActions,
@@ -27,9 +27,9 @@ import {
   ItemGroup,
   ItemMedia,
   ItemTitle,
-} from '@/components/ui/item';
-import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+} from '@/shared/ui/item';
+import { Separator } from '@/shared/ui/separator';
+import { Sheet, SheetContent, SheetTitle } from '@/shared/ui/sheet';
 
 function resourceIcon(type: Resource['type']) {
   return type === 'VIDEO' ? <FileCode2 size={20} /> : <FileText size={20} />;
