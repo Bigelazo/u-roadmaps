@@ -3,7 +3,9 @@ import { Position } from '@xyflow/react';
 import {
   floatingEdgeGeometry,
   nearestSide,
+  nodeCenter,
   roadmapGridSize,
+  roadmapNodeSize,
   sideAnchor,
   snapToRoadmapGrid,
 } from '@/lib/roadmap-geometry';
@@ -61,4 +63,28 @@ it('snaps node positions to the roadmap grid before saving them', () => {
   expect(roadmapGridSize).toBe(20);
   expect(snapToRoadmapGrid({ x: 149, y: 151 })).toEqual({ x: 140, y: 160 });
   expect(snapToRoadmapGrid({ x: -31, y: -29 })).toEqual({ x: -40, y: -20 });
+});
+
+it('keeps the centers and aligned edge anchors on the roadmap grid', () => {
+  const source = { ...snapToRoadmapGrid({ x: 120, y: 80 }), ...roadmapNodeSize };
+  const target = { ...snapToRoadmapGrid({ x: 120, y: 420 }), ...roadmapNodeSize };
+  const edge = floatingEdgeGeometry(source, target);
+
+  expect(roadmapNodeSize.width % roadmapGridSize).toBe(0);
+  expect(roadmapNodeSize.height % roadmapGridSize).toBe(0);
+  expect(nodeCenter(source).x % roadmapGridSize).toBe(0);
+  expect(nodeCenter(source).y % roadmapGridSize).toBe(0);
+  expect(nodeCenter(target).x % roadmapGridSize).toBe(0);
+  expect(nodeCenter(target).y % roadmapGridSize).toBe(0);
+  expect(edge.sourceX).toBe(edge.targetX);
+  expect(edge.sourcePosition).toBe(Position.Bottom);
+  expect(edge.targetPosition).toBe(Position.Top);
+
+  const row = floatingEdgeGeometry(source, {
+    ...snapToRoadmapGrid({ x: 620, y: 80 }),
+    ...roadmapNodeSize,
+  });
+  expect(row.sourceY).toBe(row.targetY);
+  expect(row.sourcePosition).toBe(Position.Right);
+  expect(row.targetPosition).toBe(Position.Left);
 });

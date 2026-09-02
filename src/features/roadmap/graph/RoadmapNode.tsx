@@ -3,6 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
 import type { StudentNodeBlockReason } from '@/lib/roadmap-access';
+import { roadmapNodeSize } from '@/lib/roadmap-geometry';
 import { cn } from '@/lib/utils';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
@@ -46,7 +47,7 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       data-testid="roadmap-card"
       aria-disabled={locked ? true : undefined}
       className={cn(
-        'max-w-[240px] min-w-[170px] rounded-lg border-2 px-4 py-3 motion-reduce:transform-none motion-reduce:transition-none',
+        'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transform-none motion-reduce:transition-none',
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
@@ -55,6 +56,8 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
             ),
       )}
       style={{
+        width: roadmapNodeSize.width,
+        height: roadmapNodeSize.height,
         backgroundColor: `color-mix(in srgb, ${data.typeColor} 14%, ${surface})`,
         borderColor:
           hidden || locked
@@ -63,7 +66,7 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       }}
     >
       <span className="sr-only">{data.typeName}</span>
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-start gap-2.5">
         {editing ? (
           <button
             type="button"
@@ -103,15 +106,22 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
             )}
           </span>
         )}
-        <p className="text-[15.5px] leading-[1.25] font-medium text-ink">{data.title}</p>
+        <p
+          title={data.title}
+          className="line-clamp-2 min-w-0 text-[15.5px] leading-[1.25] font-medium text-ink"
+        >
+          {data.title}
+        </p>
       </div>
       {hidden ? (
-        <Badge variant="secondary" className="mt-2.5 bg-fog text-graphite">
+        <Badge
+          variant="secondary"
+          className="absolute right-4 bottom-3 left-4 w-fit max-w-[calc(100%-2rem)] truncate bg-fog text-graphite"
+        >
           Oculto para estudiantes
         </Badge>
-      ) : null}
-      {blockMessage ? (
-        <p className="mt-2.5 flex items-center gap-1.5 text-xs leading-snug font-semibold text-graphite">
+      ) : blockMessage ? (
+        <p className="absolute right-4 bottom-3 left-4 line-clamp-2 flex items-center gap-1.5 text-xs leading-snug font-semibold text-graphite">
           <LockKeyhole className="size-3.5 shrink-0" aria-hidden="true" />
           {blockMessage}
         </p>

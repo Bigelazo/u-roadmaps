@@ -6,6 +6,12 @@ export type Point = { x: number; y: number };
 /** Tamaño, en píxeles del lienzo, de cada celda del roadmap. */
 export const roadmapGridSize = 20;
 
+/** Rectángulo uniforme de cada tarjeta, expresado en celdas completas del roadmap. */
+export const roadmapNodeSize = {
+  width: roadmapGridSize * 12,
+  height: roadmapGridSize * 8,
+} as const;
+
 /** Ajusta una posición a la intersección más cercana de la cuadrícula del roadmap. */
 export function snapToRoadmapGrid(position: Point): Point {
   return {

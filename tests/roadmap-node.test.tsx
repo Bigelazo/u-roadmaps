@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { RoadmapNode, type RoadmapFlowNode } from '../src/features/roadmap/graph/RoadmapNode';
 import type { StudentNodeBlockReason } from '../src/lib/roadmap-access';
+import { roadmapNodeSize } from '../src/lib/roadmap-geometry';
 
 function mountEditingNode(onToggleVisibility = vi.fn()) {
   const props = {
@@ -207,4 +208,105 @@ test.each([
   expect(card.className).toContain('cursor-not-allowed');
   expect(card.getAttribute('aria-disabled')).toBe('true');
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+test('keeps short, long, hidden, and blocked cards at the same grid-aligned dimensions', () => {
+  const nodeProps = (data: RoadmapFlowNode['data']) =>
+    ({
+      id: crypto.randomUUID(),
+      type: 'roadmap',
+      data,
+      selected: false,
+      selectable: true,
+      draggable: false,
+      dragging: false,
+      deletable: false,
+      isConnectable: false,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+      zIndex: 0,
+    }) as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode
+        {...nodeProps({
+          title: 'Breve',
+          typeColor: '#024AD8',
+          typeName: 'Contenido',
+          status: 'available',
+          isHidden: false,
+        })}
+      />
+      <RoadmapNode
+        {...nodeProps({
+          title: 'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse',
+          typeColor: '#024AD8',
+          typeName: 'Contenido',
+          status: 'available',
+          isHidden: false,
+        })}
+      />
+      <RoadmapNode
+        {...nodeProps({
+          title: 'Oculto',
+          typeColor: '#024AD8',
+          typeName: 'Contenido',
+          status: 'editing',
+          isHidden: true,
+        })}
+      />
+      <RoadmapNode
+        {...nodeProps({
+          title: 'Bloqueado',
+          typeColor: '#024AD8',
+          typeName: 'Contenido',
+          status: 'locked',
+          isHidden: false,
+          blockReason: 'PREREQUISITE_BLOCK',
+        })}
+      />
+    </ReactFlowProvider>,
+  );
+
+  expect(roadmapNodeSize.width % 20).toBe(0);
+  expect(roadmapNodeSize.height % 20).toBe(0);
+  for (const card of screen.getAllByTestId('roadmap-card')) {
+    expect(card.style.width).toBe(`${roadmapNodeSize.width}px`);
+    expect(card.style.height).toBe(`${roadmapNodeSize.height}px`);
+  }
+});
+
+test('truncates long card titles visually while preserving their full accessible name', () => {
+  const title = 'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse';
+  const props = {
+    id: 'long-title',
+    type: 'roadmap',
+    data: {
+      title,
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      status: 'available',
+      isHidden: false,
+    },
+    selected: false,
+    selectable: true,
+    draggable: false,
+    dragging: false,
+    deletable: false,
+    isConnectable: false,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  const heading = screen.getByText(title);
+  expect(heading.getAttribute('title')).toBe(title);
+  expect(heading.className).toContain('line-clamp-2');
 });
