@@ -726,14 +726,13 @@ test('VTI callback issues a session after validating its one-time state', async 
   expect(state).toBeTruthy();
   const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
   const token = await vtiToken(fixture.cc1002StudentWithoutProgressVtiClaims);
-  const callback = await request.post('/api/plogin', {
-    form: { jwt: token },
+  const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
     maxRedirects: 0,
     headers: { cookie: stateCookie },
   });
   expect(callback.status()).toBe(303);
   expect(callback.headers().location).toBe(
-    new URL('/', testInfo.project.use.baseURL as string).toString(),
+    new URL('/academic-overview', testInfo.project.use.baseURL as string).toString(),
   );
   const sessionCookieValue = callback.headers()['set-cookie'].split(';', 1)[0];
   const session = await request.get('/api/auth/session', {

@@ -52,24 +52,10 @@ function authenticationErrorResponse(request: Request, error: ApiError) {
   return response;
 }
 
-// El portal VTI devuelve el token por redirección GET, sin repetir el `state`
-// ni emitir `iss`, `aud` o `exp`. Este GET no muta estado: valida el estado
-// pendiente y delega en la página de acceso institucional, cuyo formulario
-// ejecuta el intercambio en el POST. La transacción de un solo uso creada por
-// `/api/plogin/start` acota la ventana de reuso a diez minutos.
-export async function GET(request: Request) {
-  const rawToken = new URL(request.url).searchParams.get('jwt');
-  if (!loginState(request) || typeof rawToken !== 'string' || !rawToken.trim())
-    return NextResponse.redirect(siteUrl('/?error=Authentication', request));
-  const target = siteUrl('/acceso-institucional', request);
-  target.searchParams.set('jwt', rawToken);
-  return NextResponse.redirect(target);
-}
-
-export async function POST(request: Request) {
+function completeLogin(request: Request, rawToken: FormDataEntryValue | null) {
   return handleApiResult(
     async () => {
-      if (isCrossSiteRequest(request))
+      if (request.method === 'POST' && isCrossSiteRequest(request))
         throw new ApiError(
           403,
           'INVALID_AUTH_CALLBACK',
@@ -80,17 +66,6 @@ export async function POST(request: Request) {
             expected: siteOrigin(request).origin,
           },
         );
-      let rawToken: FormDataEntryValue | null;
-      try {
-        rawToken = (await request.formData()).get('jwt');
-      } catch {
-        throw new ApiError(
-          400,
-          'INVALID_AUTH_CALLBACK',
-          'No fue posible completar la autenticación.',
-          { reason: 'unreadable-form-body' },
-        );
-      }
       const state = loginState(request);
       if (!state)
         throw new ApiError(
@@ -210,7 +185,7 @@ export async function POST(request: Request) {
         secret,
         maxAge: sessionMaxAge,
       });
-      const response = NextResponse.redirect(siteUrl('/', request), 303);
+      const response = NextResponse.redirect(siteUrl('/academic-overview', request), 303);
       response.cookies.set({
         name: sessionCookieName(request),
         value: sessionToken,
@@ -232,4 +207,33 @@ export async function POST(request: Request) {
         ? authenticationErrorResponse(request, error)
         : apiErrorResponse(error),
   );
+}
+
+// El portal VTI devuelve el token por una redirección GET. La transacción de
+// un solo uso creada por `/api/plogin/start` protege este callback, por lo que
+// el servidor puede completar la sesión y llevar a la persona directamente a
+// su resumen académico sin una página intermedia.
+export async function GET(request: Request) {
+  const rawToken = new URL(request.url).searchParams.get('jwt');
+  if (!loginState(request) || typeof rawToken !== 'string' || !rawToken.trim())
+    return NextResponse.redirect(siteUrl('/?error=Authentication', request));
+  return completeLogin(request, rawToken);
+}
+
+export async function POST(request: Request) {
+  let rawToken: FormDataEntryValue | null;
+  try {
+    rawToken = (await request.formData()).get('jwt');
+  } catch {
+    return authenticationErrorResponse(
+      request,
+      new ApiError(
+        400,
+        'INVALID_AUTH_CALLBACK',
+        'No fue posible completar la autenticación.',
+        { reason: 'unreadable-form-body' },
+      ),
+    );
+  }
+  return completeLogin(request, rawToken);
 }

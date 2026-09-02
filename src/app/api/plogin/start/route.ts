@@ -14,14 +14,7 @@ function parseLoginUrl(value: string | undefined): URL | null {
   }
 }
 
-// Navegaciones de solo lectura (redirecciones de rutas protegidas y la página
-// `signIn` de NextAuth) aterrizan aquí y delegan en la página de acceso
-// institucional, cuyo formulario inicia el flujo con POST.
-export async function GET(request: Request) {
-  return NextResponse.redirect(siteUrl('/acceso-institucional', request));
-}
-
-export async function POST(request: Request) {
+async function startLogin(request: Request) {
   const loginTarget = parseLoginUrl(process.env.NEXT_PUBLIC_VTI_LOGIN_URL);
   if (!loginTarget) return NextResponse.redirect(siteUrl('/?error=Authentication', request), 303);
 
@@ -41,4 +34,14 @@ export async function POST(request: Request) {
     maxAge: loginStateMaxAge,
   });
   return response;
+}
+
+// Las rutas protegidas y la página `signIn` de NextAuth llegan por GET; ambas
+// deben iniciar el mismo flujo institucional que el botón de acceso.
+export async function GET(request: Request) {
+  return startLogin(request);
+}
+
+export async function POST(request: Request) {
+  return startLogin(request);
 }

@@ -16,8 +16,8 @@ test('proxied requests resolve to the public origin instead of the internal list
   });
 
   expect(siteOrigin(request).origin).toBe('https://roadmaps.example.test');
-  expect(siteUrl('/acceso-institucional', request).toString()).toBe(
-    'https://roadmaps.example.test/acceso-institucional',
+  expect(siteUrl('/academic-overview', request).toString()).toBe(
+    'https://roadmaps.example.test/academic-overview',
   );
   expect(isHttps(request)).toBe(true);
 });
