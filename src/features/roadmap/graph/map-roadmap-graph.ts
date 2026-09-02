@@ -15,7 +15,6 @@ export function mapRoadmapGraph(
   roadmap: AnyRoadmapDto,
   canEdit: boolean,
   onDeleteDependency?: (dependencyId: string) => void,
-  onToggleNodeVisibility?: (nodeId: string, isVisible: boolean) => void,
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
@@ -32,9 +31,6 @@ export function mapRoadmapGraph(
         status: nodeStatus(node, canEdit),
         isHidden,
         blockReason,
-        onToggleVisibility: canEdit
-          ? () => 'isVisible' in node && onToggleNodeVisibility?.(node.id, node.isVisible)
-          : undefined,
       },
       position: { x: node.positionX, y: node.positionY },
       hidden: !canEdit && isHidden,

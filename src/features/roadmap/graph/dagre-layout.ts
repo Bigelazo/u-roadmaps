@@ -1,6 +1,6 @@
 import dagre from '@dagrejs/dagre';
 import { Position } from '@xyflow/react';
-import { roadmapNodeSize, snapToRoadmapGrid } from '@/lib/roadmap-geometry';
+import { roadmapNodeSizeForTitle, snapToRoadmapGrid } from '@/lib/roadmap-geometry';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 
@@ -23,7 +23,7 @@ export function layoutRoadmapGraph(
 
   const nodeIds = new Set(nodes.map((node) => node.id));
   nodes.forEach((node) => {
-    graph.setNode(node.id, { ...roadmapNodeSize });
+    graph.setNode(node.id, roadmapNodeSizeForTitle(node.data.title));
   });
   edges.forEach((edge) => {
     if (nodeIds.has(edge.source) && nodeIds.has(edge.target))
@@ -34,13 +34,14 @@ export function layoutRoadmapGraph(
 
   return nodes.map((node) => {
     const dimensions = graph.node(node.id);
+    const size = roadmapNodeSizeForTitle(node.data.title);
     return {
       ...node,
       sourcePosition: isHorizontal ? Position.Right : Position.Bottom,
       targetPosition: isHorizontal ? Position.Left : Position.Top,
       position: snapToRoadmapGrid({
-        x: dimensions.x - roadmapNodeSize.width / 2,
-        y: dimensions.y - roadmapNodeSize.height / 2,
+        x: dimensions.x - size.width / 2,
+        y: dimensions.y - size.height / 2,
       }),
     };
   });

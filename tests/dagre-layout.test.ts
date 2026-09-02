@@ -1,7 +1,7 @@
 import { Position } from '@xyflow/react';
 import { expect, test } from 'vitest';
 import { layoutRoadmapGraph } from '../src/features/roadmap/graph/dagre-layout';
-import { roadmapNodeSize } from '../src/lib/roadmap-geometry';
+import { roadmapNodeSizeForTitle } from '../src/lib/roadmap-geometry';
 import type { RoadmapFlowEdge } from '../src/features/roadmap/graph/DependencyEdge';
 import type { RoadmapFlowNode } from '../src/features/roadmap/graph/RoadmapNode';
 
@@ -76,7 +76,7 @@ test('places prerequisite nodes before their dependants horizontally', () => {
   expect(end.position.y % 20).toBe(0);
 });
 
-test('uses the fixed roadmap card dimensions instead of measured dimensions', () => {
+test('uses title-based card dimensions instead of measured dimensions', () => {
   const nodesWithIrregularMeasurements = nodes.map((node, index) => ({
     ...node,
     measured: index === 0 ? { width: 500, height: 300 } : { width: 60, height: 40 },
@@ -87,7 +87,7 @@ test('uses the fixed roadmap card dimensions instead of measured dimensions', ()
   const end = layouted.find((node) => node.id === 'end');
 
   expect(start?.position.x).toBe(end?.position.x);
-  expect(roadmapNodeSize).toEqual({ width: 240, height: 160 });
+  expect(roadmapNodeSizeForTitle('Inicio')).toEqual({ width: 160, height: 120 });
 });
 
 test('returns the same grid-aligned layout for repeated requests', () => {

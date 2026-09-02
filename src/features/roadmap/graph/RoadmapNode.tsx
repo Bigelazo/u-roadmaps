@@ -1,9 +1,8 @@
-import { CheckCircle2, Circle, Eye, EyeOff, LockKeyhole } from 'lucide-react';
+import { CheckCircle2, Circle, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { Badge } from '@/components/ui/badge';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
 import type { StudentNodeBlockReason } from '@/lib/roadmap-access';
-import { roadmapNodeSize } from '@/lib/roadmap-geometry';
+import { roadmapNodeSizeForTitle } from '@/lib/roadmap-geometry';
 import { cn } from '@/lib/utils';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
@@ -14,12 +13,12 @@ export type RoadmapNodeData = Record<string, unknown> & {
   status: RoadmapNodeStatus;
   isHidden: boolean;
   blockReason?: StudentNodeBlockReason;
-  onToggleVisibility?: () => void;
 };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
 
 export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
+  const size = roadmapNodeSizeForTitle(data.title);
   const completed = data.status === 'completed';
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
@@ -45,20 +44,26 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
     <div
       data-slot="roadmap-card"
       data-testid="roadmap-card"
+      data-hidden={hidden || undefined}
+      aria-label={hidden ? `${data.title}: oculto para estudiantes` : undefined}
       aria-disabled={locked ? true : undefined}
       className={cn(
         'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transform-none motion-reduce:transition-none',
+        hidden && 'border-dashed',
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-              'cursor-pointer transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)]',
-              !hidden && 'shadow-[var(--shadow-roadmap-node)]',
-            ),
+            'cursor-pointer transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)]',
+            !hidden && 'shadow-[var(--shadow-roadmap-node)]',
+          ),
       )}
       style={{
-        width: roadmapNodeSize.width,
-        height: roadmapNodeSize.height,
+        width: size.width,
+        height: size.height,
         backgroundColor: `color-mix(in srgb, ${data.typeColor} 14%, ${surface})`,
+        backgroundImage: hidden
+          ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 11px)`
+          : undefined,
         borderColor:
           hidden || locked
             ? `color-mix(in srgb, ${data.typeColor} 55%, ${surface})`
@@ -67,88 +72,60 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
     >
       <span className="sr-only">{data.typeName}</span>
       <div className="flex items-start gap-2.5">
-        {editing ? (
-          <button
-            type="button"
-            className={cn(
-              'nodrag nopan flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
-              hidden && 'border-graphite/25 bg-fog text-graphite',
-            )}
-            aria-label={hidden ? 'Mostrar a estudiantes' : 'Ocultar para estudiantes'}
-            title={hidden ? 'Mostrar a estudiantes' : 'Ocultar para estudiantes'}
-            onClick={(event) => {
-              event.stopPropagation();
-              data.onToggleVisibility?.();
-            }}
-          >
-            {hidden ? (
-              <EyeOff className="size-4" aria-hidden="true" />
-            ) : (
-              <Eye className="size-4" aria-hidden="true" />
-            )}
-          </button>
-        ) : hidden ? (
-          <EyeOff className="shrink-0" size={20} color="var(--graphite)" aria-hidden="true" />
-        ) : (
-          <span className="shrink-0" role="img" aria-label={statusLabel}>
-            {completed ? (
-              <CheckCircle2
-                size={24}
-                color="var(--progress-deep)"
-                fill="var(--progress-deep)"
-                stroke="var(--card)"
-                aria-hidden="true"
-              />
-            ) : locked ? (
-              <LockKeyhole size={20} aria-hidden="true" />
-            ) : (
-              <Circle size={20} fill="var(--primary-soft)" stroke={accent} aria-hidden="true" />
-            )}
-          </span>
-        )}
+        <span className="shrink-0" role="img" aria-label={statusLabel}>
+          {completed ? (
+            <CheckCircle2
+              size={24}
+              color="var(--progress-deep)"
+              fill="var(--progress-deep)"
+              stroke="var(--card)"
+              aria-hidden="true"
+            />
+          ) : locked ? (
+            <LockKeyhole size={20} aria-hidden="true" />
+          ) : (
+            <Circle size={20} fill="var(--primary-soft)" stroke={accent} aria-hidden="true" />
+          )}
+        </span>
         <p
           title={data.title}
-          className="line-clamp-2 min-w-0 text-[15.5px] leading-[1.25] font-medium text-ink"
+          className="min-w-0 break-words text-[15.5px] leading-[1.25] font-medium text-ink"
         >
           {data.title}
         </p>
       </div>
-      {hidden ? (
-        <Badge
-          variant="secondary"
-          className="absolute right-4 bottom-3 left-4 w-fit max-w-[calc(100%-2rem)] truncate bg-fog text-graphite"
-        >
-          Oculto para estudiantes
-        </Badge>
-      ) : blockMessage ? (
+      {blockMessage ? (
         <p className="absolute right-4 bottom-3 left-4 line-clamp-2 flex items-center gap-1.5 text-xs leading-snug font-semibold text-graphite">
           <LockKeyhole className="size-3.5 shrink-0" aria-hidden="true" />
           {blockMessage}
         </p>
       ) : null}
-      {editing && !hidden
+      {!hidden
         ? (
-            [
-              ['top', Position.Top],
-              ['right', Position.Right],
-              ['bottom', Position.Bottom],
-              ['left', Position.Left],
-            ] as const
-          ).map(([id, position]) => (
-            <Handle
-              key={id}
-              id={id}
-              data-testid="roadmap-node-handle"
-              type="source"
-              position={position}
-              style={{
-                width: 12,
-                height: 12,
-                background: 'var(--primary)',
-                border: '2px solid var(--card)',
-              }}
-            />
-          ))
+          [
+            ['top', Position.Top],
+            ['right', Position.Right],
+            ['bottom', Position.Bottom],
+            ['left', Position.Left],
+          ] as const
+        ).map(([id, position]) => (
+          <Handle
+            key={id}
+            id={id}
+            data-testid="roadmap-node-handle"
+            type="source"
+            position={position}
+            isConnectable={editing}
+            style={{
+              width: 12,
+              height: 12,
+              background: 'var(--primary)',
+              border: '2px solid var(--card)',
+              visibility: editing ? 'visible' : 'hidden',
+              pointerEvents: editing ? 'auto' : 'none',
+            }}
+          />
+        ))
         : null}
     </div>
   );

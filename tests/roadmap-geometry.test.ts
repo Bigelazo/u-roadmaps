@@ -5,7 +5,7 @@ import {
   nearestSide,
   nodeCenter,
   roadmapGridSize,
-  roadmapNodeSize,
+  roadmapNodeSizeForTitle,
   sideAnchor,
   snapToRoadmapGrid,
 } from '@/lib/roadmap-geometry';
@@ -66,12 +66,22 @@ it('snaps node positions to the roadmap grid before saving them', () => {
 });
 
 it('keeps the centers and aligned edge anchors on the roadmap grid', () => {
-  const source = { ...snapToRoadmapGrid({ x: 120, y: 80 }), ...roadmapNodeSize };
-  const target = { ...snapToRoadmapGrid({ x: 120, y: 420 }), ...roadmapNodeSize };
+  const sourceSize = roadmapNodeSizeForTitle('Introducción');
+  const targetSize = roadmapNodeSizeForTitle('Funciones recursivas');
+  const source = { ...snapToRoadmapGrid({ x: 120, y: 80 }), ...sourceSize };
+  const target = {
+    ...snapToRoadmapGrid({
+      x: source.x + sourceSize.width / 2 - targetSize.width / 2,
+      y: 420,
+    }),
+    ...targetSize,
+  };
   const edge = floatingEdgeGeometry(source, target);
 
-  expect(roadmapNodeSize.width % roadmapGridSize).toBe(0);
-  expect(roadmapNodeSize.height % roadmapGridSize).toBe(0);
+  expect(sourceSize.width % roadmapGridSize).toBe(0);
+  expect(sourceSize.height % roadmapGridSize).toBe(0);
+  expect(targetSize.width % roadmapGridSize).toBe(0);
+  expect(targetSize.height % roadmapGridSize).toBe(0);
   expect(nodeCenter(source).x % roadmapGridSize).toBe(0);
   expect(nodeCenter(source).y % roadmapGridSize).toBe(0);
   expect(nodeCenter(target).x % roadmapGridSize).toBe(0);
@@ -82,9 +92,26 @@ it('keeps the centers and aligned edge anchors on the roadmap grid', () => {
 
   const row = floatingEdgeGeometry(source, {
     ...snapToRoadmapGrid({ x: 620, y: 80 }),
-    ...roadmapNodeSize,
+    ...sourceSize,
   });
   expect(row.sourceY).toBe(row.targetY);
   expect(row.sourcePosition).toBe(Position.Right);
   expect(row.targetPosition).toBe(Position.Left);
+});
+
+it('sizes cards from their title while keeping every side on the grid', () => {
+  const shortTitle = roadmapNodeSizeForTitle('Listas');
+  const mediumTitle = roadmapNodeSizeForTitle('Práctica guiada');
+  const longTitle = roadmapNodeSizeForTitle(
+    'Un título deliberadamente muy largo que necesita varias líneas para leerse completo',
+  );
+
+  expect(shortTitle).toEqual({ width: 160, height: 120 });
+  expect(mediumTitle.width).toBeGreaterThan(shortTitle.width);
+  expect(longTitle.width).toBeGreaterThanOrEqual(mediumTitle.width);
+  expect(longTitle.height).toBeGreaterThan(shortTitle.height);
+  for (const size of [shortTitle, mediumTitle, longTitle]) {
+    expect(size.width % roadmapGridSize).toBe(0);
+    expect(size.height % roadmapGridSize).toBe(0);
+  }
 });

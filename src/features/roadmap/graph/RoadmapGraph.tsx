@@ -47,7 +47,6 @@ type Props = {
   onMoveNode: OnNodeDrag<RoadmapFlowNode>;
   onConnectNodes: (connection: Connection) => void;
   onDeleteDependencies: (dependencyIds: string[]) => void;
-  onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
   onAutoLayout: (nodes: RoadmapFlowNode[]) => void;
   topRightActions?: ReactNode;
 };
@@ -59,7 +58,6 @@ export function RoadmapGraph({
   onMoveNode,
   onConnectNodes,
   onDeleteDependencies,
-  onToggleNodeVisibility,
   onAutoLayout,
   topRightActions,
 }: Props) {
@@ -67,24 +65,19 @@ export function RoadmapGraph({
   // El lienzo guarda las posiciones que el arrastre todavía no ha recargado, de
   // modo que solo un roadmap nuevo puede reemplazarlas. Las devoluciones viven
   // en una referencia para que un render del contenedor no rehaga el grafo.
-  const handlers = useRef({ onDeleteDependencies, onToggleNodeVisibility });
-  handlers.current = { onDeleteDependencies, onToggleNodeVisibility };
+  const handlers = useRef({ onDeleteDependencies });
+  handlers.current = { onDeleteDependencies };
   const deleteDependency = useCallback(
     (dependencyId: string) => handlers.current.onDeleteDependencies([dependencyId]),
     [],
   );
-  const toggleNodeVisibility = useCallback(
-    (nodeId: string, isVisible: boolean) =>
-      handlers.current.onToggleNodeVisibility(nodeId, isVisible),
-    [],
-  );
   const [flow, setFlow] = useState(() =>
-    mapRoadmapGraph(roadmap, canEdit, deleteDependency, toggleNodeVisibility),
+    mapRoadmapGraph(roadmap, canEdit, deleteDependency),
   );
 
   useEffect(() => {
-    setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency, toggleNodeVisibility));
-  }, [roadmap, canEdit, deleteDependency, toggleNodeVisibility]);
+    setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency));
+  }, [roadmap, canEdit, deleteDependency]);
 
   const connectNodes = useCallback(
     (connection: Connection) => onConnectNodes(connection),

@@ -6,11 +6,50 @@ export type Point = { x: number; y: number };
 /** Tamaño, en píxeles del lienzo, de cada celda del roadmap. */
 export const roadmapGridSize = 20;
 
-/** Rectángulo uniforme de cada tarjeta, expresado en celdas completas del roadmap. */
-export const roadmapNodeSize = {
-  width: roadmapGridSize * 12,
-  height: roadmapGridSize * 8,
+/**
+ * Tamaño mínimo de una tarjeta, expresado en celdas completas del roadmap.
+ * El área útil para el título empieza después del icono y los espacios laterales.
+ */
+export const roadmapNodeMinimumSize = {
+  width: roadmapGridSize * 8,
+  height: roadmapGridSize * 6,
 } as const;
+
+const roadmapNodeMaximumWidth = roadmapGridSize * 18;
+const roadmapNodeDimensionStep = roadmapGridSize * 2;
+const titleHorizontalChrome = 78;
+const estimatedTitleCharacterWidth = 8.3;
+
+function roundUpToRoadmapNodeStep(value: number) {
+  return Math.ceil(value / roadmapNodeDimensionStep) * roadmapNodeDimensionStep;
+}
+
+/**
+ * Calcula un rectángulo que se adapta al título sin abandonar la cuadrícula.
+ * Los títulos cortos no desperdician espacio; al llegar al ancho máximo, las
+ * líneas adicionales aumentan la altura dos celdas cada una, conservando los
+ * conectores centrados en intersecciones de la cuadrícula.
+ */
+export function roadmapNodeSizeForTitle(title: string) {
+  const characterCount = Math.max(Array.from(title.trim()).length, 1);
+  const width = Math.min(
+    roadmapNodeMaximumWidth,
+    Math.max(
+      roadmapNodeMinimumSize.width,
+      roundUpToRoadmapNodeStep(
+        titleHorizontalChrome + characterCount * estimatedTitleCharacterWidth,
+      ),
+    ),
+  );
+  const charactersPerLine = Math.max(
+    1,
+    Math.floor((width - titleHorizontalChrome) / estimatedTitleCharacterWidth),
+  );
+  const titleLines = Math.ceil(characterCount / charactersPerLine);
+  const height = roadmapNodeMinimumSize.height + (titleLines - 1) * roadmapNodeDimensionStep;
+
+  return { width, height };
+}
 
 /** Ajusta una posición a la intersección más cercana de la cuadrícula del roadmap. */
 export function snapToRoadmapGrid(position: Point): Point {

@@ -12,14 +12,21 @@ vi.mock('next/dynamic', () => ({
     ({
       selectedNode,
       onRequestTeacherBlock,
+      onToggleVisibility,
     }: {
       selectedNode?: { id: string; isTeacherBlocked: boolean };
       onRequestTeacherBlock: (nodeId: string, operation: 'BLOCK' | 'UNBLOCK') => void;
+      onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
     }) =>
       selectedNode ? (
-        <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
-          Bloquear acceso
-        </button>
+        <>
+          <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
+            Bloquear acceso
+          </button>
+          <button type="button" onClick={() => onToggleVisibility(selectedNode.id, true)}>
+            Ocultar para estudiantes
+          </button>
+        </>
       ) : null,
 }));
 
@@ -28,7 +35,6 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onSelectNode,
     onConnectNodes,
     onDeleteDependencies,
-    onToggleNodeVisibility,
     onAutoLayout,
     topRightActions,
   }: {
@@ -40,7 +46,6 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       targetHandle?: string | null;
     }) => void;
     onDeleteDependencies: (ids: string[]) => void;
-    onToggleNodeVisibility: (nodeId: string, isVisible: boolean) => void;
     onAutoLayout: (nodes: { id: string; position: { x: number; y: number } }[]) => void;
     topRightActions?: ReactNode;
   }) => (
@@ -57,9 +62,6 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       </button>
       <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
         Solicitar eliminación de dependencias
-      </button>
-      <button type="button" onClick={() => onToggleNodeVisibility('node-1', true)}>
-        Ocultar para estudiantes
       </button>
       <button
         type="button"
@@ -328,6 +330,7 @@ test('previews and confirms the node visibility action before changing it', asyn
   useRoadmapMock.mockReturnValue(roadmapActions({ toggleVisibility, previewNodeVisibility }));
   renderCanvas(true);
 
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
   await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
   expect(dialog.textContent).toContain('1 dependencia');

@@ -528,6 +528,12 @@ test('teacher and student workflows render against the shared fixture', async ({
 
     await page.context().clearCookies();
     await authenticateAs(page.context(), fixture.cc1002StudentWithoutProgress);
+    const unresolvedStudentEdgeErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.text().includes("Couldn't create edge for source handle id")) {
+        unresolvedStudentEdgeErrors.push(message.text());
+      }
+    });
     await page.goto('/academic-overview');
     await expect(page.getByRole('heading', { name: 'Resumen académico' })).toBeVisible();
     await expect(page.getByRole('listitem')).toHaveCount(3);
@@ -558,6 +564,7 @@ test('teacher and student workflows render against the shared fixture', async ({
       page.getByRole('link', { name: 'Programa y herramientas del curso' }),
     ).toHaveAttribute('href', 'https://ucampus.uchile.cl/');
     await expect(page.getByRole('button', { name: 'Completar' })).toBeEnabled();
+    expect(unresolvedStudentEdgeErrors).toEqual([]);
   } finally {
     await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
     await api.dispose();

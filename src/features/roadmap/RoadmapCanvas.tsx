@@ -332,9 +332,6 @@ export default function RoadmapCanvas({
             onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
             onConnectNodes={(connection) => void requestDependencyChange(connection)}
             onDeleteDependencies={setPendingDependencyIds}
-            onToggleNodeVisibility={(nodeId, isVisible) =>
-              void requestVisibilityChange(nodeId, isVisible)
-            }
             onAutoLayout={(nodes) => {
               void Promise.all(
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),

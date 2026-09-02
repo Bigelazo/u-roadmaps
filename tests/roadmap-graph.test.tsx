@@ -1,4 +1,4 @@
-import { expect, test, vi } from 'vitest';
+import { expect, test } from 'vitest';
 import { mapRoadmapGraph } from '../src/features/roadmap/graph/map-roadmap-graph';
 import { roadmapEdgeTypes } from '../src/features/roadmap/graph/DependencyEdge';
 import { FloatingEdge } from '../src/features/roadmap/graph/FloatingEdge';
@@ -43,28 +43,14 @@ const roadmap: RoadmapDto = {
 };
 
 test('keeps hidden nodes on the teacher graph and marks them as hidden from students', () => {
-  const onToggleNodeVisibility = vi.fn();
-  const teacherNode = mapRoadmapGraph(roadmap, true, undefined, onToggleNodeVisibility).nodes[0];
+  const teacherNode = mapRoadmapGraph(roadmap, true).nodes[0];
   const studentNode = mapRoadmapGraph(roadmap, false).nodes[0];
 
   expect(teacherNode.hidden).toBe(false);
   expect(teacherNode.data.isHidden).toBe(true);
   expect(teacherNode.data.typeColor).toBe('#024AD8');
   expect(teacherNode.data.typeName).toBe('Contenido');
-  teacherNode.data.onToggleVisibility?.();
-  expect(onToggleNodeVisibility).toHaveBeenCalledWith('hidden-node', false);
-  expect(studentNode.data.onToggleVisibility).toBeUndefined();
   expect(studentNode.hidden).toBe(true);
-});
-
-test('passes a visible node current visibility to the toggle mutation', () => {
-  const visibleRoadmap = structuredClone(roadmap);
-  visibleRoadmap.nodes[0].isVisible = true;
-  const onToggleNodeVisibility = vi.fn();
-  const node = mapRoadmapGraph(visibleRoadmap, true, undefined, onToggleNodeVisibility).nodes[0];
-
-  node.data.onToggleVisibility?.();
-  expect(onToggleNodeVisibility).toHaveBeenCalledWith('hidden-node', true);
 });
 
 test('allows teachers, but not students, to delete dependency arrows', () => {
