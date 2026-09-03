@@ -1,9 +1,9 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { render, screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
-import { RoadmapNode, type RoadmapFlowNode } from './RoadmapNode';
-import { roadmapNodeSizeForTitle } from './geometry';
-import type { StudentNodeBlockReason } from '../types';
+import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
+import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
+import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 
 function mountBlockedNode(blockReason: StudentNodeBlockReason) {
   render(
@@ -231,7 +231,8 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
       />
       <RoadmapNode
         {...nodeProps({
-          title: 'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse',
+          title:
+            'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse',
           typeColor: '#024AD8',
           typeName: 'Contenido',
           status: 'available',

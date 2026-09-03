@@ -99,9 +99,11 @@ prisma/                                8 archivos · 493 líneas
 ├── seed.ts
 └── development-data.ts
 
-tests/                                23 archivos · 2.588 líneas
-├── *.test.ts(x)                      Vitest, en una carpeta técnica plana
-└── e2e/**                            Playwright
+tests/                                27 archivos · 4.585 líneas
+├── {app,development,features,...}/**/*.test.ts(x)
+│                                     Vitest, con jerarquía espejo de `src/`
+├── e2e/**                            Playwright
+└── scripts/**                         Pruebas de entry points
 ```
 
 Las cifras cuentan líneas por archivo de manera uniforme y sirven para comparar concentración, no para medir calidad. Dos hechos dominan la forma:
@@ -154,7 +156,7 @@ La Locality se rompe por abajo. Los tipos del Roadmap y su construcción de URL 
 
 `useRoadmap` ofrece 15 mutaciones más carga y manejo de errores en una sola Interface retornada ([`useRoadmap.ts`](../../src/features/roadmap/useRoadmap.ts#L49-L160), [`useRoadmap.ts`](../../src/features/roadmap/useRoadmap.ts#L162-L401)). La Implementation centraliza cancelación, estado y protocolo HTTP —Leverage real—, pero la superficie amplia aproxima la Interface a todas las operaciones de la Implementation. La Depth es intermedia, no alta.
 
-Los tests atraviesan internals como `graph/map-roadmap-graph`, `graph/DependencyEdge`, `graph/FloatingEdge`, `student/NodeDetail` y `editor/NodeDetailsEditor` ([`roadmap-graph.test.tsx`](../../tests/roadmap-graph.test.tsx#L1-L5), [`use-roadmap.test.tsx`](../../tests/use-roadmap.test.tsx#L1-L6)). Eso demuestra varios Seams de hecho, pero no una Interface pública deliberada para la feature. La referencia deja esta misma decisión sin resolver; U-Roadmaps debe decidirla en el prototipo, no heredarla por accidente.
+Los tests atraviesan internals como `graph/map-roadmap-graph`, `graph/DependencyEdge`, `graph/FloatingEdge`, `student/NodeDetail` y `editor/NodeDetailsEditor` ([`RoadmapGraph.test.tsx`](../../tests/features/roadmap/graph/RoadmapGraph.test.tsx#L1-L5), [`useRoadmap.test.tsx`](../../tests/features/roadmap/useRoadmap.test.tsx#L1-L6)). Eso demuestra varios Seams de hecho, pero no una Interface pública deliberada para la feature. La referencia deja esta misma decisión sin resolver; U-Roadmaps debe decidirla en el prototipo, no heredarla por accidente.
 
 ### 2. Roadmap servidor: Implementation específica presentada como shared
 

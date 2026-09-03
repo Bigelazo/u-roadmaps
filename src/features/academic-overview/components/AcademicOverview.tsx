@@ -9,7 +9,6 @@ import {
 } from '@/shared/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Separator } from '@/shared/ui/separator';
-import CreateRoadmapButton from '@/components/app-shell/CreateRoadmapButton';
 import type {
   AcademicOverviewCourse,
   AcademicOverviewInstitutionalPosition,
@@ -41,7 +40,20 @@ function termLabel({ year, semester }: Pick<AcademicOverviewTerm, 'year' | 'seme
   return `${semester === 1 ? 'Otoño' : 'Primavera'} ${year}`;
 }
 
-function CourseRow({ course }: Readonly<{ course: AcademicOverviewCourse }>) {
+type RoadmapCreationAction = (props: {
+  courseCode: string;
+  courseName: string;
+  semester: number;
+  year: number;
+}) => React.ReactNode;
+
+function CourseRow({
+  course,
+  renderRoadmapCreation,
+}: Readonly<{
+  course: AcademicOverviewCourse;
+  renderRoadmapCreation: RoadmapCreationAction;
+}>) {
   const position = course.institutionalPosition
     ? institutionalPositionDetails[course.institutionalPosition]
     : course.role === 'TEACHER'
@@ -94,12 +106,12 @@ function CourseRow({ course }: Readonly<{ course: AcademicOverviewCourse }>) {
               <ArrowUpRight aria-hidden="true" size={16} />
             </Link>
           ) : course.canCreateRoadmap ? (
-            <CreateRoadmapButton
-              courseCode={course.courseCode}
-              courseName={course.name}
-              semester={course.semester}
-              year={course.year}
-            />
+            renderRoadmapCreation({
+              courseCode: course.courseCode,
+              courseName: course.name,
+              semester: course.semester,
+              year: course.year,
+            })
           ) : null}
         </div>
       </div>
@@ -107,17 +119,27 @@ function CourseRow({ course }: Readonly<{ course: AcademicOverviewCourse }>) {
   );
 }
 
-function CourseList({ term }: Readonly<{ term: AcademicOverviewTerm }>) {
+function CourseList({
+  term,
+  renderRoadmapCreation,
+}: Readonly<{ term: AcademicOverviewTerm; renderRoadmapCreation: RoadmapCreationAction }>) {
   return (
     <ul className="divide-y divide-fog overflow-hidden rounded-xl border border-fog bg-card">
       {term.courses.map((course) => (
-        <CourseRow course={course} key={`${course.courseCode}:${course.year}:${course.semester}`} />
+        <CourseRow
+          course={course}
+          key={`${course.courseCode}:${course.year}:${course.semester}`}
+          renderRoadmapCreation={renderRoadmapCreation}
+        />
       ))}
     </ul>
   );
 }
 
-function AcademicTermSection({ term }: Readonly<{ term: AcademicOverviewTerm }>) {
+function AcademicTermSection({
+  term,
+  renderRoadmapCreation,
+}: Readonly<{ term: AcademicOverviewTerm; renderRoadmapCreation: RoadmapCreationAction }>) {
   const id = `term-${term.year}-${term.semester}`;
 
   return (
@@ -133,12 +155,15 @@ function AcademicTermSection({ term }: Readonly<{ term: AcademicOverviewTerm }>)
           {term.courses.length} {term.courses.length === 1 ? 'curso' : 'cursos'}
         </p>
       </div>
-      <CourseList term={term} />
+      <CourseList renderRoadmapCreation={renderRoadmapCreation} term={term} />
     </section>
   );
 }
 
-export function AcademicOverview({ overview }: Readonly<{ overview: AcademicOverviewPage }>) {
+export function AcademicOverview({
+  overview,
+  renderRoadmapCreation,
+}: Readonly<{ overview: AcademicOverviewPage; renderRoadmapCreation: RoadmapCreationAction }>) {
   const [currentTerm, ...previousTerms] = overview.terms;
 
   return (
@@ -184,7 +209,12 @@ export function AcademicOverview({ overview }: Readonly<{ overview: AcademicOver
             </Empty>
           ) : (
             <div className="flex flex-col gap-12 md:gap-16">
-              {currentTerm ? <AcademicTermSection term={currentTerm} /> : null}
+              {currentTerm ? (
+                <AcademicTermSection
+                  renderRoadmapCreation={renderRoadmapCreation}
+                  term={currentTerm}
+                />
+              ) : null}
               {previousTerms.length > 0 ? (
                 <Collapsible>
                   <div className="flex flex-col items-start gap-1">
@@ -221,7 +251,7 @@ export function AcademicOverview({ overview }: Readonly<{ overview: AcademicOver
                               </span>
                             </div>
                             <AccordionContent className="pb-4">
-                              <CourseList term={term} />
+                              <CourseList renderRoadmapCreation={renderRoadmapCreation} term={term} />
                             </AccordionContent>
                           </AccordionItem>
                         ))}

@@ -1,20 +1,16 @@
-import type { ParticipationRole } from '@/generated/prisma/client';
-import { prisma } from '@/shared/server/db';
+import 'server-only';
+
 import {
   getMufasaAcademicCourses,
+  isCourseLeadPosition,
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
+import { prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 
-// U-Campus es la fuente de los cargos y `Participation` solo distingue entre
-// edición y lectura. La cátedra y la coordinación crean el roadmap del curso;
-// los auxiliares lo editan. Ayudantes, oyentes y estudiantes lo leen.
-const roadmapCreationPositions: readonly MufasaInstitutionalCoursePosition[] = [
+const roadmapEditingPositions: readonly MufasaInstitutionalCoursePosition[] = [
   'COURSE_PROFESSOR',
   'COORDINATING_PROFESSOR',
-];
-const roadmapEditingPositions: readonly MufasaInstitutionalCoursePosition[] = [
-  ...roadmapCreationPositions,
   'AUXILIARY_PROFESSOR',
 ];
 
@@ -29,23 +25,15 @@ export type MufasaCourseAccess = Readonly<{
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
 
-export function isRoadmapCreationPosition(position: MufasaInstitutionalCoursePosition | null) {
-  return position !== null && roadmapCreationPositions.includes(position);
-}
-
-export function isRoadmapEditingPosition(position: MufasaInstitutionalCoursePosition | null) {
-  return position !== null && roadmapEditingPositions.includes(position);
-}
-
 export function canCreateRoadmap(access: MufasaCourseAccess) {
-  return access.positions.some(isRoadmapCreationPosition);
+  return access.positions.some(isCourseLeadPosition);
 }
 
 export function canEditRoadmap(access: MufasaCourseAccess) {
-  return access.positions.some(isRoadmapEditingPosition);
+  return access.positions.some((position) => roadmapEditingPositions.includes(position));
 }
 
-export function academicRole(access: MufasaCourseAccess): ParticipationRole {
+export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' {
   return canEditRoadmap(access) ? 'TEACHER' : 'STUDENT';
 }
 
@@ -77,11 +65,7 @@ export async function getMufasaCourseAccess(
   };
 }
 
-/**
- * Materializes the course offering and the participation that U-Campus
- * reports. The course keeps the name and department it already has, because
- * U-Campus does not carry the curated description shown in the overview.
- */
+/** Materializes the institutionally reported participation for one offering. */
 export async function materializeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
@@ -113,11 +97,7 @@ export async function materializeParticipation(
   });
 }
 
-/**
- * Resolves the participation that authorizes a course operation, creating it
- * from the U-Campus position when the person has never opened the course.
- * Returns null when U-Campus does not place the person in the offering.
- */
+/** Resolves and materializes participation when U-Campus grants course access. */
 export async function synchronizeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,

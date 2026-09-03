@@ -1,5 +1,5 @@
 import { RoadmapCanvas } from '@/features/roadmap';
-import { synchronizeParticipation } from '@/lib/academic-participation';
+import { synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';

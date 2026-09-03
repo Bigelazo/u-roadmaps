@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
-import GlobalNavigation from './GlobalNavigation';
+import GlobalNavigation from '@/app/_components/GlobalNavigation';
 
-vi.mock('./SessionButton', () => ({
+vi.mock('@/app/_components/SessionButton', () => ({
   default: ({ isAuthenticated }: { isAuthenticated: boolean }) => (
     <button type="button">{isAuthenticated ? 'Cerrar sesión' : 'Autenticarse'}</button>
   ),

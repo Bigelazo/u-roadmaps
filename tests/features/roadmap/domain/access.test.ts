@@ -5,9 +5,9 @@ import {
   transitiveDependentNodeIds,
   transitivePrerequisiteNodeIds,
   wouldCreateDependencyCycle,
-} from './access';
-import { decideTeacherBlock } from './teacher-block';
-import type { RoadmapNode } from '../types';
+} from '@/features/roadmap/domain/access';
+import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
+import type { RoadmapNode } from '@/features/roadmap/types';
 
 const diamondDependencies = [
   { sourceNodeId: 'intro', targetNodeId: 'theory' },

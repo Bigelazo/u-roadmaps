@@ -4,7 +4,7 @@ import {
   throwApplicationError as throwApiError,
 } from '@/app/_adapters/http';
 import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import type { TeacherBlockOperation } from '@/features/roadmap/types';
+import type { TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock, previewTeacherBlock } from '@/features/roadmap/server';
 import { ApplicationError } from '@/shared/errors/types';
 import { requireAuthenticatedUser } from '@/shared/server/session';

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
-import SessionButton from './SessionButton';
+import SessionButton from '@/app/_components/SessionButton';
 
 test('requires confirmation before submitting the logout request', async () => {
   const user = userEvent.setup();

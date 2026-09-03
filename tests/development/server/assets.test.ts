@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fixtureFileAssets, type FileFormat } from '../fixtures/catalog';
-import { developmentFixtureFileContents } from './assets';
+import { fixtureFileAssets, type FileFormat } from '@/development/fixtures/catalog';
+import { developmentFixtureFileContents } from '@/development/server/assets';
 
 const assertFileStructure: Record<FileFormat, (bytes: Buffer) => void> = {
   PDF: (bytes) => {

@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest';
-import { roadmapEdgeTypes } from './DependencyEdge';
-import { FloatingEdge } from './FloatingEdge';
-import { mapRoadmapGraph } from './map-roadmap-graph';
-import type { RoadmapDto, StudentRoadmapDto } from '../types';
+import { roadmapEdgeTypes } from '@/features/roadmap/graph/DependencyEdge';
+import { FloatingEdge } from '@/features/roadmap/graph/FloatingEdge';
+import { mapRoadmapGraph } from '@/features/roadmap/graph/map-roadmap-graph';
+import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
 const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },

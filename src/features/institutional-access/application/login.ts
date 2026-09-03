@@ -9,7 +9,7 @@ import {
   vtiLoginStateMaxAge,
   startVtiLogin,
 } from '@/integrations/vti/server';
-import { ApiError, apiErrorResponse, handleApiResult } from '@/lib/roadmap-api';
+import { ApplicationError, applicationResult } from '@/shared/errors/server';
 import { isHttps, siteUrl } from '@/shared/server/environment/site-url';
 import {
   applicationSessionCookieName,
@@ -18,32 +18,16 @@ import {
 } from '../infrastructure/session';
 import { InstitutionalIdentityConflict, reconcileInstitutionalUser } from '../infrastructure/user';
 
-function authenticationErrorResponse(request: Request, error: ApiError) {
-  console.error('[plogin] autenticación rechazada', error.code, error.details ?? {});
-  const response = NextResponse.redirect(siteUrl('/?error=Authentication', request), 303);
-  response.cookies.delete(vtiLoginStateCookieName);
-  return response;
-}
-
 function asApplicationError(error: unknown): never {
   if (error instanceof VtiAuthenticationError) {
-    throw new ApiError(error.status, error.code, error.message, error.details);
+    throw new ApplicationError(error.status, error.code, error.message, error.details);
   }
   if (error instanceof InstitutionalIdentityConflict) {
-    throw new ApiError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.', {
+    throw new ApplicationError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.', {
       reason: error.reason,
     });
   }
   throw error;
-}
-
-function authenticationFailure(request: Request, reason: string) {
-  return authenticationErrorResponse(
-    request,
-    new ApiError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.', {
-      reason,
-    }),
-  );
 }
 
 /** Starts VTI without creating a local application session. */
@@ -72,48 +56,45 @@ export async function startInstitutionalLogin(request: Request) {
 export function completeInstitutionalLogin(request: Request, rawToken: FormDataEntryValue | null) {
   const state = vtiLoginState(request);
   if (request.method === 'GET' && (!state || typeof rawToken !== 'string' || !rawToken.trim())) {
-    return Promise.resolve(NextResponse.redirect(siteUrl('/?error=Authentication', request)));
+    return applicationResult(() =>
+      Promise.resolve(NextResponse.redirect(siteUrl('/?error=Authentication', request))),
+    );
   }
 
-  return handleApiResult(
-    async () => {
-      const identity = await authenticateVtiCallback(request, state, rawToken).catch(
-        asApplicationError,
+  return applicationResult(async () => {
+    const identity = await authenticateVtiCallback(request, state, rawToken).catch(asApplicationError);
+    const user = await reconcileInstitutionalUser(identity).catch(asApplicationError);
+    const sessionToken = await createApplicationSessionToken(user.id, identity.preferredUsername);
+    if (!sessionToken) {
+      throw new ApplicationError(
+        500,
+        'AUTH_CONFIGURATION_ERROR',
+        'La autenticación institucional no está disponible.',
       );
-      const user = await reconcileInstitutionalUser(identity).catch(asApplicationError);
-      const sessionToken = await createApplicationSessionToken(user.id, identity.preferredUsername);
-      if (!sessionToken) {
-        throw new ApiError(
-          500,
-          'AUTH_CONFIGURATION_ERROR',
-          'La autenticación institucional no está disponible.',
-        );
-      }
+    }
 
-      const response = NextResponse.redirect(siteUrl('/academic-overview', request), 303);
-      response.cookies.set({
-        name: applicationSessionCookieName(request),
-        value: sessionToken,
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        secure: isHttps(request),
-        maxAge: applicationSessionMaxAge,
-        expires: new Date(Date.now() + applicationSessionMaxAge * 1000),
-      });
-      response.cookies.delete(vtiLoginStateCookieName);
-      return response;
-    },
-    (error) =>
-      error.code === 'INVALID_AUTH_CALLBACK' ||
-      error.code === 'INVALID_VTI_CLAIMS' ||
-      error.code === 'AUTH_CONFIGURATION_ERROR' ||
-      (error.code === 'CONFLICT' && error.source !== 'P2003')
-        ? authenticationErrorResponse(request, error)
-        : apiErrorResponse(error),
-  );
+    const response = NextResponse.redirect(siteUrl('/academic-overview', request), 303);
+    response.cookies.set({
+      name: applicationSessionCookieName(request),
+      value: sessionToken,
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      secure: isHttps(request),
+      maxAge: applicationSessionMaxAge,
+      expires: new Date(Date.now() + applicationSessionMaxAge * 1000),
+    });
+    response.cookies.delete(vtiLoginStateCookieName);
+    return response;
+  });
 }
 
-export function unreadableInstitutionalCallback(request: Request) {
-  return authenticationFailure(request, 'unreadable-form-body');
+export function unreadableInstitutionalCallback() {
+  return applicationResult(() =>
+    Promise.reject(
+      new ApplicationError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.', {
+        reason: 'unreadable-form-body',
+      }),
+    ),
+  );
 }

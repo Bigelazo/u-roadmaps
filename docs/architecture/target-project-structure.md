@@ -488,7 +488,7 @@ Las reglas estructurales se activarán al final de la migración, cuando el árb
 | selector, fixtures y reset de desarrollo | `development/**` + `scripts/reset-development-data.ts` | Capacidad de soporte explícita; el entry point deja de ser biblioteca. |
 | `lib/db.ts` | `shared/server/db/**` | Único Adapter técnico al cliente Prisma generado. |
 | `generated/prisma/**` | `generated/prisma/**` | Conserva ubicación, pero queda aislado por política. |
-| `tests/*.test.ts(x)` | junto al Module dueño | Los tests Vitest siguen el Seam y dejan la carpeta técnica plana. |
+| `tests/<source-path>/*.test.ts(x)` | jerarquía espejo del Module dueño | Los tests Vitest siguen el Seam sin convivir con el código de producción. |
 | `tests/e2e/**` | `tests/e2e/**` | Playwright conserva el Seam del sistema desplegado. |
 
 Este mapa define propiedad, no una secuencia de movimientos. Los cambios que mezclen responsabilidad —especialmente `roadmap-api.ts`, `auth.ts`, callback VTI, Resumen académico y Recursos— requieren extracción de Interfaces, no solo `git mv`.

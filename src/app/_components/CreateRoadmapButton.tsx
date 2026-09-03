@@ -1,5 +1,7 @@
 'use client';
 
+// App-level composition for the academic overview's Roadmap creation action.
+
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Plus } from 'lucide-react';

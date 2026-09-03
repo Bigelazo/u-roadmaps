@@ -1,7 +1,6 @@
 import 'server-only';
 
-import { isRoadmapCreationPosition } from '@/lib/academic-participation';
-import { getMufasaAcademicCourses } from '@/integrations/ucampus/server';
+import { getMufasaAcademicCourses, isCourseLeadPosition } from '@/integrations/ucampus/server';
 import {
   academicOverviewCourseKey,
   groupAcademicOverviewCoursesByAcademicTerm,
@@ -45,7 +44,7 @@ function courseFromMufasa(
         : (localCourse?.role ?? 'STUDENT'),
     institutionalPosition: course.institutionalPosition,
     hasRoadmap: localCourse?.hasRoadmap ?? false,
-    canCreateRoadmap: isRoadmapCreationPosition(course.institutionalPosition),
+    canCreateRoadmap: isCourseLeadPosition(course.institutionalPosition),
   };
 }
 

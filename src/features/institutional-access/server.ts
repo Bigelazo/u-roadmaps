@@ -15,7 +15,7 @@ export async function completeInstitutionalLogin(
   return complete(request, rawToken);
 }
 
-export async function unreadableInstitutionalCallback(request: Request) {
+export async function unreadableInstitutionalCallback() {
   const { unreadableInstitutionalCallback: reject } = await import('./application/login');
-  return reject(request);
+  return reject();
 }

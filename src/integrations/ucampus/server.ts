@@ -7,6 +7,11 @@ export type MufasaInstitutionalCoursePosition =
   | 'COORDINATING_PROFESSOR'
   | 'OBSERVER';
 
+/** Positions that lead a course offering in the institutional source. */
+export function isCourseLeadPosition(position: MufasaInstitutionalCoursePosition | null) {
+  return position === 'COURSE_PROFESSOR' || position === 'COORDINATING_PROFESSOR';
+}
+
 export type MufasaEnrolledCourse = Readonly<{
   courseCode: string;
   name: string;

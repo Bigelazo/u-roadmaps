@@ -55,7 +55,7 @@ export default defineConfig([
     rules: neverthrow.configs.recommended.rules,
   },
   {
-    files: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.{ts,tsx}'],
+    files: ['tests/**/*.test.{ts,tsx}'],
     ...vitest.configs.recommended,
     languageOptions: {
       globals: {
@@ -66,7 +66,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/**/*.test.tsx'],
+    files: ['tests/**/*.test.tsx'],
     ...testingLibrary.configs['flat/react'],
   },
   {

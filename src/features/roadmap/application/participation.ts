@@ -6,10 +6,12 @@ import {
   materializeParticipation,
   synchronizeParticipation,
   type AcademicUser,
-} from '@/lib/academic-participation';
+} from './academic-participation';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import { prisma } from '@/shared/server/db';
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
+
+export { synchronizeParticipation } from './academic-participation';
 
 type ParticipationRole = 'STUDENT' | 'TEACHER';
 

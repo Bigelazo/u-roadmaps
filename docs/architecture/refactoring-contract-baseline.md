@@ -87,4 +87,3 @@ Un alias posterior sólo puede ser una reexportación sin lógica durante una et
 
 | Alias | Consumer | Introducido por | Retiro obligatorio | Interface definitiva |
 | --- | --- | --- | --- | --- |
-| `src/lib/roadmap-api.ts` | Rutas de desarrollo y acceso institucional aún pendientes de migración | #53 | #55, cuando cada consumer use `shared/errors` o `app/_adapters` | `shared/errors`, `app/_adapters` |

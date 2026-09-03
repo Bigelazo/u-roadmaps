@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
-import { useRoadmap } from './useRoadmap';
+import { useRoadmap } from '@/features/roadmap/useRoadmap';
 
 const firstOffering = { courseCode: 'MAT101', year: 2026, semester: 1 };
 const secondOffering = { courseCode: 'MAT102', year: 2026, semester: 1 };

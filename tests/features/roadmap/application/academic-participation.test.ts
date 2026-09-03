@@ -9,8 +9,8 @@ import {
   canCreateRoadmap,
   canEditRoadmap,
   getMufasaCourseAccess,
-  isRoadmapCreationPosition,
-} from '@/lib/academic-participation';
+} from '@/features/roadmap/application/academic-participation';
+import { isCourseLeadPosition } from '@/integrations/ucampus/server';
 
 const originalToken = process.env.MUFASA_TOKEN;
 const originalBaseUrl = process.env.MUFASA_BASE_URL;
@@ -34,10 +34,10 @@ function mufasaResponse(courses: Array<Record<string, unknown>>) {
 }
 
 it('reserves roadmap creation for the course and coordinating professors', () => {
-  expect(isRoadmapCreationPosition('COURSE_PROFESSOR')).toBe(true);
-  expect(isRoadmapCreationPosition('COORDINATING_PROFESSOR')).toBe(true);
+  expect(isCourseLeadPosition('COURSE_PROFESSOR')).toBe(true);
+  expect(isCourseLeadPosition('COORDINATING_PROFESSOR')).toBe(true);
   for (const position of ['AUXILIARY_PROFESSOR', 'TEACHING_ASSISTANT', 'OBSERVER', null] as const) {
-    expect(isRoadmapCreationPosition(position)).toBe(false);
+    expect(isCourseLeadPosition(position)).toBe(false);
   }
 });
 
