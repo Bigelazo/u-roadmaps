@@ -14,6 +14,14 @@ export {
   updateRoadmapNode,
   updateRoadmapNodeType,
 } from '@/features/roadmap/application/editor';
+export {
+  createRoadmapResource,
+  downloadRoadmapResource,
+  getRoadmapNodeResources,
+  removeRoadmapResource,
+  updateRoadmapResource,
+  uploadRoadmapResource,
+} from '@/features/roadmap/application/resources';
 export { completeNode, readRoadmapForParticipant } from '@/features/roadmap/application/completion';
 export {
   createRoadmapForActor,

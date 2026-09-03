@@ -1,21 +1,16 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/shared/server/db';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import {
-  ApiError,
-  handleApiResult,
-  parseCourseOfferingIdentifier,
-  parseJson,
-  requireNodeInRoadmap,
-  requireRoadmap,
-  requireUuid,
-  resourceDto,
-  throwApiError,
-} from '@/lib/roadmap-api';
-import { requireCourseOfferingParticipation } from '@/features/roadmap/server';
+  createRoadmapResource,
+  getRoadmapNodeResources,
+  uploadRoadmapResource,
+} from '@/features/roadmap/server';
+import {
+  handleApplicationResult as handleApiResult,
+  parseJsonObject as parseJson,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/shared/server/session';
-import { requireStudentNodeAccess } from '@/lib/roadmap-completion';
-import { createRoadmapResource, createUploadedRoadmapResource } from '@/lib/roadmap-editor';
-import { deleteUploadedFile, saveUploadedFile, validateUploadedFile } from '@/lib/resource-storage';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
@@ -29,36 +24,13 @@ export async function POST(request: Request, context: Context) {
     if (request.headers.get('content-type')?.startsWith('multipart/form-data')) {
       const formData = await request.formData();
       const file = formData.get('file');
-      if (!(file instanceof File)) {
-        throw new ApiError(400, 'INVALID_REQUEST', 'Debes seleccionar un archivo para subir.');
-      }
-      try {
-        validateUploadedFile(file);
-      } catch (error) {
-        if (error instanceof Error && error.message === 'EMPTY_FILE') {
-          throw new ApiError(400, 'INVALID_REQUEST', 'El archivo seleccionado está vacío.');
-        }
-        if (error instanceof Error && error.message === 'FILE_TOO_LARGE') {
-          throw new ApiError(400, 'INVALID_REQUEST', 'El archivo no puede superar los 25 MB.');
-        }
-        throw error;
-      }
-      const fileKey = crypto.randomUUID();
-      await saveUploadedFile(fileKey, file);
-      try {
-        const resource = await createUploadedRoadmapResource({
-          userId: user.id,
-          identifier,
-          id: params.nodeId,
-          title: file.name,
-          fileKey,
-          fileContentType: file.type || null,
-        }).match((value) => value, throwApiError);
-        return NextResponse.json({ resource }, { status: 201 });
-      } catch (error) {
-        await deleteUploadedFile(fileKey);
-        throw error;
-      }
+      const resource = await uploadRoadmapResource({
+        userId: user.id,
+        identifier,
+        id: params.nodeId,
+        file,
+      }).match((value) => value, throwApiError);
+      return NextResponse.json({ resource }, { status: 201 });
     }
     const body = await parseJson(request);
     const resource = await createRoadmapResource({
@@ -76,33 +48,11 @@ export async function GET(_request: Request, context: Context) {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
     const actor = await requireAuthenticatedUser().match((value) => value, throwApiError);
-    const [{ participation }, roadmap] = await Promise.all([
-      requireCourseOfferingParticipation(actor, identifier, ['STUDENT', 'TEACHER']).match(
-        (value) => value,
-        throwApiError,
-      ),
-      requireRoadmap(identifier).match((value) => value, throwApiError),
-    ]);
-    const nodeId = requireUuid(params.nodeId, 'nodeId');
-    const node = await requireNodeInRoadmap(nodeId, roadmap.id);
-    if (participation.role === 'STUDENT' && !node.isVisible) {
-      throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
-    }
-    if (participation.role === 'STUDENT') {
-      await prisma.$transaction((transaction) =>
-        requireStudentNodeAccess(transaction, {
-          userId: participation.userId,
-          roadmapId: roadmap.id,
-          nodeId,
-        }),
-      );
-    }
-    const resources = await prisma.resource.findMany({
-      where: { roadmapNodeId: nodeId },
-      orderBy: { title: 'asc' },
-    });
-    return NextResponse.json({
-      resources: resources.map((resource) => resourceDto(resource, identifier)),
-    });
+    const resources = await getRoadmapNodeResources({
+      actor,
+      identifier,
+      nodeId: params.nodeId,
+    }).match((value) => value, throwApiError);
+    return NextResponse.json({ resources });
   });
 }

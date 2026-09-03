@@ -11,19 +11,21 @@ import {
   requireBoolean,
   requireColor,
   requireFiniteNumber,
-  requireResourceType,
   requireString,
-  requireUrl,
   requireUuid,
   resourceDto,
 } from '@/features/roadmap/application/roadmap';
-import type { CourseOfferingIdentifier, TeacherBlockOperation } from '@/features/roadmap/types';
+import type { TeacherBlockOperation } from '@/features/roadmap/types';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import { transitiveDependentNodeIds } from '@/features/roadmap/domain/access';
-import { deleteUploadedFile } from '@/lib/resource-storage';
+import {
+  requireEditorRoadmap,
+  requireNode,
+  type EditorInput,
+} from '@/features/roadmap/application/editor-access';
+import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
 
 type JsonObject = Record<string, unknown>;
-type EditorInput = { userId: string; identifier: CourseOfferingIdentifier };
 type WithInput = EditorInput & { input: JsonObject };
 type WithId = EditorInput & { id: string };
 
@@ -55,42 +57,6 @@ function dependencyHandle(value: unknown, field: string, fallback: string) {
   return handle;
 }
 
-async function requireEditorRoadmap(transaction: Prisma.TransactionClient, input: EditorInput) {
-  const courseOffering = await transaction.courseOffering.findUnique({
-    where: { courseCode_year_semester: input.identifier },
-    include: { roadmap: true },
-  });
-  if (!courseOffering) {
-    throw new ApiError(
-      404,
-      'ROADMAP_NOT_FOUND',
-      'El profesor todavía no ha creado un roadmap para este curso.',
-    );
-  }
-  const participation = await transaction.participation.findUnique({
-    where: {
-      userId_courseOfferingId: { userId: input.userId, courseOfferingId: courseOffering.id },
-    },
-  });
-  if (!participation?.isActive || participation.role !== 'TEACHER') {
-    throw new ApiError(403, 'FORBIDDEN', 'No tienes participación vigente para esta operación.');
-  }
-  if (!courseOffering.roadmap) {
-    throw new ApiError(
-      404,
-      'ROADMAP_NOT_FOUND',
-      'El profesor todavía no ha creado un roadmap para este curso.',
-    );
-  }
-  return courseOffering.roadmap;
-}
-
-async function requireNode(transaction: Prisma.TransactionClient, id: string, roadmapId: string) {
-  const node = await transaction.roadmapNode.findFirst({ where: { id, roadmapId } });
-  if (!node) throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
-  return node;
-}
-
 async function requireType(transaction: Prisma.TransactionClient, id: string, roadmapId: string) {
   const nodeType = await transaction.nodeType.findFirst({
     where: { id, OR: [{ isPredefined: true }, { roadmapId }] },
@@ -115,19 +81,6 @@ async function requireCustomType(
     throw new ApiError(409, 'PREDEFINED_TYPE_IMMUTABLE', 'Los tipos predefinidos son inmutables.');
   }
   return nodeType;
-}
-
-async function requireResource(
-  transaction: Prisma.TransactionClient,
-  id: string,
-  roadmapId: string,
-) {
-  const resource = await transaction.resource.findFirst({
-    where: { id, roadmapNode: { roadmapId } },
-  });
-  if (!resource)
-    throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
-  return resource;
 }
 
 async function withSerializableTransaction<T>(
@@ -509,86 +462,6 @@ async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
   });
 }
 
-async function createRoadmapResourceUnsafe({
-  id,
-  input,
-  ...editor
-}: WithId & { input: JsonObject }) {
-  return prisma.$transaction(async (transaction) => {
-    const roadmap = await requireEditorRoadmap(transaction, editor);
-    const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
-    const title = requireString(input.title, 'title', 240);
-    const url = requireUrl(input.url);
-    const type = requireResourceType(input.type);
-    return resourceDto(
-      await transaction.resource.create({ data: { roadmapNodeId: node.id, title, url, type } }),
-      editor.identifier,
-    );
-  });
-}
-
-async function updateRoadmapResourceUnsafe({
-  id,
-  input,
-  ...editor
-}: WithId & { input: JsonObject }) {
-  return prisma.$transaction(async (transaction) => {
-    const roadmap = await requireEditorRoadmap(transaction, editor);
-    const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
-    const data: { title?: string; url?: string; type?: 'FILE' | 'LINK' | 'VIDEO' } = {};
-    if ('title' in input) data.title = requireString(input.title, 'title', 240);
-    if ('url' in input) data.url = requireUrl(input.url);
-    if ('type' in input) data.type = requireResourceType(input.type);
-    if (Object.keys(data).length === 0)
-      throw new ApiError(400, 'INVALID_REQUEST', 'Debe indicar al menos un campo para actualizar.');
-    return resourceDto(
-      await transaction.resource.update({ where: { id: resource.id }, data }),
-      editor.identifier,
-    );
-  });
-}
-
-type UploadedResourceInput = EditorInput & {
-  id: string;
-  title: string;
-  fileKey: string;
-  fileContentType: string | null;
-};
-
-async function createUploadedRoadmapResourceUnsafe({
-  id,
-  title,
-  fileKey,
-  fileContentType,
-  ...editor
-}: UploadedResourceInput) {
-  return prisma.$transaction(async (transaction) => {
-    const roadmap = await requireEditorRoadmap(transaction, editor);
-    const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
-    const resource = await transaction.resource.create({
-      data: {
-        roadmapNodeId: node.id,
-        title: requireString(title, 'title', 240),
-        url: `https://files.u-roadmaps.invalid/${requireUuid(fileKey, 'fileKey')}`,
-        type: 'FILE',
-        fileKey,
-        fileContentType,
-      },
-    });
-    return resourceDto(resource, editor.identifier);
-  });
-}
-
-async function deleteRoadmapResourceUnsafe({ id, ...editor }: WithId) {
-  const fileKey = await prisma.$transaction(async (transaction) => {
-    const roadmap = await requireEditorRoadmap(transaction, editor);
-    const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
-    await transaction.resource.delete({ where: { id: resource.id } });
-    return resource.fileKey;
-  });
-  if (fileKey) await deleteUploadedFile(fileKey).catch(() => undefined);
-}
-
 async function nodeVisibilityPreview(transaction: Prisma.TransactionClient, input: WithId) {
   const roadmap = await requireEditorRoadmap(transaction, input);
   const node = await requireNode(transaction, requireUuid(input.id, 'nodeId'), roadmap.id);
@@ -709,22 +582,6 @@ export function previewRoadmapDependency(input: WithInput) {
 
 export function deleteRoadmapDependency(input: WithId) {
   return apiResult(() => deleteRoadmapDependencyUnsafe(input));
-}
-
-export function createRoadmapResource(input: WithId & { input: JsonObject }) {
-  return apiResult(() => createRoadmapResourceUnsafe(input));
-}
-
-export function createUploadedRoadmapResource(input: UploadedResourceInput) {
-  return apiResult(() => createUploadedRoadmapResourceUnsafe(input));
-}
-
-export function updateRoadmapResource(input: WithId & { input: JsonObject }) {
-  return apiResult(() => updateRoadmapResourceUnsafe(input));
-}
-
-export function deleteRoadmapResource(input: WithId) {
-  return apiResult(() => deleteRoadmapResourceUnsafe(input));
 }
 
 export function previewTeacherBlock(input: WithId & { operation: TeacherBlockOperation }) {

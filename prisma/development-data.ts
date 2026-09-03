@@ -1,4 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { PrismaClient } from '../src/generated/prisma/client';
 import {
   developmentFixtureCourses,
@@ -14,11 +16,18 @@ import {
 } from '../src/lib/development-fixtures';
 import { developmentFixtureFileContents } from '../src/lib/development-fixture-assets';
 import { requireFixtureEnvironment } from '../src/shared/server/environment/fixture-environment';
-import { replaceFixtureUploadedFiles } from '../src/lib/resource-storage';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL must be set to load development data.');
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const fixtureUploadsDirectory = join(process.cwd(), 'uploads');
+
+async function replaceFixtureUploadedFiles(files: readonly { fileKey: string; bytes: Buffer }[]) {
+  await mkdir(fixtureUploadsDirectory, { recursive: true });
+  await Promise.all(
+    files.map(({ fileKey, bytes }) => writeFile(join(fixtureUploadsDirectory, fileKey), bytes)),
+  );
+}
 
 export async function resetDevelopmentData() {
   requireFixtureEnvironment(process.env);

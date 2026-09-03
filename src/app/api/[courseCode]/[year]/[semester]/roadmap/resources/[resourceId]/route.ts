@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import {
-  handleApiResult,
-  parseCourseOfferingIdentifier,
-  parseJson,
-  throwApiError,
-} from '@/lib/roadmap-api';
+  handleApplicationResult as handleApiResult,
+  parseJsonObject as parseJson,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { requireAuthenticatedUser } from '@/shared/server/session';
-import { deleteRoadmapResource, updateRoadmapResource } from '@/lib/roadmap-editor';
+import { removeRoadmapResource, updateRoadmapResource } from '@/features/roadmap/server';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; resourceId: string }>;
@@ -35,7 +35,7 @@ export async function DELETE(_request: Request, context: Context) {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
     const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
-    await deleteRoadmapResource({ userId: user.id, identifier, id: params.resourceId }).match(
+    await removeRoadmapResource({ userId: user.id, identifier, id: params.resourceId }).match(
       (value) => value,
       throwApiError,
     );
