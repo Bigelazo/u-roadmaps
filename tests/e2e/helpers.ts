@@ -1,6 +1,6 @@
 import { encode } from 'next-auth/jwt';
 import type { BrowserContext } from '@playwright/test';
-import { developmentFixtureIds, fixtureRoadmaps } from '@/lib/development-fixtures';
+import { developmentFixtureIds, fixtureRoadmaps } from '@/development';
 
 const [cc1002Roadmap, ma1001Roadmap, fi1001HistoricalRoadmap] = fixtureRoadmaps;
 

@@ -1,7 +1,6 @@
-import { PrismaPg } from '@prisma/adapter-pg';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PrismaClient } from '../src/generated/prisma/client';
+import { prisma } from '@/shared/server/db';
 import {
   developmentFixtureCourses,
   developmentFixtureOfferings,
@@ -13,13 +12,9 @@ import {
   predefinedNodeTypes,
   reservedFixtureOfferingIds,
   reservedFixtureUserIds,
-} from '../src/lib/development-fixtures';
-import { developmentFixtureFileContents } from '../src/lib/development-fixture-assets';
-import { requireFixtureEnvironment } from '../src/shared/server/environment/fixture-environment';
+} from '../fixtures/catalog';
+import { developmentFixtureFileContents } from './assets';
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error('DATABASE_URL must be set to load development data.');
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const fixtureUploadsDirectory = join(process.cwd(), 'uploads');
 
 async function replaceFixtureUploadedFiles(files: readonly { fileKey: string; bytes: Buffer }[]) {
@@ -29,8 +24,33 @@ async function replaceFixtureUploadedFiles(files: readonly { fileKey: string; by
   );
 }
 
+function upsertPredefinedNodeTypes() {
+  return Promise.all(
+    predefinedNodeTypes.map((nodeType) =>
+      prisma.nodeType.upsert({
+        where: { id: nodeType.id },
+        update: {
+          name: nodeType.name,
+          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+          color: nodeType.color,
+          isPredefined: true,
+          roadmapId: null,
+        },
+        create: {
+          ...nodeType,
+          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+          isPredefined: true,
+        },
+      }),
+    ),
+  );
+}
+
+export async function seedPredefinedNodeTypes() {
+  await upsertPredefinedNodeTypes();
+}
+
 export async function resetDevelopmentData() {
-  requireFixtureEnvironment(process.env);
   await replaceFixtureUploadedFiles(developmentFixtureFileContents());
 
   await prisma.$transaction(async (transaction) => {
@@ -116,18 +136,4 @@ export async function resetDevelopmentData() {
     });
     await transaction.completion.createMany({ data: fixtureCompletions });
   });
-}
-
-async function main() {
-  await resetDevelopmentData();
-}
-if (process.argv[1]?.endsWith('development-data.ts')) {
-  main()
-    .catch((error) => {
-      console.error(error);
-      process.exitCode = 1;
-    })
-    .finally(async () => {
-      await prisma.$disconnect();
-    });
 }

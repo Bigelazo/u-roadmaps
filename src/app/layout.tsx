@@ -1,11 +1,10 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import AuthenticationAlert from '@/app/_components/AuthenticationAlert';
-import DevelopmentBar from '@/components/app-shell/DevelopmentBar';
+import { DevelopmentBar, developmentPersonas } from '@/development';
 import GlobalNavigation from '@/app/_components/GlobalNavigation';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { developmentEnvironmentEnabled } from '@/shared/server/environment/development';
-import { developmentPersonas } from '@/lib/development';
 import { Archivo, Plus_Jakarta_Sans } from 'next/font/google';
 import { cn } from '@/shared/lib/utils';
 

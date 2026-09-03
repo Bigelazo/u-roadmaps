@@ -1,9 +1,9 @@
 import { Position } from '@xyflow/react';
 import { expect, test } from 'vitest';
-import { layoutRoadmapGraph } from '../src/features/roadmap/graph/dagre-layout';
-import { roadmapNodeSizeForTitle } from '../src/features/roadmap/graph/geometry';
-import type { RoadmapFlowEdge } from '../src/features/roadmap/graph/DependencyEdge';
-import type { RoadmapFlowNode } from '../src/features/roadmap/graph/RoadmapNode';
+import type { RoadmapFlowEdge } from './DependencyEdge';
+import type { RoadmapFlowNode } from './RoadmapNode';
+import { layoutRoadmapGraph } from './dagre-layout';
+import { roadmapNodeSizeForTitle } from './geometry';
 
 const nodes: RoadmapFlowNode[] = [
   {

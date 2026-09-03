@@ -18,7 +18,10 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.sub) session.user.id = token.sub;
+      if (session.user && token.sub) {
+        session.user.id = token.sub;
+        session.user.useLocalFixtureData = token.useLocalFixtureData === true;
+      }
       return session;
     },
   },
@@ -32,7 +35,8 @@ export async function getApplicationSession(): Promise<Session | null> {
 export async function resolveSessionUser(session: Session | null) {
   const userId = session?.user?.id;
   if (!userId || !uuidPattern.test(userId)) return null;
-  return prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  return user && { ...user, useLocalFixtureData: session.user.useLocalFixtureData === true };
 }
 
 export function requireAuthenticatedUser() {

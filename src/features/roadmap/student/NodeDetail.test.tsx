@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import { StudentNodeDetail } from '../src/features/roadmap/student/NodeDetail';
-import type { RoadmapNode, StudentBlockedRoadmapNode } from '../src/features/roadmap/types';
+import { StudentNodeDetail } from './NodeDetail';
+import type { RoadmapNode, StudentBlockedRoadmapNode } from '../types';
 
 const node: RoadmapNode = {
   id: 'node-1',

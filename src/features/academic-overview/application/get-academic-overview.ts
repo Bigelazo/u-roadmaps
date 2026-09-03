@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { isDevelopmentPersona } from '@/lib/development';
 import { isRoadmapCreationPosition } from '@/lib/academic-participation';
 import { getMufasaAcademicCourses } from '@/integrations/ucampus/server';
 import {
@@ -19,7 +18,9 @@ import type {
 
 async function getAcademicOverview(actor: AcademicOverviewActor) {
   const [mufasa, localCourses] = await Promise.all([
-    getMufasaAcademicCourses(actor.rut, { useLocalFixtureData: isDevelopmentPersona(actor.id) }),
+    getMufasaAcademicCourses(actor.rut, {
+      useLocalFixtureData: actor.useLocalFixtureData === true,
+    }),
     readLocalAcademicOverview(actor),
   ]);
 
@@ -86,10 +87,7 @@ export async function getAcademicOverviewPage(
   const courses =
     mufasa.source === 'MUFASA'
       ? mufasa.courses.map((course) =>
-          courseFromMufasa(
-            course,
-            localCoursesByKey.get(academicOverviewCourseKey(course)),
-          ),
+          courseFromMufasa(course, localCoursesByKey.get(academicOverviewCourseKey(course))),
         )
       : localCourses;
 
@@ -110,10 +108,7 @@ export async function getAcademicOverviewApi(
     mufasa.source === 'MUFASA'
       ? mufasa.courses.map((course) => {
           return apiOfferingFromMufasa(
-            courseFromMufasa(
-              course,
-              localCoursesByKey.get(academicOverviewCourseKey(course)),
-            ),
+            courseFromMufasa(course, localCoursesByKey.get(academicOverviewCourseKey(course))),
           );
         })
       : localCourses.map(apiOfferingFromLocal);

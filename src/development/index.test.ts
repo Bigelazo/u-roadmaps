@@ -4,7 +4,8 @@ import {
   fixtureEnvironmentEnabled,
   requireFixtureEnvironment,
 } from '@/shared/server/environment/development';
-import { developmentPersonas, isDevelopmentPersona } from '@/lib/development';
+import { developmentPersonas } from './index';
+import { isDevelopmentPersona } from './server';
 
 const originalEnvironment = { ...process.env };
 

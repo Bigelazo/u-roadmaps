@@ -1,4 +1,4 @@
-import { fixtureFileAssets, type FileFormat } from '@/lib/development-fixtures';
+import { fixtureFileAssets, type FileFormat } from '../fixtures/catalog';
 
 type ZipEntry = { name: string; content: string | Buffer };
 

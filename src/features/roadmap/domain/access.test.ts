@@ -5,9 +5,9 @@ import {
   transitiveDependentNodeIds,
   transitivePrerequisiteNodeIds,
   wouldCreateDependencyCycle,
-} from '../src/features/roadmap/domain/access';
-import { decideTeacherBlock } from '../src/features/roadmap/domain/teacher-block';
-import type { RoadmapNode } from '../src/features/roadmap/types';
+} from './access';
+import { decideTeacherBlock } from './teacher-block';
+import type { RoadmapNode } from '../types';
 
 const diamondDependencies = [
   { sourceNodeId: 'intro', targetNodeId: 'theory' },
@@ -137,6 +137,8 @@ test('keeps teacher-block policy pure while excluding hidden dependent nodes', (
   });
 });
 
+// This is a compile-time contract test, so it has no runtime assertion.
+// eslint-disable-next-line vitest/expect-expect
 test('models hidden nodes and teacher blocks as incompatible states', () => {
   // @ts-expect-error Hidden nodes cannot retain a teacher block.
   const hiddenTeacherBlockedNode: RoadmapNode = {

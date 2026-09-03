@@ -5,6 +5,7 @@ declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
+      useLocalFixtureData?: boolean;
     } & DefaultSession['user'];
   }
 }
@@ -13,5 +14,6 @@ declare module 'next-auth/jwt' {
   interface JWT {
     sub?: string;
     preferred_username?: string;
+    useLocalFixtureData?: boolean;
   }
 }

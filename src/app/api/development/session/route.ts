@@ -2,7 +2,7 @@ import { encode } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
 import { authOptions } from '@/shared/server/session';
 import { fixtureEnvironmentEnabled } from '@/shared/server/environment/development';
-import { developmentPersonas } from '@/lib/development';
+import { developmentPersonas } from '@/development';
 import { prisma } from '@/shared/server/db';
 import { ApiError, handleApiResult, parseJson, requireUuid } from '@/lib/roadmap-api';
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     if (!authOptions.secret)
       throw new ApiError(500, 'AUTH_CONFIGURATION_ERROR', 'La sesión no está configurada.');
     const token = await encode({
-      token: { sub: user.id },
+      token: { sub: user.id, useLocalFixtureData: true },
       secret: authOptions.secret,
       maxAge: 30 * 24 * 60 * 60,
     });

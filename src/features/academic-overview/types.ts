@@ -1,6 +1,7 @@
 export type AcademicOverviewActor = Readonly<{
   id: string;
   rut: string | null;
+  useLocalFixtureData?: boolean;
 }>;
 
 export type AcademicOverviewSource = 'MUFASA' | 'LOCAL';

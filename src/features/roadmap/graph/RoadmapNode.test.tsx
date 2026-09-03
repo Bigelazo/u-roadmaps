@@ -1,9 +1,9 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { render, screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
-import { RoadmapNode, type RoadmapFlowNode } from '../src/features/roadmap/graph/RoadmapNode';
-import type { StudentNodeBlockReason } from '../src/features/roadmap/types';
-import { roadmapNodeSizeForTitle } from '../src/features/roadmap/graph/geometry';
+import { RoadmapNode, type RoadmapFlowNode } from './RoadmapNode';
+import { roadmapNodeSizeForTitle } from './geometry';
+import type { StudentNodeBlockReason } from '../types';
 
 function mountBlockedNode(blockReason: StudentNodeBlockReason) {
   render(

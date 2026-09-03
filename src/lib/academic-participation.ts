@@ -1,6 +1,5 @@
 import type { ParticipationRole } from '@/generated/prisma/client';
 import { prisma } from '@/shared/server/db';
-import { isDevelopmentPersona } from '@/lib/development';
 import {
   getMufasaAcademicCourses,
   type MufasaInstitutionalCoursePosition,
@@ -19,7 +18,11 @@ const roadmapEditingPositions: readonly MufasaInstitutionalCoursePosition[] = [
   'AUXILIARY_PROFESSOR',
 ];
 
-export type AcademicUser = Readonly<{ id: string; rut: string | null }>;
+export type AcademicUser = Readonly<{
+  id: string;
+  rut: string | null;
+  useLocalFixtureData?: boolean;
+}>;
 
 export type MufasaCourseAccess = Readonly<{
   name: string;
@@ -56,7 +59,7 @@ export async function getMufasaCourseAccess(
   identifier: CourseOfferingIdentifier,
 ): Promise<MufasaCourseAccess | null> {
   const mufasa = await getMufasaAcademicCourses(user.rut, {
-    useLocalFixtureData: isDevelopmentPersona(user.id),
+    useLocalFixtureData: user.useLocalFixtureData === true,
   });
   if (mufasa.source !== 'MUFASA') return null;
   const matches = mufasa.courses.filter(
