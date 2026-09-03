@@ -11,7 +11,7 @@ import {
   LockKeyhole,
   X,
 } from 'lucide-react';
-import type { Resource, RoadmapNode, StudentRoadmapNode } from '@/lib/roadmap-types';
+import type { Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
   isStudentBlockedNode,
   studentNodeBlockMessages,

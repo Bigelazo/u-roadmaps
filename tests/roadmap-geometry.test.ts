@@ -8,7 +8,7 @@ import {
   roadmapNodeSizeForTitle,
   sideAnchor,
   snapToRoadmapGrid,
-} from '@/lib/roadmap-geometry';
+} from '@/features/roadmap/graph/geometry';
 
 const card = (x: number, y: number) => ({ x, y, width: 190, height: 120 });
 

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
 import { expect, test, vi } from 'vitest';
 import { NodeDetailsEditor } from '../src/features/roadmap/editor/NodeDetailsEditor';
-import type { RoadmapNode } from '../src/lib/roadmap-types';
+import type { RoadmapNode } from '../src/features/roadmap/types';
 
 const node: RoadmapNode = {
   id: 'node-1',

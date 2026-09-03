@@ -1,4 +1,4 @@
-import type { Resource, RoadmapDto, RoadmapNode, TeacherBlockOperation } from '@/lib/roadmap-types';
+import type { Resource, RoadmapDto, RoadmapNode, TeacherBlockOperation } from '@/features/roadmap/types';
 
 export type NodeInput = {
   title: string;

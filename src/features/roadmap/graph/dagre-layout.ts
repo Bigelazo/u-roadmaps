@@ -1,6 +1,6 @@
 import dagre from '@dagrejs/dagre';
 import { Position } from '@xyflow/react';
-import { roadmapNodeSizeForTitle, snapToRoadmapGrid } from '@/lib/roadmap-geometry';
+import { roadmapNodeSizeForTitle, snapToRoadmapGrid } from '@/features/roadmap/graph/geometry';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 

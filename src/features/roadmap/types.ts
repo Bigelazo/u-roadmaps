@@ -1,5 +1,14 @@
-import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
-import type { StudentNodeAccess } from '@/lib/roadmap-access';
+export type CourseOfferingIdentifier = {
+  courseCode: string;
+  year: number;
+  semester: number;
+};
+
+export type StudentNodeBlockReason = 'TEACHER_BLOCK' | 'PREREQUISITE_BLOCK';
+
+export type StudentNodeAccess =
+  | { status: 'ACCESSIBLE' }
+  | { status: 'BLOCKED'; reason: StudentNodeBlockReason };
 
 export type Resource = {
   id: string;
@@ -85,7 +94,3 @@ type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
 export type RoadmapDto = RoadmapDtoBase<RoadmapNode>;
 export type StudentRoadmapDto = RoadmapDtoBase<StudentRoadmapNode>;
 export type AnyRoadmapDto = RoadmapDto | StudentRoadmapDto;
-
-export function roadmapUrl(identifier: CourseOfferingIdentifier, suffix = ''): string {
-  return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap${suffix}`;
-}

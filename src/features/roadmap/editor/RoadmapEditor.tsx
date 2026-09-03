@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PanelRightClose, Trash2 } from 'lucide-react';
-import type { Resource, RoadmapDto, RoadmapNode } from '@/lib/roadmap-types';
+import type { Resource, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import {
   AlertDialog,
   AlertDialogAction,

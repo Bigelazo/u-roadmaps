@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
 import {
-  getAvailableTypes,
-  handleApiResult,
-  parseCourseOfferingIdentifier,
-  parseJson,
-  requireRoadmap,
-  throwApiError,
-} from '@/lib/roadmap-api';
-import { requireAuthenticatedUser, requireCourseOfferingParticipation } from '@/lib/auth';
-import { createRoadmapNodeType } from '@/lib/roadmap-editor';
+  handleApplicationResult as handleApiResult,
+  parseJsonObject as parseJson,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { createRoadmapNodeType, getNodeTypesForActor } from '@/features/roadmap/server';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 
 type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
@@ -16,12 +14,12 @@ export async function GET(_request: Request, context: Context) {
   return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    await requireCourseOfferingParticipation(identifier, ['STUDENT', 'TEACHER']).match(
+    const actor = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    const nodeTypes = await getNodeTypesForActor(actor, identifier).match(
       (value) => value,
       throwApiError,
     );
-    const roadmap = await requireRoadmap(identifier).match((value) => value, throwApiError);
-    return NextResponse.json({ nodeTypes: await getAvailableTypes(roadmap.id) });
+    return NextResponse.json({ nodeTypes });
   });
 }
 

@@ -5,7 +5,7 @@ import {
   parseJson,
   throwApiError,
 } from '@/lib/roadmap-api';
-import { requireAuthenticatedUser } from '@/lib/auth';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 import { deleteRoadmapResource, updateRoadmapResource } from '@/lib/roadmap-editor';
 
 type Context = {

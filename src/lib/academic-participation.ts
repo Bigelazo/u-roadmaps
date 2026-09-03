@@ -1,8 +1,11 @@
 import type { ParticipationRole } from '@/generated/prisma/client';
 import { prisma } from '@/shared/server/db';
 import { isDevelopmentPersona } from '@/lib/development';
-import { getMufasaAcademicCourses, type MufasaInstitutionalCoursePosition } from '@/lib/mufasa';
-import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
+import {
+  getMufasaAcademicCourses,
+  type MufasaInstitutionalCoursePosition,
+} from '@/integrations/ucampus/server';
+import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 
 // U-Campus es la fuente de los cargos y `Participation` solo distingue entre
 // edición y lectura. La cátedra y la coordinación crean el roadmap del curso;

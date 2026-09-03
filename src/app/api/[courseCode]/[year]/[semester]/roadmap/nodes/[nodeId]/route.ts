@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import {
-  ApiError,
-  handleApiResult,
-  parseCourseOfferingIdentifier,
-  parseJson,
-  throwApiError,
-} from '@/lib/roadmap-api';
-import { requireAuthenticatedUser } from '@/lib/auth';
-import { deleteRoadmapNode, previewNodeVisibility, updateRoadmapNode } from '@/lib/roadmap-editor';
+  handleApplicationResult as handleApiResult,
+  parseJsonObject as parseJson,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { ApplicationError } from '@/shared/errors/types';
+import { deleteRoadmapNode, previewNodeVisibility, updateRoadmapNode } from '@/features/roadmap/server';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
@@ -15,7 +15,7 @@ type Context = {
 
 function requireHidePreview(request: Request) {
   if (new URL(request.url).searchParams.get('operation') !== 'HIDE') {
-    throw new ApiError(400, 'INVALID_REQUEST', 'operation debe ser HIDE.');
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'operation debe ser HIDE.');
   }
 }
 

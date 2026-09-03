@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { getMufasaAcademicCourses, getMufasaEnrolledCourses } from '@/lib/mufasa';
+import { getMufasaAcademicCourses, getMufasaEnrolledCourses } from '@/integrations/ucampus/server';
 
 const originalToken = process.env.MUFASA_TOKEN;
 const originalBaseUrl = process.env.MUFASA_BASE_URL;

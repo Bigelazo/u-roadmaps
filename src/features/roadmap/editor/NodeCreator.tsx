@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import { CirclePlus, Plus, Shapes } from 'lucide-react';
-import type { RoadmapDto } from '@/lib/roadmap-types';
+import type { RoadmapDto } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { Checkbox } from '@/shared/ui/checkbox';
 import {

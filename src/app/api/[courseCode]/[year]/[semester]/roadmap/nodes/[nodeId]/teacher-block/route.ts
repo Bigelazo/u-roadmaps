@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
 import {
-  ApiError,
-  handleApiResult,
-  parseCourseOfferingIdentifier,
-  throwApiError,
-} from '@/lib/roadmap-api';
-import { requireAuthenticatedUser } from '@/lib/auth';
-import {
-  changeTeacherBlock,
-  previewTeacherBlock,
-  type TeacherBlockOperation,
-} from '@/lib/roadmap-editor';
+  handleApplicationResult as handleApiResult,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import type { TeacherBlockOperation } from '@/features/roadmap/types';
+import { changeTeacherBlock, previewTeacherBlock } from '@/features/roadmap/server';
+import { ApplicationError } from '@/shared/errors/types';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
@@ -21,7 +18,11 @@ function teacherBlockOperation(request: Request): TeacherBlockOperation {
   if (operation === 'BLOCK' || operation === 'UNBLOCK' || operation === 'BRANCH_UNLOCK') {
     return operation;
   }
-  throw new ApiError(400, 'INVALID_REQUEST', 'operation debe ser BLOCK, UNBLOCK o BRANCH_UNLOCK.');
+  throw new ApplicationError(
+    400,
+    'INVALID_REQUEST',
+    'operation debe ser BLOCK, UNBLOCK o BRANCH_UNLOCK.',
+  );
 }
 
 async function teacherBlockInput(context: Context, operation: TeacherBlockOperation) {

@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import {
-  createRoadmap,
-  handleApiResult,
-  parseCourseOfferingIdentifier,
-  parseJson,
-  throwApiError,
-} from '@/lib/roadmap-api';
-import { requireAuthenticatedUser, requireRoadmapCreationAccess } from '@/lib/auth';
-import { readRoadmapForParticipant } from '@/lib/roadmap-completion';
+  handleApplicationResult as handleApiResult,
+  parseJsonObject as parseJson,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { createRoadmapForActor, readRoadmapForParticipant } from '@/features/roadmap/server';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 
 type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
@@ -27,8 +26,8 @@ export async function GET(_request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   return handleApiResult(async () => {
     const identifier = parseCourseOfferingIdentifier(await context.params);
-    await requireRoadmapCreationAccess(identifier).match((value) => value, throwApiError);
-    const roadmap = await createRoadmap(identifier, await parseJson(request)).match(
+    const actor = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    const roadmap = await createRoadmapForActor(actor, identifier, () => parseJson(request)).match(
       (value) => value,
       throwApiError,
     );

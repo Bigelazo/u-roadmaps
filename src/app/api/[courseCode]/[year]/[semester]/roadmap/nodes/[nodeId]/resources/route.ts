@@ -11,7 +11,8 @@ import {
   resourceDto,
   throwApiError,
 } from '@/lib/roadmap-api';
-import { requireAuthenticatedUser, requireCourseOfferingParticipation } from '@/lib/auth';
+import { requireCourseOfferingParticipation } from '@/features/roadmap/server';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 import { requireStudentNodeAccess } from '@/lib/roadmap-completion';
 import { createRoadmapResource, createUploadedRoadmapResource } from '@/lib/roadmap-editor';
 import { deleteUploadedFile, saveUploadedFile, validateUploadedFile } from '@/lib/resource-storage';
@@ -74,8 +75,9 @@ export async function GET(_request: Request, context: Context) {
   return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
+    const actor = await requireAuthenticatedUser().match((value) => value, throwApiError);
     const [{ participation }, roadmap] = await Promise.all([
-      requireCourseOfferingParticipation(identifier, ['STUDENT', 'TEACHER']).match(
+      requireCourseOfferingParticipation(actor, identifier, ['STUDENT', 'TEACHER']).match(
         (value) => value,
         throwApiError,
       ),

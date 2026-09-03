@@ -2,8 +2,8 @@ import type {
   RoadmapNode,
   StudentBlockedRoadmapNode,
   StudentRoadmapNode,
-} from '@/lib/roadmap-types';
-import type { StudentNodeBlockReason } from '@/lib/roadmap-access';
+  StudentNodeBlockReason,
+} from '@/features/roadmap/types';
 
 export type StudentNodeStatus = 'completed' | 'available' | 'locked';
 

@@ -187,7 +187,7 @@ test('student roadmap shows effective block reasons and restores a completed nod
           description: 'Descripción protegida del nodo.',
           nodeTypeId,
           positionX,
-          positionY: 0,
+          positionY: 600,
         },
       });
       expect(response.status()).toBe(201);
@@ -197,8 +197,8 @@ test('student roadmap shows effective block reasons and restores a completed nod
     };
 
     const prerequisite = await createNode(uniqueName('Prerrequisito visual'), 0);
-    const completedTarget = await createNode(uniqueName('Nodo completado bloqueado'), 180);
-    const prerequisiteTarget = await createNode(uniqueName('Nodo con prerrequisitos'), 360);
+    const completedTarget = await createNode(uniqueName('Nodo completado bloqueado'), 500);
+    const prerequisiteTarget = await createNode(uniqueName('Nodo con prerrequisitos'), 1000);
 
     const completion = await student.post(roadmapPath(`/nodes/${completedTarget.id}/completion`));
     expect(completion.status()).toBe(200);
@@ -237,8 +237,8 @@ test('student roadmap shows effective block reasons and restores a completed nod
       id: completedTarget.id,
       title: completedTarget.title,
       nodeTypeId,
-      positionX: 180,
-      positionY: 0,
+      positionX: 500,
+      positionY: 600,
       access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
     });
     expect(studentNodes.find(({ id }) => id === prerequisiteTarget.id)?.access).toEqual({

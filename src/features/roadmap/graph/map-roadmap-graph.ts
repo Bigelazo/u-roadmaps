@@ -1,5 +1,5 @@
 import { MarkerType } from '@xyflow/react';
-import type { AnyRoadmapDto, RoadmapNodeDto } from '@/lib/roadmap-types';
+import type { AnyRoadmapDto, RoadmapNodeDto } from '@/features/roadmap/types';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import type { RoadmapFlowNode, RoadmapNodeStatus } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';

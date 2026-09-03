@@ -16,9 +16,9 @@ import {
   type OnNodeDrag,
 } from '@xyflow/react';
 import { LayoutTemplate } from 'lucide-react';
-import { roadmapGridSize } from '@/lib/roadmap-geometry';
+import { roadmapGridSize } from '@/features/roadmap/graph/geometry';
 import { Button } from '@/shared/ui/button';
-import type { AnyRoadmapDto } from '@/lib/roadmap-types';
+import type { AnyRoadmapDto } from '@/features/roadmap/types';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
 import { mapRoadmapGraph } from '@/features/roadmap/graph/map-roadmap-graph';

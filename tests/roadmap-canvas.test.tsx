@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
-import RoadmapCanvas from '../src/features/roadmap/RoadmapCanvas';
+import { RoadmapCanvas } from '@/features/roadmap';
 
 const { useRoadmapMock } = vi.hoisted(() => ({ useRoadmapMock: vi.fn() }));
 

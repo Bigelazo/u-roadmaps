@@ -1,6 +1,6 @@
 import { Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import type { RoadmapDto } from '@/lib/roadmap-types';
+import type { RoadmapDto } from '@/features/roadmap/types';
 import {
   AlertDialog,
   AlertDialogAction,

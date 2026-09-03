@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
-import { requireAuthenticatedUser } from '@/lib/auth';
-import { completeNode } from '@/lib/roadmap-completion';
-import { handleApiResult, parseCourseOfferingIdentifier, throwApiError } from '@/lib/roadmap-api';
+import {
+  handleApplicationResult as handleApiResult,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { completeNode } from '@/features/roadmap/server';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;

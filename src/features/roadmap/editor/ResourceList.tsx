@@ -1,5 +1,5 @@
 import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
-import type { Resource } from '@/lib/roadmap-types';
+import type { Resource } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 
 type Props = {

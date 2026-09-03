@@ -1,12 +1,9 @@
+import type { StudentNodeAccess } from '@/features/roadmap/types';
+
 export type RoadmapGraphDependency = {
   sourceNodeId: string;
   targetNodeId: string;
 };
-
-export type StudentNodeBlockReason = 'TEACHER_BLOCK' | 'PREREQUISITE_BLOCK';
-
-export type StudentNodeAccess =
-  { status: 'ACCESSIBLE' } | { status: 'BLOCKED'; reason: StudentNodeBlockReason };
 
 type RoadmapAccessNode = {
   id: string;

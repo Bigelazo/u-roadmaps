@@ -1,5 +1,5 @@
 import { LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
-import type { Resource, RoadmapDto, RoadmapNode, TeacherBlockOperation } from '@/lib/roadmap-types';
+import type { Resource, RoadmapDto, RoadmapNode, TeacherBlockOperation } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';

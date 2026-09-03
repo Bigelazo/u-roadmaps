@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
 import {
-  roadmapUrl,
   type Resource,
   type AnyRoadmapDto,
+  type CourseOfferingIdentifier,
   type TeacherBlockImpact,
   type TeacherBlockOperation,
-} from '@/lib/roadmap-types';
+} from '@/features/roadmap/types';
+import { roadmapUrl } from '@/features/roadmap/client';
 
 type NewNode = {
   title: string;
@@ -26,7 +26,7 @@ export type StructuralDependency = {
   sourceNodeId: string;
   targetNodeId: string;
 };
-export type { TeacherBlockImpact, TeacherBlockOperation } from '@/lib/roadmap-types';
+export type { TeacherBlockImpact, TeacherBlockOperation } from '@/features/roadmap/types';
 
 function identifierKey(identifier: CourseOfferingIdentifier) {
   return `${identifier.courseCode}:${identifier.year}:${identifier.semester}`;

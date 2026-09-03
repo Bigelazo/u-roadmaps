@@ -724,7 +724,13 @@ test('VTI callback issues a session after validating its one-time state', async 
   expect(start.status()).toBe(303);
   const state = new URL(start.headers().location).searchParams.get('state');
   expect(state).toBeTruthy();
-  const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
+  const startCookie = start.headers()['set-cookie'];
+  expect(startCookie).toContain('u-roadmaps-vti-state=');
+  expect(startCookie).toContain('HttpOnly');
+  expect(startCookie).toMatch(/SameSite=Lax/i);
+  expect(startCookie).toContain('Max-Age=600');
+  expect(startCookie).toContain('Path=/');
+  const stateCookie = startCookie.split(';', 1)[0];
   const token = await vtiToken(fixture.cc1002StudentWithoutProgressVtiClaims);
   const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
     maxRedirects: 0,
@@ -734,7 +740,12 @@ test('VTI callback issues a session after validating its one-time state', async 
   expect(callback.headers().location).toBe(
     new URL('/academic-overview', testInfo.project.use.baseURL as string).toString(),
   );
-  const sessionCookieValue = callback.headers()['set-cookie'].split(';', 1)[0];
+  const callbackCookie = callback.headers()['set-cookie'];
+  expect(callbackCookie).toContain('next-auth.session-token=');
+  expect(callbackCookie).toContain('HttpOnly');
+  expect(callbackCookie).toMatch(/SameSite=Lax/i);
+  expect(callbackCookie).toContain('Path=/');
+  const sessionCookieValue = callbackCookie.split(';', 1)[0];
   const session = await request.get('/api/auth/session', {
     headers: { cookie: sessionCookieValue },
   });

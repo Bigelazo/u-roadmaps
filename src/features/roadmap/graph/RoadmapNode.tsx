@@ -1,8 +1,8 @@
 import { CheckCircle2, Circle, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
-import type { StudentNodeBlockReason } from '@/lib/roadmap-access';
-import { roadmapNodeSizeForTitle } from '@/lib/roadmap-geometry';
+import type { StudentNodeBlockReason } from '@/features/roadmap/types';
+import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 import { cn } from '@/shared/lib/utils';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';

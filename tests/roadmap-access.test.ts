@@ -5,8 +5,9 @@ import {
   transitiveDependentNodeIds,
   transitivePrerequisiteNodeIds,
   wouldCreateDependencyCycle,
-} from '../src/lib/roadmap-access';
-import type { RoadmapNode } from '../src/lib/roadmap-types';
+} from '../src/features/roadmap/domain/access';
+import { decideTeacherBlock } from '../src/features/roadmap/domain/teacher-block';
+import type { RoadmapNode } from '../src/features/roadmap/types';
 
 const diamondDependencies = [
   { sourceNodeId: 'intro', targetNodeId: 'theory' },
@@ -110,6 +111,30 @@ test('a teacher block prevails over a simultaneous prerequisite block', () => {
   });
 
   expect(access.get('selected')).toEqual({ status: 'BLOCKED', reason: 'TEACHER_BLOCK' });
+});
+
+test('keeps teacher-block policy pure while excluding hidden dependent nodes', () => {
+  expect(
+    decideTeacherBlock({
+      nodes: [
+        { id: 'selected', title: 'Seleccionado', isVisible: true, isTeacherBlocked: false },
+        { id: 'visible', title: 'Visible', isVisible: true, isTeacherBlocked: false },
+        { id: 'hidden', title: 'Oculto', isVisible: false, isTeacherBlocked: false },
+      ],
+      dependencies: [
+        { sourceNodeId: 'selected', targetNodeId: 'visible' },
+        { sourceNodeId: 'selected', targetNodeId: 'hidden' },
+      ],
+      nodeId: 'selected',
+      operation: 'BLOCK',
+    }),
+  ).toEqual({
+    kind: 'ALLOWED',
+    nodes: [
+      { id: 'selected', title: 'Seleccionado' },
+      { id: 'visible', title: 'Visible' },
+    ],
+  });
 });
 
 test('models hidden nodes and teacher blocks as incompatible states', () => {

@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { mapRoadmapGraph } from '../src/features/roadmap/graph/map-roadmap-graph';
 import { roadmapEdgeTypes } from '../src/features/roadmap/graph/DependencyEdge';
 import { FloatingEdge } from '../src/features/roadmap/graph/FloatingEdge';
-import type { RoadmapDto, StudentRoadmapDto } from '../src/lib/roadmap-types';
+import type { RoadmapDto, StudentRoadmapDto } from '../src/features/roadmap/types';
 
 const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },

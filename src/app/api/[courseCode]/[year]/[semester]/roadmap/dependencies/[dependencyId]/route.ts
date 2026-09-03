@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
-import { handleApiResult, parseCourseOfferingIdentifier, throwApiError } from '@/lib/roadmap-api';
-import { requireAuthenticatedUser } from '@/lib/auth';
-import { deleteRoadmapDependency } from '@/lib/roadmap-editor';
+import {
+  handleApplicationResult as handleApiResult,
+  throwApplicationError as throwApiError,
+} from '@/app/_adapters/http';
+import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { deleteRoadmapDependency } from '@/features/roadmap/server';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; dependencyId: string }>;

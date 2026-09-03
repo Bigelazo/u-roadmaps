@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { normalizeInstitutionalEmail, parseVtiIdentification } from '@/lib/vti-claims';
+import {
+  normalizeInstitutionalEmail,
+  parseVtiIdentification,
+} from '@/integrations/vti/server/claims';
 
 it('parses VTI identification into the canonical RUT body', () => {
   expect(parseVtiIdentification('000012345678-5')._unsafeUnwrap()).toBe('12345678');

@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Circle, CircleAlert, LockKeyhole, PanelRightOpen, Trash2 } from 'lucide-react';
-import type { CourseOfferingIdentifier } from '@/lib/roadmap-api';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
@@ -15,12 +14,13 @@ import {
   type TeacherBlockImpact,
 } from '@/features/roadmap/useRoadmap';
 import type {
+  CourseOfferingIdentifier,
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapNode,
   TeacherBlockOperation,
-} from '@/lib/roadmap-types';
-import { snapToRoadmapGrid } from '@/lib/roadmap-geometry';
+} from '@/features/roadmap/types';
+import { snapToRoadmapGrid } from '@/features/roadmap/graph/geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import {
   AlertDialog,

@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
-import type { Resource, RoadmapNode } from '@/lib/roadmap-types';
+import type { Resource, RoadmapNode } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { ResourceComposer } from './ResourceComposer';
 import { ResourceList } from './ResourceList';

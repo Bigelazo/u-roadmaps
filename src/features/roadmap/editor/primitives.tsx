@@ -1,4 +1,4 @@
-import type { RoadmapDto } from '@/lib/roadmap-types';
+import type { RoadmapDto } from '@/features/roadmap/types';
 import {
   Select,
   SelectContent,

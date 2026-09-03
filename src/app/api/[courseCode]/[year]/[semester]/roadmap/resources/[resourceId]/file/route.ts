@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/shared/server/db';
-import { requireCourseOfferingParticipation } from '@/lib/auth';
+import { requireCourseOfferingParticipation } from '@/features/roadmap/server';
 import {
   ApiError,
   handleApiResult,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/roadmap-api';
 import { readUploadedFile } from '@/lib/resource-storage';
 import { requireStudentNodeAccess } from '@/lib/roadmap-completion';
+import { requireAuthenticatedUser } from '@/shared/server/session';
 
 type Context = {
   params: Promise<{ courseCode: string; year: string; semester: string; resourceId: string }>;
@@ -19,10 +20,12 @@ export async function GET(_request: Request, context: Context) {
   return handleApiResult(async () => {
     const params = await context.params;
     const identifier = parseCourseOfferingIdentifier(params);
-    const { participation, courseOffering } = await requireCourseOfferingParticipation(identifier, [
-      'STUDENT',
-      'TEACHER',
-    ]).match((value) => value, throwApiError);
+    const actor = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    const { participation, courseOffering } = await requireCourseOfferingParticipation(
+      actor,
+      identifier,
+      ['STUDENT', 'TEACHER'],
+    ).match((value) => value, throwApiError);
     const roadmap = courseOffering.roadmap;
     if (!roadmap) {
       throw new ApiError(

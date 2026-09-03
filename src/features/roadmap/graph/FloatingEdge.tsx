@@ -10,7 +10,7 @@ import {
   type EdgeProps,
   type ReactFlowState,
 } from '@xyflow/react';
-import { floatingEdgeGeometry, type NodeRect } from '@/lib/roadmap-geometry';
+import { floatingEdgeGeometry, type NodeRect } from '@/features/roadmap/graph/geometry';
 import { Button } from '@/shared/ui/button';
 
 function nodeRect(state: ReactFlowState, nodeId: string): NodeRect | null {

@@ -1,4 +1,4 @@
-import RoadmapCanvas from '@/features/roadmap/RoadmapCanvas';
+import { RoadmapCanvas } from '@/features/roadmap';
 import { synchronizeParticipation } from '@/lib/academic-participation';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';

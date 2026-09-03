@@ -1,3 +1,5 @@
+import 'server-only';
+
 export type MufasaInstitutionalCoursePosition =
   | 'TEACHING_ASSISTANT'
   | 'AUXILIARY_PROFESSOR'

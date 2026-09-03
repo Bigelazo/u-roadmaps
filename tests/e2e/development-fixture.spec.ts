@@ -89,6 +89,56 @@ test('the reset fixture exposes the three complete roadmap scenarios', async ({}
   }
 });
 
+test('academic overview and development session retain their public JSON and cookie contracts', async ({
+  request,
+}, testInfo) => {
+  const anonymousOverview = await request.get('/api/academic-overview');
+  expect(anonymousOverview.status()).toBe(401);
+  await expect(anonymousOverview.json()).resolves.toEqual({
+    error: {
+      code: 'UNAUTHENTICATED',
+      message: 'Debes iniciar sesión para continuar.',
+    },
+  });
+
+  const api = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
+  });
+  try {
+    const overview = await api.get('/api/academic-overview');
+    expect(overview.status()).toBe(200);
+    await expect(overview.json()).resolves.toEqual(
+      expect.objectContaining({
+        source: 'LOCAL',
+        offerings: expect.arrayContaining([
+          expect.objectContaining({
+            courseCode: 'CC1002',
+            year: 2026,
+            semester: 2,
+            role: 'STUDENT',
+            hasRoadmap: true,
+          }),
+        ]),
+      }),
+    );
+  } finally {
+    await api.dispose();
+  }
+
+  const developmentSession = await request.post('/api/development/session', {
+    data: { userId: fixture.daniela },
+  });
+  expect(developmentSession.status()).toBe(200);
+  await expect(developmentSession.json()).resolves.toEqual({
+    user: { id: fixture.daniela, name: 'Daniela Rojas Mella' },
+  });
+  expect(developmentSession.headers()['set-cookie']).toContain('next-auth.session-token=');
+  expect(developmentSession.headers()['set-cookie']).toContain('HttpOnly');
+  expect(developmentSession.headers()['set-cookie']).toMatch(/SameSite=Lax/i);
+  expect(developmentSession.headers()['set-cookie']).toContain('Path=/');
+});
+
 test('fixture files are downloadable only through their authorized roadmap representation', async ({}, testInfo) => {
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,

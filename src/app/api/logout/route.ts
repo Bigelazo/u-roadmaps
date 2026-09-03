@@ -1,19 +1,5 @@
-import { NextResponse } from 'next/server';
-import { siteUrl } from '@/shared/server/environment/site-url';
-
-const authenticationCookieNames = [
-  'next-auth.session-token',
-  '__Secure-next-auth.session-token',
-  'next-auth.csrf-token',
-  '__Host-next-auth.csrf-token',
-  'next-auth.callback-url',
-  'u-roadmaps-vti-state',
-];
+import { endInstitutionalSession } from '@/features/institutional-access/server';
 
 export function POST(request: Request) {
-  const response = NextResponse.redirect(siteUrl('/', request), 303);
-
-  for (const name of authenticationCookieNames) response.cookies.delete(name);
-
-  return response;
+  return endInstitutionalSession(request);
 }
