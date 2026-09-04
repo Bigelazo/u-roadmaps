@@ -1,5 +1,11 @@
 import { LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
-import type { Resource, RoadmapDto, RoadmapNode, TeacherBlockOperation } from '@/features/roadmap/types';
+import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
+import type {
+  Resource,
+  RoadmapDto,
+  RoadmapNode,
+  TeacherBlockOperation,
+} from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
@@ -34,16 +40,26 @@ function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeType
 
   return (
     <header className="flex items-start justify-between gap-3 border-b border-border pb-5">
-      <div className="min-w-0">
-        <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
-          Nodo seleccionado
-        </p>
-        <h2 className="mt-1 truncate font-heading text-2xl font-semibold tracking-[-0.035em]">
-          {node.title}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {type ? type.name : 'Configura este hito del mapa.'}
-        </p>
+      <div className="flex min-w-0 items-start gap-3">
+        {type ? (
+          <NodeTypeIcon
+            icon={type.icon}
+            className="mt-1 size-5 shrink-0"
+            style={{ color: type.color }}
+            aria-hidden="true"
+          />
+        ) : null}
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
+            Nodo seleccionado
+          </p>
+          <h2 className="mt-1 truncate font-heading text-2xl font-semibold tracking-[-0.035em]">
+            {node.title}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {type ? type.name : 'Configura este hito del mapa.'}
+          </p>
+        </div>
       </div>
       <Button
         type="button"

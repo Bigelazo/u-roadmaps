@@ -1,5 +1,5 @@
-import * as lucideIcons from 'lucide-react';
 import { expect, test } from 'vitest';
+import { nodeTypeIconRegistry } from '@/features/roadmap/node-type-icon-registry';
 import {
   isNodeTypeColor,
   isNodeTypeIconId,
@@ -13,13 +13,13 @@ test('defines the approved twenty-color palette and rejects arbitrary hexadecima
   expect(isNodeTypeColor('#ABCDEF')).toBe(false);
 });
 
-test('defines eighty installed Lucide teaching icons', () => {
+test('defines eighty teaching icons through the explicit registry', () => {
   const iconIds = teachingIconCatalog.flatMap(({ icons }) => icons.map(([id]) => id));
 
   expect(iconIds).toHaveLength(80);
   expect(new Set(iconIds)).toHaveLength(80);
-  expect(iconIds.every((id) => id in lucideIcons)).toBe(true);
-  expect('Shapes' in lucideIcons).toBe(true);
+  expect(iconIds.every((id) => id in nodeTypeIconRegistry)).toBe(true);
+  expect('Shapes' in nodeTypeIconRegistry).toBe(true);
   expect(isNodeTypeIconId('BookOpen')).toBe(true);
   expect(isNodeTypeIconId('NotAnIcon')).toBe(false);
 });

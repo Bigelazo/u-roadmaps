@@ -23,6 +23,12 @@ export type ResourceInput = {
 
 export type NodeTypeInput = { name: string; icon: NodeTypeIconId; color: NodeTypeColor };
 
+export type NodeTypeDraft = {
+  name: string;
+  icon?: NodeTypeIconId;
+  color?: NodeTypeColor;
+};
+
 export type RoadmapEditorProps = {
   roadmap: RoadmapDto;
   selectedNode: RoadmapNode | undefined;

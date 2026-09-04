@@ -1,4 +1,5 @@
 import type { RoadmapDto } from '@/features/roadmap/types';
+import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import {
   Select,
   SelectContent,
@@ -33,19 +34,26 @@ export function NodeTypeSelect({
       <SelectContent>
         <SelectGroup>
           {nodeTypes.map((type) => (
-            <SelectItem key={type.id} value={type.id}>
-              <span className="flex items-center gap-2">
-                <span
-                  className="size-2.5 rounded-full"
-                  style={{ backgroundColor: type.color }}
-                  aria-hidden="true"
-                />
-                {type.name}
-              </span>
-            </SelectItem>
+            <NodeTypeOption key={type.id} type={type} />
           ))}
         </SelectGroup>
       </SelectContent>
     </Select>
+  );
+}
+
+function NodeTypeOption({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
+  return (
+    <SelectItem value={type.id}>
+      <span className="flex items-center gap-2">
+        <NodeTypeIcon
+          icon={type.icon}
+          className="size-4"
+          style={{ color: type.color }}
+          aria-hidden="true"
+        />
+        {type.name}
+      </span>
+    </SelectItem>
   );
 }

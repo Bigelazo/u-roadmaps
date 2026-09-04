@@ -1,5 +1,6 @@
 import { Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import {
@@ -14,7 +15,7 @@ import {
 } from '@/shared/ui/alert-dialog';
 import { Button } from '@/shared/ui/button';
 import { NodeTypeForm } from './NodeTypeForm';
-import type { NodeTypeInput } from './types';
+import type { NodeTypeDraft, NodeTypeInput } from './types';
 
 type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];
@@ -23,19 +24,25 @@ type Props = {
   onDelete: (id: string) => Promise<boolean>;
 };
 
-const defaultNodeTypeAppearance: Pick<NodeTypeInput, 'icon' | 'color'> = {
-  icon: 'Shapes',
-  color: '#024AD8',
-};
+function NodeTypeListIcon({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
+  return (
+    <NodeTypeIcon
+      icon={type.icon}
+      className="size-4 shrink-0"
+      style={{ color: type.color }}
+      aria-hidden="true"
+    />
+  );
+}
 
 export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props) {
-  const [value, setValue] = useState<NodeTypeInput>({ name: '', ...defaultNodeTypeAppearance });
+  const [value, setValue] = useState<NodeTypeDraft>({ name: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<{ id: string; name: string } | null>(null);
   const isEditing = editingId !== null;
 
   function closeEditor() {
-    setValue({ name: '', ...defaultNodeTypeAppearance });
+    setValue({ name: '' });
     setEditingId(null);
   }
 
@@ -50,7 +57,13 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
           isEditing={isEditing}
           onChange={setValue}
           onSubmit={async () => {
-            const saved = isEditing ? await onUpdate(editingId!, value) : await onAdd(value);
+            if (!value.icon || !value.color) return;
+            const nodeType: NodeTypeInput = {
+              name: value.name,
+              icon: value.icon,
+              color: value.color,
+            };
+            const saved = isEditing ? await onUpdate(editingId!, nodeType) : await onAdd(nodeType);
             if (saved) closeEditor();
           }}
           onCancel={isEditing ? closeEditor : undefined}
@@ -62,11 +75,7 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
       >
         {nodeTypes.map((type) => (
           <li key={type.id} className="flex items-center gap-2 py-2.5 text-sm">
-            <span
-              className="size-3 shrink-0 rounded-full"
-              style={{ backgroundColor: type.color }}
-              aria-hidden="true"
-            />
+            <NodeTypeListIcon type={type} />
             <span className="min-w-0 flex-1 truncate font-medium">{type.name}</span>
             {type.isPredefined ? (
               <span className="text-xs text-muted-foreground">Base</span>

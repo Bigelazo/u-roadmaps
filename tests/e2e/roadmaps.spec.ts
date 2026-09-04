@@ -53,6 +53,67 @@ async function createNodeFromCanvas(page: Page, title: string) {
   await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeVisible();
 }
 
+test('teacher creates and edits a custom node type with visual pickers', async ({
+  page,
+}, testInfo) => {
+  const typeName = uniqueName('Tipo visual E2E');
+  const api = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  });
+  let typeId: string | undefined;
+
+  try {
+    await authenticateAs(page.context(), fixture.daniela);
+    await page.goto('/courses/CC1002/2026/2');
+    await page.getByRole('button', { name: 'Crear en el mapa' }).click();
+    await page.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Tipos de nodo' });
+    const create = dialog.getByRole('button', { name: 'Crear tipo' });
+    await expect(create).toBeDisabled();
+    await dialog.getByLabel('Nombre').fill(typeName);
+
+    await dialog.getByRole('button', { name: 'Ícono: sin selección' }).click();
+    await page
+      .getByRole('dialog', { name: 'Elegir ícono' })
+      .getByRole('button', { name: 'Química' })
+      .click();
+    await dialog.getByRole('button', { name: 'Color: sin selección' }).click();
+    await page
+      .getByRole('dialog', { name: 'Elegir color' })
+      .getByRole('button', { name: 'Verde hoja' })
+      .click();
+    await expect(create).toBeEnabled();
+    await create.click();
+    await expect(dialog.getByText(typeName)).toBeVisible();
+
+    await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();
+    await expect(dialog.getByRole('button', { name: 'Ícono: Química' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Color: Verde hoja' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Ícono: Química' }).click();
+    await page
+      .getByRole('dialog', { name: 'Elegir ícono' })
+      .getByRole('button', { name: 'Cálculo' })
+      .click();
+    await dialog.getByRole('button', { name: 'Color: Verde hoja' }).click();
+    await page
+      .getByRole('dialog', { name: 'Elegir color' })
+      .getByRole('button', { name: 'Violeta' })
+      .click();
+    await dialog.getByRole('button', { name: 'Guardar tipo' }).click();
+
+    const roadmap = await api.get(roadmapPath());
+    const nodeType = (await roadmap.json()).nodeTypes.find(
+      (type: { name: string }) => type.name === typeName,
+    );
+    expect(nodeType).toMatchObject({ icon: 'Calculator', color: '#7540B8' });
+    typeId = nodeType?.id;
+  } finally {
+    await deleteIfPresent(api, typeId && roadmapPath(`/node-types/${typeId}`));
+    await api.dispose();
+  }
+});
+
 test('fixture participants receive their authorized roadmap representation', async ({
   request,
 }, testInfo) => {
@@ -672,9 +733,7 @@ test('creating consecutive nodes keeps them visible, separated, selected, and pe
       ).size,
     ).toBe(3);
     const nodeBoxes = await Promise.all(
-      nodeIds.map((nodeId) =>
-        page.locator(`.react-flow__node[data-id="${nodeId}"]`).boundingBox(),
-      ),
+      nodeIds.map((nodeId) => page.locator(`.react-flow__node[data-id="${nodeId}"]`).boundingBox()),
     );
     for (let index = 0; index < nodeBoxes.length; index += 1) {
       const current = nodeBoxes[index];

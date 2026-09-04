@@ -295,11 +295,15 @@ test('manages node types from the floating canvas button', async () => {
   await user.click(screen.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }));
   const dialog = screen.getByRole('dialog', { name: 'Tipos de nodo' });
   await user.type(within(dialog).getByLabelText('Nombre'), 'Laboratorio');
+  await user.click(within(dialog).getByRole('button', { name: 'Ícono: sin selección' }));
+  await user.click(screen.getByRole('button', { name: 'Libro abierto' }));
+  await user.click(within(dialog).getByRole('button', { name: 'Color: sin selección' }));
+  await user.click(screen.getByRole('button', { name: 'Azul institucional' }));
   await user.click(within(dialog).getByRole('button', { name: 'Crear tipo' }));
 
   expect(addNodeType).toHaveBeenCalledWith({
     name: 'Laboratorio',
-    icon: 'Shapes',
+    icon: 'BookOpen',
     color: '#024AD8',
   });
   expect(screen.getByRole('dialog', { name: 'Tipos de nodo' })).toBeTruthy();
