@@ -269,6 +269,9 @@ test('student roadmap shows effective block reasons and restores a completed nod
     await expect(teacherBlockedCard.locator('[data-slot="roadmap-card"]')).toHaveClass(
       /cursor-not-allowed/,
     );
+    await expect(teacherBlockedCard.getByRole('img', { name: 'Bloqueado' })).toBeVisible();
+    await expect(prerequisiteBlockedCard.getByRole('img', { name: 'Bloqueado' })).toBeVisible();
+    await expect(teacherBlockedCard.getByRole('img', { name: 'Completado' })).toHaveCount(0);
     await expect(teacherBlockedCard.locator('a')).toHaveCount(0);
     await expect(page.getByText('Descripción protegida del nodo.')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Recurso protegido' })).toHaveCount(0);

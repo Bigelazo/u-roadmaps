@@ -16,6 +16,7 @@ function mountBlockedNode(blockReason: StudentNodeBlockReason) {
             title: 'Contenido bloqueado',
             typeColor: '#024AD8',
             typeName: 'Contenido',
+            typeIcon: 'BookOpen',
             status: 'locked',
             blockReason,
             isHidden: false,
@@ -43,6 +44,7 @@ test('marks hidden teacher nodes with a distinct visual treatment and no visibil
       title: 'Material de coordinación',
       typeColor: '#024AD8',
       typeName: 'Contenido',
+      typeIcon: 'BookOpen',
       status: 'editing',
       isHidden: true,
     },
@@ -81,6 +83,7 @@ test('keeps dependency handles mounted, but inert, for student nodes', () => {
       title: 'Funciones',
       typeColor: '#024AD8',
       typeName: 'Contenido',
+      typeIcon: 'BookOpen',
       status: 'available',
       isHidden: false,
     },
@@ -108,7 +111,7 @@ test('keeps dependency handles mounted, but inert, for student nodes', () => {
   }
 });
 
-test('uses the node type as its label instead of repeating its available status', () => {
+test('shows the node-type icon with an accessible label, rather than persistent status text', () => {
   const props = {
     id: 'node-2',
     type: 'roadmap',
@@ -116,6 +119,7 @@ test('uses the node type as its label instead of repeating its available status'
       title: 'Introducción a funciones',
       typeColor: '#024AD8',
       typeName: 'Contenido',
+      typeIcon: 'BookOpen',
       status: 'available',
       isHidden: false,
     },
@@ -136,11 +140,11 @@ test('uses the node type as its label instead of repeating its available status'
     </ReactFlowProvider>,
   );
 
-  expect(screen.getByText('Contenido')).toBeTruthy();
-  expect(screen.queryByText('Disponible')).toBeNull();
+  expect(screen.getByRole('img', { name: 'Contenido' })).toBeTruthy();
+  expect(screen.queryByText('Pendiente')).toBeNull();
 });
 
-test('labels completed and available status icons for assistive technology', () => {
+test('labels completed and pending status badges for assistive technology', () => {
   const sharedProps = {
     id: 'node-3',
     type: 'roadmap' as const,
@@ -148,6 +152,7 @@ test('labels completed and available status icons for assistive technology', () 
       title: 'Introducción a funciones',
       typeColor: '#024AD8',
       typeName: 'Contenido',
+      typeIcon: 'BookOpen',
       isHidden: false,
     },
     selected: false,
@@ -182,7 +187,7 @@ test('labels completed and available status icons for assistive technology', () 
   );
 
   expect(screen.getByRole('img', { name: 'Completado' })).toBeTruthy();
-  expect(screen.getByRole('img', { name: 'Disponible' })).toBeTruthy();
+  expect(screen.getByRole('img', { name: 'Pendiente' })).toBeTruthy();
 });
 
 test.each([
@@ -192,9 +197,9 @@ test.each([
   mountBlockedNode(reason);
 
   expect(screen.getByText('Contenido bloqueado')).toBeTruthy();
-  expect(screen.getByText('Contenido')).toBeTruthy();
+  expect(screen.getByRole('img', { name: 'Contenido' })).toBeTruthy();
   expect(screen.getByText(message)).toBeTruthy();
-  expect(screen.getByRole('img', { name: message })).toBeTruthy();
+  expect(screen.getByRole('img', { name: 'Bloqueado' })).toBeTruthy();
   const card = screen.getByTestId('roadmap-card');
   expect(card.className).toContain('cursor-not-allowed');
   expect(card.getAttribute('aria-disabled')).toBe('true');
@@ -225,6 +230,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
           title: 'Breve',
           typeColor: '#024AD8',
           typeName: 'Contenido',
+          typeIcon: 'BookOpen',
           status: 'available',
           isHidden: false,
         })}
@@ -235,6 +241,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
             'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse',
           typeColor: '#024AD8',
           typeName: 'Contenido',
+          typeIcon: 'BookOpen',
           status: 'available',
           isHidden: false,
         })}
@@ -244,6 +251,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
           title: 'Oculto',
           typeColor: '#024AD8',
           typeName: 'Contenido',
+          typeIcon: 'BookOpen',
           status: 'editing',
           isHidden: true,
         })}
@@ -253,6 +261,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
           title: 'Bloqueado',
           typeColor: '#024AD8',
           typeName: 'Contenido',
+          typeIcon: 'BookOpen',
           status: 'locked',
           isHidden: false,
           blockReason: 'PREREQUISITE_BLOCK',
@@ -287,6 +296,7 @@ test('wraps long card titles while preserving their full accessible name', () =>
       title,
       typeColor: '#024AD8',
       typeName: 'Contenido',
+      typeIcon: 'BookOpen',
       status: 'available',
       isHidden: false,
     },
@@ -311,8 +321,8 @@ test('wraps long card titles while preserving their full accessible name', () =>
   const content = screen.getByTestId('roadmap-node-content');
   expect(content.className).toContain('h-full');
   expect(content.className).toContain('items-center');
-  expect(content.className).toContain('justify-center');
+  expect(content.className).not.toContain('justify-center');
   expect(heading.getAttribute('title')).toBe(title);
-  expect(heading.className).toContain('break-words');
-  expect(heading.className).toContain('text-center');
+  expect(heading.className).toContain('line-clamp-2');
+  expect(heading.className).toContain('text-left');
 });

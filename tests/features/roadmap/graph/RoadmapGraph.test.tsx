@@ -52,6 +52,7 @@ test('keeps hidden nodes on the teacher graph and marks them as hidden from stud
   expect(teacherNode.data.isHidden).toBe(true);
   expect(teacherNode.data.typeColor).toBe('#024AD8');
   expect(teacherNode.data.typeName).toBe('Contenido');
+  expect(teacherNode.data.typeIcon).toBe('BookOpen');
   expect(studentNode.hidden).toBe(true);
 });
 
@@ -111,6 +112,15 @@ test('preserves the teacher and student node-status mapping', () => {
   expect(mapRoadmapGraph(roadmap, false).nodes[0].data.status).toBe('locked');
   expect(mapRoadmapGraph(completedRoadmap, false).nodes[0].data.status).toBe('completed');
   expect(mapRoadmapGraph(availableRoadmap, false).nodes[0].data.status).toBe('available');
+});
+
+test('makes a restriction take visual precedence over a retained completion', () => {
+  const restrictedCompletedRoadmap = structuredClone(roadmap);
+  restrictedCompletedRoadmap.nodes[0].isVisible = true;
+  restrictedCompletedRoadmap.nodes[0].isTeacherBlocked = true;
+  restrictedCompletedRoadmap.nodes[0].isCompleted = true;
+
+  expect(mapRoadmapGraph(restrictedCompletedRoadmap, false).nodes[0].data.status).toBe('locked');
 });
 
 test('maps each blocked reason to a disabled, non-selectable student node', () => {

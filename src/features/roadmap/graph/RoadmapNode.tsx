@@ -1,8 +1,10 @@
-import { CheckCircle2, Circle, LockKeyhole } from 'lucide-react';
+import { CircleCheckBig, CircleEllipsis, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
+import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import { cn } from 'cn';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
@@ -10,6 +12,7 @@ export type RoadmapNodeData = Record<string, unknown> & {
   title: string;
   typeColor: string;
   typeName: string;
+  typeIcon: string;
   status: RoadmapNodeStatus;
   isHidden: boolean;
   blockReason?: StudentNodeBlockReason;
@@ -17,29 +20,72 @@ export type RoadmapNodeData = Record<string, unknown> & {
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
 
+function NodeTypeBadge({
+  icon,
+  name,
+  color,
+}: {
+  icon: RoadmapNodeData['typeIcon'];
+  name: RoadmapNodeData['typeName'];
+  color: RoadmapNodeData['typeColor'];
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="shrink-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            role="img"
+            aria-label={name}
+            tabIndex={0}
+          />
+        }
+      >
+        <NodeTypeIcon icon={icon} size={20} color={color} aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent>{name}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function StudentStatusBadge({ status }: Pick<RoadmapNodeData, 'status'>) {
+  if (status === 'editing') return null;
+
+  const isCompleted = status === 'completed';
+  const isLocked = status === 'locked';
+  const label = isLocked ? 'Bloqueado' : isCompleted ? 'Completado' : 'Pendiente';
+  const Icon = isLocked ? LockKeyhole : isCompleted ? CircleCheckBig : CircleEllipsis;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            role="img"
+            aria-label={label}
+            tabIndex={0}
+          />
+        }
+      >
+        <Icon
+          className="size-5"
+          color={isLocked ? 'var(--steel)' : isCompleted ? 'var(--progress-deep)' : 'var(--ink)'}
+          aria-hidden="true"
+        />
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
   const size = roadmapNodeSizeForTitle(data.title);
-  const completed = data.status === 'completed';
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
   const blockMessage = data.blockReason ? studentNodeBlockMessages[data.blockReason] : undefined;
-  const accent = completed
-    ? 'var(--progress-deep)'
-    : locked
-      ? 'var(--steel)'
-      : data.status === 'available'
-        ? 'var(--ink)'
-        : 'var(--primary)';
-  const statusLabel = completed
-    ? 'Completado'
-    : locked
-      ? (blockMessage ?? 'Bloqueado')
-      : 'Disponible';
-  // El tipo se lee en el color de la tarjeta: el borde lo lleva saturado y el
-  // fondo la misma tinta sobre la superficie, sin gastar una línea en una
-  // etiqueta. Las tarjetas bloqueadas y ocultas apagan la superficie.
-  const surface = hidden || locked ? 'var(--cloud)' : 'var(--card)';
+  const surface = hidden || locked ? 'var(--cloud)' : '#fff';
   return (
     <div
       data-slot="roadmap-card"
@@ -54,49 +100,31 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-            'cursor-pointer transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)]',
-            !hidden && 'shadow-[var(--shadow-roadmap-node)]',
-          ),
+              'cursor-pointer transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)]',
+              !hidden && 'shadow-[var(--shadow-roadmap-node)]',
+            ),
       )}
       style={{
         width: size.width,
         height: size.height,
-        backgroundColor: `color-mix(in srgb, ${data.typeColor} 14%, ${surface})`,
+        backgroundColor: surface,
         backgroundImage: hidden
           ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 11px)`
           : undefined,
-        borderColor:
-          hidden || locked
-            ? `color-mix(in srgb, ${data.typeColor} 55%, ${surface})`
-            : data.typeColor,
+        borderColor: data.typeColor,
       }}
     >
-      <span className="sr-only">{data.typeName}</span>
       <div
         data-testid="roadmap-node-content"
         className={cn(
-          'flex items-center justify-center gap-2.5',
+          'flex items-center gap-2.5',
           blockMessage ? 'h-[calc(100%-2.75rem)]' : 'h-full',
         )}
       >
-        <span className="shrink-0" role="img" aria-label={statusLabel}>
-          {completed ? (
-            <CheckCircle2
-              size={24}
-              color="var(--progress-deep)"
-              fill="var(--progress-deep)"
-              stroke="var(--card)"
-              aria-hidden="true"
-            />
-          ) : locked ? (
-            <LockKeyhole size={20} aria-hidden="true" />
-          ) : (
-            <Circle size={20} fill="var(--primary-soft)" stroke={accent} aria-hidden="true" />
-          )}
-        </span>
+        <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={data.typeColor} />
         <p
           title={data.title}
-          className="min-w-0 text-center text-[15.5px] leading-[1.25] font-medium break-words text-ink"
+          className="line-clamp-2 min-w-0 text-left text-[15.5px] leading-[1.25] font-medium text-ink"
         >
           {data.title}
         </p>
@@ -107,32 +135,33 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
           {blockMessage}
         </p>
       ) : null}
+      <StudentStatusBadge status={data.status} />
       {!hidden
         ? (
-          [
-            ['top', Position.Top],
-            ['right', Position.Right],
-            ['bottom', Position.Bottom],
-            ['left', Position.Left],
-          ] as const
-        ).map(([id, position]) => (
-          <Handle
-            key={id}
-            id={id}
-            data-testid="roadmap-node-handle"
-            type="source"
-            position={position}
-            isConnectable={editing}
-            style={{
-              width: 12,
-              height: 12,
-              background: 'var(--primary)',
-              border: '2px solid var(--card)',
-              visibility: editing ? 'visible' : 'hidden',
-              pointerEvents: editing ? 'auto' : 'none',
-            }}
-          />
-        ))
+            [
+              ['top', Position.Top],
+              ['right', Position.Right],
+              ['bottom', Position.Bottom],
+              ['left', Position.Left],
+            ] as const
+          ).map(([id, position]) => (
+            <Handle
+              key={id}
+              id={id}
+              data-testid="roadmap-node-handle"
+              type="source"
+              position={position}
+              isConnectable={editing}
+              style={{
+                width: 12,
+                height: 12,
+                background: 'var(--primary)',
+                border: '2px solid var(--card)',
+                visibility: editing ? 'visible' : 'hidden',
+                pointerEvents: editing ? 'auto' : 'none',
+              }}
+            />
+          ))
         : null}
     </div>
   );

@@ -26,6 +26,7 @@ export function studentNodeBlockReason(node: StudentNode): StudentNodeBlockReaso
 
 export function studentNodeStatus(node: StudentNode): StudentNodeStatus {
   if (isStudentBlockedNode(node)) return 'locked';
+  if ('isTeacherBlocked' in node && node.isTeacherBlocked) return 'locked';
   if ('isCompleted' in node && node.isCompleted) return 'completed';
   return 'canComplete' in node && node.canComplete ? 'available' : 'locked';
 }

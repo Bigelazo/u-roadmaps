@@ -687,6 +687,11 @@ test('teacher and student workflows render against the shared fixture', async ({
     await panRoadmapNodeIntoView(page, fixture.cc1002.firstNode);
     await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
     await expect(
+      page
+        .locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`)
+        .getByRole('img', { name: 'Pendiente' }),
+    ).toBeVisible();
+    await expect(
       page.getByRole('link', { name: 'Programa y herramientas del curso' }),
     ).toHaveAttribute('href', 'https://ucampus.uchile.cl/');
     await expect(page.getByRole('button', { name: 'Completar' })).toBeEnabled();

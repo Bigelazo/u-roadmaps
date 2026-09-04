@@ -29,6 +29,7 @@ export function mapRoadmapGraph(
         title: node.title,
         typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
         typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
+        typeIcon: nodeTypesById.get(node.nodeTypeId)?.icon ?? 'Shapes',
         status: nodeStatus(node, canEdit),
         isHidden,
         blockReason,
