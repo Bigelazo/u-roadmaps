@@ -4,7 +4,7 @@ import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader } from '@/shared/ui/card';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
-import { cn } from '@/shared/lib/utils';
+import { cn } from 'cn';
 
 const courseBenefits = [
   {

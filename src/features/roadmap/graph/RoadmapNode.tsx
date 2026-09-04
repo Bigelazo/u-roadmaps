@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
-import { cn } from '@/shared/lib/utils';
+import { cn } from 'cn';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> & {
@@ -17,7 +17,7 @@ export type RoadmapNodeData = Record<string, unknown> & {
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
 
-export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
+export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
   const size = roadmapNodeSizeForTitle(data.title);
   const completed = data.status === 'completed';
   const locked = data.status === 'locked';
@@ -49,6 +49,7 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       aria-disabled={locked ? true : undefined}
       className={cn(
         'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transform-none motion-reduce:transition-none',
+        selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
         hidden && 'border-dashed',
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
@@ -71,7 +72,13 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
       }}
     >
       <span className="sr-only">{data.typeName}</span>
-      <div className="flex items-start gap-2.5">
+      <div
+        data-testid="roadmap-node-content"
+        className={cn(
+          'flex items-center justify-center gap-2.5',
+          blockMessage ? 'h-[calc(100%-2.75rem)]' : 'h-full',
+        )}
+      >
         <span className="shrink-0" role="img" aria-label={statusLabel}>
           {completed ? (
             <CheckCircle2
@@ -89,7 +96,7 @@ export function RoadmapNode({ data }: NodeProps<RoadmapFlowNode>) {
         </span>
         <p
           title={data.title}
-          className="min-w-0 break-words text-[15.5px] leading-[1.25] font-medium text-ink"
+          className="min-w-0 text-[15.5px] leading-[1.25] font-medium break-words text-ink"
         >
           {data.title}
         </p>

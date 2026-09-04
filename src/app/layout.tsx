@@ -6,7 +6,7 @@ import GlobalNavigation from '@/app/_components/GlobalNavigation';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { developmentEnvironmentEnabled } from '@/shared/server/environment/development';
 import { Archivo, Plus_Jakarta_Sans } from 'next/font/google';
-import { cn } from '@/shared/lib/utils';
+import { cn } from 'cn';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
 const archivo = Archivo({ axes: ['wdth'], subsets: ['latin'], variable: '--font-archivo' });
