@@ -84,6 +84,10 @@ _Avoid_: Learning unit
 A visible node to which a teacher block, a prerequisite block, or both apply. It remains represented in the student's roadmap but exposes neither its pedagogical details nor its resources and cannot be completed, even when that student completed it previously; the completion is retained and becomes effective again after every block is removed. When both reasons apply, the student is told only that teaching staff blocked it.
 _Avoid_: Hidden node, unavailable node
 
+**Node state (Estado del nodo)**:
+The student-facing current condition of a visible node: Pending, Completed, or Blocked. It is represented by a status icon whose name is exposed through a tooltip and accessible label rather than persistent visible text; Blocked prevails while any access restriction applies, even when a Completion is retained.
+_Avoid_: Node type, visible status label
+
 **Teacher block (Bloqueo docente)**:
 An access restriction imposed by teaching staff on a visible node; it also applies persistently to every current or subsequently connected transitive dependent that can be blocked. Each resulting block persists until teaching staff remove it manually after unblocking all blocked transitive prerequisites, and it prevails over any prior completion without deleting it; academic-calendar closure removes every teacher block before freezing the roadmap.
 _Avoid_: Node visibility, prerequisite block
@@ -97,8 +101,16 @@ A per-student access restriction derived from a pending prerequisite completion 
 _Avoid_: Teacher block, hidden node
 
 **Node type (Tipo de nodo)**:
-A named, hexadecimal-color category that expresses the kind of pedagogical information represented by a node, such as learning content or an assessment. It can be predefined or customized for a roadmap.
+A named category with a color from the node type color palette and an icon from the teaching icon catalog that expresses the kind of pedagogical information represented by a node, such as learning content or an assessment. Every node type has both; it can be predefined or customized for a roadmap.
 _Avoid_: Visual type, style
+
+**Node type color palette (Paleta de colores de tipos de nodo)**:
+The fixed set of 20 named, contrast-safe colors from which teaching staff choose the required color of a node type. Arbitrary custom colors are not part of the palette.
+_Avoid_: Native color picker, custom hexadecimal color
+
+**Teaching icon catalog (Catálogo de íconos docentes)**:
+The curated, categorized set of 80 Lucide icons from which teaching staff choose the required icon of a node type. Its options represent teaching and learning concepts and use Spanish labels rather than exposing the unrestricted Lucide catalog; selection is visual rather than text search.
+_Avoid_: Full Lucide catalog, custom icon upload
 
 **Predefined node type (Tipo de nodo predefinido)**:
 An immutable node type offered by the platform as a shared base for every roadmap. The initial set includes Content, Assessment, and Supplementary material.
