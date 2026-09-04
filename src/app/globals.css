@@ -154,4 +154,8 @@ body {
   html {
     @apply font-sans;
   }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
 }

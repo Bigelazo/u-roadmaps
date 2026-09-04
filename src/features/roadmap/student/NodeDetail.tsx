@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
+import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -30,6 +30,15 @@ import {
 } from '@/shared/ui/item';
 import { Separator } from '@/shared/ui/separator';
 import { Sheet, SheetContent, SheetTitle } from '@/shared/ui/sheet';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarProvider,
+  SidebarRail,
+} from '@/shared/ui/sidebar';
+import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
+import { cn } from 'cn';
 
 function resourceIcon(type: Resource['type']) {
   return type === 'VIDEO' ? <FileCode2 size={20} /> : <FileText size={20} />;
@@ -53,6 +62,7 @@ type ContentProps = {
   onClose: () => void;
   onComplete: (node: RoadmapNode | StudentRoadmapNode) => void;
   isModal?: boolean;
+  isSidebar?: boolean;
 };
 
 function StudentNodeDetailContent({
@@ -61,11 +71,18 @@ function StudentNodeDetailContent({
   onClose,
   onComplete,
   isModal = false,
+  isSidebar = false,
 }: ContentProps) {
   const blocked = isStudentBlockedNode(node);
+  const Header = isSidebar ? SidebarHeader : 'header';
   return (
     <>
-      <header className="relative border-b border-border px-6 pt-7 pb-6">
+      <Header
+        className={cn(
+          'relative border-b border-border px-6 pt-7 pb-6',
+          isSidebar && 'shrink-0 p-0 px-6 pt-7 pb-6',
+        )}
+      >
         <Button
           aria-label="Cerrar detalle"
           onClick={onClose}
@@ -112,9 +129,9 @@ function StudentNodeDetailContent({
               : 'Este nodo se desbloquea cuando completes sus prerrequisitos.'}
           </p>
         ) : null}
-      </header>
+      </Header>
       {!blocked ? (
-        <div className="overflow-y-auto px-6 py-6">
+        <DetailBody isSidebar={isSidebar}>
           <h3 className="flex items-center gap-2 font-semibold">
             <FileText size={18} /> Descripción
           </h3>
@@ -163,15 +180,25 @@ function StudentNodeDetailContent({
               </Empty>
             )}
           </div>
-        </div>
+        </DetailBody>
       ) : null}
     </>
   );
 }
 
+function DetailBody({ children, isSidebar }: { children: ReactNode; isSidebar: boolean }) {
+  if (isSidebar) {
+    return <SidebarContent className="px-6 py-6">{children}</SidebarContent>;
+  }
+
+  return <div className="overflow-y-auto px-6 py-6">{children}</div>;
+}
+
 type Props = Omit<ContentProps, 'node' | 'status'> & {
   node: RoadmapNode | StudentRoadmapNode | undefined;
   status: StudentNodeStatus | null;
+  panelWidth?: number;
+  onPanelWidthChange?: (width: number) => void;
 };
 
 const mobileLayoutQuery = '(max-width: 767px)';
@@ -190,7 +217,14 @@ function useMobileLayout() {
   return useSyncExternalStore(subscribeToMobileLayout, getMobileLayoutSnapshot, () => false);
 }
 
-export function StudentNodeDetail({ node, status, onClose, onComplete }: Props) {
+export function StudentNodeDetail({
+  node,
+  status,
+  onClose,
+  onComplete,
+  panelWidth = 426,
+  onPanelWidthChange,
+}: Props) {
   const isMobile = useMobileLayout();
   if (!node || !status || isStudentBlockedNode(node)) return null;
   if (isMobile) {
@@ -215,16 +249,36 @@ export function StudentNodeDetail({ node, status, onClose, onComplete }: Props) 
   }
 
   return (
-    <aside
-      aria-labelledby="student-node-detail-title"
-      className="absolute top-0 right-0 bottom-0 z-[6] flex w-[426px] flex-col border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58_/_10%)]"
+    <SidebarProvider
+      className="absolute inset-y-0 right-0 z-[6] min-h-0"
+      style={{ width: panelWidth, '--sidebar-width': `${panelWidth}px` } as CSSProperties}
     >
-      <StudentNodeDetailContent
-        node={node}
-        status={status}
-        onClose={onClose}
-        onComplete={onComplete}
-      />
-    </aside>
+      <Sidebar
+        side="right"
+        collapsible="none"
+        id="student-node-detail-panel"
+        aria-labelledby="student-node-detail-title"
+        className="border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58_/_10%)]"
+      >
+        {onPanelWidthChange ? (
+          <SidebarRail
+            ariaLabel="Redimensionar detalle del nodo"
+            controlsId="student-node-detail-panel"
+            value={panelWidth}
+            min={panelWidthLimits.min}
+            max={panelWidthLimits.max}
+            onValueChange={onPanelWidthChange}
+            className="sm:hidden lg:flex"
+          />
+        ) : null}
+        <StudentNodeDetailContent
+          node={node}
+          status={status}
+          onClose={onClose}
+          onComplete={onComplete}
+          isSidebar
+        />
+      </Sidebar>
+    </SidebarProvider>
   );
 }

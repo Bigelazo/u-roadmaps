@@ -308,6 +308,11 @@ test('wraps long card titles while preserving their full accessible name', () =>
   );
 
   const heading = screen.getByText(title);
+  const content = screen.getByTestId('roadmap-node-content');
+  expect(content.className).toContain('h-full');
+  expect(content.className).toContain('items-center');
+  expect(content.className).toContain('justify-center');
   expect(heading.getAttribute('title')).toBe(title);
   expect(heading.className).toContain('break-words');
+  expect(heading.className).toContain('text-center');
 });

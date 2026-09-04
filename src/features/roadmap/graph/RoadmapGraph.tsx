@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -14,9 +14,10 @@ import {
   type EdgeChange,
   type NodeChange,
   type OnNodeDrag,
+  useReactFlow,
 } from '@xyflow/react';
 import { LayoutTemplate } from 'lucide-react';
-import { roadmapGridSize } from '@/features/roadmap/graph/geometry';
+import { roadmapGridSize, type NodeRect } from '@/features/roadmap/graph/geometry';
 import { Button } from '@/shared/ui/button';
 import type { AnyRoadmapDto } from '@/features/roadmap/types';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
@@ -29,6 +30,78 @@ import {
 } from '@/features/roadmap/graph/dagre-layout';
 
 const selectedEdgeColor = 'var(--primary)';
+
+function RoadmapGraphToolbar({
+  containerRef,
+  layoutDirection,
+  canAutoLayout,
+  onAutoLayout,
+  topRightActions,
+}: {
+  containerRef: RefObject<HTMLDivElement | null>;
+  layoutDirection: RoadmapLayoutDirection;
+  canAutoLayout: boolean;
+  onAutoLayout: () => void;
+  topRightActions?: (getViewport: () => NodeRect) => ReactNode;
+}) {
+  const { screenToFlowPosition } = useReactFlow();
+  const getViewport = useCallback(() => {
+    const bounds = containerRef.current?.getBoundingClientRect();
+    if (!bounds) return { x: 0, y: 0, width: 0, height: 0 };
+    const topLeft = screenToFlowPosition({ x: bounds.left, y: bounds.top });
+    const bottomRight = screenToFlowPosition({
+      x: bounds.right,
+      y: bounds.bottom,
+    });
+    return {
+      x: topLeft.x,
+      y: topLeft.y,
+      width: bottomRight.x - topLeft.x,
+      height: bottomRight.y - topLeft.y,
+    };
+  }, [containerRef, screenToFlowPosition]);
+
+  return (
+    <Panel position="top-right" className="mt-5 mr-5">
+      <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="justify-start sm:justify-center"
+          disabled={!canAutoLayout}
+          onClick={onAutoLayout}
+        >
+          <LayoutTemplate data-icon="inline-start" />
+          Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
+        </Button>
+        {topRightActions ? (
+          <div className="flex justify-end gap-1.5">{topRightActions(getViewport)}</div>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+function FitViewportOnPanelResize({
+  version,
+}: {
+  version: number;
+}) {
+  const { fitView } = useReactFlow();
+  const hasMounted = useRef(false);
+
+  useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => void fitView({ padding: 0.28 }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [fitView, version]);
+
+  return null;
+}
 
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
   const defaultStroke = edge.data?.defaultStroke ?? 'var(--steel)';
@@ -48,7 +121,9 @@ type Props = {
   onConnectNodes: (connection: Connection) => void;
   onDeleteDependencies: (dependencyIds: string[]) => void;
   onAutoLayout: (nodes: RoadmapFlowNode[]) => void;
-  topRightActions?: ReactNode;
+  selectedNodeId?: string | null;
+  topRightActions?: (getViewport: () => NodeRect) => ReactNode;
+  viewportFitVersion?: number;
 };
 
 export function RoadmapGraph({
@@ -59,7 +134,9 @@ export function RoadmapGraph({
   onConnectNodes,
   onDeleteDependencies,
   onAutoLayout,
+  selectedNodeId,
   topRightActions,
+  viewportFitVersion,
 }: Props) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   // El lienzo guarda las posiciones que el arrastre todavía no ha recargado, de
@@ -72,12 +149,22 @@ export function RoadmapGraph({
     [],
   );
   const [flow, setFlow] = useState(() =>
-    mapRoadmapGraph(roadmap, canEdit, deleteDependency),
+    mapRoadmapGraph(roadmap, canEdit, deleteDependency, selectedNodeId),
   );
 
   useEffect(() => {
     setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency));
   }, [roadmap, canEdit, deleteDependency]);
+
+  useEffect(() => {
+    setFlow((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) => ({
+        ...node,
+        selected: node.id === selectedNodeId,
+      })),
+    }));
+  }, [selectedNodeId]);
 
   const connectNodes = useCallback(
     (connection: Connection) => onConnectNodes(connection),
@@ -92,104 +179,101 @@ export function RoadmapGraph({
     onAutoLayout(nodes);
   }, [flow.edges, flow.nodes, layoutDirection, onAutoLayout]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
   return (
-    <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
-      nodes={flow.nodes}
-      edges={flow.edges}
-      nodeTypes={roadmapNodeTypes}
-      edgeTypes={roadmapEdgeTypes}
-      nodesDraggable={canEdit}
-      nodesConnectable={canEdit}
-      snapToGrid
-      snapGrid={[roadmapGridSize, roadmapGridSize]}
-      connectionMode={ConnectionMode.Loose}
-      nodesFocusable
-      nodeDragThreshold={5}
-      nodeClickDistance={6}
-      elementsSelectable
-      deleteKeyCode={['Backspace', 'Delete']}
-      onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) =>
-        setFlow((current) => ({
-          ...current,
-          nodes: applyNodeChanges(
-            changes.filter((change) => change.type !== 'remove'),
-            current.nodes,
-          ),
-        }))
-      }
-      onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
-        setFlow((current) => ({
-          ...current,
-          edges: applyEdgeChanges(
-            changes.filter((change) => change.type !== 'remove'),
-            current.edges,
-          ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
-        }))
-      }
-      onNodeClick={(event, node) => {
-        if (node.data.blockReason) return;
-        onSelectNode(node.id, event.currentTarget as HTMLElement);
-      }}
-      onEdgeMouseEnter={
-        canEdit
-          ? (_event, edge) =>
-              setFlow((current) => ({
-                ...current,
-                edges: current.edges.map((currentEdge) =>
-                  currentEdge.id === edge.id
-                    ? updateEdgeAppearance(currentEdge, true)
-                    : currentEdge,
-                ),
-              }))
-          : undefined
-      }
-      onEdgeMouseLeave={
-        canEdit
-          ? (_event, edge) =>
-              setFlow((current) => ({
-                ...current,
-                edges: current.edges.map((currentEdge) =>
-                  currentEdge.id === edge.id ? updateEdgeAppearance(currentEdge) : currentEdge,
-                ),
-              }))
-          : undefined
-      }
-      onNodeDragStop={canEdit ? onMoveNode : undefined}
-      onConnect={canEdit ? connectNodes : undefined}
-      onEdgesDelete={
-        canEdit ? (edges) => onDeleteDependencies(edges.map((edge) => edge.id)) : undefined
-      }
-      fitView
-      fitViewOptions={{ padding: 0.28 }}
-      proOptions={{ hideAttribution: true }}
-    >
-      {canEdit ? (
-        <Panel position="top-right" className="mt-5 mr-5">
-          <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="justify-start sm:justify-center"
-              disabled={flow.nodes.length < 2}
-              onClick={applyAutoLayout}
-            >
-              <LayoutTemplate data-icon="inline-start" />
-              Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
-            </Button>
-            {topRightActions ? (
-              <div className="flex justify-end gap-1.5">{topRightActions}</div>
-            ) : null}
-          </div>
-        </Panel>
-      ) : null}
-      <Background
-        aria-label="Cuadrícula del lienzo"
-        variant={BackgroundVariant.Lines}
-        color="var(--fog)"
-        gap={roadmapGridSize}
-        size={1}
-      />
-    </ReactFlow>
+    <div ref={containerRef} className="h-full">
+      <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
+        className="h-full"
+        nodes={flow.nodes}
+        edges={flow.edges}
+        nodeTypes={roadmapNodeTypes}
+        edgeTypes={roadmapEdgeTypes}
+        nodesDraggable={canEdit}
+        nodesConnectable={canEdit}
+        snapToGrid
+        snapGrid={[roadmapGridSize, roadmapGridSize]}
+        connectionMode={ConnectionMode.Loose}
+        nodesFocusable
+        nodeDragThreshold={5}
+        nodeClickDistance={6}
+        elementsSelectable
+        deleteKeyCode={['Backspace', 'Delete']}
+        onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) =>
+          setFlow((current) => ({
+            ...current,
+            nodes: applyNodeChanges(
+              changes.filter((change) => change.type !== 'remove'),
+              current.nodes,
+            ),
+          }))
+        }
+        onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
+          setFlow((current) => ({
+            ...current,
+            edges: applyEdgeChanges(
+              changes.filter((change) => change.type !== 'remove'),
+              current.edges,
+            ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
+          }))
+        }
+        onNodeClick={(event, node) => {
+          if (node.data.blockReason) return;
+          onSelectNode(node.id, event.currentTarget as HTMLElement);
+        }}
+        onEdgeMouseEnter={
+          canEdit
+            ? (_event, edge) =>
+                setFlow((current) => ({
+                  ...current,
+                  edges: current.edges.map((currentEdge) =>
+                    currentEdge.id === edge.id
+                      ? updateEdgeAppearance(currentEdge, true)
+                      : currentEdge,
+                  ),
+                }))
+            : undefined
+        }
+        onEdgeMouseLeave={
+          canEdit
+            ? (_event, edge) =>
+                setFlow((current) => ({
+                  ...current,
+                  edges: current.edges.map((currentEdge) =>
+                    currentEdge.id === edge.id ? updateEdgeAppearance(currentEdge) : currentEdge,
+                  ),
+                }))
+            : undefined
+        }
+        onNodeDragStop={canEdit ? onMoveNode : undefined}
+        onConnect={canEdit ? connectNodes : undefined}
+        onEdgesDelete={
+          canEdit ? (edges) => onDeleteDependencies(edges.map((edge) => edge.id)) : undefined
+        }
+        fitView
+        fitViewOptions={{ padding: 0.28 }}
+        proOptions={{ hideAttribution: true }}
+      >
+        {viewportFitVersion !== undefined ? (
+          <FitViewportOnPanelResize version={viewportFitVersion} />
+        ) : null}
+        {canEdit ? (
+          <RoadmapGraphToolbar
+            containerRef={containerRef}
+            layoutDirection={layoutDirection}
+            canAutoLayout={flow.nodes.length >= 2}
+            onAutoLayout={applyAutoLayout}
+            topRightActions={topRightActions}
+          />
+        ) : null}
+        <Background
+          aria-label="Cuadrícula del lienzo"
+          variant={BackgroundVariant.Lines}
+          color="var(--fog)"
+          gap={roadmapGridSize}
+          size={1}
+        />
+      </ReactFlow>
+    </div>
   );
 }

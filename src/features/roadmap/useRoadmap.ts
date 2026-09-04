@@ -9,6 +9,7 @@ import {
   type TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import { roadmapUrl } from '@/features/roadmap/client';
+import type { Point } from '@/features/roadmap/graph/geometry';
 
 type NewNode = {
   title: string;
@@ -249,7 +250,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
   );
 
   const addNode = useCallback(
-    async (node: NewNode) => {
+    async (node: NewNode, position: Point, onCreated?: (nodeId: string) => void) => {
       const succeeded = await mutate(
         roadmapUrl(identifier, '/nodes'),
         {
@@ -257,11 +258,25 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
           body: JSON.stringify({
             ...node,
             description: node.description || null,
-            positionX: 160,
-            positionY: 160,
+            positionX: position.x,
+            positionY: position.y,
           }),
         },
         'No se pudo crear el nodo.',
+        async (response) => {
+          const body: unknown = await response.json();
+          if (
+            typeof body === 'object' &&
+            body !== null &&
+            'node' in body &&
+            typeof body.node === 'object' &&
+            body.node !== null &&
+            'id' in body.node &&
+            typeof body.node.id === 'string'
+          ) {
+            onCreated?.(body.node.id);
+          }
+        },
       );
       if (succeeded) await load();
       return succeeded;

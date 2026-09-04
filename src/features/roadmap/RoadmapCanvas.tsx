@@ -1,13 +1,14 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import dynamic from 'next/dynamic';
-import { Circle, CircleAlert, LockKeyhole, PanelRightOpen, Trash2 } from 'lucide-react';
+import { CircleAlert, PanelRightOpen, Trash2 } from 'lucide-react';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
+import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import {
   useRoadmap,
   type StructuralDependency,
@@ -20,7 +21,11 @@ import type {
   StudentRoadmapNode,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
-import { snapToRoadmapGrid } from '@/features/roadmap/graph/geometry';
+import {
+  findOpenRoadmapPosition,
+  roadmapNodeSizeForTitle,
+  snapToRoadmapGrid,
+} from '@/features/roadmap/graph/geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import {
   AlertDialog,
@@ -36,7 +41,8 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
-import { cn } from '@/shared/lib/utils';
+import { SidebarProvider } from '@/shared/ui/sidebar';
+import { cn } from 'cn';
 
 const RoadmapEditor = dynamic(
   () =>
@@ -105,44 +111,6 @@ function sameTeacherBlockImpact(first: TeacherBlockImpact[], second: TeacherBloc
   );
 }
 
-function RoadmapLegend({
-  nodeTypes,
-}: {
-  nodeTypes: { id: string; name: string; color: string }[];
-}) {
-  return (
-    <section
-      aria-label="Leyenda del roadmap"
-      className="absolute bottom-[18px] left-5 z-[4] flex max-w-[calc(100%-2.5rem)] flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card/92 px-3 py-2 text-xs shadow-sm"
-    >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="font-semibold text-foreground">Estado</span>
-        <span className="size-2.5 rounded-full bg-progress" aria-hidden="true" />
-        <span>Completado</span>
-        <Circle className="size-3 fill-card text-graphite" aria-hidden="true" />
-        <span>Disponible</span>
-        <LockKeyhole className="size-3 text-graphite" aria-hidden="true" />
-        <span>Bloqueado</span>
-      </div>
-      {nodeTypes.length ? (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-l border-border pl-3">
-          <span className="font-semibold text-foreground">Tipos</span>
-          {nodeTypes.map((type) => (
-            <span key={type.id} className="inline-flex items-center gap-1 whitespace-nowrap">
-              <span
-                className="size-2.5 rounded-sm"
-                style={{ backgroundColor: type.color }}
-                aria-hidden="true"
-              />
-              {type.name}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 export default function RoadmapCanvas({
   identifier,
   canEdit = false,
@@ -152,7 +120,15 @@ export default function RoadmapCanvas({
   semester,
 }: Props) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [isEditorOpen, setIsEditorOpen] = useState(true);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const editorPanel = usePersistentPanelWidth({
+    storageKey: 'u-roadmaps:roadmap-editor-panel-width',
+    initialWidth: 360,
+  });
+  const studentPanel = usePersistentPanelWidth({
+    storageKey: 'u-roadmaps:student-node-detail-width',
+    initialWidth: 426,
+  });
   const [pendingDependencyIds, setPendingDependencyIds] = useState<string[] | null>(null);
   const [pendingVisibilityChange, setPendingVisibilityChange] =
     useState<PendingVisibilityChange | null>(null);
@@ -188,6 +164,7 @@ export default function RoadmapCanvas({
 
   function closeSelectedNode() {
     setSelectedNodeId(null);
+    if (canEdit) setIsEditorOpen(false);
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
   }
 
@@ -276,6 +253,27 @@ export default function RoadmapCanvas({
   }
 
   const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
+  const addNodeAtViewport = (
+    node: Parameters<typeof addNode>[0],
+    viewport: { x: number; y: number; width: number; height: number },
+  ) => {
+    const size = roadmapNodeSizeForTitle(node.title);
+    const position = findOpenRoadmapPosition(
+      roadmap.nodes.map((roadmapNode) => ({
+        x: roadmapNode.positionX,
+        y: roadmapNode.positionY,
+        ...roadmapNodeSizeForTitle(roadmapNode.title),
+      })),
+      {
+        x: viewport.x + viewport.width / 2 - size.width / 2,
+        y: viewport.y + viewport.height / 2 - size.height / 2,
+      },
+      size,
+      viewport,
+    );
+    if (!position) return Promise.resolve(false);
+    return addNode(node, position, setSelectedNodeId);
+  };
   const teacherBlockDialog = pendingTeacherBlockChange
     ? teacherBlockConfirmation(
         pendingTeacherBlockChange.operation,
@@ -283,11 +281,20 @@ export default function RoadmapCanvas({
       )
     : null;
   return (
-    <div className="lg:h-full">
+    <SidebarProvider
+      className="min-h-0 lg:h-full"
+      style={
+        {
+          '--sidebar-width': `${canEdit ? editorPanel.width : studentPanel.width}px`,
+        } as CSSProperties
+      }
+    >
       <section
         className={cn(
-          'relative box-border grid min-h-[calc(100dvh-4rem)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
-          canEdit && isEditorOpen ? 'lg:grid-cols-[minmax(0,1fr)_360px]' : 'lg:grid-cols-1',
+          'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
+          canEdit && isEditorOpen
+            ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]'
+            : 'lg:grid-cols-1',
         )}
       >
         <div
@@ -318,7 +325,6 @@ export default function RoadmapCanvas({
               <kbd className="rounded border bg-background px-1">Supr</kbd>.
             </p>
           ) : null}
-          <RoadmapLegend nodeTypes={roadmap.nodeTypes} />
           {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
           <RoadmapGraph
             roadmap={roadmap}
@@ -328,7 +334,9 @@ export default function RoadmapCanvas({
               if (!canEdit && isStudentBlockedNode(node)) return;
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
+              if (canEdit) setIsEditorOpen(true);
             }}
+            selectedNodeId={selectedNodeId}
             onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
             onConnectNodes={(connection) => void requestDependencyChange(connection)}
             onDeleteDependencies={setPendingDependencyIds}
@@ -337,30 +345,33 @@ export default function RoadmapCanvas({
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
               );
             }}
+            viewportFitVersion={canEdit ? editorPanel.width : studentPanel.width}
             topRightActions={
-              canEdit ? (
-                <>
-                  <NodeCreator
-                    nodeTypes={roadmap.nodeTypes}
-                    onSubmit={addNode}
-                    onCreateNodeType={addNodeType}
-                    onUpdateNodeType={updateNodeType}
-                    onDeleteNodeType={deleteNodeType}
-                  />
-                  {!isEditorOpen ? (
-                    <Button
-                      aria-label="Mostrar panel de edición"
-                      title="Mostrar panel de edición"
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => setIsEditorOpen(true)}
-                    >
-                      <PanelRightOpen />
-                    </Button>
-                  ) : null}
-                </>
-              ) : undefined
+              canEdit
+                ? (getViewport) => (
+                    <>
+                      <NodeCreator
+                        nodeTypes={roadmap.nodeTypes}
+                        onSubmit={(node) => addNodeAtViewport(node, getViewport())}
+                        onCreateNodeType={addNodeType}
+                        onUpdateNodeType={updateNodeType}
+                        onDeleteNodeType={deleteNodeType}
+                      />
+                      {selectedNode && !isEditorOpen ? (
+                        <Button
+                          aria-label="Mostrar panel de edición"
+                          title="Mostrar panel de edición"
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          onClick={() => setIsEditorOpen(true)}
+                        >
+                          <PanelRightOpen />
+                        </Button>
+                      ) : null}
+                    </>
+                  )
+                : undefined
             }
           />
         </div>
@@ -381,6 +392,8 @@ export default function RoadmapCanvas({
             onUploadResource={uploadResource}
             onUpdateResource={updateResource}
             onDeleteResource={deleteResource}
+            panelWidth={editorPanel.width}
+            onPanelWidthChange={editorPanel.setWidth}
           />
         )}
         {!canEdit && (
@@ -389,6 +402,8 @@ export default function RoadmapCanvas({
             status={selectedNode ? studentNodeStatus(selectedNode) : null}
             onClose={closeSelectedNode}
             onComplete={(node) => void completeNode(node.id)}
+            panelWidth={studentPanel.width}
+            onPanelWidthChange={studentPanel.setWidth}
           />
         )}
       </section>
@@ -543,6 +558,6 @@ export default function RoadmapCanvas({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </SidebarProvider>
   );
 }

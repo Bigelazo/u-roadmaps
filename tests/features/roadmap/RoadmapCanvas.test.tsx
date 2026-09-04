@@ -11,22 +11,38 @@ vi.mock('next/dynamic', () => ({
     () =>
     ({
       selectedNode,
+      isOpen,
+      onToggle,
+      onClose,
       onRequestTeacherBlock,
       onToggleVisibility,
     }: {
       selectedNode?: { id: string; isTeacherBlocked: boolean };
+      isOpen: boolean;
+      onToggle: () => void;
+      onClose: () => void;
       onRequestTeacherBlock: (nodeId: string, operation: 'BLOCK' | 'UNBLOCK') => void;
       onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
     }) =>
-      selectedNode ? (
-        <>
-          <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
-            Bloquear acceso
+      isOpen ? (
+        <aside data-testid="editor-panel">
+          <button type="button" onClick={onToggle}>
+            Ocultar panel de edición
           </button>
-          <button type="button" onClick={() => onToggleVisibility(selectedNode.id, true)}>
-            Ocultar para estudiantes
-          </button>
-        </>
+          {selectedNode ? (
+            <>
+              <button type="button" onClick={onClose}>
+                Deseleccionar nodo
+              </button>
+              <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
+                Bloquear acceso
+              </button>
+              <button type="button" onClick={() => onToggleVisibility(selectedNode.id, true)}>
+                Ocultar para estudiantes
+              </button>
+            </>
+          ) : null}
+        </aside>
       ) : null,
 }));
 
@@ -36,6 +52,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onConnectNodes,
     onDeleteDependencies,
     onAutoLayout,
+    selectedNodeId,
     topRightActions,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
@@ -47,10 +64,19 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     }) => void;
     onDeleteDependencies: (ids: string[]) => void;
     onAutoLayout: (nodes: { id: string; position: { x: number; y: number } }[]) => void;
-    topRightActions?: ReactNode;
+    selectedNodeId?: string | null;
+    topRightActions?: (
+      getViewport: () => {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      },
+    ) => ReactNode;
   }) => (
     <>
-      {topRightActions}
+      {topRightActions?.(() => ({ x: 0, y: 0, width: 800, height: 600 }))}
+      <output data-testid="selected-roadmap-node">{selectedNodeId}</output>
       <button
         type="button"
         onClick={() => onSelectNode('blocked-node', document.createElement('div'))}
@@ -190,9 +216,7 @@ test('shows the course code and localized term together in the canvas header', (
   expect(courseCode.parentElement?.textContent).toBe('CC1001·Primavera 2026');
   expect(screen.getByText('Primavera 2026')).toBeTruthy();
   expect(screen.getByText('Modo edición')).toBeTruthy();
-  expect(screen.getByRole('region', { name: 'Leyenda del roadmap' }).textContent).toContain(
-    'TiposContenido',
-  );
+  expect(screen.queryByRole('region', { name: 'Leyenda del roadmap' })).toBeNull();
   expect(
     screen.getByText(/Arrastra desde un punto de un nodo a otro para crear una dependencia/),
   ).toBeTruthy();
@@ -219,7 +243,10 @@ test('uses Otoño for first-semester roadmaps', () => {
 
 test('creates nodes from the floating canvas button', async () => {
   const user = userEvent.setup();
-  const addNode = vi.fn().mockResolvedValue(true);
+  const addNode = vi.fn().mockImplementation(async (_node, _position, onCreated) => {
+    onCreated?.('created-node');
+    return true;
+  });
   useRoadmapMock.mockReturnValue(roadmapActions({ addNode }));
   renderCanvas(true);
 
@@ -235,12 +262,19 @@ test('creates nodes from the floating canvas button', async () => {
   await user.type(within(dialog).getByLabelText('Título'), 'Repasar límites');
   await user.click(within(dialog).getByRole('button', { name: 'Agregar nodo' }));
 
-  expect(addNode).toHaveBeenCalledWith({
-    title: 'Repasar límites',
-    description: '',
-    nodeTypeId: 'content',
-    isVisible: true,
-  });
+  expect(addNode).toHaveBeenCalledWith(
+    {
+      title: 'Repasar límites',
+      description: '',
+      nodeTypeId: 'content',
+      isVisible: true,
+    },
+    { x: 280, y: 260 },
+    expect.any(Function),
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('created-node'),
+  );
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 
@@ -434,6 +468,28 @@ test('persists every repositioned node after ordering the map', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Ordenar mapa' }));
   expect(moveNode).toHaveBeenCalledWith('node-1', { x: 40, y: 80 });
+});
+
+test('starts with the editor closed and opens it when selecting a node', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+});
+
+test('hides the editor when deselecting its node', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Deseleccionar nodo' }));
+
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
 });
 
 test('surfaces a mutation error as a dismissible toast over the canvas', async () => {

@@ -96,7 +96,7 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         </span>
         <p
           title={data.title}
-          className="min-w-0 text-[15.5px] leading-[1.25] font-medium break-words text-ink"
+          className="min-w-0 text-center text-[15.5px] leading-[1.25] font-medium break-words text-ink"
         >
           {data.title}
         </p>

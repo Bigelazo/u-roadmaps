@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
@@ -143,4 +143,34 @@ test('does not render a desktop detail sidebar when no node is selected', () => 
   );
 
   expect(screen.queryByText('Selecciona un nodo')).toBeNull();
+});
+
+test('uses the student profile width and exposes a desktop resize control', () => {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+  const onPanelWidthChange = vi.fn();
+
+  render(
+    <StudentNodeDetail
+      node={node}
+      status="available"
+      onClose={vi.fn()}
+      onComplete={vi.fn()}
+      panelWidth={460}
+      onPanelWidthChange={onPanelWidthChange}
+    />,
+  );
+
+  const separator = screen.getByRole('separator', { name: 'Redimensionar detalle del nodo' });
+  expect(separator.getAttribute('aria-valuenow')).toBe('460');
+  fireEvent.keyDown(separator, { key: 'ArrowLeft' });
+  expect(onPanelWidthChange).toHaveBeenCalledWith(440);
 });

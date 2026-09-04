@@ -15,6 +15,7 @@ export function mapRoadmapGraph(
   roadmap: AnyRoadmapDto,
   canEdit: boolean,
   onDeleteDependency?: (dependencyId: string) => void,
+  selectedNodeId?: string | null,
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
@@ -33,6 +34,7 @@ export function mapRoadmapGraph(
         blockReason,
       },
       position: { x: node.positionX, y: node.positionY },
+      selected: node.id === selectedNodeId,
       hidden: !canEdit && isHidden,
       connectable: canEdit && !isHidden,
       deletable: false,

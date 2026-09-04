@@ -44,6 +44,15 @@ async function panRoadmapNodeIntoView(page: Page, nodeId: string) {
   await expect(node).toBeInViewport();
 }
 
+async function createNodeFromCanvas(page: Page, title: string) {
+  await page.getByRole('button', { name: 'Crear en el mapa' }).click();
+  await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  await dialog.getByLabel('Título').fill(title);
+  await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeVisible();
+}
+
 test('fixture participants receive their authorized roadmap representation', async ({
   request,
 }, testInfo) => {
@@ -569,6 +578,137 @@ test('teacher and student workflows render against the shared fixture', async ({
     await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
     await api.dispose();
   }
+});
+
+test('creating consecutive nodes keeps them visible, separated, selected, and persisted', async ({
+  page,
+}, testInfo) => {
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
+  const api = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  });
+  const titles = [
+    uniqueName('Primer nodo consecutivo'),
+    uniqueName('Segundo nodo consecutivo'),
+    uniqueName('Tercer nodo consecutivo'),
+  ];
+  let nodeIds: string[] = [];
+
+  try {
+    for (const title of titles) {
+      await createNodeFromCanvas(page, title);
+      await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeInViewport();
+    }
+
+    const roadmap = await api.get(roadmapPath());
+    const nodes = (await roadmap.json()).nodes.filter((node: { title: string }) =>
+      titles.includes(node.title),
+    );
+    nodeIds = nodes.map((node: { id: string }) => node.id);
+    expect(nodeIds).toHaveLength(3);
+    expect(
+      new Set(
+        nodes.map(
+          (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
+        ),
+      ).size,
+    ).toBe(3);
+    const nodeBoxes = await Promise.all(
+      nodeIds.map((nodeId) =>
+        page.locator(`.react-flow__node[data-id="${nodeId}"]`).boundingBox(),
+      ),
+    );
+    for (let index = 0; index < nodeBoxes.length; index += 1) {
+      const current = nodeBoxes[index];
+      if (!current) throw new Error('No se pudo medir un nodo creado.');
+      for (const other of nodeBoxes.slice(index + 1)) {
+        if (!other) throw new Error('No se pudo medir un nodo creado.');
+        expect(
+          current.x + current.width <= other.x ||
+            other.x + other.width <= current.x ||
+            current.y + current.height <= other.y ||
+            other.y + other.height <= current.y,
+        ).toBe(true);
+      }
+    }
+
+    const lastNode = nodes.find((node: { title: string }) => node.title === titles[2]);
+    expect(lastNode).toBeTruthy();
+    const lastCard = page.locator(
+      `.react-flow__node[data-id="${lastNode.id}"] [data-slot="roadmap-card"]`,
+    );
+    await expect(lastCard).toHaveClass(/ring-2/);
+
+    await page.reload();
+    for (const nodeId of nodeIds) {
+      await expect(page.locator(`.react-flow__node[data-id="${nodeId}"]`)).toBeInViewport();
+    }
+    const reloaded = await api.get(roadmapPath());
+    const reloadedNodes = (await reloaded.json()).nodes.filter((node: { id: string }) =>
+      nodeIds.includes(node.id),
+    );
+    expect(
+      reloadedNodes.map(
+        (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
+      ),
+    ).toEqual(
+      nodes.map(
+        (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
+      ),
+    );
+  } finally {
+    await Promise.all(
+      nodeIds.map((nodeId) => deleteIfPresent(api, roadmapPath(`/nodes/${nodeId}`))),
+    );
+    await api.dispose();
+  }
+});
+
+test('keeps the teaching panel width across reloads without changing the student profile', async ({
+  page,
+}) => {
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/courses/CC1002/2026/2');
+  await page.evaluate(() => {
+    window.localStorage.removeItem('u-roadmaps:roadmap-editor-panel-width');
+    window.localStorage.removeItem('u-roadmaps:student-node-detail-width');
+  });
+  await page.reload();
+
+  const panel = page.locator('#roadmap-editor-panel');
+  const canvas = page.getByLabel('Lienzo del roadmap');
+  const separator = page.getByRole('separator', { name: 'Redimensionar panel de edición' });
+  const [initialPanel, initialCanvas, separatorBox] = await Promise.all([
+    panel.boundingBox(),
+    canvas.boundingBox(),
+    separator.boundingBox(),
+  ]);
+  if (!initialPanel || !initialCanvas || !separatorBox)
+    throw new Error('No se pudo obtener la geometría del panel redimensionable.');
+
+  await page.mouse.move(separatorBox.x + separatorBox.width / 2, separatorBox.y + 100);
+  await page.mouse.down();
+  await page.mouse.move(separatorBox.x - 100, separatorBox.y + 100, { steps: 5 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => (await panel.boundingBox())?.width)
+    .toBeGreaterThan(initialPanel.width);
+  await expect
+    .poll(async () => (await canvas.boundingBox())?.width)
+    .toBeLessThan(initialCanvas.width);
+  const resizedWidth = (await panel.boundingBox())?.width;
+  expect(resizedWidth).toBeTruthy();
+  expect(
+    await page.evaluate(() => window.localStorage.getItem('u-roadmaps:student-node-detail-width')),
+  ).toBeNull();
+
+  await page.reload();
+  await expect.poll(async () => (await panel.boundingBox())?.width).toBe(resizedWidth);
+  await expect(page.locator('.react-flow__node').first()).toBeInViewport();
 });
 
 test('withdrawn participations remain local to their course offering', async ({ page }) => {

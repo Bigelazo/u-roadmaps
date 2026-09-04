@@ -14,6 +14,8 @@ import {
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
 import { Button } from '@/shared/ui/button';
+import { Sidebar, SidebarContent, SidebarRail } from '@/shared/ui/sidebar';
+import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
 import type { NodeUpdate, ResourceInput, RoadmapEditorProps } from './types';
 
@@ -102,6 +104,8 @@ export function RoadmapEditor({
   onUploadResource,
   onUpdateResource,
   onDeleteResource,
+  panelWidth,
+  onPanelWidthChange,
 }: RoadmapEditorProps) {
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
   const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
@@ -114,36 +118,48 @@ export function RoadmapEditor({
     return () => media.removeEventListener('change', update);
   }, []);
 
-  if (!isOpen) {
+  if (!isOpen || !selectedNode) {
     return null;
   }
 
   return (
-    <aside
+    <Sidebar
+      side="right"
+      collapsible="none"
+      id="roadmap-editor-panel"
       aria-label="Panel de edición del roadmap"
-      className="order-2 min-w-0 border-t border-border bg-background lg:order-none lg:box-border lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l"
+      className="order-2 !w-full min-w-0 border-t border-border bg-background lg:order-none lg:box-border lg:min-h-0 lg:!w-(--sidebar-width) lg:overflow-hidden lg:border-t-0 lg:border-l"
     >
-      <details
-        open={isMobileEditorExpanded}
-        onToggle={(event) => setIsMobileEditorExpanded(event.currentTarget.open)}
-      >
-        <summary className="min-h-11 cursor-pointer border-b border-border bg-cloud/70 px-5 py-3 text-sm font-bold text-primary lg:hidden">
-          Editor de nodo
-        </summary>
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5">
-          <header className="flex justify-end py-3">
-            <Button
-              aria-label="Ocultar panel de edición"
-              title="Ocultar panel de edición"
-              onClick={onToggle}
-              size="icon"
-              variant="outline"
-            >
-              <PanelRightClose />
-            </Button>
-          </header>
+      <SidebarRail
+        ariaLabel="Redimensionar panel de edición"
+        controlsId="roadmap-editor-panel"
+        value={panelWidth}
+        min={panelWidthLimits.min}
+        max={panelWidthLimits.max}
+        onValueChange={onPanelWidthChange}
+        className="sm:hidden lg:flex"
+      />
+      <SidebarContent className="overflow-visible lg:overflow-y-auto">
+        <details
+          open={isMobileEditorExpanded}
+          onToggle={(event) => setIsMobileEditorExpanded(event.currentTarget.open)}
+        >
+          <summary className="min-h-11 cursor-pointer border-b border-border bg-cloud/70 px-5 py-3 text-sm font-bold text-primary lg:hidden">
+            Editor de nodo
+          </summary>
+          <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+            <header className="flex justify-end py-3">
+              <Button
+                aria-label="Ocultar panel de edición"
+                title="Ocultar panel de edición"
+                onClick={onToggle}
+                size="icon"
+                variant="outline"
+              >
+                <PanelRightClose />
+              </Button>
+            </header>
 
-          {selectedNode ? (
             <SelectedNodeEditor
               key={selectedNode.id}
               node={selectedNode}
@@ -172,13 +188,9 @@ export function RoadmapEditor({
               }
               onClose={onClose}
             />
-          ) : (
-            <p className="rounded-lg border border-dashed border-border bg-background px-3 py-3 text-sm leading-snug text-muted-foreground">
-              Selecciona un nodo del mapa para editar sus detalles, visibilidad y recursos.
-            </p>
-          )}
-        </div>
-      </details>
+          </div>
+        </details>
+      </SidebarContent>
 
       <AlertDialog
         open={Boolean(pendingDeletion)}
@@ -210,6 +222,6 @@ export function RoadmapEditor({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </aside>
+    </Sidebar>
   );
 }

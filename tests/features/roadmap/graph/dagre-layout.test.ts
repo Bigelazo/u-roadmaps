@@ -87,7 +87,7 @@ test('uses title-based card dimensions instead of measured dimensions', () => {
   const end = layouted.find((node) => node.id === 'end');
 
   expect(start?.position.x).toBe(end?.position.x);
-  expect(roadmapNodeSizeForTitle('Inicio')).toEqual({ width: 160, height: 120 });
+  expect(roadmapNodeSizeForTitle('Inicio')).toEqual({ width: 160, height: 80 });
 });
 
 test('returns the same grid-aligned layout for repeated requests', () => {
