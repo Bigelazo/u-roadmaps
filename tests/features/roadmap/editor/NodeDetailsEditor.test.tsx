@@ -20,7 +20,9 @@ const node: RoadmapNode = {
 function renderEditor(overrides: Partial<ComponentProps<typeof NodeDetailsEditor>> = {}) {
   const props: ComponentProps<typeof NodeDetailsEditor> = {
     node,
-    nodeTypes: [{ id: 'content', name: 'Contenido', color: '#024AD8', isPredefined: true }],
+    nodeTypes: [
+      { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
+    ],
     nodeValue: { title: node.title, description: '', nodeTypeId: node.nodeTypeId },
     resourceValue: { title: '', url: '', type: 'LINK' },
     editingResourceId: null,

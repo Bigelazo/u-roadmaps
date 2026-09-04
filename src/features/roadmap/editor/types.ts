@@ -4,6 +4,7 @@ import type {
   RoadmapNode,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
+import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 
 export type NodeInput = {
   title: string;
@@ -20,7 +21,7 @@ export type ResourceInput = {
   type: Resource['type'];
 };
 
-export type NodeTypeInput = { name: string; color: string };
+export type NodeTypeInput = { name: string; icon: NodeTypeIconId; color: NodeTypeColor };
 
 export type RoadmapEditorProps = {
   roadmap: RoadmapDto;

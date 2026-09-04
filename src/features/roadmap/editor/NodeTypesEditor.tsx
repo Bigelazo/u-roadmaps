@@ -1,6 +1,7 @@
 import { Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { RoadmapDto } from '@/features/roadmap/types';
+import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,14 +23,19 @@ type Props = {
   onDelete: (id: string) => Promise<boolean>;
 };
 
+const defaultNodeTypeAppearance: Pick<NodeTypeInput, 'icon' | 'color'> = {
+  icon: 'Shapes',
+  color: '#024AD8',
+};
+
 export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props) {
-  const [value, setValue] = useState<NodeTypeInput>({ name: '', color: '#024ad8' });
+  const [value, setValue] = useState<NodeTypeInput>({ name: '', ...defaultNodeTypeAppearance });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<{ id: string; name: string } | null>(null);
   const isEditing = editingId !== null;
 
   function closeEditor() {
-    setValue({ name: '', color: '#024ad8' });
+    setValue({ name: '', ...defaultNodeTypeAppearance });
     setEditingId(null);
   }
 
@@ -73,7 +79,11 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
                   aria-label={`Editar tipo ${type.name}`}
                   onClick={() => {
                     setEditingId(type.id);
-                    setValue({ name: type.name, color: type.color });
+                    setValue({
+                      name: type.name,
+                      icon: type.icon as NodeTypeIconId,
+                      color: type.color as NodeTypeColor,
+                    });
                   }}
                 >
                   <Pencil />

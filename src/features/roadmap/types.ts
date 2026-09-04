@@ -1,3 +1,5 @@
+import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
+
 export type CourseOfferingIdentifier = {
   courseCode: string;
   year: number;
@@ -20,7 +22,8 @@ export type Resource = {
 export type NodeType = {
   id: string;
   name: string;
-  color: string;
+  icon: NodeTypeIconId;
+  color: NodeTypeColor;
   isPredefined: boolean;
 };
 

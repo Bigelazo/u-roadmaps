@@ -9,7 +9,8 @@ import {
   normalizeName,
   optionalString,
   requireBoolean,
-  requireColor,
+  requireNodeTypeColor,
+  requireNodeTypeIcon,
   requireFiniteNumber,
   requireString,
   requireUuid,
@@ -131,10 +132,17 @@ async function ensureTypeNameAvailable(
   }
 }
 
-function typeDto(nodeType: { id: string; name: string; color: string; isPredefined: boolean }) {
+function typeDto(nodeType: {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  isPredefined: boolean;
+}) {
   return {
     id: nodeType.id,
     name: nodeType.name,
+    icon: nodeType.icon,
     color: nodeType.color,
     isPredefined: nodeType.isPredefined,
   };
@@ -254,7 +262,8 @@ async function createRoadmapNodeTypeUnsafe({ input, ...editor }: WithInput) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const name = requireString(input.name, 'name', 120);
-    const color = requireColor(input.color);
+    const icon = requireNodeTypeIcon(input.icon);
+    const color = requireNodeTypeColor(input.color);
     await ensureTypeNameAvailable(transaction, name, roadmap.id);
     return typeDto(
       await transaction.nodeType.create({
@@ -262,6 +271,7 @@ async function createRoadmapNodeTypeUnsafe({ input, ...editor }: WithInput) {
           roadmapId: roadmap.id,
           name,
           normalizedName: normalizeName(name),
+          icon,
           color,
           isPredefined: false,
         },
@@ -278,15 +288,20 @@ async function updateRoadmapNodeTypeUnsafe({
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const nodeType = await requireCustomType(transaction, requireUuid(id, 'typeId'), roadmap.id);
-    const data: { name?: string; normalizedName?: string; color?: string } = {};
+    const data: { name?: string; normalizedName?: string; icon?: string; color?: string } = {};
     if ('name' in input) {
       data.name = requireString(input.name, 'name', 120);
       data.normalizedName = normalizeName(data.name);
       await ensureTypeNameAvailable(transaction, data.name, roadmap.id, nodeType.id);
     }
-    if ('color' in input) data.color = requireColor(input.color);
+    if ('icon' in input) data.icon = requireNodeTypeIcon(input.icon);
+    if ('color' in input) data.color = requireNodeTypeColor(input.color);
     if (Object.keys(data).length === 0)
-      throw new ApiError(400, 'INVALID_REQUEST', 'Debe indicar nombre o color para actualizar.');
+      throw new ApiError(
+        400,
+        'INVALID_REQUEST',
+        'Debe indicar nombre, ícono o color para actualizar.',
+      );
     return typeDto(await transaction.nodeType.update({ where: { id: nodeType.id }, data }));
   });
 }

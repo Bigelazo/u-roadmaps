@@ -1,9 +1,21 @@
 import 'server-only';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
+import {
+  isNodeTypeColor,
+  isNodeTypeIconId,
+  type NodeTypeColor,
+  type NodeTypeIconId,
+} from '@/features/roadmap/node-type-appearance';
 import { Prisma, prisma } from '@/shared/server/db';
-import { ApplicationError as ApiError, applicationResult as apiResult } from '@/shared/errors/server';
-export { ApplicationError as ApiError, applicationResult as apiResult } from '@/shared/errors/server';
+import {
+  ApplicationError as ApiError,
+  applicationResult as apiResult,
+} from '@/shared/errors/server';
+export {
+  ApplicationError as ApiError,
+  applicationResult as apiResult,
+} from '@/shared/errors/server';
 export { wouldCreateDependencyCycle as findCycle } from '@/features/roadmap/domain/access';
 
 type JsonObject = Record<string, unknown>;
@@ -42,7 +54,6 @@ export type ApiErrorCode =
   | 'TEACHER_BLOCK'
   | 'TEACHER_BLOCKED_PREREQUISITE'
   | 'UNAUTHENTICATED';
-
 
 export function parseCourseOfferingIdentifier(params: {
   courseCode: string;
@@ -118,12 +129,28 @@ export function requireUuid(value: unknown, field: string): string {
   return value;
 }
 
-export function requireColor(value: unknown): string {
+export function requireNodeTypeColor(value: unknown): NodeTypeColor {
   const color = requireString(value, 'color');
-  if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
-    throw new ApiError(400, 'INVALID_COLOR', 'color debe tener el formato hexadecimal #RRGGBB.');
+  if (!isNodeTypeColor(color)) {
+    throw new ApiError(
+      400,
+      'INVALID_REQUEST',
+      'color debe pertenecer a la paleta de tipos de nodo.',
+    );
   }
-  return color.toUpperCase();
+  return color.toUpperCase() as NodeTypeColor;
+}
+
+export function requireNodeTypeIcon(value: unknown): NodeTypeIconId {
+  const icon = requireString(value, 'icon');
+  if (!isNodeTypeIconId(icon)) {
+    throw new ApiError(
+      400,
+      'INVALID_REQUEST',
+      'icon debe pertenecer al catálogo de íconos docentes.',
+    );
+  }
+  return icon;
 }
 
 export function requireResourceType(value: unknown): 'FILE' | 'LINK' | 'VIDEO' {
@@ -233,6 +260,7 @@ export async function getAvailableTypes(roadmapId: string) {
   return [...predefined, ...custom].map((type) => ({
     id: type.id,
     name: type.name,
+    icon: type.icon as NodeTypeIconId,
     color: type.color,
     isPredefined: type.isPredefined,
   }));

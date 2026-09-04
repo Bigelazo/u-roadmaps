@@ -287,7 +287,11 @@ test('resource and custom node-type mutations persist and reload the roadmap', a
   ).resolves.toBe(true);
   await expect(result.current.deleteResource('resource-1')).resolves.toBe(true);
   await expect(
-    result.current.updateNodeType('type-1', { name: 'Laboratorio', color: '#123456' }),
+    result.current.updateNodeType('type-1', {
+      name: 'Laboratorio',
+      icon: 'Shapes',
+      color: '#024AD8',
+    }),
   ).resolves.toBe(true);
   await expect(result.current.deleteNodeType('type-1')).resolves.toBe(true);
 

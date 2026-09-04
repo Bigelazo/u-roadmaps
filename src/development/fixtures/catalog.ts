@@ -53,16 +53,19 @@ export const predefinedNodeTypes = [
   {
     id: developmentFixtureIds.predefinedNodeTypes.content,
     name: 'Contenido',
+    icon: 'BookOpen',
     color: '#024AD8',
   },
   {
     id: developmentFixtureIds.predefinedNodeTypes.assessment,
     name: 'Evaluación',
+    icon: 'ClipboardCheck',
     color: '#FF5050',
   },
   {
     id: developmentFixtureIds.predefinedNodeTypes.supplementary,
     name: 'Material extra',
+    icon: 'LibraryBig',
     color: '#356373',
   },
 ] as const;
@@ -361,7 +364,7 @@ type DependencyBlueprint = {
 type RoadmapBlueprint = {
   id: string;
   courseOfferingId: string;
-  customNodeType: { id: string; name: string; color: string };
+  customNodeType: { id: string; name: string; icon: string; color: string };
   theme: string;
   layout: 'HORIZONTAL' | 'VERTICAL' | 'MIXED';
   nodes: readonly NodeBlueprint[];
@@ -591,7 +594,8 @@ const roadmapBlueprints: readonly RoadmapBlueprint[] = [
     customNodeType: {
       id: developmentFixtureIds.customNodeTypes.cc1002,
       name: 'Laboratorio',
-      color: '#6A1B9A',
+      icon: 'Shapes',
+      color: '#00758A',
     },
     theme: 'programación funcional e imperativa',
     layout: 'HORIZONTAL',
@@ -694,7 +698,8 @@ const roadmapBlueprints: readonly RoadmapBlueprint[] = [
     customNodeType: {
       id: developmentFixtureIds.customNodeTypes.ma1001,
       name: 'Taller de problemas',
-      color: '#B45309',
+      icon: 'Shapes',
+      color: '#BD5800',
     },
     theme: 'fundamentos matemáticos, límites y derivadas',
     layout: 'VERTICAL',
@@ -797,7 +802,8 @@ const roadmapBlueprints: readonly RoadmapBlueprint[] = [
     customNodeType: {
       id: developmentFixtureIds.customNodeTypes.fi1001Historical,
       name: 'Actividad experimental',
-      color: '#047857',
+      icon: 'Shapes',
+      color: '#007C75',
     },
     theme: 'análisis cuantitativo y física newtoniana',
     layout: 'MIXED',

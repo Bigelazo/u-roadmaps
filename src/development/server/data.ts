@@ -32,6 +32,7 @@ function upsertPredefinedNodeTypes() {
         update: {
           name: nodeType.name,
           normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+          icon: nodeType.icon,
           color: nodeType.color,
           isPredefined: true,
           roadmapId: null,
@@ -75,6 +76,7 @@ export async function resetDevelopmentData() {
           update: {
             name: nodeType.name,
             normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+            icon: nodeType.icon,
             color: nodeType.color,
             isPredefined: true,
             roadmapId: null,

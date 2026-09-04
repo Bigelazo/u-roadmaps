@@ -39,6 +39,7 @@ model NodeType {
   id             String        @id @default(uuid()) @db.Uuid
   name           String        @db.VarChar(120)
   normalizedName String        @db.VarChar(120)
+  icon           String        @db.VarChar(64)
   color          String        @db.VarChar(7)
   isPredefined   Boolean       @default(false)
   roadmapId      String?       @db.Uuid

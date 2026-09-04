@@ -8,6 +8,7 @@ import {
   type TeacherBlockImpact,
   type TeacherBlockOperation,
 } from '@/features/roadmap/types';
+import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import { roadmapUrl } from '@/features/roadmap/client';
 import type { Point } from '@/features/roadmap/graph/geometry';
 
@@ -21,7 +22,7 @@ type NewNode = {
 type NodeUpdate = { title: string; description: string; nodeTypeId: string };
 type NewResource = { title: string; url: string; type: Resource['type'] };
 type ResourceUpdate = NewResource;
-type NodeTypeInput = { name: string; color: string };
+type NodeTypeInput = { name: string; icon: NodeTypeIconId; color: NodeTypeColor };
 export type StructuralDependency = {
   id: string;
   sourceNodeId: string;

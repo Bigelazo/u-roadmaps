@@ -48,10 +48,25 @@ test('the reset fixture exposes the three complete roadmap scenarios', async ({}
       );
       expect(roadmap.nodeTypes).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ name: 'Contenido', isPredefined: true }),
-          expect.objectContaining({ name: 'Evaluación', isPredefined: true }),
-          expect.objectContaining({ name: 'Material extra', isPredefined: true }),
-          expect.objectContaining({ isPredefined: false }),
+          expect.objectContaining({
+            name: 'Contenido',
+            icon: 'BookOpen',
+            color: '#024AD8',
+            isPredefined: true,
+          }),
+          expect.objectContaining({
+            name: 'Evaluación',
+            icon: 'ClipboardCheck',
+            color: '#FF5050',
+            isPredefined: true,
+          }),
+          expect.objectContaining({
+            name: 'Material extra',
+            icon: 'LibraryBig',
+            color: '#356373',
+            isPredefined: true,
+          }),
+          expect.objectContaining({ icon: 'Shapes', isPredefined: false }),
         ]),
       );
       const typeCounts = new Map<string, number>();

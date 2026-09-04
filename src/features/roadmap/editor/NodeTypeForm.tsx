@@ -2,6 +2,13 @@ import { Plus, Save } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import {
+  nodeTypeColorPalette,
+  defaultCustomNodeTypeIcon,
+  teachingIconCatalog,
+  type NodeTypeColor,
+  type NodeTypeIconId,
+} from '@/features/roadmap/node-type-appearance';
 import { inputClassName } from './primitives';
 import type { NodeTypeInput } from './types';
 
@@ -23,7 +30,7 @@ export function NodeTypeForm({ value, isEditing = false, onChange, onSubmit, onC
       }}
     >
       <FieldGroup className="gap-3">
-        <div className="grid grid-cols-[1fr_auto] gap-3">
+        <div className="grid grid-cols-[1fr_auto_auto] gap-3">
           <Field>
             <FieldLabel htmlFor="node-type-name">Nombre</FieldLabel>
             <Input
@@ -36,15 +43,47 @@ export function NodeTypeForm({ value, isEditing = false, onChange, onSubmit, onC
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="node-type-color">Color</FieldLabel>
-            <Input
-              id="node-type-color"
-              className="h-11 w-13 cursor-pointer p-1"
-              type="color"
-              value={value.color}
-              onChange={(event) => onChange({ ...value, color: event.target.value })}
+            <FieldLabel htmlFor="node-type-icon">Ícono</FieldLabel>
+            <select
+              id="node-type-icon"
+              className={`${inputClassName} h-11 max-w-48`}
+              value={value.icon}
+              onChange={(event) =>
+                onChange({ ...value, icon: event.target.value as NodeTypeIconId })
+              }
               required
-            />
+            >
+              <option value={defaultCustomNodeTypeIcon.id}>
+                {defaultCustomNodeTypeIcon.label}
+              </option>
+              {teachingIconCatalog.map((category) => (
+                <optgroup key={category.label} label={category.label}>
+                  {category.icons.map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="node-type-color">Color</FieldLabel>
+            <select
+              id="node-type-color"
+              className={`${inputClassName} h-11 max-w-44`}
+              value={value.color}
+              onChange={(event) =>
+                onChange({ ...value, color: event.target.value as NodeTypeColor })
+              }
+              required
+            >
+              {nodeTypeColorPalette.map(({ value: color, label }) => (
+                <option key={color} value={color}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
       </FieldGroup>

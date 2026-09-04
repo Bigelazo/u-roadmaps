@@ -123,7 +123,9 @@ const roadmap = {
   course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
-  nodeTypes: [{ id: 'content', name: 'Contenido', color: '#024AD8', isPredefined: true }],
+  nodeTypes: [
+    { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
+  ],
   nodes: [
     {
       id: 'node-1',
@@ -295,10 +297,20 @@ test('manages node types from the floating canvas button', async () => {
   await user.type(within(dialog).getByLabelText('Nombre'), 'Laboratorio');
   await user.click(within(dialog).getByRole('button', { name: 'Crear tipo' }));
 
-  expect(addNodeType).toHaveBeenCalledWith({ name: 'Laboratorio', color: '#024ad8' });
+  expect(addNodeType).toHaveBeenCalledWith({
+    name: 'Laboratorio',
+    icon: 'Shapes',
+    color: '#024AD8',
+  });
   expect(screen.getByRole('dialog', { name: 'Tipos de nodo' })).toBeTruthy();
 
-  const customType = { id: 'lab', name: 'Laboratorio', color: '#024ad8', isPredefined: false };
+  const customType = {
+    id: 'lab',
+    name: 'Laboratorio',
+    icon: 'Shapes',
+    color: '#024AD8',
+    isPredefined: false,
+  };
   unmount();
   useRoadmapMock.mockReturnValue(
     roadmapActions({
@@ -324,7 +336,8 @@ test('manages node types from the floating canvas button', async () => {
   await user.click(within(managementDialog).getByRole('button', { name: 'Guardar tipo' }));
   expect(updateNodeType).toHaveBeenCalledWith('lab', {
     name: 'Laboratorio de código',
-    color: '#024ad8',
+    icon: 'Shapes',
+    color: '#024AD8',
   });
 
   await user.click(

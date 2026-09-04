@@ -8,7 +8,9 @@ const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
-  nodeTypes: [{ id: 'content', name: 'Contenido', color: '#024AD8', isPredefined: true }],
+  nodeTypes: [
+    { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
+  ],
   nodes: [
     {
       id: 'hidden-node',

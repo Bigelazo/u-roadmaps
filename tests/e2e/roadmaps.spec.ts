@@ -144,28 +144,83 @@ test('teacher API manages a node type, resources, and dependencies through their
   });
   const typeName = uniqueName('Laboratorio E2E');
   let typeId: string | undefined;
+  let duplicateTypeId: string | undefined;
   let sourceId: string | undefined;
   let targetId: string | undefined;
   let resourceId: string | undefined;
   let dependencyId: string | undefined;
   try {
+    const nodeTypesBefore = await api.get(roadmapPath('/node-types'));
+    expect(nodeTypesBefore.status()).toBe(200);
+    const initialNodeTypeIds = (await nodeTypesBefore.json()).nodeTypes.map(
+      (nodeType: { id: string }) => nodeType.id,
+    );
+    const missingIcon = await api.post(roadmapPath('/node-types'), {
+      data: { name: uniqueName('Sin ícono'), color: '#024AD8' },
+    });
+    expect(missingIcon.status()).toBe(400);
+    expect((await missingIcon.json()).error.code).toBe('INVALID_REQUEST');
+    const invalidIcon = await api.post(roadmapPath('/node-types'), {
+      data: { name: uniqueName('Ícono inválido'), icon: 'NotAnIcon', color: '#024AD8' },
+    });
+    expect(invalidIcon.status()).toBe(400);
+    expect((await invalidIcon.json()).error.code).toBe('INVALID_REQUEST');
+    const invalidColor = await api.post(roadmapPath('/node-types'), {
+      data: { name: uniqueName('Color inválido'), icon: 'Shapes', color: '#ABCDEF' },
+    });
+    expect(invalidColor.status()).toBe(400);
+    expect((await invalidColor.json()).error.code).toBe('INVALID_REQUEST');
+    const nodeTypesAfterInvalidCreation = await api.get(roadmapPath('/node-types'));
+    expect(
+      (await nodeTypesAfterInvalidCreation.json()).nodeTypes.map(
+        (nodeType: { id: string }) => nodeType.id,
+      ),
+    ).toEqual(initialNodeTypeIds);
+
     const createdType = await api.post(roadmapPath('/node-types'), {
-      data: { name: typeName, color: '#abcdef' },
+      data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
     });
     expect(createdType.status()).toBe(201);
-    typeId = (await createdType.json()).nodeType.id;
+    const createdNodeType = (await createdType.json()).nodeType;
+    expect(createdNodeType).toMatchObject({ name: typeName, icon: 'Shapes', color: '#024AD8' });
+    typeId = createdNodeType.id;
+    const repeatedAppearance = await api.post(roadmapPath('/node-types'), {
+      data: { name: uniqueName('Laboratorio paralelo'), icon: 'Shapes', color: '#024AD8' },
+    });
+    expect(repeatedAppearance.status()).toBe(201);
+    duplicateTypeId = (await repeatedAppearance.json()).nodeType.id;
     expect(
       (
-        await api.post(roadmapPath('/node-types'), { data: { name: typeName, color: '#ABCDEF' } })
-      ).status(),
-    ).toBe(409);
-    expect(
-      (
-        await api.patch(roadmapPath(`/node-types/${typeId}`), {
-          data: { name: `${typeName} actualizado`, color: '#123456' },
+        await api.post(roadmapPath('/node-types'), {
+          data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
         })
       ).status(),
-    ).toBe(200);
+    ).toBe(409);
+    const updatedType = await api.patch(roadmapPath(`/node-types/${typeId}`), {
+      data: { icon: 'Calculator' },
+    });
+    expect(updatedType.status()).toBe(200);
+    expect((await updatedType.json()).nodeType).toMatchObject({
+      name: typeName,
+      icon: 'Calculator',
+      color: '#024AD8',
+    });
+    const invalidIconPatch = await api.patch(roadmapPath(`/node-types/${typeId}`), {
+      data: { icon: 'NotAnIcon' },
+    });
+    expect(invalidIconPatch.status()).toBe(400);
+    expect((await invalidIconPatch.json()).error.code).toBe('INVALID_REQUEST');
+    const invalidPatch = await api.patch(roadmapPath(`/node-types/${typeId}`), {
+      data: { color: null },
+    });
+    expect(invalidPatch.status()).toBe(400);
+    expect((await invalidPatch.json()).error.code).toBe('INVALID_REQUEST');
+    const nodeTypesAfterInvalidPatch = await api.get(roadmapPath('/node-types'));
+    expect(
+      (await nodeTypesAfterInvalidPatch.json()).nodeTypes.find(
+        (nodeType: { id: string }) => nodeType.id === typeId,
+      ),
+    ).toMatchObject({ name: typeName, icon: 'Calculator', color: '#024AD8' });
     expect(
       (
         await api.patch(roadmapPath('/node-types/00000000-0000-4000-8000-000000000001'), {
@@ -233,6 +288,7 @@ test('teacher API manages a node type, resources, and dependencies through their
     await deleteIfPresent(api, sourceId && roadmapPath(`/nodes/${sourceId}`));
     await deleteIfPresent(api, targetId && roadmapPath(`/nodes/${targetId}`));
     await deleteIfPresent(api, typeId && roadmapPath(`/node-types/${typeId}`));
+    await deleteIfPresent(api, duplicateTypeId && roadmapPath(`/node-types/${duplicateTypeId}`));
     await api.dispose();
   }
 });

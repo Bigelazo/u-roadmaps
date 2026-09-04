@@ -1,12 +1,7 @@
 import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
-import {
-  ApiError,
-  apiResult,
-  nodeDto,
-  resourceDto,
-} from '@/features/roadmap/application/roadmap';
+import { ApiError, apiResult, nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import type { CourseOfferingIdentifier, StudentNodeAccess } from '@/features/roadmap/types';
 import { studentNodeAccessById } from '@/features/roadmap/domain/access';
 
@@ -168,6 +163,7 @@ async function readRoadmapForParticipantUnsafe({ userId, identifier }: Participa
         nodeTypes: [...predefinedNodeTypes, ...customNodeTypes].map((type) => ({
           id: type.id,
           name: type.name,
+          icon: type.icon,
           color: type.color,
           isPredefined: type.isPredefined,
         })),
