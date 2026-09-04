@@ -1,5 +1,7 @@
 import { expect, test } from 'vitest';
-import { nodeTypeIconRegistry } from '@/features/roadmap/node-type-icon-registry';
+import { createElement } from 'react';
+import { render } from '@testing-library/react';
+import { NodeTypeIcon, nodeTypeIconRegistry } from '@/features/roadmap/node-type-icon-registry';
 import {
   isNodeTypeColor,
   isNodeTypeIconId,
@@ -22,4 +24,15 @@ test('defines eighty teaching icons through the explicit registry', () => {
   expect('Shapes' in nodeTypeIconRegistry).toBe(true);
   expect(isNodeTypeIconId('BookOpen')).toBe(true);
   expect(isNodeTypeIconId('NotAnIcon')).toBe(false);
+});
+
+test('renders the fallback icon for a legacy icon id outside the catalog', () => {
+  expect(() =>
+    render(
+      createElement(NodeTypeIcon, {
+        icon: 'LegacyIcon' as keyof typeof nodeTypeIconRegistry,
+        'aria-label': 'Tipo',
+      }),
+    ),
+  ).not.toThrow();
 });

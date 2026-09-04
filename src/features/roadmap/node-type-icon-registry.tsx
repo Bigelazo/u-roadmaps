@@ -169,10 +169,10 @@ export const nodeTypeIconRegistry = {
   Wrench,
 } as const satisfies Record<NodeTypeIconId, LucideIcon>;
 
-export function nodeTypeIcon(icon: NodeTypeIconId): LucideIcon {
-  return nodeTypeIconRegistry[icon];
+export function nodeTypeIcon(icon: string): LucideIcon {
+  return nodeTypeIconRegistry[icon as NodeTypeIconId] ?? nodeTypeIconRegistry.Shapes;
 }
 
-export function NodeTypeIcon({ icon, ...props }: { icon: NodeTypeIconId } & LucideProps) {
+export function NodeTypeIcon({ icon, ...props }: { icon: string } & LucideProps) {
   return createElement(nodeTypeIcon(icon), props);
 }
