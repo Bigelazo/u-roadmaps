@@ -8,6 +8,7 @@ import {
   fixtureParticipations,
   fixtureResources,
   fixtureRoadmaps,
+  fixtureSimulatedCompletions,
   fixtureUsers,
   predefinedNodeTypes,
   reservedFixtureOfferingIds,
@@ -137,5 +138,23 @@ export async function resetDevelopmentData() {
       ),
     });
     await transaction.completion.createMany({ data: fixtureCompletions });
+    await Promise.all(
+      fixtureSimulatedCompletions.map(async ({ userId, ...completion }) => {
+        const participation = await transaction.participation.findUnique({
+          where: {
+            userId_courseOfferingId: {
+              userId,
+              courseOfferingId: completion.courseOfferingId,
+            },
+          },
+          select: { id: true },
+        });
+        if (!participation)
+          throw new Error('Missing fixture participation for simulated completion.');
+        return transaction.simulatedCompletion.create({
+          data: { ...completion, participationId: participation.id },
+        });
+      }),
+    );
   });
 }

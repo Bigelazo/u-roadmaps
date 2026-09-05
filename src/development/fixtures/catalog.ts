@@ -1056,6 +1056,23 @@ export const fixtureCompletions = fixtureRoadmaps.flatMap((roadmap, roadmapIndex
   });
 });
 
+// These make the development personas visibly exercise the two independent
+// teacher simulations for CC1002. They never share or alter student progress.
+export const fixtureSimulatedCompletions = [
+  {
+    userId: developmentFixtureIds.daniela,
+    courseOfferingId: developmentFixtureIds.offerings.cc1002,
+    roadmapId: developmentFixtureIds.roadmaps.cc1002,
+    roadmapNodeId: fixtureRoadmaps[0].nodes[0].id,
+  },
+  {
+    userId: developmentFixtureIds.nicolas,
+    courseOfferingId: developmentFixtureIds.offerings.cc1002,
+    roadmapId: developmentFixtureIds.roadmaps.cc1002,
+    roadmapNodeId: fixtureRoadmaps[0].nodes[1].id,
+  },
+] as const;
+
 export const reservedFixtureOfferingIds = developmentFixtureOfferings.map(({ id }) => id);
 export const reservedFixtureUserIds = [
   developmentFixtureIds.daniela,

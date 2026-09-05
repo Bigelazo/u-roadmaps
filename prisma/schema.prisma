@@ -28,12 +28,16 @@ model CourseOffering {
 }
 
 model Roadmap {
-  id               String       @id @default(uuid()) @db.Uuid
-  courseOfferingId String       @unique @db.Uuid
-  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  nodeTypes        NodeType[]
-  roadmapNodes     RoadmapNode[]
+  id                   String                  @id @default(uuid()) @db.Uuid
+  courseOfferingId     String                  @unique @db.Uuid
+  courseOffering       CourseOffering          @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  nodeTypes            NodeType[]
+  roadmapNodes         RoadmapNode[]
+  simulatedCompletions SimulatedCompletion[]
+
+  @@unique([id, courseOfferingId])
 }
+
 
 model NodeType {
   id             String        @id @default(uuid()) @db.Uuid
@@ -66,9 +70,11 @@ model RoadmapNode {
   incomingDependencies Dependency[] @relation("IncomingDependencies")
   resources            Resource[]
   completions          Completion[]
+  simulatedCompletions SimulatedCompletion[]
 
   @@index([roadmapId])
   @@index([nodeTypeId])
+  @@unique([id, roadmapId])
 }
 
 model Dependency {
@@ -116,16 +122,18 @@ model VtiLoginTransaction {
 }
 
 model Participation {
-  id               String            @id @default(uuid()) @db.Uuid
-  userId           String            @db.Uuid
-  courseOfferingId String            @db.Uuid
-  role             ParticipationRole
-  isActive         Boolean           @default(true)
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseOffering   CourseOffering    @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  id                   String                  @id @default(uuid()) @db.Uuid
+  userId               String                  @db.Uuid
+  courseOfferingId     String                  @db.Uuid
+  role                 ParticipationRole
+  isActive             Boolean                 @default(true)
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseOffering       CourseOffering          @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  simulatedCompletions SimulatedCompletion[]
 
   @@unique([userId, courseOfferingId])
   @@index([courseOfferingId, role])
+  @@unique([id, courseOfferingId])
 }
 
 model Completion {
@@ -138,6 +146,22 @@ model Completion {
 
   @@unique([userId, roadmapNodeId])
   @@index([roadmapNodeId])
+}
+
+model SimulatedCompletion {
+  id               String        @id @default(uuid()) @db.Uuid
+  participationId  String        @db.Uuid
+  courseOfferingId String        @db.Uuid
+  roadmapId        String        @db.Uuid
+  roadmapNodeId    String        @db.Uuid
+  completedAt      DateTime      @default(now())
+  participation    Participation @relation(fields: [participationId, courseOfferingId], references: [id, courseOfferingId], onDelete: Cascade)
+  roadmap          Roadmap       @relation(fields: [roadmapId, courseOfferingId], references: [id, courseOfferingId], onDelete: Cascade)
+  roadmapNode      RoadmapNode   @relation(fields: [roadmapNodeId, roadmapId], references: [id, roadmapId], onDelete: Cascade)
+
+  @@unique([participationId, roadmapNodeId])
+  @@index([roadmapNodeId])
+  @@index([participationId, roadmapId])
 }
 
 enum ResourceType {

@@ -22,7 +22,13 @@ export {
   updateRoadmapResource,
   uploadRoadmapResource,
 } from '@/features/roadmap/application/resources';
-export { completeNode, readRoadmapForParticipant } from '@/features/roadmap/application/completion';
+export {
+  completeNode,
+  completeSimulatedNode,
+  readRoadmapForParticipant,
+  readSimulatedRoadmap,
+  resetSimulatedCompletions,
+} from '@/features/roadmap/application/completion';
 export {
   createRoadmapForActor,
   getNodeTypesForActor,
