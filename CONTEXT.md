@@ -132,6 +132,14 @@ _Avoid_: Link, visual connection
 The dated fact that a participating student completed a node in their course offering's roadmap. Only current visible prerequisites must be complete; a student cannot reverse it, and repeated completion attempts preserve the original fact and date. Later roadmap changes do not invalidate it, though it disappears if a teacher deletes the node. Its absence means the node is pending.
 _Avoid_: Progress state, mutable progress
 
+**Canvas preview (Previsualización del canvas)**:
+A teaching-staff simulation of a Roadmap's student experience that follows the same access and progress rules without representing or changing any actual student's Participation or Completion.
+_Avoid_: Preview, teacher progress, student impersonation, preview completion
+
+**Node information preview (Previsualización de información del nodo)**:
+A teaching-staff inspection of a Node's information through the same view available to a student who can access that Node, projecting any unsaved change that is visible in that view. Unlike Canvas preview, it does not evaluate the Node's visibility, Teacher block, or Prerequisite block.
+_Avoid_: Preview, student access preview, draft preview
+
 **Resource (Recurso)**:
 A URL reference with a title and file, link, or video type to pedagogical material stored outside the database and attached to one node.
 _Avoid_: File, global material
