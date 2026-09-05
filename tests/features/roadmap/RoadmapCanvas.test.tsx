@@ -14,6 +14,7 @@ vi.mock('next/dynamic', () => ({
       isOpen,
       onToggle,
       onClose,
+      onPreview,
       onRequestTeacherBlock,
       onToggleVisibility,
       onUpdateNode,
@@ -23,6 +24,19 @@ vi.mock('next/dynamic', () => ({
       isOpen: boolean;
       onToggle: () => void;
       onClose: () => void;
+      onPreview: (node: {
+        id: string;
+        title: string;
+        description: string | null;
+        nodeTypeId: string;
+        positionX: number;
+        positionY: number;
+        isVisible: true;
+        access: { status: 'ACCESSIBLE' };
+        isCompleted: boolean;
+        canComplete: boolean;
+        resources: [];
+      }) => void;
       onRequestTeacherBlock: (nodeId: string, operation: 'BLOCK' | 'UNBLOCK') => void;
       onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
       onUpdateNode: (nodeId: string, node: unknown) => Promise<boolean>;
@@ -61,6 +75,26 @@ vi.mock('next/dynamic', () => ({
                 }
               >
                 Guardar enlace
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onPreview({
+                    id: selectedNode.id,
+                    title: 'Vista previa docente',
+                    description: 'Borrador visible',
+                    nodeTypeId: 'content',
+                    positionX: 0,
+                    positionY: 0,
+                    isVisible: true,
+                    access: { status: 'ACCESSIBLE' },
+                    isCompleted: false,
+                    canComplete: true,
+                    resources: [],
+                  })
+                }
+              >
+                Previsualizar
               </button>
             </>
           ) : null}
@@ -151,8 +185,29 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
 }));
 
 vi.mock('@/features/roadmap/student/NodeDetail', () => ({
-  StudentNodeDetail: ({ node }: { node?: { title: string } }) =>
-    node ? <div data-testid="student-detail">{node.title}</div> : null,
+  StudentNodeDetail: ({
+    node,
+    status,
+    onClose,
+    onComplete,
+  }: {
+    node?: { title: string };
+    status: string | null;
+    onClose: () => void;
+    onComplete: (node: { title: string }) => void;
+  }) =>
+    node ? (
+      <aside data-testid="student-detail">
+        <p>{node.title}</p>
+        <p>{status}</p>
+        <button type="button" onClick={() => onComplete(node)}>
+          Completar
+        </button>
+        <button type="button" onClick={onClose}>
+          Cerrar detalle
+        </button>
+      </aside>
+    ) : null,
 }));
 
 vi.mock('@/features/roadmap/useRoadmap', () => ({ useRoadmap: useRoadmapMock }));
@@ -617,6 +672,27 @@ test('starts with the editor closed and opens it when selecting a node', async (
   expect(screen.queryByTestId('editor-panel')).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+});
+
+test('replaces the editor with the shared student detail and keeps its completion local', async () => {
+  const user = userEvent.setup();
+  const completeNode = vi.fn();
+  useRoadmapMock.mockReturnValue(roadmapActions({ completeNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Previsualizar' }));
+
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByTestId('student-detail').textContent).toContain('Vista previa docente');
+  expect(screen.getByTestId('student-detail').textContent).toContain('available');
+
+  await user.click(screen.getByRole('button', { name: 'Completar' }));
+  expect(screen.getByTestId('student-detail').textContent).toContain('completed');
+  expect(completeNode).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Cerrar detalle' }));
   expect(screen.getByTestId('editor-panel')).toBeTruthy();
 });
 

@@ -1,5 +1,4 @@
 import { FileUp, Link2, Save, X } from 'lucide-react';
-import { useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
@@ -13,7 +12,9 @@ type Props = {
   editingResourceId: string | null;
   editingResource: Resource | null;
   mode: 'file' | 'link';
+  selectedFile: File | null;
   onModeChange: (mode: 'file' | 'link') => void;
+  onSelectedFileChange: (file: File | null) => void;
   onResourceChange: (value: ResourceInput) => void;
   onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
   onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
@@ -27,14 +28,15 @@ export function ResourceComposer({
   editingResourceId,
   editingResource,
   mode,
+  selectedFile,
   onModeChange,
+  onSelectedFileChange,
   onResourceChange,
   onAddResource,
   onUploadResource,
   onUpdateResource,
   onClose,
 }: Props) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const isEditingResource = Boolean(editingResourceId);
   const hasChanges =
     !editingResource ||
@@ -115,7 +117,7 @@ export function ResourceComposer({
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
-              setSelectedFile(event.dataTransfer.files.item(0));
+              onSelectedFileChange(event.dataTransfer.files.item(0));
             }}
           >
             <FileUp className="mb-2 size-5 text-primary" />
@@ -129,7 +131,7 @@ export function ResourceComposer({
               id="resource-file"
               className="sr-only"
               type="file"
-              onChange={(event) => setSelectedFile(event.target.files?.item(0) ?? null)}
+              onChange={(event) => onSelectedFileChange(event.target.files?.item(0) ?? null)}
             />
           </label>
           <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>

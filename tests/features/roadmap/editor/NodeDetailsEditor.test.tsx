@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ComponentProps } from 'react';
+import { createRef, type ComponentProps } from 'react';
 import { expect, test, vi } from 'vitest';
 import { NodeDetailsEditor } from '@/features/roadmap/editor/NodeDetailsEditor';
 import type { RoadmapNode } from '@/features/roadmap/types';
@@ -26,8 +26,16 @@ function renderEditor(overrides: Partial<ComponentProps<typeof NodeDetailsEditor
     nodeValue: { title: node.title, description: '', nodeTypeId: node.nodeTypeId },
     resourceValue: { title: '', url: '', type: 'LINK' },
     editingResourceId: null,
+    isResourceComposerOpen: false,
+    resourceMode: 'file',
+    selectedResourceFile: null,
+    isDirty: false,
     onNodeChange: vi.fn(),
     onResourceChange: vi.fn(),
+    onResourceComposerOpen: vi.fn(),
+    onResourceComposerClose: vi.fn(),
+    onResourceModeChange: vi.fn(),
+    onSelectedResourceFileChange: vi.fn(),
     onUpdateNode: vi.fn(),
     onToggleVisibility: vi.fn(),
     onRequestTeacherBlock: vi.fn(),
@@ -38,6 +46,8 @@ function renderEditor(overrides: Partial<ComponentProps<typeof NodeDetailsEditor
     onCancelResource: vi.fn(),
     onDeleteNode: vi.fn(),
     onDeleteResource: vi.fn(),
+    onPreview: vi.fn(),
+    previewButtonRef: createRef<HTMLButtonElement>(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -102,6 +112,15 @@ test('enables saving only after the node form changes', async () => {
     description: '',
     nodeTypeId: 'content',
   });
+});
+
+test('labels the secondary eye action from the shared dirty state', () => {
+  const { props, rerender } = renderEditor();
+  expect(screen.getByRole('button', { name: 'Previsualizar' })).toBeTruthy();
+
+  rerender(<NodeDetailsEditor {...props} isDirty />);
+
+  expect(screen.getByRole('button', { name: 'Previsualizar cambios' })).toBeTruthy();
 });
 
 test('offers individual and branch unlock actions for a teacher-blocked node', async () => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { PanelRightClose, Trash2 } from 'lucide-react';
-import type { Resource, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
+import type { Resource } from '@/features/roadmap/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,78 +17,15 @@ import { Button } from '@/shared/ui/button';
 import { Sidebar, SidebarContent, SidebarRail } from '@/shared/ui/sidebar';
 import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
-import type { NodeUpdate, ResourceInput, RoadmapEditorProps } from './types';
+import {
+  emptyResourceEditorDraft,
+  hasUnsavedNodeInformation,
+  projectNodeInformationPreview,
+  type ResourceEditorDraft,
+} from './node-information-preview';
+import type { NodeUpdate, RoadmapEditorProps } from './types';
 
 type PendingDeletion = { label: string; onConfirm: () => Promise<boolean> } | null;
-
-type SelectedNodeEditorProps = {
-  node: RoadmapNode;
-  nodeTypes: RoadmapDto['nodeTypes'];
-  onUpdateNode: RoadmapEditorProps['onUpdateNode'];
-  onToggleVisibility: RoadmapEditorProps['onToggleVisibility'];
-  onRequestTeacherBlock: RoadmapEditorProps['onRequestTeacherBlock'];
-  onAddResource: RoadmapEditorProps['onAddResource'];
-  onUploadResource: RoadmapEditorProps['onUploadResource'];
-  onUpdateResource: RoadmapEditorProps['onUpdateResource'];
-  onDeleteNode: (node: RoadmapNode) => void;
-  onDeleteResource: (resource: Resource) => void;
-  onClose: () => void;
-};
-
-function SelectedNodeEditor({
-  node,
-  nodeTypes,
-  onUpdateNode,
-  onToggleVisibility,
-  onRequestTeacherBlock,
-  onAddResource,
-  onUploadResource,
-  onUpdateResource,
-  onDeleteNode,
-  onDeleteResource,
-  onClose,
-}: SelectedNodeEditorProps) {
-  const [editNode, setEditNode] = useState<NodeUpdate>(() => ({
-    title: node.title,
-    description: node.description ?? '',
-    nodeTypeId: node.nodeTypeId,
-  }));
-  const [resource, setResource] = useState<ResourceInput>({ title: '', url: '', type: 'LINK' });
-  const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
-
-  const cancelResourceEditor = () => {
-    setResource({ title: '', url: '', type: 'LINK' });
-    setEditingResourceId(null);
-  };
-
-  const startEditingResource = (item: Resource) => {
-    setEditingResourceId(item.id);
-    setResource({ title: item.title, url: item.url, type: item.type });
-  };
-
-  return (
-    <NodeDetailsEditor
-      node={node}
-      nodeTypes={nodeTypes}
-      nodeValue={editNode}
-      resourceValue={resource}
-      editingResourceId={editingResourceId}
-      onNodeChange={setEditNode}
-      onResourceChange={setResource}
-      onUpdateNode={onUpdateNode}
-      onToggleVisibility={onToggleVisibility}
-      onRequestTeacherBlock={onRequestTeacherBlock}
-      onAddResource={onAddResource}
-      onUploadResource={onUploadResource}
-      onUpdateResource={onUpdateResource}
-      onStartEditingResource={startEditingResource}
-      onCancelResource={cancelResourceEditor}
-      onDeleteNode={onDeleteNode}
-      onDeleteResource={onDeleteResource}
-      onClose={onClose}
-    />
-  );
-}
 
 export function RoadmapEditor({
   roadmap,
@@ -102,11 +39,22 @@ export function RoadmapEditor({
   onDeleteNode,
   onAddResource,
   onUploadResource,
+  onPreview,
+  previewButtonRef,
   onUpdateResource,
   onDeleteResource,
   panelWidth,
   onPanelWidthChange,
 }: RoadmapEditorProps) {
+  const [draftNodeId, setDraftNodeId] = useState<string | null>(null);
+  const [editNode, setEditNode] = useState<NodeUpdate>({
+    title: '',
+    description: '',
+    nodeTypeId: '',
+  });
+  const [resourceDraft, setResourceDraft] = useState<ResourceEditorDraft>(
+    emptyResourceEditorDraft,
+  );
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
   const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
 
@@ -118,8 +66,36 @@ export function RoadmapEditor({
     return () => media.removeEventListener('change', update);
   }, []);
 
-  if (!isOpen || !selectedNode) {
+  useEffect(() => {
+    if (!selectedNode) {
+      setDraftNodeId(null);
+      return;
+    }
+    if (draftNodeId === selectedNode.id) return;
+    setDraftNodeId(selectedNode.id);
+    setEditNode({
+      title: selectedNode.title,
+      description: selectedNode.description ?? '',
+      nodeTypeId: selectedNode.nodeTypeId,
+    });
+    setResourceDraft(emptyResourceEditorDraft());
+  }, [draftNodeId, selectedNode]);
+
+  if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) {
     return null;
+  const isDirty = hasUnsavedNodeInformation(selectedNode, editNode, resourceDraft);
+  const closeResourceEditor = () => setResourceDraft(emptyResourceEditorDraft());
+  const openResourceEditor = (mode: ResourceEditorDraft['mode']) =>
+    setResourceDraft((draft) => ({ ...draft, isOpen: true, mode, selectedFile: null }));
+  const startEditingResource = (resource: Resource) =>
+    setResourceDraft({
+      value: { title: resource.title, url: resource.url, type: resource.type },
+      editingResourceId: resource.id,
+      isOpen: true,
+      mode: resource.type === 'FILE' ? 'file' : 'link',
+      selectedFile: null,
+    });
+
   }
 
   return (
@@ -149,19 +125,39 @@ export function RoadmapEditor({
           </summary>
           <div className="px-4 pb-4 sm:px-5 sm:pb-5">
             <header className="flex justify-end py-3">
+              nodeValue={editNode}
+              resourceValue={resourceDraft.value}
+              editingResourceId={resourceDraft.editingResourceId}
+              isResourceComposerOpen={resourceDraft.isOpen}
+              resourceMode={resourceDraft.mode}
+              selectedResourceFile={resourceDraft.selectedFile}
+              isDirty={isDirty}
+              onNodeChange={setEditNode}
+              onResourceChange={(value) =>
+                setResourceDraft((draft) => ({ ...draft, value }))
+              }
+              onResourceComposerOpen={openResourceEditor}
+              onResourceComposerClose={closeResourceEditor}
+              onResourceModeChange={(mode) =>
+                setResourceDraft((draft) => ({ ...draft, mode }))
+              }
+              onSelectedResourceFileChange={(selectedFile) =>
+                setResourceDraft((draft) => ({ ...draft, selectedFile }))
+              }
               <Button
                 aria-label="Ocultar panel de edición"
                 title="Ocultar panel de edición"
                 onClick={onToggle}
                 size="icon"
                 variant="outline"
+              onStartEditingResource={startEditingResource}
+              onCancelResource={closeResourceEditor}
               >
                 <PanelRightClose />
               </Button>
             </header>
 
-            <SelectedNodeEditor
-              key={selectedNode.id}
+            <NodeDetailsEditor
               node={selectedNode}
               nodeTypes={roadmap.nodeTypes}
               onUpdateNode={onUpdateNode}
@@ -172,6 +168,10 @@ export function RoadmapEditor({
               onUpdateResource={onUpdateResource}
               onDeleteNode={(node) =>
                 setPendingDeletion({
+              onPreview={() =>
+                onPreview(projectNodeInformationPreview(selectedNode, editNode, resourceDraft))
+              }
+              previewButtonRef={previewButtonRef}
                   label: `el nodo ${node.title} y sus dependencias y recursos`,
                   onConfirm: async () => {
                     const deleted = await onDeleteNode(node.id);

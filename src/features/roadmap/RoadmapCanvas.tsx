@@ -26,6 +26,7 @@ import type {
   CourseOfferingIdentifier,
   RoadmapDto,
   RoadmapNode,
+  StudentAccessibleRoadmapNode,
   StudentRoadmapNode,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
@@ -140,6 +141,10 @@ export default function RoadmapCanvas({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isStudentDetailOpen, setIsStudentDetailOpen] = useState(false);
+  const [teacherPreviewNode, setTeacherPreviewNode] = useState<StudentAccessibleRoadmapNode | null>(
+    null,
+  );
+  const [isTeacherPreviewCompleted, setIsTeacherPreviewCompleted] = useState(false);
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const editorPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:roadmap-editor-panel-width',
@@ -157,6 +162,7 @@ export default function RoadmapCanvas({
   const [pendingTeacherBlockChange, setPendingTeacherBlockChange] =
     useState<PendingTeacherBlockChange | null>(null);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
+  const previewButtonRef = useRef<HTMLButtonElement | null>(null);
   const successToastIdRef = useRef(0);
   const {
     roadmap,
@@ -224,13 +230,27 @@ export default function RoadmapCanvas({
 
   function closeSelectedNode() {
     setSelectedNodeId(null);
+    setTeacherPreviewNode(null);
+    setIsTeacherPreviewCompleted(false);
     if (canEdit) setIsEditorOpen(false);
     else setIsStudentDetailOpen(false);
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
   }
 
+  function closeTeacherPreview() {
+    setTeacherPreviewNode(null);
+    setIsTeacherPreviewCompleted(false);
+    setIsEditorOpen(true);
+    requestAnimationFrame(() => previewButtonRef.current?.focus());
+  }
+
   useEffect(() => {
     const handleKeyboardShortcut = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && canEdit && teacherPreviewNode) {
+        event.preventDefault();
+        closeTeacherPreview();
+        return;
+      }
       if (event.key === 'Escape' && canEdit && isEditorOpen) {
         event.preventDefault();
         setIsEditorOpen(false);
@@ -238,13 +258,14 @@ export default function RoadmapCanvas({
       }
       if (event.key.toLowerCase() === 'b' && (event.metaKey || event.ctrlKey) && selectedNodeId) {
         event.preventDefault();
-        if (canEdit) setIsEditorOpen((open) => !open);
-        else setIsStudentDetailOpen((open) => !open);
+        if (canEdit) {
+          if (!teacherPreviewNode) setIsEditorOpen((open) => !open);
+        } else setIsStudentDetailOpen((open) => !open);
       }
     };
     window.addEventListener('keydown', handleKeyboardShortcut);
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
-  }, [canEdit, isEditorOpen, selectedNodeId]);
+  }, [canEdit, isEditorOpen, selectedNodeId, teacherPreviewNode]);
 
   async function requestVisibilityChange(nodeId: string, isVisible: boolean) {
     if (!isVisible) return toggleVisibility(nodeId, isVisible);
@@ -560,18 +581,36 @@ export default function RoadmapCanvas({
             onUploadResource={uploadResource}
             onUpdateResource={updateResourceWithConfirmation}
             onDeleteResource={deleteResource}
+            onPreview={(node) => {
+              setTeacherPreviewNode(node);
+              setIsTeacherPreviewCompleted(false);
+              setIsEditorOpen(false);
+            }}
+            previewButtonRef={previewButtonRef}
             panelWidth={editorPanel.width}
             onPanelWidthChange={editorPanel.setWidth}
           />
         )}
-        {!canEdit && (
+        {(!canEdit || teacherPreviewNode) && (
           <StudentNodeDetail
             node={
-              isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined
+              teacherPreviewNode ??
+              (isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined)
             }
-            status={isStudentDetailOpen && selectedNode ? studentNodeStatus(selectedNode) : null}
-            onClose={closeSelectedNode}
-            onComplete={(node) => void completeNode(node.id)}
+            status={
+              teacherPreviewNode
+                ? isTeacherPreviewCompleted
+                  ? 'completed'
+                  : 'available'
+                : isStudentDetailOpen && selectedNode
+                  ? studentNodeStatus(selectedNode)
+                  : null
+            }
+            onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
+            onComplete={(node) => {
+              if (teacherPreviewNode) setIsTeacherPreviewCompleted(true);
+              else void completeNode(node.id);
+            }}
             panelWidth={studentPanel.width}
             onPanelWidthChange={studentPanel.setWidth}
           />

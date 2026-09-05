@@ -2,8 +2,10 @@ import type {
   Resource,
   RoadmapDto,
   RoadmapNode,
+  StudentAccessibleRoadmapNode,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
+import type { RefObject } from 'react';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 
 export type NodeInput = {
@@ -43,6 +45,8 @@ export type RoadmapEditorProps = {
   onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onDeleteResource: (resourceId: string) => Promise<boolean>;
+  onPreview: (node: StudentAccessibleRoadmapNode) => void;
+  previewButtonRef: RefObject<HTMLButtonElement | null>;
   panelWidth: number;
   onPanelWidthChange: (width: number) => void;
 };

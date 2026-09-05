@@ -10,7 +10,14 @@ type Props = {
   node: RoadmapNode;
   resourceValue: ResourceInput;
   editingResourceId: string | null;
+  isComposerOpen: boolean;
+  mode: 'file' | 'link';
+  selectedFile: File | null;
   onResourceChange: (value: ResourceInput) => void;
+  onComposerOpen: (mode: 'file' | 'link') => void;
+  onComposerClose: () => void;
+  onModeChange: (mode: 'file' | 'link') => void;
+  onSelectedFileChange: (file: File | null) => void;
   onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
   onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
@@ -23,7 +30,14 @@ export function NodeResources({
   node,
   resourceValue,
   editingResourceId,
+  isComposerOpen,
+  mode,
+  selectedFile,
   onResourceChange,
+  onComposerOpen,
+  onComposerClose,
+  onModeChange,
+  onSelectedFileChange,
   onAddResource,
   onUploadResource,
   onUpdateResource,
@@ -31,15 +45,22 @@ export function NodeResources({
   onCancelResource,
   onDeleteResource,
 }: Props) {
-  const [isComposerOpen, setIsComposerOpen] = useState(false);
-  const [mode, setMode] = useState<'file' | 'link'>('file');
+  const [localComposerOpen, setLocalComposerOpen] = useState(false);
+  const [localMode, setLocalMode] = useState<'file' | 'link'>('file');
+  const [localSelectedFile, setLocalSelectedFile] = useState<File | null>(null);
+  const composerOpen = isComposerOpen || localComposerOpen;
+  const composerMode = isComposerOpen ? mode : localMode;
+  const composerSelectedFile = isComposerOpen ? selectedFile : localSelectedFile;
   const openComposer = (nextMode: 'file' | 'link') => {
-    setMode(nextMode);
-    setIsComposerOpen(true);
+    setLocalMode(nextMode);
+    setLocalSelectedFile(null);
+    setLocalComposerOpen(true);
+    onComposerOpen(nextMode);
   };
   const closeComposer = () => {
-    setIsComposerOpen(false);
-    onCancelResource();
+    setLocalComposerOpen(false);
+    setLocalSelectedFile(null);
+    onComposerClose();
   };
 
   return (
@@ -53,7 +74,7 @@ export function NodeResources({
             Recursos <span className="text-muted-foreground">({node.resources.length})</span>
           </h3>
         </div>
-        {!isComposerOpen && (
+        {!composerOpen && (
           <Button
             type="button"
             size="sm"
@@ -68,14 +89,22 @@ export function NodeResources({
         )}
       </div>
       <div className="pt-4 pb-6">
-        {isComposerOpen && (
+        {composerOpen && (
           <ResourceComposer
             nodeId={node.id}
             resourceValue={resourceValue}
             editingResourceId={editingResourceId}
             editingResource={node.resources.find((resource) => resource.id === editingResourceId) ?? null}
-            mode={mode}
-            onModeChange={setMode}
+            mode={composerMode}
+            selectedFile={composerSelectedFile}
+            onModeChange={(nextMode) => {
+              setLocalMode(nextMode);
+              onModeChange(nextMode);
+            }}
+            onSelectedFileChange={(file) => {
+              setLocalSelectedFile(file);
+              onSelectedFileChange(file);
+            }}
             onResourceChange={onResourceChange}
             onAddResource={onAddResource}
             onUploadResource={onUploadResource}
