@@ -32,6 +32,7 @@ export function mapRoadmapGraph(
         typeIcon: nodeTypesById.get(node.nodeTypeId)?.icon ?? 'Shapes',
         status: nodeStatus(node, canEdit),
         isHidden,
+        isTeacherBlocked: canEdit && 'isTeacherBlocked' in node && node.isTeacherBlocked,
         blockReason,
       },
       position: { x: node.positionX, y: node.positionY },

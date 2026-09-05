@@ -1,9 +1,17 @@
 'use client';
 
-import { useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import dynamic from 'next/dynamic';
-import { CircleAlert, PanelRightOpen, Trash2 } from 'lucide-react';
+import { ArrowRight, CircleAlert, EyeOff, Keyboard, PanelRightOpen, Trash2 } from 'lucide-react';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
+import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
@@ -41,6 +49,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
+import { Kbd, KbdGroup } from '@/shared/ui/kbd';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 
@@ -78,6 +87,15 @@ type PendingTeacherBlockChange = {
   operation: TeacherBlockOperation;
   nodes: TeacherBlockImpact[];
 };
+
+function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)] items-start gap-3">
+      <dt className="flex min-h-5 min-w-0 items-center">{keys}</dt>
+      <dd className="pt-px leading-relaxed">{children}</dd>
+    </div>
+  );
+}
 
 function teacherBlockConfirmation(operation: TeacherBlockOperation, count: number) {
   const nodes = count === 1 ? 'nodo' : 'nodos';
@@ -121,6 +139,8 @@ export default function RoadmapCanvas({
 }: Props) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isStudentDetailOpen, setIsStudentDetailOpen] = useState(false);
+  const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const editorPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:roadmap-editor-panel-width',
     initialWidth: 360,
@@ -137,6 +157,7 @@ export default function RoadmapCanvas({
   const [pendingTeacherBlockChange, setPendingTeacherBlockChange] =
     useState<PendingTeacherBlockChange | null>(null);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
+  const successToastIdRef = useRef(0);
   const {
     roadmap,
     error,
@@ -162,11 +183,68 @@ export default function RoadmapCanvas({
     completeNode,
   } = useRoadmap(identifier);
 
+  const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
+
+  const showSuccessToast = useCallback((message: string) => {
+    setSuccessToast({ id: ++successToastIdRef.current, message });
+  }, []);
+
+  const updateNodeWithConfirmation = useCallback(
+    async (...args: Parameters<typeof updateNode>) => {
+      const succeeded = await updateNode(...args);
+      if (succeeded) showSuccessToast('Cambios guardados exitosamente.');
+      return succeeded;
+    },
+    [showSuccessToast, updateNode],
+  );
+
+  const addResourceWithConfirmation = useCallback(
+    async (...args: Parameters<typeof addResource>) => {
+      const succeeded = await addResource(...args);
+      if (succeeded) showSuccessToast('Enlace guardado exitosamente.');
+      return succeeded;
+    },
+    [addResource, showSuccessToast],
+  );
+
+  const updateResourceWithConfirmation = useCallback(
+    async (...args: Parameters<typeof updateResource>) => {
+      const succeeded = await updateResource(...args);
+      if (succeeded) {
+        showSuccessToast(
+          args[1].type === 'LINK'
+            ? 'Enlace guardado exitosamente.'
+            : 'Recurso guardado exitosamente.',
+        );
+      }
+      return succeeded;
+    },
+    [showSuccessToast, updateResource],
+  );
+
   function closeSelectedNode() {
     setSelectedNodeId(null);
     if (canEdit) setIsEditorOpen(false);
+    else setIsStudentDetailOpen(false);
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
   }
+
+  useEffect(() => {
+    const handleKeyboardShortcut = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && canEdit && isEditorOpen) {
+        event.preventDefault();
+        setIsEditorOpen(false);
+        return;
+      }
+      if (event.key.toLowerCase() === 'b' && (event.metaKey || event.ctrlKey) && selectedNodeId) {
+        event.preventDefault();
+        if (canEdit) setIsEditorOpen((open) => !open);
+        else setIsStudentDetailOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', handleKeyboardShortcut);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcut);
+  }, [canEdit, isEditorOpen, selectedNodeId]);
 
   async function requestVisibilityChange(nodeId: string, isVisible: boolean) {
     if (!isVisible) return toggleVisibility(nodeId, isVisible);
@@ -280,6 +358,8 @@ export default function RoadmapCanvas({
         pendingTeacherBlockChange.nodes.length,
       )
     : null;
+  const visibilityDependencies = pendingVisibilityChange?.dependencies ?? [];
+  const hasVisibilityDependencies = visibilityDependencies.length > 0;
   return (
     <SidebarProvider
       className="min-h-0 lg:h-full"
@@ -317,15 +397,99 @@ export default function RoadmapCanvas({
               </span>
             </p>
           </header>
-          {canEdit ? (
-            <p className="pointer-events-none absolute right-5 bottom-[18px] z-[4] max-w-xs rounded-lg border border-border bg-card/92 px-3 py-2 text-xs leading-relaxed text-muted-foreground shadow-sm">
-              Arrastra desde un punto de un nodo a otro para crear una dependencia. Selecciona una
-              flecha para eliminarla con el botón{' '}
-              <kbd className="rounded border bg-background px-1">X</kbd> o{' '}
-              <kbd className="rounded border bg-background px-1">Supr</kbd>.
-            </p>
-          ) : null}
+          <details
+            aria-label="Atajos de teclado"
+            className="group pointer-events-auto absolute right-5 bottom-[18px] z-[4] w-[min(23rem,calc(100%-2.5rem))] overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm"
+          >
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 font-semibold text-foreground transition-colors outline-none marker:content-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
+              <span className="flex size-6 items-center justify-center rounded-md border border-border bg-muted text-primary">
+                <Keyboard className="size-3.5" aria-hidden="true" />
+              </span>
+              <span>Atajos de teclado</span>
+              <span className="ml-auto text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                Ayuda
+              </span>
+            </summary>
+            <dl className="grid gap-3 border-t border-border px-3.5 py-3.5">
+              <KeyboardShortcut keys={<Kbd aria-label="Tabulador">⇥</Kbd>}>
+                Recorrer los controles y elementos del mapa.
+              </KeyboardShortcut>
+              <KeyboardShortcut
+                keys={
+                  <KbdGroup className="flex-wrap">
+                    <Kbd aria-label="Enter">↵</Kbd>
+                    <span aria-hidden="true">/</span>
+                    <Kbd aria-label="Espacio">␣</Kbd>
+                  </KbdGroup>
+                }
+              >
+                Activar el control o seleccionar el elemento enfocado.
+              </KeyboardShortcut>
+              <KeyboardShortcut keys={<Kbd aria-label="Escape">Esc</Kbd>}>
+                Cerrar el detalle o panel del nodo seleccionado.
+              </KeyboardShortcut>
+              <KeyboardShortcut
+                keys={
+                  <KbdGroup className="flex-wrap">
+                    <Kbd aria-label="Flecha arriba">↑</Kbd>
+                    <Kbd aria-label="Flecha abajo">↓</Kbd>
+                    <Kbd aria-label="Flecha izquierda">←</Kbd>
+                    <Kbd aria-label="Flecha derecha">→</Kbd>
+                  </KbdGroup>
+                }
+              >
+                Mover el nodo seleccionado en modo edición; con <Kbd aria-label="Shift">⇧</Kbd>, más
+                rápido.
+              </KeyboardShortcut>
+              {canEdit ? (
+                <KeyboardShortcut
+                  keys={
+                    <KbdGroup className="flex-wrap">
+                      <Kbd aria-label="Suprimir">⌦</Kbd>
+                      <span aria-hidden="true">/</span>
+                      <Kbd aria-label="Retroceso">⌫</Kbd>
+                    </KbdGroup>
+                  }
+                >
+                  Eliminar la dependencia seleccionada, con confirmación.
+                </KeyboardShortcut>
+              ) : null}
+              <KeyboardShortcut
+                keys={
+                  <KbdGroup className="flex-wrap">
+                    <Kbd aria-label="Comando">⌘</Kbd>
+                    <span aria-hidden="true">+</span>
+                    <Kbd>B</Kbd>
+                    <span aria-hidden="true">/</span>
+                    <Kbd aria-label="Control">⌃</Kbd>
+                    <span aria-hidden="true">+</span>
+                    <Kbd>B</Kbd>
+                  </KbdGroup>
+                }
+              >
+                Ocultar o mostrar el panel lateral.
+              </KeyboardShortcut>
+              <KeyboardShortcut
+                keys={
+                  <KbdGroup className="flex-wrap">
+                    <Kbd>Inicio</Kbd>
+                    <span aria-hidden="true">/</span>
+                    <Kbd>Fin</Kbd>
+                  </KbdGroup>
+                }
+              >
+                Con el borde del panel enfocado, usar su ancho mínimo o máximo.
+              </KeyboardShortcut>
+            </dl>
+          </details>
           {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
+          {successToast && (
+            <RoadmapSuccessToast
+              key={successToast.id}
+              message={successToast.message}
+              onDismiss={dismissSuccessToast}
+            />
+          )}
           <RoadmapGraph
             roadmap={roadmap}
             canEdit={canEdit}
@@ -335,9 +499,14 @@ export default function RoadmapCanvas({
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
               if (canEdit) setIsEditorOpen(true);
+              else setIsStudentDetailOpen(true);
             }}
             selectedNodeId={selectedNodeId}
             onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
+            onKeyboardNodeMove={(nodeId, position) =>
+              void moveNode(nodeId, snapToRoadmapGrid(position))
+            }
+            onClearSelectedNode={closeSelectedNode}
             onConnectNodes={(connection) => void requestDependencyChange(connection)}
             onDeleteDependencies={setPendingDependencyIds}
             onAutoLayout={(nodes) => {
@@ -345,7 +514,6 @@ export default function RoadmapCanvas({
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
               );
             }}
-            viewportFitVersion={canEdit ? editorPanel.width : studentPanel.width}
             topRightActions={
               canEdit
                 ? (getViewport) => (
@@ -382,15 +550,15 @@ export default function RoadmapCanvas({
             isOpen={isEditorOpen}
             onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
             onClose={closeSelectedNode}
-            onUpdateNode={updateNode}
+            onUpdateNode={updateNodeWithConfirmation}
             onToggleVisibility={requestVisibilityChange}
             onRequestTeacherBlock={(nodeId, operation) =>
               void requestTeacherBlockChange(nodeId, operation)
             }
             onDeleteNode={deleteNode}
-            onAddResource={addResource}
+            onAddResource={addResourceWithConfirmation}
             onUploadResource={uploadResource}
-            onUpdateResource={updateResource}
+            onUpdateResource={updateResourceWithConfirmation}
             onDeleteResource={deleteResource}
             panelWidth={editorPanel.width}
             onPanelWidthChange={editorPanel.setWidth}
@@ -398,8 +566,10 @@ export default function RoadmapCanvas({
         )}
         {!canEdit && (
           <StudentNodeDetail
-            node={selectedNode as StudentRoadmapNode | undefined}
-            status={selectedNode ? studentNodeStatus(selectedNode) : null}
+            node={
+              isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined
+            }
+            status={isStudentDetailOpen && selectedNode ? studentNodeStatus(selectedNode) : null}
             onClose={closeSelectedNode}
             onComplete={(node) => void completeNode(node.id)}
             panelWidth={studentPanel.width}
@@ -443,34 +613,78 @@ export default function RoadmapCanvas({
         open={Boolean(pendingVisibilityChange)}
         onOpenChange={(open) => !open && setPendingVisibilityChange(null)}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Confirmar ocultación
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Ocultarás el nodo y eliminarás {pendingVisibilityChange?.dependencies.length ?? 0}{' '}
-              {pendingVisibilityChange?.dependencies.length === 1
-                ? 'dependencia relacionada'
-                : 'dependencias relacionadas'}
-              .
-            </AlertDialogDescription>
-            <p className="text-sm text-muted-foreground">
-              Estas dependencias no se restaurarán al volver a mostrar el nodo.
-            </p>
-            <ul className="list-disc pl-5 text-sm text-muted-foreground">
-              {pendingVisibilityChange?.dependencies.map((dependency) => {
-                const source = roadmap.nodes.find((node) => node.id === dependency.sourceNodeId);
-                const target = roadmap.nodes.find((node) => node.id === dependency.targetNodeId);
-                return (
-                  <li key={dependency.id}>
-                    {source?.title ?? dependency.sourceNodeId} →{' '}
-                    {target?.title ?? dependency.targetNodeId}
-                  </li>
-                );
-              })}
-            </ul>
+        <AlertDialogContent className="gap-5 sm:max-w-xl">
+          <AlertDialogHeader className="items-stretch gap-4 text-left sm:items-stretch">
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground ring-1 ring-border"
+              >
+                <EyeOff className="size-5 text-muted-foreground" />
+              </span>
+              <div className="min-w-0 space-y-1">
+                <AlertDialogTitle className="text-xl font-semibold tracking-[-0.025em]">
+                  Confirmar ocultación
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm leading-relaxed">
+                  {hasVisibilityDependencies ? (
+                    <>
+                      Ocultarás este nodo y eliminarás{' '}
+                      <span className="font-semibold text-destructive">
+                        {visibilityDependencies.length}{' '}
+                        {visibilityDependencies.length === 1
+                          ? 'dependencia relacionada'
+                          : 'dependencias relacionadas'}
+                      </span>
+                      .
+                    </>
+                  ) : (
+                    'Ocultarás este nodo. No posee dependencias.'
+                  )}
+                </AlertDialogDescription>
+              </div>
+            </div>
           </AlertDialogHeader>
+          {hasVisibilityDependencies ? (
+            <section aria-labelledby="removed-dependencies-heading" className="space-y-2.5">
+              <h3
+                id="removed-dependencies-heading"
+                className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase"
+              >
+                Dependencias que se eliminarán
+              </h3>
+              <ul
+                className="divide-y divide-border border-t border-border"
+                aria-label="Dependencias que se eliminarán"
+              >
+                {visibilityDependencies.map((dependency) => {
+                  const source = roadmap.nodes.find((node) => node.id === dependency.sourceNodeId);
+                  const target = roadmap.nodes.find((node) => node.id === dependency.targetNodeId);
+                  return (
+                    <li
+                      key={dependency.id}
+                      className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 py-3"
+                    >
+                      <span className="text-sm leading-5 font-medium text-foreground">
+                        {source?.title ?? dependency.sourceNodeId}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="sr-only">conduce a</span>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-destructive"
+                          strokeWidth={2.75}
+                        />
+                      </span>
+                      <span className="text-sm leading-5 font-medium text-foreground">
+                        {target?.title ?? dependency.targetNodeId}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction

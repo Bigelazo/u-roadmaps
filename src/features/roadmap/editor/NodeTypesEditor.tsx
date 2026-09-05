@@ -16,6 +16,9 @@ import {
 import { Button } from '@/shared/ui/button';
 import { NodeTypeForm } from './NodeTypeForm';
 import type { NodeTypeDraft, NodeTypeInput } from './types';
+import { DialogTitle } from '@/shared/ui/dialog';
+
+const sectionTitleClassName = 'font-heading text-lg leading-tight font-semibold tracking-[-0.015em]';
 
 type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];
@@ -48,10 +51,10 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
 
   return (
     <>
-      <div className="rounded-lg border border-dashed border-border bg-cloud/60 p-3">
-        <p className="text-sm font-semibold">
+      <section className="flex flex-col gap-3">
+        <h2 className={sectionTitleClassName}>
           {isEditing ? 'Editar tipo' : 'Crear tipo personalizado'}
-        </p>
+        </h2>
         <NodeTypeForm
           value={value}
           isEditing={isEditing}
@@ -68,13 +71,15 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
           }}
           onCancel={isEditing ? closeEditor : undefined}
         />
-      </div>
+      </section>
+      <DialogTitle className={sectionTitleClassName}>Tipos de nodo</DialogTitle>
+
       <ul
-        className="mt-3 flex flex-col divide-y divide-border"
+        className="mt-1 flex flex-col divide-y divide-border"
         aria-label="Tipos de nodo disponibles"
       >
         {nodeTypes.map((type) => (
-          <li key={type.id} className="flex items-center gap-2 py-2.5 text-sm">
+          <li key={type.id} className="flex h-11 items-center gap-2 text-sm">
             <NodeTypeListIcon type={type} />
             <span className="min-w-0 flex-1 truncate font-medium">{type.name}</span>
             {type.isPredefined ? (
@@ -83,8 +88,9 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
               <div className="flex shrink-0 gap-0.5">
                 <Button
                   type="button"
-                  size="icon-xs"
+                  size="xs"
                   variant="ghost"
+                  className="!size-8 !min-h-0 !p-0"
                   aria-label={`Editar tipo ${type.name}`}
                   onClick={() => {
                     setEditingId(type.id);
@@ -95,16 +101,17 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
                     });
                   }}
                 >
-                  <Pencil />
+                  <Pencil className="size-4" />
                 </Button>
                 <Button
                   type="button"
-                  size="icon-xs"
+                  size="xs"
                   variant="ghost"
+                  className="!size-8 !min-h-0 !p-0"
                   aria-label={`Eliminar tipo ${type.name}`}
                   onClick={() => setPendingDeletion({ id: type.id, name: type.name })}
                 >
-                  <Trash2 />
+                  <Trash2 className="size-4" />
                 </Button>
               </div>
             )}

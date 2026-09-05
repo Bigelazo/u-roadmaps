@@ -172,7 +172,7 @@ function Sidebar({
         data-side={side}
         data-variant={variant}
         className={cn(
-          'group relative flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground',
+          'group relative flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground transition-shadow focus-within:ring-2 focus-within:ring-primary focus-within:ring-inset',
           className,
         )}
         {...props}
@@ -336,7 +336,7 @@ function SidebarRail({
         aria-valuenow={value}
         aria-valuetext={`Ancho del panel: ${value} píxeles`}
         className={cn(
-          'absolute inset-y-0 z-20 hidden w-4 cursor-col-resize touch-none items-center justify-center outline-none select-none after:absolute after:inset-y-0 after:start-1/2 after:w-px after:bg-sidebar-border hover:after:bg-sidebar-primary focus-visible:after:w-0.5 focus-visible:after:bg-sidebar-primary sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2',
+          'absolute inset-y-0 z-20 hidden w-4 cursor-col-resize touch-none items-center justify-center outline-none select-none after:absolute after:inset-y-0 after:start-1/2 after:w-px after:bg-sidebar-border hover:after:w-0.5 hover:after:bg-primary focus-visible:after:w-0.5 focus-visible:after:bg-primary sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2',
           'group-data-[side=left]:-right-4 group-data-[side=right]:left-0',
           className,
         )}

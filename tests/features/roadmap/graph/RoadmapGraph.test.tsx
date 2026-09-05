@@ -53,7 +53,20 @@ test('keeps hidden nodes on the teacher graph and marks them as hidden from stud
   expect(teacherNode.data.typeColor).toBe('#024AD8');
   expect(teacherNode.data.typeName).toBe('Contenido');
   expect(teacherNode.data.typeIcon).toBe('BookOpen');
+  expect(teacherNode.data.isTeacherBlocked).toBe(false);
   expect(studentNode.hidden).toBe(true);
+});
+
+test('maps a teacher block to the editing graph without turning the node into student progress', () => {
+  const teacherBlockedRoadmap = structuredClone(roadmap);
+  teacherBlockedRoadmap.nodes[0].isVisible = true;
+  teacherBlockedRoadmap.nodes[0].isTeacherBlocked = true;
+
+  const node = mapRoadmapGraph(teacherBlockedRoadmap, true).nodes[0];
+
+  expect(node.data).toMatchObject({ status: 'editing', isTeacherBlocked: true });
+  expect(node.selectable).toBe(true);
+  expect(node.connectable).toBe(true);
 });
 
 test('allows teachers, but not students, to delete dependency arrows', () => {

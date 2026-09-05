@@ -1,9 +1,13 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
-import { render, screen } from '@testing-library/react';
-import { expect, test } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, expect, test, vi } from 'vitest';
 import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function mountBlockedNode(blockReason: StudentNodeBlockReason) {
   render(
@@ -18,6 +22,7 @@ function mountBlockedNode(blockReason: StudentNodeBlockReason) {
             typeName: 'Contenido',
             typeIcon: 'BookOpen',
             status: 'locked',
+            isTeacherBlocked: false,
             blockReason,
             isHidden: false,
           },
@@ -46,6 +51,7 @@ test('marks hidden teacher nodes with a distinct visual treatment and no visibil
       typeName: 'Contenido',
       typeIcon: 'BookOpen',
       status: 'editing',
+      isTeacherBlocked: false,
       isHidden: true,
     },
     selected: false,
@@ -73,6 +79,8 @@ test('marks hidden teacher nodes with a distinct visual treatment and no visibil
   expect(card.dataset.hidden).toBe('true');
   expect(card.className).toContain('border-dashed');
   expect(card.style.backgroundImage).toContain('repeating-linear-gradient');
+  const hiddenBadge = screen.getByRole('img', { name: 'Oculto para estudiantes' });
+  expect(hiddenBadge).toBeTruthy();
 });
 
 test('keeps dependency handles mounted, but inert, for student nodes', () => {
@@ -85,6 +93,7 @@ test('keeps dependency handles mounted, but inert, for student nodes', () => {
       typeName: 'Contenido',
       typeIcon: 'BookOpen',
       status: 'available',
+      isTeacherBlocked: false,
       isHidden: false,
     },
     selected: false,
@@ -121,6 +130,7 @@ test('shows the node-type icon with an accessible label, rather than persistent 
       typeName: 'Contenido',
       typeIcon: 'BookOpen',
       status: 'available',
+      isTeacherBlocked: false,
       isHidden: false,
     },
     selected: false,
@@ -144,6 +154,41 @@ test('shows the node-type icon with an accessible label, rather than persistent 
   expect(screen.queryByText('Pendiente')).toBeNull();
 });
 
+test('does not lift a roadmap node on hover', () => {
+  const props = {
+    id: 'node-without-hover-lift',
+    type: 'roadmap',
+    data: {
+      title: 'Introducción a funciones',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'available' as const,
+      isTeacherBlocked: false,
+      isHidden: false,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  const card = screen.getByTestId('roadmap-card');
+  expect(card.className).not.toContain('hover:translate-y');
+  expect(card.className).not.toContain('transition-[transform');
+});
+
 test('labels completed and pending status badges for assistive technology', () => {
   const sharedProps = {
     id: 'node-3',
@@ -154,6 +199,7 @@ test('labels completed and pending status badges for assistive technology', () =
       typeName: 'Contenido',
       typeIcon: 'BookOpen',
       isHidden: false,
+      isTeacherBlocked: false,
     },
     selected: false,
     selectable: true,
@@ -190,6 +236,90 @@ test('labels completed and pending status badges for assistive technology', () =
   expect(screen.getByRole('img', { name: 'Pendiente' })).toBeTruthy();
 });
 
+test('gives the node status badge a visual hover affordance', () => {
+  const props = {
+    id: 'node-status-hover',
+    type: 'roadmap',
+    data: {
+      title: 'Introducción a funciones',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'available' as const,
+      isTeacherBlocked: false,
+      isHidden: false,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  const statusBadge = screen.getByRole('img', { name: 'Pendiente' });
+  expect(statusBadge.className).toContain('hover:scale-110');
+  expect(statusBadge.className).toContain('hover:bg-muted');
+  expect(statusBadge.className).toContain('hover:shadow-md');
+  expect(statusBadge.className).toContain('motion-reduce:transform-none');
+});
+
+test('opens node icon and status tooltips immediately, with the status below its badge', async () => {
+  vi.useFakeTimers();
+  const props = {
+    id: 'node-tooltip',
+    type: 'roadmap',
+    data: {
+      title: 'Introducción a funciones',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'available' as const,
+      isTeacherBlocked: false,
+      isHidden: false,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  fireEvent.mouseEnter(screen.getByRole('img', { name: 'Contenido' }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(screen.getByText('Contenido').closest('[data-slot="tooltip-content"]')).toBeTruthy();
+
+  fireEvent.mouseLeave(screen.getByRole('img', { name: 'Contenido' }));
+  fireEvent.mouseEnter(screen.getByRole('img', { name: 'Pendiente' }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  const statusTooltip = screen.getByText('Pendiente').closest('[data-slot="tooltip-content"]');
+  expect(statusTooltip).toBeTruthy();
+  expect(statusTooltip?.getAttribute('data-side')).toBe('bottom');
+});
+
 test.each([
   ['TEACHER_BLOCK', 'Bloqueado por el equipo docente'],
   ['PREREQUISITE_BLOCK', 'Completa los prerrequisitos'],
@@ -204,6 +334,44 @@ test.each([
   expect(card.className).toContain('cursor-not-allowed');
   expect(card.getAttribute('aria-disabled')).toBe('true');
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+test('shows teacher blocks like student blocks without disabling editing', () => {
+  const props = {
+    id: 'teacher-blocked-node',
+    type: 'roadmap',
+    data: {
+      title: 'Contenido bloqueado por docencia',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'editing',
+      isTeacherBlocked: true,
+      isHidden: false,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  const card = screen.getByTestId('roadmap-card');
+  expect(screen.queryByText('Bloqueado por docencia')).toBeNull();
+  expect(screen.getByRole('img', { name: 'Bloqueado por docencia' })).toBeTruthy();
+  expect(card.style.backgroundColor).toBe('var(--cloud)');
+  expect(card.className).toContain('cursor-pointer');
+  expect(card.getAttribute('aria-disabled')).toBeNull();
 });
 
 test('sizes cards from their titles in grid-aligned dimensions', () => {
@@ -232,6 +400,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
           typeName: 'Contenido',
           typeIcon: 'BookOpen',
           status: 'available',
+          isTeacherBlocked: false,
           isHidden: false,
         })}
       />
@@ -243,6 +412,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
           typeName: 'Contenido',
           typeIcon: 'BookOpen',
           status: 'available',
+          isTeacherBlocked: false,
           isHidden: false,
         })}
       />
@@ -253,6 +423,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
           typeName: 'Contenido',
           typeIcon: 'BookOpen',
           status: 'editing',
+          isTeacherBlocked: false,
           isHidden: true,
         })}
       />
@@ -263,6 +434,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
           typeName: 'Contenido',
           typeIcon: 'BookOpen',
           status: 'locked',
+          isTeacherBlocked: false,
           isHidden: false,
           blockReason: 'PREREQUISITE_BLOCK',
         })}
@@ -287,7 +459,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
   expect(cards[1].style.height).not.toBe(cards[0].style.height);
 });
 
-test('wraps long card titles while preserving their full accessible name', () => {
+test('wraps long card titles without truncating them', () => {
   const title = 'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse';
   const props = {
     id: 'long-title',
@@ -298,6 +470,7 @@ test('wraps long card titles while preserving their full accessible name', () =>
       typeName: 'Contenido',
       typeIcon: 'BookOpen',
       status: 'available',
+      isTeacherBlocked: false,
       isHidden: false,
     },
     selected: false,
@@ -321,8 +494,9 @@ test('wraps long card titles while preserving their full accessible name', () =>
   const content = screen.getByTestId('roadmap-node-content');
   expect(content.className).toContain('h-full');
   expect(content.className).toContain('items-center');
-  expect(content.className).not.toContain('justify-center');
+  expect(content.className).toContain('justify-center');
   expect(heading.getAttribute('title')).toBe(title);
-  expect(heading.className).toContain('line-clamp-2');
+  expect(heading.className).not.toContain('line-clamp-2');
+  expect(heading.className).toContain('break-words');
   expect(heading.className).toContain('text-left');
 });

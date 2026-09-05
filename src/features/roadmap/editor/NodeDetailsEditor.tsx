@@ -53,7 +53,7 @@ function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeType
           <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
             Nodo seleccionado
           </p>
-          <h2 className="mt-1 truncate font-heading text-2xl font-semibold tracking-[-0.035em]">
+          <h2 className="mt-1 break-words font-heading text-2xl font-semibold tracking-[-0.035em]">
             {node.title}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -82,12 +82,18 @@ function NodeForm({
   onNodeChange,
   onUpdateNode,
 }: Pick<Props, 'node' | 'nodeTypes' | 'nodeValue' | 'onNodeChange' | 'onUpdateNode'>) {
+  const hasChanges =
+    nodeValue.title !== node.title ||
+    nodeValue.description !== (node.description ?? '') ||
+    nodeValue.nodeTypeId !== node.nodeTypeId;
+  const canSave = hasChanges && Boolean(nodeValue.title.trim());
+
   return (
     <form
       className="flex flex-col gap-4 py-5"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (nodeValue.title.trim()) await onUpdateNode(node.id, nodeValue);
+        if (canSave) await onUpdateNode(node.id, nodeValue);
       }}
     >
       <FieldGroup>
@@ -121,7 +127,7 @@ function NodeForm({
           />
         </Field>
       </FieldGroup>
-      <Button type="submit" className="w-full">
+      <Button type="submit" className="w-full" disabled={!canSave}>
         <Save data-icon="inline-start" />
         Guardar cambios
       </Button>

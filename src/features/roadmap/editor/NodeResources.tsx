@@ -73,6 +73,7 @@ export function NodeResources({
             nodeId={node.id}
             resourceValue={resourceValue}
             editingResourceId={editingResourceId}
+            editingResource={node.resources.find((resource) => resource.id === editingResourceId) ?? null}
             mode={mode}
             onModeChange={setMode}
             onResourceChange={onResourceChange}

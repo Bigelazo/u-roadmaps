@@ -81,6 +81,7 @@ test('groups editing controls without visual overlap on narrow viewports', async
   await page.setViewportSize({ width: 1280, height: 720 });
   await authenticateAs(page.context(), fixture.daniela);
   await page.goto('/courses/CC1002/2026/2');
+  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
   await page.getByRole('button', { name: 'Ocultar panel de edición' }).click();
   await expect(page.getByRole('button', { name: 'Mostrar panel de edición' })).toBeVisible();
 

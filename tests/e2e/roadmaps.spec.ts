@@ -73,9 +73,9 @@ test('teacher creates and edits a custom node type with visual pickers', async (
     await expect(create).toBeDisabled();
     await dialog.getByLabel('Nombre').fill(typeName);
 
-    await dialog.getByRole('button', { name: 'Ícono: sin selección' }).click();
+    await dialog.getByRole('button', { name: 'Icono: sin selección' }).click();
     await page
-      .getByRole('dialog', { name: 'Elegir ícono' })
+      .getByRole('dialog', { name: 'Elegir Icono' })
       .getByRole('button', { name: 'Química' })
       .click();
     await dialog.getByRole('button', { name: 'Color: sin selección' }).click();
@@ -88,11 +88,11 @@ test('teacher creates and edits a custom node type with visual pickers', async (
     await expect(dialog.getByText(typeName)).toBeVisible();
 
     await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();
-    await expect(dialog.getByRole('button', { name: 'Ícono: Química' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Icono: Química' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Color: Verde hoja' })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Ícono: Química' }).click();
+    await dialog.getByRole('button', { name: 'Icono: Química' }).click();
     await page
-      .getByRole('dialog', { name: 'Elegir ícono' })
+      .getByRole('dialog', { name: 'Elegir Icono' })
       .getByRole('button', { name: 'Cálculo' })
       .click();
     await dialog.getByRole('button', { name: 'Color: Verde hoja' }).click();
@@ -100,7 +100,14 @@ test('teacher creates and edits a custom node type with visual pickers', async (
       .getByRole('dialog', { name: 'Elegir color' })
       .getByRole('button', { name: 'Violeta' })
       .click();
-    await dialog.getByRole('button', { name: 'Guardar tipo' }).click();
+    const updateResponse = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' && response.url().includes('/node-types/'),
+      ),
+      dialog.getByRole('button', { name: 'Guardar tipo' }).click(),
+    ]).then(([response]) => response);
+    expect(updateResponse.status()).toBe(200);
 
     const roadmap = await api.get(roadmapPath());
     const nodeType = (await roadmap.json()).nodeTypes.find(
@@ -685,12 +692,12 @@ test('teacher and student workflows render against the shared fixture', async ({
     ).toBe(true);
     await page.getByRole('link', { name: 'Abrir roadmap' }).first().click();
     await panRoadmapNodeIntoView(page, fixture.cc1002.firstNode);
-    await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
     await expect(
       page
         .locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`)
         .getByRole('img', { name: 'Pendiente' }),
     ).toBeVisible();
+    await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
     await expect(
       page.getByRole('link', { name: 'Programa y herramientas del curso' }),
     ).toHaveAttribute('href', 'https://ucampus.uchile.cl/');
@@ -797,6 +804,7 @@ test('keeps the teaching panel width across reloads without changing the student
     window.localStorage.removeItem('u-roadmaps:student-node-detail-width');
   });
   await page.reload();
+  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
 
   const panel = page.locator('#roadmap-editor-panel');
   const canvas = page.getByLabel('Lienzo del roadmap');
@@ -827,6 +835,7 @@ test('keeps the teaching panel width across reloads without changing the student
   ).toBeNull();
 
   await page.reload();
+  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
   await expect.poll(async () => (await panel.boundingBox())?.width).toBe(resizedWidth);
   await expect(page.locator('.react-flow__node').first()).toBeInViewport();
 });

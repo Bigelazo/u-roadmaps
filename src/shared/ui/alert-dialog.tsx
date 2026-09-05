@@ -107,8 +107,19 @@ function AlertDialogDescription({
   );
 }
 
-function AlertDialogAction({ className, ...props }: React.ComponentProps<typeof Button>) {
-  return <Button data-slot="alert-dialog-action" className={cn(className)} {...props} />;
+function AlertDialogAction({
+  className,
+  autoFocus = true,
+  ...props
+}: React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      data-slot="alert-dialog-action"
+      autoFocus={autoFocus}
+      className={cn(className)}
+      {...props}
+    />
+  );
 }
 
 function AlertDialogCancel({

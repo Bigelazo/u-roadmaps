@@ -16,6 +16,8 @@ vi.mock('next/dynamic', () => ({
       onClose,
       onRequestTeacherBlock,
       onToggleVisibility,
+      onUpdateNode,
+      onAddResource,
     }: {
       selectedNode?: { id: string; isTeacherBlocked: boolean };
       isOpen: boolean;
@@ -23,6 +25,8 @@ vi.mock('next/dynamic', () => ({
       onClose: () => void;
       onRequestTeacherBlock: (nodeId: string, operation: 'BLOCK' | 'UNBLOCK') => void;
       onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
+      onUpdateNode: (nodeId: string, node: unknown) => Promise<boolean>;
+      onAddResource: (nodeId: string, resource: unknown) => Promise<boolean>;
     }) =>
       isOpen ? (
         <aside data-testid="editor-panel">
@@ -40,6 +44,24 @@ vi.mock('next/dynamic', () => ({
               <button type="button" onClick={() => onToggleVisibility(selectedNode.id, true)}>
                 Ocultar para estudiantes
               </button>
+              <button
+                type="button"
+                onClick={() => void onUpdateNode(selectedNode.id, { title: 'Límites' })}
+              >
+                Guardar cambios
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void onAddResource(selectedNode.id, {
+                    title: 'Guía de ejercicios',
+                    url: 'https://example.test/guia',
+                    type: 'LINK',
+                  })
+                }
+              >
+                Guardar enlace
+              </button>
             </>
           ) : null}
         </aside>
@@ -52,6 +74,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onConnectNodes,
     onDeleteDependencies,
     onAutoLayout,
+    onClearSelectedNode,
+    onKeyboardNodeMove,
     selectedNodeId,
     topRightActions,
   }: {
@@ -64,6 +88,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     }) => void;
     onDeleteDependencies: (ids: string[]) => void;
     onAutoLayout: (nodes: { id: string; position: { x: number; y: number } }[]) => void;
+    onClearSelectedNode?: () => void;
+    onKeyboardNodeMove?: (nodeId: string, position: { x: number; y: number }) => void;
     selectedNodeId?: string | null;
     topRightActions?: (
       getViewport: () => {
@@ -86,6 +112,12 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       <button type="button" onClick={() => onSelectNode('node-1', document.createElement('div'))}>
         Activar nodo docente
       </button>
+      <button
+        type="button"
+        onClick={() => onSelectNode('missing-node', document.createElement('div'))}
+      >
+        Activar nodo inexistente
+      </button>
       <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
         Solicitar eliminación de dependencias
       </button>
@@ -107,6 +139,12 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         onClick={() => onAutoLayout([{ id: 'node-1', position: { x: 40, y: 80 } }])}
       >
         Ordenar mapa
+      </button>
+      <button type="button" onClick={onClearSelectedNode}>
+        Cerrar nodo con Escape
+      </button>
+      <button type="button" onClick={() => onKeyboardNodeMove?.('node-1', { x: 20, y: 0 })}>
+        Mover nodo con teclado
       </button>
     </>
   ),
@@ -219,9 +257,10 @@ test('shows the course code and localized term together in the canvas header', (
   expect(screen.getByText('Primavera 2026')).toBeTruthy();
   expect(screen.getByText('Modo edición')).toBeTruthy();
   expect(screen.queryByRole('region', { name: 'Leyenda del roadmap' })).toBeNull();
-  expect(
-    screen.getByText(/Arrastra desde un punto de un nodo a otro para crear una dependencia/),
-  ).toBeTruthy();
+  const shortcuts = screen.getByRole('group', { name: 'Atajos de teclado' });
+  expect(shortcuts).toHaveProperty('open', false);
+  expect(within(shortcuts).getByText('Ocultar o mostrar el panel lateral.')).toBeTruthy();
+  expect(within(shortcuts).getByText(/Mover el nodo seleccionado en modo edición/)).toBeTruthy();
   const canvas = screen.getByLabelText('Lienzo del roadmap');
   expect(canvas.className).toContain('lg:min-h-0');
   expect(canvas.parentElement?.className).toContain('lg:grid-rows-[minmax(0,1fr)]');
@@ -295,7 +334,7 @@ test('manages node types from the floating canvas button', async () => {
   await user.click(screen.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }));
   const dialog = screen.getByRole('dialog', { name: 'Tipos de nodo' });
   await user.type(within(dialog).getByLabelText('Nombre'), 'Laboratorio');
-  await user.click(within(dialog).getByRole('button', { name: 'Ícono: sin selección' }));
+  await user.click(within(dialog).getByRole('button', { name: 'Icono: sin selección' }));
   await user.click(screen.getByRole('button', { name: 'Libro abierto' }));
   await user.click(within(dialog).getByRole('button', { name: 'Color: sin selección' }));
   await user.click(screen.getByRole('button', { name: 'Azul institucional' }));
@@ -311,7 +350,7 @@ test('manages node types from the floating canvas button', async () => {
   const customType = {
     id: 'lab',
     name: 'Laboratorio',
-    icon: 'Shapes',
+    icon: 'BookOpen',
     color: '#024AD8',
     isPredefined: false,
   };
@@ -340,7 +379,7 @@ test('manages node types from the floating canvas button', async () => {
   await user.click(within(managementDialog).getByRole('button', { name: 'Guardar tipo' }));
   expect(updateNodeType).toHaveBeenCalledWith('lab', {
     name: 'Laboratorio de código',
-    icon: 'Shapes',
+    icon: 'BookOpen',
     color: '#024AD8',
   });
 
@@ -358,9 +397,16 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Solicitar eliminación de dependencias' }));
-  expect(screen.getByRole('alertdialog', { name: 'Confirmar eliminación' }).textContent).toContain(
+  const dialog = screen.getByRole('alertdialog', { name: 'Confirmar eliminación' });
+  expect(dialog.textContent).toContain(
     'Eliminarás estas dependencias. Esta acción no se puede deshacer.',
   );
+  await user.keyboard('{Enter}');
+  expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
+  expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
+
+  deleteDependency.mockClear();
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminación de dependencias' }));
 
   await user.click(screen.getByRole('button', { name: 'Cancelar' }));
   expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -370,6 +416,57 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
   expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
   expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
+});
+
+test('closes the selected-node sidebar on Escape without tying that behavior to canvas clicks', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+
+  await user.click(screen.getByRole('button', { name: 'Cerrar nodo con Escape' }));
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
+});
+
+test('closes the editor sidebar on Escape when the selected node is no longer available', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo inexistente' }));
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+
+  await user.keyboard('{Escape}');
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
+});
+
+test('persists a position reached with the keyboard', async () => {
+  const user = userEvent.setup();
+  const moveNode = vi.fn();
+  useRoadmapMock.mockReturnValue(roadmapActions({ moveNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Mover nodo con teclado' }));
+
+  expect(moveNode).toHaveBeenCalledWith('node-1', { x: 20, y: 0 });
+});
+
+test('toggles the selected editor sidebar with the platform shortcut', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+
+  await user.keyboard('{Meta>}b{/Meta}');
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
+
+  await user.keyboard('{Meta>}b{/Meta}');
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+
+  await user.keyboard('{Control>}b{/Control}');
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
 });
 
 test('previews and confirms the node visibility action before changing it', async () => {
@@ -385,14 +482,39 @@ test('previews and confirms the node visibility action before changing it', asyn
   await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
   expect(dialog.textContent).toContain('1 dependencia');
-  expect(dialog.textContent).toContain('Límites → node-2');
-  expect(dialog.textContent).toContain('no se restaurarán al volver a mostrar el nodo');
+  expect(dialog.textContent).toContain('Límites');
+  expect(dialog.textContent).toContain('node-2');
+  expect(
+    within(dialog).getByRole('heading', { name: 'Dependencias que se eliminarán' }),
+  ).toBeTruthy();
+  expect(within(dialog).getByText('conduce a')).toBeTruthy();
   await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
   expect(toggleVisibility).not.toHaveBeenCalled();
 
   await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
   const confirmation = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
   await user.click(within(confirmation).getByRole('button', { name: 'Ocultar' }));
+  expect(toggleVisibility).toHaveBeenCalledWith('node-1', true);
+});
+
+test('omits the dependency section when hiding a node without dependencies', async () => {
+  const user = userEvent.setup();
+  const toggleVisibility = vi.fn();
+  const previewNodeVisibility = vi.fn().mockResolvedValue([]);
+  useRoadmapMock.mockReturnValue(roadmapActions({ toggleVisibility, previewNodeVisibility }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
+
+  expect(dialog.textContent).toContain('Ocultarás este nodo. No posee dependencias.');
+  expect(
+    within(dialog).queryByRole('heading', { name: 'Dependencias que se eliminarán' }),
+  ).toBeNull();
+  expect(within(dialog).queryByRole('list', { name: 'Dependencias que se eliminarán' })).toBeNull();
+
+  await user.click(within(dialog).getByRole('button', { name: 'Ocultar' }));
   expect(toggleVisibility).toHaveBeenCalledWith('node-1', true);
 });
 
@@ -523,6 +645,38 @@ test('surfaces a mutation error as a dismissible toast over the canvas', async (
 
   await user.click(screen.getByRole('button', { name: 'Cerrar alerta' }));
   expect(dismissError).toHaveBeenCalled();
+});
+
+test('confirms that a node update was saved successfully', async () => {
+  const user = userEvent.setup();
+  const updateNode = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ updateNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+  expect(
+    await screen.findByRole('status', { name: 'Cambios guardados exitosamente.' }),
+  ).toBeTruthy();
+  expect(updateNode).toHaveBeenCalledWith('node-1', { title: 'Límites' });
+});
+
+test('confirms that a link was saved successfully', async () => {
+  const user = userEvent.setup();
+  const addResource = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ addResource }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Guardar enlace' }));
+
+  expect(await screen.findByRole('status', { name: 'Enlace guardado exitosamente.' })).toBeTruthy();
+  expect(addResource).toHaveBeenCalledWith('node-1', {
+    title: 'Guía de ejercicios',
+    url: 'https://example.test/guia',
+    type: 'LINK',
+  });
 });
 
 test('surfaces a concurrent hidden-node dependency error over the canvas', async () => {

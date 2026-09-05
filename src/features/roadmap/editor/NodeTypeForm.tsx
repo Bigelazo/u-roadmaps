@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Check, ChevronDown, Plus, Save } from 'lucide-react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import {
@@ -30,10 +31,11 @@ type Props = {
 };
 
 function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
+  const [open, setOpen] = useState(false);
   const selectedIcon = value.icon ? nodeTypeIcons.find(({ id }) => id === value.icon) : undefined;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
           <Button
@@ -41,7 +43,7 @@ function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
             type="button"
             variant="outline"
             className="w-full justify-between font-normal"
-            aria-label={`Ícono: ${selectedIcon?.label ?? 'sin selección'}`}
+            aria-label={`Icono: ${selectedIcon?.label ?? 'sin selección'}`}
           />
         }
       >
@@ -49,13 +51,13 @@ function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
           {value.icon ? (
             <NodeTypeIcon icon={value.icon} data-icon="inline-start" aria-hidden="true" />
           ) : null}
-          {selectedIcon?.label ?? 'Elegir ícono'}
+          {selectedIcon?.label ?? 'Elegir Icono'}
         </span>
         <ChevronDown data-icon="inline-end" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 p-3">
         <PopoverHeader>
-          <PopoverTitle>Elegir ícono</PopoverTitle>
+          <PopoverTitle>Elegir Icono</PopoverTitle>
         </PopoverHeader>
         <ScrollArea className="h-80">
           <div className="flex flex-col gap-4 pr-2">
@@ -76,7 +78,10 @@ function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
                               aria-label={label}
                               aria-pressed={selected}
                               className="flex size-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-                              onClick={() => onChange({ ...value, icon })}
+                              onClick={() => {
+                                onChange({ ...value, icon });
+                                setOpen(false);
+                              }}
                             />
                           }
                         >
@@ -97,12 +102,13 @@ function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
 }
 
 function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
+  const [open, setOpen] = useState(false);
   const selectedColor = value.color
     ? nodeTypeColorPalette.find(({ value: color }) => color === value.color)
     : undefined;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
           <Button
@@ -143,7 +149,10 @@ function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
                       aria-pressed={selected}
                       className="flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground aria-pressed:ring-offset-2"
                       style={{ backgroundColor: color }}
-                      onClick={() => onChange({ ...value, color: color as NodeTypeColor })}
+                      onClick={() => {
+                        onChange({ ...value, color: color as NodeTypeColor });
+                        setOpen(false);
+                      }}
                     />
                   }
                 >
@@ -185,7 +194,7 @@ export function NodeTypeForm({ value, isEditing = false, onChange, onSubmit, onC
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="node-type-icon">Ícono</FieldLabel>
+              <FieldLabel htmlFor="node-type-icon">Icono</FieldLabel>
               <IconPicker value={value} onChange={onChange} />
             </Field>
             <Field>

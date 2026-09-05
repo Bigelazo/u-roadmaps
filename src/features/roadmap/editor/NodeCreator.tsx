@@ -177,10 +177,6 @@ export function NodeCreator({
       <Dialog open={isNodeTypesDialogOpen} onOpenChange={setIsNodeTypesDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Tipos de nodo</DialogTitle>
-            <DialogDescription>
-              Crea y organiza las categorías que aparecen en la leyenda del mapa.
-            </DialogDescription>
           </DialogHeader>
           <NodeTypesEditor
             nodeTypes={nodeTypes}

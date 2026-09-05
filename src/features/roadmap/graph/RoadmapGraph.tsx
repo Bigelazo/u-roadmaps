@@ -5,6 +5,8 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
+  ControlButton,
+  Controls,
   MarkerType,
   Panel,
   ReactFlow,
@@ -16,8 +18,18 @@ import {
   type OnNodeDrag,
   useReactFlow,
 } from '@xyflow/react';
-import { LayoutTemplate } from 'lucide-react';
+import { LayoutTemplate, Maximize } from 'lucide-react';
 import { roadmapGridSize, type NodeRect } from '@/features/roadmap/graph/geometry';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/shared/ui/alert-dialog';
 import { Button } from '@/shared/ui/button';
 import type { AnyRoadmapDto } from '@/features/roadmap/types';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
@@ -30,6 +42,7 @@ import {
 } from '@/features/roadmap/graph/dagre-layout';
 
 const selectedEdgeColor = 'var(--primary)';
+const roadmapFitViewOptions = { padding: 0.28 };
 
 function RoadmapGraphToolbar({
   containerRef,
@@ -83,24 +96,19 @@ function RoadmapGraphToolbar({
   );
 }
 
-function FitViewportOnPanelResize({
-  version,
-}: {
-  version: number;
-}) {
+function RoadmapViewportControls() {
   const { fitView } = useReactFlow();
-  const hasMounted = useRef(false);
-
-  useEffect(() => {
-    if (!hasMounted.current) {
-      hasMounted.current = true;
-      return;
-    }
-    const frame = window.requestAnimationFrame(() => void fitView({ padding: 0.28 }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [fitView, version]);
-
-  return null;
+  return (
+    <Controls position="bottom-left" showZoom={false} showFitView={false} showInteractive={false}>
+      <ControlButton
+        aria-label="Centrar mapa"
+        title="Centrar mapa"
+        onClick={() => void fitView(roadmapFitViewOptions)}
+      >
+        <Maximize aria-hidden="true" />
+      </ControlButton>
+    </Controls>
+  );
 }
 
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
@@ -121,9 +129,10 @@ type Props = {
   onConnectNodes: (connection: Connection) => void;
   onDeleteDependencies: (dependencyIds: string[]) => void;
   onAutoLayout: (nodes: RoadmapFlowNode[]) => void;
+  onClearSelectedNode?: () => void;
+  onKeyboardNodeMove?: (nodeId: string, position: { x: number; y: number }) => void;
   selectedNodeId?: string | null;
   topRightActions?: (getViewport: () => NodeRect) => ReactNode;
-  viewportFitVersion?: number;
 };
 
 export function RoadmapGraph({
@@ -134,16 +143,21 @@ export function RoadmapGraph({
   onConnectNodes,
   onDeleteDependencies,
   onAutoLayout,
+  onClearSelectedNode,
+  onKeyboardNodeMove,
   selectedNodeId,
   topRightActions,
-  viewportFitVersion,
 }: Props) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
+  const [isAutoLayoutConfirmationOpen, setIsAutoLayoutConfirmationOpen] = useState(false);
   // El lienzo guarda las posiciones que el arrastre todavía no ha recargado, de
   // modo que solo un roadmap nuevo puede reemplazarlas. Las devoluciones viven
   // en una referencia para que un render del contenedor no rehaga el grafo.
   const handlers = useRef({ onDeleteDependencies });
   handlers.current = { onDeleteDependencies };
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  selectedNodeIdRef.current = selectedNodeId;
+  const keyboardMovePendingRef = useRef(false);
   const deleteDependency = useCallback(
     (dependencyId: string) => handlers.current.onDeleteDependencies([dependencyId]),
     [],
@@ -153,7 +167,7 @@ export function RoadmapGraph({
   );
 
   useEffect(() => {
-    setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency));
+    setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency, selectedNodeIdRef.current));
   }, [roadmap, canEdit, deleteDependency]);
 
   useEffect(() => {
@@ -182,7 +196,20 @@ export function RoadmapGraph({
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div ref={containerRef} className="h-full">
+    <div
+      ref={containerRef}
+      className="h-full"
+      onKeyDownCapture={(event) => {
+        const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
+        if (!node) return;
+        if (event.key === 'Escape' && node.dataset.id === selectedNodeIdRef.current) {
+          onClearSelectedNode?.();
+          return;
+        }
+        if (canEdit && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key))
+          keyboardMovePendingRef.current = true;
+      }}
+    >
       <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
         className="h-full"
         nodes={flow.nodes}
@@ -199,15 +226,23 @@ export function RoadmapGraph({
         nodeClickDistance={6}
         elementsSelectable
         deleteKeyCode={['Backspace', 'Delete']}
-        onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) =>
+        onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) => {
+          const movedWithKeyboard = keyboardMovePendingRef.current;
+          keyboardMovePendingRef.current = false;
           setFlow((current) => ({
             ...current,
             nodes: applyNodeChanges(
               changes.filter((change) => change.type !== 'remove'),
               current.nodes,
             ),
-          }))
-        }
+          }));
+          if (movedWithKeyboard) {
+            for (const change of changes) {
+              if (change.type === 'position' && change.position)
+                onKeyboardNodeMove?.(change.id, change.position);
+            }
+          }
+        }}
         onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
           setFlow((current) => ({
             ...current,
@@ -251,18 +286,16 @@ export function RoadmapGraph({
           canEdit ? (edges) => onDeleteDependencies(edges.map((edge) => edge.id)) : undefined
         }
         fitView
-        fitViewOptions={{ padding: 0.28 }}
+        fitViewOptions={roadmapFitViewOptions}
         proOptions={{ hideAttribution: true }}
       >
-        {viewportFitVersion !== undefined ? (
-          <FitViewportOnPanelResize version={viewportFitVersion} />
-        ) : null}
+        <RoadmapViewportControls />
         {canEdit ? (
           <RoadmapGraphToolbar
             containerRef={containerRef}
             layoutDirection={layoutDirection}
             canAutoLayout={flow.nodes.length >= 2}
-            onAutoLayout={applyAutoLayout}
+            onAutoLayout={() => setIsAutoLayoutConfirmationOpen(true)}
             topRightActions={topRightActions}
           />
         ) : null}
@@ -274,6 +307,33 @@ export function RoadmapGraph({
           size={1}
         />
       </ReactFlow>
+      <AlertDialog
+        open={isAutoLayoutConfirmationOpen}
+        onOpenChange={setIsAutoLayoutConfirmationOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">
+              Confirmar ordenamiento
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => {
+                setIsAutoLayoutConfirmationOpen(false);
+                applyAutoLayout();
+              }}
+            >
+              Ordenar nodos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

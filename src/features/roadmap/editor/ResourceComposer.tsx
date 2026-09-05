@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import type { Resource } from '@/features/roadmap/types';
 import { inputClassName } from './primitives';
 import type { ResourceInput } from './types';
 
@@ -10,6 +11,7 @@ type Props = {
   nodeId: string;
   resourceValue: ResourceInput;
   editingResourceId: string | null;
+  editingResource: Resource | null;
   mode: 'file' | 'link';
   onModeChange: (mode: 'file' | 'link') => void;
   onResourceChange: (value: ResourceInput) => void;
@@ -23,6 +25,7 @@ export function ResourceComposer({
   nodeId,
   resourceValue,
   editingResourceId,
+  editingResource,
   mode,
   onModeChange,
   onResourceChange,
@@ -33,20 +36,31 @@ export function ResourceComposer({
 }: Props) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const isEditingResource = Boolean(editingResourceId);
+  const hasChanges =
+    !editingResource ||
+    resourceValue.title !== editingResource.title ||
+    resourceValue.url !== editingResource.url ||
+    resourceValue.type !== editingResource.type;
+  const hasRequiredLinkFields = Boolean(resourceValue.title.trim() && resourceValue.url.trim());
+  const canSave =
+    mode === 'file' && !isEditingResource
+      ? Boolean(selectedFile)
+      : hasChanges &&
+        Boolean(resourceValue.title.trim()) &&
+        (mode !== 'link' || hasRequiredLinkFields);
 
   return (
     <form
       className="mb-4 flex flex-col gap-3 border-y border-dashed border-border py-4"
       onSubmit={async (event) => {
         event.preventDefault();
+        if (!canSave) return;
         const saved =
           mode === 'file' && !isEditingResource
-            ? selectedFile && (await onUploadResource(nodeId, selectedFile))
-            : resourceValue.title.trim() &&
-              resourceValue.url.trim() &&
-              (isEditingResource
-                ? await onUpdateResource(editingResourceId!, resourceValue)
-                : await onAddResource(nodeId, { ...resourceValue, type: 'LINK' }));
+            ? await onUploadResource(nodeId, selectedFile!)
+            : isEditingResource
+              ? await onUpdateResource(editingResourceId!, resourceValue)
+              : await onAddResource(nodeId, { ...resourceValue, type: 'LINK' });
         if (saved) {
           onClose();
         }
@@ -157,11 +171,13 @@ export function ResourceComposer({
         <Button
           type="submit"
           size="sm"
-          disabled={mode === 'file' && !isEditingResource && !selectedFile}
+          disabled={!canSave}
         >
           <Save data-icon="inline-start" />
           {isEditingResource
-            ? 'Guardar recurso'
+            ? mode === 'link'
+              ? 'Guardar enlace'
+              : 'Guardar recurso'
             : mode === 'file'
               ? 'Subir archivo'
               : 'Agregar enlace'}

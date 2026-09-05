@@ -1,4 +1,4 @@
-import { CircleCheckBig, CircleEllipsis, LockKeyhole } from 'lucide-react';
+import { CircleCheckBig, CircleEllipsis, EyeOff, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
@@ -15,6 +15,7 @@ export type RoadmapNodeData = Record<string, unknown> & {
   typeIcon: string;
   status: RoadmapNodeStatus;
   isHidden: boolean;
+  isTeacherBlocked: boolean;
   blockReason?: StudentNodeBlockReason;
 };
 
@@ -32,6 +33,7 @@ function NodeTypeBadge({
   return (
     <Tooltip>
       <TooltipTrigger
+        delay={0}
         render={
           <span
             className="shrink-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -59,9 +61,10 @@ function StudentStatusBadge({ status }: Pick<RoadmapNodeData, 'status'>) {
   return (
     <Tooltip>
       <TooltipTrigger
+        delay={0}
         render={
           <span
-            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm transition-[transform,box-shadow,background-color] duration-150 ease-out hover:scale-110 hover:bg-muted hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none data-open:scale-110 data-open:bg-muted data-open:shadow-md"
             role="img"
             aria-label={label}
             tabIndex={0}
@@ -70,11 +73,53 @@ function StudentStatusBadge({ status }: Pick<RoadmapNodeData, 'status'>) {
       >
         <Icon
           className="size-5"
-          color={isLocked ? 'var(--steel)' : isCompleted ? 'var(--progress-deep)' : 'var(--ink)'}
+          color={isLocked ? 'var(--graphite)' : isCompleted ? 'var(--progress-deep)' : 'var(--ink)'}
           aria-hidden="true"
         />
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function TeacherBlockBadge() {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={0}
+        render={
+          <span
+            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            role="img"
+            aria-label="Bloqueado por docencia"
+            tabIndex={0}
+          />
+        }
+      >
+        <LockKeyhole className="size-5" color="var(--graphite)" aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Bloqueado por docencia</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function HiddenBadge() {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={0}
+        render={
+          <span
+            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            role="img"
+            aria-label="Oculto para estudiantes"
+            tabIndex={0}
+          />
+        }
+      >
+        <EyeOff className="size-5" color="var(--graphite)" aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent side="bottom">Oculto para estudiantes</TooltipContent>
     </Tooltip>
   );
 }
@@ -84,8 +129,9 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
+  const teacherBlocked = editing && data.isTeacherBlocked;
   const blockMessage = data.blockReason ? studentNodeBlockMessages[data.blockReason] : undefined;
-  const surface = hidden || locked ? 'var(--cloud)' : '#fff';
+  const surface = hidden || locked || teacherBlocked ? 'var(--cloud)' : '#fff';
   return (
     <div
       data-slot="roadmap-card"
@@ -100,7 +146,7 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-              'cursor-pointer transition-[transform,box-shadow] hover:translate-y-[-2px] hover:shadow-[var(--shadow-roadmap-node-hover)]',
+              'cursor-pointer transition-shadow hover:shadow-[var(--shadow-roadmap-node-hover)]',
               !hidden && 'shadow-[var(--shadow-roadmap-node)]',
             ),
       )}
@@ -117,14 +163,14 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
       <div
         data-testid="roadmap-node-content"
         className={cn(
-          'flex items-center gap-2.5',
+          'flex items-center justify-center gap-2.5',
           blockMessage ? 'h-[calc(100%-2.75rem)]' : 'h-full',
         )}
       >
         <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={data.typeColor} />
         <p
           title={data.title}
-          className="line-clamp-2 min-w-0 text-left text-[15.5px] leading-[1.25] font-medium text-ink"
+          className="min-w-0 text-left text-[15.5px] leading-[1.25] font-medium break-words text-ink"
         >
           {data.title}
         </p>
@@ -135,7 +181,13 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
           {blockMessage}
         </p>
       ) : null}
-      <StudentStatusBadge status={data.status} />
+      {hidden ? (
+        <HiddenBadge />
+      ) : teacherBlocked ? (
+        <TeacherBlockBadge />
+      ) : (
+        <StudentStatusBadge status={data.status} />
+      )}
       {!hidden
         ? (
             [
