@@ -36,7 +36,7 @@ export default function DevelopmentBar({
     <Menu.Root onOpenChange={setIsOpen} open={isOpen}>
       <Menu.Trigger
         aria-label="Cambiar perfil de desarrollo"
-        className="fixed bottom-4 left-4 z-30 grid size-11 place-items-center rounded-full bg-[#024ad8] text-white shadow-[0_18px_50px_rgb(18_33_58_/_8%)] transition-colors hover:bg-[#0e3191] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#024ad8] sm:bottom-6 sm:left-6"
+        className="fixed bottom-4 left-4 z-30 grid size-11 place-items-center rounded-full bg-[#024ad8] text-white shadow-[0_18px_50px_rgb(18_33_58/8%)] transition-colors hover:bg-[#0e3191] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#024ad8] sm:bottom-6 sm:left-6"
         onClick={() => setIsOpen((open) => !open)}
         title="Cambiar perfil de desarrollo"
       >
@@ -44,14 +44,14 @@ export default function DevelopmentBar({
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner align="start" side="top" sideOffset={12}>
-          <Menu.Popup className="z-40 min-w-64 rounded-[var(--radius-lg)] border border-[#dce1e8] bg-white p-2 shadow-[0_18px_50px_rgb(18_33_58_/_8%)] outline-none">
+          <Menu.Popup className="z-40 min-w-64 rounded-lg border border-[#dce1e8] bg-white p-2 shadow-[0_18px_50px_rgb(18_33_58/8%)] outline-none">
             <Menu.Group>
               <Menu.GroupLabel className="px-2 py-1.5 text-xs font-bold tracking-[0.08em] text-[#5a6474]">
                 CAMBIAR PERFIL
               </Menu.GroupLabel>
               {personas.map((persona) => (
                 <Menu.Item
-                  className="flex min-h-11 w-full items-center rounded-[var(--radius-md)] px-2 text-left text-sm outline-none data-[highlighted]:bg-[#f3f5f7] data-[highlighted]:text-[#12213a]"
+                  className="flex min-h-11 w-full items-center rounded-(--radius-md) px-2 text-left text-sm outline-none data-highlighted:bg-[#f3f5f7] data-highlighted:text-[#12213a]"
                   key={persona.id}
                   onClick={() => void assumePersona(persona.id)}
                 >

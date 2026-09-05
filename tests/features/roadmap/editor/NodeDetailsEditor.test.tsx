@@ -60,7 +60,7 @@ test('wraps the selected node title in the editor header without truncating it',
 
   const heading = screen.getByRole('heading', { name: title });
   expect(heading.className).not.toContain('truncate');
-  expect(heading.className).toContain('break-words');
+  expect(heading.className).toContain('wrap-break-word');
 });
 
 test('places the node-type icon alongside the title without repeating the type as a subtitle', () => {

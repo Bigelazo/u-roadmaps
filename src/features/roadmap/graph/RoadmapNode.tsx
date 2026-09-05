@@ -204,8 +204,8 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-              'cursor-pointer transition-shadow hover:shadow-[var(--shadow-roadmap-node-hover)]',
-              !hidden && 'shadow-[var(--shadow-roadmap-node)]',
+              'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
+              !hidden && 'shadow-(--shadow-roadmap-node)',
             ),
       )}
       style={{
@@ -228,7 +228,7 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={data.typeColor} />
         <p
           title={data.title}
-          className="min-w-0 text-left text-[15.5px] leading-[1.25] font-medium break-words text-ink"
+          className="min-w-0 text-left text-[15.5px] leading-tight font-medium wrap-break-word text-ink"
         >
           {data.title}
         </p>

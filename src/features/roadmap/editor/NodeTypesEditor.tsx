@@ -91,7 +91,7 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
                   type="button"
                   size="xs"
                   variant="ghost"
-                  className="!size-8 !min-h-0 !p-0"
+                  className="size-8! min-h-0! p-0!"
                   aria-label={`Editar tipo ${type.name}`}
                   onClick={() => {
                     setEditingId(type.id);
@@ -108,7 +108,7 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
                   type="button"
                   size="xs"
                   variant="ghost"
-                  className="!size-8 !min-h-0 !p-0"
+                  className="size-8! min-h-0! p-0!"
                   aria-label={`Eliminar tipo ${type.name}`}
                   onClick={() => setPendingDeletion({ id: type.id, name: type.name })}
                 >

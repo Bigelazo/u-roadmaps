@@ -400,7 +400,7 @@ export default function RoadmapCanvas({
     >
       <section
         className={cn(
-          'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26_/_5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
+          'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
           canEdit && isEditorOpen
             ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]'
             : 'lg:grid-cols-1',
@@ -411,7 +411,7 @@ export default function RoadmapCanvas({
           aria-label="Lienzo del roadmap"
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
-          <header className="pointer-events-none absolute top-4 left-4 z-[4] max-w-[calc(100%-2rem)] sm:top-6 sm:left-6 sm:max-w-md">
+          <header className="pointer-events-none absolute top-4 left-4 z-4 max-w-[calc(100%-2rem)] sm:top-6 sm:left-6 sm:max-w-md">
             <div className="flex flex-wrap items-center gap-2">
               {canEdit ? <Badge variant="secondary">Modo edición</Badge> : null}
             </div>
@@ -428,7 +428,7 @@ export default function RoadmapCanvas({
           </header>
           <details
             aria-label="Atajos de teclado"
-            className="group pointer-events-auto absolute right-5 bottom-[18px] z-[4] w-[min(23rem,calc(100%-2.5rem))] overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm"
+            className="group pointer-events-auto absolute right-5 bottom-[18px] z-4 w-[min(23rem,calc(100%-2.5rem))] overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm"
           >
             <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 font-semibold text-foreground transition-colors outline-none marker:content-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
               <span className="flex size-6 items-center justify-center rounded-md border border-border bg-muted text-primary">
@@ -669,7 +669,7 @@ export default function RoadmapCanvas({
                 <EyeOff className="size-5 text-muted-foreground" />
               </span>
               <div className="min-w-0 space-y-1">
-                <AlertDialogTitle className="text-xl font-semibold tracking-[-0.025em]">
+                <AlertDialogTitle className="text-xl font-semibold tracking-tight">
                   Confirmar ocultación
                 </AlertDialogTitle>
                 <AlertDialogDescription className="text-sm leading-relaxed">

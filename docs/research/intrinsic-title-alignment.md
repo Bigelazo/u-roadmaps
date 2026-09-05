@@ -41,7 +41,7 @@ El conjunto icono+título debe ser el elemento que el padre centra. El título s
 <div className="flex h-full items-center justify-center">
   <div className="flex min-w-0 max-w-full items-center gap-2.5">
     <NodeTypeBadge /* ... */ />
-    <p className="min-w-0 text-left text-[15.5px] leading-[1.25] font-medium break-words text-ink">
+    <p className="min-w-0 text-left text-[15.5px] leading-tight font-medium wrap-break-word text-ink">
       {title}
     </p>
   </div>

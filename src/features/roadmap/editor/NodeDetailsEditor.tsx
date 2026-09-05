@@ -74,7 +74,7 @@ function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeType
               aria-hidden="true"
             />
           ) : null}
-          <h2 className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] break-words">
+          <h2 className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word">
             {node.title}
           </h2>
         </div>

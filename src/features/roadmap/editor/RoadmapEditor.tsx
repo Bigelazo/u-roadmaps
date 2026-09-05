@@ -102,7 +102,7 @@ export function RoadmapEditor({
       collapsible="none"
       id="roadmap-editor-panel"
       aria-label="Panel de edición del roadmap"
-      className="order-2 !w-full min-w-0 border-t border-border bg-background focus-within:ring-0 lg:order-none lg:box-border lg:min-h-0 lg:!w-(--sidebar-width) lg:overflow-hidden lg:border-t-0 lg:border-l"
+      className="order-2 w-full! min-w-0 border-t border-border bg-background focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l"
     >
       <SidebarRail
         ariaLabel="Redimensionar panel de edición"

@@ -66,7 +66,7 @@ export function NodeCreator({
           <Menu.Positioner align="end" side="bottom" sideOffset={8}>
             <Menu.Popup className="z-40 min-w-52 rounded-lg border border-border bg-popover p-1.5 text-sm shadow-lg outline-none">
               <Menu.Item
-                className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-3 text-left outline-none data-[highlighted]:bg-muted"
+                className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-3 text-left outline-none data-highlighted:bg-muted"
                 onClick={() => {
                   setIsMenuOpen(false);
                   setIsNodeDialogOpen(true);
@@ -76,7 +76,7 @@ export function NodeCreator({
                 Crear nodo
               </Menu.Item>
               <Menu.Item
-                className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-3 text-left outline-none data-[highlighted]:bg-muted"
+                className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-3 text-left outline-none data-highlighted:bg-muted"
                 onClick={() => {
                   setIsMenuOpen(false);
                   setIsNodeTypesDialogOpen(true);

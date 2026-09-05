@@ -567,6 +567,6 @@ test('wraps long card titles without truncating them', () => {
   expect(content.className).toContain('justify-center');
   expect(heading.getAttribute('title')).toBe(title);
   expect(heading.className).not.toContain('line-clamp-2');
-  expect(heading.className).toContain('break-words');
+  expect(heading.className).toContain('wrap-break-word');
   expect(heading.className).toContain('text-left');
 });

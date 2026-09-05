@@ -236,7 +236,7 @@ export function AcademicOverview({
                       <Accordion className="pt-4" multiple>
                         {previousTerms.map((term, index) => (
                           <AccordionItem
-                            className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:[&>[data-slot=accordion-content]]:col-start-2 md:[&>[data-slot=separator]]:col-span-2"
+                            className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
                             key={`${term.year}-${term.semester}`}
                             value={`${term.year}-${term.semester}`}
                           >

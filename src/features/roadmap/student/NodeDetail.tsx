@@ -234,7 +234,7 @@ export function StudentNodeDetail({
           side="bottom"
           showCloseButton={false}
           aria-modal="true"
-          className="gap-0 overflow-y-auto border-0 bg-card shadow-none data-[side=bottom]:!h-dvh data-[side=bottom]:!max-h-dvh"
+          className="gap-0 overflow-y-auto border-0 bg-card shadow-none data-[side=bottom]:h-dvh! data-[side=bottom]:max-h-dvh!"
         >
           <StudentNodeDetailContent
             node={node}
@@ -250,7 +250,7 @@ export function StudentNodeDetail({
 
   return (
     <SidebarProvider
-      className="absolute inset-y-0 right-0 z-[6] min-h-0"
+      className="absolute inset-y-0 right-0 z-6 min-h-0"
       style={{ width: panelWidth, '--sidebar-width': `${panelWidth}px` } as CSSProperties}
     >
       <Sidebar
@@ -258,7 +258,7 @@ export function StudentNodeDetail({
         collapsible="none"
         id="student-node-detail-panel"
         aria-labelledby="student-node-detail-title"
-        className="border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58_/_10%)]"
+        className="border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58/10%)]"
       >
         {onPanelWidthChange ? (
           <SidebarRail

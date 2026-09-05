@@ -50,10 +50,10 @@ export default async function Home() {
       <div className="mx-auto max-w-[1440px] px-6 py-10 md:py-20">
         <section className="overflow-hidden rounded-xl bg-ink p-6 text-primary-foreground sm:p-8 md:grid md:grid-cols-[minmax(0,1fr)_420px] md:gap-12 md:p-14">
           <div className="max-w-2xl">
-            <p className="mb-5 text-xs font-bold tracking-[0.1em] text-primary-soft uppercase">
+            <p className="mb-5 text-xs font-bold tracking-widest text-primary-soft uppercase">
               U-Roadmaps
             </p>
-            <h1 className="font-heading text-5xl leading-[0.98] font-semibold tracking-[-0.05em] md:text-7xl">
+            <h1 className="font-heading text-5xl leading-[0.98] font-semibold tracking-tighter md:text-7xl">
               Cada curso, una ruta clara.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-primary-foreground/85">
@@ -99,7 +99,7 @@ export default async function Home() {
         </section>
 
         <section className="mt-16">
-          <p className="text-xs font-bold tracking-[0.1em] text-primary uppercase">
+          <p className="text-xs font-bold tracking-widest text-primary uppercase">
             Una ruta para cada curso
           </p>
           <h2 className="mt-2 font-heading text-4xl font-semibold tracking-[-0.04em]">
