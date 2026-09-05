@@ -242,6 +242,16 @@ export default defineConfig([
               },
             },
             {
+              // Scheduled scripts are the process boundary for integrations
+              // that have no HTTP route, such as the academic-calendar sync.
+              from: { element: { type: 'entrypoint' } },
+              allow: {
+                to: {
+                  element: { type: 'integration', fileInternalPath: 'server.ts' },
+                },
+              },
+            },
+            {
               from: { element: { type: 'entrypoint' } },
               allow: {
                 to: {

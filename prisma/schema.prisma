@@ -38,6 +38,22 @@ model Roadmap {
   @@unique([id, courseOfferingId])
 }
 
+// The official dates that make a Course offering read-only are published once
+// per Academic term, not once per roadmap. They are synchronized from the
+// FCFM academic calendar before the end of the term.
+model AcademicTerm {
+  year              Int
+  semester          Int
+  lastClassDay      DateTime @db.Date
+  examStartDay      DateTime @db.Date
+  examEndDay        DateTime @db.Date
+  roadmapFreezeDate DateTime @db.Date
+  sourcePageUrl     String
+  sourcePdfUrl      String
+  syncedAt          DateTime @updatedAt
+
+  @@id([year, semester])
+}
 
 model NodeType {
   id             String        @id @default(uuid()) @db.Uuid
