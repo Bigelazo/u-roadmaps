@@ -120,6 +120,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     roadmap,
     canEdit,
     isTeacherView,
+    onViewportChange,
+    restoreViewport,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
     onConnectNodes: (connection: {
@@ -136,6 +138,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     roadmap: { roadmap: { id: string } };
     canEdit: boolean;
     isTeacherView?: boolean;
+    onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
+    restoreViewport?: { x: number; y: number; zoom: number } | null;
     topRightActions?: (
       getViewport: () => {
         x: number;
@@ -151,6 +155,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       <output data-testid="roadmap-mode">{canEdit ? 'editing' : 'student'}</output>
       <output data-testid="roadmap-projection">{isTeacherView ? 'teacher' : 'student'}</output>
       <output data-testid="displayed-roadmap">{roadmap.roadmap.id}</output>
+      <output data-testid="restored-viewport">{restoreViewport?.x ?? 'none'}</output>
       <button
         type="button"
         onClick={() => onSelectNode('blocked-node', document.createElement('div'))}
@@ -194,6 +199,12 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       <button type="button" onClick={() => onKeyboardNodeMove?.('node-1', { x: 20, y: 0 })}>
         Mover nodo con teclado
       </button>
+      <button type="button" onClick={() => onViewportChange?.({ x: 100, y: 0, zoom: 1 })}>
+        Mover viewport a 100
+      </button>
+      <button type="button" onClick={() => onViewportChange?.({ x: 400, y: 0, zoom: 1 })}>
+        Mover viewport a 400
+      </button>
     </>
   ),
 }));
@@ -204,17 +215,19 @@ vi.mock('@/features/roadmap/student/NodeDetail', () => ({
     status,
     onClose,
     onComplete,
+    isReadOnly,
   }: {
     node?: { title: string };
     status: string | null;
     onClose: () => void;
     onComplete: (node: { title: string }) => void;
+    isReadOnly?: boolean;
   }) =>
     node ? (
       <aside data-testid="student-detail">
         <p>{node.title}</p>
         <p>{status}</p>
-        <button type="button" onClick={() => onComplete(node)}>
+        <button type="button" disabled={isReadOnly} onClick={() => onComplete(node)}>
           Completar
         </button>
         <button type="button" onClick={onClose}>
@@ -800,6 +813,22 @@ test('confirms before discarding an unsaved editor draft to enter the canvas pre
   expect(screen.getByText('Previsualización del canvas')).toBeTruthy();
 });
 
+test('does not restore a prior preview viewport when entering a later preview', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap: roadmap }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Mover viewport a 100' }));
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
+  expect(screen.getByTestId('restored-viewport').textContent).toBe('100');
+
+  await user.click(screen.getByRole('button', { name: 'Mover viewport a 400' }));
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+
+  expect(screen.getByTestId('restored-viewport').textContent).toBe('none');
+});
+
 test('keeps a frozen teacher roadmap read-only and returns there from preview', async () => {
   const user = userEvent.setup();
   const loadSimulation = vi.fn().mockResolvedValue(true);
@@ -823,6 +852,43 @@ test('keeps a frozen teacher roadmap read-only and returns there from preview', 
 
   expect(screen.getByTestId('roadmap-projection').textContent).toBe('teacher');
   expect(screen.queryByTestId('editor-panel')).toBeNull();
+});
+
+test('does not offer completion or reset mutations in a frozen canvas preview', async () => {
+  const user = userEvent.setup();
+  const completeSimulatedNode = vi.fn();
+  const simulationRoadmap = {
+    ...roadmap,
+    nodes: [
+      {
+        ...roadmap.nodes[0],
+        access: { status: 'ACCESSIBLE' as const },
+        isCompleted: false,
+        canComplete: true,
+      },
+    ],
+  };
+  useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap, completeSimulatedNode }));
+  render(
+    <RoadmapCanvas
+      identifier={identifier}
+      canPreview
+      isHistorical
+      title="Programación I"
+      courseCode="CC1001"
+      year={2026}
+      semester={2}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+
+  expect((screen.getByRole('button', { name: 'Completar' }) as HTMLButtonElement).disabled).toBe(
+    true,
+  );
+  expect(screen.queryByRole('button', { name: 'Reiniciar progreso' })).toBeNull();
+  expect(completeSimulatedNode).not.toHaveBeenCalled();
 });
 
 test('hides the editor when deselecting its node', async () => {

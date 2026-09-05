@@ -53,9 +53,7 @@ export function RoadmapEditor({
     description: '',
     nodeTypeId: '',
   });
-  const [resourceDraft, setResourceDraft] = useState<ResourceEditorDraft>(
-    emptyResourceEditorDraft,
-  );
+  const [resourceDraft, setResourceDraft] = useState<ResourceEditorDraft>(emptyResourceEditorDraft);
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
@@ -81,10 +79,9 @@ export function RoadmapEditor({
   }, [draftNodeId, selectedNode]);
 
   const isDirty = Boolean(
-    isOpen &&
-      selectedNode &&
-      draftNodeId === selectedNode.id &&
-      hasUnsavedNodeInformation(selectedNode, editNode, resourceDraft),
+    selectedNode &&
+    draftNodeId === selectedNode.id &&
+    hasUnsavedNodeInformation(selectedNode, editNode, resourceDraft),
   );
 
   useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
@@ -139,14 +136,10 @@ export function RoadmapEditor({
               selectedResourceFile={resourceDraft.selectedFile}
               isDirty={isDirty}
               onNodeChange={setEditNode}
-              onResourceChange={(value) =>
-                setResourceDraft((draft) => ({ ...draft, value }))
-              }
+              onResourceChange={(value) => setResourceDraft((draft) => ({ ...draft, value }))}
               onResourceComposerOpen={openResourceEditor}
               onResourceComposerClose={closeResourceEditor}
-              onResourceModeChange={(mode) =>
-                setResourceDraft((draft) => ({ ...draft, mode }))
-              }
+              onResourceModeChange={(mode) => setResourceDraft((draft) => ({ ...draft, mode }))}
               onSelectedResourceFileChange={(selectedFile) =>
                 setResourceDraft((draft) => ({ ...draft, selectedFile }))
               }

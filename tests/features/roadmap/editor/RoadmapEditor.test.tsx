@@ -24,8 +24,20 @@ const roadmap: RoadmapDto = {
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
-    { id: 'content', name: 'Contenido', icon: 'BookOpen' as const, color: '#024AD8', isPredefined: true },
-    { id: 'assessment', name: 'Evaluación', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
+    {
+      id: 'content',
+      name: 'Contenido',
+      icon: 'BookOpen' as const,
+      color: '#024AD8',
+      isPredefined: true,
+    },
+    {
+      id: 'assessment',
+      name: 'Evaluación',
+      icon: 'BookOpen',
+      color: '#024AD8',
+      isPredefined: true,
+    },
   ],
   nodes: [node],
   dependencies: [],
@@ -87,7 +99,30 @@ test('keeps the node-information draft when returning from the full-canvas previ
     </SidebarProvider>,
   );
 
-  expect((await screen.findByLabelText('Título') as HTMLInputElement).value).toBe(
+  expect(((await screen.findByLabelText('Título')) as HTMLInputElement).value).toBe(
     'Límites y continuidad',
   );
+});
+
+test('continues reporting a retained draft after the editor panel closes', async () => {
+  const user = userEvent.setup();
+  const onDirtyChange = vi.fn();
+  const props = editorProps({ onDirtyChange });
+  const { rerender } = render(
+    <SidebarProvider>
+      <RoadmapEditor {...props} />
+    </SidebarProvider>,
+  );
+
+  await user.clear(await screen.findByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), 'Límites y continuidad');
+  expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+
+  rerender(
+    <SidebarProvider>
+      <RoadmapEditor {...props} isOpen={false} />
+    </SidebarProvider>,
+  );
+
+  expect(onDirtyChange).toHaveBeenLastCalledWith(true);
 });

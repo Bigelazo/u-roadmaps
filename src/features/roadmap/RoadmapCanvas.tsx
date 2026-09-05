@@ -283,6 +283,7 @@ export default function RoadmapCanvas({
     const loaded = await loadSimulation();
     if (!loaded) return;
     if (discardDraft) setEditorKey((key) => key + 1);
+    setRestoreViewport(null);
     setPreviewReturnState({
       selectedNodeId,
       isEditorOpen,
@@ -423,7 +424,7 @@ export default function RoadmapCanvas({
     );
   }
 
-  const displayedRoadmap = isCanvasPreview ? simulationRoadmap ?? roadmap : roadmap;
+  const displayedRoadmap = isCanvasPreview ? (simulationRoadmap ?? roadmap) : roadmap;
   const isReadOnlyTeacher = canPreview && !canEdit;
   const isStudentExperience = (!canEdit && !isReadOnlyTeacher) || isCanvasPreview;
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
@@ -584,16 +585,20 @@ export default function RoadmapCanvas({
           )}
           {isCanvasPreview ? (
             <div className="pointer-events-auto absolute top-3 left-1/2 z-5 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-border bg-card/95 p-2 shadow-lg shadow-black/5 backdrop-blur-sm sm:w-auto sm:flex-nowrap">
-              <p className="px-2 text-sm font-semibold text-foreground">Previsualización del canvas</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsResetConfirmationOpen(true)}
-              >
-                <RotateCcw data-icon="inline-start" />
-                Reiniciar progreso
-              </Button>
+              <p className="px-2 text-sm font-semibold text-foreground">
+                Previsualización del canvas
+              </p>
+              {!isHistorical ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsResetConfirmationOpen(true)}
+                >
+                  <RotateCcw data-icon="inline-start" />
+                  Reiniciar progreso
+                </Button>
+              ) : null}
               <Button type="button" size="sm" onClick={exitCanvasPreview}>
                 {isHistorical ? 'Volver al roadmap' : 'Ir al editor'}
               </Button>
@@ -721,10 +726,11 @@ export default function RoadmapCanvas({
             }
             onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
             onComplete={(node) => {
-              if (isCanvasPreview) void completeSimulatedNode(node.id);
+              if (isCanvasPreview && !isHistorical) void completeSimulatedNode(node.id);
               else if (teacherPreviewNode) setIsTeacherPreviewCompleted(true);
               else void completeNode(node.id);
             }}
+            isReadOnly={isHistorical && !teacherPreviewNode}
             panelWidth={studentPanel.width}
             onPanelWidthChange={studentPanel.setWidth}
           />
@@ -768,7 +774,9 @@ export default function RoadmapCanvas({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">Descartar cambios sin guardar</AlertDialogTitle>
+            <AlertDialogTitle className="text-xl font-semibold">
+              Descartar cambios sin guardar
+            </AlertDialogTitle>
             <AlertDialogDescription>
               La previsualización muestra únicamente el último estado guardado. Puedes seguir
               editando o descartar este borrador para continuar.

@@ -116,6 +116,21 @@ async function requireParticipantRoadmap(
   return { courseOffering, participation, roadmap: courseOffering.roadmap };
 }
 
+async function requireCurrentRoadmap(
+  transaction: Prisma.TransactionClient,
+  courseOffering: { year: number; semester: number },
+) {
+  const academicTerm = await transaction.academicTerm.findUnique({
+    where: {
+      year_semester: { year: courseOffering.year, semester: courseOffering.semester },
+    },
+    select: { roadmapFreezeDate: true },
+  });
+  if (academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now()) {
+    throw new ApiError(403, 'ROADMAP_FROZEN', 'Este roadmap histórico es de sólo lectura.');
+  }
+}
+
 async function studentRoadmapProjection(
   transaction: Prisma.TransactionClient,
   {
@@ -305,11 +320,12 @@ async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeIn
   return withSerializableRetry(() =>
     prisma.$transaction(
       async (transaction) => {
-        const { roadmap } = await requireParticipantRoadmap(
+        const { courseOffering, roadmap } = await requireParticipantRoadmap(
           transaction,
           { userId, identifier },
           'STUDENT',
         );
+        await requireCurrentRoadmap(transaction, courseOffering);
         await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
         return transaction.completion.upsert({
           where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
@@ -354,6 +370,7 @@ async function completeSimulatedNodeUnsafe({ userId, identifier, nodeId }: Compl
           { userId, identifier },
           'TEACHER',
         );
+        await requireCurrentRoadmap(transaction, courseOffering);
         const completions = await transaction.simulatedCompletion.findMany({
           where: { participationId: participation.id, roadmapId: roadmap.id },
           select: { roadmapNodeId: true },
@@ -388,11 +405,12 @@ async function resetSimulatedCompletionsUnsafe({ userId, identifier }: Participa
   return withSerializableRetry(() =>
     prisma.$transaction(
       async (transaction) => {
-        const { participation, roadmap } = await requireParticipantRoadmap(
+        const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
           transaction,
           { userId, identifier },
           'TEACHER',
         );
+        await requireCurrentRoadmap(transaction, courseOffering);
         return transaction.simulatedCompletion.deleteMany({
           where: { participationId: participation.id, roadmapId: roadmap.id },
         });

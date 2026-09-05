@@ -61,6 +61,7 @@ type ContentProps = {
   status: StudentNodeStatus;
   onClose: () => void;
   onComplete: (node: RoadmapNode | StudentRoadmapNode) => void;
+  isReadOnly?: boolean;
   isModal?: boolean;
   isSidebar?: boolean;
 };
@@ -70,6 +71,7 @@ function StudentNodeDetailContent({
   status,
   onClose,
   onComplete,
+  isReadOnly = false,
   isModal = false,
   isSidebar = false,
 }: ContentProps) {
@@ -113,7 +115,11 @@ function StudentNodeDetailContent({
             Completado
           </Button>
         ) : (
-          <Button className="mt-5" disabled={status === 'locked'} onClick={() => onComplete(node)}>
+          <Button
+            className="mt-5"
+            disabled={status === 'locked' || isReadOnly}
+            onClick={() => onComplete(node)}
+          >
             {status === 'locked' ? (
               <LockKeyhole data-icon="inline-start" />
             ) : (
@@ -222,6 +228,7 @@ export function StudentNodeDetail({
   status,
   onClose,
   onComplete,
+  isReadOnly,
   panelWidth = 426,
   onPanelWidthChange,
 }: Props) {
@@ -241,6 +248,7 @@ export function StudentNodeDetail({
             status={status}
             onClose={onClose}
             onComplete={onComplete}
+            isReadOnly={isReadOnly}
             isModal
           />
         </SheetContent>
@@ -276,6 +284,7 @@ export function StudentNodeDetail({
           status={status}
           onClose={onClose}
           onComplete={onComplete}
+          isReadOnly={isReadOnly}
           isSidebar
         />
       </Sidebar>
