@@ -39,11 +39,10 @@ export function createRoadmapForActor(
 
 export function getNodeTypesForActor(actor: RoadmapActor, identifier: CourseOfferingIdentifier) {
   return applicationResult(async () => {
-    const { courseOffering } = await requireCourseOfferingParticipation(
-      actor,
-      identifier,
-      ['STUDENT', 'TEACHER'],
-    ).match(
+    const { courseOffering } = await requireCourseOfferingParticipation(actor, identifier, [
+      'STUDENT',
+      'TEACHER',
+    ]).match(
       (value) => value,
       (error) => {
         throw error;
@@ -64,11 +63,10 @@ export function getNodeTypesForActor(actor: RoadmapActor, identifier: CourseOffe
 
 export function getRoadmapNodesForActor(actor: RoadmapActor, identifier: CourseOfferingIdentifier) {
   return applicationResult(async () => {
-    const { participation } = await requireCourseOfferingParticipation(
-      actor,
-      identifier,
-      ['STUDENT', 'TEACHER'],
-    ).match(
+    const { participation } = await requireCourseOfferingParticipation(actor, identifier, [
+      'STUDENT',
+      'TEACHER',
+    ]).match(
       (value) => value,
       (error) => {
         throw error;

@@ -14,9 +14,7 @@ type TeacherBlockNode = {
 };
 
 export type TeacherBlockRuleFailure =
-  | 'NODE_NOT_FOUND'
-  | 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN'
-  | 'TEACHER_BLOCKED_PREREQUISITE';
+  'NODE_NOT_FOUND' | 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN' | 'TEACHER_BLOCKED_PREREQUISITE';
 
 export type TeacherBlockDecision =
   | { kind: 'ALLOWED'; nodes: Array<{ id: string; title: string }> }

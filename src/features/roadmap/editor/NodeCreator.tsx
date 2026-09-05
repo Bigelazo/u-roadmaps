@@ -176,8 +176,7 @@ export function NodeCreator({
       </Dialog>
       <Dialog open={isNodeTypesDialogOpen} onOpenChange={setIsNodeTypesDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-          </DialogHeader>
+          <DialogHeader></DialogHeader>
           <NodeTypesEditor
             nodeTypes={nodeTypes}
             onAdd={onCreateNodeType}

@@ -26,9 +26,7 @@ test('requires an explicit name, icon, and color before creating a node type', a
   expect(within(iconPicker).getAllByRole('button')).toHaveLength(80);
   expect(within(iconPicker).getByRole('region', { name: 'Contenido y lectura' })).toBeTruthy();
   await user.click(within(iconPicker).getByRole('button', { name: 'Libro abierto' }));
-  await waitFor(() =>
-    expect(screen.queryByRole('dialog', { name: 'Elegir Icono' })).toBeNull(),
-  );
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Elegir Icono' })).toBeNull());
   expect((create as HTMLButtonElement).disabled).toBe(true);
 
   await user.click(screen.getByRole('button', { name: 'Color: sin selección' }));

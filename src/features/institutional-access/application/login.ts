@@ -23,9 +23,14 @@ function asApplicationError(error: unknown): never {
     throw new ApplicationError(error.status, error.code, error.message, error.details);
   }
   if (error instanceof InstitutionalIdentityConflict) {
-    throw new ApplicationError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.', {
-      reason: error.reason,
-    });
+    throw new ApplicationError(
+      400,
+      'INVALID_AUTH_CALLBACK',
+      'No fue posible completar la autenticación.',
+      {
+        reason: error.reason,
+      },
+    );
   }
   throw error;
 }
@@ -62,7 +67,9 @@ export function completeInstitutionalLogin(request: Request, rawToken: FormDataE
   }
 
   return applicationResult(async () => {
-    const identity = await authenticateVtiCallback(request, state, rawToken).catch(asApplicationError);
+    const identity = await authenticateVtiCallback(request, state, rawToken).catch(
+      asApplicationError,
+    );
     const user = await reconcileInstitutionalUser(identity).catch(asApplicationError);
     const sessionToken = await createApplicationSessionToken(user.id, identity.preferredUsername);
     if (!sessionToken) {
@@ -92,9 +99,14 @@ export function completeInstitutionalLogin(request: Request, rawToken: FormDataE
 export function unreadableInstitutionalCallback() {
   return applicationResult(() =>
     Promise.reject(
-      new ApplicationError(400, 'INVALID_AUTH_CALLBACK', 'No fue posible completar la autenticación.', {
-        reason: 'unreadable-form-body',
-      }),
+      new ApplicationError(
+        400,
+        'INVALID_AUTH_CALLBACK',
+        'No fue posible completar la autenticación.',
+        {
+          reason: 'unreadable-form-body',
+        },
+      ),
     ),
   );
 }

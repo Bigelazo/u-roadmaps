@@ -5,11 +5,7 @@ import { fixtureEnvironmentEnabled } from '@/shared/server/environment/developme
 import { developmentPersonas } from '@/development';
 import { prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/types';
-import {
-  handleApplicationResult,
-  parseJsonObject,
-  requireUuid,
-} from '@/app/_adapters/http';
+import { handleApplicationResult, parseJsonObject, requireUuid } from '@/app/_adapters/http';
 
 export async function POST(request: Request) {
   return handleApplicationResult(async () => {

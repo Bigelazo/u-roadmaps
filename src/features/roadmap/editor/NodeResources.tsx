@@ -94,7 +94,9 @@ export function NodeResources({
             nodeId={node.id}
             resourceValue={resourceValue}
             editingResourceId={editingResourceId}
-            editingResource={node.resources.find((resource) => resource.id === editingResourceId) ?? null}
+            editingResource={
+              node.resources.find((resource) => resource.id === editingResourceId) ?? null
+            }
             mode={composerMode}
             selectedFile={composerSelectedFile}
             onModeChange={(nextMode) => {

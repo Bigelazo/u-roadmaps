@@ -12,7 +12,8 @@ export type { AcademicOverviewActor } from './types';
 export async function getAcademicOverviewPage(
   actor: AcademicOverviewActor,
 ): Promise<AcademicOverviewPage> {
-  const { getAcademicOverviewPage: getOverview } = await import('./application/get-academic-overview');
+  const { getAcademicOverviewPage: getOverview } =
+    await import('./application/get-academic-overview');
   return getOverview(actor);
 }
 
@@ -20,6 +21,7 @@ export async function getAcademicOverviewPage(
 export async function getAcademicOverviewApi(
   actor: AcademicOverviewActor,
 ): Promise<AcademicOverviewApiResponse> {
-  const { getAcademicOverviewApi: getOverview } = await import('./application/get-academic-overview');
+  const { getAcademicOverviewApi: getOverview } =
+    await import('./application/get-academic-overview');
   return getOverview(actor);
 }

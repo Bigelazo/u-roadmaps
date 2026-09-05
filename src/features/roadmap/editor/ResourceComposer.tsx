@@ -170,11 +170,7 @@ export function ResourceComposer({
         </FieldGroup>
       )}
       <div className="flex gap-2">
-        <Button
-          type="submit"
-          size="sm"
-          disabled={!canSave}
-        >
+        <Button type="submit" size="sm" disabled={!canSave}>
           <Save data-icon="inline-start" />
           {isEditingResource
             ? mode === 'link'

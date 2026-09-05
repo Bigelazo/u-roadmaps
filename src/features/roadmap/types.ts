@@ -9,8 +9,7 @@ export type CourseOfferingIdentifier = {
 export type StudentNodeBlockReason = 'TEACHER_BLOCK' | 'PREREQUISITE_BLOCK';
 
 export type StudentNodeAccess =
-  | { status: 'ACCESSIBLE' }
-  | { status: 'BLOCKED'; reason: StudentNodeBlockReason };
+  { status: 'ACCESSIBLE' } | { status: 'BLOCKED'; reason: StudentNodeBlockReason };
 
 export type Resource = {
   id: string;

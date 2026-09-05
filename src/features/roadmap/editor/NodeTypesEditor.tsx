@@ -18,7 +18,8 @@ import { NodeTypeForm } from './NodeTypeForm';
 import type { NodeTypeDraft, NodeTypeInput } from './types';
 import { DialogTitle } from '@/shared/ui/dialog';
 
-const sectionTitleClassName = 'font-heading text-lg leading-tight font-semibold tracking-[-0.015em]';
+const sectionTitleClassName =
+  'font-heading text-lg leading-tight font-semibold tracking-[-0.015em]';
 
 type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];

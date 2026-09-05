@@ -54,7 +54,11 @@ async function requireCourseOfferingParticipationUnsafe(
     allowedRoles,
   );
   if (!participation) {
-    throw new ApplicationError(403, 'FORBIDDEN', 'No tienes participación vigente para esta operación.');
+    throw new ApplicationError(
+      403,
+      'FORBIDDEN',
+      'No tienes participación vigente para esta operación.',
+    );
   }
   return { actor, courseOffering, participation };
 }

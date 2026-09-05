@@ -251,7 +251,10 @@ export function AcademicOverview({
                               </span>
                             </div>
                             <AccordionContent className="pb-4">
-                              <CourseList renderRoadmapCreation={renderRoadmapCreation} term={term} />
+                              <CourseList
+                                renderRoadmapCreation={renderRoadmapCreation}
+                                term={term}
+                              />
                             </AccordionContent>
                           </AccordionItem>
                         ))}

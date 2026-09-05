@@ -37,10 +37,7 @@ export function handleApplicationResult<Success extends Response>(
 export async function unwrapApplicationResult<Value>(
   result: ApplicationResult<Value>,
 ): Promise<Value> {
-  return result.match(
-    (value) => value,
-    throwApplicationError,
-  );
+  return result.match((value) => value, throwApplicationError);
 }
 
 export async function parseJsonObject(request: Request): Promise<JsonObject> {
