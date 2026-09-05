@@ -1,4 +1,4 @@
-import { CircleCheckBig, CircleEllipsis, EyeOff, LockKeyhole } from 'lucide-react';
+import { CircleCheckBig, CircleEllipsis, EyeOff, FileText, Link2, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
@@ -16,6 +16,8 @@ export type RoadmapNodeData = Record<string, unknown> & {
   status: RoadmapNodeStatus;
   isHidden: boolean;
   isTeacherBlocked: boolean;
+  fileCount?: number;
+  linkCount?: number;
   blockReason?: StudentNodeBlockReason;
 };
 
@@ -124,6 +126,62 @@ function HiddenBadge() {
   );
 }
 
+function resourceCountLabel(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function NodeResourceSummary({
+  fileCount = 0,
+  linkCount = 0,
+}: Pick<RoadmapNodeData, 'fileCount' | 'linkCount'>) {
+  const resourceGroups = [
+    {
+      count: fileCount,
+      Icon: FileText,
+      label: resourceCountLabel(fileCount, 'archivo', 'archivos'),
+      className: 'text-graphite',
+    },
+    {
+      count: linkCount,
+      Icon: Link2,
+      label: resourceCountLabel(linkCount, 'enlace', 'enlaces'),
+      className: 'text-primary',
+    },
+  ].filter((group) => group.count > 0);
+
+  if (!resourceGroups.length) return null;
+
+  return (
+    <div
+      data-testid="roadmap-node-resources"
+      className="absolute bottom-3 left-4 flex items-center gap-2.5 text-xs font-bold tabular-nums"
+    >
+      {resourceGroups.map(({ count, Icon, label, className }) => (
+        <Tooltip key={label}>
+          <TooltipTrigger
+            delay={0}
+            render={
+              <span
+                className={cn(
+                  'flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  className,
+                )}
+                role="img"
+                aria-label={label}
+                tabIndex={0}
+              />
+            }
+          >
+            <Icon className="size-3.5" aria-hidden="true" />
+            <span aria-hidden="true">{count}</span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{label}</TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+
 export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
   const size = roadmapNodeSizeForTitle(data.title);
   const locked = data.status === 'locked';
@@ -180,6 +238,9 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
           <LockKeyhole className="size-3.5 shrink-0" aria-hidden="true" />
           {blockMessage}
         </p>
+      ) : null}
+      {!blockMessage ? (
+        <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
       ) : null}
       {hidden ? (
         <HiddenBadge />

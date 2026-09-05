@@ -9,7 +9,15 @@ import {
   type ReactNode,
 } from 'react';
 import dynamic from 'next/dynamic';
-import { ArrowRight, CircleAlert, EyeOff, Keyboard, PanelRightOpen, Trash2 } from 'lucide-react';
+import {
+  ArrowRight,
+  CircleAlert,
+  EyeOff,
+  Keyboard,
+  PanelRightClose,
+  PanelRightOpen,
+  Trash2,
+} from 'lucide-react';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
@@ -91,10 +99,10 @@ type PendingTeacherBlockChange = {
 
 function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)] items-start gap-3">
+    <>
       <dt className="flex min-h-5 min-w-0 items-center">{keys}</dt>
-      <dd className="pt-px leading-relaxed">{children}</dd>
-    </div>
+      <dd className="leading-relaxed">{children}</dd>
+    </>
   );
 }
 
@@ -431,8 +439,8 @@ export default function RoadmapCanvas({
                 Ayuda
               </span>
             </summary>
-            <dl className="grid gap-3 border-t border-border px-3.5 py-3.5">
-              <KeyboardShortcut keys={<Kbd aria-label="Tabulador">⇥</Kbd>}>
+            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-3 border-t border-border px-3.5 py-3.5">
+              <KeyboardShortcut keys={<Kbd>Tab</Kbd>}>
                 Recorrer los controles y elementos del mapa.
               </KeyboardShortcut>
               <KeyboardShortcut
@@ -449,19 +457,12 @@ export default function RoadmapCanvas({
               <KeyboardShortcut keys={<Kbd aria-label="Escape">Esc</Kbd>}>
                 Cerrar el detalle o panel del nodo seleccionado.
               </KeyboardShortcut>
-              <KeyboardShortcut
-                keys={
-                  <KbdGroup className="flex-wrap">
-                    <Kbd aria-label="Flecha arriba">↑</Kbd>
-                    <Kbd aria-label="Flecha abajo">↓</Kbd>
-                    <Kbd aria-label="Flecha izquierda">←</Kbd>
-                    <Kbd aria-label="Flecha derecha">→</Kbd>
-                  </KbdGroup>
-                }
-              >
-                Mover el nodo seleccionado en modo edición; con <Kbd aria-label="Shift">⇧</Kbd>, más
-                rápido.
-              </KeyboardShortcut>
+              {canEdit ? (
+                <KeyboardShortcut keys={<Kbd>Flechas</Kbd>}>
+                  Mover una cuadrícula el nodo seleccionado. <Kbd aria-label="Shift">⇧</Kbd> +{' '}
+                  <Kbd>Flechas</Kbd> lo desplaza 5 cuadrículas.
+                </KeyboardShortcut>
+              ) : null}
               {canEdit ? (
                 <KeyboardShortcut
                   keys={
@@ -477,15 +478,18 @@ export default function RoadmapCanvas({
               ) : null}
               <KeyboardShortcut
                 keys={
-                  <KbdGroup className="flex-wrap">
-                    <Kbd aria-label="Comando">⌘</Kbd>
-                    <span aria-hidden="true">+</span>
-                    <Kbd>B</Kbd>
-                    <span aria-hidden="true">/</span>
-                    <Kbd aria-label="Control">⌃</Kbd>
-                    <span aria-hidden="true">+</span>
-                    <Kbd>B</Kbd>
-                  </KbdGroup>
+                  <div className="flex flex-col items-start gap-1">
+                    <KbdGroup className="w-fit flex-none">
+                      <Kbd aria-label="Comando">⌘</Kbd>
+                      <span aria-hidden="true">+</span>
+                      <Kbd>B</Kbd>
+                    </KbdGroup>
+                    <KbdGroup className="w-fit flex-none">
+                      <Kbd>Ctrl</Kbd>
+                      <span aria-hidden="true">+</span>
+                      <Kbd>B</Kbd>
+                    </KbdGroup>
+                  </div>
                 }
               >
                 Ocultar o mostrar el panel lateral.
@@ -499,7 +503,7 @@ export default function RoadmapCanvas({
                   </KbdGroup>
                 }
               >
-                Con el borde del panel enfocado, usar su ancho mínimo o máximo.
+                Con el borde del panel enfocado, establecer su ancho mínimo o máximo.
               </KeyboardShortcut>
             </dl>
           </details>
@@ -546,16 +550,20 @@ export default function RoadmapCanvas({
                         onUpdateNodeType={updateNodeType}
                         onDeleteNodeType={deleteNodeType}
                       />
-                      {selectedNode && !isEditorOpen ? (
+                      {selectedNode ? (
                         <Button
-                          aria-label="Mostrar panel de edición"
-                          title="Mostrar panel de edición"
+                          aria-label={
+                            isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'
+                          }
+                          title={
+                            isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'
+                          }
                           type="button"
                           size="icon"
                           variant="outline"
-                          onClick={() => setIsEditorOpen(true)}
+                          onClick={() => setIsEditorOpen((isOpen) => !isOpen)}
                         >
-                          <PanelRightOpen />
+                          {isEditorOpen ? <PanelRightClose /> : <PanelRightOpen />}
                         </Button>
                       ) : null}
                     </>
@@ -569,7 +577,6 @@ export default function RoadmapCanvas({
             roadmap={roadmap as RoadmapDto}
             selectedNode={selectedNode as RoadmapNode | undefined}
             isOpen={isEditorOpen}
-            onToggle={() => setIsEditorOpen((isOpen) => !isOpen)}
             onClose={closeSelectedNode}
             onUpdateNode={updateNodeWithConfirmation}
             onToggleVisibility={requestVisibilityChange}

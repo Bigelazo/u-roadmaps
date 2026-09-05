@@ -315,11 +315,30 @@ test('shows the course code and localized term together in the canvas header', (
   const shortcuts = screen.getByRole('group', { name: 'Atajos de teclado' });
   expect(shortcuts).toHaveProperty('open', false);
   expect(within(shortcuts).getByText('Ocultar o mostrar el panel lateral.')).toBeTruthy();
-  expect(within(shortcuts).getByText(/Mover el nodo seleccionado en modo edición/)).toBeTruthy();
+  expect(within(shortcuts).getAllByText('Flechas')).toHaveLength(2);
+  expect(within(shortcuts).getByLabelText('Shift')).toBeTruthy();
+  expect(within(shortcuts).getByText('Tab')).toBeTruthy();
+  expect(within(shortcuts).getByText('Ctrl')).toBeTruthy();
+  expect(
+    within(shortcuts).getByText(
+      /Con el borde del panel enfocado, establecer su ancho mínimo o máximo/,
+    ),
+  ).toBeTruthy();
   const canvas = screen.getByLabelText('Lienzo del roadmap');
   expect(canvas.className).toContain('lg:min-h-0');
   expect(canvas.parentElement?.className).toContain('lg:grid-rows-[minmax(0,1fr)]');
   expect(canvas.parentElement?.parentElement?.className).toContain('lg:h-full');
+});
+
+test('hides editor-only keyboard shortcuts from students', () => {
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas();
+
+  const shortcuts = screen.getByRole('group', { name: 'Atajos de teclado' });
+  expect(within(shortcuts).queryByText('Flechas')).toBeNull();
+  expect(
+    within(shortcuts).queryByText('Eliminar la dependencia seleccionada, con confirmación.'),
+  ).toBeNull();
 });
 
 test('uses Otoño for first-semester roadmaps', () => {

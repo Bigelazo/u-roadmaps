@@ -154,6 +154,76 @@ test('shows the node-type icon with an accessible label, rather than persistent 
   expect(screen.queryByText('Pendiente')).toBeNull();
 });
 
+test('summarizes files and web resources separately with accessible icons', () => {
+  const props = {
+    id: 'node-resources',
+    type: 'roadmap',
+    data: {
+      title: 'Material de estudio',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'available' as const,
+      isTeacherBlocked: false,
+      isHidden: false,
+      fileCount: 2,
+      linkCount: 3,
+    },
+    selected: false,
+    selectable: true,
+    draggable: false,
+    dragging: false,
+    deletable: false,
+    isConnectable: false,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  expect(screen.getByTestId('roadmap-node-resources')).toBeTruthy();
+  expect(screen.getByRole('img', { name: '2 archivos' })).toBeTruthy();
+  expect(screen.getByRole('img', { name: '3 enlaces' })).toBeTruthy();
+});
+
+test('does not reserve a resource summary when the node has no resources', () => {
+  const props = {
+    id: 'node-without-resources',
+    type: 'roadmap',
+    data: {
+      title: 'Material de estudio',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'available' as const,
+      isTeacherBlocked: false,
+      isHidden: false,
+    },
+    selected: false,
+    selectable: true,
+    draggable: false,
+    dragging: false,
+    deletable: false,
+    isConnectable: false,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  expect(screen.queryByTestId('roadmap-node-resources')).toBeNull();
+});
+
 test('does not lift a roadmap node on hover', () => {
   const props = {
     id: 'node-without-hover-lift',

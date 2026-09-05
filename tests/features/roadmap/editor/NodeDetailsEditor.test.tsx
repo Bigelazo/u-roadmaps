@@ -63,6 +63,13 @@ test('wraps the selected node title in the editor header without truncating it',
   expect(heading.className).toContain('break-words');
 });
 
+test('places the node-type icon alongside the title without repeating the type as a subtitle', () => {
+  renderEditor();
+
+  expect(screen.getByTestId('node-type-icon')).toBeTruthy();
+  expect(screen.queryByText('Contenido', { selector: 'p' })).toBeNull();
+});
+
 test('uploads a resource selected from the computer', async () => {
   const user = userEvent.setup();
   const { props } = renderEditor();
@@ -78,15 +85,26 @@ test('uploads a resource selected from the computer', async () => {
   expect(props.onUpdateNode).not.toHaveBeenCalled();
 });
 
-test('shows the teacher-block state without restricting node editing', async () => {
+test('groups visibility and teacher access under the node status without restricting node editing', async () => {
   const user = userEvent.setup();
   const onRequestTeacherBlock = vi.fn();
-  renderEditor({ onRequestTeacherBlock });
+  const onToggleVisibility = vi.fn();
+  renderEditor({ onRequestTeacherBlock, onToggleVisibility });
 
-  expect(screen.getByText('Sin bloqueo docente')).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
+  expect(screen.getByRole('heading', { name: 'Estado del hito' })).toBeTruthy();
+  expect(screen.getByText('Sin restricciones docentes')).toBeTruthy();
+  await user.click(screen.getByRole('switch', { name: 'Visible para estudiantes' }));
+  expect(onToggleVisibility).toHaveBeenCalledWith(node.id, true);
+  await user.click(screen.getByRole('button', { name: 'Restringir acceso' }));
   expect(onRequestTeacherBlock).toHaveBeenCalledWith(node.id, 'BLOCK');
   expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeTruthy();
+});
+
+test('explains that student access does not apply while the node is hidden', () => {
+  renderEditor({ node: { ...node, isVisible: false, isTeacherBlocked: false } });
+
+  expect(screen.getByText('El acceso se habilitará cuando el hito sea visible.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Restringir acceso' })).toBeNull();
 });
 
 test('enables saving only after the node form changes', async () => {
@@ -131,7 +149,7 @@ test('offers individual and branch unlock actions for a teacher-blocked node', a
     onRequestTeacherBlock,
   });
 
-  expect(screen.getByText('Bloqueado por docencia')).toBeTruthy();
+  expect(screen.getByText('Acceso restringido por docencia')).toBeTruthy();
   expect(screen.getByText(/no podrá desbloquearse de forma individual/)).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Desbloquear este nodo' }));
   await user.click(screen.getByRole('button', { name: 'Desbloquear rama' }));
@@ -159,9 +177,9 @@ test('adds an external link with its title', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
   await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  expect((screen.getByRole('button', { name: 'Agregar enlace' }) as HTMLButtonElement).disabled).toBe(
-    true,
-  );
+  expect(
+    (screen.getByRole('button', { name: 'Agregar enlace' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
   await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía de ejercicios');
   await user.type(screen.getByLabelText('Enlace'), 'https://example.test/guia');
   await user.click(screen.getByRole('button', { name: 'Agregar enlace' }));

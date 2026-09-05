@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PanelRightClose, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import {
   AlertDialog,
@@ -13,7 +13,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
-import { Button } from '@/shared/ui/button';
 import { Sidebar, SidebarContent, SidebarRail } from '@/shared/ui/sidebar';
 import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
@@ -31,7 +30,6 @@ export function RoadmapEditor({
   roadmap,
   selectedNode,
   isOpen,
-  onToggle,
   onClose,
   onUpdateNode,
   onToggleVisibility,
@@ -39,13 +37,15 @@ export function RoadmapEditor({
   onDeleteNode,
   onAddResource,
   onUploadResource,
-  onPreview,
-  previewButtonRef,
   onUpdateResource,
   onDeleteResource,
+  onPreview,
+  previewButtonRef,
   panelWidth,
   onPanelWidthChange,
 }: RoadmapEditorProps) {
+  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
+  const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
   const [draftNodeId, setDraftNodeId] = useState<string | null>(null);
   const [editNode, setEditNode] = useState<NodeUpdate>({
     title: '',
@@ -55,8 +55,6 @@ export function RoadmapEditor({
   const [resourceDraft, setResourceDraft] = useState<ResourceEditorDraft>(
     emptyResourceEditorDraft,
   );
-  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
-  const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
@@ -83,6 +81,8 @@ export function RoadmapEditor({
 
   if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) {
     return null;
+  }
+
   const isDirty = hasUnsavedNodeInformation(selectedNode, editNode, resourceDraft);
   const closeResourceEditor = () => setResourceDraft(emptyResourceEditorDraft());
   const openResourceEditor = (mode: ResourceEditorDraft['mode']) =>
@@ -96,15 +96,13 @@ export function RoadmapEditor({
       selectedFile: null,
     });
 
-  }
-
   return (
     <Sidebar
       side="right"
       collapsible="none"
       id="roadmap-editor-panel"
       aria-label="Panel de edición del roadmap"
-      className="order-2 !w-full min-w-0 border-t border-border bg-background lg:order-none lg:box-border lg:min-h-0 lg:!w-(--sidebar-width) lg:overflow-hidden lg:border-t-0 lg:border-l"
+      className="order-2 !w-full min-w-0 border-t border-border bg-background focus-within:ring-0 lg:order-none lg:box-border lg:min-h-0 lg:!w-(--sidebar-width) lg:overflow-hidden lg:border-t-0 lg:border-l"
     >
       <SidebarRail
         ariaLabel="Redimensionar panel de edición"
@@ -124,7 +122,9 @@ export function RoadmapEditor({
             Editor de nodo
           </summary>
           <div className="px-4 pb-4 sm:px-5 sm:pb-5">
-            <header className="flex justify-end py-3">
+            <NodeDetailsEditor
+              node={selectedNode}
+              nodeTypes={roadmap.nodeTypes}
               nodeValue={editNode}
               resourceValue={resourceDraft.value}
               editingResourceId={resourceDraft.editingResourceId}
@@ -144,34 +144,16 @@ export function RoadmapEditor({
               onSelectedResourceFileChange={(selectedFile) =>
                 setResourceDraft((draft) => ({ ...draft, selectedFile }))
               }
-              <Button
-                aria-label="Ocultar panel de edición"
-                title="Ocultar panel de edición"
-                onClick={onToggle}
-                size="icon"
-                variant="outline"
-              onStartEditingResource={startEditingResource}
-              onCancelResource={closeResourceEditor}
-              >
-                <PanelRightClose />
-              </Button>
-            </header>
-
-            <NodeDetailsEditor
-              node={selectedNode}
-              nodeTypes={roadmap.nodeTypes}
               onUpdateNode={onUpdateNode}
               onToggleVisibility={onToggleVisibility}
               onRequestTeacherBlock={onRequestTeacherBlock}
               onAddResource={onAddResource}
               onUploadResource={onUploadResource}
               onUpdateResource={onUpdateResource}
+              onStartEditingResource={startEditingResource}
+              onCancelResource={closeResourceEditor}
               onDeleteNode={(node) =>
                 setPendingDeletion({
-              onPreview={() =>
-                onPreview(projectNodeInformationPreview(selectedNode, editNode, resourceDraft))
-              }
-              previewButtonRef={previewButtonRef}
                   label: `el nodo ${node.title} y sus dependencias y recursos`,
                   onConfirm: async () => {
                     const deleted = await onDeleteNode(node.id);
@@ -186,6 +168,10 @@ export function RoadmapEditor({
                   onConfirm: () => onDeleteResource(item.id),
                 })
               }
+              onPreview={() =>
+                onPreview(projectNodeInformationPreview(selectedNode, editNode, resourceDraft))
+              }
+              previewButtonRef={previewButtonRef}
               onClose={onClose}
             />
           </div>

@@ -22,6 +22,7 @@ export function mapRoadmapGraph(
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
     const blockReason = canEdit ? undefined : studentNodeBlockReason(node);
+    const resources = 'resources' in node ? node.resources : [];
     return {
       id: node.id,
       type: 'roadmap',
@@ -33,6 +34,8 @@ export function mapRoadmapGraph(
         status: nodeStatus(node, canEdit),
         isHidden,
         isTeacherBlocked: canEdit && 'isTeacherBlocked' in node && node.isTeacherBlocked,
+        fileCount: resources.filter((resource) => resource.type === 'FILE').length,
+        linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
         blockReason,
       },
       position: { x: node.positionX, y: node.positionY },

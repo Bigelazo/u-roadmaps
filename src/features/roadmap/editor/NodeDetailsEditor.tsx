@@ -1,4 +1,5 @@
-import { LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
+import type { RefObject } from 'react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type {
   Resource,
@@ -7,8 +8,17 @@ import type {
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
-import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldTitle,
+} from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import { Separator } from '@/shared/ui/separator';
+import { Switch } from '@/shared/ui/switch';
 import { Textarea } from '@/shared/ui/textarea';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeResources } from './NodeResources';
@@ -20,8 +30,16 @@ type Props = {
   nodeValue: NodeUpdate;
   resourceValue: ResourceInput;
   editingResourceId: string | null;
+  isResourceComposerOpen: boolean;
+  resourceMode: 'file' | 'link';
+  selectedResourceFile: File | null;
+  isDirty: boolean;
   onNodeChange: (value: NodeUpdate) => void;
   onResourceChange: (value: ResourceInput) => void;
+  onResourceComposerOpen: (mode: 'file' | 'link') => void;
+  onResourceComposerClose: () => void;
+  onResourceModeChange: (mode: 'file' | 'link') => void;
+  onSelectedResourceFileChange: (file: File | null) => void;
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
   onRequestTeacherBlock: (nodeId: string, operation: TeacherBlockOperation) => void;
@@ -32,6 +50,8 @@ type Props = {
   onCancelResource: () => void;
   onDeleteNode: (node: RoadmapNode) => void;
   onDeleteResource: (resource: Resource) => void;
+  onPreview: () => void;
+  previewButtonRef: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
 };
 
@@ -39,26 +59,24 @@ function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeType
   const type = nodeTypes.find((nodeType) => nodeType.id === node.nodeTypeId);
 
   return (
-    <header className="flex items-start justify-between gap-3 border-b border-border pb-5">
-      <div className="flex min-w-0 items-start gap-3">
-        {type ? (
-          <NodeTypeIcon
-            icon={type.icon}
-            className="mt-1 size-5 shrink-0"
-            style={{ color: type.color }}
-            aria-hidden="true"
-          />
-        ) : null}
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
-            Nodo seleccionado
-          </p>
-          <h2 className="mt-1 break-words font-heading text-2xl font-semibold tracking-[-0.035em]">
+    <header className="flex items-start justify-between gap-3 border-b border-border pt-8 pb-5">
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
+          Nodo seleccionado
+        </p>
+        <div className="mt-1 flex min-w-0 items-start gap-3">
+          {type ? (
+            <NodeTypeIcon
+              icon={type.icon}
+              data-testid="node-type-icon"
+              className="mt-1 size-5 shrink-0"
+              style={{ color: type.color }}
+              aria-hidden="true"
+            />
+          ) : null}
+          <h2 className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] break-words">
             {node.title}
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {type ? type.name : 'Configura este hito del mapa.'}
-          </p>
         </div>
       </div>
       <Button
@@ -81,7 +99,20 @@ function NodeForm({
   nodeValue,
   onNodeChange,
   onUpdateNode,
-}: Pick<Props, 'node' | 'nodeTypes' | 'nodeValue' | 'onNodeChange' | 'onUpdateNode'>) {
+  isDirty,
+  onPreview,
+  previewButtonRef,
+}: Pick<
+  Props,
+  | 'node'
+  | 'nodeTypes'
+  | 'nodeValue'
+  | 'onNodeChange'
+  | 'onUpdateNode'
+  | 'isDirty'
+  | 'onPreview'
+  | 'previewButtonRef'
+>) {
   const hasChanges =
     nodeValue.title !== node.title ||
     nodeValue.description !== (node.description ?? '') ||
@@ -127,98 +158,130 @@ function NodeForm({
           />
         </Field>
       </FieldGroup>
-      <Button type="submit" className="w-full" disabled={!canSave}>
-        <Save data-icon="inline-start" />
-        Guardar cambios
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button type="submit" disabled={!canSave}>
+          <Save data-icon="inline-start" />
+          Guardar cambios
+        </Button>
+        <Button
+          ref={previewButtonRef}
+          type="button"
+          variant="outline"
+          onClick={onPreview}
+        >
+          <Eye data-icon="inline-start" />
+          {isDirty ? 'Previsualizar cambios' : 'Previsualizar'}
+        </Button>
+      </div>
     </form>
   );
 }
 
-function NodeAvailability({
+function NodeStatus({
   node,
   onToggleVisibility,
-}: Pick<Props, 'node' | 'onToggleVisibility'>) {
-  return (
-    <section className="border-t border-border py-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="font-heading text-base font-semibold">Disponibilidad</h3>
-          <p className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
-            <span
-              className={`size-2 shrink-0 rounded-full ${node.isVisible ? 'bg-progress' : 'bg-steel'}`}
-            />
-            {node.isVisible ? 'Visible para estudiantes' : 'Oculto para estudiantes'}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void onToggleVisibility(node.id, node.isVisible)}
-        >
-          {node.isVisible ? 'Ocultar' : 'Mostrar'}
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-function NodeTeacherBlock({
-  node,
   onRequestTeacherBlock,
-}: Pick<Props, 'node' | 'onRequestTeacherBlock'>) {
-  if (!node.isVisible) return null;
+}: Pick<Props, 'node' | 'onToggleVisibility' | 'onRequestTeacherBlock'>) {
+  const accessStatus = node.isTeacherBlocked
+    ? 'Acceso restringido por docencia'
+    : 'Sin restricciones docentes';
 
   return (
     <section className="border-t border-border py-5">
-      <div className="flex flex-col gap-3">
+      <div className="rounded-xl border border-border bg-cloud/55 p-1">
         <div>
-          <h3 className="font-heading text-base font-semibold">Acceso de estudiantes</h3>
-          <p className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
-            {node.isTeacherBlocked ? (
-              <LockKeyhole aria-hidden="true" />
-            ) : (
-              <LockKeyholeOpen aria-hidden="true" />
-            )}
-            {node.isTeacherBlocked ? 'Bloqueado por docencia' : 'Sin bloqueo docente'}
+          <h3 className="px-3 pt-3 font-heading text-base font-semibold">Estado del hito</h3>
+          <p className="px-3 pt-0.5 text-sm text-muted-foreground">
+            Define qué pueden ver y abrir las y los estudiantes.
           </p>
         </div>
-        {node.isTeacherBlocked ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRequestTeacherBlock(node.id, 'UNBLOCK')}
-              >
-                <LockKeyholeOpen className="size-6" data-icon="inline-start" />
-                Desbloquear este nodo
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onRequestTeacherBlock(node.id, 'BRANCH_UNLOCK')}
-              >
-                <LockKeyholeOpen className="size-6" data-icon="inline-start" />
-                Desbloquear rama
-              </Button>
+        <FieldGroup className="gap-0 pt-3">
+          <Field orientation="horizontal" className="rounded-lg px-3 py-3">
+            <FieldContent>
+              <FieldLabel htmlFor="node-visible">Visible para estudiantes</FieldLabel>
+              <FieldDescription>
+                {node.isVisible
+                  ? 'El hito aparece en el roadmap de estudiantes.'
+                  : 'El hito no aparece en el roadmap de estudiantes.'}
+              </FieldDescription>
+            </FieldContent>
+            <Switch
+              id="node-visible"
+              checked={node.isVisible}
+              onCheckedChange={() => void onToggleVisibility(node.id, node.isVisible)}
+            />
+          </Field>
+          <Separator className="mx-3 w-auto" />
+          <div className="flex flex-col gap-3 rounded-lg px-3 py-3">
+            <div className="flex items-start gap-2">
+              {node.isVisible ? (
+                node.isTeacherBlocked ? (
+                  <LockKeyhole
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <LockKeyholeOpen
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                )
+              ) : (
+                <EyeOff
+                  className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              )}
+              <div>
+                <FieldTitle>Acceso de estudiantes</FieldTitle>
+                <FieldDescription>
+                  {node.isVisible
+                    ? accessStatus
+                    : 'El acceso se habilitará cuando el hito sea visible.'}
+                </FieldDescription>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Si conserva un prerrequisito con bloqueo docente, no podrá desbloquearse de forma
-              individual.
-            </p>
+            {node.isVisible &&
+              (node.isTeacherBlocked ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRequestTeacherBlock(node.id, 'UNBLOCK')}
+                    >
+                      <LockKeyholeOpen data-icon="inline-start" />
+                      Desbloquear este nodo
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRequestTeacherBlock(node.id, 'BRANCH_UNLOCK')}
+                    >
+                      <LockKeyholeOpen data-icon="inline-start" />
+                      Desbloquear rama
+                    </Button>
+                  </div>
+                  <FieldDescription>
+                    Si conserva un prerrequisito con bloqueo docente, no podrá desbloquearse de
+                    forma individual.
+                  </FieldDescription>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onRequestTeacherBlock(node.id, 'BLOCK')}
+                >
+                  <LockKeyhole data-icon="inline-start" />
+                  Restringir acceso
+                </Button>
+              ))}
           </div>
-        ) : (
-          <div>
-            <Button type="button" size="sm" onClick={() => onRequestTeacherBlock(node.id, 'BLOCK')}>
-              <LockKeyhole className="size-6" data-icon="inline-start" />
-              Bloquear acceso
-            </Button>
-          </div>
-        )}
+        </FieldGroup>
       </div>
     </section>
   );
@@ -249,8 +312,16 @@ export function NodeDetailsEditor({
   nodeValue,
   resourceValue,
   editingResourceId,
+  isResourceComposerOpen,
+  resourceMode,
+  selectedResourceFile,
+  isDirty,
   onNodeChange,
   onResourceChange,
+  onResourceComposerOpen,
+  onResourceComposerClose,
+  onResourceModeChange,
+  onSelectedResourceFileChange,
   onUpdateNode,
   onToggleVisibility,
   onRequestTeacherBlock,
@@ -261,6 +332,8 @@ export function NodeDetailsEditor({
   onCancelResource,
   onDeleteNode,
   onDeleteResource,
+  onPreview,
+  previewButtonRef,
   onClose,
 }: Props) {
   return (
@@ -272,15 +345,28 @@ export function NodeDetailsEditor({
         nodeValue={nodeValue}
         onNodeChange={onNodeChange}
         onUpdateNode={onUpdateNode}
+        isDirty={isDirty}
+        onPreview={onPreview}
+        previewButtonRef={previewButtonRef}
       />
-      <NodeAvailability node={node} onToggleVisibility={onToggleVisibility} />
-      <NodeTeacherBlock node={node} onRequestTeacherBlock={onRequestTeacherBlock} />
+      <NodeStatus
+        node={node}
+        onToggleVisibility={onToggleVisibility}
+        onRequestTeacherBlock={onRequestTeacherBlock}
+      />
       <NodeDangerZone node={node} onDeleteNode={onDeleteNode} />
       <NodeResources
         node={node}
         resourceValue={resourceValue}
         editingResourceId={editingResourceId}
+        isComposerOpen={isResourceComposerOpen}
+        mode={resourceMode}
+        selectedFile={selectedResourceFile}
         onResourceChange={onResourceChange}
+        onComposerOpen={onResourceComposerOpen}
+        onComposerClose={onResourceComposerClose}
+        onModeChange={onResourceModeChange}
+        onSelectedFileChange={onSelectedResourceFileChange}
         onAddResource={onAddResource}
         onUploadResource={onUploadResource}
         onUpdateResource={onUpdateResource}

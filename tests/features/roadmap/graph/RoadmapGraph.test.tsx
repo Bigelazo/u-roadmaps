@@ -54,6 +54,8 @@ test('keeps hidden nodes on the teacher graph and marks them as hidden from stud
   expect(teacherNode.data.typeName).toBe('Contenido');
   expect(teacherNode.data.typeIcon).toBe('BookOpen');
   expect(teacherNode.data.isTeacherBlocked).toBe(false);
+  expect(teacherNode.data.fileCount).toBe(1);
+  expect(teacherNode.data.linkCount).toBe(0);
   expect(studentNode.hidden).toBe(true);
 });
 
