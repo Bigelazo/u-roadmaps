@@ -107,10 +107,14 @@ async function responseError(response: Response, fallback: string) {
 export function useRoadmap(identifier: CourseOfferingIdentifier) {
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
+  const [simulationRoadmap, setSimulationRoadmap] = useState<AnyRoadmapDto | null>(null);
+  const [simulationRoadmapKey, setSimulationRoadmapKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const simulationControllerRef = useRef<AbortController | null>(null);
   const requestVersionRef = useRef(0);
+  const simulationRequestVersionRef = useRef(0);
   const activeIdentifierRef = useRef<string | null>(null);
   const lastMutationErrorRef = useRef<string | null>(null);
   const key = identifierKey(identifier);
@@ -177,7 +181,9 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     void load();
     return () => {
       controllerRef.current?.abort();
+      simulationControllerRef.current?.abort();
       requestVersionRef.current += 1;
+      simulationRequestVersionRef.current += 1;
     };
   }, [load]);
 
@@ -186,6 +192,60 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     setError(null);
     setErrorKey(null);
   }, []);
+
+  const loadSimulation = useCallback(async () => {
+    const requestKey = identifierKey(identifier);
+    if (activeIdentifierRef.current !== requestKey) return false;
+
+    simulationControllerRef.current?.abort();
+    const controller = new AbortController();
+    simulationControllerRef.current = controller;
+    const requestVersion = ++simulationRequestVersionRef.current;
+
+    try {
+      const response = await fetch(roadmapUrl(identifier, '/simulation'), { signal: controller.signal });
+      const body: unknown = response.ok ? await response.json() : undefined;
+      const message = response.ok
+        ? undefined
+        : await responseError(response, 'No se pudo cargar la previsualización.');
+      if (
+        controller.signal.aborted ||
+        requestVersion !== simulationRequestVersionRef.current ||
+        activeIdentifierRef.current !== requestKey
+      ) {
+        return false;
+      }
+      if (!response.ok || !isRoadmapDto(body)) {
+        setSimulationRoadmap(null);
+        setSimulationRoadmapKey(requestKey);
+        setError(message ?? 'No se pudo cargar la previsualización.');
+        setErrorKey(requestKey);
+        return false;
+      }
+      setSimulationRoadmap(body);
+      setSimulationRoadmapKey(requestKey);
+      setError(null);
+      setErrorKey(null);
+      return true;
+    } catch (cause) {
+      if (
+        controller.signal.aborted ||
+        requestVersion !== simulationRequestVersionRef.current ||
+        activeIdentifierRef.current !== requestKey
+      ) {
+        return false;
+      }
+      setSimulationRoadmap(null);
+      setSimulationRoadmapKey(requestKey);
+      setError(
+        cause instanceof Error && cause.name === 'AbortError'
+          ? null
+          : 'No se pudo cargar la previsualización.',
+      );
+      setErrorKey(requestKey);
+      return false;
+    }
+  }, [identifier]);
 
   const mutate = useCallback(
     async (
@@ -556,10 +616,43 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier, load, mutate],
   );
 
+  const completeSimulatedNode = useCallback(
+    async (nodeId: string) => {
+      const succeeded = await mutate(
+        roadmapUrl(identifier, `/simulation/nodes/${nodeId}/completion`),
+        { method: 'POST' },
+        'No se pudo completar el nodo en la previsualización.',
+      );
+      await loadSimulation();
+      if (!succeeded && activeIdentifierRef.current === identifierKey(identifier)) {
+        setError(lastMutationErrorRef.current ?? 'No se pudo completar el nodo en la previsualización.');
+        setErrorKey(identifierKey(identifier));
+      }
+      return succeeded;
+    },
+    [identifier, loadSimulation, mutate],
+  );
+
+  const resetSimulation = useCallback(async () => {
+    const succeeded = await mutate(
+      roadmapUrl(identifier, '/simulation'),
+      { method: 'DELETE' },
+      'No se pudo reiniciar el progreso de previsualización.',
+    );
+    await loadSimulation();
+    if (!succeeded && activeIdentifierRef.current === identifierKey(identifier)) {
+      setError(lastMutationErrorRef.current ?? 'No se pudo reiniciar el progreso de previsualización.');
+      setErrorKey(identifierKey(identifier));
+    }
+    return succeeded;
+  }, [identifier, loadSimulation, mutate]);
+
   return {
     roadmap: roadmapKey === key ? roadmap : null,
+    simulationRoadmap: simulationRoadmapKey === key ? simulationRoadmap : null,
     error: errorKey === key ? error : null,
     dismissError,
+    loadSimulation,
     addNode,
     updateNode,
     moveNode,
@@ -579,5 +672,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     updateNodeType,
     deleteNodeType,
     completeNode,
+    completeSimulatedNode,
+    resetSimulation,
   };
 }

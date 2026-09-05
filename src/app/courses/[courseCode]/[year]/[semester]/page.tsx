@@ -27,12 +27,20 @@ export default async function CoursePage({ params }: Props) {
     },
   });
   if (!courseOffering) notFound();
+  const academicTerm = await prisma.academicTerm.findUnique({
+    where: { year_semester: { year, semester } },
+    select: { roadmapFreezeDate: true },
+  });
   // U-Campus manda sobre el cargo: quien nunca abrió el curso obtiene su
   // participación al entrar. Con una participación vigente, la vista evita el
   // viaje a U-Campus y el cargo se actualiza en la siguiente operación.
   const participation =
     courseOffering.participants[0] ?? (await synchronizeParticipation(user, identifier));
-  const canEdit = participation?.role === 'TEACHER';
+  const canPreview = participation?.role === 'TEACHER';
+  const isHistorical = Boolean(
+    academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now(),
+  );
+  const canEdit = canPreview && !isHistorical;
   const courseName = courseOffering.course.name ?? courseCode;
 
   return (
@@ -41,6 +49,8 @@ export default async function CoursePage({ params }: Props) {
         key={`${courseCode}-${year}-${semester}`}
         identifier={{ courseCode, year, semester }}
         canEdit={canEdit}
+        canPreview={canPreview}
+        isHistorical={isHistorical}
         title={courseName}
         courseCode={courseCode}
         year={year}

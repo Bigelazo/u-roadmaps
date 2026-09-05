@@ -12,12 +12,15 @@ import dynamic from 'next/dynamic';
 import {
   ArrowRight,
   CircleAlert,
+  Eye,
   EyeOff,
   Keyboard,
   PanelRightClose,
   PanelRightOpen,
+  RotateCcw,
   Trash2,
 } from 'lucide-react';
+import type { Viewport } from '@xyflow/react';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
@@ -71,6 +74,8 @@ const RoadmapEditor = dynamic(
 type Props = {
   identifier: CourseOfferingIdentifier;
   canEdit?: boolean;
+  canPreview?: boolean;
+  isHistorical?: boolean;
   title: string;
   courseCode: string;
   year: number;
@@ -95,6 +100,13 @@ type PendingTeacherBlockChange = {
   nodeId: string;
   operation: TeacherBlockOperation;
   nodes: TeacherBlockImpact[];
+};
+
+type PreviewReturnState = {
+  selectedNodeId: string | null;
+  isEditorOpen: boolean;
+  isStudentDetailOpen: boolean;
+  viewport: Viewport | null;
 };
 
 function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: ReactNode }) {
@@ -141,6 +153,8 @@ function sameTeacherBlockImpact(first: TeacherBlockImpact[], second: TeacherBloc
 export default function RoadmapCanvas({
   identifier,
   canEdit = false,
+  canPreview = canEdit,
+  isHistorical = false,
   title,
   courseCode,
   year,
@@ -149,6 +163,13 @@ export default function RoadmapCanvas({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isStudentDetailOpen, setIsStudentDetailOpen] = useState(false);
+  const [isCanvasPreview, setIsCanvasPreview] = useState(false);
+  const [previewReturnState, setPreviewReturnState] = useState<PreviewReturnState | null>(null);
+  const [restoreViewport, setRestoreViewport] = useState<Viewport | null>(null);
+  const [isEditorDirty, setIsEditorDirty] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
+  const [isDiscardPreviewConfirmationOpen, setIsDiscardPreviewConfirmationOpen] = useState(false);
+  const [isResetConfirmationOpen, setIsResetConfirmationOpen] = useState(false);
   const [teacherPreviewNode, setTeacherPreviewNode] = useState<StudentAccessibleRoadmapNode | null>(
     null,
   );
@@ -171,6 +192,8 @@ export default function RoadmapCanvas({
     useState<PendingTeacherBlockChange | null>(null);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previewCanvasButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastViewportRef = useRef<Viewport | null>(null);
   const successToastIdRef = useRef(0);
   const {
     roadmap,
@@ -195,6 +218,10 @@ export default function RoadmapCanvas({
     updateNodeType,
     deleteNodeType,
     completeNode,
+    simulationRoadmap,
+    loadSimulation,
+    completeSimulatedNode,
+    resetSimulation,
   } = useRoadmap(identifier);
 
   const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
@@ -252,6 +279,43 @@ export default function RoadmapCanvas({
     requestAnimationFrame(() => previewButtonRef.current?.focus());
   }
 
+  async function enterCanvasPreview(discardDraft = false) {
+    const loaded = await loadSimulation();
+    if (!loaded) return;
+    if (discardDraft) setEditorKey((key) => key + 1);
+    setPreviewReturnState({
+      selectedNodeId,
+      isEditorOpen,
+      isStudentDetailOpen,
+      viewport: lastViewportRef.current,
+    });
+    setTeacherPreviewNode(null);
+    setIsTeacherPreviewCompleted(false);
+    setIsStudentDetailOpen(false);
+    setIsEditorOpen(false);
+    setSelectedNodeId(null);
+    setIsCanvasPreview(true);
+  }
+
+  function requestCanvasPreview() {
+    if (isEditorDirty) {
+      setIsDiscardPreviewConfirmationOpen(true);
+      return;
+    }
+    void enterCanvasPreview();
+  }
+
+  function exitCanvasPreview() {
+    const previous = previewReturnState;
+    setIsCanvasPreview(false);
+    setSelectedNodeId(previous?.selectedNodeId ?? null);
+    setIsEditorOpen(previous?.isEditorOpen ?? false);
+    setIsStudentDetailOpen(previous?.isStudentDetailOpen ?? false);
+    setRestoreViewport(previous?.viewport ?? null);
+    setPreviewReturnState(null);
+    requestAnimationFrame(() => previewCanvasButtonRef.current?.focus());
+  }
+
   useEffect(() => {
     const handleKeyboardShortcut = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && canEdit && teacherPreviewNode) {
@@ -259,21 +323,21 @@ export default function RoadmapCanvas({
         closeTeacherPreview();
         return;
       }
-      if (event.key === 'Escape' && canEdit && isEditorOpen) {
+      if (event.key === 'Escape' && canEdit && isEditorOpen && !isCanvasPreview) {
         event.preventDefault();
         setIsEditorOpen(false);
         return;
       }
       if (event.key.toLowerCase() === 'b' && (event.metaKey || event.ctrlKey) && selectedNodeId) {
         event.preventDefault();
-        if (canEdit) {
+        if (canEdit && !isCanvasPreview) {
           if (!teacherPreviewNode) setIsEditorOpen((open) => !open);
         } else setIsStudentDetailOpen((open) => !open);
       }
     };
     window.addEventListener('keydown', handleKeyboardShortcut);
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
-  }, [canEdit, isEditorOpen, selectedNodeId, teacherPreviewNode]);
+  }, [canEdit, isCanvasPreview, isEditorOpen, selectedNodeId, teacherPreviewNode]);
 
   async function requestVisibilityChange(nodeId: string, isVisible: boolean) {
     if (!isVisible) return toggleVisibility(nodeId, isVisible);
@@ -359,7 +423,10 @@ export default function RoadmapCanvas({
     );
   }
 
-  const selectedNode = roadmap.nodes.find((node) => node.id === selectedNodeId);
+  const displayedRoadmap = isCanvasPreview ? simulationRoadmap ?? roadmap : roadmap;
+  const isReadOnlyTeacher = canPreview && !canEdit;
+  const isStudentExperience = (!canEdit && !isReadOnlyTeacher) || isCanvasPreview;
+  const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
   const addNodeAtViewport = (
     node: Parameters<typeof addNode>[0],
     viewport: { x: number; y: number; width: number; height: number },
@@ -394,14 +461,14 @@ export default function RoadmapCanvas({
       className="min-h-0 lg:h-full"
       style={
         {
-          '--sidebar-width': `${canEdit ? editorPanel.width : studentPanel.width}px`,
+          '--sidebar-width': `${canEdit && !isCanvasPreview ? editorPanel.width : studentPanel.width}px`,
         } as CSSProperties
       }
     >
       <section
         className={cn(
           'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
-          canEdit && isEditorOpen
+          canEdit && isEditorOpen && !isCanvasPreview
             ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]'
             : 'lg:grid-cols-1',
         )}
@@ -413,7 +480,7 @@ export default function RoadmapCanvas({
         >
           <header className="pointer-events-none absolute top-4 left-4 z-4 max-w-[calc(100%-2rem)] sm:top-6 sm:left-6 sm:max-w-md">
             <div className="flex flex-wrap items-center gap-2">
-              {canEdit ? <Badge variant="secondary">Modo edición</Badge> : null}
+              {canEdit && !isCanvasPreview ? <Badge variant="secondary">Modo edición</Badge> : null}
             </div>
             <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
               {title}
@@ -457,13 +524,13 @@ export default function RoadmapCanvas({
               <KeyboardShortcut keys={<Kbd aria-label="Escape">Esc</Kbd>}>
                 Cerrar el detalle o panel del nodo seleccionado.
               </KeyboardShortcut>
-              {canEdit ? (
+              {canEdit && !isCanvasPreview ? (
                 <KeyboardShortcut keys={<Kbd>Flechas</Kbd>}>
                   Mover una cuadrícula el nodo seleccionado. <Kbd aria-label="Shift">⇧</Kbd> +{' '}
                   <Kbd>Flechas</Kbd> lo desplaza 5 cuadrículas.
                 </KeyboardShortcut>
               ) : null}
-              {canEdit ? (
+              {canEdit && !isCanvasPreview ? (
                 <KeyboardShortcut
                   keys={
                     <KbdGroup className="flex-wrap">
@@ -515,16 +582,34 @@ export default function RoadmapCanvas({
               onDismiss={dismissSuccessToast}
             />
           )}
+          {isCanvasPreview ? (
+            <div className="pointer-events-auto absolute top-3 left-1/2 z-5 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-border bg-card/95 p-2 shadow-lg shadow-black/5 backdrop-blur-sm sm:w-auto sm:flex-nowrap">
+              <p className="px-2 text-sm font-semibold text-foreground">Previsualización del canvas</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsResetConfirmationOpen(true)}
+              >
+                <RotateCcw data-icon="inline-start" />
+                Reiniciar progreso
+              </Button>
+              <Button type="button" size="sm" onClick={exitCanvasPreview}>
+                {isHistorical ? 'Volver al roadmap' : 'Ir al editor'}
+              </Button>
+            </div>
+          ) : null}
           <RoadmapGraph
-            roadmap={roadmap}
-            canEdit={canEdit}
+            roadmap={displayedRoadmap}
+            canEdit={canEdit && !isCanvasPreview}
+            isTeacherView={!isStudentExperience}
             onSelectNode={(nodeId, trigger) => {
-              const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
-              if (!canEdit && isStudentBlockedNode(node)) return;
+              const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
+              if (isStudentExperience && isStudentBlockedNode(node)) return;
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
-              if (canEdit) setIsEditorOpen(true);
-              else setIsStudentDetailOpen(true);
+              if (isStudentExperience) setIsStudentDetailOpen(true);
+              else if (canEdit) setIsEditorOpen(true);
             }}
             selectedNodeId={selectedNodeId}
             onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
@@ -539,18 +624,37 @@ export default function RoadmapCanvas({
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
               );
             }}
+            onViewportChange={(viewport) => {
+              lastViewportRef.current = viewport;
+            }}
+            restoreViewport={restoreViewport}
             topRightActions={
-              canEdit
+              !isCanvasPreview && (canEdit || canPreview)
                 ? (getViewport) => (
                     <>
-                      <NodeCreator
-                        nodeTypes={roadmap.nodeTypes}
-                        onSubmit={(node) => addNodeAtViewport(node, getViewport())}
-                        onCreateNodeType={addNodeType}
-                        onUpdateNodeType={updateNodeType}
-                        onDeleteNodeType={deleteNodeType}
-                      />
-                      {selectedNode ? (
+                      {canEdit ? (
+                        <NodeCreator
+                          nodeTypes={roadmap.nodeTypes}
+                          onSubmit={(node) => addNodeAtViewport(node, getViewport())}
+                          onCreateNodeType={addNodeType}
+                          onUpdateNodeType={updateNodeType}
+                          onDeleteNodeType={deleteNodeType}
+                        />
+                      ) : null}
+                      {canPreview ? (
+                        <Button
+                          ref={previewCanvasButtonRef}
+                          aria-label="Previsualizar canvas"
+                          title="Previsualizar canvas"
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          onClick={requestCanvasPreview}
+                        >
+                          <Eye />
+                        </Button>
+                      ) : null}
+                      {canEdit && selectedNode ? (
                         <Button
                           aria-label={
                             isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'
@@ -574,9 +678,10 @@ export default function RoadmapCanvas({
         </div>
         {canEdit && (
           <RoadmapEditor
+            key={editorKey}
             roadmap={roadmap as RoadmapDto}
             selectedNode={selectedNode as RoadmapNode | undefined}
-            isOpen={isEditorOpen}
+            isOpen={isEditorOpen && !isCanvasPreview}
             onClose={closeSelectedNode}
             onUpdateNode={updateNodeWithConfirmation}
             onToggleVisibility={requestVisibilityChange}
@@ -593,12 +698,13 @@ export default function RoadmapCanvas({
               setIsTeacherPreviewCompleted(false);
               setIsEditorOpen(false);
             }}
+            onDirtyChange={setIsEditorDirty}
             previewButtonRef={previewButtonRef}
             panelWidth={editorPanel.width}
             onPanelWidthChange={editorPanel.setWidth}
           />
         )}
-        {(!canEdit || teacherPreviewNode) && (
+        {(isStudentExperience || teacherPreviewNode) && (
           <StudentNodeDetail
             node={
               teacherPreviewNode ??
@@ -615,7 +721,8 @@ export default function RoadmapCanvas({
             }
             onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
             onComplete={(node) => {
-              if (teacherPreviewNode) setIsTeacherPreviewCompleted(true);
+              if (isCanvasPreview) void completeSimulatedNode(node.id);
+              else if (teacherPreviewNode) setIsTeacherPreviewCompleted(true);
               else void completeNode(node.id);
             }}
             panelWidth={studentPanel.width}
@@ -651,6 +758,58 @@ export default function RoadmapCanvas({
             >
               <Trash2 data-icon="inline-start" />
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={isDiscardPreviewConfirmationOpen}
+        onOpenChange={setIsDiscardPreviewConfirmationOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">Descartar cambios sin guardar</AlertDialogTitle>
+            <AlertDialogDescription>
+              La previsualización muestra únicamente el último estado guardado. Puedes seguir
+              editando o descartar este borrador para continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => {
+                setIsDiscardPreviewConfirmationOpen(false);
+                void enterCanvasPreview(true);
+              }}
+            >
+              Descartar cambios y previsualizar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={isResetConfirmationOpen} onOpenChange={setIsResetConfirmationOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">
+              Reiniciar progreso de previsualización
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Eliminarás las completaciones simuladas de este roadmap. Esta acción no se puede
+              deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                setIsResetConfirmationOpen(false);
+                void resetSimulation();
+              }}
+            >
+              Reiniciar progreso
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

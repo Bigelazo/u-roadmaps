@@ -40,6 +40,7 @@ export function RoadmapEditor({
   onUpdateResource,
   onDeleteResource,
   onPreview,
+  onDirtyChange,
   previewButtonRef,
   panelWidth,
   onPanelWidthChange,
@@ -79,11 +80,16 @@ export function RoadmapEditor({
     setResourceDraft(emptyResourceEditorDraft());
   }, [draftNodeId, selectedNode]);
 
-  if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) {
-    return null;
-  }
+  const isDirty = Boolean(
+    isOpen &&
+      selectedNode &&
+      draftNodeId === selectedNode.id &&
+      hasUnsavedNodeInformation(selectedNode, editNode, resourceDraft),
+  );
 
-  const isDirty = hasUnsavedNodeInformation(selectedNode, editNode, resourceDraft);
+  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
+
+  if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) return null;
   const closeResourceEditor = () => setResourceDraft(emptyResourceEditorDraft());
   const openResourceEditor = (mode: ResourceEditorDraft['mode']) =>
     setResourceDraft((draft) => ({ ...draft, isOpen: true, mode, selectedFile: null }));

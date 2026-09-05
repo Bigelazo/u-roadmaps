@@ -45,6 +45,69 @@ test('rapid course-offering navigation aborts the stale roadmap load', async () 
   await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('current'));
 });
 
+test('loads, completes, and resets a teacher simulation through its student-mode contract', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('editing')))
+    .mockResolvedValueOnce(Response.json(roadmap('simulation-before')))
+    .mockResolvedValueOnce(Response.json({ completion: { id: 'completion-1' } }))
+    .mockResolvedValueOnce(Response.json(roadmap('simulation-after-completion')))
+    .mockResolvedValueOnce(Response.json({ deletedCount: 1 }))
+    .mockResolvedValueOnce(Response.json(roadmap('simulation-after-reset')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('editing'));
+
+  await expect(result.current.loadSimulation()).resolves.toBe(true);
+  await expect(result.current.completeSimulatedNode('node-1')).resolves.toBe(true);
+  await expect(result.current.resetSimulation()).resolves.toBe(true);
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    '/api/MAT101/2026/1/roadmap/simulation',
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    3,
+    '/api/MAT101/2026/1/roadmap/simulation/nodes/node-1/completion',
+    expect.objectContaining({ method: 'POST' }),
+  );
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    5,
+    '/api/MAT101/2026/1/roadmap/simulation',
+    expect.objectContaining({ method: 'DELETE' }),
+  );
+  await waitFor(() =>
+    expect(result.current.simulationRoadmap?.roadmap.id).toBe('simulation-after-reset'),
+  );
+  expect(result.current.roadmap?.roadmap.id).toBe('editing');
+});
+
+test('keeps simulation completion and reset errors visible after refreshing the projection', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('editing')))
+    .mockResolvedValueOnce(
+      Response.json({ error: { message: 'El nodo ya no está disponible.' } }, { status: 403 }),
+    )
+    .mockResolvedValueOnce(Response.json(roadmap('after-completion-rejection')))
+    .mockResolvedValueOnce(
+      Response.json({ error: { message: 'No se pudo reiniciar el progreso.' } }, { status: 409 }),
+    )
+    .mockResolvedValueOnce(Response.json(roadmap('after-reset-rejection')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('editing'));
+
+  await expect(result.current.completeSimulatedNode('node-1')).resolves.toBe(false);
+  await waitFor(() => expect(result.current.error).toBe('El nodo ya no está disponible.'));
+
+  await expect(result.current.resetSimulation()).resolves.toBe(false);
+  await waitFor(() => expect(result.current.error).toBe('No se pudo reiniciar el progreso.'));
+});
+
 test('ignores a preview that resolves after navigating to another course offering', async () => {
   let resolvePreview: (response: Response) => void;
   const fetchMock = vi

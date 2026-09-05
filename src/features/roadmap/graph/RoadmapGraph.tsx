@@ -16,6 +16,7 @@ import {
   type EdgeChange,
   type NodeChange,
   type OnNodeDrag,
+  type Viewport,
   useReactFlow,
 } from '@xyflow/react';
 import { LayoutTemplate, Maximize } from 'lucide-react';
@@ -47,12 +48,14 @@ const roadmapFitViewOptions = { padding: 0.28 };
 function RoadmapGraphToolbar({
   containerRef,
   layoutDirection,
+  showAutoLayout,
   canAutoLayout,
   onAutoLayout,
   topRightActions,
 }: {
   containerRef: RefObject<HTMLDivElement | null>;
   layoutDirection: RoadmapLayoutDirection;
+  showAutoLayout: boolean;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
   topRightActions?: (getViewport: () => NodeRect) => ReactNode;
@@ -77,17 +80,19 @@ function RoadmapGraphToolbar({
   return (
     <Panel position="top-right" className="mt-5 mr-5">
       <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="justify-start sm:justify-center"
-          disabled={!canAutoLayout}
-          onClick={onAutoLayout}
-        >
-          <LayoutTemplate data-icon="inline-start" />
-          Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
-        </Button>
+        {showAutoLayout ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="justify-start sm:justify-center"
+            disabled={!canAutoLayout}
+            onClick={onAutoLayout}
+          >
+            <LayoutTemplate data-icon="inline-start" />
+            Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
+          </Button>
+        ) : null}
         {topRightActions ? (
           <div className="flex justify-end gap-1.5">{topRightActions(getViewport)}</div>
         ) : null}
@@ -111,6 +116,14 @@ function RoadmapViewportControls() {
   );
 }
 
+function RoadmapViewportRestorer({ viewport }: { viewport?: Viewport | null }) {
+  const { setViewport } = useReactFlow();
+  useEffect(() => {
+    if (viewport) void setViewport(viewport);
+  }, [setViewport, viewport]);
+  return null;
+}
+
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
   const defaultStroke = edge.data?.defaultStroke ?? 'var(--steel)';
   const stroke = edge.selected || isHovered ? selectedEdgeColor : defaultStroke;
@@ -124,6 +137,7 @@ function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): Roadmap
 type Props = {
   roadmap: AnyRoadmapDto;
   canEdit: boolean;
+  isTeacherView?: boolean;
   onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
   onMoveNode: OnNodeDrag<RoadmapFlowNode>;
   onConnectNodes: (connection: Connection) => void;
@@ -133,11 +147,14 @@ type Props = {
   onKeyboardNodeMove?: (nodeId: string, position: { x: number; y: number }) => void;
   selectedNodeId?: string | null;
   topRightActions?: (getViewport: () => NodeRect) => ReactNode;
+  onViewportChange?: (viewport: Viewport) => void;
+  restoreViewport?: Viewport | null;
 };
 
 export function RoadmapGraph({
   roadmap,
   canEdit,
+  isTeacherView = canEdit,
   onSelectNode,
   onMoveNode,
   onConnectNodes,
@@ -147,6 +164,8 @@ export function RoadmapGraph({
   onKeyboardNodeMove,
   selectedNodeId,
   topRightActions,
+  onViewportChange,
+  restoreViewport,
 }: Props) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const [isAutoLayoutConfirmationOpen, setIsAutoLayoutConfirmationOpen] = useState(false);
@@ -163,12 +182,12 @@ export function RoadmapGraph({
     [],
   );
   const [flow, setFlow] = useState(() =>
-    mapRoadmapGraph(roadmap, canEdit, deleteDependency, selectedNodeId),
+    mapRoadmapGraph(roadmap, isTeacherView, deleteDependency, selectedNodeId),
   );
 
   useEffect(() => {
-    setFlow(mapRoadmapGraph(roadmap, canEdit, deleteDependency, selectedNodeIdRef.current));
-  }, [roadmap, canEdit, deleteDependency]);
+    setFlow(mapRoadmapGraph(roadmap, isTeacherView, deleteDependency, selectedNodeIdRef.current));
+  }, [roadmap, isTeacherView, deleteDependency]);
 
   useEffect(() => {
     setFlow((current) => ({
@@ -285,16 +304,19 @@ export function RoadmapGraph({
         onEdgesDelete={
           canEdit ? (edges) => onDeleteDependencies(edges.map((edge) => edge.id)) : undefined
         }
+        onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
         fitView
         fitViewOptions={roadmapFitViewOptions}
         proOptions={{ hideAttribution: true }}
       >
         <RoadmapViewportControls />
-        {canEdit ? (
+        <RoadmapViewportRestorer viewport={restoreViewport} />
+        {canEdit || topRightActions ? (
           <RoadmapGraphToolbar
             containerRef={containerRef}
             layoutDirection={layoutDirection}
-            canAutoLayout={flow.nodes.length >= 2}
+            showAutoLayout={canEdit}
+            canAutoLayout={canEdit && flow.nodes.length >= 2}
             onAutoLayout={() => setIsAutoLayoutConfirmationOpen(true)}
             topRightActions={topRightActions}
           />

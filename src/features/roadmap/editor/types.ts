@@ -45,6 +45,7 @@ export type RoadmapEditorProps = {
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onDeleteResource: (resourceId: string) => Promise<boolean>;
   onPreview: (node: StudentAccessibleRoadmapNode) => void;
+  onDirtyChange?: (isDirty: boolean) => void;
   previewButtonRef: RefObject<HTMLButtonElement | null>;
   panelWidth: number;
   onPanelWidthChange: (width: number) => void;
