@@ -451,7 +451,9 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testIn
     expect(preview.status()).toBe(200);
     expect((await preview.json()).nodes).toEqual(
       expect.arrayContaining(
-        [root, left, right, join, leaf].map(({ id, title }) => ({ id, title })),
+        [root, left, right, join, leaf].map(({ id, title }) =>
+          expect.objectContaining({ id, title }),
+        ),
       ),
     );
 
@@ -479,11 +481,61 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testIn
 
     const individualPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=UNBLOCK`);
     expect(individualPreview.status()).toBe(200);
-    expect((await individualPreview.json()).nodes).toEqual([{ id: root.id, title: root.title }]);
-    const prerequisiteStillBlocked = await teacher.delete(teacherBlockPath(left.id));
-    expect(prerequisiteStillBlocked.status()).toBe(409);
-    expect((await prerequisiteStillBlocked.json()).error.code).toBe('TEACHER_BLOCKED_PREREQUISITE');
-    expect((await teacher.delete(teacherBlockPath(root.id))).status()).toBe(200);
+    const individual = await individualPreview.json();
+    expect(individual).toMatchObject({
+      mode: 'SINGLE',
+      nodes: [
+        expect.objectContaining({
+          id: root.id,
+          title: root.title,
+          relation: 'SELECTED_NODE',
+          nodeType: expect.objectContaining({
+            icon: expect.any(String),
+            color: expect.any(String),
+          }),
+        }),
+      ],
+    });
+    const upstreamPreview = await teacher.get(`${teacherBlockPath(left.id)}?operation=UNBLOCK`);
+    expect(upstreamPreview.status()).toBe(200);
+    const upstream = await upstreamPreview.json();
+    expect(upstream).toMatchObject({
+      mode: 'UPSTREAM',
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ id: root.id, relation: 'PREREQUISITE' }),
+        expect.objectContaining({ id: left.id, relation: 'SELECTED_NODE' }),
+      ]),
+    });
+    expect(
+      (
+        await teacher.delete(teacherBlockPath(root.id), {
+          headers: { 'x-teacher-block-preview': individual.version },
+        })
+      ).status(),
+    ).toBe(200);
+    const staleUnlock = await teacher.delete(teacherBlockPath(left.id), {
+      headers: { 'x-teacher-block-preview': upstream.version },
+    });
+    expect(staleUnlock.status()).toBe(409);
+    expect((await staleUnlock.json()).error.code).toBe('TEACHER_BLOCK_PREVIEW_STALE');
+    const afterStaleUnlock = await teacher.get(roadmapPath());
+    expect(
+      (await afterStaleUnlock.json()).nodes.find((node: { id: string }) => node.id === left.id)
+        .isTeacherBlocked,
+    ).toBe(true);
+    expect((await teacher.post(teacherBlockPath(root.id))).status()).toBe(200);
+    const refreshedUpstreamPreview = await teacher.get(
+      `${teacherBlockPath(left.id)}?operation=UNBLOCK`,
+    );
+    expect(refreshedUpstreamPreview.status()).toBe(200);
+    const refreshedUpstream = await refreshedUpstreamPreview.json();
+    expect(
+      (
+        await teacher.delete(teacherBlockPath(left.id), {
+          headers: { 'x-teacher-block-preview': refreshedUpstream.version },
+        })
+      ).status(),
+    ).toBe(200);
     const studentRoadmap = await student.get(roadmapPath());
     expect(
       (await studentRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
@@ -492,21 +544,27 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testIn
     expect((await teacher.post(teacherBlockPath(external.id))).status()).toBe(200);
     const branchPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BRANCH_UNLOCK`);
     expect(branchPreview.status()).toBe(200);
-    expect((await branchPreview.json()).nodes).toEqual(
-      expect.arrayContaining([left, right].map(({ id, title }) => ({ id, title }))),
-    );
+    const branch = await branchPreview.json();
+    expect(branch).toMatchObject({
+      mode: 'BRANCH',
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ id: right.id, relation: 'DEPENDENT' }),
+      ]),
+    });
     const beforeBranchUnlock = await teacher.get(roadmapPath());
     const beforeBranchUnlockByNodeId = new Map(
       (await beforeBranchUnlock.json()).nodes.map(
         (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
       ),
     );
-    expect(beforeBranchUnlockByNodeId.get(left.id)).toBe(true);
+    expect(beforeBranchUnlockByNodeId.get(left.id)).toBe(false);
     expect(beforeBranchUnlockByNodeId.get(right.id)).toBe(true);
-    const branchUnlock = await teacher.patch(teacherBlockPath(root.id));
+    const branchUnlock = await teacher.patch(teacherBlockPath(root.id), {
+      headers: { 'x-teacher-block-preview': branch.version },
+    });
     expect(branchUnlock.status()).toBe(200);
     expect((await branchUnlock.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
-      expect.arrayContaining([left.id, right.id]),
+      expect.arrayContaining([right.id]),
     );
     const afterBranchUnlock = await teacher.get(roadmapPath());
     const teacherBlockByNodeId = new Map(

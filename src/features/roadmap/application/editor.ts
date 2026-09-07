@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { createHash } from 'node:crypto';
 import { Prisma, prisma } from '@/shared/server/db';
 import {
   ApiError,
@@ -16,7 +17,7 @@ import {
   requireUuid,
   resourceDto,
 } from '@/features/roadmap/application/roadmap';
-import type { TeacherBlockOperation } from '@/features/roadmap/types';
+import type { TeacherBlockOperation, TeacherBlockPreview } from '@/features/roadmap/types';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import { transitiveDependentNodeIds } from '@/features/roadmap/domain/access';
 import {
@@ -29,9 +30,9 @@ import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/
 type JsonObject = Record<string, unknown>;
 type WithInput = EditorInput & { input: JsonObject };
 type WithId = EditorInput & { id: string };
-
-type TeacherBlockPreview = {
-  nodes: Array<{ id: string; title: string }>;
+type WithTeacherBlockOperation = WithId & {
+  operation: TeacherBlockOperation;
+  previewVersion?: string;
 };
 
 type StructuralDependency = {
@@ -498,14 +499,20 @@ async function previewNodeVisibilityUnsafe(input: WithId) {
 
 async function teacherBlockPreview(
   transaction: Prisma.TransactionClient,
-  { id, ...editor }: WithId & { operation: TeacherBlockOperation },
+  { id, ...editor }: WithTeacherBlockOperation,
 ) {
   const roadmap = await requireEditorRoadmap(transaction, editor);
   const nodeId = requireUuid(id, 'nodeId');
   const [nodes, dependencies] = await Promise.all([
     transaction.roadmapNode.findMany({
       where: { roadmapId: roadmap.id },
-      select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
+      select: {
+        id: true,
+        title: true,
+        isVisible: true,
+        isTeacherBlocked: true,
+        nodeType: { select: { name: true, icon: true, color: true } },
+      },
       orderBy: { title: 'asc' },
     }),
     transaction.dependency.findMany({
@@ -519,7 +526,13 @@ async function teacherBlockPreview(
     nodeId,
     operation: editor.operation,
   });
-  if (decision.kind === 'ALLOWED') return { nodes: decision.nodes } satisfies TeacherBlockPreview;
+  if (decision.kind === 'ALLOWED') {
+    const preview = { mode: decision.mode, nodes: decision.nodes };
+    return {
+      ...preview,
+      version: createHash('sha256').update(JSON.stringify(preview)).digest('base64url'),
+    } satisfies TeacherBlockPreview;
+  }
   if (decision.reason === 'NODE_NOT_FOUND') {
     throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   }
@@ -530,23 +543,29 @@ async function teacherBlockPreview(
       'Un nodo oculto no puede tener un bloqueo docente.',
     );
   }
-  throw new ApiError(
-    409,
-    'TEACHER_BLOCKED_PREREQUISITE',
-    'No se puede desbloquear el nodo mientras conserve un prerrequisito con bloqueo docente.',
-  );
+  throw new ApiError(409, 'INVALID_TEACHER_BLOCK_OPERATION', 'Operación de bloqueo no válida.');
 }
 
-async function previewTeacherBlockUnsafe(input: WithId & { operation: TeacherBlockOperation }) {
+async function previewTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
   return prisma.$transaction((transaction) => teacherBlockPreview(transaction, input), {
     isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
   });
 }
 
-async function changeTeacherBlockUnsafe(input: WithId & { operation: TeacherBlockOperation }) {
+async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
   return withSerializableTransaction(
     async (transaction) => {
       const preview = await teacherBlockPreview(transaction, input);
+      if (
+        input.operation !== 'BLOCK' &&
+        (!input.previewVersion || input.previewVersion !== preview.version)
+      ) {
+        throw new ApiError(
+          409,
+          'TEACHER_BLOCK_PREVIEW_STALE',
+          'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
+        );
+      }
       if (preview.nodes.length > 0) {
         await transaction.roadmapNode.updateMany({
           where: { id: { in: preview.nodes.map((node) => node.id) } },
@@ -599,10 +618,10 @@ export function deleteRoadmapDependency(input: WithId) {
   return apiResult(() => deleteRoadmapDependencyUnsafe(input));
 }
 
-export function previewTeacherBlock(input: WithId & { operation: TeacherBlockOperation }) {
+export function previewTeacherBlock(input: WithTeacherBlockOperation) {
   return apiResult(() => previewTeacherBlockUnsafe(input));
 }
 
-export function changeTeacherBlock(input: WithId & { operation: TeacherBlockOperation }) {
+export function changeTeacherBlock(input: WithTeacherBlockOperation) {
   return apiResult(() => changeTeacherBlockUnsafe(input));
 }

@@ -130,9 +130,47 @@ test('keeps teacher-block policy pure while excluding hidden dependent nodes', (
     }),
   ).toEqual({
     kind: 'ALLOWED',
+    mode: 'BLOCK',
     nodes: [
-      { id: 'selected', title: 'Seleccionado' },
-      { id: 'visible', title: 'Visible' },
+      { id: 'selected', title: 'Seleccionado', relation: 'SELECTED_NODE' },
+      { id: 'visible', title: 'Visible', relation: 'DEPENDENT' },
+    ],
+  });
+});
+
+test('contextual unlock traverses every blocked prerequisite in convergent paths without unlocking dependents', () => {
+  const nodes = [
+    { id: 'a', title: 'A', isVisible: true, isTeacherBlocked: true },
+    { id: 'b', title: 'B', isVisible: true, isTeacherBlocked: true },
+    { id: 'c', title: 'C', isVisible: true, isTeacherBlocked: true },
+    { id: 'd', title: 'D', isVisible: true, isTeacherBlocked: true },
+  ];
+  const dependencies = [
+    { sourceNodeId: 'a', targetNodeId: 'c' },
+    { sourceNodeId: 'b', targetNodeId: 'c' },
+    { sourceNodeId: 'c', targetNodeId: 'd' },
+  ];
+
+  expect(decideTeacherBlock({ nodes, dependencies, nodeId: 'a', operation: 'UNBLOCK' })).toEqual({
+    kind: 'ALLOWED',
+    mode: 'SINGLE',
+    nodes: [{ id: 'a', title: 'A', relation: 'SELECTED_NODE' }],
+  });
+
+  expect(
+    decideTeacherBlock({
+      nodes,
+      dependencies,
+      nodeId: 'c',
+      operation: 'UNBLOCK',
+    }),
+  ).toEqual({
+    kind: 'ALLOWED',
+    mode: 'UPSTREAM',
+    nodes: [
+      { id: 'a', title: 'A', relation: 'PREREQUISITE' },
+      { id: 'b', title: 'B', relation: 'PREREQUISITE' },
+      { id: 'c', title: 'C', relation: 'SELECTED_NODE' },
     ],
   });
 });

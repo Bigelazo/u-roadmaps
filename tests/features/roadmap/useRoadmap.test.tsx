@@ -270,7 +270,13 @@ test('previews and applies teacher-block actions with a server refresh', async (
   const fetchMock = vi
     .fn()
     .mockResolvedValueOnce(Response.json(roadmap('before')))
-    .mockResolvedValueOnce(Response.json({ nodes: [{ id: 'node-1', title: 'Límites' }] }))
+    .mockResolvedValueOnce(
+      Response.json({
+        mode: 'BLOCK',
+        version: 'preview-version',
+        nodes: [{ id: 'node-1', title: 'Límites' }],
+      }),
+    )
     .mockResolvedValueOnce(Response.json({ nodes: [{ id: 'node-1', title: 'Límites' }] }))
     .mockResolvedValueOnce(Response.json(roadmap('after')));
   vi.stubGlobal('fetch', fetchMock);
@@ -278,9 +284,11 @@ test('previews and applies teacher-block actions with a server refresh', async (
   const { result } = renderHook(() => useRoadmap(firstOffering));
   await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before'));
 
-  await expect(result.current.previewTeacherBlock('node-1', 'BLOCK')).resolves.toEqual([
-    { id: 'node-1', title: 'Límites' },
-  ]);
+  await expect(result.current.previewTeacherBlock('node-1', 'BLOCK')).resolves.toEqual({
+    mode: 'BLOCK',
+    version: 'preview-version',
+    nodes: [{ id: 'node-1', title: 'Límites' }],
+  });
   await expect(result.current.changeTeacherBlock('node-1', 'BLOCK')).resolves.toBe(true);
 
   expect(fetchMock).toHaveBeenNthCalledWith(

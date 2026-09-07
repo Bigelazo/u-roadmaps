@@ -1,4 +1,8 @@
-import type { TeacherBlockOperation } from '@/features/roadmap/types';
+import type {
+  TeacherBlockImpact,
+  TeacherBlockOperation,
+  TeacherBlockUnlockMode,
+} from '@/features/roadmap/types';
 import {
   eligibleBranchUnlockNodeIds,
   transitiveDependentNodeIds,
@@ -11,13 +15,18 @@ type TeacherBlockNode = {
   title: string;
   isVisible: boolean;
   isTeacherBlocked: boolean;
+  nodeType?: TeacherBlockImpact['nodeType'];
 };
 
 export type TeacherBlockRuleFailure =
   'NODE_NOT_FOUND' | 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN' | 'TEACHER_BLOCKED_PREREQUISITE';
 
 export type TeacherBlockDecision =
-  | { kind: 'ALLOWED'; nodes: Array<{ id: string; title: string }> }
+  | {
+      kind: 'ALLOWED';
+      mode: TeacherBlockUnlockMode;
+      nodes: TeacherBlockImpact[];
+    }
   | { kind: 'REJECTED'; reason: TeacherBlockRuleFailure };
 
 export function decideTeacherBlock({
@@ -39,36 +48,53 @@ export function decideTeacherBlock({
   }
 
   let changedNodeIds: Set<string>;
+  let mode: TeacherBlockUnlockMode;
   if (operation === 'BLOCK') {
+    mode = 'BLOCK';
     changedNodeIds = new Set(
       [nodeId, ...transitiveDependentNodeIds(dependencies, nodeId)].filter((candidateNodeId) => {
         const node = nodeById.get(candidateNodeId);
         return node?.isVisible && !node.isTeacherBlocked;
       }),
     );
-  } else if (operation === 'UNBLOCK') {
-    if (!selectedNode.isTeacherBlocked) return { kind: 'ALLOWED', nodes: [] };
-    const hasTeacherBlockedPrerequisite = [
-      ...transitivePrerequisiteNodeIds(dependencies, nodeId),
-    ].some((prerequisiteNodeId) => nodeById.get(prerequisiteNodeId)?.isTeacherBlocked);
-    if (hasTeacherBlockedPrerequisite) {
-      return { kind: 'REJECTED', reason: 'TEACHER_BLOCKED_PREREQUISITE' };
-    }
-    changedNodeIds = new Set([nodeId]);
   } else {
-    changedNodeIds = eligibleBranchUnlockNodeIds({
-      dependencies,
-      teacherBlockedNodeIds: new Set(
-        nodes.filter((node) => node.isTeacherBlocked).map((node) => node.id),
-      ),
-      rootNodeId: nodeId,
-    });
+    const prerequisiteNodeIds = transitivePrerequisiteNodeIds(dependencies, nodeId);
+    const hasTeacherBlockedPrerequisite = [...prerequisiteNodeIds].some(
+      (prerequisiteNodeId) => nodeById.get(prerequisiteNodeId)?.isTeacherBlocked,
+    );
+    if (hasTeacherBlockedPrerequisite) {
+      mode = 'UPSTREAM';
+      changedNodeIds = new Set(
+        [nodeId, ...prerequisiteNodeIds].filter(
+          (candidateNodeId) => nodeById.get(candidateNodeId)?.isTeacherBlocked,
+        ),
+      );
+    } else if (operation === 'UNBLOCK') {
+      mode = 'SINGLE';
+      changedNodeIds = selectedNode.isTeacherBlocked ? new Set([nodeId]) : new Set();
+    } else {
+      mode = 'BRANCH';
+      changedNodeIds = eligibleBranchUnlockNodeIds({
+        dependencies,
+        teacherBlockedNodeIds: new Set(
+          nodes.filter((node) => node.isTeacherBlocked).map((node) => node.id),
+        ),
+        rootNodeId: nodeId,
+      });
+    }
   }
 
   return {
     kind: 'ALLOWED',
+    mode,
     nodes: nodes
       .filter((node) => changedNodeIds.has(node.id))
-      .map(({ id, title }) => ({ id, title })),
+      .map(({ id, title, nodeType }) => ({
+        id,
+        title,
+        ...(nodeType ? { nodeType } : {}),
+        relation:
+          id === nodeId ? 'SELECTED_NODE' : mode === 'UPSTREAM' ? 'PREREQUISITE' : 'DEPENDENT',
+      })),
   };
 }

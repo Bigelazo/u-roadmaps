@@ -7,6 +7,7 @@ import {
   type CourseOfferingIdentifier,
   type TeacherBlockImpact,
   type TeacherBlockOperation,
+  type TeacherBlockPreview,
 } from '@/features/roadmap/types';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import { roadmapUrl } from '@/features/roadmap/client';
@@ -28,7 +29,11 @@ export type StructuralDependency = {
   sourceNodeId: string;
   targetNodeId: string;
 };
-export type { TeacherBlockImpact, TeacherBlockOperation } from '@/features/roadmap/types';
+export type {
+  TeacherBlockImpact,
+  TeacherBlockOperation,
+  TeacherBlockPreview,
+} from '@/features/roadmap/types';
 
 function identifierKey(identifier: CourseOfferingIdentifier) {
   return `${identifier.courseCode}:${identifier.year}:${identifier.semester}`;
@@ -93,6 +98,19 @@ function isDependencyPreview(value: unknown): value is { nodes: TeacherBlockImpa
     'nodes' in value &&
     Array.isArray(value.nodes) &&
     value.nodes.every(isTeacherBlockImpact)
+  );
+}
+
+function isTeacherBlockPreview(value: unknown): value is TeacherBlockPreview {
+  return (
+    isDependencyPreview(value) &&
+    (!('mode' in value) ||
+      value.mode === 'UPSTREAM' ||
+      value.mode === 'SINGLE' ||
+      value.mode === 'BRANCH' ||
+      value.mode === 'BLOCK') &&
+    'version' in value &&
+    typeof value.version === 'string'
   );
 }
 
@@ -490,20 +508,23 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     async (nodeId: string, operation: TeacherBlockOperation) => {
       const result = await preview(
         roadmapUrl(identifier, `/nodes/${nodeId}/teacher-block?operation=${operation}`),
-        isDependencyPreview,
+        isTeacherBlockPreview,
         'No se pudo calcular el impacto del bloqueo docente.',
       );
-      return result?.nodes ?? null;
+      return result ?? null;
     },
     [identifier, preview],
   );
 
   const changeTeacherBlock = useCallback(
-    async (nodeId: string, operation: TeacherBlockOperation) => {
+    async (nodeId: string, operation: TeacherBlockOperation, previewVersion?: string) => {
       const method = operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH';
       const succeeded = await mutate(
         roadmapUrl(identifier, `/nodes/${nodeId}/teacher-block`),
-        { method },
+        {
+          method,
+          ...(previewVersion ? { headers: { 'x-teacher-block-preview': previewVersion } } : {}),
+        },
         'No se pudo cambiar el bloqueo docente.',
       );
       if (succeeded) await load();

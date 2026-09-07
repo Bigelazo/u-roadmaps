@@ -288,7 +288,14 @@ test('student roadmap shows effective block reasons and restores a completed nod
       teacher,
       targetDependencyId && roadmapPath(`/dependencies/${targetDependencyId}`),
     );
-    const unblock = await teacher.delete(roadmapPath(`/nodes/${completedTarget.id}/teacher-block`));
+    const unlockPreview = await teacher.get(
+      roadmapPath(`/nodes/${completedTarget.id}/teacher-block?operation=UNBLOCK`),
+    );
+    expect(unlockPreview.status()).toBe(200);
+    const { version } = await unlockPreview.json();
+    const unblock = await teacher.delete(roadmapPath(`/nodes/${completedTarget.id}/teacher-block`), {
+      headers: { 'x-teacher-block-preview': version },
+    });
     expect(unblock.status()).toBe(200);
 
     await page.reload();

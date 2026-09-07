@@ -82,7 +82,20 @@ export type DependencyHandle = 'top' | 'right' | 'bottom' | 'left';
 
 export type TeacherBlockOperation = 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK';
 
-export type TeacherBlockImpact = { id: string; title: string };
+export type TeacherBlockUnlockMode = 'BLOCK' | 'UPSTREAM' | 'SINGLE' | 'BRANCH';
+
+export type TeacherBlockImpact = {
+  id: string;
+  title: string;
+  relation?: 'SELECTED_NODE' | 'PREREQUISITE' | 'DEPENDENT';
+  nodeType?: { name: string; icon: string; color: string };
+};
+
+export type TeacherBlockPreview = {
+  mode: TeacherBlockUnlockMode;
+  nodes: TeacherBlockImpact[];
+  version: string;
+};
 
 type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
   course: { code: string; name: string; department: string };

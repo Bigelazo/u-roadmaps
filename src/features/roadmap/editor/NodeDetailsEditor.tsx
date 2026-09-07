@@ -243,32 +243,15 @@ function NodeStatus({
             </div>
             {node.isVisible &&
               (node.isTeacherBlocked ? (
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onRequestTeacherBlock(node.id, 'UNBLOCK')}
-                    >
-                      <LockKeyholeOpen data-icon="inline-start" />
-                      Desbloquear este nodo
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onRequestTeacherBlock(node.id, 'BRANCH_UNLOCK')}
-                    >
-                      <LockKeyholeOpen data-icon="inline-start" />
-                      Desbloquear rama
-                    </Button>
-                  </div>
-                  <FieldDescription>
-                    Si conserva un prerrequisito con bloqueo docente, no podrá desbloquearse de
-                    forma individual.
-                  </FieldDescription>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onRequestTeacherBlock(node.id, 'UNBLOCK')}
+                >
+                  <LockKeyholeOpen data-icon="inline-start" />
+                  Desbloquear
+                </Button>
               ) : (
                 <Button
                   type="button"
@@ -277,7 +260,7 @@ function NodeStatus({
                   onClick={() => onRequestTeacherBlock(node.id, 'BLOCK')}
                 >
                   <LockKeyhole data-icon="inline-start" />
-                  Restringir acceso
+                  Bloquear rama
                 </Button>
               ))}
           </div>

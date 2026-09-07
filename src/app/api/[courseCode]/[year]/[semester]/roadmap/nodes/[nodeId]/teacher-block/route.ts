@@ -25,7 +25,11 @@ function teacherBlockOperation(request: Request): TeacherBlockOperation {
   );
 }
 
-async function teacherBlockInput(context: Context, operation: TeacherBlockOperation) {
+async function teacherBlockInput(
+  context: Context,
+  operation: TeacherBlockOperation,
+  request?: Request,
+) {
   const params = await context.params;
   const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
   return {
@@ -33,6 +37,7 @@ async function teacherBlockInput(context: Context, operation: TeacherBlockOperat
     identifier: parseCourseOfferingIdentifier(params),
     id: params.nodeId,
     operation,
+    previewVersion: request?.headers.get('x-teacher-block-preview') ?? undefined,
   };
 }
 
@@ -45,30 +50,28 @@ export async function GET(request: Request, context: Context) {
   });
 }
 
-export async function POST(_request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const result = await changeTeacherBlock(await teacherBlockInput(context, 'BLOCK')).match(
-      (value) => value,
-      throwApiError,
-    );
-    return NextResponse.json(result);
-  });
-}
-
-export async function DELETE(_request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const result = await changeTeacherBlock(await teacherBlockInput(context, 'UNBLOCK')).match(
-      (value) => value,
-      throwApiError,
-    );
-    return NextResponse.json(result);
-  });
-}
-
-export async function PATCH(_request: Request, context: Context) {
+export async function POST(request: Request, context: Context) {
   return handleApiResult(async () => {
     const result = await changeTeacherBlock(
-      await teacherBlockInput(context, 'BRANCH_UNLOCK'),
+      await teacherBlockInput(context, 'BLOCK', request),
+    ).match((value) => value, throwApiError);
+    return NextResponse.json(result);
+  });
+}
+
+export async function DELETE(request: Request, context: Context) {
+  return handleApiResult(async () => {
+    const result = await changeTeacherBlock(
+      await teacherBlockInput(context, 'UNBLOCK', request),
+    ).match((value) => value, throwApiError);
+    return NextResponse.json(result);
+  });
+}
+
+export async function PATCH(request: Request, context: Context) {
+  return handleApiResult(async () => {
+    const result = await changeTeacherBlock(
+      await teacherBlockInput(context, 'BRANCH_UNLOCK', request),
     ).match((value) => value, throwApiError);
     return NextResponse.json(result);
   });

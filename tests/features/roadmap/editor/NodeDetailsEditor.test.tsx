@@ -95,7 +95,7 @@ test('groups visibility and teacher access under the node status without restric
   expect(screen.getByText('Sin restricciones docentes')).toBeTruthy();
   await user.click(screen.getByRole('switch', { name: 'Visible para estudiantes' }));
   expect(onToggleVisibility).toHaveBeenCalledWith(node.id, true);
-  await user.click(screen.getByRole('button', { name: 'Restringir acceso' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
   expect(onRequestTeacherBlock).toHaveBeenCalledWith(node.id, 'BLOCK');
   expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeTruthy();
 });
@@ -141,7 +141,7 @@ test('labels the secondary eye action from the shared dirty state', () => {
   expect(screen.getByRole('button', { name: 'Previsualizar cambios' })).toBeTruthy();
 });
 
-test('offers individual and branch unlock actions for a teacher-blocked node', async () => {
+test('offers one contextual unlock action for a teacher-blocked node', async () => {
   const user = userEvent.setup();
   const onRequestTeacherBlock = vi.fn();
   renderEditor({
@@ -150,12 +150,11 @@ test('offers individual and branch unlock actions for a teacher-blocked node', a
   });
 
   expect(screen.getByText('Acceso restringido por docencia')).toBeTruthy();
-  expect(screen.getByText(/no podrá desbloquearse de forma individual/)).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: 'Desbloquear este nodo' }));
-  await user.click(screen.getByRole('button', { name: 'Desbloquear rama' }));
+  expect(screen.getByRole('button', { name: 'Desbloquear' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Desbloquear rama' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Desbloquear' }));
 
-  expect(onRequestTeacherBlock).toHaveBeenNthCalledWith(1, node.id, 'UNBLOCK');
-  expect(onRequestTeacherBlock).toHaveBeenNthCalledWith(2, node.id, 'BRANCH_UNLOCK');
+  expect(onRequestTeacherBlock).toHaveBeenCalledWith(node.id, 'UNBLOCK');
 });
 
 test('adds an external link with its title', async () => {

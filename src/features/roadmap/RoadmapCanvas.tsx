@@ -32,6 +32,7 @@ import {
   useRoadmap,
   type StructuralDependency,
   type TeacherBlockImpact,
+  type TeacherBlockPreview,
 } from '@/features/roadmap/useRoadmap';
 import type {
   CourseOfferingIdentifier,
@@ -63,6 +64,7 @@ import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Kbd, KbdGroup } from '@/shared/ui/kbd';
 import { SidebarProvider } from '@/shared/ui/sidebar';
+import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import { cn } from 'cn';
 
 const RoadmapEditor = dynamic(
@@ -99,8 +101,7 @@ type PendingDependencyChange = {
 type PendingTeacherBlockChange = {
   nodeId: string;
   operation: TeacherBlockOperation;
-  nodes: TeacherBlockImpact[];
-};
+} & TeacherBlockPreview;
 
 type PreviewReturnState = {
   selectedNodeId: string | null;
@@ -217,16 +218,27 @@ function KeyboardShortcuts({
   );
 }
 
-function teacherBlockConfirmation(operation: TeacherBlockOperation, count: number) {
+function teacherBlockConfirmation(
+  operation: TeacherBlockOperation,
+  mode: TeacherBlockPreview['mode'],
+  count: number,
+) {
   const nodes = count === 1 ? 'nodo' : 'nodos';
-  if (operation === 'BLOCK') {
+  if (mode === 'BLOCK') {
     return {
       title: 'Confirmar bloqueo docente',
       description: `Bloquearás ${count} ${nodes}.`,
       action: 'Bloquear acceso',
     };
   }
-  if (operation === 'UNBLOCK') {
+  if (mode === 'UPSTREAM') {
+    return {
+      title: 'Desbloquear prerrequisitos',
+      description: `Desbloquearás ${count} ${nodes}, incluidos los prerrequisitos bloqueados.`,
+      action: `Desbloquear ${count} ${nodes}`,
+    };
+  }
+  if (mode === 'SINGLE') {
     return {
       title: 'Confirmar desbloqueo',
       description: `Desbloquearás ${count} ${nodes}.`,
@@ -240,11 +252,19 @@ function teacherBlockConfirmation(operation: TeacherBlockOperation, count: numbe
   };
 }
 
-function sameTeacherBlockImpact(first: TeacherBlockImpact[], second: TeacherBlockImpact[]) {
+function sameTeacherBlockPreview(first: TeacherBlockPreview, second: TeacherBlockPreview) {
   return (
-    first.length === second.length &&
-    first.every(
-      (node, index) => node.id === second[index]?.id && node.title === second[index]?.title,
+    first.mode === second.mode &&
+    first.version === second.version &&
+    first.nodes.length === second.nodes.length &&
+    first.nodes.every(
+      (node, index) =>
+        node.id === second.nodes[index]?.id &&
+        node.title === second.nodes[index]?.title &&
+        node.relation === second.nodes[index]?.relation &&
+        node.nodeType?.name === second.nodes[index]?.nodeType?.name &&
+        node.nodeType?.icon === second.nodes[index]?.nodeType?.icon &&
+        node.nodeType?.color === second.nodes[index]?.nodeType?.color,
     )
   );
 }
@@ -479,26 +499,43 @@ export default function RoadmapCanvas({
   }
 
   async function requestTeacherBlockChange(nodeId: string, operation: TeacherBlockOperation) {
-    const nodes = await previewTeacherBlock(nodeId, operation);
-    if (nodes) setPendingTeacherBlockChange({ nodeId, operation, nodes });
+    const preview = await previewTeacherBlock(nodeId, operation);
+    if (preview) setPendingTeacherBlockChange({ nodeId, operation, ...preview });
   }
 
   async function confirmTeacherBlockChange() {
     if (!pendingTeacherBlockChange) return;
-    const latestNodes = await previewTeacherBlock(
+    const latestPreview = await previewTeacherBlock(
       pendingTeacherBlockChange.nodeId,
       pendingTeacherBlockChange.operation,
     );
-    if (!latestNodes) {
+    if (!latestPreview) {
       setPendingTeacherBlockChange(null);
       return;
     }
-    if (!sameTeacherBlockImpact(pendingTeacherBlockChange.nodes, latestNodes)) {
-      setPendingTeacherBlockChange({ ...pendingTeacherBlockChange, nodes: latestNodes });
+    if (!sameTeacherBlockPreview(pendingTeacherBlockChange, latestPreview)) {
+      setPendingTeacherBlockChange({ ...pendingTeacherBlockChange, ...latestPreview });
       return;
     }
     setPendingTeacherBlockChange(null);
-    await changeTeacherBlock(pendingTeacherBlockChange.nodeId, pendingTeacherBlockChange.operation);
+    const changed = await changeTeacherBlock(
+      pendingTeacherBlockChange.nodeId,
+      pendingTeacherBlockChange.operation,
+      pendingTeacherBlockChange.version,
+    );
+    if (!changed) {
+      const refreshedPreview = await previewTeacherBlock(
+        pendingTeacherBlockChange.nodeId,
+        pendingTeacherBlockChange.operation,
+      );
+      if (refreshedPreview) {
+        setPendingTeacherBlockChange({
+          nodeId: pendingTeacherBlockChange.nodeId,
+          operation: pendingTeacherBlockChange.operation,
+          ...refreshedPreview,
+        });
+      }
+    }
   }
 
   if (error && !roadmap) {
@@ -551,6 +588,7 @@ export default function RoadmapCanvas({
   const teacherBlockDialog = pendingTeacherBlockChange
     ? teacherBlockConfirmation(
         pendingTeacherBlockChange.operation,
+        pendingTeacherBlockChange.mode,
         pendingTeacherBlockChange.nodes.length,
       )
     : null;
@@ -1010,9 +1048,63 @@ export default function RoadmapCanvas({
             </p>
             <ul className="list-disc pl-5 text-sm text-muted-foreground">
               {pendingTeacherBlockChange?.nodes.map((node) => (
-                <li key={node.id}>{node.title}</li>
+                <li key={node.id} className="flex items-center gap-2">
+                  {node.nodeType ? (
+                    <NodeTypeIcon
+                      icon={node.nodeType.icon}
+                      className="size-4 shrink-0"
+                      style={{ color: node.nodeType.color }}
+                      aria-label={node.nodeType.name}
+                    />
+                  ) : null}
+                  <span>{node.title}</span>
+                  {node.relation ? (
+                    <span className="text-xs">
+                      (
+                      {
+                        {
+                          SELECTED_NODE: 'Nodo seleccionado',
+                          PREREQUISITE: 'Prerrequisito',
+                          DEPENDENT: 'Dependiente',
+                        }[node.relation]
+                      }
+                      )
+                    </span>
+                  ) : null}
+                </li>
               ))}
             </ul>
+            {pendingTeacherBlockChange?.mode === 'SINGLE' ||
+            pendingTeacherBlockChange?.mode === 'BRANCH' ? (
+              <fieldset className="flex flex-col gap-2 text-sm text-foreground">
+                <legend className="font-medium">Alcance del desbloqueo</legend>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="unlock-scope"
+                    checked={pendingTeacherBlockChange.operation === 'UNBLOCK'}
+                    onChange={() =>
+                      void requestTeacherBlockChange(pendingTeacherBlockChange.nodeId, 'UNBLOCK')
+                    }
+                  />
+                  Solo este Nodo
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="unlock-scope"
+                    checked={pendingTeacherBlockChange.operation === 'BRANCH_UNLOCK'}
+                    onChange={() =>
+                      void requestTeacherBlockChange(
+                        pendingTeacherBlockChange.nodeId,
+                        'BRANCH_UNLOCK',
+                      )
+                    }
+                  />
+                  Este Nodo y su rama
+                </label>
+              </fieldset>
+            ) : null}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
