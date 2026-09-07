@@ -1,5 +1,6 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
@@ -81,6 +82,55 @@ test('marks hidden teacher nodes with a distinct visual treatment and no visibil
   expect(card.style.backgroundImage).toContain('repeating-linear-gradient');
   const hiddenBadge = screen.getByRole('img', { name: 'Oculto para estudiantes' });
   expect(hiddenBadge).toBeTruthy();
+});
+
+test('opens the teaching action menu independently and invokes its contextual access action', async () => {
+  const user = userEvent.setup();
+  const onToggleActionMenu = vi.fn();
+  const onRequestAccessAction = vi.fn();
+  const props = {
+    id: 'teacher-node',
+    type: 'roadmap',
+    data: {
+      title: 'Límites',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'editing' as const,
+      isTeacherBlocked: false,
+      isHidden: false,
+      canManageActions: true,
+      isActionMenuOpen: false,
+      onToggleActionMenu,
+      onRequestAccessAction,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+  const { rerender } = render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Abrir menú de acciones del nodo' }));
+  expect(onToggleActionMenu).toHaveBeenCalledWith('teacher-node', expect.any(HTMLButtonElement));
+
+  rerender(
+    <ReactFlowProvider>
+      <RoadmapNode {...{ ...props, data: { ...props.data, isActionMenuOpen: true } }} />
+    </ReactFlowProvider>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
+  expect(onRequestAccessAction).toHaveBeenCalledWith('teacher-node', 'BLOCK');
+  expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
 });
 
 test('keeps dependency handles mounted, but inert, for student nodes', () => {

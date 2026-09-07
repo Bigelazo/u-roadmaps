@@ -1,9 +1,21 @@
-import { CircleCheckBig, CircleEllipsis, EyeOff, FileText, Link2, LockKeyhole } from 'lucide-react';
+import {
+  CircleCheckBig,
+  CircleEllipsis,
+  EyeOff,
+  FileText,
+  Link2,
+  LockKeyhole,
+  LockKeyholeOpen,
+  Settings,
+  X,
+} from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
+import type { NodeAccessActionOperation } from '@/features/roadmap/graph/node-action';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
+import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
@@ -18,6 +30,11 @@ export type RoadmapNodeData = Record<string, unknown> & {
   fileCount?: number;
   linkCount?: number;
   blockReason?: StudentNodeBlockReason;
+  canManageActions?: boolean;
+  isActionMenuOpen?: boolean;
+  isActionMenuClosing?: boolean;
+  onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
+  onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
 };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
@@ -125,6 +142,127 @@ function HiddenBadge() {
   );
 }
 
+function NodeActionMenu({
+  nodeId,
+  hidden,
+  teacherBlocked,
+  isOpen,
+  isClosing,
+  onToggle,
+  onRequestAccessAction,
+}: {
+  nodeId: string;
+  hidden: boolean;
+  teacherBlocked: boolean;
+  isOpen: boolean;
+  isClosing: boolean;
+  onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
+  onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
+}) {
+  const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
+  const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';
+
+  return (
+    <div className="absolute right-[-10px] bottom-[-10px] z-10 hidden lg:block">
+      {isOpen ? (
+        <div
+          aria-label="Menú de acciones del nodo"
+          className="pointer-events-none absolute inset-0"
+        >
+          {!hidden ? (
+            <Tooltip>
+              <TooltipTrigger
+                delay={200}
+                render={
+                  <span className="pointer-events-auto absolute top-0 left-[4.25rem]">
+                    <button
+                      type="button"
+                      aria-label={accessLabel}
+                      className={cn(
+                        styles.actionButton,
+                        isClosing && styles.actionButtonClosing,
+                        'group flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                      )}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRequestAccessAction?.(nodeId, teacherBlocked ? 'UNBLOCK' : 'BLOCK');
+                      }}
+                    />
+                  </span>
+                }
+              >
+                {teacherBlocked ? (
+                  <>
+                    <LockKeyhole className="size-4 group-hover:hidden group-focus-visible:hidden" />
+                    <LockKeyholeOpen className="hidden size-4 group-hover:block group-focus-visible:block" />
+                  </>
+                ) : (
+                  <>
+                    <LockKeyholeOpen className="size-4 group-hover:hidden group-focus-visible:hidden" />
+                    <LockKeyhole className="hidden size-4 group-hover:block group-focus-visible:block" />
+                  </>
+                )}
+              </TooltipTrigger>
+              <TooltipContent side="right">{accessLabel}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          <span
+            aria-hidden="true"
+            data-slot="node-action-visibility"
+            className="absolute top-6 left-[3.7rem] size-8 rounded-full"
+          />
+          <span
+            aria-hidden="true"
+            data-slot="node-action-resource"
+            className="absolute top-[3.7rem] left-6 size-8 rounded-full"
+          />
+          <span
+            aria-hidden="true"
+            data-slot="node-action-delete"
+            className="absolute top-[4.25rem] left-0 size-8 rounded-full"
+          />
+        </div>
+      ) : null}
+      <Tooltip>
+        <TooltipTrigger
+          delay={200}
+          render={
+            <button
+              type="button"
+              aria-label={
+                isOpen ? 'Cerrar menú de acciones del nodo' : 'Abrir menú de acciones del nodo'
+              }
+              aria-expanded={isOpen}
+              className="nodrag nopan flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm transition-[transform,box-shadow,background-color] duration-150 ease-out hover:scale-110 hover:bg-muted hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggle?.(nodeId, event.currentTarget);
+              }}
+            />
+          }
+        >
+          {isOpen ? (
+            <X
+              className={cn(
+                'size-5 transition-all duration-150',
+                isClosing && 'scale-75 opacity-0',
+              )}
+              aria-hidden="true"
+            />
+          ) : (
+            <ClosedIcon className="size-5" aria-hidden="true" />
+          )}
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          {isOpen ? 'Cerrar acciones' : 'Acciones del nodo'}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
 function resourceCountLabel(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -181,7 +319,7 @@ function NodeResourceSummary({
   );
 }
 
-export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
+export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) {
   const size = roadmapNodeSizeForTitle(data.title);
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
@@ -202,9 +340,9 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-            'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
-            !hidden && 'shadow-(--shadow-roadmap-node)',
-          ),
+              'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
+              !hidden && 'shadow-(--shadow-roadmap-node)',
+            ),
       )}
       style={{
         width: size.width,
@@ -229,7 +367,17 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         </p>
       </div>
       <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
-      {hidden ? (
+      {data.canManageActions ? (
+        <NodeActionMenu
+          nodeId={id}
+          hidden={hidden}
+          teacherBlocked={teacherBlocked}
+          isOpen={Boolean(data.isActionMenuOpen)}
+          isClosing={Boolean(data.isActionMenuClosing)}
+          onToggle={data.onToggleActionMenu}
+          onRequestAccessAction={data.onRequestAccessAction}
+        />
+      ) : hidden ? (
         <HiddenBadge />
       ) : teacherBlocked ? (
         <TeacherBlockBadge />
@@ -238,30 +386,30 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
       )}
       {!hidden
         ? (
-          [
-            ['top', Position.Top],
-            ['right', Position.Right],
-            ['bottom', Position.Bottom],
-            ['left', Position.Left],
-          ] as const
-        ).map(([id, position]) => (
-          <Handle
-            key={id}
-            id={id}
-            data-testid="roadmap-node-handle"
-            type="source"
-            position={position}
-            isConnectable={editing}
-            style={{
-              width: 12,
-              height: 12,
-              background: 'var(--primary)',
-              border: '2px solid var(--card)',
-              visibility: editing ? 'visible' : 'hidden',
-              pointerEvents: editing ? 'auto' : 'none',
-            }}
-          />
-        ))
+            [
+              ['top', Position.Top],
+              ['right', Position.Right],
+              ['bottom', Position.Bottom],
+              ['left', Position.Left],
+            ] as const
+          ).map(([id, position]) => (
+            <Handle
+              key={id}
+              id={id}
+              data-testid="roadmap-node-handle"
+              type="source"
+              position={position}
+              isConnectable={editing}
+              style={{
+                width: 12,
+                height: 12,
+                background: 'var(--primary)',
+                border: '2px solid var(--card)',
+                visibility: editing ? 'visible' : 'hidden',
+                pointerEvents: editing ? 'auto' : 'none',
+              }}
+            />
+          ))
         : null}
     </div>
   );

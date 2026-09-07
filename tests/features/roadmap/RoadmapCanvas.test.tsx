@@ -58,7 +58,7 @@ vi.mock('next/dynamic', () => ({
                 Deseleccionar nodo
               </button>
               <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
-                Bloquear acceso
+                Bloquear rama
               </button>
               <button
                 type="button"
@@ -652,8 +652,8 @@ test('confirms a teacher block from the most recent preview before mutating', as
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
-  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
-  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo docente' });
+  await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo de rama' });
   expect(previewTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK');
   expect(dialog.textContent).toContain('Bloquearás 2 nodos.');
   expect(dialog.textContent).toContain('Límites');
@@ -663,11 +663,11 @@ test('confirms a teacher block from the most recent preview before mutating', as
   await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
   expect(changeTeacherBlock).not.toHaveBeenCalled();
 
-  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
   await user.click(
-    within(await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo docente' })).getByRole(
+    within(await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo de rama' })).getByRole(
       'button',
-      { name: 'Bloquear acceso' },
+      { name: 'Bloquear rama' },
     ),
   );
   await waitFor(() =>
@@ -705,15 +705,15 @@ test('requires a renewed confirmation when the teacher-block preview changed', a
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
-  await user.click(screen.getByRole('button', { name: 'Bloquear acceso' }));
-  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo docente' });
-  await user.click(within(dialog).getByRole('button', { name: 'Bloquear acceso' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo de rama' });
+  await user.click(within(dialog).getByRole('button', { name: 'Bloquear rama' }));
 
   expect(changeTeacherBlock).not.toHaveBeenCalled();
   expect(dialog.textContent).toContain('Bloquearás 2 nodos.');
   expect(dialog.textContent).toContain('Derivadas');
 
-  await user.click(within(dialog).getByRole('button', { name: 'Bloquear acceso' }));
+  await user.click(within(dialog).getByRole('button', { name: 'Bloquear rama' }));
   await waitFor(() => expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK', 'two'));
 });
 

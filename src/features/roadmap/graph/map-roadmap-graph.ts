@@ -3,6 +3,7 @@ import type { AnyRoadmapDto, RoadmapNodeDto } from '@/features/roadmap/types';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import type { RoadmapFlowNode, RoadmapNodeStatus } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
+import type { NodeAccessActionOperation } from '@/features/roadmap/graph/node-action';
 
 const studentEdgeStroke = 'var(--ink)';
 
@@ -16,6 +17,12 @@ export function mapRoadmapGraph(
   canEdit: boolean,
   onDeleteDependency?: (dependencyId: string) => void,
   selectedNodeId?: string | null,
+  actionMenu?: {
+    openNodeId: string | null;
+    closingNodeId: string | null;
+    onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
+    onRequestAccessAction: (nodeId: string, operation: NodeAccessActionOperation) => void;
+  },
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
@@ -37,6 +44,12 @@ export function mapRoadmapGraph(
         fileCount: resources.filter((resource) => resource.type === 'FILE').length,
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
         blockReason,
+        canManageActions: canEdit,
+        isActionMenuOpen:
+          actionMenu?.openNodeId === node.id || actionMenu?.closingNodeId === node.id,
+        isActionMenuClosing: actionMenu?.closingNodeId === node.id,
+        onToggleActionMenu: actionMenu?.onToggle,
+        onRequestAccessAction: actionMenu?.onRequestAccessAction,
       },
       position: { x: node.positionX, y: node.positionY },
       selected: node.id === selectedNodeId,
@@ -45,6 +58,7 @@ export function mapRoadmapGraph(
       deletable: false,
       selectable: canEdit || !blockReason,
       focusable: true,
+      zIndex: actionMenu?.openNodeId === node.id || actionMenu?.closingNodeId === node.id ? 20 : 0,
       ariaRole: blockReason ? 'button' : undefined,
       domAttributes: blockReason ? { 'aria-disabled': true } : undefined,
     };

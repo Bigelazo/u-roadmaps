@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 
@@ -63,6 +63,38 @@ vi.mock('@xyflow/react', () => ({
       >
         Nodo con teclado
       </button>
+      {nodes.map((node) => {
+        const actionData = node.data as {
+          canManageActions?: boolean;
+          isActionMenuOpen?: boolean;
+          onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
+          onRequestAccessAction?: (nodeId: string, operation: 'BLOCK' | 'UNBLOCK') => void;
+          isTeacherBlocked?: boolean;
+        };
+        if (!actionData.canManageActions) return null;
+        return (
+          <div key={node.id}>
+            <button
+              type="button"
+              aria-label={`${actionData.isActionMenuOpen ? 'Cerrar' : 'Abrir'} acciones ${node.id}`}
+              onClick={(event) => actionData.onToggleActionMenu?.(node.id, event.currentTarget)}
+            />
+            {actionData.isActionMenuOpen ? (
+              <button
+                type="button"
+                onClick={() =>
+                  actionData.onRequestAccessAction?.(
+                    node.id,
+                    actionData.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK',
+                  )
+                }
+              >
+                Ejecutar acceso {node.id}
+              </button>
+            ) : null}
+          </div>
+        );
+      })}
       {children}
     </>
   ),
@@ -80,6 +112,8 @@ vi.mock('@xyflow/react', () => ({
   useReactFlow: () => ({
     fitView: fitViewMock,
     screenToFlowPosition: (position: { x: number; y: number }) => position,
+    getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
+    setViewport: vi.fn(),
   }),
 }));
 
@@ -238,6 +272,39 @@ test('reports a keyboard node move for persistence', async () => {
   screen.getByTestId('keyboard-node').focus();
   await user.keyboard('{ArrowRight}');
   expect(onKeyboardNodeMove).toHaveBeenCalledWith('node-1', { x: 20, y: 0 });
+});
+
+test('keeps one action menu open, closes it with Escape, and hands access changes to the canvas', async () => {
+  const user = userEvent.setup();
+  const onRequestAccessAction = vi.fn();
+  render(
+    <RoadmapGraph
+      roadmap={roadmap}
+      canEdit
+      onSelectNode={vi.fn()}
+      onMoveNode={vi.fn()}
+      onConnectNodes={vi.fn()}
+      onDeleteDependencies={vi.fn()}
+      onAutoLayout={vi.fn()}
+      onRequestAccessAction={onRequestAccessAction}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
+  expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Ejecutar acceso node-1' })).toBeTruthy();
+
+  await user.keyboard('{Escape}');
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull(),
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
+  await user.click(screen.getByRole('button', { name: 'Ejecutar acceso node-1' }));
+  expect(onRequestAccessAction).toHaveBeenCalledWith('node-1', 'BLOCK');
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeNull(),
+  );
 });
 
 test('requires confirmation before automatically ordering canvas nodes', async () => {

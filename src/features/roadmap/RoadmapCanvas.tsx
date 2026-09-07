@@ -226,9 +226,9 @@ function teacherBlockConfirmation(
   const nodes = count === 1 ? 'nodo' : 'nodos';
   if (mode === 'BLOCK') {
     return {
-      title: 'Confirmar bloqueo docente',
+      title: 'Confirmar bloqueo de rama',
       description: `Bloquearás ${count} ${nodes}.`,
-      action: 'Bloquear acceso',
+      action: 'Bloquear rama',
     };
   }
   if (mode === 'UPSTREAM') {
@@ -309,6 +309,7 @@ export default function RoadmapCanvas({
     useState<PendingDependencyChange | null>(null);
   const [pendingTeacherBlockChange, setPendingTeacherBlockChange] =
     useState<PendingTeacherBlockChange | null>(null);
+  const [isTeacherBlockChanging, setIsTeacherBlockChanging] = useState(false);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
   const previewCanvasButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -504,17 +505,20 @@ export default function RoadmapCanvas({
   }
 
   async function confirmTeacherBlockChange() {
-    if (!pendingTeacherBlockChange) return;
+    if (!pendingTeacherBlockChange || isTeacherBlockChanging) return;
+    setIsTeacherBlockChanging(true);
     const latestPreview = await previewTeacherBlock(
       pendingTeacherBlockChange.nodeId,
       pendingTeacherBlockChange.operation,
     );
     if (!latestPreview) {
       setPendingTeacherBlockChange(null);
+      setIsTeacherBlockChanging(false);
       return;
     }
     if (!sameTeacherBlockPreview(pendingTeacherBlockChange, latestPreview)) {
       setPendingTeacherBlockChange({ ...pendingTeacherBlockChange, ...latestPreview });
+      setIsTeacherBlockChanging(false);
       return;
     }
     setPendingTeacherBlockChange(null);
@@ -536,6 +540,7 @@ export default function RoadmapCanvas({
         });
       }
     }
+    setIsTeacherBlockChanging(false);
   }
 
   if (error && !roadmap) {
@@ -702,6 +707,9 @@ export default function RoadmapCanvas({
               lastViewportRef.current = viewport;
             }}
             restoreViewport={restoreViewport}
+            onRequestAccessAction={(nodeId, operation) =>
+              void requestTeacherBlockChange(nodeId, operation)
+            }
             topRightActions={
               !isCanvasPreview && (canEdit || canPreview)
                 ? (getViewport) => (
@@ -1108,7 +1116,11 @@ export default function RoadmapCanvas({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction type="button" onClick={() => void confirmTeacherBlockChange()}>
+            <AlertDialogAction
+              type="button"
+              disabled={isTeacherBlockChanging}
+              onClick={() => void confirmTeacherBlockChange()}
+            >
               {teacherBlockDialog?.action}
             </AlertDialogAction>
           </AlertDialogFooter>
