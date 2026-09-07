@@ -11,7 +11,6 @@ import {
   LockKeyhole,
   X,
 } from 'lucide-react';
-import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
   isStudentBlockedNode,
@@ -30,16 +29,15 @@ import {
   ItemTitle,
 } from '@/shared/ui/item';
 import { Separator } from '@/shared/ui/separator';
-import { Sheet, SheetContent, SheetTitle } from '@/shared/ui/sheet';
+import { Sheet, SheetContent } from '@/shared/ui/sheet';
 import {
   Sidebar,
   SidebarContent,
-  SidebarHeader,
   SidebarProvider,
   SidebarRail,
 } from '@/shared/ui/sidebar';
 import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
-import { cn } from 'cn';
+import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 
 function resourceIcon(type: Resource['type']) {
   return type === 'VIDEO' ? <FileCode2 size={20} /> : <FileText size={20} />;
@@ -79,82 +77,54 @@ function StudentNodeDetailContent({
   nodeType,
 }: ContentProps) {
   const blocked = isStudentBlockedNode(node);
-  const Header = isSidebar ? SidebarHeader : 'header';
   return (
     <>
-      <Header
-        className={cn(
-          'relative border-b border-border px-6 pt-7 pb-6',
-          isSidebar && 'shrink-0 p-0 px-6 pt-7 pb-6',
-        )}
-      >
-        <div className="min-w-0 pr-20">
-          <p className="text-xs font-bold tracking-[1.2px] text-primary uppercase">
-            Nodo seleccionado
-          </p>
-          <div className="mt-1 flex min-w-0 items-start gap-3">
-            {nodeType ? (
-              <NodeTypeIcon
-                icon={nodeType.icon}
-                data-testid="student-node-type-icon"
-                className="mt-1 size-5 shrink-0"
-                style={{ color: nodeType.color }}
-                aria-hidden="true"
-              />
-            ) : null}
-            {isModal ? (
-              <SheetTitle className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word">
-                {node.title}
-              </SheetTitle>
-            ) : (
-              <h2
-                id="student-node-detail-title"
-                className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word"
+      <NodePanelHeader
+        title={node.title}
+        nodeType={nodeType}
+        iconTestId="student-node-type-icon"
+        headingId="student-node-detail-title"
+        isModal={isModal}
+        isSidebar={isSidebar}
+        actions={
+          <>
+            {status === 'completed' ? (
+              <Button
+                aria-label="Completado"
+                title="Completado"
+                disabled
+                size="icon"
+                variant="outline"
               >
-                {node.title}
-              </h2>
+                <Check />
+              </Button>
+            ) : (
+              <Button
+                aria-label={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
+                title={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                disabled={status === 'locked' || isReadOnly}
+                onClick={() => onComplete(node)}
+                size="icon"
+              >
+                {status === 'locked' ? <LockKeyhole /> : <CircleCheckBig />}
+              </Button>
             )}
-          </div>
-        </div>
-        <div
-          className="absolute top-4 right-4 flex items-center gap-1"
-          role="group"
-          aria-label="Acciones del nodo"
-        >
-          {status === 'completed' ? (
-            <Button
-              aria-label="Completado"
-              title="Completado"
-              disabled
-              size="icon"
-              variant="outline"
-            >
-              <Check />
+            <Button aria-label="Cerrar detalle" onClick={onClose} variant="ghost" size="icon">
+              <X size={18} />
             </Button>
-          ) : (
-            <Button
-              aria-label={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
-              title={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-              disabled={status === 'locked' || isReadOnly}
-              onClick={() => onComplete(node)}
-              size="icon"
-            >
-              {status === 'locked' ? <LockKeyhole /> : <CircleCheckBig />}
-            </Button>
-          )}
-          <Button aria-label="Cerrar detalle" onClick={onClose} variant="ghost" size="icon">
-            <X size={18} />
-          </Button>
-        </div>
-        {status === 'locked' ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            {blocked
-              ? studentNodeBlockMessages[node.access.reason]
-              : 'Este nodo se desbloquea cuando completes sus prerrequisitos.'}
-          </p>
-        ) : null}
-      </Header>
+          </>
+        }
+        footer={
+          status === 'locked' ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {blocked
+                ? studentNodeBlockMessages[node.access.reason]
+                : 'Este nodo se desbloquea cuando completes sus prerrequisitos.'}
+            </p>
+          ) : null
+        }
+      />
       {!blocked ? (
         <DetailBody isSidebar={isSidebar}>
           <h3 className="flex items-center gap-2 font-semibold">
@@ -289,7 +259,7 @@ export function StudentNodeDetail({
         collapsible="none"
         id="student-node-detail-panel"
         aria-labelledby="student-node-detail-title"
-        className="order-2 w-full! min-w-0 border-t border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58/10%)] focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l"
+        className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"
       >
         {onPanelWidthChange ? (
           <SidebarRail

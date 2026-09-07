@@ -134,6 +134,7 @@ body {
     0 9px 18px color-mix(in srgb, var(--primary) 18%, transparent);
   --shadow-roadmap-node-focus:
     0 0 0 4px color-mix(in srgb, var(--primary) 24%, transparent), var(--shadow-roadmap-node);
+  --shadow-roadmap-panel: -4px 0 14px rgb(18 33 58 / 7%);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);

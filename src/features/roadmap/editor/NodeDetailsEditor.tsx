@@ -1,6 +1,5 @@
 import { Eye, EyeOff, LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
 import type { RefObject } from 'react';
-import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type {
   Resource,
   RoadmapDto,
@@ -23,6 +22,7 @@ import { Textarea } from '@/shared/ui/textarea';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeResources } from './NodeResources';
 import type { NodeUpdate, ResourceInput } from './types';
+import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 
 type Props = {
   node: RoadmapNode;
@@ -59,37 +59,24 @@ function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeType
   const type = nodeTypes.find((nodeType) => nodeType.id === node.nodeTypeId);
 
   return (
-    <header className="flex items-start justify-between gap-3 border-b border-border pt-8 pb-5">
-      <div className="min-w-0">
-        <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
-          Nodo seleccionado
-        </p>
-        <div className="mt-1 flex min-w-0 items-start gap-3">
-          {type ? (
-            <NodeTypeIcon
-              icon={type.icon}
-              data-testid="node-type-icon"
-              className="mt-1 size-5 shrink-0"
-              style={{ color: type.color }}
-              aria-hidden="true"
-            />
-          ) : null}
-          <h2 className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word">
-            {node.title}
-          </h2>
-        </div>
-      </div>
-      <Button
-        type="button"
-        size="icon-xs"
-        variant="ghost"
-        aria-label="Deseleccionar nodo"
-        title="Deseleccionar nodo"
-        onClick={onClose}
-      >
-        <X />
-      </Button>
-    </header>
+    <NodePanelHeader
+      title={node.title}
+      nodeType={type}
+      iconTestId="node-type-icon"
+      isSidebar
+      actions={
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          aria-label="Deseleccionar nodo"
+          title="Deseleccionar nodo"
+          onClick={onClose}
+        >
+          <X />
+        </Button>
+      }
+    />
   );
 }
 
@@ -163,12 +150,7 @@ function NodeForm({
           <Save data-icon="inline-start" />
           Guardar cambios
         </Button>
-        <Button
-          ref={previewButtonRef}
-          type="button"
-          variant="outline"
-          onClick={onPreview}
-        >
+        <Button ref={previewButtonRef} type="button" variant="outline" onClick={onPreview}>
           <Eye data-icon="inline-start" />
           {isDirty ? 'Previsualizar cambios' : 'Previsualizar'}
         </Button>
@@ -322,41 +304,43 @@ export function NodeDetailsEditor({
   return (
     <div>
       <NodeHeader node={node} nodeTypes={nodeTypes} onClose={onClose} />
-      <NodeForm
-        node={node}
-        nodeTypes={nodeTypes}
-        nodeValue={nodeValue}
-        onNodeChange={onNodeChange}
-        onUpdateNode={onUpdateNode}
-        isDirty={isDirty}
-        onPreview={onPreview}
-        previewButtonRef={previewButtonRef}
-      />
-      <NodeStatus
-        node={node}
-        onToggleVisibility={onToggleVisibility}
-        onRequestTeacherBlock={onRequestTeacherBlock}
-      />
-      <NodeDangerZone node={node} onDeleteNode={onDeleteNode} />
-      <NodeResources
-        node={node}
-        resourceValue={resourceValue}
-        editingResourceId={editingResourceId}
-        isComposerOpen={isResourceComposerOpen}
-        mode={resourceMode}
-        selectedFile={selectedResourceFile}
-        onResourceChange={onResourceChange}
-        onComposerOpen={onResourceComposerOpen}
-        onComposerClose={onResourceComposerClose}
-        onModeChange={onResourceModeChange}
-        onSelectedFileChange={onSelectedResourceFileChange}
-        onAddResource={onAddResource}
-        onUploadResource={onUploadResource}
-        onUpdateResource={onUpdateResource}
-        onStartEditingResource={onStartEditingResource}
-        onCancelResource={onCancelResource}
-        onDeleteResource={onDeleteResource}
-      />
+      <div className="px-6">
+        <NodeForm
+          node={node}
+          nodeTypes={nodeTypes}
+          nodeValue={nodeValue}
+          onNodeChange={onNodeChange}
+          onUpdateNode={onUpdateNode}
+          isDirty={isDirty}
+          onPreview={onPreview}
+          previewButtonRef={previewButtonRef}
+        />
+        <NodeStatus
+          node={node}
+          onToggleVisibility={onToggleVisibility}
+          onRequestTeacherBlock={onRequestTeacherBlock}
+        />
+        <NodeDangerZone node={node} onDeleteNode={onDeleteNode} />
+        <NodeResources
+          node={node}
+          resourceValue={resourceValue}
+          editingResourceId={editingResourceId}
+          isComposerOpen={isResourceComposerOpen}
+          mode={resourceMode}
+          selectedFile={selectedResourceFile}
+          onResourceChange={onResourceChange}
+          onComposerOpen={onResourceComposerOpen}
+          onComposerClose={onResourceComposerClose}
+          onModeChange={onResourceModeChange}
+          onSelectedFileChange={onSelectedResourceFileChange}
+          onAddResource={onAddResource}
+          onUploadResource={onUploadResource}
+          onUpdateResource={onUpdateResource}
+          onStartEditingResource={onStartEditingResource}
+          onCancelResource={onCancelResource}
+          onDeleteResource={onDeleteResource}
+        />
+      </div>
     </div>
   );
 }

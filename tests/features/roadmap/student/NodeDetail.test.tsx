@@ -218,4 +218,6 @@ test('uses the selected-node header and keeps completion next to the close actio
       .map((button) => button.getAttribute('aria-label')),
   ).toEqual(['Completar', 'Cerrar detalle']);
   expect(screen.getByRole('button', { name: 'Completar' }).className).toContain('bg-emerald-600');
+  const panel = screen.getByLabelText(node.title);
+  expect(panel.className).toContain('shadow-(--shadow-roadmap-panel)');
 });

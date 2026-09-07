@@ -126,3 +126,16 @@ test('continues reporting a retained draft after the editor panel closes', async
 
   expect(onDirtyChange).toHaveBeenLastCalledWith(true);
 });
+
+test('uses the shared node-panel chrome for an effortless mode transition', () => {
+  render(
+    <SidebarProvider>
+      <RoadmapEditor {...editorProps()} />
+    </SidebarProvider>,
+  );
+
+  const panel = screen.getByLabelText('Panel de edición del roadmap');
+  expect(panel.className).toContain('bg-card');
+  expect(panel.className).toContain('shadow-(--shadow-roadmap-panel)');
+  expect(screen.getByRole('group', { name: 'Acciones del nodo' })).toBeTruthy();
+});
