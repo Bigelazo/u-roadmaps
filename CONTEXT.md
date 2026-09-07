@@ -88,9 +88,17 @@ _Avoid_: Hidden node, unavailable node
 The student-facing current condition of a visible node: Pending, Completed, or Blocked. It is represented by a status icon whose name is exposed through a tooltip and accessible label rather than persistent visible text; Blocked prevails while any access restriction applies, even when a Completion is retained.
 _Avoid_: Node type, visible status label
 
+**Node action menu (Menú de acciones del nodo)**:
+The teaching-staff-only control that groups the actions available for a Node. It is distinct from Node state: opening it or invoking one of its actions does not make deletion, visibility, blocking, or Resource creation into states.
+_Avoid_: Node state selector, status menu
+
 **Teacher block (Bloqueo docente)**:
 An access restriction imposed by teaching staff on a visible node; it also applies persistently to every current or subsequently connected transitive dependent that can be blocked. Each resulting block persists until teaching staff remove it manually after unblocking all blocked transitive prerequisites, and it prevails over any prior completion without deleting it; academic-calendar closure removes every teacher block before freezing the roadmap.
 _Avoid_: Node visibility, prerequisite block
+
+**Node unlock (Desbloqueo de nodo)**:
+A teaching-staff action that removes Teacher blocks according to the selected Node's current prerequisites. When any direct or transitive prerequisite has a Teacher block, it atomically unlocks the selected Node and every blocked transitive prerequisite without changing dependents; otherwise, teaching staff choose between unlocking only the selected Node and performing a Branch unlock.
+_Avoid_: Prerequisite block removal, Dependency unlock
 
 **Branch unlock (Desbloqueo de rama)**:
 A teaching-staff action that atomically removes teacher blocks from a selected node and its eligible transitive dependents, regardless of when or why each block was imposed. A node remains blocked only when a blocked prerequisite outside the selected branch still prevents its release; block provenance is not retained.
