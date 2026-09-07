@@ -840,6 +840,37 @@ test('keeps the teaching panel width across reloads without changing the student
   await expect(page.locator('.react-flow__node').first()).toBeInViewport();
 });
 
+test('uses the teaching width for node information preview and keeps shortcuts on the canvas', async ({
+  page,
+}) => {
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/courses/CC1002/2026/2');
+  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+
+  const editorPanel = page.locator('#roadmap-editor-panel');
+  await expect(editorPanel).toBeVisible();
+  const editorBox = (await editorPanel.boundingBox())!;
+
+  await page.getByRole('button', { name: 'Previsualizar', exact: true }).click();
+  const studentPanel = page.locator('#student-node-detail-panel');
+  await expect(studentPanel).toBeVisible();
+  await expect.poll(async () => (await studentPanel.boundingBox())?.width).toBe(editorBox.width);
+
+  const canvas = page.getByLabel('Lienzo del roadmap');
+  const shortcuts = page.locator('details[aria-label="Atajos de teclado"]');
+  await expect(canvas).toBeVisible();
+  await expect(shortcuts).toBeVisible();
+  const [canvasBox, shortcutsBox] = (await Promise.all([
+    canvas.boundingBox(),
+    shortcuts.boundingBox(),
+  ])) as [
+    NonNullable<Awaited<ReturnType<typeof canvas.boundingBox>>>,
+    NonNullable<Awaited<ReturnType<typeof shortcuts.boundingBox>>>,
+  ];
+  expect(shortcutsBox.x + shortcutsBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width);
+});
+
 test('withdrawn participations remain local to their course offering', async ({ page }) => {
   await authenticateAs(page.context(), fixture.camila);
   await page.goto('/academic-overview');

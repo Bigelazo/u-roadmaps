@@ -3,7 +3,7 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import {
   Check,
-  CheckCircle2,
+  CircleCheckBig,
   Download,
   ExternalLink,
   FileCode2,
@@ -11,7 +11,8 @@ import {
   LockKeyhole,
   X,
 } from 'lucide-react';
-import type { Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
+import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
+import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
   isStudentBlockedNode,
   studentNodeBlockMessages,
@@ -64,6 +65,7 @@ type ContentProps = {
   isReadOnly?: boolean;
   isModal?: boolean;
   isSidebar?: boolean;
+  nodeType?: NodeType;
 };
 
 function StudentNodeDetailContent({
@@ -74,6 +76,7 @@ function StudentNodeDetailContent({
   isReadOnly = false,
   isModal = false,
   isSidebar = false,
+  nodeType,
 }: ContentProps) {
   const blocked = isStudentBlockedNode(node);
   const Header = isSidebar ? SidebarHeader : 'header';
@@ -85,49 +88,65 @@ function StudentNodeDetailContent({
           isSidebar && 'shrink-0 p-0 px-6 pt-7 pb-6',
         )}
       >
-        <Button
-          aria-label="Cerrar detalle"
-          onClick={onClose}
-          variant="ghost"
-          size="icon"
-          className="absolute top-4 right-4"
-        >
-          <X size={18} />
-        </Button>
-        <p className="text-xs font-bold tracking-[1.2px] text-primary uppercase">
-          Nodo del roadmap
-        </p>
-        {isModal ? (
-          <SheetTitle className="mt-1 font-heading text-2xl font-semibold tracking-[-0.035em]">
-            {node.title}
-          </SheetTitle>
-        ) : (
-          <h2
-            id="student-node-detail-title"
-            className="mt-1 font-heading text-2xl font-semibold tracking-[-0.035em]"
-          >
-            {node.title}
-          </h2>
-        )}
-        {status === 'completed' ? (
-          <Button disabled className="mt-5">
-            <Check data-icon="inline-start" />
-            Completado
-          </Button>
-        ) : (
-          <Button
-            className="mt-5"
-            disabled={status === 'locked' || isReadOnly}
-            onClick={() => onComplete(node)}
-          >
-            {status === 'locked' ? (
-              <LockKeyhole data-icon="inline-start" />
+        <div className="min-w-0 pr-20">
+          <p className="text-xs font-bold tracking-[1.2px] text-primary uppercase">
+            Nodo seleccionado
+          </p>
+          <div className="mt-1 flex min-w-0 items-start gap-3">
+            {nodeType ? (
+              <NodeTypeIcon
+                icon={nodeType.icon}
+                data-testid="student-node-type-icon"
+                className="mt-1 size-5 shrink-0"
+                style={{ color: nodeType.color }}
+                aria-hidden="true"
+              />
+            ) : null}
+            {isModal ? (
+              <SheetTitle className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word">
+                {node.title}
+              </SheetTitle>
             ) : (
-              <CheckCircle2 data-icon="inline-start" />
+              <h2
+                id="student-node-detail-title"
+                className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word"
+              >
+                {node.title}
+              </h2>
             )}
-            {status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
+          </div>
+        </div>
+        <div
+          className="absolute top-4 right-4 flex items-center gap-1"
+          role="group"
+          aria-label="Acciones del nodo"
+        >
+          {status === 'completed' ? (
+            <Button
+              aria-label="Completado"
+              title="Completado"
+              disabled
+              size="icon"
+              variant="outline"
+            >
+              <Check />
+            </Button>
+          ) : (
+            <Button
+              aria-label={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
+              title={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              disabled={status === 'locked' || isReadOnly}
+              onClick={() => onComplete(node)}
+              size="icon"
+            >
+              {status === 'locked' ? <LockKeyhole /> : <CircleCheckBig />}
+            </Button>
+          )}
+          <Button aria-label="Cerrar detalle" onClick={onClose} variant="ghost" size="icon">
+            <X size={18} />
           </Button>
-        )}
+        </div>
         {status === 'locked' ? (
           <p className="mt-3 text-sm text-muted-foreground">
             {blocked
@@ -203,6 +222,7 @@ function DetailBody({ children, isSidebar }: { children: ReactNode; isSidebar: b
 type Props = Omit<ContentProps, 'node' | 'status'> & {
   node: RoadmapNode | StudentRoadmapNode | undefined;
   status: StudentNodeStatus | null;
+  nodeTypes?: NodeType[];
   panelWidth?: number;
   onPanelWidthChange?: (width: number) => void;
 };
@@ -229,11 +249,13 @@ export function StudentNodeDetail({
   onClose,
   onComplete,
   isReadOnly,
+  nodeTypes,
   panelWidth = 426,
   onPanelWidthChange,
 }: Props) {
   const isMobile = useMobileLayout();
   if (!node || !status || isStudentBlockedNode(node)) return null;
+  const nodeType = nodeTypes?.find((type) => type.id === node.nodeTypeId);
   if (isMobile) {
     return (
       <Sheet open onOpenChange={(open) => !open && onClose()}>
@@ -250,6 +272,7 @@ export function StudentNodeDetail({
             onComplete={onComplete}
             isReadOnly={isReadOnly}
             isModal
+            nodeType={nodeType}
           />
         </SheetContent>
       </Sheet>
@@ -258,15 +281,15 @@ export function StudentNodeDetail({
 
   return (
     <SidebarProvider
-      className="absolute inset-y-0 right-0 z-6 min-h-0"
-      style={{ width: panelWidth, '--sidebar-width': `${panelWidth}px` } as CSSProperties}
+      className="contents"
+      style={{ '--sidebar-width': `${panelWidth}px` } as CSSProperties}
     >
       <Sidebar
         side="right"
         collapsible="none"
         id="student-node-detail-panel"
         aria-labelledby="student-node-detail-title"
-        className="border-l border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58/10%)]"
+        className="order-2 w-full! min-w-0 border-t border-border bg-card shadow-[-8px_0_24px_rgb(18_33_58/10%)] focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l"
       >
         {onPanelWidthChange ? (
           <SidebarRail
@@ -286,6 +309,7 @@ export function StudentNodeDetail({
           onComplete={onComplete}
           isReadOnly={isReadOnly}
           isSidebar
+          nodeType={nodeType}
         />
       </Sidebar>
     </SidebarProvider>

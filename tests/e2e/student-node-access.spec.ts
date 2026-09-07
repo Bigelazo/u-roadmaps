@@ -262,8 +262,8 @@ test('student roadmap shows effective block reasons and restores a completed nod
     );
     await expect(teacherBlockedCard).toBeVisible();
     await expect(prerequisiteBlockedCard).toBeVisible();
-    await expect(teacherBlockedCard).toContainText('Bloqueado por el equipo docente');
-    await expect(prerequisiteBlockedCard).toContainText('Completa los prerrequisitos');
+    await expect(teacherBlockedCard).not.toContainText('Bloqueado por el equipo docente');
+    await expect(prerequisiteBlockedCard).not.toContainText('Completa los prerrequisitos');
     await expect(teacherBlockedCard).toHaveAttribute('aria-disabled', 'true');
     await expect(prerequisiteBlockedCard).toHaveAttribute('aria-disabled', 'true');
     await expect(teacherBlockedCard.locator('[data-slot="roadmap-card"]')).toHaveClass(

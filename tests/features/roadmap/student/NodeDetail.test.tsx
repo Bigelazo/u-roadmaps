@@ -1,8 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
-import type { RoadmapNode, StudentBlockedRoadmapNode } from '@/features/roadmap/types';
+import type { NodeType, RoadmapNode, StudentBlockedRoadmapNode } from '@/features/roadmap/types';
 
 const node: RoadmapNode = {
   id: 'node-1',
@@ -44,6 +44,16 @@ const blockedNode: StudentBlockedRoadmapNode = {
   positionY: 0,
   access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
 };
+
+const nodeTypes: NodeType[] = [
+  {
+    id: 'type-1',
+    name: 'Contenido',
+    icon: 'ClipboardCheck',
+    color: '#024AD8',
+    isPredefined: true,
+  },
+];
 
 test('student can close a named mobile node-detail dialog with Escape or its close control', async () => {
   const user = userEvent.setup();
@@ -173,4 +183,39 @@ test('uses the student profile width and exposes a desktop resize control', () =
   expect(separator.getAttribute('aria-valuenow')).toBe('460');
   fireEvent.keyDown(separator, { key: 'ArrowLeft' });
   expect(onPanelWidthChange).toHaveBeenCalledWith(440);
+});
+
+test('uses the selected-node header and keeps completion next to the close action', () => {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia;
+
+  render(
+    <StudentNodeDetail
+      node={node}
+      nodeTypes={nodeTypes}
+      status="available"
+      onClose={vi.fn()}
+      onComplete={vi.fn()}
+    />,
+  );
+
+  expect(screen.getByText('Nodo seleccionado')).toBeTruthy();
+  expect(screen.getByTestId('student-node-type-icon').getAttribute('style')).toContain(
+    'rgb(2, 74, 216)',
+  );
+  const actions = screen.getByRole('group', { name: 'Acciones del nodo' });
+  expect(
+    within(actions)
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label')),
+  ).toEqual(['Completar', 'Cerrar detalle']);
+  expect(screen.getByRole('button', { name: 'Completar' }).className).toContain('bg-emerald-600');
 });

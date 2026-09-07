@@ -390,21 +390,22 @@ test('opens node icon and status tooltips immediately, with the status below its
   expect(statusTooltip?.getAttribute('data-side')).toBe('bottom');
 });
 
-test.each([
-  ['TEACHER_BLOCK', 'Bloqueado por el equipo docente'],
-  ['PREREQUISITE_BLOCK', 'Completa los prerrequisitos'],
-] as const)('shows the %s block reason without hiding node identity', (reason, message) => {
-  mountBlockedNode(reason);
+test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(
+  'does not show a supplementary message for %s blocks',
+  (reason) => {
+    mountBlockedNode(reason);
 
-  expect(screen.getByText('Contenido bloqueado')).toBeTruthy();
-  expect(screen.getByRole('img', { name: 'Contenido' })).toBeTruthy();
-  expect(screen.getByText(message)).toBeTruthy();
-  expect(screen.getByRole('img', { name: 'Bloqueado' })).toBeTruthy();
-  const card = screen.getByTestId('roadmap-card');
-  expect(card.className).toContain('cursor-not-allowed');
-  expect(card.getAttribute('aria-disabled')).toBe('true');
-  expect(screen.queryByRole('button')).toBeNull();
-});
+    expect(screen.getByText('Contenido bloqueado')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Contenido' })).toBeTruthy();
+    expect(screen.queryByText('Bloqueado por el equipo docente')).toBeNull();
+    expect(screen.queryByText('Completa los prerrequisitos')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Bloqueado' })).toBeTruthy();
+    const card = screen.getByTestId('roadmap-card');
+    expect(card.className).toContain('cursor-not-allowed');
+    expect(card.getAttribute('aria-disabled')).toBe('true');
+    expect(screen.queryByRole('button')).toBeNull();
+  },
+);
 
 test('shows teacher blocks like student blocks without disabling editing', () => {
   const props = {

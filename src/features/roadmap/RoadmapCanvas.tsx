@@ -118,6 +118,105 @@ function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: React
   );
 }
 
+function KeyboardShortcuts({
+  canEdit,
+  isCanvasPreview,
+  isSidePanelOpen,
+}: {
+  canEdit: boolean;
+  isCanvasPreview: boolean;
+  isSidePanelOpen: boolean;
+}) {
+  return (
+    <details
+      aria-label="Atajos de teclado"
+      data-placement="roadmap"
+      className={cn(
+        'group pointer-events-auto absolute right-5 bottom-[18px] z-4 w-[min(23rem,calc(100%-2.5rem))] overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm',
+        isSidePanelOpen &&
+          'lg:right-[calc(var(--sidebar-width)+1.25rem)] lg:w-[min(23rem,calc(100%-var(--sidebar-width)-2.5rem))]',
+      )}
+    >
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 font-semibold text-foreground transition-colors outline-none marker:content-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
+        <span className="flex size-6 items-center justify-center rounded-md border border-border bg-muted text-primary">
+          <Keyboard className="size-3.5" aria-hidden="true" />
+        </span>
+        <span>Atajos de teclado</span>
+        <span className="ml-auto text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+          Ayuda
+        </span>
+      </summary>
+      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-3 border-t border-border px-3.5 py-3.5">
+        <KeyboardShortcut keys={<Kbd>Tab</Kbd>}>
+          Recorrer los controles y elementos del mapa.
+        </KeyboardShortcut>
+        <KeyboardShortcut
+          keys={
+            <KbdGroup className="flex-wrap">
+              <Kbd aria-label="Enter">↵</Kbd>
+              <span aria-hidden="true">/</span>
+              <Kbd aria-label="Espacio">␣</Kbd>
+            </KbdGroup>
+          }
+        >
+          Activar el control o seleccionar el elemento enfocado.
+        </KeyboardShortcut>
+        <KeyboardShortcut keys={<Kbd aria-label="Escape">Esc</Kbd>}>
+          Cerrar el detalle o panel del nodo seleccionado.
+        </KeyboardShortcut>
+        {canEdit && !isCanvasPreview ? (
+          <KeyboardShortcut keys={<Kbd>Flechas</Kbd>}>
+            Mover una cuadrícula el nodo seleccionado. <Kbd aria-label="Shift">⇧</Kbd> +{' '}
+            <Kbd>Flechas</Kbd> lo desplaza 5 cuadrículas.
+          </KeyboardShortcut>
+        ) : null}
+        {canEdit && !isCanvasPreview ? (
+          <KeyboardShortcut
+            keys={
+              <KbdGroup className="flex-wrap">
+                <Kbd aria-label="Suprimir">⌦</Kbd>
+                <span aria-hidden="true">/</span>
+                <Kbd aria-label="Retroceso">⌫</Kbd>
+              </KbdGroup>
+            }
+          >
+            Eliminar la dependencia seleccionada, con confirmación.
+          </KeyboardShortcut>
+        ) : null}
+        <KeyboardShortcut
+          keys={
+            <div className="flex flex-col items-start gap-1">
+              <KbdGroup className="w-fit flex-none">
+                <Kbd aria-label="Comando">⌘</Kbd>
+                <span aria-hidden="true">+</span>
+                <Kbd>B</Kbd>
+              </KbdGroup>
+              <KbdGroup className="w-fit flex-none">
+                <Kbd>Ctrl</Kbd>
+                <span aria-hidden="true">+</span>
+                <Kbd>B</Kbd>
+              </KbdGroup>
+            </div>
+          }
+        >
+          Ocultar o mostrar el panel lateral.
+        </KeyboardShortcut>
+        <KeyboardShortcut
+          keys={
+            <KbdGroup className="flex-wrap">
+              <Kbd>Inicio</Kbd>
+              <span aria-hidden="true">/</span>
+              <Kbd>Fin</Kbd>
+            </KbdGroup>
+          }
+        >
+          Con el borde del panel enfocado, establecer su ancho mínimo o máximo.
+        </KeyboardShortcut>
+      </dl>
+    </details>
+  );
+}
+
 function teacherBlockConfirmation(operation: TeacherBlockOperation, count: number) {
   const nodes = count === 1 ? 'nodo' : 'nodos';
   if (operation === 'BLOCK') {
@@ -457,21 +556,30 @@ export default function RoadmapCanvas({
     : null;
   const visibilityDependencies = pendingVisibilityChange?.dependencies ?? [];
   const hasVisibilityDependencies = visibilityDependencies.length > 0;
+  const isEditorPanelOpen = canEdit && isEditorOpen && !isCanvasPreview;
+  const isStudentPanelOpen = Boolean(
+    teacherPreviewNode ||
+    (isStudentExperience &&
+      isStudentDetailOpen &&
+      selectedNode &&
+      !isStudentBlockedNode(selectedNode)),
+  );
+  const isSidePanelOpen = isEditorPanelOpen || isStudentPanelOpen;
+  const activePanelWidth =
+    teacherPreviewNode || isEditorPanelOpen ? editorPanel.width : studentPanel.width;
   return (
     <SidebarProvider
       className="min-h-0 lg:h-full"
       style={
         {
-          '--sidebar-width': `${canEdit && !isCanvasPreview ? editorPanel.width : studentPanel.width}px`,
+          '--sidebar-width': `${activePanelWidth}px`,
         } as CSSProperties
       }
     >
       <section
         className={cn(
           'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
-          canEdit && isEditorOpen && !isCanvasPreview
-            ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]'
-            : 'lg:grid-cols-1',
+          isSidePanelOpen ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]' : 'lg:grid-cols-1',
         )}
       >
         <div
@@ -494,87 +602,6 @@ export default function RoadmapCanvas({
               </span>
             </p>
           </header>
-          <details
-            aria-label="Atajos de teclado"
-            className="group pointer-events-auto absolute right-5 bottom-[18px] z-4 w-[min(23rem,calc(100%-2.5rem))] overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm"
-          >
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 font-semibold text-foreground transition-colors outline-none marker:content-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
-              <span className="flex size-6 items-center justify-center rounded-md border border-border bg-muted text-primary">
-                <Keyboard className="size-3.5" aria-hidden="true" />
-              </span>
-              <span>Atajos de teclado</span>
-              <span className="ml-auto text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-                Ayuda
-              </span>
-            </summary>
-            <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-3 border-t border-border px-3.5 py-3.5">
-              <KeyboardShortcut keys={<Kbd>Tab</Kbd>}>
-                Recorrer los controles y elementos del mapa.
-              </KeyboardShortcut>
-              <KeyboardShortcut
-                keys={
-                  <KbdGroup className="flex-wrap">
-                    <Kbd aria-label="Enter">↵</Kbd>
-                    <span aria-hidden="true">/</span>
-                    <Kbd aria-label="Espacio">␣</Kbd>
-                  </KbdGroup>
-                }
-              >
-                Activar el control o seleccionar el elemento enfocado.
-              </KeyboardShortcut>
-              <KeyboardShortcut keys={<Kbd aria-label="Escape">Esc</Kbd>}>
-                Cerrar el detalle o panel del nodo seleccionado.
-              </KeyboardShortcut>
-              {canEdit && !isCanvasPreview ? (
-                <KeyboardShortcut keys={<Kbd>Flechas</Kbd>}>
-                  Mover una cuadrícula el nodo seleccionado. <Kbd aria-label="Shift">⇧</Kbd> +{' '}
-                  <Kbd>Flechas</Kbd> lo desplaza 5 cuadrículas.
-                </KeyboardShortcut>
-              ) : null}
-              {canEdit && !isCanvasPreview ? (
-                <KeyboardShortcut
-                  keys={
-                    <KbdGroup className="flex-wrap">
-                      <Kbd aria-label="Suprimir">⌦</Kbd>
-                      <span aria-hidden="true">/</span>
-                      <Kbd aria-label="Retroceso">⌫</Kbd>
-                    </KbdGroup>
-                  }
-                >
-                  Eliminar la dependencia seleccionada, con confirmación.
-                </KeyboardShortcut>
-              ) : null}
-              <KeyboardShortcut
-                keys={
-                  <div className="flex flex-col items-start gap-1">
-                    <KbdGroup className="w-fit flex-none">
-                      <Kbd aria-label="Comando">⌘</Kbd>
-                      <span aria-hidden="true">+</span>
-                      <Kbd>B</Kbd>
-                    </KbdGroup>
-                    <KbdGroup className="w-fit flex-none">
-                      <Kbd>Ctrl</Kbd>
-                      <span aria-hidden="true">+</span>
-                      <Kbd>B</Kbd>
-                    </KbdGroup>
-                  </div>
-                }
-              >
-                Ocultar o mostrar el panel lateral.
-              </KeyboardShortcut>
-              <KeyboardShortcut
-                keys={
-                  <KbdGroup className="flex-wrap">
-                    <Kbd>Inicio</Kbd>
-                    <span aria-hidden="true">/</span>
-                    <Kbd>Fin</Kbd>
-                  </KbdGroup>
-                }
-              >
-                Con el borde del panel enfocado, establecer su ancho mínimo o máximo.
-              </KeyboardShortcut>
-            </dl>
-          </details>
           {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
           {successToast && (
             <RoadmapSuccessToast
@@ -614,7 +641,11 @@ export default function RoadmapCanvas({
               selectedNodeTriggerRef.current = trigger;
               setSelectedNodeId(nodeId);
               if (isStudentExperience) setIsStudentDetailOpen(true);
-              else if (canEdit) setIsEditorOpen(true);
+              else if (canEdit) {
+                setTeacherPreviewNode(null);
+                setIsTeacherPreviewCompleted(false);
+                setIsEditorOpen(true);
+              }
             }}
             selectedNodeId={selectedNodeId}
             onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
@@ -681,6 +712,11 @@ export default function RoadmapCanvas({
             }
           />
         </div>
+        <KeyboardShortcuts
+          canEdit={canEdit}
+          isCanvasPreview={isCanvasPreview}
+          isSidePanelOpen={isSidePanelOpen}
+        />
         {canEdit && (
           <RoadmapEditor
             key={editorKey}
@@ -731,8 +767,9 @@ export default function RoadmapCanvas({
               else void completeNode(node.id);
             }}
             isReadOnly={isHistorical && !teacherPreviewNode}
-            panelWidth={studentPanel.width}
-            onPanelWidthChange={studentPanel.setWidth}
+            nodeTypes={roadmap.nodeTypes}
+            panelWidth={teacherPreviewNode ? editorPanel.width : studentPanel.width}
+            onPanelWidthChange={teacherPreviewNode ? editorPanel.setWidth : studentPanel.setWidth}
           />
         )}
       </section>
@@ -772,7 +809,7 @@ export default function RoadmapCanvas({
         open={isDiscardPreviewConfirmationOpen}
         onOpenChange={setIsDiscardPreviewConfirmationOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="gap-5 sm:max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-semibold">
               Descartar cambios sin guardar
@@ -791,7 +828,7 @@ export default function RoadmapCanvas({
                 void enterCanvasPreview(true);
               }}
             >
-              Descartar cambios y previsualizar
+              Descartar y previsualizar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

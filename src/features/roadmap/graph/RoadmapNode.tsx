@@ -1,7 +1,6 @@
 import { CircleCheckBig, CircleEllipsis, EyeOff, FileText, Link2, LockKeyhole } from 'lucide-react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
-import { studentNodeBlockMessages } from '@/features/roadmap/student/node-status';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
@@ -188,7 +187,6 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
   const teacherBlocked = editing && data.isTeacherBlocked;
-  const blockMessage = data.blockReason ? studentNodeBlockMessages[data.blockReason] : undefined;
   const surface = hidden || locked || teacherBlocked ? 'var(--cloud)' : '#fff';
   return (
     <div
@@ -204,9 +202,9 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-              'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
-              !hidden && 'shadow-(--shadow-roadmap-node)',
-            ),
+            'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
+            !hidden && 'shadow-(--shadow-roadmap-node)',
+          ),
       )}
       style={{
         width: size.width,
@@ -220,10 +218,7 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
     >
       <div
         data-testid="roadmap-node-content"
-        className={cn(
-          'flex items-center justify-center gap-2.5',
-          blockMessage ? 'h-[calc(100%-2.75rem)]' : 'h-full',
-        )}
+        className="flex h-full items-center justify-center gap-2.5"
       >
         <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={data.typeColor} />
         <p
@@ -233,15 +228,7 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
           {data.title}
         </p>
       </div>
-      {blockMessage ? (
-        <p className="absolute right-4 bottom-3 left-4 line-clamp-2 flex items-center gap-1.5 text-xs leading-snug font-semibold text-graphite">
-          <LockKeyhole className="size-3.5 shrink-0" aria-hidden="true" />
-          {blockMessage}
-        </p>
-      ) : null}
-      {!blockMessage ? (
-        <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
-      ) : null}
+      <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
       {hidden ? (
         <HiddenBadge />
       ) : teacherBlocked ? (
@@ -251,30 +238,30 @@ export function RoadmapNode({ data, selected }: NodeProps<RoadmapFlowNode>) {
       )}
       {!hidden
         ? (
-            [
-              ['top', Position.Top],
-              ['right', Position.Right],
-              ['bottom', Position.Bottom],
-              ['left', Position.Left],
-            ] as const
-          ).map(([id, position]) => (
-            <Handle
-              key={id}
-              id={id}
-              data-testid="roadmap-node-handle"
-              type="source"
-              position={position}
-              isConnectable={editing}
-              style={{
-                width: 12,
-                height: 12,
-                background: 'var(--primary)',
-                border: '2px solid var(--card)',
-                visibility: editing ? 'visible' : 'hidden',
-                pointerEvents: editing ? 'auto' : 'none',
-              }}
-            />
-          ))
+          [
+            ['top', Position.Top],
+            ['right', Position.Right],
+            ['bottom', Position.Bottom],
+            ['left', Position.Left],
+          ] as const
+        ).map(([id, position]) => (
+          <Handle
+            key={id}
+            id={id}
+            data-testid="roadmap-node-handle"
+            type="source"
+            position={position}
+            isConnectable={editing}
+            style={{
+              width: 12,
+              height: 12,
+              background: 'var(--primary)',
+              border: '2px solid var(--card)',
+              visibility: editing ? 'visible' : 'hidden',
+              pointerEvents: editing ? 'auto' : 'none',
+            }}
+          />
+        ))
         : null}
     </div>
   );

@@ -216,15 +216,17 @@ vi.mock('@/features/roadmap/student/NodeDetail', () => ({
     onClose,
     onComplete,
     isReadOnly,
+    panelWidth,
   }: {
     node?: { title: string };
     status: string | null;
     onClose: () => void;
     onComplete: (node: { title: string }) => void;
     isReadOnly?: boolean;
+    panelWidth?: number;
   }) =>
     node ? (
-      <aside data-testid="student-detail">
+      <aside data-testid="student-detail" data-panel-width={panelWidth}>
         <p>{node.title}</p>
         <p>{status}</p>
         <button type="button" disabled={isReadOnly} onClick={() => onComplete(node)}>
@@ -357,6 +359,7 @@ test('shows the course code and localized term together in the canvas header', (
   ).toBeTruthy();
   const canvas = screen.getByLabelText('Lienzo del roadmap');
   expect(canvas.className).toContain('lg:min-h-0');
+  expect(shortcuts.getAttribute('data-placement')).toBe('roadmap');
   expect(canvas.parentElement?.className).toContain('lg:grid-rows-[minmax(0,1fr)]');
   expect(canvas.parentElement?.parentElement?.className).toContain('lg:h-full');
 });
@@ -737,12 +740,26 @@ test('replaces the editor with the shared student detail and keeps its completio
   expect(screen.queryByTestId('editor-panel')).toBeNull();
   expect(screen.getByTestId('student-detail').textContent).toContain('Vista previa docente');
   expect(screen.getByTestId('student-detail').textContent).toContain('available');
+  expect(screen.getByTestId('student-detail').getAttribute('data-panel-width')).toBe('360');
 
   await user.click(screen.getByRole('button', { name: 'Completar' }));
   expect(screen.getByTestId('student-detail').textContent).toContain('completed');
   expect(completeNode).not.toHaveBeenCalled();
 
   await user.click(screen.getByRole('button', { name: 'Cerrar detalle' }));
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+});
+
+test('replaces a node information preview with the editor when selecting a node', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Previsualizar' }));
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+
+  expect(screen.queryByTestId('student-detail')).toBeNull();
   expect(screen.getByTestId('editor-panel')).toBeTruthy();
 });
 
@@ -807,7 +824,9 @@ test('confirms before discarding an unsaved editor draft to enter the canvas pre
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
   expect(screen.queryByText('Previsualización del canvas')).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
-  await user.click(screen.getByRole('button', { name: 'Descartar cambios y previsualizar' }));
+  const dialog = screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  expect(dialog.className).toContain('sm:max-w-lg');
+  await user.click(screen.getByRole('button', { name: 'Descartar y previsualizar' }));
 
   await waitFor(() => expect(loadSimulation).toHaveBeenCalledTimes(1));
   expect(screen.getByText('Previsualización del canvas')).toBeTruthy();
