@@ -164,6 +164,41 @@ test('deleting a dependency drops it from the roadmap without reloading', async 
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
+test('keeps a saved node position when canvas preview replaces the editing projection', async () => {
+  const editingRoadmap = {
+    ...roadmap('editing'),
+    nodes: [
+      {
+        id: 'node-1',
+        title: 'Límites',
+        nodeTypeId: 'type-1',
+        positionX: 0,
+        positionY: 0,
+      },
+    ],
+  };
+  const previewRoadmap = {
+    ...roadmap('preview'),
+    nodes: [{ ...editingRoadmap.nodes[0], positionX: 160, positionY: 80 }],
+  };
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(editingRoadmap))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json(previewRoadmap));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.nodes[0]?.positionX).toBe(0));
+
+  await expect(result.current.moveNode('node-1', { x: 160, y: 80 })).resolves.toBe(true);
+  await expect(result.current.loadSimulation()).resolves.toBe(true);
+
+  await waitFor(() => expect(result.current.simulationRoadmap?.nodes[0]?.positionX).toBe(160));
+  expect(result.current.roadmap?.nodes[0]).toMatchObject({ positionX: 160, positionY: 80 });
+  expect(fetchMock).toHaveBeenCalledTimes(3);
+});
+
 test('creating a dependency reloads the effective blocked state returned by the server', async () => {
   const fetchMock = vi
     .fn()

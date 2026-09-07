@@ -104,6 +104,19 @@ async function responseError(response: Response, fallback: string) {
   }
 }
 
+function withRoadmapNodePosition<T extends AnyRoadmapDto>(
+  roadmap: T,
+  nodeId: string,
+  position: { x: number; y: number },
+) {
+  return {
+    ...roadmap,
+    nodes: roadmap.nodes.map((node) =>
+      node.id === nodeId ? { ...node, positionX: position.x, positionY: position.y } : node,
+    ),
+  } as T;
+}
+
 export function useRoadmap(identifier: CourseOfferingIdentifier) {
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
@@ -363,11 +376,17 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
 
   const moveNode = useCallback(
     async (nodeId: string, position: { x: number; y: number }) => {
+      const requestKey = identifierKey(identifier);
       const succeeded = await mutate(
         roadmapUrl(identifier, `/nodes/${nodeId}`),
         { method: 'PATCH', body: JSON.stringify({ positionX: position.x, positionY: position.y }) },
         'No se pudo guardar la posición.',
       );
+      if (succeeded && activeIdentifierRef.current === requestKey) {
+        setRoadmap((current) =>
+          current ? withRoadmapNodePosition(current, nodeId, position) : current,
+        );
+      }
       if (!succeeded) await load();
       return succeeded;
     },
