@@ -234,7 +234,9 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     const requestVersion = ++simulationRequestVersionRef.current;
 
     try {
-      const response = await fetch(roadmapUrl(identifier, '/simulation'), { signal: controller.signal });
+      const response = await fetch(roadmapUrl(identifier, '/simulation'), {
+        signal: controller.signal,
+      });
       const body: unknown = response.ok ? await response.json() : undefined;
       const message = response.ok
         ? undefined
@@ -665,7 +667,9 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       );
       await loadSimulation();
       if (!succeeded && activeIdentifierRef.current === identifierKey(identifier)) {
-        setError(lastMutationErrorRef.current ?? 'No se pudo completar el nodo en la previsualización.');
+        setError(
+          lastMutationErrorRef.current ?? 'No se pudo completar el nodo en la previsualización.',
+        );
         setErrorKey(identifierKey(identifier));
       }
       return succeeded;
@@ -681,7 +685,9 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     );
     await loadSimulation();
     if (!succeeded && activeIdentifierRef.current === identifierKey(identifier)) {
-      setError(lastMutationErrorRef.current ?? 'No se pudo reiniciar el progreso de previsualización.');
+      setError(
+        lastMutationErrorRef.current ?? 'No se pudo reiniciar el progreso de previsualización.',
+      );
       setErrorKey(identifierKey(identifier));
     }
     return succeeded;
