@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useReducer,
   useRef,
   useState,
   type CSSProperties,
@@ -24,6 +25,7 @@ import type { Viewport } from '@xyflow/react';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
+import { useRoadmapEditorDraft } from '@/features/roadmap/editor/useRoadmapEditorDraft';
 import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
@@ -109,6 +111,144 @@ type PreviewReturnState = {
   isStudentDetailOpen: boolean;
   viewport: Viewport | null;
 };
+
+type CanvasState = {
+  selectedNodeId: string | null;
+  isEditorOpen: boolean;
+  isStudentDetailOpen: boolean;
+  isCanvasPreview: boolean;
+  previewReturnState: PreviewReturnState | null;
+  restoreViewport: Viewport | null;
+  editorKey: number;
+  isDiscardPreviewConfirmationOpen: boolean;
+  isResetConfirmationOpen: boolean;
+  teacherPreviewNode: StudentAccessibleRoadmapNode | null;
+  isTeacherPreviewCompleted: boolean;
+  pendingDependencyIds: string[] | null;
+  pendingVisibilityChange: PendingVisibilityChange | null;
+  isVisibilityPreviewing: boolean;
+  isVisibilityChanging: boolean;
+  pendingDependencyChange: PendingDependencyChange | null;
+  pendingTeacherBlockChange: PendingTeacherBlockChange | null;
+  isTeacherBlockChanging: boolean;
+};
+
+type CanvasStateAction =
+  | { type: 'closeSelectedNode'; canEdit: boolean }
+  | { type: 'closeTeacherPreview' }
+  | { type: 'enterCanvasPreview'; viewport: Viewport | null; discardDraft: boolean }
+  | { type: 'exitCanvasPreview' }
+  | {
+      type: 'selectNode';
+      nodeId: string;
+      isStudentExperience: boolean;
+      canEdit: boolean;
+    }
+  | { type: 'showTeacherPreview'; node: StudentAccessibleRoadmapNode }
+  | { type: 'completeTeacherPreview' }
+  | { type: 'toggleEditor' }
+  | { type: 'toggleStudentDetail' }
+  | { type: 'update'; update: Partial<CanvasState> };
+
+const initialCanvasState: CanvasState = {
+  selectedNodeId: null,
+  isEditorOpen: false,
+  isStudentDetailOpen: false,
+  isCanvasPreview: false,
+  previewReturnState: null,
+  restoreViewport: null,
+  editorKey: 0,
+  isDiscardPreviewConfirmationOpen: false,
+  isResetConfirmationOpen: false,
+  teacherPreviewNode: null,
+  isTeacherPreviewCompleted: false,
+  pendingDependencyIds: null,
+  pendingVisibilityChange: null,
+  isVisibilityPreviewing: false,
+  isVisibilityChanging: false,
+  pendingDependencyChange: null,
+  pendingTeacherBlockChange: null,
+  isTeacherBlockChanging: false,
+};
+
+function canvasStateReducer(state: CanvasState, action: CanvasStateAction): CanvasState {
+  switch (action.type) {
+    case 'closeSelectedNode':
+      return {
+        ...state,
+        selectedNodeId: null,
+        teacherPreviewNode: null,
+        isTeacherPreviewCompleted: false,
+        ...(action.canEdit ? { isEditorOpen: false } : { isStudentDetailOpen: false }),
+      };
+    case 'closeTeacherPreview':
+      return {
+        ...state,
+        teacherPreviewNode: null,
+        isTeacherPreviewCompleted: false,
+        isEditorOpen: true,
+      };
+    case 'enterCanvasPreview':
+      return {
+        ...state,
+        editorKey: action.discardDraft ? state.editorKey + 1 : state.editorKey,
+        restoreViewport: null,
+        previewReturnState: {
+          selectedNodeId: state.selectedNodeId,
+          isEditorOpen: state.isEditorOpen,
+          isStudentDetailOpen: state.isStudentDetailOpen,
+          viewport: action.viewport,
+        },
+        teacherPreviewNode: null,
+        isTeacherPreviewCompleted: false,
+        isStudentDetailOpen: false,
+        isEditorOpen: false,
+        selectedNodeId: null,
+        isCanvasPreview: true,
+      };
+    case 'exitCanvasPreview': {
+      const previous = state.previewReturnState;
+      return {
+        ...state,
+        isCanvasPreview: false,
+        selectedNodeId: previous?.selectedNodeId ?? null,
+        isEditorOpen: previous?.isEditorOpen ?? false,
+        isStudentDetailOpen: previous?.isStudentDetailOpen ?? false,
+        restoreViewport: previous?.viewport ?? null,
+        previewReturnState: null,
+      };
+    }
+    case 'selectNode':
+      return {
+        ...state,
+        selectedNodeId: action.nodeId,
+        ...(action.isStudentExperience
+          ? { isStudentDetailOpen: true }
+          : action.canEdit
+            ? {
+                teacherPreviewNode: null,
+                isTeacherPreviewCompleted: false,
+                isEditorOpen: true,
+              }
+            : {}),
+      };
+    case 'showTeacherPreview':
+      return {
+        ...state,
+        teacherPreviewNode: action.node,
+        isTeacherPreviewCompleted: false,
+        isEditorOpen: false,
+      };
+    case 'completeTeacherPreview':
+      return { ...state, isTeacherPreviewCompleted: true };
+    case 'toggleEditor':
+      return { ...state, isEditorOpen: !state.isEditorOpen };
+    case 'toggleStudentDetail':
+      return { ...state, isStudentDetailOpen: !state.isStudentDetailOpen };
+    case 'update':
+      return { ...state, ...action.update };
+  }
+}
 
 function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: ReactNode }) {
   return (
@@ -279,20 +419,26 @@ export default function RoadmapCanvas({
   year,
   semester,
 }: Props) {
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [isEditorOpen, setIsEditorOpen] = useState(false);
-  const [isStudentDetailOpen, setIsStudentDetailOpen] = useState(false);
-  const [isCanvasPreview, setIsCanvasPreview] = useState(false);
-  const [previewReturnState, setPreviewReturnState] = useState<PreviewReturnState | null>(null);
-  const [restoreViewport, setRestoreViewport] = useState<Viewport | null>(null);
-  const [isEditorDirty, setIsEditorDirty] = useState(false);
-  const [editorKey, setEditorKey] = useState(0);
-  const [isDiscardPreviewConfirmationOpen, setIsDiscardPreviewConfirmationOpen] = useState(false);
-  const [isResetConfirmationOpen, setIsResetConfirmationOpen] = useState(false);
-  const [teacherPreviewNode, setTeacherPreviewNode] = useState<StudentAccessibleRoadmapNode | null>(
-    null,
-  );
-  const [isTeacherPreviewCompleted, setIsTeacherPreviewCompleted] = useState(false);
+  const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
+  const {
+    selectedNodeId,
+    isEditorOpen,
+    isStudentDetailOpen,
+    isCanvasPreview,
+    restoreViewport,
+    editorKey,
+    isDiscardPreviewConfirmationOpen,
+    isResetConfirmationOpen,
+    teacherPreviewNode,
+    isTeacherPreviewCompleted,
+    pendingDependencyIds,
+    pendingVisibilityChange,
+    isVisibilityPreviewing,
+    isVisibilityChanging,
+    pendingDependencyChange,
+    pendingTeacherBlockChange,
+    isTeacherBlockChanging,
+  } = canvasState;
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const editorPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:roadmap-editor-panel-width',
@@ -302,14 +448,6 @@ export default function RoadmapCanvas({
     storageKey: 'u-roadmaps:student-node-detail-width',
     initialWidth: 426,
   });
-  const [pendingDependencyIds, setPendingDependencyIds] = useState<string[] | null>(null);
-  const [pendingVisibilityChange, setPendingVisibilityChange] =
-    useState<PendingVisibilityChange | null>(null);
-  const [pendingDependencyChange, setPendingDependencyChange] =
-    useState<PendingDependencyChange | null>(null);
-  const [pendingTeacherBlockChange, setPendingTeacherBlockChange] =
-    useState<PendingTeacherBlockChange | null>(null);
-  const [isTeacherBlockChanging, setIsTeacherBlockChanging] = useState(false);
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
   const previewCanvasButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -343,6 +481,9 @@ export default function RoadmapCanvas({
     completeSimulatedNode,
     resetSimulation,
   } = useRoadmap(identifier);
+  const editorSelectedNode = roadmap?.nodes.find((node) => node.id === selectedNodeId) as
+    RoadmapNode | undefined;
+  const editorDraft = useRoadmapEditorDraft(editorSelectedNode);
 
   const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
 
@@ -384,56 +525,36 @@ export default function RoadmapCanvas({
   );
 
   function closeSelectedNode() {
-    setSelectedNodeId(null);
-    setTeacherPreviewNode(null);
-    setIsTeacherPreviewCompleted(false);
-    if (canEdit) setIsEditorOpen(false);
-    else setIsStudentDetailOpen(false);
+    dispatchCanvas({ type: 'closeSelectedNode', canEdit });
     requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
   }
 
   function closeTeacherPreview() {
-    setTeacherPreviewNode(null);
-    setIsTeacherPreviewCompleted(false);
-    setIsEditorOpen(true);
+    dispatchCanvas({ type: 'closeTeacherPreview' });
     requestAnimationFrame(() => previewButtonRef.current?.focus());
   }
 
   async function enterCanvasPreview(discardDraft = false) {
     const loaded = await loadSimulation();
     if (!loaded) return;
-    if (discardDraft) setEditorKey((key) => key + 1);
-    setRestoreViewport(null);
-    setPreviewReturnState({
-      selectedNodeId,
-      isEditorOpen,
-      isStudentDetailOpen,
+    if (discardDraft) editorDraft.reset();
+    dispatchCanvas({
+      type: 'enterCanvasPreview',
       viewport: lastViewportRef.current,
+      discardDraft,
     });
-    setTeacherPreviewNode(null);
-    setIsTeacherPreviewCompleted(false);
-    setIsStudentDetailOpen(false);
-    setIsEditorOpen(false);
-    setSelectedNodeId(null);
-    setIsCanvasPreview(true);
   }
 
   function requestCanvasPreview() {
-    if (isEditorDirty) {
-      setIsDiscardPreviewConfirmationOpen(true);
+    if (editorDraft.isDirty) {
+      dispatchCanvas({ type: 'update', update: { isDiscardPreviewConfirmationOpen: true } });
       return;
     }
     void enterCanvasPreview();
   }
 
   function exitCanvasPreview() {
-    const previous = previewReturnState;
-    setIsCanvasPreview(false);
-    setSelectedNodeId(previous?.selectedNodeId ?? null);
-    setIsEditorOpen(previous?.isEditorOpen ?? false);
-    setIsStudentDetailOpen(previous?.isStudentDetailOpen ?? false);
-    setRestoreViewport(previous?.viewport ?? null);
-    setPreviewReturnState(null);
+    dispatchCanvas({ type: 'exitCanvasPreview' });
     requestAnimationFrame(() => previewCanvasButtonRef.current?.focus());
   }
 
@@ -446,14 +567,14 @@ export default function RoadmapCanvas({
       }
       if (event.key === 'Escape' && canEdit && isEditorOpen && !isCanvasPreview) {
         event.preventDefault();
-        setIsEditorOpen(false);
+        dispatchCanvas({ type: 'update', update: { isEditorOpen: false } });
         return;
       }
       if (event.key.toLowerCase() === 'b' && (event.metaKey || event.ctrlKey) && selectedNodeId) {
         event.preventDefault();
         if (canEdit && !isCanvasPreview) {
-          if (!teacherPreviewNode) setIsEditorOpen((open) => !open);
-        } else setIsStudentDetailOpen((open) => !open);
+          if (!teacherPreviewNode) dispatchCanvas({ type: 'toggleEditor' });
+        } else dispatchCanvas({ type: 'toggleStudentDetail' });
       }
     };
     window.addEventListener('keydown', handleKeyboardShortcut);
@@ -461,10 +582,45 @@ export default function RoadmapCanvas({
   }, [canEdit, isCanvasPreview, isEditorOpen, selectedNodeId, teacherPreviewNode]);
 
   async function requestVisibilityChange(nodeId: string, isVisible: boolean) {
-    if (!isVisible) return toggleVisibility(nodeId, isVisible);
-    const dependencies = await previewNodeVisibility(nodeId);
-    if (dependencies) setPendingVisibilityChange({ nodeId, isVisible, dependencies });
+    if (pendingVisibilityChange || isVisibilityPreviewing || isVisibilityChanging) return false;
+    if (!isVisible) {
+      dispatchCanvas({
+        type: 'update',
+        update: { pendingVisibilityChange: { nodeId, isVisible, dependencies: [] } },
+      });
+      return false;
+    }
+    dispatchCanvas({ type: 'update', update: { isVisibilityPreviewing: true } });
+    try {
+      const dependencies = await previewNodeVisibility(nodeId);
+      if (dependencies)
+        dispatchCanvas({
+          type: 'update',
+          update: { pendingVisibilityChange: { nodeId, isVisible, dependencies } },
+        });
+    } finally {
+      dispatchCanvas({
+        type: 'update',
+        update: { isVisibilityPreviewing: false },
+      });
+    }
     return false;
+  }
+
+  async function confirmVisibilityChange() {
+    if (!pendingVisibilityChange || isVisibilityChanging) return;
+    dispatchCanvas({ type: 'update', update: { isVisibilityChanging: true } });
+    const changed = await toggleVisibility(
+      pendingVisibilityChange.nodeId,
+      pendingVisibilityChange.isVisible,
+    );
+    dispatchCanvas({
+      type: 'update',
+      update: {
+        isVisibilityChanging: false,
+        ...(changed ? { pendingVisibilityChange: null } : {}),
+      },
+    });
   }
 
   async function requestDependencyChange({
@@ -490,38 +646,54 @@ export default function RoadmapCanvas({
       void connectNodes(source, target, sourceHandle ?? undefined, targetHandle ?? undefined);
       return;
     }
-    setPendingDependencyChange({
-      sourceNodeId: source,
-      targetNodeId: target,
-      sourceHandle: sourceHandle ?? undefined,
-      targetHandle: targetHandle ?? undefined,
-      nodes,
+    dispatchCanvas({
+      type: 'update',
+      update: {
+        pendingDependencyChange: {
+          sourceNodeId: source,
+          targetNodeId: target,
+          sourceHandle: sourceHandle ?? undefined,
+          targetHandle: targetHandle ?? undefined,
+          nodes,
+        },
+      },
     });
   }
 
   async function requestTeacherBlockChange(nodeId: string, operation: TeacherBlockOperation) {
     const preview = await previewTeacherBlock(nodeId, operation);
-    if (preview) setPendingTeacherBlockChange({ nodeId, operation, ...preview });
+    if (preview)
+      dispatchCanvas({
+        type: 'update',
+        update: { pendingTeacherBlockChange: { nodeId, operation, ...preview } },
+      });
   }
 
   async function confirmTeacherBlockChange() {
     if (!pendingTeacherBlockChange || isTeacherBlockChanging) return;
-    setIsTeacherBlockChanging(true);
+    dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: true } });
     const latestPreview = await previewTeacherBlock(
       pendingTeacherBlockChange.nodeId,
       pendingTeacherBlockChange.operation,
     );
     if (!latestPreview) {
-      setPendingTeacherBlockChange(null);
-      setIsTeacherBlockChanging(false);
+      dispatchCanvas({
+        type: 'update',
+        update: { pendingTeacherBlockChange: null, isTeacherBlockChanging: false },
+      });
       return;
     }
     if (!sameTeacherBlockPreview(pendingTeacherBlockChange, latestPreview)) {
-      setPendingTeacherBlockChange({ ...pendingTeacherBlockChange, ...latestPreview });
-      setIsTeacherBlockChanging(false);
+      dispatchCanvas({
+        type: 'update',
+        update: {
+          pendingTeacherBlockChange: { ...pendingTeacherBlockChange, ...latestPreview },
+          isTeacherBlockChanging: false,
+        },
+      });
       return;
     }
-    setPendingTeacherBlockChange(null);
+    dispatchCanvas({ type: 'update', update: { pendingTeacherBlockChange: null } });
     const changed = await changeTeacherBlock(
       pendingTeacherBlockChange.nodeId,
       pendingTeacherBlockChange.operation,
@@ -533,14 +705,19 @@ export default function RoadmapCanvas({
         pendingTeacherBlockChange.operation,
       );
       if (refreshedPreview) {
-        setPendingTeacherBlockChange({
-          nodeId: pendingTeacherBlockChange.nodeId,
-          operation: pendingTeacherBlockChange.operation,
-          ...refreshedPreview,
+        dispatchCanvas({
+          type: 'update',
+          update: {
+            pendingTeacherBlockChange: {
+              nodeId: pendingTeacherBlockChange.nodeId,
+              operation: pendingTeacherBlockChange.operation,
+              ...refreshedPreview,
+            },
+          },
         });
       }
     }
-    setIsTeacherBlockChanging(false);
+    dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: false } });
   }
 
   if (error && !roadmap) {
@@ -588,7 +765,9 @@ export default function RoadmapCanvas({
       viewport,
     );
     if (!position) return Promise.resolve(false);
-    return addNode(node, position, setSelectedNodeId);
+    return addNode(node, position, (nodeId) =>
+      dispatchCanvas({ type: 'update', update: { selectedNodeId: nodeId } }),
+    );
   };
   const teacherBlockDialog = pendingTeacherBlockChange
     ? teacherBlockConfirmation(
@@ -663,7 +842,9 @@ export default function RoadmapCanvas({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsResetConfirmationOpen(true)}
+                  onClick={() =>
+                    dispatchCanvas({ type: 'update', update: { isResetConfirmationOpen: true } })
+                  }
                 >
                   <RotateCcw data-icon="inline-start" />
                   Reiniciar progreso
@@ -682,13 +863,7 @@ export default function RoadmapCanvas({
               const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
               if (isStudentExperience && isStudentBlockedNode(node)) return;
               selectedNodeTriggerRef.current = trigger;
-              setSelectedNodeId(nodeId);
-              if (isStudentExperience) setIsStudentDetailOpen(true);
-              else if (canEdit) {
-                setTeacherPreviewNode(null);
-                setIsTeacherPreviewCompleted(false);
-                setIsEditorOpen(true);
-              }
+              dispatchCanvas({ type: 'selectNode', nodeId, isStudentExperience, canEdit });
             }}
             selectedNodeId={selectedNodeId}
             onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
@@ -697,7 +872,9 @@ export default function RoadmapCanvas({
             }
             onClearSelectedNode={closeSelectedNode}
             onConnectNodes={(connection) => void requestDependencyChange(connection)}
-            onDeleteDependencies={setPendingDependencyIds}
+            onDeleteDependencies={(pendingDependencyIds) =>
+              dispatchCanvas({ type: 'update', update: { pendingDependencyIds } })
+            }
             onAutoLayout={(nodes) => {
               void Promise.all(
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
@@ -709,6 +886,9 @@ export default function RoadmapCanvas({
             restoreViewport={restoreViewport}
             onRequestAccessAction={(nodeId, operation) =>
               void requestTeacherBlockChange(nodeId, operation)
+            }
+            onRequestVisibilityAction={(nodeId, isVisible) =>
+              void requestVisibilityChange(nodeId, isVisible)
             }
             topRightActions={
               !isCanvasPreview && (canEdit || canPreview)
@@ -747,7 +927,7 @@ export default function RoadmapCanvas({
                           type="button"
                           size="icon"
                           variant="outline"
-                          onClick={() => setIsEditorOpen((isOpen) => !isOpen)}
+                          onClick={() => dispatchCanvas({ type: 'toggleEditor' })}
                         >
                           {isEditorOpen ? <PanelRightClose /> : <PanelRightOpen />}
                         </Button>
@@ -768,6 +948,8 @@ export default function RoadmapCanvas({
             key={editorKey}
             roadmap={roadmap as RoadmapDto}
             selectedNode={selectedNode as RoadmapNode | undefined}
+            draft={editorDraft}
+            isVisibilityPending={isVisibilityPreviewing || isVisibilityChanging}
             isOpen={isEditorOpen && !isCanvasPreview}
             onClose={closeSelectedNode}
             onUpdateNode={updateNodeWithConfirmation}
@@ -781,11 +963,8 @@ export default function RoadmapCanvas({
             onUpdateResource={updateResourceWithConfirmation}
             onDeleteResource={deleteResource}
             onPreview={(node) => {
-              setTeacherPreviewNode(node);
-              setIsTeacherPreviewCompleted(false);
-              setIsEditorOpen(false);
+              dispatchCanvas({ type: 'showTeacherPreview', node });
             }}
-            onDirtyChange={setIsEditorDirty}
             previewButtonRef={previewButtonRef}
             panelWidth={editorPanel.width}
             onPanelWidthChange={editorPanel.setWidth}
@@ -809,7 +988,7 @@ export default function RoadmapCanvas({
             onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
             onComplete={(node) => {
               if (isCanvasPreview && !isHistorical) void completeSimulatedNode(node.id);
-              else if (teacherPreviewNode) setIsTeacherPreviewCompleted(true);
+              else if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
               else void completeNode(node.id);
             }}
             isReadOnly={isHistorical && !teacherPreviewNode}
@@ -821,7 +1000,9 @@ export default function RoadmapCanvas({
       </section>
       <AlertDialog
         open={Boolean(pendingDependencyIds?.length)}
-        onOpenChange={(open) => !open && setPendingDependencyIds(null)}
+        onOpenChange={(open) =>
+          !open && dispatchCanvas({ type: 'update', update: { pendingDependencyIds: null } })
+        }
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -842,7 +1023,7 @@ export default function RoadmapCanvas({
               onClick={() => {
                 for (const dependencyId of pendingDependencyIds ?? [])
                   void deleteDependency(dependencyId);
-                setPendingDependencyIds(null);
+                dispatchCanvas({ type: 'update', update: { pendingDependencyIds: null } });
               }}
             >
               <Trash2 data-icon="inline-start" />
@@ -853,7 +1034,9 @@ export default function RoadmapCanvas({
       </AlertDialog>
       <AlertDialog
         open={isDiscardPreviewConfirmationOpen}
-        onOpenChange={setIsDiscardPreviewConfirmationOpen}
+        onOpenChange={(isDiscardPreviewConfirmationOpen) =>
+          dispatchCanvas({ type: 'update', update: { isDiscardPreviewConfirmationOpen } })
+        }
       >
         <AlertDialogContent className="gap-5 sm:max-w-lg">
           <AlertDialogHeader>
@@ -870,7 +1053,10 @@ export default function RoadmapCanvas({
             <AlertDialogAction
               type="button"
               onClick={() => {
-                setIsDiscardPreviewConfirmationOpen(false);
+                dispatchCanvas({
+                  type: 'update',
+                  update: { isDiscardPreviewConfirmationOpen: false },
+                });
                 void enterCanvasPreview(true);
               }}
             >
@@ -879,7 +1065,12 @@ export default function RoadmapCanvas({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog open={isResetConfirmationOpen} onOpenChange={setIsResetConfirmationOpen}>
+      <AlertDialog
+        open={isResetConfirmationOpen}
+        onOpenChange={(isResetConfirmationOpen) =>
+          dispatchCanvas({ type: 'update', update: { isResetConfirmationOpen } })
+        }
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-semibold">
@@ -896,7 +1087,7 @@ export default function RoadmapCanvas({
               type="button"
               variant="destructive"
               onClick={() => {
-                setIsResetConfirmationOpen(false);
+                dispatchCanvas({ type: 'update', update: { isResetConfirmationOpen: false } });
                 void resetSimulation();
               }}
             >
@@ -907,7 +1098,10 @@ export default function RoadmapCanvas({
       </AlertDialog>
       <AlertDialog
         open={Boolean(pendingVisibilityChange)}
-        onOpenChange={(open) => !open && setPendingVisibilityChange(null)}
+        onOpenChange={(open) => {
+          if (!open && !isVisibilityChanging)
+            dispatchCanvas({ type: 'update', update: { pendingVisibilityChange: null } });
+        }}
       >
         <AlertDialogContent className="gap-5 sm:max-w-xl">
           <AlertDialogHeader className="items-stretch gap-4 text-left sm:items-stretch">
@@ -916,16 +1110,25 @@ export default function RoadmapCanvas({
                 aria-hidden="true"
                 className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground ring-1 ring-border"
               >
-                <EyeOff className="size-5 text-muted-foreground" />
+                {pendingVisibilityChange?.isVisible ? (
+                  <EyeOff className="size-5 text-muted-foreground" />
+                ) : (
+                  <Eye className="size-5 text-muted-foreground" />
+                )}
               </span>
-              <div className="min-w-0 space-y-1">
+              <div className="flex min-w-0 flex-col gap-1">
                 <AlertDialogTitle className="text-xl font-semibold tracking-tight">
-                  Confirmar ocultación
+                  {pendingVisibilityChange?.isVisible
+                    ? 'Confirmar ocultación'
+                    : 'Confirmar publicación'}
                 </AlertDialogTitle>
                 <AlertDialogDescription className="text-sm leading-relaxed">
-                  {hasVisibilityDependencies ? (
+                  {!pendingVisibilityChange?.isVisible ? (
+                    'Este Nodo se mostrará al estudiantado y quedará disponible inmediatamente. No tendrá Dependencias ni Bloqueo docente.'
+                  ) : hasVisibilityDependencies ? (
                     <>
-                      Ocultarás este nodo y eliminarás{' '}
+                      El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo
+                      docente y se eliminarán{' '}
                       <span className="font-semibold text-destructive">
                         {visibilityDependencies.length}{' '}
                         {visibilityDependencies.length === 1
@@ -935,14 +1138,17 @@ export default function RoadmapCanvas({
                       .
                     </>
                   ) : (
-                    'Ocultarás este nodo. No posee dependencias.'
+                    'El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y no posee Dependencias.'
                   )}
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
-          {hasVisibilityDependencies ? (
-            <section aria-labelledby="removed-dependencies-heading" className="space-y-2.5">
+          {pendingVisibilityChange?.isVisible && hasVisibilityDependencies ? (
+            <section
+              aria-labelledby="removed-dependencies-heading"
+              className="flex flex-col gap-2.5"
+            >
               <h3
                 id="removed-dependencies-heading"
                 className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase"
@@ -982,27 +1188,23 @@ export default function RoadmapCanvas({
             </section>
           ) : null}
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isVisibilityChanging}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               type="button"
-              variant="destructive"
-              onClick={() => {
-                if (pendingVisibilityChange)
-                  void toggleVisibility(
-                    pendingVisibilityChange.nodeId,
-                    pendingVisibilityChange.isVisible,
-                  );
-                setPendingVisibilityChange(null);
-              }}
+              variant={pendingVisibilityChange?.isVisible ? 'destructive' : 'default'}
+              disabled={isVisibilityChanging}
+              onClick={() => void confirmVisibilityChange()}
             >
-              Ocultar
+              {pendingVisibilityChange?.isVisible ? 'Ocultar' : 'Mostrar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog
         open={Boolean(pendingDependencyChange)}
-        onOpenChange={(open) => !open && setPendingDependencyChange(null)}
+        onOpenChange={(open) =>
+          !open && dispatchCanvas({ type: 'update', update: { pendingDependencyChange: null } })
+        }
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1033,7 +1235,7 @@ export default function RoadmapCanvas({
                     pendingDependencyChange.sourceHandle,
                     pendingDependencyChange.targetHandle,
                   );
-                setPendingDependencyChange(null);
+                dispatchCanvas({ type: 'update', update: { pendingDependencyChange: null } });
               }}
             >
               Conectar y bloquear
@@ -1043,7 +1245,9 @@ export default function RoadmapCanvas({
       </AlertDialog>
       <AlertDialog
         open={Boolean(pendingTeacherBlockChange)}
-        onOpenChange={(open) => !open && setPendingTeacherBlockChange(null)}
+        onOpenChange={(open) =>
+          !open && dispatchCanvas({ type: 'update', update: { pendingTeacherBlockChange: null } })
+        }
       >
         <AlertDialogContent>
           <AlertDialogHeader>

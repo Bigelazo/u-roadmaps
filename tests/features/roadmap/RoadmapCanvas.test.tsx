@@ -19,7 +19,8 @@ vi.mock('next/dynamic', () => ({
       onToggleVisibility,
       onUpdateNode,
       onAddResource,
-      onDirtyChange,
+      draft,
+      isVisibilityPending,
     }: {
       selectedNode?: { id: string; isTeacherBlocked: boolean };
       isOpen: boolean;
@@ -45,7 +46,11 @@ vi.mock('next/dynamic', () => ({
       onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
       onUpdateNode: (nodeId: string, node: unknown) => Promise<boolean>;
       onAddResource: (nodeId: string, resource: unknown) => Promise<boolean>;
-      onDirtyChange?: (isDirty: boolean) => void;
+      draft?: {
+        editNode: { title: string; description: string; nodeTypeId: string };
+        setEditNode: (value: { title: string; description: string; nodeTypeId: string }) => void;
+      };
+      isVisibilityPending: boolean;
     }) =>
       isOpen ? (
         <aside data-testid="editor-panel">
@@ -66,7 +71,11 @@ vi.mock('next/dynamic', () => ({
               >
                 Desbloquear
               </button>
-              <button type="button" onClick={() => onToggleVisibility(selectedNode.id, true)}>
+              <button
+                type="button"
+                disabled={isVisibilityPending}
+                onClick={() => onToggleVisibility(selectedNode.id, true)}
+              >
                 Ocultar para estudiantes
               </button>
               <button
@@ -107,7 +116,12 @@ vi.mock('next/dynamic', () => ({
               >
                 Previsualizar
               </button>
-              <button type="button" onClick={() => onDirtyChange?.(true)}>
+              <button
+                type="button"
+                onClick={() =>
+                  draft?.setEditNode({ ...draft.editNode, title: 'Borrador sin guardar' })
+                }
+              >
                 Marcar borrador sin guardar
               </button>
             </>
@@ -131,6 +145,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     isTeacherView,
     onViewportChange,
     restoreViewport,
+    onRequestVisibilityAction,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
     onConnectNodes: (connection: {
@@ -149,6 +164,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     isTeacherView?: boolean;
     onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
     restoreViewport?: { x: number; y: number; zoom: number } | null;
+    onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
     topRightActions?: (
       getViewport: () => {
         x: number;
@@ -173,6 +189,12 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       </button>
       <button type="button" onClick={() => onSelectNode('node-1', document.createElement('div'))}>
         Activar nodo docente
+      </button>
+      <button type="button" onClick={() => onRequestVisibilityAction?.('node-1', true)}>
+        Solicitar ocultar nodo
+      </button>
+      <button type="button" onClick={() => onRequestVisibilityAction?.('node-1', false)}>
+        Solicitar mostrar nodo
       </button>
       <button
         type="button"
@@ -627,7 +649,9 @@ test('omits the dependency section when hiding a node without dependencies', asy
   await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' });
 
-  expect(dialog.textContent).toContain('Ocultarás este nodo. No posee dependencias.');
+  expect(dialog.textContent).toContain('desaparecerá del Roadmap del estudiantado');
+  expect(dialog.textContent).toContain('se quitará su Bloqueo docente');
+  expect(dialog.textContent).toContain('no posee Dependencias');
   expect(
     within(dialog).queryByRole('heading', { name: 'Dependencias que se eliminarán' }),
   ).toBeNull();
@@ -635,6 +659,82 @@ test('omits the dependency section when hiding a node without dependencies', asy
 
   await user.click(within(dialog).getByRole('button', { name: 'Ocultar' }));
   expect(toggleVisibility).toHaveBeenCalledWith('node-1', true);
+});
+
+test('confirms showing a node with the approved message before changing it', async () => {
+  const user = userEvent.setup();
+  const toggleVisibility = vi.fn();
+  useRoadmapMock.mockReturnValue(roadmapActions({ toggleVisibility }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Solicitar mostrar nodo' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar publicación' });
+  const approvedMessage =
+    'Este Nodo se mostrará al estudiantado y quedará disponible inmediatamente. No tendrá Dependencias ni Bloqueo docente.';
+  expect(within(dialog).getByText(approvedMessage).textContent).toBe(approvedMessage);
+  await user.click(within(dialog).getByRole('button', { name: 'Mostrar' }));
+  expect(toggleVisibility).toHaveBeenCalledWith('node-1', false);
+});
+
+test('prevents duplicate visibility previews while loading their impact', async () => {
+  const user = userEvent.setup();
+  let resolvePreview!: (dependencies: []) => void;
+  const previewNodeVisibility = vi.fn(
+    () =>
+      new Promise<[]>((resolve) => {
+        resolvePreview = resolve;
+      }),
+  );
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewNodeVisibility }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  const visibilityControl = screen.getByRole('button', {
+    name: 'Ocultar para estudiantes',
+  }) as HTMLButtonElement;
+  await user.click(visibilityControl);
+
+  await waitFor(() => expect(visibilityControl.disabled).toBe(true));
+  await user.click(visibilityControl);
+  expect(previewNodeVisibility).toHaveBeenCalledTimes(1);
+
+  resolvePreview([]);
+  expect(await screen.findByRole('alertdialog', { name: 'Confirmar ocultación' })).toBeTruthy();
+});
+
+test('keeps a failed visibility mutation recoverable and blocks duplicate confirmation', async () => {
+  const user = userEvent.setup();
+  let resolveFirstAttempt!: (changed: boolean) => void;
+  const toggleVisibility = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveFirstAttempt = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ toggleVisibility }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Solicitar mostrar nodo' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar publicación' });
+  const confirm = within(dialog).getByRole('button', { name: 'Mostrar' }) as HTMLButtonElement;
+  await user.click(within(dialog).getByRole('button', { name: 'Mostrar' }));
+  await waitFor(() => expect(confirm.disabled).toBe(true));
+
+  await user.click(confirm);
+  expect(toggleVisibility).toHaveBeenCalledTimes(1);
+
+  resolveFirstAttempt(false);
+  await waitFor(() => expect(confirm.disabled).toBe(false));
+  expect(screen.getByRole('alertdialog', { name: 'Confirmar publicación' })).toBeTruthy();
+
+  await user.click(confirm);
+  await waitFor(() =>
+    expect(screen.queryByRole('alertdialog', { name: 'Confirmar publicación' })).toBeNull(),
+  );
+  expect(toggleVisibility).toHaveBeenCalledTimes(2);
 });
 
 test('confirms a teacher block from the most recent preview before mutating', async () => {
@@ -919,7 +1019,7 @@ test('lets teachers enter the persistent student canvas preview, complete a node
   expect(screen.getByRole('button', { name: 'Previsualizar canvas' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
 
-  await waitFor(() => expect(screen.getByText('Previsualización del canvas')).toBeTruthy());
+  expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
   expect(loadSimulation).toHaveBeenCalled();
   expect(screen.getByTestId('roadmap-mode').textContent).toBe('student');
   expect(screen.getByTestId('displayed-roadmap').textContent).toBe('simulation-roadmap');

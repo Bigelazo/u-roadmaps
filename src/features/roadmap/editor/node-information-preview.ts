@@ -1,13 +1,5 @@
 import type { RoadmapNode, StudentAccessibleRoadmapNode } from '@/features/roadmap/types';
-import type { NodeUpdate, ResourceInput } from './types';
-
-export type ResourceEditorDraft = {
-  value: ResourceInput;
-  editingResourceId: string | null;
-  isOpen: boolean;
-  mode: 'file' | 'link';
-  selectedFile: File | null;
-};
+import type { NodeUpdate, ResourceEditorDraft } from './types';
 
 export function emptyResourceEditorDraft(): ResourceEditorDraft {
   return {
@@ -60,7 +52,9 @@ export function projectNodeInformationPreview(
 
   if (resourceChanges && resourceDraft.editingResourceId) {
     resources = node.resources.map((resource) =>
-      resource.id === resourceDraft.editingResourceId ? { ...resource, ...resourceDraft.value } : resource,
+      resource.id === resourceDraft.editingResourceId
+        ? { ...resource, ...resourceDraft.value }
+        : resource,
     );
   } else if (resourceChanges && !resourceDraft.editingResourceId) {
     const resource = resourceDraft.selectedFile

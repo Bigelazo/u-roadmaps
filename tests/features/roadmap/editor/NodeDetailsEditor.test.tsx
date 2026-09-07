@@ -27,6 +27,7 @@ function renderEditor(overrides: Partial<ComponentProps<typeof NodeDetailsEditor
     resourceValue: { title: '', url: '', type: 'LINK' },
     editingResourceId: null,
     isResourceComposerOpen: false,
+    isVisibilityPending: false,
     resourceMode: 'file',
     selectedResourceFile: null,
     isDirty: false,
@@ -105,6 +106,17 @@ test('explains that student access does not apply while the node is hidden', () 
 
   expect(screen.getByText('El acceso se habilitará cuando el hito sea visible.')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Restringir acceso' })).toBeNull();
+});
+
+test('disables the visibility control while its impact or mutation is pending', async () => {
+  const user = userEvent.setup();
+  const onToggleVisibility = vi.fn();
+  renderEditor({ isVisibilityPending: true, onToggleVisibility });
+
+  const visibilityControl = screen.getByRole('switch', { name: 'Visible para estudiantes' });
+  expect(visibilityControl.hasAttribute('data-disabled')).toBe(true);
+  await user.click(visibilityControl);
+  expect(onToggleVisibility).not.toHaveBeenCalled();
 });
 
 test('enables saving only after the node form changes', async () => {

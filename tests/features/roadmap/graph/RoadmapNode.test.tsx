@@ -84,10 +84,11 @@ test('marks hidden teacher nodes with a distinct visual treatment and no visibil
   expect(hiddenBadge).toBeTruthy();
 });
 
-test('opens the teaching action menu independently and invokes its contextual access action', async () => {
+test('opens the teaching action menu independently and invokes its contextual actions', async () => {
   const user = userEvent.setup();
   const onToggleActionMenu = vi.fn();
   const onRequestAccessAction = vi.fn();
+  const onRequestVisibilityAction = vi.fn();
   const props = {
     id: 'teacher-node',
     type: 'roadmap',
@@ -103,6 +104,7 @@ test('opens the teaching action menu independently and invokes its contextual ac
       isActionMenuOpen: false,
       onToggleActionMenu,
       onRequestAccessAction,
+      onRequestVisibilityAction,
     },
     selected: false,
     selectable: true,
@@ -130,7 +132,82 @@ test('opens the teaching action menu independently and invokes its contextual ac
   );
   await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
   expect(onRequestAccessAction).toHaveBeenCalledWith('teacher-node', 'BLOCK');
+  const visibilityAction = screen.getByRole('button', { name: 'Ocultar para estudiantes' });
+  expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
+  expect(visibilityAction.className).toContain('top-6');
+  expect(visibilityAction.className).toContain('left-[3.7rem]');
+  expect(
+    screen.getByTestId('visibility-current-icon').getAttribute('class')?.split(/\s+/),
+  ).not.toContain('hidden');
+  expect(
+    screen.getByTestId('visibility-result-icon').getAttribute('class')?.split(/\s+/),
+  ).toContain('hidden');
+  await user.click(visibilityAction);
+  expect(onRequestVisibilityAction).toHaveBeenCalledWith('teacher-node', true);
   expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
+});
+
+test('offers showing a hidden node without an access action', async () => {
+  const user = userEvent.setup();
+  const onRequestVisibilityAction = vi.fn();
+  const props = {
+    id: 'hidden-teacher-node',
+    type: 'roadmap',
+    data: {
+      title: 'Material de coordinación',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'editing' as const,
+      isTeacherBlocked: false,
+      isHidden: true,
+      canManageActions: true,
+      isActionMenuOpen: false,
+      onRequestVisibilityAction,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: false,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  const { rerender } = render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  expect(screen.getByTestId('node-action-trigger-hidden')).toBeTruthy();
+  expect(screen.queryByTestId('node-action-trigger-close')).toBeNull();
+
+  rerender(
+    <ReactFlowProvider>
+      <RoadmapNode {...{ ...props, data: { ...props.data, isActionMenuOpen: true } }} />
+    </ReactFlowProvider>,
+  );
+
+  expect(screen.getByTestId('node-action-trigger-close')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Bloquear rama' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Desbloquear' })).toBeNull();
+  const visibilityAction = screen.getByRole('button', { name: 'Mostrar para estudiantes' });
+  expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
+  expect(visibilityAction.className).toContain('top-6');
+  expect(visibilityAction.className).toContain('left-[3.7rem]');
+  expect(
+    screen.getByTestId('visibility-current-icon').getAttribute('class')?.split(/\s+/),
+  ).not.toContain('hidden');
+  expect(
+    screen.getByTestId('visibility-result-icon').getAttribute('class')?.split(/\s+/),
+  ).toContain('hidden');
+  expect(screen.getByTestId('node-action-resource-slot')).toBeTruthy();
+  expect(screen.getByTestId('node-action-delete-slot')).toBeTruthy();
+  await user.click(visibilityAction);
+  expect(onRequestVisibilityAction).toHaveBeenCalledWith('hidden-teacher-node', false);
 });
 
 test('keeps dependency handles mounted, but inert, for student nodes', () => {
@@ -428,16 +505,16 @@ test('opens node icon and status tooltips immediately, with the status below its
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1);
   });
-  expect(screen.getByText('Contenido').closest('[data-slot="tooltip-content"]')).toBeTruthy();
+  expect(screen.getByText('Contenido').getAttribute('data-slot')).toBe('tooltip-content');
 
   fireEvent.mouseLeave(screen.getByRole('img', { name: 'Contenido' }));
   fireEvent.mouseEnter(screen.getByRole('img', { name: 'Pendiente' }));
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1);
   });
-  const statusTooltip = screen.getByText('Pendiente').closest('[data-slot="tooltip-content"]');
-  expect(statusTooltip).toBeTruthy();
-  expect(statusTooltip?.getAttribute('data-side')).toBe('bottom');
+  const statusTooltip = screen.getByText('Pendiente');
+  expect(statusTooltip.getAttribute('data-slot')).toBe('tooltip-content');
+  expect(statusTooltip.getAttribute('data-side')).toBe('bottom');
 });
 
 test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(

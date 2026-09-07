@@ -5,7 +5,7 @@ import type {
   StudentAccessibleRoadmapNode,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
-import type { RefObject } from 'react';
+import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 
 export type NodeInput = {
@@ -23,6 +23,24 @@ export type ResourceInput = {
   type: Resource['type'];
 };
 
+export type ResourceEditorDraft = {
+  value: ResourceInput;
+  editingResourceId: string | null;
+  isOpen: boolean;
+  mode: 'file' | 'link';
+  selectedFile: File | null;
+};
+
+export type RoadmapEditorDraft = {
+  draftNodeId: string | null;
+  editNode: NodeUpdate;
+  resourceDraft: ResourceEditorDraft;
+  isDirty: boolean;
+  setEditNode: Dispatch<SetStateAction<NodeUpdate>>;
+  setResourceDraft: Dispatch<SetStateAction<ResourceEditorDraft>>;
+  reset: () => void;
+};
+
 export type NodeTypeInput = { name: string; icon: NodeTypeIconId; color: NodeTypeColor };
 
 export type NodeTypeDraft = {
@@ -34,6 +52,8 @@ export type NodeTypeDraft = {
 export type RoadmapEditorProps = {
   roadmap: RoadmapDto;
   selectedNode: RoadmapNode | undefined;
+  draft: RoadmapEditorDraft;
+  isVisibilityPending: boolean;
   isOpen: boolean;
   onClose: () => void;
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
@@ -45,7 +65,6 @@ export type RoadmapEditorProps = {
   onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onDeleteResource: (resourceId: string) => Promise<boolean>;
   onPreview: (node: StudentAccessibleRoadmapNode) => void;
-  onDirtyChange?: (isDirty: boolean) => void;
   previewButtonRef: RefObject<HTMLButtonElement | null>;
   panelWidth: number;
   onPanelWidthChange: (width: number) => void;

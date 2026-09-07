@@ -31,6 +31,7 @@ type Props = {
   resourceValue: ResourceInput;
   editingResourceId: string | null;
   isResourceComposerOpen: boolean;
+  isVisibilityPending: boolean;
   resourceMode: 'file' | 'link';
   selectedResourceFile: File | null;
   isDirty: boolean;
@@ -161,9 +162,10 @@ function NodeForm({
 
 function NodeStatus({
   node,
+  isVisibilityPending,
   onToggleVisibility,
   onRequestTeacherBlock,
-}: Pick<Props, 'node' | 'onToggleVisibility' | 'onRequestTeacherBlock'>) {
+}: Pick<Props, 'node' | 'isVisibilityPending' | 'onToggleVisibility' | 'onRequestTeacherBlock'>) {
   const accessStatus = node.isTeacherBlocked
     ? 'Acceso restringido por docencia'
     : 'Sin restricciones docentes';
@@ -190,6 +192,7 @@ function NodeStatus({
             <Switch
               id="node-visible"
               checked={node.isVisible}
+              disabled={isVisibilityPending}
               onCheckedChange={() => void onToggleVisibility(node.id, node.isVisible)}
             />
           </Field>
@@ -278,6 +281,7 @@ export function NodeDetailsEditor({
   resourceValue,
   editingResourceId,
   isResourceComposerOpen,
+  isVisibilityPending,
   resourceMode,
   selectedResourceFile,
   isDirty,
@@ -317,6 +321,7 @@ export function NodeDetailsEditor({
         />
         <NodeStatus
           node={node}
+          isVisibilityPending={isVisibilityPending}
           onToggleVisibility={onToggleVisibility}
           onRequestTeacherBlock={onRequestTeacherBlock}
         />

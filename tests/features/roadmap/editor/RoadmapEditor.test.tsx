@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { RoadmapEditor } from '@/features/roadmap/editor/RoadmapEditor';
 import type { RoadmapEditorProps } from '@/features/roadmap/editor/types';
+import { useRoadmapEditorDraft } from '@/features/roadmap/editor/useRoadmapEditorDraft';
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 
@@ -43,10 +44,18 @@ const roadmap: RoadmapDto = {
   dependencies: [],
 };
 
-function editorProps(overrides: Partial<RoadmapEditorProps> = {}): RoadmapEditorProps {
+type EditorHarnessProps = Omit<RoadmapEditorProps, 'draft'>;
+
+function EditorHarness(props: EditorHarnessProps) {
+  const draft = useRoadmapEditorDraft(props.selectedNode);
+  return <RoadmapEditor {...props} draft={draft} />;
+}
+
+function editorProps(overrides: Partial<EditorHarnessProps> = {}): EditorHarnessProps {
   return {
     roadmap,
     selectedNode: node,
+    isVisibilityPending: false,
     isOpen: true,
     onClose: vi.fn(),
     onUpdateNode: vi.fn().mockResolvedValue(true),
@@ -70,7 +79,7 @@ test('keeps the node-information draft when returning from the full-canvas previ
   const props = editorProps();
   const { rerender } = render(
     <SidebarProvider>
-      <RoadmapEditor {...props} />
+      <EditorHarness {...props} />
     </SidebarProvider>,
   );
 
@@ -90,12 +99,12 @@ test('keeps the node-information draft when returning from the full-canvas previ
 
   rerender(
     <SidebarProvider>
-      <RoadmapEditor {...props} isOpen={false} />
+      <EditorHarness {...props} isOpen={false} />
     </SidebarProvider>,
   );
   rerender(
     <SidebarProvider>
-      <RoadmapEditor {...props} isOpen />
+      <EditorHarness {...props} isOpen />
     </SidebarProvider>,
   );
 
@@ -104,33 +113,35 @@ test('keeps the node-information draft when returning from the full-canvas previ
   );
 });
 
-test('continues reporting a retained draft after the editor panel closes', async () => {
+test('continues treating a retained draft as dirty after the editor panel closes', async () => {
   const user = userEvent.setup();
-  const onDirtyChange = vi.fn();
-  const props = editorProps({ onDirtyChange });
+  const props = editorProps();
   const { rerender } = render(
     <SidebarProvider>
-      <RoadmapEditor {...props} />
+      <EditorHarness {...props} />
     </SidebarProvider>,
   );
 
   await user.clear(await screen.findByLabelText('Título'));
   await user.type(screen.getByLabelText('Título'), 'Límites y continuidad');
-  expect(onDirtyChange).toHaveBeenLastCalledWith(true);
-
   rerender(
     <SidebarProvider>
-      <RoadmapEditor {...props} isOpen={false} />
+      <EditorHarness {...props} isOpen={false} />
+    </SidebarProvider>,
+  );
+  rerender(
+    <SidebarProvider>
+      <EditorHarness {...props} isOpen />
     </SidebarProvider>,
   );
 
-  expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  expect(screen.getByRole('button', { name: 'Previsualizar cambios' })).toBeTruthy();
 });
 
 test('uses the shared node-panel chrome for an effortless mode transition', () => {
   render(
     <SidebarProvider>
-      <RoadmapEditor {...editorProps()} />
+      <EditorHarness {...editorProps()} />
     </SidebarProvider>,
   );
 

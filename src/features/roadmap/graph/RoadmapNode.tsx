@@ -1,6 +1,7 @@
 import {
   CircleCheckBig,
   CircleEllipsis,
+  Eye,
   EyeOff,
   FileText,
   Link2,
@@ -35,6 +36,7 @@ export type RoadmapNodeData = Record<string, unknown> & {
   isActionMenuClosing?: boolean;
   onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
+  onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
 };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
@@ -150,6 +152,7 @@ function NodeActionMenu({
   isClosing,
   onToggle,
   onRequestAccessAction,
+  onRequestVisibilityAction,
 }: {
   nodeId: string;
   hidden: boolean;
@@ -158,9 +161,11 @@ function NodeActionMenu({
   isClosing: boolean;
   onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
+  onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
 }) {
   const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
   const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';
+  const visibilityLabel = hidden ? 'Mostrar para estudiantes' : 'Ocultar para estudiantes';
 
   return (
     <div className="absolute right-[-10px] bottom-[-10px] z-10 hidden lg:block">
@@ -174,52 +179,110 @@ function NodeActionMenu({
               <TooltipTrigger
                 delay={200}
                 render={
-                  <span className="pointer-events-auto absolute top-0 left-[4.25rem]">
-                    <button
-                      type="button"
-                      aria-label={accessLabel}
-                      className={cn(
-                        styles.actionButton,
-                        isClosing && styles.actionButtonClosing,
-                        'group flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                      )}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onRequestAccessAction?.(nodeId, teacherBlocked ? 'UNBLOCK' : 'BLOCK');
-                      }}
-                    />
-                  </span>
+                  <button
+                    type="button"
+                    aria-label={accessLabel}
+                    className={cn(
+                      styles.actionButton,
+                      isClosing && styles.actionButtonClosing,
+                      'group pointer-events-auto absolute top-0 left-[4.25rem] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    )}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRequestAccessAction?.(nodeId, teacherBlocked ? 'UNBLOCK' : 'BLOCK');
+                    }}
+                  />
                 }
               >
                 {teacherBlocked ? (
                   <>
-                    <LockKeyhole className="size-4 group-hover:hidden group-focus-visible:hidden" />
-                    <LockKeyholeOpen className="hidden size-4 group-hover:block group-focus-visible:block" />
+                    <LockKeyhole
+                      aria-hidden="true"
+                      className="size-4 group-hover:hidden group-focus-visible:hidden"
+                    />
+                    <LockKeyholeOpen
+                      aria-hidden="true"
+                      className="hidden size-4 group-hover:block group-focus-visible:block"
+                    />
                   </>
                 ) : (
                   <>
-                    <LockKeyholeOpen className="size-4 group-hover:hidden group-focus-visible:hidden" />
-                    <LockKeyhole className="hidden size-4 group-hover:block group-focus-visible:block" />
+                    <LockKeyholeOpen
+                      aria-hidden="true"
+                      className="size-4 group-hover:hidden group-focus-visible:hidden"
+                    />
+                    <LockKeyhole
+                      aria-hidden="true"
+                      className="hidden size-4 group-hover:block group-focus-visible:block"
+                    />
                   </>
                 )}
               </TooltipTrigger>
               <TooltipContent side="right">{accessLabel}</TooltipContent>
             </Tooltip>
           ) : null}
-          <span
-            aria-hidden="true"
-            data-slot="node-action-visibility"
-            className="absolute top-6 left-[3.7rem] size-8 rounded-full"
-          />
+          <Tooltip>
+            <TooltipTrigger
+              delay={200}
+              render={
+                <button
+                  type="button"
+                  aria-label={visibilityLabel}
+                  data-slot="node-action-visibility"
+                  className={cn(
+                    styles.actionButton,
+                    isClosing && styles.actionButtonClosing,
+                    'group pointer-events-auto absolute top-6 left-[3.7rem] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  )}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRequestVisibilityAction?.(nodeId, !hidden);
+                  }}
+                />
+              }
+            >
+              {hidden ? (
+                <>
+                  <EyeOff
+                    aria-hidden="true"
+                    data-testid="visibility-current-icon"
+                    className="size-4 group-hover:hidden group-focus-visible:hidden"
+                  />
+                  <Eye
+                    aria-hidden="true"
+                    data-testid="visibility-result-icon"
+                    className="hidden size-4 group-hover:block group-focus-visible:block"
+                  />
+                </>
+              ) : (
+                <>
+                  <Eye
+                    aria-hidden="true"
+                    data-testid="visibility-current-icon"
+                    className="size-4 group-hover:hidden group-focus-visible:hidden"
+                  />
+                  <EyeOff
+                    aria-hidden="true"
+                    data-testid="visibility-result-icon"
+                    className="hidden size-4 group-hover:block group-focus-visible:block"
+                  />
+                </>
+              )}
+            </TooltipTrigger>
+            <TooltipContent side="right">{visibilityLabel}</TooltipContent>
+          </Tooltip>
           <span
             aria-hidden="true"
             data-slot="node-action-resource"
+            data-testid="node-action-resource-slot"
             className="absolute top-[3.7rem] left-6 size-8 rounded-full"
           />
           <span
             aria-hidden="true"
             data-slot="node-action-delete"
+            data-testid="node-action-delete-slot"
             className="absolute top-[4.25rem] left-0 size-8 rounded-full"
           />
         </div>
@@ -245,6 +308,7 @@ function NodeActionMenu({
         >
           {isOpen ? (
             <X
+              data-testid="node-action-trigger-close"
               className={cn(
                 'size-5 transition-all duration-150',
                 isClosing && 'scale-75 opacity-0',
@@ -252,7 +316,11 @@ function NodeActionMenu({
               aria-hidden="true"
             />
           ) : (
-            <ClosedIcon className="size-5" aria-hidden="true" />
+            <ClosedIcon
+              data-testid={`node-action-trigger-${hidden ? 'hidden' : teacherBlocked ? 'blocked' : 'default'}`}
+              className="size-5"
+              aria-hidden="true"
+            />
           )}
         </TooltipTrigger>
         <TooltipContent side="bottom">
@@ -376,6 +444,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
           isClosing={Boolean(data.isActionMenuClosing)}
           onToggle={data.onToggleActionMenu}
           onRequestAccessAction={data.onRequestAccessAction}
+          onRequestVisibilityAction={data.onRequestVisibilityAction}
         />
       ) : hidden ? (
         <HiddenBadge />

@@ -196,6 +196,7 @@ type Props = {
   onViewportChange?: (viewport: Viewport) => void;
   restoreViewport?: Viewport | null;
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
+  onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
 };
 
 export function RoadmapGraph({
@@ -214,6 +215,7 @@ export function RoadmapGraph({
   onViewportChange,
   restoreViewport,
   onRequestAccessAction,
+  onRequestVisibilityAction,
 }: Props) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const [isAutoLayoutConfirmationOpen, setIsAutoLayoutConfirmationOpen] = useState(false);
@@ -224,8 +226,12 @@ export function RoadmapGraph({
   // El lienzo guarda las posiciones que el arrastre todavía no ha recargado, de
   // modo que solo un roadmap nuevo puede reemplazarlas. Las devoluciones viven
   // en una referencia para que un render del contenedor no rehaga el grafo.
-  const handlers = useRef({ onDeleteDependencies, onRequestAccessAction });
-  handlers.current = { onDeleteDependencies, onRequestAccessAction };
+  const handlers = useRef({
+    onDeleteDependencies,
+    onRequestAccessAction,
+    onRequestVisibilityAction,
+  });
+  handlers.current = { onDeleteDependencies, onRequestAccessAction, onRequestVisibilityAction };
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const keyboardMovePendingRef = useRef(false);
@@ -265,14 +271,29 @@ export function RoadmapGraph({
     },
     [closeActionMenu],
   );
+  const requestVisibilityAction = useCallback(
+    (nodeId: string, isVisible: boolean) => {
+      closeActionMenu(false);
+      handlers.current.onRequestVisibilityAction?.(nodeId, isVisible);
+    },
+    [closeActionMenu],
+  );
   const actionMenu = useMemo(
     () => ({
       openNodeId: canEdit ? openActionMenuNodeId : null,
       closingNodeId: canEdit ? closingActionMenuNodeId : null,
       onToggle: toggleActionMenu,
       onRequestAccessAction: requestAccessAction,
+      onRequestVisibilityAction: requestVisibilityAction,
     }),
-    [canEdit, closingActionMenuNodeId, openActionMenuNodeId, requestAccessAction, toggleActionMenu],
+    [
+      canEdit,
+      closingActionMenuNodeId,
+      openActionMenuNodeId,
+      requestAccessAction,
+      requestVisibilityAction,
+      toggleActionMenu,
+    ],
   );
   const [flow, setFlow] = useState(() =>
     mapRoadmapGraph(roadmap, isTeacherView, deleteDependency, selectedNodeId, actionMenu),

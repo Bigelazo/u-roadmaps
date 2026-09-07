@@ -18,17 +18,17 @@ import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
 import {
   emptyResourceEditorDraft,
-  hasUnsavedNodeInformation,
   projectNodeInformationPreview,
-  type ResourceEditorDraft,
 } from './node-information-preview';
-import type { NodeUpdate, RoadmapEditorProps } from './types';
+import type { ResourceEditorDraft, RoadmapEditorProps } from './types';
 
 type PendingDeletion = { label: string; onConfirm: () => Promise<boolean> } | null;
 
 export function RoadmapEditor({
   roadmap,
   selectedNode,
+  draft,
+  isVisibilityPending,
   isOpen,
   onClose,
   onUpdateNode,
@@ -40,20 +40,13 @@ export function RoadmapEditor({
   onUpdateResource,
   onDeleteResource,
   onPreview,
-  onDirtyChange,
   previewButtonRef,
   panelWidth,
   onPanelWidthChange,
 }: RoadmapEditorProps) {
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
   const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
-  const [draftNodeId, setDraftNodeId] = useState<string | null>(null);
-  const [editNode, setEditNode] = useState<NodeUpdate>({
-    title: '',
-    description: '',
-    nodeTypeId: '',
-  });
-  const [resourceDraft, setResourceDraft] = useState<ResourceEditorDraft>(emptyResourceEditorDraft);
+  const { draftNodeId, editNode, resourceDraft, isDirty, setEditNode, setResourceDraft } = draft;
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
@@ -62,29 +55,6 @@ export function RoadmapEditor({
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
-
-  useEffect(() => {
-    if (!selectedNode) {
-      setDraftNodeId(null);
-      return;
-    }
-    if (draftNodeId === selectedNode.id) return;
-    setDraftNodeId(selectedNode.id);
-    setEditNode({
-      title: selectedNode.title,
-      description: selectedNode.description ?? '',
-      nodeTypeId: selectedNode.nodeTypeId,
-    });
-    setResourceDraft(emptyResourceEditorDraft());
-  }, [draftNodeId, selectedNode]);
-
-  const isDirty = Boolean(
-    selectedNode &&
-    draftNodeId === selectedNode.id &&
-    hasUnsavedNodeInformation(selectedNode, editNode, resourceDraft),
-  );
-
-  useEffect(() => onDirtyChange?.(isDirty), [isDirty, onDirtyChange]);
 
   if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) return null;
   const closeResourceEditor = () => setResourceDraft(emptyResourceEditorDraft());
@@ -132,6 +102,7 @@ export function RoadmapEditor({
               resourceValue={resourceDraft.value}
               editingResourceId={resourceDraft.editingResourceId}
               isResourceComposerOpen={resourceDraft.isOpen}
+              isVisibilityPending={isVisibilityPending}
               resourceMode={resourceDraft.mode}
               selectedResourceFile={resourceDraft.selectedFile}
               isDirty={isDirty}
