@@ -197,6 +197,7 @@ type Props = {
   restoreViewport?: Viewport | null;
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
   onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
+  onRequestAddResource?: (nodeId: string) => void;
 };
 
 export function RoadmapGraph({
@@ -216,6 +217,7 @@ export function RoadmapGraph({
   restoreViewport,
   onRequestAccessAction,
   onRequestVisibilityAction,
+  onRequestAddResource,
 }: Props) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const [isAutoLayoutConfirmationOpen, setIsAutoLayoutConfirmationOpen] = useState(false);
@@ -230,8 +232,14 @@ export function RoadmapGraph({
     onDeleteDependencies,
     onRequestAccessAction,
     onRequestVisibilityAction,
+    onRequestAddResource,
   });
-  handlers.current = { onDeleteDependencies, onRequestAccessAction, onRequestVisibilityAction };
+  handlers.current = {
+    onDeleteDependencies,
+    onRequestAccessAction,
+    onRequestVisibilityAction,
+    onRequestAddResource,
+  };
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
   const keyboardMovePendingRef = useRef(false);
@@ -278,6 +286,13 @@ export function RoadmapGraph({
     },
     [closeActionMenu],
   );
+  const requestAddResource = useCallback(
+    (nodeId: string) => {
+      closeActionMenu(false);
+      handlers.current.onRequestAddResource?.(nodeId);
+    },
+    [closeActionMenu],
+  );
   const actionMenu = useMemo(
     () => ({
       openNodeId: canEdit ? openActionMenuNodeId : null,
@@ -285,6 +300,7 @@ export function RoadmapGraph({
       onToggle: toggleActionMenu,
       onRequestAccessAction: requestAccessAction,
       onRequestVisibilityAction: requestVisibilityAction,
+      onRequestAddResource: requestAddResource,
     }),
     [
       canEdit,
@@ -292,6 +308,7 @@ export function RoadmapGraph({
       openActionMenuNodeId,
       requestAccessAction,
       requestVisibilityAction,
+      requestAddResource,
       toggleActionMenu,
     ],
   );

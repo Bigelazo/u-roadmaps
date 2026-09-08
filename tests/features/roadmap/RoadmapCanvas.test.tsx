@@ -145,7 +145,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     isTeacherView,
     onViewportChange,
     restoreViewport,
-    onRequestVisibilityAction,
+      onRequestVisibilityAction,
+      onRequestAddResource,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
     onConnectNodes: (connection: {
@@ -165,6 +166,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
     restoreViewport?: { x: number; y: number; zoom: number } | null;
     onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
+    onRequestAddResource?: (nodeId: string) => void;
     topRightActions?: (
       getViewport: () => {
         x: number;
@@ -195,6 +197,12 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       </button>
       <button type="button" onClick={() => onRequestVisibilityAction?.('node-1', false)}>
         Solicitar mostrar nodo
+      </button>
+      <button type="button" onClick={() => onRequestAddResource?.('node-1')}>
+        Agregar recurso al nodo actual
+      </button>
+      <button type="button" onClick={() => onRequestAddResource?.('node-2')}>
+        Agregar recurso a otro nodo
       </button>
       <button
         type="button"
@@ -1061,6 +1069,40 @@ test('confirms before discarding an unsaved editor draft to enter the canvas pre
 
   await waitFor(() => expect(loadSimulation).toHaveBeenCalledTimes(1));
   expect(screen.getByText('Previsualización del canvas')).toBeTruthy();
+});
+
+test('opens a resource composer without warning for the current draft and confirms only before replacing it', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(
+    roadmapActions({
+      roadmap: {
+        ...roadmap,
+        nodes: [
+          ...roadmap.nodes,
+          {
+            ...roadmap.nodes[0],
+            id: 'node-2',
+            title: 'Derivadas',
+          },
+        ],
+      },
+    }),
+  );
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Marcar borrador sin guardar' }));
+  await user.click(screen.getByRole('button', { name: 'Agregar recurso al nodo actual' }));
+  expect(screen.queryByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
+  expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
+  expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-1');
+
+  await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
+  await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
+  await waitFor(() => expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-2'));
 });
 
 test('does not restore a prior preview viewport when entering a later preview', async () => {

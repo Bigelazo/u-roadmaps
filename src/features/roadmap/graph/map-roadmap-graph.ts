@@ -23,6 +23,7 @@ export function mapRoadmapGraph(
     onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
     onRequestAccessAction: (nodeId: string, operation: NodeAccessActionOperation) => void;
     onRequestVisibilityAction: (nodeId: string, isVisible: boolean) => void;
+    onRequestAddResource: (nodeId: string) => void;
   },
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
@@ -52,6 +53,7 @@ export function mapRoadmapGraph(
         onToggleActionMenu: actionMenu?.onToggle,
         onRequestAccessAction: actionMenu?.onRequestAccessAction,
         onRequestVisibilityAction: actionMenu?.onRequestVisibilityAction,
+        onRequestAddResource: actionMenu?.onRequestAddResource,
       },
       position: { x: node.positionX, y: node.positionY },
       selected: node.id === selectedNodeId,

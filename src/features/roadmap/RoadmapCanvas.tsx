@@ -131,6 +131,8 @@ type CanvasState = {
   pendingDependencyChange: PendingDependencyChange | null;
   pendingTeacherBlockChange: PendingTeacherBlockChange | null;
   isTeacherBlockChanging: boolean;
+  pendingResourceComposerNodeId: string | null;
+  resourceComposerRequest: number;
 };
 
 type CanvasStateAction =
@@ -169,6 +171,8 @@ const initialCanvasState: CanvasState = {
   pendingDependencyChange: null,
   pendingTeacherBlockChange: null,
   isTeacherBlockChanging: false,
+  pendingResourceComposerNodeId: null,
+  resourceComposerRequest: 0,
 };
 
 function canvasStateReducer(state: CanvasState, action: CanvasStateAction): CanvasState {
@@ -438,6 +442,8 @@ export default function RoadmapCanvas({
     pendingDependencyChange,
     pendingTeacherBlockChange,
     isTeacherBlockChanging,
+    pendingResourceComposerNodeId,
+    resourceComposerRequest,
   } = canvasState;
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const editorPanel = usePersistentPanelWidth({
@@ -551,6 +557,24 @@ export default function RoadmapCanvas({
       return;
     }
     void enterCanvasPreview();
+  }
+
+  function openResourceComposer(nodeId: string) {
+    if (!canEdit || isCanvasPreview || pendingResourceComposerNodeId) return;
+    if (editorDraft.isDirty && editorDraft.draftNodeId !== nodeId) {
+      dispatchCanvas({ type: 'update', update: { pendingResourceComposerNodeId: nodeId } });
+      return;
+    }
+    dispatchCanvas({
+      type: 'update',
+      update: {
+        selectedNodeId: nodeId,
+        isEditorOpen: true,
+        teacherPreviewNode: null,
+        isTeacherPreviewCompleted: false,
+        resourceComposerRequest: resourceComposerRequest + 1,
+      },
+    });
   }
 
   function exitCanvasPreview() {
@@ -890,6 +914,7 @@ export default function RoadmapCanvas({
             onRequestVisibilityAction={(nodeId, isVisible) =>
               void requestVisibilityChange(nodeId, isVisible)
             }
+            onRequestAddResource={openResourceComposer}
             topRightActions={
               !isCanvasPreview && (canEdit || canPreview)
                 ? (getViewport) => (
@@ -951,6 +976,7 @@ export default function RoadmapCanvas({
             draft={editorDraft}
             isVisibilityPending={isVisibilityPreviewing || isVisibilityChanging}
             isOpen={isEditorOpen && !isCanvasPreview}
+            resourceComposerRequest={resourceComposerRequest}
             onClose={closeSelectedNode}
             onUpdateNode={updateNodeWithConfirmation}
             onToggleVisibility={requestVisibilityChange}
@@ -1028,6 +1054,47 @@ export default function RoadmapCanvas({
             >
               <Trash2 data-icon="inline-start" />
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(pendingResourceComposerNodeId)}
+        onOpenChange={(open) => {
+          if (!open)
+            dispatchCanvas({ type: 'update', update: { pendingResourceComposerNodeId: null } });
+        }}
+      >
+        <AlertDialogContent className="gap-5 sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">
+              Descartar cambios sin guardar
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Agregar un recurso a otro nodo reemplazará el borrador actual. Puedes seguir
+              editando o descartarlo para continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => {
+                const nodeId = pendingResourceComposerNodeId;
+                if (!nodeId) return;
+                editorDraft.reset();
+                dispatchCanvas({
+                  type: 'update',
+                  update: {
+                    selectedNodeId: nodeId,
+                    isEditorOpen: true,
+                    pendingResourceComposerNodeId: null,
+                    resourceComposerRequest: resourceComposerRequest + 1,
+                  },
+                });
+              }}
+            >
+              Descartar y continuar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

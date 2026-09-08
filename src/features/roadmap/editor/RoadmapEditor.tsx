@@ -30,6 +30,7 @@ export function RoadmapEditor({
   draft,
   isVisibilityPending,
   isOpen,
+  resourceComposerRequest,
   onClose,
   onUpdateNode,
   onToggleVisibility,
@@ -55,6 +56,17 @@ export function RoadmapEditor({
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
   }, []);
+
+  useEffect(() => {
+    if (!resourceComposerRequest || draftNodeId !== selectedNode?.id) return;
+    setResourceDraft((draft) =>
+      draft.isOpen ? draft : { ...emptyResourceEditorDraft(), isOpen: true, mode: 'file' },
+    );
+    const frame = requestAnimationFrame(() => {
+      (document.getElementById('resource-file') ?? document.getElementById('resource-title'))?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draftNodeId, resourceComposerRequest, selectedNode?.id, setResourceDraft]);
 
   if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) return null;
   const closeResourceEditor = () => setResourceDraft(emptyResourceEditorDraft());

@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { RoadmapEditor } from '@/features/roadmap/editor/RoadmapEditor';
@@ -136,6 +136,17 @@ test('continues treating a retained draft as dirty after the editor panel closes
   );
 
   expect(screen.getByRole('button', { name: 'Previsualizar cambios' })).toBeTruthy();
+});
+
+test('opens the existing resource composer and moves focus to its file field on request', async () => {
+  render(
+    <SidebarProvider>
+      <EditorHarness {...editorProps({ resourceComposerRequest: 1 })} />
+    </SidebarProvider>,
+  );
+
+  const file = await screen.findByLabelText('Archivo');
+  await waitFor(() => expect(document.activeElement).toBe(file));
 });
 
 test('uses the shared node-panel chrome for an effortless mode transition', () => {

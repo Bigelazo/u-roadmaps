@@ -3,6 +3,7 @@ import {
   CircleEllipsis,
   Eye,
   EyeOff,
+  FilePlusCorner,
   FileText,
   Link2,
   LockKeyhole,
@@ -37,6 +38,7 @@ export type RoadmapNodeData = Record<string, unknown> & {
   onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
   onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
+  onRequestAddResource?: (nodeId: string) => void;
 };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
@@ -153,6 +155,7 @@ function NodeActionMenu({
   onToggle,
   onRequestAccessAction,
   onRequestVisibilityAction,
+  onRequestAddResource,
 }: {
   nodeId: string;
   hidden: boolean;
@@ -162,6 +165,7 @@ function NodeActionMenu({
   onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
   onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
+  onRequestAddResource?: (nodeId: string) => void;
 }) {
   const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
   const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';
@@ -272,6 +276,32 @@ function NodeActionMenu({
               )}
             </TooltipTrigger>
             <TooltipContent side="right">{visibilityLabel}</TooltipContent>
+          </Tooltip>
+          <span
+            aria-hidden="true"
+            data-slot="node-action-resource"
+          />
+          <Tooltip>
+            <TooltipTrigger
+              delay={200}
+              render={
+                <button
+                  type="button"
+                  aria-label="Agregar recurso"
+                  data-slot="node-action-resource-control"
+                  data-angle="60"
+                  className="group pointer-events-auto absolute top-[3.7rem] left-6 flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.94]"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRequestAddResource?.(nodeId);
+                  }}
+                >
+                  <FilePlusCorner aria-hidden="true" className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:-rotate-12 group-hover:scale-110 group-focus-visible:-translate-y-0.5 group-focus-visible:-rotate-12 group-focus-visible:scale-110" />
+                </button>
+              }
+            />
+            <TooltipContent side="right">Agregar recurso</TooltipContent>
           </Tooltip>
           <span
             aria-hidden="true"
@@ -445,6 +475,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
           onToggle={data.onToggleActionMenu}
           onRequestAccessAction={data.onRequestAccessAction}
           onRequestVisibilityAction={data.onRequestVisibilityAction}
+          onRequestAddResource={data.onRequestAddResource}
         />
       ) : hidden ? (
         <HiddenBadge />

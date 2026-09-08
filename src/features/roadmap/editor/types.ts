@@ -55,6 +55,7 @@ export type RoadmapEditorProps = {
   draft: RoadmapEditorDraft;
   isVisibilityPending: boolean;
   isOpen: boolean;
+  resourceComposerRequest?: number;
   onClose: () => void;
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
