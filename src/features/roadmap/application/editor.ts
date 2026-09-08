@@ -472,21 +472,23 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
   return withSerializableTransaction(
     async (transaction) => {
       const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
-      const dependency = await transaction.dependency.create({
-        data: {
-          sourceNodeId: prepared.sourceNodeId,
-          targetNodeId: prepared.targetNodeId,
-          sourceHandle: prepared.sourceHandle,
-          targetHandle: prepared.targetHandle,
-        },
-      });
-      const nodes = await teacherBlockedDependentNodes(transaction, {
-        ...prepared,
-        dependencies: [
-          ...prepared.dependencies,
-          { sourceNodeId: prepared.sourceNodeId, targetNodeId: prepared.targetNodeId },
-        ],
-      });
+      const [dependency, nodes] = await Promise.all([
+        transaction.dependency.create({
+          data: {
+            sourceNodeId: prepared.sourceNodeId,
+            targetNodeId: prepared.targetNodeId,
+            sourceHandle: prepared.sourceHandle,
+            targetHandle: prepared.targetHandle,
+          },
+        }),
+        teacherBlockedDependentNodes(transaction, {
+          ...prepared,
+          dependencies: [
+            ...prepared.dependencies,
+            { sourceNodeId: prepared.sourceNodeId, targetNodeId: prepared.targetNodeId },
+          ],
+        }),
+      ]);
       if (nodes.length > 0) {
         await transaction.roadmapNode.updateMany({
           where: { id: { in: nodes.map((node) => node.id) } },

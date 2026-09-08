@@ -30,8 +30,10 @@ async function teacherBlockInput(
   operation: TeacherBlockOperation,
   request?: Request,
 ) {
-  const params = await context.params;
-  const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+  const [params, user] = await Promise.all([
+    context.params,
+    requireAuthenticatedUser().match((value) => value, throwApiError),
+  ]);
   return {
     userId: user.id,
     identifier: parseCourseOfferingIdentifier(params),

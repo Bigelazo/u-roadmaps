@@ -25,8 +25,10 @@ function previewOperation(request: Request) {
 }
 
 async function nodeInput(context: Context) {
-  const params = await context.params;
-  const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+  const [params, user] = await Promise.all([
+    context.params,
+    requireAuthenticatedUser().match((value) => value, throwApiError),
+  ]);
   return {
     userId: user.id,
     identifier: parseCourseOfferingIdentifier(params),
@@ -52,8 +54,8 @@ export async function GET(request: Request, context: Context) {
 
 export async function PATCH(request: Request, context: Context) {
   return handleApiResult(async () => {
-    const params = await context.params;
-    const [body, user] = await Promise.all([
+    const [params, body, user] = await Promise.all([
+      context.params,
       parseJson(request),
       requireAuthenticatedUser().match((value) => value, throwApiError),
     ]);
