@@ -50,7 +50,6 @@ import {
   layoutRoadmapGraph,
   type RoadmapLayoutDirection,
 } from '@/features/roadmap/graph/dagre-layout';
-import { cn } from 'cn';
 
 const selectedEdgeColor = 'var(--primary)';
 const roadmapFitViewOptions = { padding: 0.28 };
@@ -151,8 +150,8 @@ function ActionMenuViewportAdjustment({
       if (!container || !node) return;
       const canvas = container.getBoundingClientRect();
       const bounds = node.getBoundingClientRect();
-      const horizontalOverflow = Math.max(0, bounds.right + 140 - canvas.right);
-      const verticalOverflow = Math.max(0, bounds.bottom + 116 - canvas.bottom);
+      const horizontalOverflow = Math.max(0, bounds.right + 210 - canvas.right);
+      const verticalOverflow = Math.max(0, bounds.bottom + 196 - canvas.bottom);
       if (!horizontalOverflow && !verticalOverflow) return;
       const viewport = getViewport();
       void setViewport(
@@ -198,6 +197,7 @@ type Props = {
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
   onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
   onRequestAddResource?: (nodeId: string) => void;
+  onRequestDelete?: (nodeId: string) => void;
 };
 
 export function RoadmapGraph({
@@ -218,6 +218,7 @@ export function RoadmapGraph({
   onRequestAccessAction,
   onRequestVisibilityAction,
   onRequestAddResource,
+  onRequestDelete,
 }: Props) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const [isAutoLayoutConfirmationOpen, setIsAutoLayoutConfirmationOpen] = useState(false);
@@ -233,12 +234,14 @@ export function RoadmapGraph({
     onRequestAccessAction,
     onRequestVisibilityAction,
     onRequestAddResource,
+    onRequestDelete,
   });
   handlers.current = {
     onDeleteDependencies,
     onRequestAccessAction,
     onRequestVisibilityAction,
     onRequestAddResource,
+    onRequestDelete,
   };
   const selectedNodeIdRef = useRef(selectedNodeId);
   selectedNodeIdRef.current = selectedNodeId;
@@ -250,7 +253,7 @@ export function RoadmapGraph({
   const beginClosingActionMenu = useCallback((nodeId: string) => {
     if (actionMenuCloseTimerRef.current) clearTimeout(actionMenuCloseTimerRef.current);
     setClosingActionMenuNodeId(nodeId);
-    actionMenuCloseTimerRef.current = setTimeout(() => setClosingActionMenuNodeId(null), 180);
+    actionMenuCloseTimerRef.current = setTimeout(() => setClosingActionMenuNodeId(null), 400);
   }, []);
   const closeActionMenu = useCallback(
     (restoreFocus = true) => {
@@ -293,6 +296,13 @@ export function RoadmapGraph({
     },
     [closeActionMenu],
   );
+  const requestDelete = useCallback(
+    (nodeId: string) => {
+      closeActionMenu(false);
+      handlers.current.onRequestDelete?.(nodeId);
+    },
+    [closeActionMenu],
+  );
   const actionMenu = useMemo(
     () => ({
       openNodeId: canEdit ? openActionMenuNodeId : null,
@@ -301,6 +311,7 @@ export function RoadmapGraph({
       onRequestAccessAction: requestAccessAction,
       onRequestVisibilityAction: requestVisibilityAction,
       onRequestAddResource: requestAddResource,
+      onRequestDelete: requestDelete,
     }),
     [
       canEdit,
@@ -309,6 +320,7 @@ export function RoadmapGraph({
       requestAccessAction,
       requestVisibilityAction,
       requestAddResource,
+      requestDelete,
       toggleActionMenu,
     ],
   );
@@ -444,6 +456,9 @@ export function RoadmapGraph({
           if (node.data.blockReason) return;
           onSelectNode(node.id, event.currentTarget as HTMLElement);
         }}
+        onPaneClick={() => {
+          if (openActionMenuNodeId || closingActionMenuNodeId) closeActionMenu(false);
+        }}
         onEdgeMouseEnter={
           canEdit
             ? (_event, edge) =>
@@ -507,17 +522,6 @@ export function RoadmapGraph({
           gap={roadmapGridSize}
           size={1}
         />
-        {canEdit && (openActionMenuNodeId || closingActionMenuNodeId) ? (
-          <button
-            type="button"
-            aria-label="Cerrar menú de acciones del nodo"
-            className={cn(
-              'absolute inset-0 z-10 cursor-default bg-ink/20 transition-opacity duration-180',
-              closingActionMenuNodeId && 'opacity-0',
-            )}
-            onClick={() => closeActionMenu()}
-          />
-        ) : null}
       </ReactFlow>
       <AlertDialog
         open={isAutoLayoutConfirmationOpen}

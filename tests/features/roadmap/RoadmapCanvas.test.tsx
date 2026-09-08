@@ -147,6 +147,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     restoreViewport,
       onRequestVisibilityAction,
       onRequestAddResource,
+      onRequestDelete,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
     onConnectNodes: (connection: {
@@ -167,6 +168,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     restoreViewport?: { x: number; y: number; zoom: number } | null;
     onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
     onRequestAddResource?: (nodeId: string) => void;
+    onRequestDelete?: (nodeId: string) => void;
     topRightActions?: (
       getViewport: () => {
         x: number;
@@ -203,6 +205,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       </button>
       <button type="button" onClick={() => onRequestAddResource?.('node-2')}>
         Agregar recurso a otro nodo
+      </button>
+      <button type="button" onClick={() => onRequestDelete?.('node-1')}>
+        Solicitar eliminar nodo
       </button>
       <button
         type="button"
@@ -322,6 +327,15 @@ function roadmapActions(overrides = {}) {
     deleteDependency: vi.fn(),
     toggleVisibility: vi.fn(),
     previewNodeVisibility: vi.fn().mockResolvedValue([]),
+    previewNodeDeletion: vi.fn().mockResolvedValue({
+      node: {
+        title: 'Límites',
+        nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+      },
+      dependencies: [],
+      resources: [],
+      version: 'delete-preview',
+    }),
     deleteNode: vi.fn(),
     addResource: vi.fn(),
     updateResource: vi.fn(),
@@ -1103,6 +1117,103 @@ test('opens a resource composer without warning for the current draft and confir
   await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
   await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
   await waitFor(() => expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-2'));
+});
+
+test('shows the authoritative named deletion impact and deletes only after a fresh preview', async () => {
+  const user = userEvent.setup();
+  const impact = {
+    node: {
+      title: 'Límites',
+      nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+    },
+    dependencies: [
+      { id: 'dependency-1', sourceTitle: 'Base', targetTitle: 'Límites' },
+      { id: 'dependency-2', sourceTitle: 'Límites', targetTitle: 'Derivadas' },
+    ],
+    resources: [{ id: 'resource-1', title: 'Guía de ejercicios' }],
+    version: 'delete-preview',
+  };
+  const previewNodeDeletion = vi.fn().mockResolvedValue(impact);
+  const deleteNode = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewNodeDeletion, deleteNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+  expect(dialog.textContent).toContain('Límites');
+  expect(dialog.textContent).toContain('Base');
+  expect(dialog.textContent).toContain('Base');
+  expect(dialog.textContent).toContain('Derivadas');
+  expect(dialog.textContent).toContain('Guía de ejercicios');
+  expect(dialog.textContent).not.toContain('Completaciones');
+  expect(screen.getByLabelText('Contenido')).toBeTruthy();
+
+  await user.click(within(dialog).getByRole('button', { name: 'Eliminar Nodo' }));
+  await waitFor(() => expect(deleteNode).toHaveBeenCalledWith('node-1', 'delete-preview'));
+  expect(previewNodeDeletion).toHaveBeenCalledTimes(2);
+});
+
+test('updates a changed deletion impact and requires a renewed confirmation', async () => {
+  const user = userEvent.setup();
+  const initialImpact = {
+    node: {
+      title: 'Límites',
+      nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+    },
+    dependencies: [],
+    resources: [],
+    version: 'one',
+  };
+  const changedImpact = {
+    ...initialImpact,
+    dependencies: [{ id: 'dependency-1', sourceTitle: 'Base', targetTitle: 'Límites' }],
+    version: 'two',
+  };
+  const previewNodeDeletion = vi
+    .fn()
+    .mockResolvedValueOnce(initialImpact)
+    .mockResolvedValueOnce(changedImpact)
+    .mockResolvedValueOnce(changedImpact);
+  const deleteNode = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewNodeDeletion, deleteNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+  await user.click(within(dialog).getByRole('button', { name: 'Eliminar Nodo' }));
+
+  expect(deleteNode).not.toHaveBeenCalled();
+  expect(dialog.textContent).toContain('Base');
+  await user.click(within(dialog).getByRole('button', { name: 'Eliminar Nodo' }));
+  await waitFor(() => expect(deleteNode).toHaveBeenCalledWith('node-1', 'two'));
+});
+
+test('protects a dirty draft of the same Node before opening deletion confirmation', async () => {
+  const user = userEvent.setup();
+  const previewNodeDeletion = vi.fn().mockResolvedValue({
+    node: {
+      title: 'Límites',
+      nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+    },
+    dependencies: [],
+    resources: [],
+    version: 'delete-preview',
+  });
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewNodeDeletion }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Marcar borrador sin guardar' }));
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
+  expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
+  expect(previewNodeDeletion).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
+  expect(screen.queryByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
+  await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
+  await waitFor(() => expect(previewNodeDeletion).toHaveBeenCalledWith('node-1'));
+  expect(screen.getByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeTruthy();
 });
 
 test('does not restore a prior preview viewport when entering a later preview', async () => {

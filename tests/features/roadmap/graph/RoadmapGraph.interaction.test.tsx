@@ -291,7 +291,7 @@ test('keeps one action menu open, closes it with Escape, and hands access change
   );
 
   await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
-  expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeNull();
   expect(screen.getByRole('button', { name: 'Ejecutar acceso node-1' })).toBeTruthy();
 
   await user.keyboard('{Escape}');

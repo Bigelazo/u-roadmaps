@@ -8,6 +8,7 @@ export {
   deleteRoadmapDependency,
   deleteRoadmapNode,
   deleteRoadmapNodeType,
+  previewNodeDeletion,
   previewNodeVisibility,
   previewRoadmapDependency,
   previewTeacherBlock,

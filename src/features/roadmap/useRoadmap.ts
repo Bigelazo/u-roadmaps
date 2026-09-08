@@ -5,6 +5,7 @@ import {
   type Resource,
   type AnyRoadmapDto,
   type CourseOfferingIdentifier,
+  type NodeDeletionImpact,
   type TeacherBlockImpact,
   type TeacherBlockOperation,
   type TeacherBlockPreview,
@@ -88,6 +89,54 @@ function isVisibilityPreview(value: unknown): value is { dependencies: Structura
     'dependencies' in value &&
     Array.isArray(value.dependencies) &&
     value.dependencies.every(isStructuralDependency)
+  );
+}
+
+function isNodeDeletionImpact(value: unknown): value is NodeDeletionImpact {
+  if (typeof value !== 'object' || value === null) return false;
+  const preview = value as Record<string, unknown>;
+  const node = preview.node;
+  if (
+    typeof node !== 'object' ||
+    node === null ||
+    !('title' in node) ||
+    typeof node.title !== 'string' ||
+    !('nodeType' in node) ||
+    typeof node.nodeType !== 'object' ||
+    node.nodeType === null ||
+    !('name' in node.nodeType) ||
+    typeof node.nodeType.name !== 'string' ||
+    !('icon' in node.nodeType) ||
+    typeof node.nodeType.icon !== 'string' ||
+    !('color' in node.nodeType) ||
+    typeof node.nodeType.color !== 'string'
+  ) {
+    return false;
+  }
+  return (
+    typeof preview.version === 'string' &&
+    Array.isArray(preview.dependencies) &&
+    preview.dependencies.every(
+      (dependency) =>
+        typeof dependency === 'object' &&
+        dependency !== null &&
+        'id' in dependency &&
+        typeof dependency.id === 'string' &&
+        'sourceTitle' in dependency &&
+        typeof dependency.sourceTitle === 'string' &&
+        'targetTitle' in dependency &&
+        typeof dependency.targetTitle === 'string',
+    ) &&
+    Array.isArray(preview.resources) &&
+    preview.resources.every(
+      (resource) =>
+        typeof resource === 'object' &&
+        resource !== null &&
+        'id' in resource &&
+        typeof resource.id === 'string' &&
+        'title' in resource &&
+        typeof resource.title === 'string',
+    )
   );
 }
 
@@ -486,6 +535,16 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     [identifier, preview],
   );
 
+  const previewNodeDeletion = useCallback(
+    async (nodeId: string) =>
+      preview(
+        roadmapUrl(identifier, `/nodes/${nodeId}?operation=DELETE`),
+        isNodeDeletionImpact,
+        'No se pudo calcular el impacto de eliminar el nodo.',
+      ),
+    [identifier, preview],
+  );
+
   const previewRoadmapDependency = useCallback(
     async (
       sourceNodeId: string,
@@ -536,10 +595,13 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
   );
 
   const deleteNode = useCallback(
-    async (nodeId: string) => {
+    async (nodeId: string, previewVersion?: string) => {
       const succeeded = await mutate(
         roadmapUrl(identifier, `/nodes/${nodeId}`),
-        { method: 'DELETE' },
+        {
+          method: 'DELETE',
+          ...(previewVersion ? { headers: { 'x-node-delete-preview': previewVersion } } : {}),
+        },
         'No se pudo eliminar el nodo.',
       );
       if (succeeded) await load();
@@ -709,6 +771,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
     deleteDependency,
     toggleVisibility,
     previewNodeVisibility,
+    previewNodeDeletion,
     deleteNode,
     addResource,
     uploadResource,

@@ -266,6 +266,42 @@ test('previews the structural impact before hiding a node or connecting a blocke
   );
 });
 
+test('requests the server-authoritative deletion impact and sends its version on deletion', async () => {
+  const deletionImpact = {
+    node: { title: 'Límites', nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' } },
+    dependencies: [{ id: 'dependency-1', sourceTitle: 'Base', targetTitle: 'Límites' }],
+    resources: [{ id: 'resource-1', title: 'Guía de ejercicios' }],
+    version: 'delete-preview',
+  };
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(roadmap('before-delete')))
+    .mockResolvedValueOnce(Response.json(deletionImpact))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json(roadmap('after-delete')));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { result } = renderHook(() => useRoadmap(firstOffering));
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('before-delete'));
+
+  await expect(result.current.previewNodeDeletion('node-1')).resolves.toEqual(deletionImpact);
+  await expect(result.current.deleteNode('node-1', deletionImpact.version)).resolves.toBe(true);
+
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    2,
+    '/api/MAT101/2026/1/roadmap/nodes/node-1?operation=DELETE',
+  );
+  expect(fetchMock).toHaveBeenNthCalledWith(
+    3,
+    '/api/MAT101/2026/1/roadmap/nodes/node-1',
+    expect.objectContaining({
+      method: 'DELETE',
+      headers: expect.objectContaining({ 'x-node-delete-preview': 'delete-preview' }),
+    }),
+  );
+  await waitFor(() => expect(result.current.roadmap?.roadmap.id).toBe('after-delete'));
+});
+
 test('previews and applies teacher-block actions with a server refresh', async () => {
   const fetchMock = vi
     .fn()

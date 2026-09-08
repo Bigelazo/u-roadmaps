@@ -38,6 +38,7 @@ import {
 } from '@/features/roadmap/useRoadmap';
 import type {
   CourseOfferingIdentifier,
+  NodeDeletionImpact,
   RoadmapDto,
   RoadmapNode,
   StudentAccessibleRoadmapNode,
@@ -105,6 +106,8 @@ type PendingTeacherBlockChange = {
   operation: TeacherBlockOperation;
 } & TeacherBlockPreview;
 
+type PendingNodeDeletion = { nodeId: string } & NodeDeletionImpact;
+
 type PreviewReturnState = {
   selectedNodeId: string | null;
   isEditorOpen: boolean;
@@ -131,6 +134,10 @@ type CanvasState = {
   pendingDependencyChange: PendingDependencyChange | null;
   pendingTeacherBlockChange: PendingTeacherBlockChange | null;
   isTeacherBlockChanging: boolean;
+  pendingNodeDeletion: PendingNodeDeletion | null;
+  isNodeDeletionPreviewing: boolean;
+  isNodeDeleting: boolean;
+  pendingDeletionDraftNodeId: string | null;
   pendingResourceComposerNodeId: string | null;
   resourceComposerRequest: number;
 };
@@ -171,6 +178,10 @@ const initialCanvasState: CanvasState = {
   pendingDependencyChange: null,
   pendingTeacherBlockChange: null,
   isTeacherBlockChanging: false,
+  pendingNodeDeletion: null,
+  isNodeDeletionPreviewing: false,
+  isNodeDeleting: false,
+  pendingDeletionDraftNodeId: null,
   pendingResourceComposerNodeId: null,
   resourceComposerRequest: 0,
 };
@@ -413,6 +424,28 @@ function sameTeacherBlockPreview(first: TeacherBlockPreview, second: TeacherBloc
   );
 }
 
+function sameNodeDeletionImpact(first: NodeDeletionImpact, second: NodeDeletionImpact) {
+  return (
+    first.version === second.version &&
+    first.node.title === second.node.title &&
+    first.node.nodeType.name === second.node.nodeType.name &&
+    first.node.nodeType.icon === second.node.nodeType.icon &&
+    first.node.nodeType.color === second.node.nodeType.color &&
+    first.dependencies.length === second.dependencies.length &&
+    first.dependencies.every(
+      (dependency, index) =>
+        dependency.id === second.dependencies[index]?.id &&
+        dependency.sourceTitle === second.dependencies[index]?.sourceTitle &&
+        dependency.targetTitle === second.dependencies[index]?.targetTitle,
+    ) &&
+    first.resources.length === second.resources.length &&
+    first.resources.every(
+      (resource, index) =>
+        resource.id === second.resources[index]?.id && resource.title === second.resources[index]?.title,
+    )
+  );
+}
+
 export default function RoadmapCanvas({
   identifier,
   canEdit = false,
@@ -442,6 +475,10 @@ export default function RoadmapCanvas({
     pendingDependencyChange,
     pendingTeacherBlockChange,
     isTeacherBlockChanging,
+    pendingNodeDeletion,
+    isNodeDeletionPreviewing,
+    isNodeDeleting,
+    pendingDeletionDraftNodeId,
     pendingResourceComposerNodeId,
     resourceComposerRequest,
   } = canvasState;
@@ -473,6 +510,7 @@ export default function RoadmapCanvas({
     deleteDependency,
     toggleVisibility,
     previewNodeVisibility,
+    previewNodeDeletion,
     deleteNode,
     addResource,
     uploadResource,
@@ -629,6 +667,73 @@ export default function RoadmapCanvas({
       });
     }
     return false;
+  }
+
+  async function previewAndRequestNodeDeletion(nodeId: string) {
+    if (pendingNodeDeletion || isNodeDeletionPreviewing || isNodeDeleting) return;
+    dispatchCanvas({ type: 'update', update: { isNodeDeletionPreviewing: true } });
+    try {
+      const impact = await previewNodeDeletion(nodeId);
+      if (impact)
+        dispatchCanvas({
+          type: 'update',
+          update: { pendingNodeDeletion: { nodeId, ...impact } },
+        });
+    } finally {
+      dispatchCanvas({ type: 'update', update: { isNodeDeletionPreviewing: false } });
+    }
+  }
+
+  function requestNodeDeletion(nodeId: string) {
+    if (editorDraft.isDirty && editorDraft.draftNodeId === nodeId) {
+      dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: nodeId } });
+      return;
+    }
+    void previewAndRequestNodeDeletion(nodeId);
+  }
+
+  async function confirmNodeDeletion() {
+    if (!pendingNodeDeletion || isNodeDeleting) return;
+    dispatchCanvas({ type: 'update', update: { isNodeDeleting: true } });
+    const latestImpact = await previewNodeDeletion(pendingNodeDeletion.nodeId);
+    if (!latestImpact) {
+      dispatchCanvas({ type: 'update', update: { isNodeDeleting: false } });
+      return;
+    }
+    if (!sameNodeDeletionImpact(pendingNodeDeletion, latestImpact)) {
+      dispatchCanvas({
+        type: 'update',
+        update: {
+          pendingNodeDeletion: { nodeId: pendingNodeDeletion.nodeId, ...latestImpact },
+          isNodeDeleting: false,
+        },
+      });
+      return;
+    }
+    const deleted = await deleteNode(pendingNodeDeletion.nodeId, pendingNodeDeletion.version);
+    if (deleted) {
+      editorDraft.reset();
+      dispatchCanvas({
+        type: 'update',
+        update: {
+          selectedNodeId: null,
+          isEditorOpen: false,
+          pendingNodeDeletion: null,
+          isNodeDeleting: false,
+        },
+      });
+      return;
+    }
+    const refreshedImpact = await previewNodeDeletion(pendingNodeDeletion.nodeId);
+    dispatchCanvas({
+      type: 'update',
+      update: {
+        ...(refreshedImpact
+          ? { pendingNodeDeletion: { nodeId: pendingNodeDeletion.nodeId, ...refreshedImpact } }
+          : {}),
+        isNodeDeleting: false,
+      },
+    });
   }
 
   async function confirmVisibilityChange() {
@@ -915,6 +1020,7 @@ export default function RoadmapCanvas({
               void requestVisibilityChange(nodeId, isVisible)
             }
             onRequestAddResource={openResourceComposer}
+            onRequestDelete={requestNodeDeletion}
             topRightActions={
               !isCanvasPreview && (canEdit || canPreview)
                 ? (getViewport) => (
@@ -1024,6 +1130,161 @@ export default function RoadmapCanvas({
           />
         )}
       </section>
+      <AlertDialog
+        open={Boolean(pendingDeletionDraftNodeId)}
+        onOpenChange={(open) => {
+          if (!open)
+            dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: null } });
+        }}
+      >
+        <AlertDialogContent className="gap-5 sm:max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-semibold">
+              Descartar cambios sin guardar
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Eliminar este Nodo descartará su borrador actual. Puedes seguir editando o
+              descartarlo para continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => {
+                const nodeId = pendingDeletionDraftNodeId;
+                if (!nodeId) return;
+                editorDraft.reset();
+                dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: null } });
+                void previewAndRequestNodeDeletion(nodeId);
+              }}
+            >
+              Descartar y continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={Boolean(pendingNodeDeletion)}
+        onOpenChange={(open) => {
+          if (!open && !isNodeDeleting)
+            dispatchCanvas({ type: 'update', update: { pendingNodeDeletion: null } });
+        }}
+      >
+        <AlertDialogContent className="gap-5 sm:max-w-xl">
+          <AlertDialogHeader className="items-stretch gap-4 text-left">
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive ring-1 ring-destructive/20"
+              >
+                <NodeTypeIcon
+                  icon={pendingNodeDeletion?.node.nodeType.icon ?? 'Shapes'}
+                  className="size-5"
+                  style={{ color: pendingNodeDeletion?.node.nodeType.color }}
+                />
+              </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <AlertDialogTitle className="text-xl font-semibold tracking-tight">
+                  Eliminar Nodo
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm leading-relaxed">
+                  Eliminarás{' '}
+                  <span className="font-semibold text-foreground">
+                    {pendingNodeDeletion?.node.title}
+                  </span>{' '}
+                  y sus elementos relacionados. Esta acción no se puede deshacer.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          {pendingNodeDeletion ? (
+            <div className="flex flex-col gap-5">
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <NodeTypeIcon
+                  icon={pendingNodeDeletion.node.nodeType.icon}
+                  className="size-4"
+                  style={{ color: pendingNodeDeletion.node.nodeType.color }}
+                  aria-label={pendingNodeDeletion.node.nodeType.name}
+                />
+                {pendingNodeDeletion.node.nodeType.name}
+              </p>
+              <section
+                aria-labelledby="node-deletion-dependencies-heading"
+                className="flex flex-col gap-2.5"
+              >
+                <h3
+                  id="node-deletion-dependencies-heading"
+                  className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase"
+                >
+                  Dependencias relacionadas
+                </h3>
+                {pendingNodeDeletion.dependencies.length ? (
+                  <ul
+                    className="divide-y divide-border border-t border-border"
+                    aria-label="Dependencias relacionadas"
+                  >
+                    {pendingNodeDeletion.dependencies.map((dependency) => (
+                      <li
+                        key={dependency.id}
+                        className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 py-3 text-sm font-medium text-foreground"
+                      >
+                        <span>{dependency.sourceTitle}</span>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-4 shrink-0 text-destructive"
+                        />
+                        <span>{dependency.targetTitle}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No hay Dependencias relacionadas.
+                  </p>
+                )}
+              </section>
+              <section
+                aria-labelledby="node-deletion-resources-heading"
+                className="flex flex-col gap-2.5"
+              >
+                <h3
+                  id="node-deletion-resources-heading"
+                  className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase"
+                >
+                  Recursos que se eliminarán
+                </h3>
+                {pendingNodeDeletion.resources.length ? (
+                  <ul
+                    className="divide-y divide-border border-t border-border"
+                    aria-label="Recursos que se eliminarán"
+                  >
+                    {pendingNodeDeletion.resources.map((resource) => (
+                      <li key={resource.id} className="py-2 text-sm font-medium text-foreground">
+                        {resource.title}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No hay Recursos relacionados.</p>
+                )}
+              </section>
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isNodeDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              variant="destructive"
+              disabled={isNodeDeleting}
+              onClick={() => void confirmNodeDeletion()}
+            >
+              <Trash2 data-icon="inline-start" />
+              Eliminar Nodo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog
         open={Boolean(pendingDependencyIds?.length)}
         onOpenChange={(open) =>

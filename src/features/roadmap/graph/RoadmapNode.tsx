@@ -9,8 +9,10 @@ import {
   LockKeyhole,
   LockKeyholeOpen,
   Settings,
+  Trash2,
   X,
 } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
@@ -39,6 +41,7 @@ export type RoadmapNodeData = Record<string, unknown> & {
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
   onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
   onRequestAddResource?: (nodeId: string) => void;
+  onRequestDelete?: (nodeId: string) => void;
 };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
@@ -156,6 +159,7 @@ function NodeActionMenu({
   onRequestAccessAction,
   onRequestVisibilityAction,
   onRequestAddResource,
+  onRequestDelete,
 }: {
   nodeId: string;
   hidden: boolean;
@@ -166,155 +170,92 @@ function NodeActionMenu({
   onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
   onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
   onRequestAddResource?: (nodeId: string) => void;
+  onRequestDelete?: (nodeId: string) => void;
 }) {
   const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
   const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';
   const visibilityLabel = hidden ? 'Mostrar para estudiantes' : 'Ocultar para estudiantes';
+  const actions = [
+    ...(!hidden
+      ? [
+          {
+            id: 'access',
+            label: accessLabel,
+            Icon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
+            onSelect: () => onRequestAccessAction?.(nodeId, teacherBlocked ? 'UNBLOCK' : 'BLOCK'),
+            angle: 0,
+          },
+        ]
+      : []),
+    {
+      id: 'visibility',
+      label: visibilityLabel,
+      Icon: hidden ? Eye : EyeOff,
+      onSelect: () => onRequestVisibilityAction?.(nodeId, !hidden),
+      angle: 30,
+    },
+    {
+      id: 'resource',
+      label: 'Agregar recurso',
+      Icon: FilePlusCorner,
+      onSelect: () => onRequestAddResource?.(nodeId),
+      angle: 60,
+    },
+    {
+      id: 'delete',
+      label: 'Eliminar nodo',
+      Icon: Trash2,
+      onSelect: () => onRequestDelete?.(nodeId),
+      angle: 90,
+    },
+  ];
 
   return (
     <div className="absolute right-[-10px] bottom-[-10px] z-10 hidden lg:block">
       {isOpen ? (
         <div
           aria-label="Menú de acciones del nodo"
-          className="pointer-events-none absolute inset-0"
+          className={cn(styles.menuRing, isClosing ? styles.menuRingClosing : styles.menuRingOpen)}
+          id={`node-actions-${nodeId}`}
+          role="group"
         >
-          {!hidden ? (
-            <Tooltip>
-              <TooltipTrigger
-                delay={200}
-                render={
-                  <button
-                    type="button"
-                    aria-label={accessLabel}
-                    className={cn(
-                      styles.actionButton,
-                      isClosing && styles.actionButtonClosing,
-                      'group pointer-events-auto absolute top-0 left-[4.25rem] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    )}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onRequestAccessAction?.(nodeId, teacherBlocked ? 'UNBLOCK' : 'BLOCK');
-                    }}
+          {actions.map(({ id, label, Icon, onSelect, angle }, index) => {
+            const itemStyle = {
+              '--i': index,
+              '--total': actions.length,
+              '--angle': `${angle}deg`,
+            } as CSSProperties;
+            return (
+              <div key={id} className={styles.actionItem} style={itemStyle}>
+                <Tooltip>
+                  <TooltipTrigger
+                    delay={200}
+                    render={
+                      <button
+                        type="button"
+                        aria-label={label}
+                        data-slot={id === 'visibility' ? 'node-action-visibility' : undefined}
+                        data-angle={id === 'resource' ? 60 : undefined}
+                        className={cn(
+                          styles.actionButton,
+                          id === 'resource' && styles.resourceAction,
+                          id === 'delete' && styles.deleteAction,
+                        )}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelect();
+                        }}
+                      >
+                        <Icon aria-hidden="true" className="size-4" />
+                      </button>
+                    }
                   />
-                }
-              >
-                {teacherBlocked ? (
-                  <>
-                    <LockKeyhole
-                      aria-hidden="true"
-                      className="size-4 group-hover:hidden group-focus-visible:hidden"
-                    />
-                    <LockKeyholeOpen
-                      aria-hidden="true"
-                      className="hidden size-4 group-hover:block group-focus-visible:block"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <LockKeyholeOpen
-                      aria-hidden="true"
-                      className="size-4 group-hover:hidden group-focus-visible:hidden"
-                    />
-                    <LockKeyhole
-                      aria-hidden="true"
-                      className="hidden size-4 group-hover:block group-focus-visible:block"
-                    />
-                  </>
-                )}
-              </TooltipTrigger>
-              <TooltipContent side="right">{accessLabel}</TooltipContent>
-            </Tooltip>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger
-              delay={200}
-              render={
-                <button
-                  type="button"
-                  aria-label={visibilityLabel}
-                  data-slot="node-action-visibility"
-                  className={cn(
-                    styles.actionButton,
-                    isClosing && styles.actionButtonClosing,
-                    'group pointer-events-auto absolute top-6 left-[3.7rem] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  )}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRequestVisibilityAction?.(nodeId, !hidden);
-                  }}
-                />
-              }
-            >
-              {hidden ? (
-                <>
-                  <EyeOff
-                    aria-hidden="true"
-                    data-testid="visibility-current-icon"
-                    className="size-4 group-hover:hidden group-focus-visible:hidden"
-                  />
-                  <Eye
-                    aria-hidden="true"
-                    data-testid="visibility-result-icon"
-                    className="hidden size-4 group-hover:block group-focus-visible:block"
-                  />
-                </>
-              ) : (
-                <>
-                  <Eye
-                    aria-hidden="true"
-                    data-testid="visibility-current-icon"
-                    className="size-4 group-hover:hidden group-focus-visible:hidden"
-                  />
-                  <EyeOff
-                    aria-hidden="true"
-                    data-testid="visibility-result-icon"
-                    className="hidden size-4 group-hover:block group-focus-visible:block"
-                  />
-                </>
-              )}
-            </TooltipTrigger>
-            <TooltipContent side="right">{visibilityLabel}</TooltipContent>
-          </Tooltip>
-          <span
-            aria-hidden="true"
-            data-slot="node-action-resource"
-          />
-          <Tooltip>
-            <TooltipTrigger
-              delay={200}
-              render={
-                <button
-                  type="button"
-                  aria-label="Agregar recurso"
-                  data-slot="node-action-resource-control"
-                  data-angle="60"
-                  className="group pointer-events-auto absolute top-[3.7rem] left-6 flex size-8 items-center justify-center rounded-full border-2 border-card bg-card text-graphite shadow-md transition-all duration-240 hover:scale-110 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.94]"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onRequestAddResource?.(nodeId);
-                  }}
-                >
-                  <FilePlusCorner aria-hidden="true" className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:-rotate-12 group-hover:scale-110 group-focus-visible:-translate-y-0.5 group-focus-visible:-rotate-12 group-focus-visible:scale-110" />
-                </button>
-              }
-            />
-            <TooltipContent side="right">Agregar recurso</TooltipContent>
-          </Tooltip>
-          <span
-            aria-hidden="true"
-            data-slot="node-action-resource"
-            data-testid="node-action-resource-slot"
-            className="absolute top-[3.7rem] left-6 size-8 rounded-full"
-          />
-          <span
-            aria-hidden="true"
-            data-slot="node-action-delete"
-            data-testid="node-action-delete-slot"
-            className="absolute top-[4.25rem] left-0 size-8 rounded-full"
-          />
+                  <TooltipContent side="right">{label}</TooltipContent>
+                </Tooltip>
+              </div>
+            );
+          })}
         </div>
       ) : null}
       <Tooltip>
@@ -327,7 +268,8 @@ function NodeActionMenu({
                 isOpen ? 'Cerrar menú de acciones del nodo' : 'Abrir menú de acciones del nodo'
               }
               aria-expanded={isOpen}
-              className="nodrag nopan flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm transition-[transform,box-shadow,background-color] duration-150 ease-out hover:scale-110 hover:bg-muted hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-controls={`node-actions-${nodeId}`}
+              className={cn('nodrag nopan', styles.actionTrigger)}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
@@ -476,6 +418,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
           onRequestAccessAction={data.onRequestAccessAction}
           onRequestVisibilityAction={data.onRequestVisibilityAction}
           onRequestAddResource={data.onRequestAddResource}
+          onRequestDelete={data.onRequestDelete}
         />
       ) : hidden ? (
         <HiddenBadge />

@@ -97,6 +97,16 @@ export type TeacherBlockPreview = {
   version: string;
 };
 
+export type NodeDeletionImpact = {
+  node: {
+    title: string;
+    nodeType: { name: string; icon: string; color: string };
+  };
+  dependencies: Array<{ id: string; sourceTitle: string; targetTitle: string }>;
+  resources: Array<{ id: string; title: string }>;
+  version: string;
+};
+
 type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
   course: { code: string; name: string; department: string };
   courseOffering: { id: string; year: number; semester: number };

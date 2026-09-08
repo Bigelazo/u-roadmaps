@@ -89,6 +89,8 @@ test('opens the teaching action menu independently and invokes its contextual ac
   const onToggleActionMenu = vi.fn();
   const onRequestAccessAction = vi.fn();
   const onRequestVisibilityAction = vi.fn();
+  const onRequestAddResource = vi.fn();
+  const onRequestDelete = vi.fn();
   const props = {
     id: 'teacher-node',
     type: 'roadmap',
@@ -105,6 +107,8 @@ test('opens the teaching action menu independently and invokes its contextual ac
       onToggleActionMenu,
       onRequestAccessAction,
       onRequestVisibilityAction,
+      onRequestAddResource,
+      onRequestDelete,
     },
     selected: false,
     selectable: true,
@@ -130,18 +134,23 @@ test('opens the teaching action menu independently and invokes its contextual ac
       <RoadmapNode {...{ ...props, data: { ...props.data, isActionMenuOpen: true } }} />
     </ReactFlowProvider>,
   );
+  expect(screen.queryByTestId('node-action-focus')).toBeNull();
+  expect(screen.getByRole('group', { name: 'Menú de acciones del nodo' })).toBeTruthy();
+
   await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
   expect(onRequestAccessAction).toHaveBeenCalledWith('teacher-node', 'BLOCK');
   const visibilityAction = screen.getByRole('button', { name: 'Ocultar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
-  expect(visibilityAction.className).toContain('top-6');
-  expect(visibilityAction.className).toContain('left-[3.7rem]');
-  expect(
-    screen.getByTestId('visibility-current-icon').getAttribute('class')?.split(/\s+/),
-  ).not.toContain('hidden');
-  expect(
-    screen.getByTestId('visibility-result-icon').getAttribute('class')?.split(/\s+/),
-  ).toContain('hidden');
+  expect(visibilityAction.parentElement?.style.getPropertyValue('--i')).toBe('1');
+  expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('4');
+  const resourceAction = screen.getByRole('button', { name: 'Agregar recurso' });
+  expect(resourceAction.parentElement?.style.getPropertyValue('--angle')).toBe('60deg');
+  await user.click(resourceAction);
+  expect(onRequestAddResource).toHaveBeenCalledWith('teacher-node');
+  const deleteAction = screen.getByRole('button', { name: 'Eliminar nodo' });
+  expect(deleteAction.parentElement?.style.getPropertyValue('--angle')).toBe('90deg');
+  await user.click(deleteAction);
+  expect(onRequestDelete).toHaveBeenCalledWith('teacher-node');
   await user.click(visibilityAction);
   expect(onRequestVisibilityAction).toHaveBeenCalledWith('teacher-node', true);
   expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
@@ -196,18 +205,14 @@ test('offers showing a hidden node without an access action', async () => {
   expect(screen.queryByRole('button', { name: 'Desbloquear' })).toBeNull();
   const visibilityAction = screen.getByRole('button', { name: 'Mostrar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
-  expect(visibilityAction.className).toContain('top-6');
-  expect(visibilityAction.className).toContain('left-[3.7rem]');
+  expect(visibilityAction.parentElement?.style.getPropertyValue('--i')).toBe('0');
+  expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('3');
   expect(
-    screen.getByTestId('visibility-current-icon').getAttribute('class')?.split(/\s+/),
-  ).not.toContain('hidden');
-  expect(
-    screen.getByTestId('visibility-result-icon').getAttribute('class')?.split(/\s+/),
-  ).toContain('hidden');
-  expect(screen.getByTestId('node-action-resource-slot')).toBeTruthy();
-  expect(screen.getByTestId('node-action-delete-slot')).toBeTruthy();
+    screen.getByRole('button', { name: 'Agregar recurso' }).parentElement?.style.getPropertyValue('--angle'),
+  ).toBe('60deg');
   await user.click(visibilityAction);
   expect(onRequestVisibilityAction).toHaveBeenCalledWith('hidden-teacher-node', false);
+  expect(screen.getByRole('button', { name: 'Eliminar nodo' })).toBeTruthy();
 });
 
 test('keeps dependency handles mounted, but inert, for student nodes', () => {

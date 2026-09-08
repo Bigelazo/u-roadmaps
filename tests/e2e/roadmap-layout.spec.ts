@@ -105,3 +105,17 @@ test('groups editing controls without visual overlap on narrow viewports', async
   expect(overlaps(boxes[0], boxes[2])).toBe(false);
   expect(overlaps(boxes[1], boxes[2])).toBe(false);
 });
+
+test('keeps the radial node actions above their canvas focus treatment', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
+
+  const node = page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`);
+  await node.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
+
+  await page.getByRole('button', { name: 'Ocultar para estudiantes' }).click();
+
+  await expect(page.getByRole('alertdialog', { name: 'Confirmar ocultación' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancelar' }).click();
+});

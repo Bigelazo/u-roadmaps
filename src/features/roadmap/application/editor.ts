@@ -17,7 +17,11 @@ import {
   requireUuid,
   resourceDto,
 } from '@/features/roadmap/application/roadmap';
-import type { TeacherBlockOperation, TeacherBlockPreview } from '@/features/roadmap/types';
+import type {
+  NodeDeletionImpact,
+  TeacherBlockOperation,
+  TeacherBlockPreview,
+} from '@/features/roadmap/types';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import { transitiveDependentNodeIds } from '@/features/roadmap/domain/access';
 import {
@@ -34,6 +38,7 @@ type WithTeacherBlockOperation = WithId & {
   operation: TeacherBlockOperation;
   previewVersion?: string;
 };
+type WithDeletePreview = WithId & { previewVersion?: string };
 
 type StructuralDependency = {
   id: string;
@@ -245,17 +250,72 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
   );
 }
 
-async function deleteRoadmapNodeUnsafe({ id, ...editor }: WithId) {
-  const fileKeys = await prisma.$transaction(async (transaction) => {
-    const roadmap = await requireEditorRoadmap(transaction, editor);
-    const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
-    const resources = await transaction.resource.findMany({
-      where: { roadmapNodeId: node.id, fileKey: { not: null } },
-      select: { fileKey: true },
-    });
-    await transaction.roadmapNode.delete({ where: { id: node.id } });
-    return resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : []));
+async function nodeDeletionPreview(
+  transaction: Prisma.TransactionClient,
+  { id, ...editor }: WithId,
+): Promise<NodeDeletionImpact> {
+  const roadmap = await requireEditorRoadmap(transaction, editor);
+  const node = await transaction.roadmapNode.findFirst({
+    where: { id: requireUuid(id, 'nodeId'), roadmapId: roadmap.id },
+    include: {
+      nodeType: { select: { name: true, icon: true, color: true } },
+      resources: { select: { id: true, title: true }, orderBy: [{ title: 'asc' }, { id: 'asc' }] },
+    },
   });
+  if (!node) throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  const dependencies = await transaction.dependency.findMany({
+    where: { OR: [{ sourceNodeId: node.id }, { targetNodeId: node.id }] },
+    select: {
+      id: true,
+      sourceNode: { select: { title: true } },
+      targetNode: { select: { title: true } },
+    },
+    orderBy: { id: 'asc' },
+  });
+  const impact = {
+    node: {
+      title: node.title,
+      nodeType: node.nodeType,
+    },
+    dependencies: dependencies.map((dependency) => ({
+      id: dependency.id,
+      sourceTitle: dependency.sourceNode.title,
+      targetTitle: dependency.targetNode.title,
+    })),
+    resources: node.resources,
+  };
+  return {
+    ...impact,
+    version: createHash('sha256').update(JSON.stringify(impact)).digest('base64url'),
+  };
+}
+
+async function previewNodeDeletionUnsafe(input: WithId) {
+  return prisma.$transaction((transaction) => nodeDeletionPreview(transaction, input), {
+    isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
+  });
+}
+
+async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDeletePreview) {
+  const fileKeys = await withSerializableTransaction(
+    async (transaction) => {
+      const preview = await nodeDeletionPreview(transaction, { id, ...editor });
+      if (previewVersion && previewVersion !== preview.version) {
+        throw new ApiError(
+          409,
+          'NODE_DELETE_PREVIEW_STALE',
+          'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
+        );
+      }
+      const resources = await transaction.resource.findMany({
+        where: { roadmapNodeId: requireUuid(id, 'nodeId'), fileKey: { not: null } },
+        select: { fileKey: true },
+      });
+      await transaction.roadmapNode.delete({ where: { id: requireUuid(id, 'nodeId') } });
+      return resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : []));
+    },
+    () => new ApiError(409, 'CONFLICT', 'La eliminación entra en conflicto con otra modificación.'),
+  );
   await Promise.all(fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)));
 }
 
@@ -590,7 +650,11 @@ export function previewNodeVisibility(input: WithId) {
   return apiResult(() => previewNodeVisibilityUnsafe(input));
 }
 
-export function deleteRoadmapNode(input: WithId) {
+export function previewNodeDeletion(input: WithId) {
+  return apiResult(() => previewNodeDeletionUnsafe(input));
+}
+
+export function deleteRoadmapNode(input: WithDeletePreview) {
   return apiResult(() => deleteRoadmapNodeUnsafe(input));
 }
 
