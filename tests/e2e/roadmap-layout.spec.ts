@@ -119,3 +119,40 @@ test('keeps the radial node actions above their canvas focus treatment', async (
   await expect(page.getByRole('alertdialog', { name: 'Confirmar ocultación' })).toBeVisible();
   await page.getByRole('button', { name: 'Cancelar' }).click();
 });
+
+test('keeps radial node actions evenly sized and separated', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
+
+  const node = page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`);
+  const trigger = node.getByRole('button', { name: 'Abrir menú de acciones del nodo' });
+  await trigger.click();
+  await page.waitForTimeout(450);
+  await page.mouse.move(0, 0);
+
+  const controls = [
+    node.getByRole('button', { name: 'Cerrar menú de acciones del nodo' }),
+    page.getByRole('button', { name: 'Bloquear rama' }),
+    page.getByRole('button', { name: 'Ocultar para estudiantes' }),
+    page.getByRole('button', { name: 'Agregar recurso' }),
+    page.getByRole('button', { name: 'Eliminar nodo' }),
+  ];
+  const boxes = await Promise.all(
+    controls.map(async (control) => {
+      const box = await control.boundingBox();
+      if (!box) throw new Error('No se pudo medir un control radial.');
+      return box;
+    }),
+  );
+
+  for (const box of boxes) {
+    expect(box.width).toBeCloseTo(boxes[0].width, 1);
+    expect(box.height).toBeCloseTo(boxes[0].height, 1);
+  }
+  for (let index = 1; index < boxes.length; index += 1) {
+    for (let otherIndex = index + 1; otherIndex < boxes.length; otherIndex += 1) {
+      expect(overlaps(boxes[index], boxes[otherIndex])).toBe(false);
+    }
+  }
+});

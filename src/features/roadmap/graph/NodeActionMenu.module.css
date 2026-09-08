@@ -24,7 +24,9 @@
 }
 
 .menuRing {
+  /* 32 px controls touch neither their neighbour nor the trigger at 30°. */
   --radius: 4rem;
+  --action-size: 2rem;
   position: absolute;
   top: 50%;
   left: 50%;
@@ -50,9 +52,9 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 3.25rem;
-  height: 3.25rem;
-  margin: -1.625rem;
+  width: var(--action-size);
+  height: var(--action-size);
+  margin: calc(var(--action-size) / -2);
   pointer-events: auto;
   transform: rotate(var(--angle)) translate(var(--radius)) rotate(calc(-1 * var(--angle)));
 }
@@ -82,10 +84,38 @@
   color: var(--primary-foreground);
   background: var(--primary);
   box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent),
-    0 8px 18px color-mix(in srgb, var(--primary) 25%, transparent);
+    0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent),
+    0 6px 14px color-mix(in srgb, var(--primary) 25%, transparent);
   outline: none;
-  transform: scale(1.12);
+}
+
+.actionIcon {
+  display: grid;
+  place-items: center;
+}
+
+.actionIcon svg {
+  grid-area: 1 / 1;
+  transition:
+    opacity 140ms ease-out,
+    transform 140ms ease-out;
+}
+
+.actionHoverIcon {
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+.actionButton:hover .actionDefaultIcon,
+.actionButton:focus-visible .actionDefaultIcon {
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+.actionButton:hover .actionHoverIcon,
+.actionButton:focus-visible .actionHoverIcon {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .resourceAction svg {
@@ -111,11 +141,11 @@
 
 .deleteAction:hover,
 .deleteAction:focus-visible {
-  color: var(--destructive-foreground);
+  color: #fff;
   background: var(--destructive);
   box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--destructive) 18%, transparent),
-    0 8px 18px color-mix(in srgb, var(--destructive) 25%, transparent);
+    0 0 0 2px color-mix(in srgb, var(--destructive) 18%, transparent),
+    0 6px 14px color-mix(in srgb, var(--destructive) 25%, transparent);
 }
 
 .deleteAction:hover svg,
@@ -131,8 +161,8 @@
   position: relative;
   z-index: 2;
   display: flex;
-  width: 2rem;
-  height: 2rem;
+  width: var(--action-size, 2rem);
+  height: var(--action-size, 2rem);
   align-items: center;
   justify-content: center;
   border: 2px solid var(--card);
@@ -166,6 +196,23 @@
   .actionTrigger {
     animation: none;
     transition: none;
+  }
+
+  .actionHoverIcon {
+    opacity: 0;
+    transform: none;
+  }
+
+  .actionButton:hover .actionDefaultIcon,
+  .actionButton:focus-visible .actionDefaultIcon {
+    opacity: 0;
+    transform: none;
+  }
+
+  .actionButton:hover .actionHoverIcon,
+  .actionButton:focus-visible .actionHoverIcon {
+    opacity: 1;
+    transform: none;
   }
 
   .menuRingOpen,

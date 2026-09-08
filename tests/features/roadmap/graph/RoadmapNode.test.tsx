@@ -141,6 +141,10 @@ test('opens the teaching action menu independently and invokes its contextual ac
   expect(onRequestAccessAction).toHaveBeenCalledWith('teacher-node', 'BLOCK');
   const visibilityAction = screen.getByRole('button', { name: 'Ocultar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
+  expect(screen.getByTestId('node-action-access-default-icon')).toBeTruthy();
+  expect(screen.getByTestId('node-action-access-hover-icon')).toBeTruthy();
+  expect(screen.getByTestId('node-action-visibility-default-icon')).toBeTruthy();
+  expect(screen.getByTestId('node-action-visibility-hover-icon')).toBeTruthy();
   expect(visibilityAction.parentElement?.style.getPropertyValue('--i')).toBe('1');
   expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('4');
   const resourceAction = screen.getByRole('button', { name: 'Agregar recurso' });
@@ -205,6 +209,8 @@ test('offers showing a hidden node without an access action', async () => {
   expect(screen.queryByRole('button', { name: 'Desbloquear' })).toBeNull();
   const visibilityAction = screen.getByRole('button', { name: 'Mostrar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
+  expect(screen.getByTestId('node-action-visibility-default-icon')).toBeTruthy();
+  expect(screen.getByTestId('node-action-visibility-hover-icon')).toBeTruthy();
   expect(visibilityAction.parentElement?.style.getPropertyValue('--i')).toBe('0');
   expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('3');
   expect(

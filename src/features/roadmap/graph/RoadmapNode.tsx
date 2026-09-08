@@ -181,7 +181,8 @@ function NodeActionMenu({
           {
             id: 'access',
             label: accessLabel,
-            Icon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
+            Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
+            HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
             onSelect: () => onRequestAccessAction?.(nodeId, teacherBlocked ? 'UNBLOCK' : 'BLOCK'),
             angle: 0,
           },
@@ -190,7 +191,8 @@ function NodeActionMenu({
     {
       id: 'visibility',
       label: visibilityLabel,
-      Icon: hidden ? Eye : EyeOff,
+      Icon: hidden ? EyeOff : Eye,
+      HoverIcon: hidden ? Eye : EyeOff,
       onSelect: () => onRequestVisibilityAction?.(nodeId, !hidden),
       angle: 30,
     },
@@ -198,6 +200,7 @@ function NodeActionMenu({
       id: 'resource',
       label: 'Agregar recurso',
       Icon: FilePlusCorner,
+      HoverIcon: null,
       onSelect: () => onRequestAddResource?.(nodeId),
       angle: 60,
     },
@@ -205,6 +208,7 @@ function NodeActionMenu({
       id: 'delete',
       label: 'Eliminar nodo',
       Icon: Trash2,
+      HoverIcon: null,
       onSelect: () => onRequestDelete?.(nodeId),
       angle: 90,
     },
@@ -219,7 +223,7 @@ function NodeActionMenu({
           id={`node-actions-${nodeId}`}
           role="group"
         >
-          {actions.map(({ id, label, Icon, onSelect, angle }, index) => {
+          {actions.map(({ id, label, Icon, HoverIcon, onSelect, angle }, index) => {
             const itemStyle = {
               '--i': index,
               '--total': actions.length,
@@ -247,7 +251,20 @@ function NodeActionMenu({
                           onSelect();
                         }}
                       >
-                        <Icon aria-hidden="true" className="size-4" />
+                        {HoverIcon ? (
+                          <span className={styles.actionIcon} aria-hidden="true">
+                            <Icon
+                              className={cn('size-4', styles.actionDefaultIcon)}
+                              data-testid={`node-action-${id}-default-icon`}
+                            />
+                            <HoverIcon
+                              className={cn('size-4', styles.actionHoverIcon)}
+                              data-testid={`node-action-${id}-hover-icon`}
+                            />
+                          </span>
+                        ) : (
+                          <Icon aria-hidden="true" className="size-4" />
+                        )}
                       </button>
                     }
                   />
