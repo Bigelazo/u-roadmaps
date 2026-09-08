@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { RoadmapNode } from '@/features/roadmap/types';
 import { emptyResourceEditorDraft, hasUnsavedNodeInformation } from './node-information-preview';
 import type { NodeUpdate, RoadmapEditorDraft } from './types';
@@ -10,12 +10,19 @@ const emptyNodeDraft: NodeUpdate = {
 };
 
 export function useRoadmapEditorDraft(selectedNode: RoadmapNode | undefined): RoadmapEditorDraft {
-  const [draftNodeId, setDraftNodeId] = useState<string | null>(null);
-  const [editNode, setEditNode] = useState<NodeUpdate>(emptyNodeDraft);
+  const draftNodeId = selectedNode?.id ?? null;
+  const [editNode, setEditNode] = useState<NodeUpdate>(() =>
+    selectedNode
+      ? {
+          title: selectedNode.title,
+          description: selectedNode.description ?? '',
+          nodeTypeId: selectedNode.nodeTypeId,
+        }
+      : emptyNodeDraft,
+  );
   const [resourceDraft, setResourceDraft] = useState(emptyResourceEditorDraft);
 
   const reset = useCallback(() => {
-    setDraftNodeId(selectedNode?.id ?? null);
     setEditNode(
       selectedNode
         ? {
@@ -27,10 +34,6 @@ export function useRoadmapEditorDraft(selectedNode: RoadmapNode | undefined): Ro
     );
     setResourceDraft(emptyResourceEditorDraft());
   }, [selectedNode]);
-
-  useEffect(() => {
-    if (draftNodeId !== (selectedNode?.id ?? null)) reset();
-  }, [draftNodeId, reset, selectedNode?.id]);
 
   const isDirty = Boolean(
     selectedNode &&

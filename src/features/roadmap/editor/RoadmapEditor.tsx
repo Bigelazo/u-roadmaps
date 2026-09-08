@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import {
@@ -20,176 +20,191 @@ import {
   emptyResourceEditorDraft,
   projectNodeInformationPreview,
 } from './node-information-preview';
-import type { ResourceEditorDraft, RoadmapEditorProps } from './types';
+import type { ResourceEditorDraft, RoadmapEditorDraftHandle, RoadmapEditorProps } from './types';
+import { useRoadmapEditorDraft } from './useRoadmapEditorDraft';
 
 type PendingDeletion = { label: string; onConfirm: () => Promise<boolean> } | null;
 
-export function RoadmapEditor({
-  roadmap,
-  selectedNode,
-  draft,
-  isVisibilityPending,
-  isOpen,
-  resourceComposerRequest,
-  onClose,
-  onUpdateNode,
-  onToggleVisibility,
-  onRequestTeacherBlock,
-  onDeleteNode,
-  onAddResource,
-  onUploadResource,
-  onUpdateResource,
-  onDeleteResource,
-  onPreview,
-  previewButtonRef,
-  panelWidth,
-  onPanelWidthChange,
-}: RoadmapEditorProps) {
-  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
-  const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
-  const { draftNodeId, editNode, resourceDraft, isDirty, setEditNode, setResourceDraft } = draft;
+export const RoadmapEditor = forwardRef<RoadmapEditorDraftHandle, RoadmapEditorProps>(
+  function RoadmapEditor(
+    {
+      roadmap,
+      selectedNode,
+      isVisibilityPending,
+      isOpen,
+      resourceComposerRequest,
+      onClose,
+      onUpdateNode,
+      onToggleVisibility,
+      onRequestTeacherBlock,
+      onDeleteNode,
+      onAddResource,
+      onUploadResource,
+      onUpdateResource,
+      onDeleteResource,
+      onPreview,
+      previewButtonRef,
+      panelWidth,
+      onPanelWidthChange,
+    }: RoadmapEditorProps,
+    ref,
+  ) {
+    const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
+    const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
+    const draft = useRoadmapEditorDraft(selectedNode);
+    const { draftNodeId, editNode, resourceDraft, isDirty, reset, setEditNode, setResourceDraft } =
+      draft;
 
-  useEffect(() => {
-    const media = window.matchMedia('(min-width: 1024px)');
-    const update = () => setIsMobileEditorExpanded(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
+    useImperativeHandle(ref, () => ({ draftNodeId, isDirty, reset }), [
+      draftNodeId,
+      isDirty,
+      reset,
+    ]);
 
-  useEffect(() => {
-    if (!resourceComposerRequest || draftNodeId !== selectedNode?.id) return;
-    setResourceDraft((draft) =>
-      draft.isOpen ? draft : { ...emptyResourceEditorDraft(), isOpen: true, mode: 'file' },
-    );
-    const frame = requestAnimationFrame(() => {
-      (document.getElementById('resource-file') ?? document.getElementById('resource-title'))?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [draftNodeId, resourceComposerRequest, selectedNode?.id, setResourceDraft]);
+    useEffect(() => {
+      const media = window.matchMedia('(min-width: 1024px)');
+      const update = () => setIsMobileEditorExpanded(media.matches);
+      update();
+      media.addEventListener('change', update);
+      return () => media.removeEventListener('change', update);
+    }, []);
 
-  if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) return null;
-  const closeResourceEditor = () => setResourceDraft(emptyResourceEditorDraft());
-  const openResourceEditor = (mode: ResourceEditorDraft['mode']) =>
-    setResourceDraft((draft) => ({ ...draft, isOpen: true, mode, selectedFile: null }));
-  const startEditingResource = (resource: Resource) =>
-    setResourceDraft({
-      value: { title: resource.title, url: resource.url, type: resource.type },
-      editingResourceId: resource.id,
-      isOpen: true,
-      mode: resource.type === 'FILE' ? 'file' : 'link',
-      selectedFile: null,
-    });
+    useEffect(() => {
+      if (!resourceComposerRequest || draftNodeId !== selectedNode?.id) return;
+      setResourceDraft((draft) =>
+        draft.isOpen ? draft : { ...emptyResourceEditorDraft(), isOpen: true, mode: 'file' },
+      );
+      const frame = requestAnimationFrame(() => {
+        (
+          document.getElementById('resource-file') ?? document.getElementById('resource-title')
+        )?.focus();
+      });
+      return () => cancelAnimationFrame(frame);
+    }, [draftNodeId, resourceComposerRequest, selectedNode?.id, setResourceDraft]);
 
-  return (
-    <Sidebar
-      side="right"
-      collapsible="none"
-      id="roadmap-editor-panel"
-      aria-label="Panel de edición del roadmap"
-      className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"
-    >
-      <SidebarRail
-        ariaLabel="Redimensionar panel de edición"
-        controlsId="roadmap-editor-panel"
-        value={panelWidth}
-        min={panelWidthLimits.min}
-        max={panelWidthLimits.max}
-        onValueChange={onPanelWidthChange}
-        className="sm:hidden lg:flex"
-      />
-      <SidebarContent className="overflow-visible lg:overflow-y-auto">
-        <details
-          open={isMobileEditorExpanded}
-          onToggle={(event) => setIsMobileEditorExpanded(event.currentTarget.open)}
-        >
-          <summary className="min-h-11 cursor-pointer border-b border-border bg-cloud/70 px-5 py-3 text-sm font-bold text-primary lg:hidden">
-            Editor de nodo
-          </summary>
-          <div className="pb-6">
-            <NodeDetailsEditor
-              node={selectedNode}
-              nodeTypes={roadmap.nodeTypes}
-              nodeValue={editNode}
-              resourceValue={resourceDraft.value}
-              editingResourceId={resourceDraft.editingResourceId}
-              isResourceComposerOpen={resourceDraft.isOpen}
-              isVisibilityPending={isVisibilityPending}
-              resourceMode={resourceDraft.mode}
-              selectedResourceFile={resourceDraft.selectedFile}
-              isDirty={isDirty}
-              onNodeChange={setEditNode}
-              onResourceChange={(value) => setResourceDraft((draft) => ({ ...draft, value }))}
-              onResourceComposerOpen={openResourceEditor}
-              onResourceComposerClose={closeResourceEditor}
-              onResourceModeChange={(mode) => setResourceDraft((draft) => ({ ...draft, mode }))}
-              onSelectedResourceFileChange={(selectedFile) =>
-                setResourceDraft((draft) => ({ ...draft, selectedFile }))
-              }
-              onUpdateNode={onUpdateNode}
-              onToggleVisibility={onToggleVisibility}
-              onRequestTeacherBlock={onRequestTeacherBlock}
-              onAddResource={onAddResource}
-              onUploadResource={onUploadResource}
-              onUpdateResource={onUpdateResource}
-              onStartEditingResource={startEditingResource}
-              onCancelResource={closeResourceEditor}
-              onDeleteNode={(node) =>
-                setPendingDeletion({
-                  label: `el nodo ${node.title} y sus dependencias y recursos`,
-                  onConfirm: async () => {
-                    const deleted = await onDeleteNode(node.id);
-                    if (deleted) onClose();
-                    return deleted;
-                  },
-                })
-              }
-              onDeleteResource={(item) =>
-                setPendingDeletion({
-                  label: `el recurso ${item.title}`,
-                  onConfirm: () => onDeleteResource(item.id),
-                })
-              }
-              onPreview={() =>
-                onPreview(projectNodeInformationPreview(selectedNode, editNode, resourceDraft))
-              }
-              previewButtonRef={previewButtonRef}
-              onClose={onClose}
-            />
-          </div>
-        </details>
-      </SidebarContent>
+    if (!isOpen || !selectedNode || draftNodeId !== selectedNode.id) return null;
+    const closeResourceEditor = () => setResourceDraft(emptyResourceEditorDraft());
+    const openResourceEditor = (mode: ResourceEditorDraft['mode']) =>
+      setResourceDraft((draft) => ({ ...draft, isOpen: true, mode, selectedFile: null }));
+    const startEditingResource = (resource: Resource) =>
+      setResourceDraft({
+        value: { title: resource.title, url: resource.url, type: resource.type },
+        editingResourceId: resource.id,
+        isOpen: true,
+        mode: resource.type === 'FILE' ? 'file' : 'link',
+        selectedFile: null,
+      });
 
-      <AlertDialog
-        open={Boolean(pendingDeletion)}
-        onOpenChange={(open) => !open && setPendingDeletion(null)}
+    return (
+      <Sidebar
+        side="right"
+        collapsible="none"
+        id="roadmap-editor-panel"
+        aria-label="Panel de edición del roadmap"
+        className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Confirmar eliminación
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Eliminarás {pendingDeletion?.label}. Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              variant="destructive"
-              onClick={() =>
-                void pendingDeletion?.onConfirm().then((deleted) => {
-                  if (deleted) setPendingDeletion(null);
-                })
-              }
-            >
-              <Trash2 data-icon="inline-start" />
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Sidebar>
-  );
-}
+        <SidebarRail
+          ariaLabel="Redimensionar panel de edición"
+          controlsId="roadmap-editor-panel"
+          value={panelWidth}
+          min={panelWidthLimits.min}
+          max={panelWidthLimits.max}
+          onValueChange={onPanelWidthChange}
+          className="sm:hidden lg:flex"
+        />
+        <SidebarContent className="overflow-visible lg:overflow-y-auto">
+          <details
+            open={isMobileEditorExpanded}
+            onToggle={(event) => setIsMobileEditorExpanded(event.currentTarget.open)}
+          >
+            <summary className="min-h-11 cursor-pointer border-b border-border bg-cloud/70 px-5 py-3 text-sm font-bold text-primary lg:hidden">
+              Editor de nodo
+            </summary>
+            <div className="pb-6">
+              <NodeDetailsEditor
+                node={selectedNode}
+                nodeTypes={roadmap.nodeTypes}
+                nodeValue={editNode}
+                resourceValue={resourceDraft.value}
+                editingResourceId={resourceDraft.editingResourceId}
+                isResourceComposerOpen={resourceDraft.isOpen}
+                isVisibilityPending={isVisibilityPending}
+                resourceMode={resourceDraft.mode}
+                selectedResourceFile={resourceDraft.selectedFile}
+                isDirty={isDirty}
+                onNodeChange={setEditNode}
+                onResourceChange={(value) => setResourceDraft((draft) => ({ ...draft, value }))}
+                onResourceComposerOpen={openResourceEditor}
+                onResourceComposerClose={closeResourceEditor}
+                onResourceModeChange={(mode) => setResourceDraft((draft) => ({ ...draft, mode }))}
+                onSelectedResourceFileChange={(selectedFile) =>
+                  setResourceDraft((draft) => ({ ...draft, selectedFile }))
+                }
+                onUpdateNode={onUpdateNode}
+                onToggleVisibility={onToggleVisibility}
+                onRequestTeacherBlock={onRequestTeacherBlock}
+                onAddResource={onAddResource}
+                onUploadResource={onUploadResource}
+                onUpdateResource={onUpdateResource}
+                onStartEditingResource={startEditingResource}
+                onCancelResource={closeResourceEditor}
+                onDeleteNode={(node) =>
+                  setPendingDeletion({
+                    label: `el nodo ${node.title} y sus dependencias y recursos`,
+                    onConfirm: async () => {
+                      const deleted = await onDeleteNode(node.id);
+                      if (deleted) onClose();
+                      return deleted;
+                    },
+                  })
+                }
+                onDeleteResource={(item) =>
+                  setPendingDeletion({
+                    label: `el recurso ${item.title}`,
+                    onConfirm: () => onDeleteResource(item.id),
+                  })
+                }
+                onPreview={() =>
+                  onPreview(projectNodeInformationPreview(selectedNode, editNode, resourceDraft))
+                }
+                previewButtonRef={previewButtonRef}
+                onClose={onClose}
+              />
+            </div>
+          </details>
+        </SidebarContent>
+
+        <AlertDialog
+          open={Boolean(pendingDeletion)}
+          onOpenChange={(open) => !open && setPendingDeletion(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl font-semibold">
+                Confirmar eliminación
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Eliminarás {pendingDeletion?.label}. Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                type="button"
+                variant="destructive"
+                onClick={() =>
+                  void pendingDeletion?.onConfirm().then((deleted) => {
+                    if (deleted) setPendingDeletion(null);
+                  })
+                }
+              >
+                <Trash2 data-icon="inline-start" />
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Sidebar>
+    );
+  },
+);

@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
@@ -200,26 +202,33 @@ type Props = {
   onRequestDelete?: (nodeId: string) => void;
 };
 
-export function RoadmapGraph({
-  roadmap,
-  canEdit,
-  isTeacherView = canEdit,
-  onSelectNode,
-  onMoveNode,
-  onConnectNodes,
-  onDeleteDependencies,
-  onAutoLayout,
-  onClearSelectedNode,
-  onKeyboardNodeMove,
-  selectedNodeId,
-  topRightActions,
-  onViewportChange,
-  restoreViewport,
-  onRequestAccessAction,
-  onRequestVisibilityAction,
-  onRequestAddResource,
-  onRequestDelete,
-}: Props) {
+export type RoadmapGraphHandle = {
+  closeActionMenus: () => void;
+};
+
+export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function RoadmapGraph(
+  {
+    roadmap,
+    canEdit,
+    isTeacherView = canEdit,
+    onSelectNode,
+    onMoveNode,
+    onConnectNodes,
+    onDeleteDependencies,
+    onAutoLayout,
+    onClearSelectedNode,
+    onKeyboardNodeMove,
+    selectedNodeId,
+    topRightActions,
+    onViewportChange,
+    restoreViewport,
+    onRequestAccessAction,
+    onRequestVisibilityAction,
+    onRequestAddResource,
+    onRequestDelete,
+  }: Props,
+  ref,
+) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const [isAutoLayoutConfirmationOpen, setIsAutoLayoutConfirmationOpen] = useState(false);
   const [openActionMenuNodeId, setOpenActionMenuNodeId] = useState<string | null>(null);
@@ -236,15 +245,25 @@ export function RoadmapGraph({
     onRequestAddResource,
     onRequestDelete,
   });
-  handlers.current = {
+  useEffect(() => {
+    handlers.current = {
+      onDeleteDependencies,
+      onRequestAccessAction,
+      onRequestVisibilityAction,
+      onRequestAddResource,
+      onRequestDelete,
+    };
+  }, [
     onDeleteDependencies,
     onRequestAccessAction,
     onRequestVisibilityAction,
     onRequestAddResource,
     onRequestDelete,
-  };
+  ]);
   const selectedNodeIdRef = useRef(selectedNodeId);
-  selectedNodeIdRef.current = selectedNodeId;
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
   const keyboardMovePendingRef = useRef(false);
   const deleteDependency = useCallback(
     (dependencyId: string) => handlers.current.onDeleteDependencies([dependencyId]),
@@ -263,6 +282,11 @@ export function RoadmapGraph({
     },
     [beginClosingActionMenu, openActionMenuNodeId],
   );
+  const closeActionMenus = useCallback(() => {
+    setOpenActionMenuNodeId(null);
+    setClosingActionMenuNodeId(null);
+  }, []);
+  useImperativeHandle(ref, () => ({ closeActionMenus }), [closeActionMenus]);
   const toggleActionMenu = useCallback(
     (nodeId: string, trigger: HTMLButtonElement) => {
       actionMenuTriggerRef.current = trigger;
@@ -339,13 +363,6 @@ export function RoadmapGraph({
       ),
     );
   }, [actionMenu, deleteDependency, isTeacherView, roadmap]);
-
-  useEffect(() => {
-    if (!canEdit) {
-      setOpenActionMenuNodeId(null);
-      setClosingActionMenuNodeId(null);
-    }
-  }, [canEdit]);
 
   const previousSelectedNodeIdRef = useRef(selectedNodeId);
   useEffect(() => {
@@ -552,4 +569,4 @@ export function RoadmapGraph({
       </AlertDialog>
     </div>
   );
-}
+});

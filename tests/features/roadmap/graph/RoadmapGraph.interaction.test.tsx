@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { createRef, useState, type ReactNode } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -117,7 +117,7 @@ vi.mock('@xyflow/react', () => ({
   }),
 }));
 
-import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
+import { RoadmapGraph, type RoadmapGraphHandle } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto } from '@/features/roadmap/types';
 
 const roadmap: RoadmapDto = {
@@ -305,6 +305,30 @@ test('keeps one action menu open, closes it with Escape, and hands access change
   await waitFor(() =>
     expect(screen.queryByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeNull(),
   );
+});
+
+test('closes action menus when preview mode starts', async () => {
+  const user = userEvent.setup();
+  const ref = createRef<RoadmapGraphHandle>();
+  render(
+    <RoadmapGraph
+      ref={ref}
+      roadmap={roadmap}
+      canEdit
+      onSelectNode={vi.fn()}
+      onMoveNode={vi.fn()}
+      onConnectNodes={vi.fn()}
+      onDeleteDependencies={vi.fn()}
+      onAutoLayout={vi.fn()}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
+  expect(screen.getByRole('button', { name: 'Ejecutar acceso node-1' })).toBeTruthy();
+
+  act(() => ref.current?.closeActionMenus());
+
+  expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
 
 test('requires confirmation before automatically ordering canvas nodes', async () => {

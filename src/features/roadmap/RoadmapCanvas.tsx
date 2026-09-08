@@ -25,8 +25,7 @@ import type { Viewport } from '@xyflow/react';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
-import { useRoadmapEditorDraft } from '@/features/roadmap/editor/useRoadmapEditorDraft';
-import { RoadmapGraph } from '@/features/roadmap/graph/RoadmapGraph';
+import { RoadmapGraph, type RoadmapGraphHandle } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
@@ -45,6 +44,7 @@ import type {
   StudentRoadmapNode,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
+import type { RoadmapEditorDraftHandle } from '@/features/roadmap/editor/types';
 import {
   findOpenRoadmapPosition,
   roadmapNodeSizeForTitle,
@@ -494,6 +494,8 @@ export default function RoadmapCanvas({
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
   const previewCanvasButtonRef = useRef<HTMLButtonElement | null>(null);
+  const roadmapGraphRef = useRef<RoadmapGraphHandle>(null);
+  const editorDraftRef = useRef<RoadmapEditorDraftHandle>(null);
   const lastViewportRef = useRef<Viewport | null>(null);
   const successToastIdRef = useRef(0);
   const {
@@ -525,10 +527,6 @@ export default function RoadmapCanvas({
     completeSimulatedNode,
     resetSimulation,
   } = useRoadmap(identifier);
-  const editorSelectedNode = roadmap?.nodes.find((node) => node.id === selectedNodeId) as
-    RoadmapNode | undefined;
-  const editorDraft = useRoadmapEditorDraft(editorSelectedNode);
-
   const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
 
   const showSuccessToast = useCallback((message: string) => {
@@ -581,7 +579,8 @@ export default function RoadmapCanvas({
   async function enterCanvasPreview(discardDraft = false) {
     const loaded = await loadSimulation();
     if (!loaded) return;
-    if (discardDraft) editorDraft.reset();
+    if (discardDraft) editorDraftRef.current?.reset();
+    roadmapGraphRef.current?.closeActionMenus();
     dispatchCanvas({
       type: 'enterCanvasPreview',
       viewport: lastViewportRef.current,
@@ -590,7 +589,7 @@ export default function RoadmapCanvas({
   }
 
   function requestCanvasPreview() {
-    if (editorDraft.isDirty) {
+    if (editorDraftRef.current?.isDirty) {
       dispatchCanvas({ type: 'update', update: { isDiscardPreviewConfirmationOpen: true } });
       return;
     }
@@ -599,7 +598,7 @@ export default function RoadmapCanvas({
 
   function openResourceComposer(nodeId: string) {
     if (!canEdit || isCanvasPreview || pendingResourceComposerNodeId) return;
-    if (editorDraft.isDirty && editorDraft.draftNodeId !== nodeId) {
+    if (editorDraftRef.current?.isDirty && editorDraftRef.current.draftNodeId !== nodeId) {
       dispatchCanvas({ type: 'update', update: { pendingResourceComposerNodeId: nodeId } });
       return;
     }
@@ -685,7 +684,7 @@ export default function RoadmapCanvas({
   }
 
   function requestNodeDeletion(nodeId: string) {
-    if (editorDraft.isDirty && editorDraft.draftNodeId === nodeId) {
+    if (editorDraftRef.current?.isDirty && editorDraftRef.current.draftNodeId === nodeId) {
       dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: nodeId } });
       return;
     }
@@ -712,7 +711,7 @@ export default function RoadmapCanvas({
     }
     const deleted = await deleteNode(pendingNodeDeletion.nodeId, pendingNodeDeletion.version);
     if (deleted) {
-      editorDraft.reset();
+      editorDraftRef.current?.reset();
       dispatchCanvas({
         type: 'update',
         update: {
@@ -985,6 +984,7 @@ export default function RoadmapCanvas({
             </div>
           ) : null}
           <RoadmapGraph
+            ref={roadmapGraphRef}
             roadmap={displayedRoadmap}
             canEdit={canEdit && !isCanvasPreview}
             isTeacherView={!isStudentExperience}
@@ -1076,10 +1076,10 @@ export default function RoadmapCanvas({
         />
         {canEdit && (
           <RoadmapEditor
-            key={editorKey}
+            key={editorKey + ':' + (selectedNode?.id ?? 'none')}
             roadmap={roadmap as RoadmapDto}
             selectedNode={selectedNode as RoadmapNode | undefined}
-            draft={editorDraft}
+            ref={editorDraftRef}
             isVisibilityPending={isVisibilityPreviewing || isVisibilityChanging}
             isOpen={isEditorOpen && !isCanvasPreview}
             resourceComposerRequest={resourceComposerRequest}
@@ -1154,7 +1154,7 @@ export default function RoadmapCanvas({
               onClick={() => {
                 const nodeId = pendingDeletionDraftNodeId;
                 if (!nodeId) return;
-                editorDraft.reset();
+                editorDraftRef.current?.reset();
                 dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: null } });
                 void previewAndRequestNodeDeletion(nodeId);
               }}
@@ -1343,7 +1343,7 @@ export default function RoadmapCanvas({
               onClick={() => {
                 const nodeId = pendingResourceComposerNodeId;
                 if (!nodeId) return;
-                editorDraft.reset();
+                editorDraftRef.current?.reset();
                 dispatchCanvas({
                   type: 'update',
                   update: {

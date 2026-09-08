@@ -41,6 +41,11 @@ export type RoadmapEditorDraft = {
   reset: () => void;
 };
 
+export type RoadmapEditorDraftHandle = Pick<
+  RoadmapEditorDraft,
+  'draftNodeId' | 'isDirty' | 'reset'
+>;
+
 export type NodeTypeInput = { name: string; icon: NodeTypeIconId; color: NodeTypeColor };
 
 export type NodeTypeDraft = {
@@ -52,7 +57,6 @@ export type NodeTypeDraft = {
 export type RoadmapEditorProps = {
   roadmap: RoadmapDto;
   selectedNode: RoadmapNode | undefined;
-  draft: RoadmapEditorDraft;
   isVisibilityPending: boolean;
   isOpen: boolean;
   resourceComposerRequest?: number;

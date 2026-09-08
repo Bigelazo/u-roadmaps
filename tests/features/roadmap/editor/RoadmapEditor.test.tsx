@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { RoadmapEditor } from '@/features/roadmap/editor/RoadmapEditor';
 import type { RoadmapEditorProps } from '@/features/roadmap/editor/types';
-import { useRoadmapEditorDraft } from '@/features/roadmap/editor/useRoadmapEditorDraft';
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 
@@ -44,11 +43,10 @@ const roadmap: RoadmapDto = {
   dependencies: [],
 };
 
-type EditorHarnessProps = Omit<RoadmapEditorProps, 'draft'>;
+type EditorHarnessProps = RoadmapEditorProps;
 
 function EditorHarness(props: EditorHarnessProps) {
-  const draft = useRoadmapEditorDraft(props.selectedNode);
-  return <RoadmapEditor {...props} draft={draft} />;
+  return <RoadmapEditor {...props} />;
 }
 
 function editorProps(overrides: Partial<EditorHarnessProps> = {}): EditorHarnessProps {
