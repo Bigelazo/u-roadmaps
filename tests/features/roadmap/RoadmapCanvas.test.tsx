@@ -8,135 +8,130 @@ const { useRoadmapMock } = vi.hoisted(() => ({ useRoadmapMock: vi.fn() }));
 
 vi.mock('next/dynamic', () => ({
   default: () =>
-    forwardRef(
-      (
-        {
-          selectedNode,
-          isOpen,
-          onToggle,
-          onClose,
-          onPreview,
-          onRequestTeacherBlock,
-          onToggleVisibility,
-          onUpdateNode,
-          onAddResource,
-          isVisibilityPending,
-        }: {
-          selectedNode?: { id: string; isTeacherBlocked: boolean };
-          isOpen: boolean;
-          onToggle: () => void;
-          onClose: () => void;
-          onPreview: (node: {
-            id: string;
-            title: string;
-            description: string | null;
-            nodeTypeId: string;
-            positionX: number;
-            positionY: number;
-            isVisible: true;
-            access: { status: 'ACCESSIBLE' };
-            isCompleted: boolean;
-            canComplete: boolean;
-            resources: [];
-          }) => void;
-          onRequestTeacherBlock: (
-            nodeId: string,
-            operation: 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK',
-          ) => void;
-          onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
-          onUpdateNode: (nodeId: string, node: unknown) => Promise<boolean>;
-          onAddResource: (nodeId: string, resource: unknown) => Promise<boolean>;
-          isVisibilityPending: boolean;
-        },
-        ref,
-      ) => {
-        const [isDirty, setIsDirty] = useState(false);
-        useImperativeHandle(
-          ref,
-          () => ({
-            draftNodeId: selectedNode?.id ?? null,
-            isDirty,
-            reset: () => setIsDirty(false),
-          }),
-          [isDirty, selectedNode?.id],
-        );
-
-        return isOpen ? (
-          <aside data-testid="editor-panel">
-            <button type="button" onClick={onToggle}>
-              Ocultar panel de edición
-            </button>
-            {selectedNode ? (
-              <>
-                <button type="button" onClick={onClose}>
-                  Deseleccionar nodo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}
-                >
-                  Bloquear rama
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onRequestTeacherBlock(selectedNode.id, 'UNBLOCK')}
-                >
-                  Desbloquear
-                </button>
-                <button
-                  type="button"
-                  disabled={isVisibilityPending}
-                  onClick={() => onToggleVisibility(selectedNode.id, true)}
-                >
-                  Ocultar para estudiantes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void onUpdateNode(selectedNode.id, { title: 'Límites' })}
-                >
-                  Guardar cambios
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void onAddResource(selectedNode.id, {
-                      title: 'Guía de ejercicios',
-                      url: 'https://example.test/guia',
-                      type: 'LINK',
-                    })
-                  }
-                >
-                  Guardar enlace
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onPreview({
-                      id: selectedNode.id,
-                      title: 'Vista previa docente',
-                      description: 'Borrador visible',
-                      nodeTypeId: 'content',
-                      positionX: 0,
-                      positionY: 0,
-                      isVisible: true,
-                      access: { status: 'ACCESSIBLE' },
-                      isCompleted: false,
-                      canComplete: true,
-                      resources: [],
-                    })
-                  }
-                >
-                  Previsualizar
-                </button>
-                <button type="button" onClick={() => setIsDirty(true)}>
-                  Marcar borrador sin guardar
-                </button>
-              </>
-            ) : null}
-          </aside>
-        ) : null;
+    forwardRef(function RoadmapEditorMock(
+      {
+        selectedNode,
+        isOpen,
+        onToggle,
+        onClose,
+        onPreview,
+        onRequestTeacherBlock,
+        onToggleVisibility,
+        onUpdateNode,
+        onAddResource,
+        isVisibilityPending,
+      }: {
+        selectedNode?: { id: string; isTeacherBlocked: boolean };
+        isOpen: boolean;
+        onToggle: () => void;
+        onClose: () => void;
+        onPreview: (node: {
+          id: string;
+          title: string;
+          description: string | null;
+          nodeTypeId: string;
+          positionX: number;
+          positionY: number;
+          isVisible: true;
+          access: { status: 'ACCESSIBLE' };
+          isCompleted: boolean;
+          canComplete: boolean;
+          resources: [];
+        }) => void;
+        onRequestTeacherBlock: (
+          nodeId: string,
+          operation: 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK',
+        ) => void;
+        onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
+        onUpdateNode: (nodeId: string, node: unknown) => Promise<boolean>;
+        onAddResource: (nodeId: string, resource: unknown) => Promise<boolean>;
+        isVisibilityPending: boolean;
       },
-    ),
+      ref,
+    ) {
+      const [isDirty, setIsDirty] = useState(false);
+      useImperativeHandle(
+        ref,
+        () => ({
+          draftNodeId: selectedNode?.id ?? null,
+          isDirty,
+          reset: () => setIsDirty(false),
+        }),
+        [isDirty, selectedNode?.id],
+      );
+
+      return isOpen ? (
+        <aside data-testid="editor-panel">
+          <button type="button" onClick={onToggle}>
+            Ocultar panel de edición
+          </button>
+          {selectedNode ? (
+            <>
+              <button type="button" onClick={onClose}>
+                Deseleccionar nodo
+              </button>
+              <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
+                Bloquear rama
+              </button>
+              <button
+                type="button"
+                onClick={() => onRequestTeacherBlock(selectedNode.id, 'UNBLOCK')}
+              >
+                Desbloquear
+              </button>
+              <button
+                type="button"
+                disabled={isVisibilityPending}
+                onClick={() => onToggleVisibility(selectedNode.id, true)}
+              >
+                Ocultar para estudiantes
+              </button>
+              <button
+                type="button"
+                onClick={() => void onUpdateNode(selectedNode.id, { title: 'Límites' })}
+              >
+                Guardar cambios
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void onAddResource(selectedNode.id, {
+                    title: 'Guía de ejercicios',
+                    url: 'https://example.test/guia',
+                    type: 'LINK',
+                  })
+                }
+              >
+                Guardar enlace
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onPreview({
+                    id: selectedNode.id,
+                    title: 'Vista previa docente',
+                    description: 'Borrador visible',
+                    nodeTypeId: 'content',
+                    positionX: 0,
+                    positionY: 0,
+                    isVisible: true,
+                    access: { status: 'ACCESSIBLE' },
+                    isCompleted: false,
+                    canComplete: true,
+                    resources: [],
+                  })
+                }
+              >
+                Previsualizar
+              </button>
+              <button type="button" onClick={() => setIsDirty(true)}>
+                Marcar borrador sin guardar
+              </button>
+            </>
+          ) : null}
+        </aside>
+      ) : null;
+    }),
 }));
 
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
@@ -154,9 +149,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     isTeacherView,
     onViewportChange,
     restoreViewport,
-      onRequestVisibilityAction,
-      onRequestAddResource,
-      onRequestDelete,
+    onRequestVisibilityAction,
+    onRequestAddResource,
+    onRequestDelete,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
     onConnectNodes: (connection: {
@@ -570,10 +565,12 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Solicitar eliminación de dependencias' }));
   const dialog = screen.getByRole('alertdialog', { name: 'Confirmar eliminación' });
+  expect(dialog.getAttribute('data-intent')).toBe('destructive');
   expect(dialog.textContent).toContain(
     'Eliminarás estas dependencias. Esta acción no se puede deshacer.',
   );
   await user.keyboard('{Enter}');
+  expect(deleteDependency).toHaveBeenCalledTimes(2);
   expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
   expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
 
@@ -1061,11 +1058,21 @@ test('lets teachers enter the persistent student canvas preview, complete a node
   expect(completeSimulatedNode).toHaveBeenCalledWith('node-1');
 
   await user.click(screen.getByRole('button', { name: 'Reiniciar progreso' }));
-  expect(
-    screen.getByRole('alertdialog', { name: 'Reiniciar progreso de previsualización' }),
-  ).toBeTruthy();
-  await user.click(screen.getAllByRole('button', { name: 'Reiniciar progreso' }).at(-1)!);
-  expect(resetSimulation).toHaveBeenCalled();
+  const resetDialog = screen.getByRole('alertdialog', {
+    name: 'Reiniciar progreso de previsualización',
+  });
+  expect(resetDialog.getAttribute('data-intent')).toBe('destructive');
+  expect(resetDialog.textContent).toContain('completaciones simuladas');
+  expect(resetDialog.textContent).toContain('Completions estudiantiles');
+  await user.click(within(resetDialog).getByRole('button', { name: 'Cancelar' }));
+  expect(resetSimulation).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Reiniciar progreso' }));
+  const confirmation = screen.getByRole('alertdialog', {
+    name: 'Reiniciar progreso de previsualización',
+  });
+  await user.click(within(confirmation).getByRole('button', { name: 'Reiniciar progreso' }));
+  expect(resetSimulation).toHaveBeenCalledTimes(1);
 
   await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
   expect(screen.getByTestId('roadmap-mode').textContent).toBe('editing');
@@ -1082,12 +1089,15 @@ test('confirms before discarding an unsaved editor draft to enter the canvas pre
   await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
 
   expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
+  expect(
+    screen
+      .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
+      .getAttribute('data-intent'),
+  ).toBe('warning');
   expect(loadSimulation).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
   expect(screen.queryByText('Previsualización del canvas')).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
-  const dialog = screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
-  expect(dialog.className).toContain('sm:max-w-lg');
   await user.click(screen.getByRole('button', { name: 'Descartar y previsualizar' }));
 
   await waitFor(() => expect(loadSimulation).toHaveBeenCalledTimes(1));
@@ -1120,12 +1130,19 @@ test('opens a resource composer without warning for the current draft and confir
 
   await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
   expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
+  expect(
+    screen
+      .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
+      .getAttribute('data-intent'),
+  ).toBe('warning');
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
   expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-1');
 
   await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
   await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
-  await waitFor(() => expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-2'));
+  await waitFor(() =>
+    expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-2'),
+  );
 });
 
 test('shows the authoritative named deletion impact and deletes only after a fresh preview', async () => {
@@ -1215,6 +1232,11 @@ test('protects a dirty draft of the same Node before opening deletion confirmati
   await user.click(screen.getByRole('button', { name: 'Marcar borrador sin guardar' }));
   await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
   expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
+  expect(
+    screen
+      .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
+      .getAttribute('data-intent'),
+  ).toBe('warning');
   expect(previewNodeDeletion).not.toHaveBeenCalled();
 
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));

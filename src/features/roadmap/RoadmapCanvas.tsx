@@ -61,6 +61,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
+import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
 import { Badge } from '@/shared/ui/badge';
@@ -108,6 +109,74 @@ type PendingTeacherBlockChange = {
 
 type PendingNodeDeletion = { nodeId: string } & NodeDeletionImpact;
 
+type PendingSimpleConfirmation =
+  | { kind: 'deleteDependencies'; dependencyIds: string[] }
+  | { kind: 'discardNodeDraft'; nodeId: string }
+  | { kind: 'discardResourceDraft'; nodeId: string }
+  | { kind: 'discardCanvasPreviewDraft' }
+  | { kind: 'resetSimulation' };
+
+const simpleConfirmationActionIds = {
+  deleteDependencies: 'delete-dependencies',
+  discardDraft: 'discard-draft',
+  resetSimulation: 'reset-simulation',
+} as const;
+
+function simpleConfirmationPresentation(
+  confirmation: PendingSimpleConfirmation,
+): ConfirmationPresentation {
+  switch (confirmation.kind) {
+    case 'deleteDependencies': {
+      const dependencyLabel =
+        confirmation.dependencyIds.length === 1 ? 'esta dependencia' : 'estas dependencias';
+
+      return {
+        title: 'Confirmar eliminación',
+        description: `Eliminarás ${dependencyLabel}. Esta acción no se puede deshacer.`,
+        intent: 'destructive',
+        actions: [{ id: simpleConfirmationActionIds.deleteDependencies, label: 'Eliminar' }],
+      };
+    }
+    case 'discardNodeDraft':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'Eliminar este Nodo descartará su borrador actual. Puedes seguir editando o descartarlo para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [{ id: simpleConfirmationActionIds.discardDraft, label: 'Descartar y continuar' }],
+      };
+    case 'discardResourceDraft':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'Agregar un recurso a otro nodo reemplazará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [{ id: simpleConfirmationActionIds.discardDraft, label: 'Descartar y continuar' }],
+      };
+    case 'discardCanvasPreviewDraft':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'La previsualización muestra únicamente el último estado guardado. Puedes seguir editando o descartar este borrador para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [
+          { id: simpleConfirmationActionIds.discardDraft, label: 'Descartar y previsualizar' },
+        ],
+      };
+    case 'resetSimulation':
+      return {
+        title: 'Reiniciar progreso de previsualización',
+        description:
+          'Eliminarás las completaciones simuladas de este Canvas preview. No se eliminarán las Completions estudiantiles. Esta acción no se puede deshacer.',
+        intent: 'destructive',
+        actions: [{ id: simpleConfirmationActionIds.resetSimulation, label: 'Reiniciar progreso' }],
+      };
+  }
+}
+
 type PreviewReturnState = {
   selectedNodeId: string | null;
   isEditorOpen: boolean;
@@ -123,11 +192,9 @@ type CanvasState = {
   previewReturnState: PreviewReturnState | null;
   restoreViewport: Viewport | null;
   editorKey: number;
-  isDiscardPreviewConfirmationOpen: boolean;
-  isResetConfirmationOpen: boolean;
   teacherPreviewNode: StudentAccessibleRoadmapNode | null;
   isTeacherPreviewCompleted: boolean;
-  pendingDependencyIds: string[] | null;
+  pendingSimpleConfirmation: PendingSimpleConfirmation | null;
   pendingVisibilityChange: PendingVisibilityChange | null;
   isVisibilityPreviewing: boolean;
   isVisibilityChanging: boolean;
@@ -137,8 +204,6 @@ type CanvasState = {
   pendingNodeDeletion: PendingNodeDeletion | null;
   isNodeDeletionPreviewing: boolean;
   isNodeDeleting: boolean;
-  pendingDeletionDraftNodeId: string | null;
-  pendingResourceComposerNodeId: string | null;
   resourceComposerRequest: number;
 };
 
@@ -167,11 +232,9 @@ const initialCanvasState: CanvasState = {
   previewReturnState: null,
   restoreViewport: null,
   editorKey: 0,
-  isDiscardPreviewConfirmationOpen: false,
-  isResetConfirmationOpen: false,
   teacherPreviewNode: null,
   isTeacherPreviewCompleted: false,
-  pendingDependencyIds: null,
+  pendingSimpleConfirmation: null,
   pendingVisibilityChange: null,
   isVisibilityPreviewing: false,
   isVisibilityChanging: false,
@@ -181,8 +244,6 @@ const initialCanvasState: CanvasState = {
   pendingNodeDeletion: null,
   isNodeDeletionPreviewing: false,
   isNodeDeleting: false,
-  pendingDeletionDraftNodeId: null,
-  pendingResourceComposerNodeId: null,
   resourceComposerRequest: 0,
 };
 
@@ -464,11 +525,9 @@ export default function RoadmapCanvas({
     isCanvasPreview,
     restoreViewport,
     editorKey,
-    isDiscardPreviewConfirmationOpen,
-    isResetConfirmationOpen,
     teacherPreviewNode,
     isTeacherPreviewCompleted,
-    pendingDependencyIds,
+    pendingSimpleConfirmation,
     pendingVisibilityChange,
     isVisibilityPreviewing,
     isVisibilityChanging,
@@ -478,11 +537,10 @@ export default function RoadmapCanvas({
     pendingNodeDeletion,
     isNodeDeletionPreviewing,
     isNodeDeleting,
-    pendingDeletionDraftNodeId,
-    pendingResourceComposerNodeId,
     resourceComposerRequest,
   } = canvasState;
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
+  const [pendingActionId, setPendingActionId] = useState<string>();
   const editorPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:roadmap-editor-panel-width',
     initialWidth: 360,
@@ -577,9 +635,9 @@ export default function RoadmapCanvas({
   }
 
   async function enterCanvasPreview(discardDraft = false) {
+    if (discardDraft) editorDraftRef.current?.reset();
     const loaded = await loadSimulation();
     if (!loaded) return;
-    if (discardDraft) editorDraftRef.current?.reset();
     roadmapGraphRef.current?.closeActionMenus();
     dispatchCanvas({
       type: 'enterCanvasPreview',
@@ -590,16 +648,22 @@ export default function RoadmapCanvas({
 
   function requestCanvasPreview() {
     if (editorDraftRef.current?.isDirty) {
-      dispatchCanvas({ type: 'update', update: { isDiscardPreviewConfirmationOpen: true } });
+      dispatchCanvas({
+        type: 'update',
+        update: { pendingSimpleConfirmation: { kind: 'discardCanvasPreviewDraft' } },
+      });
       return;
     }
     void enterCanvasPreview();
   }
 
   function openResourceComposer(nodeId: string) {
-    if (!canEdit || isCanvasPreview || pendingResourceComposerNodeId) return;
+    if (!canEdit || isCanvasPreview || pendingSimpleConfirmation) return;
     if (editorDraftRef.current?.isDirty && editorDraftRef.current.draftNodeId !== nodeId) {
-      dispatchCanvas({ type: 'update', update: { pendingResourceComposerNodeId: nodeId } });
+      dispatchCanvas({
+        type: 'update',
+        update: { pendingSimpleConfirmation: { kind: 'discardResourceDraft', nodeId } },
+      });
       return;
     }
     dispatchCanvas({
@@ -685,7 +749,10 @@ export default function RoadmapCanvas({
 
   function requestNodeDeletion(nodeId: string) {
     if (editorDraftRef.current?.isDirty && editorDraftRef.current.draftNodeId === nodeId) {
-      dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: nodeId } });
+      dispatchCanvas({
+        type: 'update',
+        update: { pendingSimpleConfirmation: { kind: 'discardNodeDraft', nodeId } },
+      });
       return;
     }
     void previewAndRequestNodeDeletion(nodeId);
@@ -848,6 +915,74 @@ export default function RoadmapCanvas({
     dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: false } });
   }
 
+  function clearSimpleConfirmation() {
+    setPendingActionId(undefined);
+    dispatchCanvas({ type: 'update', update: { pendingSimpleConfirmation: null } });
+  }
+
+  async function confirmDependencyDeletion(dependencyIds: string[]) {
+    if (pendingActionId) return;
+    setPendingActionId(simpleConfirmationActionIds.deleteDependencies);
+    await Promise.allSettled(dependencyIds.map((dependencyId) => deleteDependency(dependencyId)));
+    clearSimpleConfirmation();
+  }
+
+  async function confirmSimulationReset() {
+    if (pendingActionId) return;
+    setPendingActionId(simpleConfirmationActionIds.resetSimulation);
+    await resetSimulation();
+    clearSimpleConfirmation();
+  }
+
+  function handleSimpleConfirmationAction(actionId: string) {
+    const confirmation = pendingSimpleConfirmation;
+    if (!confirmation || pendingActionId) return;
+
+    if (
+      confirmation.kind === 'deleteDependencies' &&
+      actionId === simpleConfirmationActionIds.deleteDependencies
+    ) {
+      void confirmDependencyDeletion(confirmation.dependencyIds);
+      return;
+    }
+
+    if (actionId !== simpleConfirmationActionIds.discardDraft) {
+      if (
+        confirmation.kind === 'resetSimulation' &&
+        actionId === simpleConfirmationActionIds.resetSimulation
+      )
+        void confirmSimulationReset();
+      return;
+    }
+
+    if (confirmation.kind === 'discardNodeDraft') {
+      editorDraftRef.current?.reset();
+      clearSimpleConfirmation();
+      void previewAndRequestNodeDeletion(confirmation.nodeId);
+      return;
+    }
+
+    if (confirmation.kind === 'discardResourceDraft') {
+      editorDraftRef.current?.reset();
+      dispatchCanvas({
+        type: 'update',
+        update: {
+          pendingSimpleConfirmation: null,
+          selectedNodeId: confirmation.nodeId,
+          isEditorOpen: true,
+          resourceComposerRequest: resourceComposerRequest + 1,
+        },
+      });
+      setPendingActionId(undefined);
+      return;
+    }
+
+    if (confirmation.kind === 'discardCanvasPreviewDraft') {
+      clearSimpleConfirmation();
+      void enterCanvasPreview(true);
+    }
+  }
+
   if (error && !roadmap) {
     return (
       <Alert variant="destructive" className="m-4 max-w-2xl">
@@ -971,7 +1106,10 @@ export default function RoadmapCanvas({
                   variant="outline"
                   size="sm"
                   onClick={() =>
-                    dispatchCanvas({ type: 'update', update: { isResetConfirmationOpen: true } })
+                    dispatchCanvas({
+                      type: 'update',
+                      update: { pendingSimpleConfirmation: { kind: 'resetSimulation' } },
+                    })
                   }
                 >
                   <RotateCcw data-icon="inline-start" />
@@ -1001,8 +1139,16 @@ export default function RoadmapCanvas({
             }
             onClearSelectedNode={closeSelectedNode}
             onConnectNodes={(connection) => void requestDependencyChange(connection)}
-            onDeleteDependencies={(pendingDependencyIds) =>
-              dispatchCanvas({ type: 'update', update: { pendingDependencyIds } })
+            onDeleteDependencies={(dependencyIds) =>
+              dispatchCanvas({
+                type: 'update',
+                update: {
+                  pendingSimpleConfirmation: {
+                    kind: 'deleteDependencies',
+                    dependencyIds: [...dependencyIds],
+                  },
+                },
+              })
             }
             onAutoLayout={(nodes) => {
               void Promise.all(
@@ -1131,40 +1277,6 @@ export default function RoadmapCanvas({
         )}
       </section>
       <AlertDialog
-        open={Boolean(pendingDeletionDraftNodeId)}
-        onOpenChange={(open) => {
-          if (!open)
-            dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: null } });
-        }}
-      >
-        <AlertDialogContent className="gap-5 sm:max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Descartar cambios sin guardar
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Eliminar este Nodo descartará su borrador actual. Puedes seguir editando o
-              descartarlo para continuar.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              onClick={() => {
-                const nodeId = pendingDeletionDraftNodeId;
-                if (!nodeId) return;
-                editorDraftRef.current?.reset();
-                dispatchCanvas({ type: 'update', update: { pendingDeletionDraftNodeId: null } });
-                void previewAndRequestNodeDeletion(nodeId);
-              }}
-            >
-              Descartar y continuar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
         open={Boolean(pendingNodeDeletion)}
         onOpenChange={(open) => {
           if (!open && !isNodeDeleting)
@@ -1285,145 +1397,16 @@ export default function RoadmapCanvas({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <AlertDialog
-        open={Boolean(pendingDependencyIds?.length)}
-        onOpenChange={(open) =>
-          !open && dispatchCanvas({ type: 'update', update: { pendingDependencyIds: null } })
+      <ConfirmationDialog
+        confirmation={
+          pendingSimpleConfirmation
+            ? simpleConfirmationPresentation(pendingSimpleConfirmation)
+            : null
         }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Confirmar eliminación
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Eliminarás{' '}
-              {pendingDependencyIds?.length === 1 ? 'esta dependencia' : 'estas dependencias'}. Esta
-              acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              variant="destructive"
-              onClick={() => {
-                for (const dependencyId of pendingDependencyIds ?? [])
-                  void deleteDependency(dependencyId);
-                dispatchCanvas({ type: 'update', update: { pendingDependencyIds: null } });
-              }}
-            >
-              <Trash2 data-icon="inline-start" />
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={Boolean(pendingResourceComposerNodeId)}
-        onOpenChange={(open) => {
-          if (!open)
-            dispatchCanvas({ type: 'update', update: { pendingResourceComposerNodeId: null } });
-        }}
-      >
-        <AlertDialogContent className="gap-5 sm:max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Descartar cambios sin guardar
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Agregar un recurso a otro nodo reemplazará el borrador actual. Puedes seguir
-              editando o descartarlo para continuar.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              onClick={() => {
-                const nodeId = pendingResourceComposerNodeId;
-                if (!nodeId) return;
-                editorDraftRef.current?.reset();
-                dispatchCanvas({
-                  type: 'update',
-                  update: {
-                    selectedNodeId: nodeId,
-                    isEditorOpen: true,
-                    pendingResourceComposerNodeId: null,
-                    resourceComposerRequest: resourceComposerRequest + 1,
-                  },
-                });
-              }}
-            >
-              Descartar y continuar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={isDiscardPreviewConfirmationOpen}
-        onOpenChange={(isDiscardPreviewConfirmationOpen) =>
-          dispatchCanvas({ type: 'update', update: { isDiscardPreviewConfirmationOpen } })
-        }
-      >
-        <AlertDialogContent className="gap-5 sm:max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Descartar cambios sin guardar
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              La previsualización muestra únicamente el último estado guardado. Puedes seguir
-              editando o descartar este borrador para continuar.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              onClick={() => {
-                dispatchCanvas({
-                  type: 'update',
-                  update: { isDiscardPreviewConfirmationOpen: false },
-                });
-                void enterCanvasPreview(true);
-              }}
-            >
-              Descartar y previsualizar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={isResetConfirmationOpen}
-        onOpenChange={(isResetConfirmationOpen) =>
-          dispatchCanvas({ type: 'update', update: { isResetConfirmationOpen } })
-        }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Reiniciar progreso de previsualización
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Eliminarás las completaciones simuladas de este roadmap. Esta acción no se puede
-              deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              variant="destructive"
-              onClick={() => {
-                dispatchCanvas({ type: 'update', update: { isResetConfirmationOpen: false } });
-                void resetSimulation();
-              }}
-            >
-              Reiniciar progreso
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        pendingActionId={pendingActionId}
+        onCancel={clearSimpleConfirmation}
+        onAction={handleSimpleConfirmationAction}
+      />
       <AlertDialog
         open={Boolean(pendingVisibilityChange)}
         onOpenChange={(open) => {
