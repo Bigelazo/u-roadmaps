@@ -4,16 +4,11 @@ import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/ui/alert-dialog';
+  nodeTypeDeletionConfirmation,
+  roadmapConfirmationActionIds,
+} from '@/features/roadmap/ui/roadmap-confirmation';
 import { Button } from '@/shared/ui/button';
+import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { NodeTypeForm } from './NodeTypeForm';
 import type { NodeTypeDraft, NodeTypeInput } from './types';
 import { DialogTitle } from '@/shared/ui/dialog';
@@ -42,12 +37,35 @@ function NodeTypeListIcon({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
 export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props) {
   const [value, setValue] = useState<NodeTypeDraft>({ name: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [pendingDeletion, setPendingDeletion] = useState<{ id: string; name: string } | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<RoadmapDto['nodeTypes'][number] | null>(
+    null,
+  );
+  const [pendingDeletionActionId, setPendingDeletionActionId] = useState<string>();
   const isEditing = editingId !== null;
 
   function closeEditor() {
     setValue({ name: '' });
     setEditingId(null);
+  }
+
+  function cancelPendingDeletion() {
+    if (pendingDeletionActionId) return;
+    setPendingDeletion(null);
+  }
+
+  function handlePendingDeletionAction(actionId: string) {
+    if (!pendingDeletion || pendingDeletionActionId) return;
+    if (actionId !== roadmapConfirmationActionIds.deleteNodeType) return;
+
+    setPendingDeletionActionId(actionId);
+    void (async () => {
+      try {
+        const deleted = await onDelete(pendingDeletion.id);
+        if (deleted) setPendingDeletion(null);
+      } finally {
+        setPendingDeletionActionId(undefined);
+      }
+    })();
   }
 
   return (
@@ -110,7 +128,7 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
                   variant="ghost"
                   className="size-8! min-h-0! p-0!"
                   aria-label={`Eliminar tipo ${type.name}`}
-                  onClick={() => setPendingDeletion({ id: type.id, name: type.name })}
+                  onClick={() => setPendingDeletion(type)}
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -119,37 +137,12 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
           </li>
         ))}
       </ul>
-      <AlertDialog
-        open={pendingDeletion !== null}
-        onOpenChange={(open) => !open && setPendingDeletion(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Confirmar eliminación
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Eliminarás el tipo {pendingDeletion?.name}. Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              variant="destructive"
-              onClick={() => {
-                if (!pendingDeletion) return;
-                void onDelete(pendingDeletion.id).then((deleted) => {
-                  if (deleted) setPendingDeletion(null);
-                });
-              }}
-            >
-              <Trash2 data-icon="inline-start" />
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmationDialog
+        confirmation={pendingDeletion ? nodeTypeDeletionConfirmation(pendingDeletion) : null}
+        pendingActionId={pendingDeletionActionId}
+        onCancel={cancelPendingDeletion}
+        onAction={handlePendingDeletionAction}
+      />
     </>
   );
 }

@@ -490,7 +490,7 @@ test('manages node types from the floating canvas button', async () => {
   const user = userEvent.setup();
   const addNodeType = vi.fn().mockResolvedValue(true);
   const updateNodeType = vi.fn().mockResolvedValue(true);
-  const deleteNodeType = vi.fn().mockResolvedValue(true);
+  const deleteNodeType = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   useRoadmapMock.mockReturnValue(roadmapActions({ addNodeType, updateNodeType, deleteNodeType }));
   const { unmount } = renderCanvas(true);
 
@@ -553,8 +553,27 @@ test('manages node types from the floating canvas button', async () => {
   await user.click(
     within(managementDialog).getByRole('button', { name: 'Eliminar tipo Laboratorio' }),
   );
-  await user.click(screen.getByRole('button', { name: 'Eliminar' }));
-  expect(deleteNodeType).toHaveBeenCalledWith('lab');
+  const deletionDialog = await screen.findByRole('alertdialog', {
+    name: 'Confirmar eliminación',
+  });
+  expect(deletionDialog.getAttribute('data-intent')).toBe('destructive');
+  expect(within(deletionDialog).getByRole('listitem', { name: 'Laboratorio' })).toBeTruthy();
+  await user.click(within(deletionDialog).getByRole('button', { name: 'Cancelar' }));
+  expect(deleteNodeType).not.toHaveBeenCalled();
+
+  await user.click(
+    within(managementDialog).getByRole('button', { name: 'Eliminar tipo Laboratorio' }),
+  );
+  const retryDialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+  const confirm = within(retryDialog).getByRole('button', { name: 'Eliminar' });
+  await user.click(confirm);
+  await waitFor(() => expect(deleteNodeType).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByRole('alertdialog', { name: 'Confirmar eliminación' })).toBeTruthy();
+
+  await user.click(confirm);
+  await waitFor(() => expect(deleteNodeType).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 });
 
 test('confirms, cancels, and deletes every selected dependency', async () => {
@@ -1166,6 +1185,10 @@ test('shows the authoritative named deletion impact and deletes only after a fre
 
   await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+  expect(dialog.getAttribute('data-intent')).toBe('destructive');
+  expect(within(dialog).getByRole('listitem', { name: 'Límites' })).toBeTruthy();
+  expect(within(dialog).getByRole('list', { name: 'Dependencias relacionadas' })).toBeTruthy();
+  expect(within(dialog).getByRole('list', { name: 'Recursos que se eliminarán' })).toBeTruthy();
   expect(dialog.textContent).toContain('Límites');
   expect(dialog.textContent).toContain('Base');
   expect(dialog.textContent).toContain('Base');
@@ -1177,6 +1200,26 @@ test('shows the authoritative named deletion impact and deletes only after a fre
   await user.click(within(dialog).getByRole('button', { name: 'Eliminar Nodo' }));
   await waitFor(() => expect(deleteNode).toHaveBeenCalledWith('node-1', 'delete-preview'));
   expect(previewNodeDeletion).toHaveBeenCalledTimes(2);
+});
+
+test('keeps preview-backed node deletion recoverable after a failed mutation', async () => {
+  const user = userEvent.setup();
+  const deleteNode = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ deleteNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+  const confirm = within(dialog).getByRole('button', { name: 'Eliminar Nodo' });
+
+  await user.click(confirm);
+  await waitFor(() => expect(deleteNode).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeTruthy();
+
+  await user.click(confirm);
+  await waitFor(() => expect(deleteNode).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 });
 
 test('updates a changed deletion impact and requires a renewed confirmation', async () => {

@@ -19,7 +19,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   RotateCcw,
-  Trash2,
 } from 'lucide-react';
 import type { Viewport } from '@xyflow/react';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
@@ -29,6 +28,10 @@ import { RoadmapGraph, type RoadmapGraphHandle } from '@/features/roadmap/graph/
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
+import {
+  nodeDeletionConfirmation,
+  roadmapConfirmationActionIds,
+} from '@/features/roadmap/ui/roadmap-confirmation';
 import {
   useRoadmap,
   type StructuralDependency,
@@ -802,6 +805,10 @@ export default function RoadmapCanvas({
     });
   }
 
+  function handleNodeDeletionAction(actionId: string) {
+    if (actionId === roadmapConfirmationActionIds.deleteNode) void confirmNodeDeletion();
+  }
+
   async function confirmVisibilityChange() {
     if (!pendingVisibilityChange || isVisibilityChanging) return;
     dispatchCanvas({ type: 'update', update: { isVisibilityChanging: true } });
@@ -1276,127 +1283,24 @@ export default function RoadmapCanvas({
           />
         )}
       </section>
-      <AlertDialog
-        open={Boolean(pendingNodeDeletion)}
-        onOpenChange={(open) => {
-          if (!open && !isNodeDeleting)
+      <ConfirmationDialog
+        confirmation={
+          pendingNodeDeletion
+            ? nodeDeletionConfirmation({
+                nodeId: pendingNodeDeletion.nodeId,
+                node: pendingNodeDeletion.node,
+                dependencies: pendingNodeDeletion.dependencies,
+                resources: pendingNodeDeletion.resources,
+              })
+            : null
+        }
+        pendingActionId={isNodeDeleting ? roadmapConfirmationActionIds.deleteNode : undefined}
+        onCancel={() => {
+          if (!isNodeDeleting)
             dispatchCanvas({ type: 'update', update: { pendingNodeDeletion: null } });
         }}
-      >
-        <AlertDialogContent className="gap-5 sm:max-w-xl">
-          <AlertDialogHeader className="items-stretch gap-4 text-left">
-            <div className="flex items-start gap-3">
-              <span
-                aria-hidden="true"
-                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive ring-1 ring-destructive/20"
-              >
-                <NodeTypeIcon
-                  icon={pendingNodeDeletion?.node.nodeType.icon ?? 'Shapes'}
-                  className="size-5"
-                  style={{ color: pendingNodeDeletion?.node.nodeType.color }}
-                />
-              </span>
-              <div className="flex min-w-0 flex-col gap-1">
-                <AlertDialogTitle className="text-xl font-semibold tracking-tight">
-                  Eliminar Nodo
-                </AlertDialogTitle>
-                <AlertDialogDescription className="text-sm leading-relaxed">
-                  Eliminarás{' '}
-                  <span className="font-semibold text-foreground">
-                    {pendingNodeDeletion?.node.title}
-                  </span>{' '}
-                  y sus elementos relacionados. Esta acción no se puede deshacer.
-                </AlertDialogDescription>
-              </div>
-            </div>
-          </AlertDialogHeader>
-          {pendingNodeDeletion ? (
-            <div className="flex flex-col gap-5">
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <NodeTypeIcon
-                  icon={pendingNodeDeletion.node.nodeType.icon}
-                  className="size-4"
-                  style={{ color: pendingNodeDeletion.node.nodeType.color }}
-                  aria-label={pendingNodeDeletion.node.nodeType.name}
-                />
-                {pendingNodeDeletion.node.nodeType.name}
-              </p>
-              <section
-                aria-labelledby="node-deletion-dependencies-heading"
-                className="flex flex-col gap-2.5"
-              >
-                <h3
-                  id="node-deletion-dependencies-heading"
-                  className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase"
-                >
-                  Dependencias relacionadas
-                </h3>
-                {pendingNodeDeletion.dependencies.length ? (
-                  <ul
-                    className="divide-y divide-border border-t border-border"
-                    aria-label="Dependencias relacionadas"
-                  >
-                    {pendingNodeDeletion.dependencies.map((dependency) => (
-                      <li
-                        key={dependency.id}
-                        className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 py-3 text-sm font-medium text-foreground"
-                      >
-                        <span>{dependency.sourceTitle}</span>
-                        <ArrowRight
-                          aria-hidden="true"
-                          className="size-4 shrink-0 text-destructive"
-                        />
-                        <span>{dependency.targetTitle}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No hay Dependencias relacionadas.
-                  </p>
-                )}
-              </section>
-              <section
-                aria-labelledby="node-deletion-resources-heading"
-                className="flex flex-col gap-2.5"
-              >
-                <h3
-                  id="node-deletion-resources-heading"
-                  className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase"
-                >
-                  Recursos que se eliminarán
-                </h3>
-                {pendingNodeDeletion.resources.length ? (
-                  <ul
-                    className="divide-y divide-border border-t border-border"
-                    aria-label="Recursos que se eliminarán"
-                  >
-                    {pendingNodeDeletion.resources.map((resource) => (
-                      <li key={resource.id} className="py-2 text-sm font-medium text-foreground">
-                        {resource.title}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No hay Recursos relacionados.</p>
-                )}
-              </section>
-            </div>
-          ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isNodeDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              variant="destructive"
-              disabled={isNodeDeleting}
-              onClick={() => void confirmNodeDeletion()}
-            >
-              <Trash2 data-icon="inline-start" />
-              Eliminar Nodo
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onAction={handleNodeDeletionAction}
+      />
       <ConfirmationDialog
         confirmation={
           pendingSimpleConfirmation

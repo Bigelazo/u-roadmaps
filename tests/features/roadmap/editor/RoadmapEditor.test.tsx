@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { RoadmapEditor } from '@/features/roadmap/editor/RoadmapEditor';
@@ -158,4 +158,124 @@ test('uses the shared node-panel chrome for an effortless mode transition', () =
   expect(panel.className).toContain('bg-card');
   expect(panel.className).toContain('shadow-(--shadow-roadmap-panel)');
   expect(screen.getByRole('group', { name: 'Acciones del nodo' })).toBeTruthy();
+});
+
+test('confirms node deletion with declarative consequences and preserves a cancelled draft', async () => {
+  const user = userEvent.setup();
+  const resource = {
+    id: 'resource-1',
+    title: 'Guía de ejercicios',
+    url: 'https://example.test/guia',
+    type: 'LINK' as const,
+  };
+  const selectedNode = { ...node, resources: [resource] };
+  const props = editorProps({
+    roadmap: {
+      ...roadmap,
+      nodes: [{ ...node, id: 'node-0', title: 'Bases', resources: [] }, selectedNode],
+      dependencies: [
+        {
+          id: 'dependency-1',
+          sourceNodeId: 'node-0',
+          targetNodeId: selectedNode.id,
+          sourceHandle: 'right' as const,
+          targetHandle: 'left' as const,
+        },
+      ],
+    },
+    selectedNode,
+  });
+
+  render(
+    <SidebarProvider>
+      <EditorHarness {...props} />
+    </SidebarProvider>,
+  );
+
+  const title = await screen.findByLabelText('Título');
+  await user.clear(title);
+  await user.type(title, 'Límites y continuidad');
+  await user.click(screen.getByRole('button', { name: /^Eliminar$/ }));
+
+  const dialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+  expect(dialog.getAttribute('data-intent')).toBe('destructive');
+  expect(within(dialog).getByRole('listitem', { name: 'Límites' })).toBeTruthy();
+  expect(within(dialog).getByText('Bases')).toBeTruthy();
+  expect(within(dialog).getByText('Guía de ejercicios')).toBeTruthy();
+  expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeTruthy();
+
+  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+  expect(props.onDeleteNode).not.toHaveBeenCalled();
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Límites y continuidad');
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+});
+
+test('keeps node deletion recoverable after an error and closes only after success', async () => {
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  const onDeleteNode = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  const props = editorProps({ onClose, onDeleteNode });
+
+  render(
+    <SidebarProvider>
+      <EditorHarness {...props} />
+    </SidebarProvider>,
+  );
+
+  await user.click(screen.getByRole('button', { name: /^Eliminar$/ }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+  const confirm = within(dialog).getByRole('button', { name: 'Eliminar Nodo' });
+
+  await user.click(confirm);
+  await waitFor(() => expect(onDeleteNode).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeTruthy();
+  expect(onClose).not.toHaveBeenCalled();
+
+  await user.click(confirm);
+  await waitFor(() => expect(onDeleteNode).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('confirms resource deletion and keeps the dialog open when the mutation fails', async () => {
+  const user = userEvent.setup();
+  const resource = {
+    id: 'resource-1',
+    title: 'Guía de ejercicios',
+    url: 'https://example.test/guia',
+    type: 'LINK' as const,
+  };
+  const onDeleteResource = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  const props = editorProps({
+    selectedNode: { ...node, resources: [resource] },
+    onDeleteResource,
+  });
+
+  render(
+    <SidebarProvider>
+      <EditorHarness {...props} />
+    </SidebarProvider>,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Eliminar recurso Guía de ejercicios' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+  expect(dialog.getAttribute('data-intent')).toBe('destructive');
+  expect(within(dialog).getByRole('listitem', { name: 'Guía de ejercicios' })).toBeTruthy();
+
+  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+  expect(onDeleteResource).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Eliminar recurso Guía de ejercicios' }));
+  const retryDialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+  const confirm = within(retryDialog).getByRole('button', { name: 'Eliminar' });
+  await user.click(confirm);
+  await waitFor(() => expect(onDeleteResource).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByRole('alertdialog', { name: 'Confirmar eliminación' })).toBeTruthy();
+
+  await user.click(confirm);
+  await waitFor(() => expect(onDeleteResource).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 });

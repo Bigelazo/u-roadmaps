@@ -1,18 +1,13 @@
 'use client';
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { Trash2 } from 'lucide-react';
-import type { Resource } from '@/features/roadmap/types';
+import type { Resource, RoadmapNode } from '@/features/roadmap/types';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/ui/alert-dialog';
+  roadmapConfirmationActionIds,
+  roadmapNodeDeletionConfirmation,
+  resourceDeletionConfirmation,
+} from '@/features/roadmap/ui/roadmap-confirmation';
+import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Sidebar, SidebarContent, SidebarRail } from '@/shared/ui/sidebar';
 import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
@@ -23,7 +18,8 @@ import {
 import type { ResourceEditorDraft, RoadmapEditorDraftHandle, RoadmapEditorProps } from './types';
 import { useRoadmapEditorDraft } from './useRoadmapEditorDraft';
 
-type PendingDeletion = { label: string; onConfirm: () => Promise<boolean> } | null;
+type PendingDeletion =
+  { kind: 'node'; node: RoadmapNode } | { kind: 'resource'; resource: Resource } | null;
 
 export const RoadmapEditor = forwardRef<RoadmapEditorDraftHandle, RoadmapEditorProps>(
   function RoadmapEditor(
@@ -50,6 +46,7 @@ export const RoadmapEditor = forwardRef<RoadmapEditorDraftHandle, RoadmapEditorP
     ref,
   ) {
     const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion>(null);
+    const [pendingDeletionActionId, setPendingDeletionActionId] = useState<string>();
     const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
     const draft = useRoadmapEditorDraft(selectedNode);
     const { draftNodeId, editNode, resourceDraft, isDirty, reset, setEditNode, setResourceDraft } =
@@ -94,6 +91,43 @@ export const RoadmapEditor = forwardRef<RoadmapEditorDraftHandle, RoadmapEditorP
         mode: resource.type === 'FILE' ? 'file' : 'link',
         selectedFile: null,
       });
+
+    const pendingDeletionConfirmation = pendingDeletion
+      ? pendingDeletion.kind === 'node'
+        ? roadmapNodeDeletionConfirmation(roadmap, pendingDeletion.node)
+        : resourceDeletionConfirmation(pendingDeletion.resource)
+      : null;
+
+    function cancelPendingDeletion() {
+      if (pendingDeletionActionId) return;
+      setPendingDeletion(null);
+    }
+
+    function handlePendingDeletionAction(actionId: string) {
+      if (!pendingDeletion || pendingDeletionActionId) return;
+
+      const expectedActionId =
+        pendingDeletion.kind === 'node'
+          ? roadmapConfirmationActionIds.deleteNode
+          : roadmapConfirmationActionIds.deleteResource;
+      if (actionId !== expectedActionId) return;
+
+      setPendingDeletionActionId(actionId);
+      void (async () => {
+        try {
+          const deleted =
+            pendingDeletion.kind === 'node'
+              ? await onDeleteNode(pendingDeletion.node.id)
+              : await onDeleteResource(pendingDeletion.resource.id);
+          if (deleted) {
+            setPendingDeletion(null);
+            if (pendingDeletion.kind === 'node') onClose();
+          }
+        } finally {
+          setPendingDeletionActionId(undefined);
+        }
+      })();
+    }
 
     return (
       <Sidebar
@@ -148,22 +182,8 @@ export const RoadmapEditor = forwardRef<RoadmapEditorDraftHandle, RoadmapEditorP
                 onUpdateResource={onUpdateResource}
                 onStartEditingResource={startEditingResource}
                 onCancelResource={closeResourceEditor}
-                onDeleteNode={(node) =>
-                  setPendingDeletion({
-                    label: `el nodo ${node.title} y sus dependencias y recursos`,
-                    onConfirm: async () => {
-                      const deleted = await onDeleteNode(node.id);
-                      if (deleted) onClose();
-                      return deleted;
-                    },
-                  })
-                }
-                onDeleteResource={(item) =>
-                  setPendingDeletion({
-                    label: `el recurso ${item.title}`,
-                    onConfirm: () => onDeleteResource(item.id),
-                  })
-                }
+                onDeleteNode={(node) => setPendingDeletion({ kind: 'node', node })}
+                onDeleteResource={(resource) => setPendingDeletion({ kind: 'resource', resource })}
                 onPreview={() =>
                   onPreview(projectNodeInformationPreview(selectedNode, editNode, resourceDraft))
                 }
@@ -174,36 +194,12 @@ export const RoadmapEditor = forwardRef<RoadmapEditorDraftHandle, RoadmapEditorP
           </details>
         </SidebarContent>
 
-        <AlertDialog
-          open={Boolean(pendingDeletion)}
-          onOpenChange={(open) => !open && setPendingDeletion(null)}
-        >
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-xl font-semibold">
-                Confirmar eliminación
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                Eliminarás {pendingDeletion?.label}. Esta acción no se puede deshacer.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                type="button"
-                variant="destructive"
-                onClick={() =>
-                  void pendingDeletion?.onConfirm().then((deleted) => {
-                    if (deleted) setPendingDeletion(null);
-                  })
-                }
-              >
-                <Trash2 data-icon="inline-start" />
-                Eliminar
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmationDialog
+          confirmation={pendingDeletionConfirmation}
+          pendingActionId={pendingDeletionActionId}
+          onCancel={cancelPendingDeletion}
+          onAction={handlePendingDeletionAction}
+        />
       </Sidebar>
     );
   },
