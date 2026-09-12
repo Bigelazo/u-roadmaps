@@ -1,5 +1,5 @@
 import { createRef, useState, type ReactNode } from 'react';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 
@@ -346,16 +346,70 @@ test('requires confirmation before automatically ordering canvas nodes', async (
     />,
   );
 
-  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  const layoutButton = screen.getByRole('button', { name: 'Ordenar horizontalmente' });
+  await user.click(layoutButton);
 
-  expect(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).not.toBeNull();
+  const dialog = screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' });
+  expect(
+    within(dialog).getByText(
+      'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
+    ),
+  ).toBeTruthy();
   expect(onAutoLayout).not.toHaveBeenCalled();
 
+  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+  expect(onAutoLayout).not.toHaveBeenCalled();
+  await user.keyboard('{Enter}');
+  expect(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Cancelar' }));
-  expect(onAutoLayout).not.toHaveBeenCalled();
 
-  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
-  await user.click(screen.getByRole('button', { name: 'Ordenar nodos' }));
+  await user.click(layoutButton);
+  await user.click(
+    within(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).getByRole(
+      'button',
+      { name: 'Ordenar nodos' },
+    ),
+  );
 
   expect(onAutoLayout).toHaveBeenCalledTimes(1);
+});
+
+test('does not expose automatic ordering when the Roadmap cannot be edited', () => {
+  render(
+    <RoadmapGraph
+      roadmap={roadmap}
+      canEdit={false}
+      onSelectNode={vi.fn()}
+      onMoveNode={vi.fn()}
+      onConnectNodes={vi.fn()}
+      onDeleteDependencies={vi.fn()}
+      onAutoLayout={vi.fn()}
+    />,
+  );
+
+  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+});
+
+test('disables automatic ordering until the Roadmap has enough Nodes', async () => {
+  const user = userEvent.setup();
+  render(
+    <RoadmapGraph
+      roadmap={{ ...roadmap, nodes: roadmap.nodes.slice(0, 1) }}
+      canEdit
+      onSelectNode={vi.fn()}
+      onMoveNode={vi.fn()}
+      onConnectNodes={vi.fn()}
+      onDeleteDependencies={vi.fn()}
+      onAutoLayout={vi.fn()}
+    />,
+  );
+
+  const button = screen.getByRole('button', {
+    name: 'Ordenar horizontalmente',
+  }) as HTMLButtonElement;
+  expect(button.disabled).toBe(true);
+
+  await user.click(button);
+  expect(screen.queryByRole('alertdialog')).toBeNull();
 });

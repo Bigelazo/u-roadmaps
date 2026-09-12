@@ -29,10 +29,18 @@ type NodeDeletionConfirmationInput = {
 };
 
 export const roadmapConfirmationActionIds = {
+  autoLayout: 'auto-layout',
   deleteNode: 'delete-node',
   deleteResource: 'delete-resource',
   deleteNodeType: 'delete-node-type',
 } as const;
+
+export const roadmapAutoLayoutConfirmation = {
+  title: 'Confirmar ordenamiento',
+  description: 'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
+  intent: 'warning',
+  actions: [{ id: roadmapConfirmationActionIds.autoLayout, label: 'Ordenar nodos' }],
+} as const satisfies ConfirmationPresentation;
 
 function nodeTypeMedia(nodeType: NodeTypePresentation) {
   return (

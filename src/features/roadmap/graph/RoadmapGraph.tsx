@@ -33,16 +33,11 @@ import { LayoutTemplate, Maximize } from 'lucide-react';
 import { roadmapGridSize, type NodeRect } from '@/features/roadmap/graph/geometry';
 import type { NodeAccessActionOperation } from '@/features/roadmap/graph/node-action';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/ui/alert-dialog';
+  roadmapAutoLayoutConfirmation,
+  roadmapConfirmationActionIds,
+} from '@/features/roadmap/ui/roadmap-confirmation';
 import { Button } from '@/shared/ui/button';
+import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import type { AnyRoadmapDto } from '@/features/roadmap/types';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
@@ -230,7 +225,8 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
   ref,
 ) {
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
-  const [isAutoLayoutConfirmationOpen, setIsAutoLayoutConfirmationOpen] = useState(false);
+  const [autoLayoutConfirmation, setAutoLayoutConfirmation] =
+    useState<ConfirmationPresentation | null>(null);
   const [openActionMenuNodeId, setOpenActionMenuNodeId] = useState<string | null>(null);
   const [closingActionMenuNodeId, setClosingActionMenuNodeId] = useState<string | null>(null);
   const actionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -394,6 +390,15 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
     onAutoLayout(nodes);
   }, [flow.edges, flow.nodes, layoutDirection, onAutoLayout]);
 
+  const handleAutoLayoutAction = useCallback(
+    (actionId: string) => {
+      if (actionId !== roadmapConfirmationActionIds.autoLayout) return;
+      setAutoLayoutConfirmation(null);
+      applyAutoLayout();
+    },
+    [applyAutoLayout],
+  );
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -528,7 +533,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
             layoutDirection={layoutDirection}
             showAutoLayout={canEdit}
             canAutoLayout={canEdit && flow.nodes.length >= 2}
-            onAutoLayout={() => setIsAutoLayoutConfirmationOpen(true)}
+            onAutoLayout={() => setAutoLayoutConfirmation(roadmapAutoLayoutConfirmation)}
             topRightActions={topRightActions}
           />
         ) : null}
@@ -540,33 +545,11 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
           size={1}
         />
       </ReactFlow>
-      <AlertDialog
-        open={isAutoLayoutConfirmationOpen}
-        onOpenChange={setIsAutoLayoutConfirmationOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              Confirmar ordenamiento
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              onClick={() => {
-                setIsAutoLayoutConfirmationOpen(false);
-                applyAutoLayout();
-              }}
-            >
-              Ordenar nodos
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmationDialog
+        confirmation={autoLayoutConfirmation}
+        onCancel={() => setAutoLayoutConfirmation(null)}
+        onAction={handleAutoLayoutAction}
+      />
     </div>
   );
 });
