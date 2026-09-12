@@ -11,10 +11,8 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  ArrowRight,
   CircleAlert,
   Eye,
-  EyeOff,
   Keyboard,
   PanelRightClose,
   PanelRightOpen,
@@ -30,6 +28,7 @@ import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/stud
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import {
   nodeDeletionConfirmation,
+  roadmapNodeVisibilityConfirmation,
   roadmapConfirmationActionIds,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import {
@@ -809,6 +808,10 @@ export default function RoadmapCanvas({
     if (actionId === roadmapConfirmationActionIds.deleteNode) void confirmNodeDeletion();
   }
 
+  function handleVisibilityAction(actionId: string) {
+    if (actionId === roadmapConfirmationActionIds.toggleVisibility) void confirmVisibilityChange();
+  }
+
   async function confirmVisibilityChange() {
     if (!pendingVisibilityChange || isVisibilityChanging) return;
     dispatchCanvas({ type: 'update', update: { isVisibilityChanging: true } });
@@ -1047,7 +1050,9 @@ export default function RoadmapCanvas({
       )
     : null;
   const visibilityDependencies = pendingVisibilityChange?.dependencies ?? [];
-  const hasVisibilityDependencies = visibilityDependencies.length > 0;
+  const pendingVisibilityNode = pendingVisibilityChange
+    ? roadmap.nodes.find((node) => node.id === pendingVisibilityChange.nodeId)
+    : undefined;
   const isEditorPanelOpen = canEdit && isEditorOpen && !isCanvasPreview;
   const isStudentPanelOpen = Boolean(
     teacherPreviewNode ||
@@ -1311,110 +1316,26 @@ export default function RoadmapCanvas({
         onCancel={clearSimpleConfirmation}
         onAction={handleSimpleConfirmationAction}
       />
-      <AlertDialog
-        open={Boolean(pendingVisibilityChange)}
-        onOpenChange={(open) => {
-          if (!open && !isVisibilityChanging)
+      <ConfirmationDialog
+        confirmation={
+          pendingVisibilityChange && pendingVisibilityNode
+            ? roadmapNodeVisibilityConfirmation(
+                roadmap,
+                pendingVisibilityNode,
+                pendingVisibilityChange.isVisible,
+                visibilityDependencies,
+              )
+            : null
+        }
+        pendingActionId={
+          isVisibilityChanging ? roadmapConfirmationActionIds.toggleVisibility : undefined
+        }
+        onCancel={() => {
+          if (!isVisibilityChanging)
             dispatchCanvas({ type: 'update', update: { pendingVisibilityChange: null } });
         }}
-      >
-        <AlertDialogContent className="gap-5 sm:max-w-xl">
-          <AlertDialogHeader className="items-stretch gap-4 text-left sm:items-stretch">
-            <div className="flex items-start gap-3">
-              <span
-                aria-hidden="true"
-                className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground ring-1 ring-border"
-              >
-                {pendingVisibilityChange?.isVisible ? (
-                  <EyeOff className="size-5 text-muted-foreground" />
-                ) : (
-                  <Eye className="size-5 text-muted-foreground" />
-                )}
-              </span>
-              <div className="flex min-w-0 flex-col gap-1">
-                <AlertDialogTitle className="text-xl font-semibold tracking-tight">
-                  {pendingVisibilityChange?.isVisible
-                    ? 'Confirmar ocultación'
-                    : 'Confirmar publicación'}
-                </AlertDialogTitle>
-                <AlertDialogDescription className="text-sm leading-relaxed">
-                  {!pendingVisibilityChange?.isVisible ? (
-                    'Este Nodo se mostrará al estudiantado y quedará disponible inmediatamente. No tendrá Dependencias ni Bloqueo docente.'
-                  ) : hasVisibilityDependencies ? (
-                    <>
-                      El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo
-                      docente y se eliminarán{' '}
-                      <span className="font-semibold text-destructive">
-                        {visibilityDependencies.length}{' '}
-                        {visibilityDependencies.length === 1
-                          ? 'dependencia relacionada'
-                          : 'dependencias relacionadas'}
-                      </span>
-                      .
-                    </>
-                  ) : (
-                    'El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y no posee Dependencias.'
-                  )}
-                </AlertDialogDescription>
-              </div>
-            </div>
-          </AlertDialogHeader>
-          {pendingVisibilityChange?.isVisible && hasVisibilityDependencies ? (
-            <section
-              aria-labelledby="removed-dependencies-heading"
-              className="flex flex-col gap-2.5"
-            >
-              <h3
-                id="removed-dependencies-heading"
-                className="text-xs font-bold tracking-[0.12em] text-muted-foreground uppercase"
-              >
-                Dependencias que se eliminarán
-              </h3>
-              <ul
-                className="divide-y divide-border border-t border-border"
-                aria-label="Dependencias que se eliminarán"
-              >
-                {visibilityDependencies.map((dependency) => {
-                  const source = roadmap.nodes.find((node) => node.id === dependency.sourceNodeId);
-                  const target = roadmap.nodes.find((node) => node.id === dependency.targetNodeId);
-                  return (
-                    <li
-                      key={dependency.id}
-                      className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 py-3"
-                    >
-                      <span className="text-sm leading-5 font-medium text-foreground">
-                        {source?.title ?? dependency.sourceNodeId}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="sr-only">conduce a</span>
-                        <ArrowRight
-                          aria-hidden="true"
-                          className="size-5 shrink-0 text-destructive"
-                          strokeWidth={2.75}
-                        />
-                      </span>
-                      <span className="text-sm leading-5 font-medium text-foreground">
-                        {target?.title ?? dependency.targetNodeId}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isVisibilityChanging}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              variant={pendingVisibilityChange?.isVisible ? 'destructive' : 'default'}
-              disabled={isVisibilityChanging}
-              onClick={() => void confirmVisibilityChange()}
-            >
-              {pendingVisibilityChange?.isVisible ? 'Ocultar' : 'Mostrar'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onAction={handleVisibilityAction}
+      />
       <AlertDialog
         open={Boolean(pendingDependencyChange)}
         onOpenChange={(open) =>
