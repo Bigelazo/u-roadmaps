@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import SessionButton from '@/app/_components/SessionButton';
 
 test('requires confirmation before submitting the logout request', async () => {
@@ -14,4 +14,26 @@ test('requires confirmation before submitting the logout request', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Cancelar' }));
   expect(screen.queryByRole('alertdialog')).toBeNull();
+});
+
+test('submits the existing logout form only after the affirmative action', async () => {
+  const user = userEvent.setup();
+  const requestSubmit = vi
+    .spyOn(HTMLFormElement.prototype, 'requestSubmit')
+    .mockImplementation(() => undefined);
+
+  render(<SessionButton isAuthenticated />);
+  await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
+
+  const dialog = screen.getByRole('alertdialog', { name: '¿Cerrar sesión?' });
+  expect(requestSubmit).not.toHaveBeenCalled();
+
+  await user.click(within(dialog).getByRole('button', { name: 'Cerrar sesión' }));
+
+  await waitFor(() => expect(requestSubmit).toHaveBeenCalledTimes(1));
+  expect(
+    (within(dialog).getByRole('button', { name: 'Cerrar sesión' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+
+  requestSubmit.mockRestore();
 });

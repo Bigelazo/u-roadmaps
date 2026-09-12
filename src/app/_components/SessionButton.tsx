@@ -1,19 +1,23 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { Button } from '@/shared/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/shared/ui/alert-dialog';
+import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
+
+const LOGOUT_ACTION_ID = 'logout';
+
+const logoutConfirmation = {
+  title: '¿Cerrar sesión?',
+  description: 'Tendrás que autenticarte nuevamente para ingresar.',
+  intent: 'destructive',
+  actions: [{ id: LOGOUT_ACTION_ID, label: 'Cerrar sesión' }],
+} as const satisfies ConfirmationPresentation;
 
 export default function SessionButton({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const [confirmation, setConfirmation] = useState<ConfirmationPresentation | null>(null);
+  const [pendingActionId, setPendingActionId] = useState<string>();
+  const logoutFormRef = useRef<HTMLFormElement>(null);
+
   if (!isAuthenticated)
     return (
       <form action="/api/plogin/start" method="post">
@@ -24,24 +28,32 @@ export default function SessionButton({ isAuthenticated }: { isAuthenticated: bo
     );
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger render={<Button variant="outline" />}>Cerrar sesión</AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>¿Cerrar sesión?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Tendrás que autenticarte nuevamente para ingresar.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <form action="/api/logout" method="post">
-            <AlertDialogAction type="submit" variant="destructive">
-              Cerrar sesión
-            </AlertDialogAction>
-          </form>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => {
+          setPendingActionId(undefined);
+          setConfirmation(logoutConfirmation);
+        }}
+      >
+        Cerrar sesión
+      </Button>
+      <form ref={logoutFormRef} action="/api/logout" method="post" className="hidden" />
+      <ConfirmationDialog
+        confirmation={confirmation}
+        pendingActionId={pendingActionId}
+        onCancel={() => {
+          setPendingActionId(undefined);
+          setConfirmation(null);
+        }}
+        onAction={(actionId) => {
+          if (actionId !== LOGOUT_ACTION_ID) return;
+
+          setPendingActionId(actionId);
+          logoutFormRef.current?.requestSubmit();
+        }}
+      />
+    </>
   );
 }
