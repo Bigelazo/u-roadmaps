@@ -22,6 +22,7 @@ import type { Viewport } from '@xyflow/react';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-workflow';
+import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
@@ -33,20 +34,14 @@ import {
   nodeDeletionConfirmation,
   roadmapNodeVisibilityConfirmation,
   roadmapConfirmationActionIds,
-  roadmapTeacherBlockConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
-import {
-  useRoadmap,
-  type StructuralDependency,
-  type TeacherBlockPreview,
-} from '@/features/roadmap/useRoadmap';
+import { useRoadmap, type StructuralDependency } from '@/features/roadmap/useRoadmap';
 import type {
   CourseOfferingIdentifier,
   NodeDeletionImpact,
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapNode,
-  TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import type { RoadmapEditorDraftHandle } from '@/features/roadmap/editor/types';
 import {
@@ -86,13 +81,6 @@ type PendingVisibilityChange = {
   isVisible: boolean;
   dependencies: StructuralDependency[];
 };
-
-type PendingTeacherBlockChange = {
-  nodeId: string;
-  operation: TeacherBlockOperation;
-  individualPreview?: TeacherBlockPreview;
-  branchPreview?: TeacherBlockPreview;
-} & TeacherBlockPreview;
 
 type PendingNodeDeletion = { nodeId: string } & NodeDeletionImpact;
 
@@ -257,70 +245,6 @@ function KeyboardShortcuts({
   );
 }
 
-function teacherBlockPreviewForOperation(
-  pending: PendingTeacherBlockChange,
-  operation: TeacherBlockOperation,
-): TeacherBlockPreview | null {
-  if (pending.mode === 'UPSTREAM') return pending;
-  if (operation === 'UNBLOCK') {
-    return pending.individualPreview ?? (pending.operation === operation ? pending : null);
-  }
-  if (operation === 'BRANCH_UNLOCK') {
-    return pending.branchPreview ?? (pending.operation === operation ? pending : null);
-  }
-  return pending.operation === operation ? pending : null;
-}
-
-function isUnlockScopeOperation(
-  operation: TeacherBlockOperation,
-): operation is Extract<TeacherBlockOperation, 'UNBLOCK' | 'BRANCH_UNLOCK'> {
-  return operation === 'UNBLOCK' || operation === 'BRANCH_UNLOCK';
-}
-
-function replaceTeacherBlockPreview(
-  pending: PendingTeacherBlockChange,
-  operation: TeacherBlockOperation,
-  preview: TeacherBlockPreview,
-): PendingTeacherBlockChange {
-  if (preview.mode === 'UPSTREAM') {
-    return {
-      nodeId: pending.nodeId,
-      operation: pending.operation,
-      ...preview,
-    };
-  }
-
-  return {
-    ...pending,
-    ...(pending.operation === operation
-      ? { mode: preview.mode, nodes: preview.nodes, version: preview.version }
-      : {}),
-    ...(operation === 'UNBLOCK' ? { individualPreview: preview } : {}),
-    ...(operation === 'BRANCH_UNLOCK' ? { branchPreview: preview } : {}),
-  };
-}
-
-function isCompleteUnlockPreviewPair(pending: PendingTeacherBlockChange) {
-  return pending.individualPreview?.mode === 'SINGLE' && pending.branchPreview?.mode === 'BRANCH';
-}
-
-function sameTeacherBlockPreview(first: TeacherBlockPreview, second: TeacherBlockPreview) {
-  return (
-    first.mode === second.mode &&
-    first.version === second.version &&
-    first.nodes.length === second.nodes.length &&
-    first.nodes.every(
-      (node, index) =>
-        node.id === second.nodes[index]?.id &&
-        node.title === second.nodes[index]?.title &&
-        node.relation === second.nodes[index]?.relation &&
-        node.nodeType?.name === second.nodes[index]?.nodeType?.name &&
-        node.nodeType?.icon === second.nodes[index]?.nodeType?.icon &&
-        node.nodeType?.color === second.nodes[index]?.nodeType?.color,
-    )
-  );
-}
-
 function sameNodeDeletionImpact(first: NodeDeletionImpact, second: NodeDeletionImpact) {
   return (
     first.version === second.version &&
@@ -380,10 +304,6 @@ export default function RoadmapCanvas({
     useState<PendingVisibilityChange | null>(null);
   const [isVisibilityPreviewing, setIsVisibilityPreviewing] = useState(false);
   const [isVisibilityChanging, setIsVisibilityChanging] = useState(false);
-  const [pendingTeacherBlockChange, setPendingTeacherBlockChange] =
-    useState<PendingTeacherBlockChange | null>(null);
-  const [isTeacherBlockPreviewing, setIsTeacherBlockPreviewing] = useState(false);
-  const [isTeacherBlockChanging, setIsTeacherBlockChanging] = useState(false);
   const [pendingNodeDeletion, setPendingNodeDeletion] = useState<PendingNodeDeletion | null>(null);
   const [isNodeDeletionPreviewing, setIsNodeDeletionPreviewing] = useState(false);
   const [isNodeDeleting, setIsNodeDeleting] = useState(false);
@@ -438,6 +358,11 @@ export default function RoadmapCanvas({
     connectNodes,
     previewRoadmapDependency,
     deleteDependency,
+  });
+  const teacherBlockWorkflow = useTeacherBlockWorkflow({
+    roadmap,
+    previewTeacherBlock,
+    changeTeacherBlock,
   });
   const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
 
@@ -629,117 +554,6 @@ export default function RoadmapCanvas({
     setIsVisibilityChanging(false);
   }
 
-  async function loadTeacherBlockPreviewSet(
-    nodeId: string,
-    operation: TeacherBlockOperation,
-  ): Promise<PendingTeacherBlockChange | null> {
-    const preview = await previewTeacherBlock(nodeId, operation);
-    if (!preview) return null;
-
-    if ((operation === 'UNBLOCK' || operation === 'BRANCH_UNLOCK') && preview.mode !== 'UPSTREAM') {
-      const [individualPreview, branchPreview] = await Promise.all([
-        operation === 'UNBLOCK' ? Promise.resolve(preview) : previewTeacherBlock(nodeId, 'UNBLOCK'),
-        operation === 'BRANCH_UNLOCK'
-          ? Promise.resolve(preview)
-          : previewTeacherBlock(nodeId, 'BRANCH_UNLOCK'),
-      ]);
-
-      if (individualPreview?.mode === 'SINGLE' && branchPreview?.mode === 'BRANCH') {
-        return {
-          nodeId,
-          operation,
-          ...(operation === 'UNBLOCK' ? individualPreview : branchPreview),
-          individualPreview,
-          branchPreview,
-        };
-      }
-    }
-
-    return { nodeId, operation, ...preview };
-  }
-
-  async function requestTeacherBlockChange(nodeId: string, operation: TeacherBlockOperation) {
-    if (pendingTeacherBlockChange || isTeacherBlockPreviewing || isTeacherBlockChanging) return;
-    setIsTeacherBlockPreviewing(true);
-    try {
-      const pending = await loadTeacherBlockPreviewSet(nodeId, operation);
-      if (pending) setPendingTeacherBlockChange(pending);
-    } finally {
-      setIsTeacherBlockPreviewing(false);
-    }
-  }
-
-  async function confirmTeacherBlockChange(operation: TeacherBlockOperation) {
-    const pending = pendingTeacherBlockChange;
-    if (!pending || isTeacherBlockChanging) return;
-    const displayedPreview = teacherBlockPreviewForOperation(pending, operation);
-    if (!displayedPreview) return;
-
-    setIsTeacherBlockChanging(true);
-
-    try {
-      const latestPreview = await previewTeacherBlock(pending.nodeId, operation);
-      if (!latestPreview) return;
-
-      if (!sameTeacherBlockPreview(displayedPreview, latestPreview)) {
-        let latestPending = replaceTeacherBlockPreview(pending, operation, latestPreview);
-        if (
-          isUnlockScopeOperation(operation) &&
-          latestPreview.mode !== 'UPSTREAM' &&
-          isCompleteUnlockPreviewPair(pending)
-        ) {
-          const otherOperation = operation === 'UNBLOCK' ? 'BRANCH_UNLOCK' : 'UNBLOCK';
-          const otherPreview = await previewTeacherBlock(pending.nodeId, otherOperation);
-          if (!otherPreview) return;
-
-          latestPending = replaceTeacherBlockPreview(latestPending, otherOperation, otherPreview);
-          if (latestPending.mode !== 'UPSTREAM' && !isCompleteUnlockPreviewPair(latestPending)) {
-            return;
-          }
-        }
-
-        setPendingTeacherBlockChange(latestPending);
-        return;
-      }
-
-      const changed = await changeTeacherBlock(pending.nodeId, operation, latestPreview.version);
-      if (changed) {
-        setPendingTeacherBlockChange(null);
-        return;
-      }
-
-      const refreshedPreview = await previewTeacherBlock(pending.nodeId, operation);
-      if (refreshedPreview) {
-        setPendingTeacherBlockChange(
-          replaceTeacherBlockPreview(pending, operation, refreshedPreview),
-        );
-      }
-    } finally {
-      setPendingActionId(undefined);
-      setIsTeacherBlockChanging(false);
-    }
-  }
-
-  function handleTeacherBlockAction(actionId: string) {
-    const pending = pendingTeacherBlockChange;
-    if (!pending || isTeacherBlockChanging) return;
-
-    const operation =
-      actionId === roadmapConfirmationActionIds.blockTeacher
-        ? ('BLOCK' as const)
-        : actionId === roadmapConfirmationActionIds.unlockNode
-          ? ('UNBLOCK' as const)
-          : actionId === roadmapConfirmationActionIds.unlockBranch
-            ? ('BRANCH_UNLOCK' as const)
-            : actionId === roadmapConfirmationActionIds.unlockPrerequisites
-              ? pending.operation
-              : null;
-    if (!operation || !teacherBlockPreviewForOperation(pending, operation)) return;
-
-    setPendingActionId(actionId);
-    void confirmTeacherBlockChange(operation);
-  }
-
   function clearSimpleConfirmation() {
     setPendingActionId(undefined);
     setPendingSimpleConfirmation(null);
@@ -834,15 +648,6 @@ export default function RoadmapCanvas({
       dispatchCanvas({ type: 'selectCreatedNode', nodeId }),
     );
   };
-  const teacherBlockPresentation = pendingTeacherBlockChange
-    ? roadmapTeacherBlockConfirmation({
-        roadmap,
-        nodeId: pendingTeacherBlockChange.nodeId,
-        preview: pendingTeacherBlockChange,
-        individualPreview: pendingTeacherBlockChange.individualPreview,
-        branchPreview: pendingTeacherBlockChange.branchPreview,
-      })
-    : null;
   const visibilityDependencies = pendingVisibilityChange?.dependencies ?? [];
   const pendingVisibilityNode = pendingVisibilityChange
     ? roadmap.nodes.find((node) => node.id === pendingVisibilityChange.nodeId)
@@ -955,7 +760,7 @@ export default function RoadmapCanvas({
             }}
             restoreViewport={restoreViewport}
             onRequestAccessAction={(nodeId, operation) =>
-              void requestTeacherBlockChange(nodeId, operation)
+              teacherBlockWorkflow.requestChange(nodeId, operation)
             }
             onRequestVisibilityAction={(nodeId, isVisible) =>
               void requestVisibilityChange(nodeId, isVisible)
@@ -1024,7 +829,7 @@ export default function RoadmapCanvas({
             onUpdateNode={updateNodeWithConfirmation}
             onToggleVisibility={requestVisibilityChange}
             onRequestTeacherBlock={(nodeId, operation) =>
-              void requestTeacherBlockChange(nodeId, operation)
+              teacherBlockWorkflow.requestChange(nodeId, operation)
             }
             onDeleteNode={deleteNode}
             onAddResource={addResourceWithConfirmation}
@@ -1115,17 +920,7 @@ export default function RoadmapCanvas({
         onAction={handleVisibilityAction}
       />
       <ConfirmationDialog {...dependencyWorkflow.creationDialog} />
-      <ConfirmationDialog
-        confirmation={teacherBlockPresentation}
-        pendingActionId={isTeacherBlockChanging ? pendingActionId : undefined}
-        onCancel={() => {
-          if (!isTeacherBlockChanging) {
-            setPendingActionId(undefined);
-            setPendingTeacherBlockChange(null);
-          }
-        }}
-        onAction={handleTeacherBlockAction}
-      />
+      <ConfirmationDialog {...teacherBlockWorkflow.confirmationDialog} />
     </SidebarProvider>
   );
 }

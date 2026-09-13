@@ -386,12 +386,21 @@ test('keeps both unlock scopes recoverable after a failed mutation', async () =>
     version: 'single-refreshed',
     nodes: [{ id: 'node-1', title: 'Límites actualizado', relation: 'SELECTED_NODE' as const }],
   };
+  const refreshedBranchPreview = {
+    mode: 'BRANCH' as const,
+    version: 'branch-refreshed',
+    nodes: [
+      { id: 'node-1', title: 'Límites actualizado', relation: 'SELECTED_NODE' as const },
+      { id: 'node-2', title: 'Continuidad', relation: 'DEPENDENT' as const },
+    ],
+  };
   const previewTeacherBlock = vi
     .fn()
     .mockResolvedValueOnce(individualPreview)
     .mockResolvedValueOnce(branchPreview)
     .mockResolvedValueOnce(individualPreview)
     .mockResolvedValueOnce(refreshedIndividualPreview)
+    .mockResolvedValueOnce(refreshedBranchPreview)
     .mockResolvedValueOnce(refreshedIndividualPreview);
   const changeTeacherBlock = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
