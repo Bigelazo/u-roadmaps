@@ -439,6 +439,7 @@ function teacherBlockPreviewForOperation(
   pending: PendingTeacherBlockChange,
   operation: TeacherBlockOperation,
 ): TeacherBlockPreview | null {
+  if (pending.mode === 'UPSTREAM') return pending;
   if (operation === 'UNBLOCK') {
     return pending.individualPreview ?? (pending.operation === operation ? pending : null);
   }
@@ -446,6 +447,39 @@ function teacherBlockPreviewForOperation(
     return pending.branchPreview ?? (pending.operation === operation ? pending : null);
   }
   return pending.operation === operation ? pending : null;
+}
+
+function isUnlockScopeOperation(
+  operation: TeacherBlockOperation,
+): operation is Extract<TeacherBlockOperation, 'UNBLOCK' | 'BRANCH_UNLOCK'> {
+  return operation === 'UNBLOCK' || operation === 'BRANCH_UNLOCK';
+}
+
+function replaceTeacherBlockPreview(
+  pending: PendingTeacherBlockChange,
+  operation: TeacherBlockOperation,
+  preview: TeacherBlockPreview,
+): PendingTeacherBlockChange {
+  if (preview.mode === 'UPSTREAM') {
+    return {
+      nodeId: pending.nodeId,
+      operation: pending.operation,
+      ...preview,
+    };
+  }
+
+  return {
+    ...pending,
+    ...(pending.operation === operation
+      ? { mode: preview.mode, nodes: preview.nodes, version: preview.version }
+      : {}),
+    ...(operation === 'UNBLOCK' ? { individualPreview: preview } : {}),
+    ...(operation === 'BRANCH_UNLOCK' ? { branchPreview: preview } : {}),
+  };
+}
+
+function isCompleteUnlockPreviewPair(pending: PendingTeacherBlockChange) {
+  return pending.individualPreview?.mode === 'SINGLE' && pending.branchPreview?.mode === 'BRANCH';
 }
 
 function sameTeacherBlockPreview(first: TeacherBlockPreview, second: TeacherBlockPreview) {
@@ -942,13 +976,26 @@ export default function RoadmapCanvas({
     dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: true } });
 
     try {
-      const latestPending = await loadTeacherBlockPreviewSet(pending.nodeId, operation);
-      const latestPreview = latestPending
-        ? teacherBlockPreviewForOperation(latestPending, operation)
-        : null;
+      const latestPreview = await previewTeacherBlock(pending.nodeId, operation);
       if (!latestPreview) return;
 
       if (!sameTeacherBlockPreview(displayedPreview, latestPreview)) {
+        let latestPending = replaceTeacherBlockPreview(pending, operation, latestPreview);
+        if (
+          isUnlockScopeOperation(operation) &&
+          latestPreview.mode !== 'UPSTREAM' &&
+          isCompleteUnlockPreviewPair(pending)
+        ) {
+          const otherOperation = operation === 'UNBLOCK' ? 'BRANCH_UNLOCK' : 'UNBLOCK';
+          const otherPreview = await previewTeacherBlock(pending.nodeId, otherOperation);
+          if (!otherPreview) return;
+
+          latestPending = replaceTeacherBlockPreview(latestPending, otherOperation, otherPreview);
+          if (latestPending.mode !== 'UPSTREAM' && !isCompleteUnlockPreviewPair(latestPending)) {
+            return;
+          }
+        }
+
         dispatchCanvas({
           type: 'update',
           update: {
@@ -964,12 +1011,19 @@ export default function RoadmapCanvas({
         return;
       }
 
-      const refreshedPending = await loadTeacherBlockPreviewSet(pending.nodeId, operation);
-      if (refreshedPending)
+      const refreshedPreview = await previewTeacherBlock(pending.nodeId, operation);
+      if (refreshedPreview) {
         dispatchCanvas({
           type: 'update',
-          update: { pendingTeacherBlockChange: refreshedPending },
+          update: {
+            pendingTeacherBlockChange: replaceTeacherBlockPreview(
+              pending,
+              operation,
+              refreshedPreview,
+            ),
+          },
         });
+      }
     } finally {
       setPendingActionId(undefined);
       dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: false } });
