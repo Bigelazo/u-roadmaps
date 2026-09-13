@@ -45,6 +45,17 @@ type NodeVisibilityConfirmationInput = {
   dependencies: DependencyPresentation[];
 };
 
+function nodeVisibilityDescription(isHiding: boolean, dependencyCount: number) {
+  if (!isHiding)
+    return 'Este Nodo se mostrará al estudiantado y quedará disponible inmediatamente. No tendrá Dependencias ni Bloqueo docente.';
+  if (dependencyCount === 0)
+    return 'El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y no posee Dependencias.';
+
+  const dependencyLabel =
+    dependencyCount === 1 ? 'dependencia relacionada' : 'dependencias relacionadas';
+  return `El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y se eliminarán ${dependencyCount} ${dependencyLabel}.`;
+}
+
 type RoadmapConfirmationRoadmap = {
   nodes: readonly RoadmapNodeIdentity[];
   nodeTypes: RoadmapDto['nodeTypes'];
@@ -350,23 +361,7 @@ export function nodeVisibilityConfirmation({
 
   return {
     title: isHiding ? 'Confirmar ocultación' : 'Confirmar publicación',
-    description: isHiding ? (
-      dependencyCount > 0 ? (
-        <>
-          El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y se
-          eliminarán{' '}
-          <span className="font-semibold text-destructive">
-            {dependencyCount}{' '}
-            {dependencyCount === 1 ? 'dependencia relacionada' : 'dependencias relacionadas'}
-          </span>
-          .
-        </>
-      ) : (
-        'El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y no posee Dependencias.'
-      )
-    ) : (
-      'Este Nodo se mostrará al estudiantado y quedará disponible inmediatamente. No tendrá Dependencias ni Bloqueo docente.'
-    ),
+    description: nodeVisibilityDescription(isHiding, dependencyCount),
     intent: isHiding ? 'destructive' : 'default',
     sections: [
       {

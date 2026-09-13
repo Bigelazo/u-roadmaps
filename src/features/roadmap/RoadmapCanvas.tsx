@@ -1058,15 +1058,36 @@ export default function RoadmapCanvas({
   async function confirmDependencyDeletion(dependencyIds: string[]) {
     if (pendingActionId) return;
     setPendingActionId(simpleConfirmationActionIds.deleteDependencies);
-    await Promise.allSettled(dependencyIds.map((dependencyId) => deleteDependency(dependencyId)));
-    clearSimpleConfirmation();
+    const results = await Promise.allSettled(
+      dependencyIds.map((dependencyId) => deleteDependency(dependencyId)),
+    );
+    const failedDependencyIds = results.flatMap((result, index) =>
+      result.status === 'fulfilled' && result.value ? [] : [dependencyIds[index]],
+    );
+
+    if (failedDependencyIds.length === 0) {
+      clearSimpleConfirmation();
+      return;
+    }
+
+    setPendingActionId(undefined);
+    dispatchCanvas({
+      type: 'update',
+      update: {
+        pendingSimpleConfirmation: {
+          kind: 'deleteDependencies',
+          dependencyIds: failedDependencyIds,
+        },
+      },
+    });
   }
 
   async function confirmSimulationReset() {
     if (pendingActionId) return;
     setPendingActionId(simpleConfirmationActionIds.resetSimulation);
-    await resetSimulation();
-    clearSimpleConfirmation();
+    const succeeded = await resetSimulation();
+    if (succeeded) clearSimpleConfirmation();
+    else setPendingActionId(undefined);
   }
 
   function handleSimpleConfirmationAction(actionId: string) {

@@ -606,6 +606,96 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testIn
   }
 });
 
+test('keeps the two-scope unlock confirmation usable on a narrow viewport', async ({
+  page,
+}, testInfo) => {
+  const teacher = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  });
+  const createdNodeIds: string[] = [];
+  let dependencyId: string | undefined;
+
+  try {
+    const roadmapResponse = await teacher.get(roadmapPath());
+    expect(roadmapResponse.status()).toBe(200);
+    const roadmap = await roadmapResponse.json();
+    const contentTypeId = roadmap.nodeTypes.find(
+      (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
+    ).id;
+
+    const sourceResponse = await teacher.post(roadmapPath('/nodes'), {
+      data: {
+        title: uniqueName('Desbloqueo estrecho origen'),
+        nodeTypeId: contentTypeId,
+        positionX: 1200,
+        positionY: 720,
+      },
+    });
+    const targetResponse = await teacher.post(roadmapPath('/nodes'), {
+      data: {
+        title: uniqueName('Desbloqueo estrecho destino'),
+        nodeTypeId: contentTypeId,
+        positionX: 1440,
+        positionY: 720,
+      },
+    });
+    expect(sourceResponse.status()).toBe(201);
+    expect(targetResponse.status()).toBe(201);
+    const source = (await sourceResponse.json()).node as { id: string };
+    const target = (await targetResponse.json()).node as { id: string };
+    createdNodeIds.push(source.id, target.id);
+
+    const dependencyResponse = await teacher.post(roadmapPath('/dependencies'), {
+      data: { sourceNodeId: source.id, targetNodeId: target.id },
+    });
+    expect(dependencyResponse.status()).toBe(201);
+    dependencyId = (await dependencyResponse.json()).dependency.id;
+
+    const blockResponse = await teacher.post(roadmapPath(`/nodes/${source.id}/teacher-block`));
+    expect(blockResponse.status()).toBe(200);
+
+    await authenticateAs(page.context(), fixture.daniela);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/courses/CC1002/2026/2');
+    await panRoadmapNodeIntoView(page, source.id);
+    await page.locator(`.react-flow__node[data-id="${source.id}"]`).click();
+
+    const editor = page.locator('#roadmap-editor-panel');
+    await expect(editor).toBeVisible();
+    await editor.locator('summary').click();
+    await editor.getByRole('button', { name: 'Desbloquear', exact: true }).click();
+
+    const dialog = page.getByRole('alertdialog', { name: 'Confirmar desbloqueo' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('region', { name: 'Solo este Nodo' })).toBeVisible();
+    await expect(dialog.getByRole('region', { name: 'Este Nodo y su rama' })).toBeVisible();
+
+    const controls = [
+      dialog.getByRole('button', { name: 'Cancelar' }),
+      dialog.getByRole('button', { name: 'Desbloquear este Nodo' }),
+      dialog.getByRole('button', { name: 'Desbloquear la rama' }),
+    ];
+    for (const control of controls) {
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      if (!box) throw new Error('No se pudo medir una acción de confirmación.');
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(375);
+      expect(box.y + box.height).toBeLessThanOrEqual(812);
+    }
+
+    await controls[0].click();
+    await expect(dialog).toHaveCount(0);
+  } finally {
+    await deleteIfPresent(teacher, dependencyId && roadmapPath(`/dependencies/${dependencyId}`));
+    for (const nodeId of createdNodeIds)
+      await deleteIfPresent(teacher, roadmapPath(`/nodes/${nodeId}`));
+    await teacher.dispose();
+  }
+});
+
 test('hidden dependencies are rejected and completion requires an active student participation', async ({}, testInfo) => {
   const teacher = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,

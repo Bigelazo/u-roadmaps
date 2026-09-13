@@ -51,6 +51,27 @@ test('renders an accessible one-action confirmation and reports its identifier',
   expect(onAction).toHaveBeenCalledWith('archive');
 });
 
+test('activates a focused action from the keyboard', async () => {
+  const user = userEvent.setup();
+  const onAction = vi.fn();
+
+  render(
+    <ConfirmationDialog
+      confirmation={twoActionConfirmation}
+      onAction={onAction}
+      onCancel={vi.fn()}
+    />,
+  );
+
+  const dialog = await screen.findByRole('alertdialog', { name: 'Desbloquear Nodo' });
+  const branchAction = within(dialog).getByRole('button', { name: 'Desbloquear la rama' });
+  branchAction.focus();
+
+  await user.keyboard('{Enter}');
+
+  expect(onAction).toHaveBeenCalledWith('branch');
+});
+
 test('supports an established cancellation label without removing the cancellation action', async () => {
   render(
     <ConfirmationDialog

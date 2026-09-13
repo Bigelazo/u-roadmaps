@@ -578,7 +578,7 @@ test('manages node types from the floating canvas button', async () => {
 
 test('confirms, cancels, and deletes every selected dependency', async () => {
   const user = userEvent.setup();
-  const deleteDependency = vi.fn();
+  const deleteDependency = vi.fn().mockResolvedValue(true);
   useRoadmapMock.mockReturnValue(roadmapActions({ deleteDependency }));
   renderCanvas(true);
 
@@ -604,6 +604,33 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
   expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
   expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
+});
+
+test('keeps failed dependency deletions recoverable and retries only the failed ones', async () => {
+  const user = userEvent.setup();
+  const deleteDependency = vi
+    .fn()
+    .mockResolvedValueOnce(true)
+    .mockResolvedValueOnce(false)
+    .mockResolvedValueOnce(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ deleteDependency }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminación de dependencias' }));
+  const dialog = screen.getByRole('alertdialog', { name: 'Confirmar eliminación' });
+  await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
+
+  await waitFor(() => expect(deleteDependency).toHaveBeenCalledTimes(2));
+  const retryDialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+  expect(retryDialog.textContent).toContain('esta dependencia');
+  expect(retryDialog.textContent).not.toContain('estas dependencias');
+  expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
+  expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
+
+  await user.click(within(retryDialog).getByRole('button', { name: 'Eliminar' }));
+  await waitFor(() => expect(deleteDependency).toHaveBeenCalledTimes(3));
+  expect(deleteDependency).toHaveBeenLastCalledWith('dependency-2');
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 });
 
 test('closes the selected-node sidebar on Escape without tying that behavior to canvas clicks', async () => {
@@ -1536,6 +1563,53 @@ test('lets teachers enter the persistent student canvas preview, complete a node
 
   await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
   expect(screen.getByTestId('roadmap-mode').textContent).toBe('editing');
+});
+
+test('keeps a failed Canvas preview reset recoverable', async () => {
+  const user = userEvent.setup();
+  const simulationRoadmap = {
+    ...roadmap,
+    roadmap: { id: 'simulation-roadmap' },
+    nodes: [
+      {
+        ...roadmap.nodes[0],
+        access: { status: 'ACCESSIBLE' as const },
+        isCompleted: false,
+        canComplete: true,
+      },
+    ],
+  };
+  const resetSimulation = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  useRoadmapMock.mockReturnValue(
+    roadmapActions({
+      simulationRoadmap,
+      loadSimulation: vi.fn().mockResolvedValue(true),
+      completeSimulatedNode: vi.fn().mockResolvedValue(true),
+      resetSimulation,
+    }),
+  );
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Completar' }));
+  await user.click(screen.getByRole('button', { name: 'Reiniciar progreso' }));
+
+  const dialog = screen.getByRole('alertdialog', {
+    name: 'Reiniciar progreso de previsualización',
+  });
+  await user.click(within(dialog).getByRole('button', { name: 'Reiniciar progreso' }));
+
+  await waitFor(() => expect(resetSimulation).toHaveBeenCalledTimes(1));
+  expect(
+    screen.getByRole('alertdialog', { name: 'Reiniciar progreso de previsualización' }),
+  ).toBeTruthy();
+
+  await user.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Reiniciar progreso' }),
+  );
+  await waitFor(() => expect(resetSimulation).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 });
 
 test('confirms before discarding an unsaved editor draft to enter the canvas preview', async () => {
