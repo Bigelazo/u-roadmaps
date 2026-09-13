@@ -27,6 +27,7 @@ import {
   useNodeDeletionWorkflow,
   type NodeDeletionRequestOptions,
 } from '@/features/roadmap/canvas/node-deletion-workflow';
+import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
@@ -35,11 +36,7 @@ import { RoadmapGraph, type RoadmapGraphHandle } from '@/features/roadmap/graph/
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
-import {
-  roadmapNodeVisibilityConfirmation,
-  roadmapConfirmationActionIds,
-} from '@/features/roadmap/ui/roadmap-confirmation';
-import { useRoadmap, type StructuralDependency } from '@/features/roadmap/useRoadmap';
+import { useRoadmap } from '@/features/roadmap/useRoadmap';
 import type {
   CourseOfferingIdentifier,
   RoadmapDto,
@@ -80,12 +77,6 @@ type Props = {
   courseCode: string;
   year: number;
   semester: number;
-};
-
-type PendingVisibilityChange = {
-  nodeId: string;
-  isVisible: boolean;
-  dependencies: StructuralDependency[];
 };
 
 type PendingSimpleConfirmation = { kind: 'resetSimulation' };
@@ -247,10 +238,6 @@ export default function RoadmapCanvas({
     canvasMode.capabilities;
   const [pendingSimpleConfirmation, setPendingSimpleConfirmation] =
     useState<PendingSimpleConfirmation | null>(null);
-  const [pendingVisibilityChange, setPendingVisibilityChange] =
-    useState<PendingVisibilityChange | null>(null);
-  const [isVisibilityPreviewing, setIsVisibilityPreviewing] = useState(false);
-  const [isVisibilityChanging, setIsVisibilityChanging] = useState(false);
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string>();
   const editorPanel = usePersistentPanelWidth({
@@ -310,6 +297,11 @@ export default function RoadmapCanvas({
     roadmap,
     previewTeacherBlock,
     changeTeacherBlock,
+  });
+  const nodeVisibilityWorkflow = useNodeVisibilityWorkflow({
+    roadmap,
+    previewNodeVisibility,
+    toggleVisibility,
   });
   const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
 
@@ -451,37 +443,6 @@ export default function RoadmapCanvas({
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
   }, [canEditRoadmap, isCanvasPreview, isEditorOpen, selectedNodeId, teacherPreviewNode]);
 
-  async function requestVisibilityChange(nodeId: string, isVisible: boolean) {
-    if (pendingVisibilityChange || isVisibilityPreviewing || isVisibilityChanging) return false;
-    if (!isVisible) {
-      setPendingVisibilityChange({ nodeId, isVisible, dependencies: [] });
-      return false;
-    }
-    setIsVisibilityPreviewing(true);
-    try {
-      const dependencies = await previewNodeVisibility(nodeId);
-      if (dependencies) setPendingVisibilityChange({ nodeId, isVisible, dependencies });
-    } finally {
-      setIsVisibilityPreviewing(false);
-    }
-    return false;
-  }
-
-  function handleVisibilityAction(actionId: string) {
-    if (actionId === roadmapConfirmationActionIds.toggleVisibility) void confirmVisibilityChange();
-  }
-
-  async function confirmVisibilityChange() {
-    if (!pendingVisibilityChange || isVisibilityChanging) return;
-    setIsVisibilityChanging(true);
-    const changed = await toggleVisibility(
-      pendingVisibilityChange.nodeId,
-      pendingVisibilityChange.isVisible,
-    );
-    if (changed) setPendingVisibilityChange(null);
-    setIsVisibilityChanging(false);
-  }
-
   function clearSimpleConfirmation() {
     setPendingActionId(undefined);
     setPendingSimpleConfirmation(null);
@@ -553,10 +514,6 @@ export default function RoadmapCanvas({
       dispatchCanvas({ type: 'selectCreatedNode', nodeId }),
     );
   };
-  const visibilityDependencies = pendingVisibilityChange?.dependencies ?? [];
-  const pendingVisibilityNode = pendingVisibilityChange
-    ? roadmap.nodes.find((node) => node.id === pendingVisibilityChange.nodeId)
-    : undefined;
   const isEditorPanelOpen = canvasMode.isEditing && isEditorOpen;
   const isStudentPanelOpen = Boolean(
     teacherPreviewNode ||
@@ -668,7 +625,7 @@ export default function RoadmapCanvas({
               teacherBlockWorkflow.requestChange(nodeId, operation)
             }
             onRequestVisibilityAction={(nodeId, isVisible) =>
-              void requestVisibilityChange(nodeId, isVisible)
+              void nodeVisibilityWorkflow.requestChange(nodeId, isVisible)
             }
             onRequestAddResource={openResourceComposer}
             onRequestDelete={nodeDeletionWorkflow.requestDeletion}
@@ -727,12 +684,12 @@ export default function RoadmapCanvas({
             roadmap={roadmap as RoadmapDto}
             selectedNode={selectedNode as RoadmapNode | undefined}
             ref={editorDraftRef}
-            isVisibilityPending={isVisibilityPreviewing || isVisibilityChanging}
+            isVisibilityPending={nodeVisibilityWorkflow.isPending}
             isOpen={canvasMode.isEditing && isEditorOpen}
             resourceComposerRequest={resourceComposerRequest}
             onClose={closeSelectedNode}
             onUpdateNode={updateNodeWithConfirmation}
-            onToggleVisibility={requestVisibilityChange}
+            onToggleVisibility={nodeVisibilityWorkflow.requestChange}
             onRequestTeacherBlock={(nodeId, operation) =>
               teacherBlockWorkflow.requestChange(nodeId, operation)
             }
@@ -790,25 +747,7 @@ export default function RoadmapCanvas({
       />
       <ConfirmationDialog {...editorDraftGuard.confirmationDialog} />
       <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />
-      <ConfirmationDialog
-        confirmation={
-          pendingVisibilityChange && pendingVisibilityNode
-            ? roadmapNodeVisibilityConfirmation(
-                roadmap,
-                pendingVisibilityNode,
-                pendingVisibilityChange.isVisible,
-                visibilityDependencies,
-              )
-            : null
-        }
-        pendingActionId={
-          isVisibilityChanging ? roadmapConfirmationActionIds.toggleVisibility : undefined
-        }
-        onCancel={() => {
-          if (!isVisibilityChanging) setPendingVisibilityChange(null);
-        }}
-        onAction={handleVisibilityAction}
-      />
+      <ConfirmationDialog {...nodeVisibilityWorkflow.confirmationDialog} />
       <ConfirmationDialog {...dependencyWorkflow.creationDialog} />
       <ConfirmationDialog {...teacherBlockWorkflow.confirmationDialog} />
     </SidebarProvider>
