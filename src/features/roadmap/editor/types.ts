@@ -46,6 +46,11 @@ export type RoadmapEditorDraftHandle = Pick<
   'draftNodeId' | 'isDirty' | 'reset'
 >;
 
+export type EditorDraftDiscardDestination =
+  | { kind: 'discardNodeDraft'; nodeId: string }
+  | { kind: 'discardResourceDraft'; nodeId: string }
+  | { kind: 'discardCanvasPreviewDraft' };
+
 export type NodeTypeInput = { name: string; icon: NodeTypeIconId; color: NodeTypeColor };
 
 export type NodeTypeDraft = {

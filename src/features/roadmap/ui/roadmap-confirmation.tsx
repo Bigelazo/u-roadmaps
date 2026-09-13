@@ -6,6 +6,7 @@ import type {
   TeacherBlockImpact,
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
+import type { EditorDraftDiscardDestination } from '@/features/roadmap/editor/types';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 
 type NodeTypePresentation = {
@@ -85,6 +86,7 @@ export const roadmapConfirmationActionIds = {
   unlockNode: 'unlock-node',
   unlockBranch: 'unlock-branch',
   unlockPrerequisites: 'unlock-prerequisites',
+  discardEditorDraft: 'discard-draft',
 } as const;
 
 export const roadmapAutoLayoutConfirmation = {
@@ -93,6 +95,55 @@ export const roadmapAutoLayoutConfirmation = {
   intent: 'warning',
   actions: [{ id: roadmapConfirmationActionIds.autoLayout, label: 'Ordenar nodos' }],
 } as const satisfies ConfirmationPresentation;
+
+export function editorDraftDiscardConfirmation(
+  destination: EditorDraftDiscardDestination,
+): ConfirmationPresentation {
+  switch (destination.kind) {
+    case 'discardNodeDraft':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'Eliminar este Nodo descartará su borrador actual. Puedes seguir editando o descartarlo para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [
+          {
+            id: roadmapConfirmationActionIds.discardEditorDraft,
+            label: 'Descartar y continuar',
+          },
+        ],
+      };
+    case 'discardResourceDraft':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'Agregar un recurso a otro nodo reemplazará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [
+          {
+            id: roadmapConfirmationActionIds.discardEditorDraft,
+            label: 'Descartar y continuar',
+          },
+        ],
+      };
+    case 'discardCanvasPreviewDraft':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'La previsualización muestra únicamente el último estado guardado. Puedes seguir editando o descartar este borrador para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [
+          {
+            id: roadmapConfirmationActionIds.discardEditorDraft,
+            label: 'Descartar y previsualizar',
+          },
+        ],
+      };
+  }
+}
 
 function nodeTypeMedia(nodeType: NodeTypePresentation) {
   return (

@@ -22,6 +22,7 @@ import type { Viewport } from '@xyflow/react';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-workflow';
+import { useEditorDraftGuard } from '@/features/roadmap/canvas/editor-draft-guard';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
@@ -43,7 +44,10 @@ import type {
   RoadmapNode,
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
-import type { RoadmapEditorDraftHandle } from '@/features/roadmap/editor/types';
+import type {
+  EditorDraftDiscardDestination,
+  RoadmapEditorDraftHandle,
+} from '@/features/roadmap/editor/types';
 import {
   findOpenRoadmapPosition,
   roadmapNodeSizeForTitle,
@@ -82,16 +86,11 @@ type PendingVisibilityChange = {
   dependencies: StructuralDependency[];
 };
 
-type PendingNodeDeletion = { nodeId: string } & NodeDeletionImpact;
+type PendingNodeDeletion = { nodeId: string; draftWasDiscarded: boolean } & NodeDeletionImpact;
 
-type PendingSimpleConfirmation =
-  | { kind: 'discardNodeDraft'; nodeId: string }
-  | { kind: 'discardResourceDraft'; nodeId: string }
-  | { kind: 'discardCanvasPreviewDraft' }
-  | { kind: 'resetSimulation' };
+type PendingSimpleConfirmation = { kind: 'resetSimulation' };
 
 const simpleConfirmationActionIds = {
-  discardDraft: 'discard-draft',
   resetSimulation: 'reset-simulation',
 } as const;
 
@@ -99,35 +98,6 @@ function simpleConfirmationPresentation(
   confirmation: PendingSimpleConfirmation,
 ): ConfirmationPresentation {
   switch (confirmation.kind) {
-    case 'discardNodeDraft':
-      return {
-        title: 'Descartar cambios sin guardar',
-        description:
-          'Eliminar este Nodo descartará su borrador actual. Puedes seguir editando o descartarlo para continuar.',
-        intent: 'warning',
-        cancelLabel: 'Seguir editando',
-        actions: [{ id: simpleConfirmationActionIds.discardDraft, label: 'Descartar y continuar' }],
-      };
-    case 'discardResourceDraft':
-      return {
-        title: 'Descartar cambios sin guardar',
-        description:
-          'Agregar un recurso a otro nodo reemplazará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
-        intent: 'warning',
-        cancelLabel: 'Seguir editando',
-        actions: [{ id: simpleConfirmationActionIds.discardDraft, label: 'Descartar y continuar' }],
-      };
-    case 'discardCanvasPreviewDraft':
-      return {
-        title: 'Descartar cambios sin guardar',
-        description:
-          'La previsualización muestra únicamente el último estado guardado. Puedes seguir editando o descartar este borrador para continuar.',
-        intent: 'warning',
-        cancelLabel: 'Seguir editando',
-        actions: [
-          { id: simpleConfirmationActionIds.discardDraft, label: 'Descartar y previsualizar' },
-        ],
-      };
     case 'resetSimulation':
       return {
         title: 'Reiniciar progreso de previsualización',
@@ -417,7 +387,6 @@ export default function RoadmapCanvas({
   }
 
   async function enterCanvasPreview(discardDraft = false) {
-    if (discardDraft) editorDraftRef.current?.reset();
     const loaded = await loadSimulation();
     if (!loaded) return;
     roadmapGraphRef.current?.closeActionMenus();
@@ -428,20 +397,33 @@ export default function RoadmapCanvas({
     });
   }
 
-  function requestCanvasPreview() {
-    if (editorDraftRef.current?.isDirty) {
-      setPendingSimpleConfirmation({ kind: 'discardCanvasPreviewDraft' });
-      return;
+  function resumeEditorDraftDestination(destination: EditorDraftDiscardDestination) {
+    switch (destination.kind) {
+      case 'discardNodeDraft':
+        void previewAndRequestNodeDeletion(destination.nodeId, true);
+        return;
+      case 'discardResourceDraft':
+        dispatchCanvas({ type: 'openResourceComposer', nodeId: destination.nodeId });
+        return;
+      case 'discardCanvasPreviewDraft':
+        void enterCanvasPreview(true);
+        return;
     }
+  }
+
+  const editorDraftGuard = useEditorDraftGuard({
+    draftRef: editorDraftRef,
+    onDiscard: resumeEditorDraftDestination,
+  });
+
+  function requestCanvasPreview() {
+    if (editorDraftGuard.request({ kind: 'discardCanvasPreviewDraft' })) return;
     void enterCanvasPreview();
   }
 
   function openResourceComposer(nodeId: string) {
-    if (!canEditRoadmap || isCanvasPreview || pendingSimpleConfirmation) return;
-    if (editorDraftRef.current?.isDirty && editorDraftRef.current.draftNodeId !== nodeId) {
-      setPendingSimpleConfirmation({ kind: 'discardResourceDraft', nodeId });
-      return;
-    }
+    if (!canEditRoadmap || isCanvasPreview) return;
+    if (editorDraftGuard.request({ kind: 'discardResourceDraft', nodeId })) return;
     dispatchCanvas({ type: 'openResourceComposer', nodeId });
   }
 
@@ -489,22 +471,19 @@ export default function RoadmapCanvas({
     return false;
   }
 
-  async function previewAndRequestNodeDeletion(nodeId: string) {
+  async function previewAndRequestNodeDeletion(nodeId: string, draftWasDiscarded = false) {
     if (pendingNodeDeletion || isNodeDeletionPreviewing || isNodeDeleting) return;
     setIsNodeDeletionPreviewing(true);
     try {
       const impact = await previewNodeDeletion(nodeId);
-      if (impact) setPendingNodeDeletion({ nodeId, ...impact });
+      if (impact) setPendingNodeDeletion({ nodeId, draftWasDiscarded, ...impact });
     } finally {
       setIsNodeDeletionPreviewing(false);
     }
   }
 
   function requestNodeDeletion(nodeId: string) {
-    if (editorDraftRef.current?.isDirty && editorDraftRef.current.draftNodeId === nodeId) {
-      setPendingSimpleConfirmation({ kind: 'discardNodeDraft', nodeId });
-      return;
-    }
+    if (editorDraftGuard.request({ kind: 'discardNodeDraft', nodeId })) return;
     void previewAndRequestNodeDeletion(nodeId);
   }
 
@@ -517,13 +496,17 @@ export default function RoadmapCanvas({
       return;
     }
     if (!sameNodeDeletionImpact(pendingNodeDeletion, latestImpact)) {
-      setPendingNodeDeletion({ nodeId: pendingNodeDeletion.nodeId, ...latestImpact });
+      setPendingNodeDeletion({
+        nodeId: pendingNodeDeletion.nodeId,
+        draftWasDiscarded: pendingNodeDeletion.draftWasDiscarded,
+        ...latestImpact,
+      });
       setIsNodeDeleting(false);
       return;
     }
     const deleted = await deleteNode(pendingNodeDeletion.nodeId, pendingNodeDeletion.version);
     if (deleted) {
-      editorDraftRef.current?.reset();
+      if (!pendingNodeDeletion.draftWasDiscarded) editorDraftRef.current?.reset();
       dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
       setPendingNodeDeletion(null);
       setIsNodeDeleting(false);
@@ -531,7 +514,11 @@ export default function RoadmapCanvas({
     }
     const refreshedImpact = await previewNodeDeletion(pendingNodeDeletion.nodeId);
     if (refreshedImpact)
-      setPendingNodeDeletion({ nodeId: pendingNodeDeletion.nodeId, ...refreshedImpact });
+      setPendingNodeDeletion({
+        nodeId: pendingNodeDeletion.nodeId,
+        draftWasDiscarded: pendingNodeDeletion.draftWasDiscarded,
+        ...refreshedImpact,
+      });
     setIsNodeDeleting(false);
   }
 
@@ -571,34 +558,11 @@ export default function RoadmapCanvas({
     const confirmation = pendingSimpleConfirmation;
     if (!confirmation || pendingActionId) return;
 
-    if (actionId !== simpleConfirmationActionIds.discardDraft) {
-      if (
-        confirmation.kind === 'resetSimulation' &&
-        actionId === simpleConfirmationActionIds.resetSimulation
-      )
-        void confirmSimulationReset();
-      return;
-    }
-
-    if (confirmation.kind === 'discardNodeDraft') {
-      editorDraftRef.current?.reset();
-      clearSimpleConfirmation();
-      void previewAndRequestNodeDeletion(confirmation.nodeId);
-      return;
-    }
-
-    if (confirmation.kind === 'discardResourceDraft') {
-      editorDraftRef.current?.reset();
-      setPendingSimpleConfirmation(null);
-      dispatchCanvas({ type: 'openResourceComposer', nodeId: confirmation.nodeId });
-      setPendingActionId(undefined);
-      return;
-    }
-
-    if (confirmation.kind === 'discardCanvasPreviewDraft') {
-      clearSimpleConfirmation();
-      void enterCanvasPreview(true);
-    }
+    if (
+      confirmation.kind === 'resetSimulation' &&
+      actionId === simpleConfirmationActionIds.resetSimulation
+    )
+      void confirmSimulationReset();
   }
 
   if (error && !roadmap) {
@@ -899,6 +863,7 @@ export default function RoadmapCanvas({
         onCancel={clearSimpleConfirmation}
         onAction={handleSimpleConfirmationAction}
       />
+      <ConfirmationDialog {...editorDraftGuard.confirmationDialog} />
       <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />
       <ConfirmationDialog
         confirmation={
