@@ -80,6 +80,7 @@ export const roadmapConfirmationActionIds = {
   deleteResource: 'delete-resource',
   deleteNodeType: 'delete-node-type',
   createDependency: 'create-dependency',
+  deleteDependencies: 'delete-dependencies',
   blockTeacher: 'block-teacher',
   unlockNode: 'unlock-node',
   unlockBranch: 'unlock-branch',
@@ -220,6 +221,19 @@ export function roadmapDependencyConfirmation({
       },
     ],
     actions: [{ id: roadmapConfirmationActionIds.createDependency, label: 'Conectar y bloquear' }],
+  };
+}
+
+export function roadmapDependencyDeletionConfirmation(
+  dependencyIds: readonly string[],
+): ConfirmationPresentation {
+  const dependencyLabel = dependencyIds.length === 1 ? 'esta dependencia' : 'estas dependencias';
+
+  return {
+    title: 'Confirmar eliminación',
+    description: `Eliminarás ${dependencyLabel}. Esta acción no se puede deshacer.`,
+    intent: 'destructive',
+    actions: [{ id: roadmapConfirmationActionIds.deleteDependencies, label: 'Eliminar' }],
   };
 }
 

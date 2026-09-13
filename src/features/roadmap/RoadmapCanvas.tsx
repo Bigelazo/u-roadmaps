@@ -21,6 +21,7 @@ import {
 import type { Viewport } from '@xyflow/react';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
+import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-workflow';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
@@ -30,7 +31,6 @@ import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/stud
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import {
   nodeDeletionConfirmation,
-  roadmapDependencyConfirmation,
   roadmapNodeVisibilityConfirmation,
   roadmapConfirmationActionIds,
   roadmapTeacherBlockConfirmation,
@@ -38,7 +38,6 @@ import {
 import {
   useRoadmap,
   type StructuralDependency,
-  type TeacherBlockImpact,
   type TeacherBlockPreview,
 } from '@/features/roadmap/useRoadmap';
 import type {
@@ -88,14 +87,6 @@ type PendingVisibilityChange = {
   dependencies: StructuralDependency[];
 };
 
-type PendingDependencyChange = {
-  sourceNodeId: string;
-  targetNodeId: string;
-  sourceHandle?: string;
-  targetHandle?: string;
-  nodes: TeacherBlockImpact[];
-};
-
 type PendingTeacherBlockChange = {
   nodeId: string;
   operation: TeacherBlockOperation;
@@ -106,14 +97,12 @@ type PendingTeacherBlockChange = {
 type PendingNodeDeletion = { nodeId: string } & NodeDeletionImpact;
 
 type PendingSimpleConfirmation =
-  | { kind: 'deleteDependencies'; dependencyIds: string[] }
   | { kind: 'discardNodeDraft'; nodeId: string }
   | { kind: 'discardResourceDraft'; nodeId: string }
   | { kind: 'discardCanvasPreviewDraft' }
   | { kind: 'resetSimulation' };
 
 const simpleConfirmationActionIds = {
-  deleteDependencies: 'delete-dependencies',
   discardDraft: 'discard-draft',
   resetSimulation: 'reset-simulation',
 } as const;
@@ -122,17 +111,6 @@ function simpleConfirmationPresentation(
   confirmation: PendingSimpleConfirmation,
 ): ConfirmationPresentation {
   switch (confirmation.kind) {
-    case 'deleteDependencies': {
-      const dependencyLabel =
-        confirmation.dependencyIds.length === 1 ? 'esta dependencia' : 'estas dependencias';
-
-      return {
-        title: 'Confirmar eliminación',
-        description: `Eliminarás ${dependencyLabel}. Esta acción no se puede deshacer.`,
-        intent: 'destructive',
-        actions: [{ id: simpleConfirmationActionIds.deleteDependencies, label: 'Eliminar' }],
-      };
-    }
     case 'discardNodeDraft':
       return {
         title: 'Descartar cambios sin guardar',
@@ -402,10 +380,6 @@ export default function RoadmapCanvas({
     useState<PendingVisibilityChange | null>(null);
   const [isVisibilityPreviewing, setIsVisibilityPreviewing] = useState(false);
   const [isVisibilityChanging, setIsVisibilityChanging] = useState(false);
-  const [pendingDependencyChange, setPendingDependencyChange] =
-    useState<PendingDependencyChange | null>(null);
-  const [isDependencyPreviewing, setIsDependencyPreviewing] = useState(false);
-  const [isDependencyChanging, setIsDependencyChanging] = useState(false);
   const [pendingTeacherBlockChange, setPendingTeacherBlockChange] =
     useState<PendingTeacherBlockChange | null>(null);
   const [isTeacherBlockPreviewing, setIsTeacherBlockPreviewing] = useState(false);
@@ -459,6 +433,12 @@ export default function RoadmapCanvas({
     completeSimulatedNode,
     resetSimulation,
   } = useRoadmap(identifier);
+  const dependencyWorkflow = useDependencyWorkflow({
+    roadmap,
+    connectNodes,
+    previewRoadmapDependency,
+    deleteDependency,
+  });
   const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
 
   const showSuccessToast = useCallback((message: string) => {
@@ -678,60 +658,6 @@ export default function RoadmapCanvas({
     return { nodeId, operation, ...preview };
   }
 
-  async function requestDependencyChange({
-    source,
-    target,
-    sourceHandle,
-    targetHandle,
-  }: {
-    source: string | null;
-    target: string | null;
-    sourceHandle?: string | null;
-    targetHandle?: string | null;
-  }) {
-    if (
-      !source ||
-      !target ||
-      pendingDependencyChange ||
-      isDependencyPreviewing ||
-      isDependencyChanging
-    )
-      return;
-
-    setIsDependencyPreviewing(true);
-    try {
-      const normalizedSourceHandle = sourceHandle ?? undefined;
-      const normalizedTargetHandle = targetHandle ?? undefined;
-      const nodes = await previewRoadmapDependency(
-        source,
-        target,
-        normalizedSourceHandle,
-        normalizedTargetHandle,
-      );
-      if (!nodes) return;
-
-      if (nodes.length === 0) {
-        setIsDependencyChanging(true);
-        try {
-          await connectNodes(source, target, normalizedSourceHandle, normalizedTargetHandle);
-        } finally {
-          setIsDependencyChanging(false);
-        }
-        return;
-      }
-
-      setPendingDependencyChange({
-        sourceNodeId: source,
-        targetNodeId: target,
-        sourceHandle: normalizedSourceHandle,
-        targetHandle: normalizedTargetHandle,
-        nodes,
-      });
-    } finally {
-      setIsDependencyPreviewing(false);
-    }
-  }
-
   async function requestTeacherBlockChange(nodeId: string, operation: TeacherBlockOperation) {
     if (pendingTeacherBlockChange || isTeacherBlockPreviewing || isTeacherBlockChanging) return;
     setIsTeacherBlockPreviewing(true);
@@ -741,27 +667,6 @@ export default function RoadmapCanvas({
     } finally {
       setIsTeacherBlockPreviewing(false);
     }
-  }
-
-  async function confirmDependencyChange() {
-    const pending = pendingDependencyChange;
-    if (!pending || isDependencyChanging) return;
-    setIsDependencyChanging(true);
-    try {
-      const connected = await connectNodes(
-        pending.sourceNodeId,
-        pending.targetNodeId,
-        pending.sourceHandle,
-        pending.targetHandle,
-      );
-      if (connected) setPendingDependencyChange(null);
-    } finally {
-      setIsDependencyChanging(false);
-    }
-  }
-
-  function handleDependencyAction(actionId: string) {
-    if (actionId === roadmapConfirmationActionIds.createDependency) void confirmDependencyChange();
   }
 
   async function confirmTeacherBlockChange(operation: TeacherBlockOperation) {
@@ -840,28 +745,6 @@ export default function RoadmapCanvas({
     setPendingSimpleConfirmation(null);
   }
 
-  async function confirmDependencyDeletion(dependencyIds: string[]) {
-    if (pendingActionId) return;
-    setPendingActionId(simpleConfirmationActionIds.deleteDependencies);
-    const results = await Promise.allSettled(
-      dependencyIds.map((dependencyId) => deleteDependency(dependencyId)),
-    );
-    const failedDependencyIds = results.flatMap((result, index) =>
-      result.status === 'fulfilled' && result.value ? [] : [dependencyIds[index]],
-    );
-
-    if (failedDependencyIds.length === 0) {
-      clearSimpleConfirmation();
-      return;
-    }
-
-    setPendingActionId(undefined);
-    setPendingSimpleConfirmation({
-      kind: 'deleteDependencies',
-      dependencyIds: failedDependencyIds,
-    });
-  }
-
   async function confirmSimulationReset() {
     if (pendingActionId) return;
     setPendingActionId(simpleConfirmationActionIds.resetSimulation);
@@ -873,14 +756,6 @@ export default function RoadmapCanvas({
   function handleSimpleConfirmationAction(actionId: string) {
     const confirmation = pendingSimpleConfirmation;
     if (!confirmation || pendingActionId) return;
-
-    if (
-      confirmation.kind === 'deleteDependencies' &&
-      actionId === simpleConfirmationActionIds.deleteDependencies
-    ) {
-      void confirmDependencyDeletion(confirmation.dependencyIds);
-      return;
-    }
 
     if (actionId !== simpleConfirmationActionIds.discardDraft) {
       if (
@@ -1068,13 +943,8 @@ export default function RoadmapCanvas({
               void moveNode(nodeId, snapToRoadmapGrid(position))
             }
             onClearSelectedNode={closeSelectedNode}
-            onConnectNodes={(connection) => void requestDependencyChange(connection)}
-            onDeleteDependencies={(dependencyIds) =>
-              setPendingSimpleConfirmation({
-                kind: 'deleteDependencies',
-                dependencyIds: [...dependencyIds],
-              })
-            }
+            onConnectNodes={dependencyWorkflow.requestCreation}
+            onDeleteDependencies={dependencyWorkflow.requestDeletion}
             onAutoLayout={(nodes) => {
               void Promise.all(
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
@@ -1140,10 +1010,7 @@ export default function RoadmapCanvas({
             }
           />
         </div>
-        <KeyboardShortcuts
-          isEditing={canvasMode.isEditing}
-          isSidePanelOpen={isSidePanelOpen}
-        />
+        <KeyboardShortcuts isEditing={canvasMode.isEditing} isSidePanelOpen={isSidePanelOpen} />
         {canEditRoadmap && (
           <RoadmapEditor
             key={editorKey + ':' + (selectedNode?.id ?? 'none')}
@@ -1227,6 +1094,7 @@ export default function RoadmapCanvas({
         onCancel={clearSimpleConfirmation}
         onAction={handleSimpleConfirmationAction}
       />
+      <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />
       <ConfirmationDialog
         confirmation={
           pendingVisibilityChange && pendingVisibilityNode
@@ -1246,25 +1114,7 @@ export default function RoadmapCanvas({
         }}
         onAction={handleVisibilityAction}
       />
-      <ConfirmationDialog
-        confirmation={
-          pendingDependencyChange
-            ? roadmapDependencyConfirmation({
-                roadmap,
-                sourceNodeId: pendingDependencyChange.sourceNodeId,
-                targetNodeId: pendingDependencyChange.targetNodeId,
-                nodes: pendingDependencyChange.nodes,
-              })
-            : null
-        }
-        pendingActionId={
-          isDependencyChanging ? roadmapConfirmationActionIds.createDependency : undefined
-        }
-        onCancel={() => {
-          if (!isDependencyChanging) setPendingDependencyChange(null);
-        }}
-        onAction={handleDependencyAction}
-      />
+      <ConfirmationDialog {...dependencyWorkflow.creationDialog} />
       <ConfirmationDialog
         confirmation={teacherBlockPresentation}
         pendingActionId={isTeacherBlockChanging ? pendingActionId : undefined}
