@@ -808,7 +808,7 @@ test('confirms a teacher block from the most recent preview before mutating', as
       { id: 'node-2', title: 'Continuidad' },
     ],
   });
-  const changeTeacherBlock = vi.fn();
+  const changeTeacherBlock = vi.fn().mockResolvedValue(true);
   useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
   renderCanvas(true);
 
@@ -836,6 +836,51 @@ test('confirms a teacher block from the most recent preview before mutating', as
   );
 });
 
+test('keeps a failed teacher-block mutation recoverable and refreshes its preview', async () => {
+  const user = userEvent.setup();
+  const initialPreview = {
+    mode: 'BLOCK' as const,
+    version: 'initial',
+    nodes: [{ id: 'node-1', title: 'Límites' }],
+  };
+  const refreshedPreview = {
+    mode: 'BLOCK' as const,
+    version: 'refreshed',
+    nodes: [
+      { id: 'node-1', title: 'Límites actualizado' },
+      { id: 'node-2', title: 'Continuidad' },
+    ],
+  };
+  const previewTeacherBlock = vi
+    .fn()
+    .mockResolvedValueOnce(initialPreview)
+    .mockResolvedValueOnce(initialPreview)
+    .mockResolvedValueOnce(refreshedPreview)
+    .mockResolvedValue(refreshedPreview);
+  const changeTeacherBlock = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo de rama' });
+  const confirm = within(dialog).getByRole('button', { name: 'Bloquear rama' });
+
+  await user.click(confirm);
+  await waitFor(() =>
+    expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK', 'initial'),
+  );
+  await waitFor(() => expect(dialog.textContent).toContain('Límites actualizado'));
+  expect(dialog.textContent).toContain('Bloquearás 2 nodos.');
+  expect(changeTeacherBlock).toHaveBeenCalledTimes(1);
+
+  await user.click(confirm);
+  await waitFor(() =>
+    expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK', 'refreshed'),
+  );
+  expect(changeTeacherBlock).toHaveBeenCalledTimes(2);
+});
+
 test('requires a renewed confirmation when the teacher-block preview changed', async () => {
   const user = userEvent.setup();
   const previewTeacherBlock = vi
@@ -861,7 +906,7 @@ test('requires a renewed confirmation when the teacher-block preview changed', a
         { id: 'node-3', title: 'Derivadas' },
       ],
     });
-  const changeTeacherBlock = vi.fn();
+  const changeTeacherBlock = vi.fn().mockResolvedValue(true);
   useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
   renderCanvas(true);
 
@@ -878,69 +923,68 @@ test('requires a renewed confirmation when the teacher-block preview changed', a
   await waitFor(() => expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'BLOCK', 'two'));
 });
 
-test('chooses and refreshes the contextual unlock scope before confirming', async () => {
+test('shows both unlock scopes as declarative sections and confirms individual operation', async () => {
   const user = userEvent.setup();
+  const individualPreview = {
+    mode: 'SINGLE' as const,
+    version: 'single',
+    nodes: [
+      {
+        id: 'node-1',
+        title: 'Límites',
+        relation: 'SELECTED_NODE' as const,
+        nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+      },
+    ],
+  };
+  const branchPreview = {
+    mode: 'BRANCH' as const,
+    version: 'branch',
+    nodes: [
+      {
+        id: 'node-1',
+        title: 'Límites',
+        relation: 'SELECTED_NODE' as const,
+        nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+      },
+      {
+        id: 'node-2',
+        title: 'Continuidad',
+        relation: 'DEPENDENT' as const,
+        nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+      },
+    ],
+  };
   const previewTeacherBlock = vi
     .fn()
-    .mockResolvedValueOnce({
-      mode: 'SINGLE',
-      version: 'single',
-      nodes: [
-        {
-          id: 'node-1',
-          title: 'Límites',
-          relation: 'SELECTED_NODE',
-          nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
-        },
-      ],
-    })
-    .mockResolvedValueOnce({
-      mode: 'BRANCH',
-      version: 'branch',
-      nodes: [
-        {
-          id: 'node-1',
-          title: 'Límites',
-          relation: 'SELECTED_NODE',
-          nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
-        },
-        {
-          id: 'node-2',
-          title: 'Continuidad',
-          relation: 'DEPENDENT',
-          nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
-        },
-      ],
-    });
-  useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock }));
+    .mockResolvedValueOnce(individualPreview)
+    .mockResolvedValueOnce(branchPreview)
+    .mockResolvedValueOnce(individualPreview)
+    .mockResolvedValueOnce(branchPreview);
+  const changeTeacherBlock = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
   await user.click(screen.getByRole('button', { name: 'Desbloquear' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar desbloqueo' });
-  expect(
-    (within(dialog).getByRole('radio', { name: 'Solo este Nodo' }) as HTMLInputElement).checked,
-  ).toBe(true);
+  expect(within(dialog).getByRole('list', { name: 'Solo este Nodo' })).toBeTruthy();
+  expect(within(dialog).getByRole('list', { name: 'Este Nodo y su rama' })).toBeTruthy();
   expect(dialog.textContent).toContain('Nodo seleccionado');
-  expect(within(dialog).getByLabelText('Contenido')).toBeTruthy();
-
-  await user.click(within(dialog).getByRole('radio', { name: 'Este Nodo y su rama' }));
-  await waitFor(() =>
-    expect(previewTeacherBlock).toHaveBeenLastCalledWith('node-1', 'BRANCH_UNLOCK'),
-  );
-  expect(dialog.textContent).toContain('Continuidad');
   expect(dialog.textContent).toContain('Dependiente');
-  expect(
-    (within(dialog).getByRole('radio', { name: 'Este Nodo y su rama' }) as HTMLInputElement)
-      .checked,
-  ).toBe(true);
+  expect(within(dialog).getAllByLabelText('Contenido')).toHaveLength(3);
+
+  await user.click(within(dialog).getByRole('button', { name: 'Desbloquear este Nodo' }));
+  await waitFor(() =>
+    expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'UNBLOCK', 'single'),
+  );
 });
 
-test('restores an updated confirmation when the server rejects a stale unlock preview', async () => {
+test('confirms the branch unlock alternative from the same preview pair', async () => {
   const user = userEvent.setup();
-  const initialPreview = {
+  const individualPreview = {
     mode: 'SINGLE' as const,
-    version: 'stale-preview',
+    version: 'single',
     nodes: [
       {
         id: 'node-1',
@@ -949,40 +993,131 @@ test('restores an updated confirmation when the server rejects a stale unlock pr
       },
     ],
   };
-  const refreshedPreview = {
-    mode: 'UPSTREAM' as const,
-    version: 'refreshed-preview',
+  const branchPreview = {
+    mode: 'BRANCH' as const,
+    version: 'branch',
     nodes: [
-      { id: 'node-0', title: 'Base', relation: 'PREREQUISITE' as const },
       { id: 'node-1', title: 'Límites', relation: 'SELECTED_NODE' as const },
+      { id: 'node-2', title: 'Continuidad', relation: 'DEPENDENT' as const },
     ],
   };
   const previewTeacherBlock = vi
     .fn()
-    .mockResolvedValueOnce(initialPreview)
-    .mockResolvedValueOnce(initialPreview)
-    .mockResolvedValueOnce(refreshedPreview);
-  const changeTeacherBlock = vi.fn().mockResolvedValue(false);
+    .mockResolvedValueOnce(individualPreview)
+    .mockResolvedValueOnce(branchPreview)
+    .mockResolvedValueOnce(branchPreview)
+    .mockResolvedValueOnce(individualPreview);
+  const changeTeacherBlock = vi.fn().mockResolvedValue(true);
   useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
   await user.click(screen.getByRole('button', { name: 'Desbloquear' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar desbloqueo' });
-  await user.click(within(dialog).getByRole('button', { name: 'Desbloquear este nodo' }));
+  expect(within(dialog).getByText('Continuidad')).toBeTruthy();
+  await user.click(within(dialog).getByRole('button', { name: 'Desbloquear la rama' }));
 
   await waitFor(() =>
-    expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'UNBLOCK', 'stale-preview'),
+    expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'BRANCH_UNLOCK', 'branch'),
   );
-  expect(
-    await screen.findByRole('alertdialog', { name: 'Desbloquear prerrequisitos' }),
-  ).toBeTruthy();
-  expect(screen.getByText('Base')).toBeTruthy();
+});
+
+test('uses one affirmative action when blocked prerequisites determine the unlock scope', async () => {
+  const user = userEvent.setup();
+  const previewTeacherBlock = vi
+    .fn()
+    .mockResolvedValueOnce({
+      mode: 'UPSTREAM' as const,
+      version: 'upstream',
+      nodes: [
+        { id: 'node-0', title: 'Base', relation: 'PREREQUISITE' as const },
+        { id: 'node-1', title: 'Límites', relation: 'SELECTED_NODE' as const },
+      ],
+    })
+    .mockResolvedValueOnce({
+      mode: 'UPSTREAM' as const,
+      version: 'upstream',
+      nodes: [
+        { id: 'node-0', title: 'Base', relation: 'PREREQUISITE' as const },
+        { id: 'node-1', title: 'Límites', relation: 'SELECTED_NODE' as const },
+      ],
+    });
+  const changeTeacherBlock = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Desbloquear' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Desbloquear prerrequisitos' });
+  expect(within(dialog).getAllByRole('button')).toHaveLength(2);
+  expect(within(dialog).queryByRole('button', { name: 'Desbloquear la rama' })).toBeNull();
+  expect(within(dialog).getByRole('button', { name: 'Desbloquear 2 nodos' })).toBeTruthy();
+
+  await user.click(within(dialog).getByRole('button', { name: 'Desbloquear 2 nodos' }));
+  await waitFor(() =>
+    expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'UNBLOCK', 'upstream'),
+  );
+});
+
+test('refreshes both unlock scopes and requires a new action when the selected preview is stale', async () => {
+  const user = userEvent.setup();
+  const initialIndividual = {
+    mode: 'SINGLE' as const,
+    version: 'single-one',
+    nodes: [{ id: 'node-1', title: 'Límites', relation: 'SELECTED_NODE' as const }],
+  };
+  const initialBranch = {
+    mode: 'BRANCH' as const,
+    version: 'branch-one',
+    nodes: [
+      { id: 'node-1', title: 'Límites', relation: 'SELECTED_NODE' as const },
+      { id: 'node-2', title: 'Continuidad', relation: 'DEPENDENT' as const },
+    ],
+  };
+  const refreshedIndividual = {
+    mode: 'SINGLE' as const,
+    version: 'single-two',
+    nodes: [{ id: 'node-1', title: 'Límites actualizado', relation: 'SELECTED_NODE' as const }],
+  };
+  const refreshedBranch = {
+    mode: 'BRANCH' as const,
+    version: 'branch-two',
+    nodes: [
+      { id: 'node-1', title: 'Límites actualizado', relation: 'SELECTED_NODE' as const },
+      { id: 'node-3', title: 'Derivadas', relation: 'DEPENDENT' as const },
+    ],
+  };
+  const previewTeacherBlock = vi
+    .fn()
+    .mockResolvedValueOnce(initialIndividual)
+    .mockResolvedValueOnce(initialBranch)
+    .mockResolvedValueOnce(refreshedIndividual)
+    .mockResolvedValueOnce(refreshedBranch)
+    .mockResolvedValueOnce(refreshedIndividual)
+    .mockResolvedValueOnce(refreshedBranch);
+  const changeTeacherBlock = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewTeacherBlock, changeTeacherBlock }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Desbloquear' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar desbloqueo' });
+  await user.click(within(dialog).getByRole('button', { name: 'Desbloquear este Nodo' }));
+
+  await waitFor(() => expect(previewTeacherBlock).toHaveBeenCalledTimes(4));
+  expect(changeTeacherBlock).not.toHaveBeenCalled();
+  expect(dialog.textContent).toContain('Límites actualizado');
+  expect(dialog.textContent).toContain('Derivadas');
+
+  await user.click(within(dialog).getByRole('button', { name: 'Desbloquear este Nodo' }));
+  await waitFor(() =>
+    expect(changeTeacherBlock).toHaveBeenCalledWith('node-1', 'UNBLOCK', 'single-two'),
+  );
 });
 
 test('previews and confirms a dependency that propagates teacher blocks', async () => {
   const user = userEvent.setup();
-  const connectNodes = vi.fn();
+  const connectNodes = vi.fn().mockResolvedValue(true);
   const previewRoadmapDependency = vi.fn().mockResolvedValue([
     { id: 'target-node', title: 'Destino afectado' },
     { id: 'descendant-node', title: 'Descendiente afectado' },
@@ -992,11 +1127,61 @@ test('previews and confirms a dependency that propagates teacher blocks', async 
 
   await user.click(screen.getByRole('button', { name: 'Conectar rama bloqueada' }));
   const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo' });
+  expect(
+    within(dialog).getByRole('listitem', {
+      name: 'Relación: source-node → target-node',
+    }),
+  ).toBeTruthy();
+  expect(within(dialog).getByRole('list', { name: 'Nodos que se bloquearán' })).toBeTruthy();
   expect(dialog.textContent).toContain('Destino afectado');
   expect(dialog.textContent).toContain('Descendiente afectado');
   await user.click(within(dialog).getByRole('button', { name: 'Conectar y bloquear' }));
 
-  expect(connectNodes).toHaveBeenCalledWith('source-node', 'target-node', 'right', 'left');
+  await waitFor(() =>
+    expect(connectNodes).toHaveBeenCalledWith('source-node', 'target-node', 'right', 'left'),
+  );
+});
+
+test('connects an unaffected dependency immediately without opening a confirmation', async () => {
+  const user = userEvent.setup();
+  const connectNodes = vi.fn().mockResolvedValue(true);
+  const previewRoadmapDependency = vi.fn().mockResolvedValue([]);
+  useRoadmapMock.mockReturnValue(roadmapActions({ connectNodes, previewRoadmapDependency }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Conectar rama bloqueada' }));
+
+  await waitFor(() =>
+    expect(connectNodes).toHaveBeenCalledWith('source-node', 'target-node', 'right', 'left'),
+  );
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+});
+
+test('keeps an impacted dependency confirmation recoverable after cancellation and failure', async () => {
+  const user = userEvent.setup();
+  const connectNodes = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  const previewRoadmapDependency = vi
+    .fn()
+    .mockResolvedValue([{ id: 'target-node', title: 'Destino afectado' }]);
+  useRoadmapMock.mockReturnValue(roadmapActions({ connectNodes, previewRoadmapDependency }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Conectar rama bloqueada' }));
+  let dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo' });
+  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+  expect(connectNodes).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole('button', { name: 'Conectar rama bloqueada' }));
+  dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo' });
+  const confirm = within(dialog).getByRole('button', { name: 'Conectar y bloquear' });
+  await user.click(confirm);
+  await waitFor(() => expect(connectNodes).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getByRole('alertdialog', { name: 'Confirmar bloqueo' })).toBeTruthy();
+
+  await user.click(confirm);
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  expect(connectNodes).toHaveBeenCalledTimes(2);
 });
 
 test('persists every repositioned node after ordering the map', async () => {

@@ -28,8 +28,10 @@ import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/stud
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import {
   nodeDeletionConfirmation,
+  roadmapDependencyConfirmation,
   roadmapNodeVisibilityConfirmation,
   roadmapConfirmationActionIds,
+  roadmapTeacherBlockConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import {
   useRoadmap,
@@ -53,16 +55,6 @@ import {
   snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/ui/alert-dialog';
 import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
@@ -70,7 +62,6 @@ import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Kbd, KbdGroup } from '@/shared/ui/kbd';
 import { SidebarProvider } from '@/shared/ui/sidebar';
-import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import { cn } from 'cn';
 
 const RoadmapEditor = dynamic(
@@ -107,6 +98,8 @@ type PendingDependencyChange = {
 type PendingTeacherBlockChange = {
   nodeId: string;
   operation: TeacherBlockOperation;
+  individualPreview?: TeacherBlockPreview;
+  branchPreview?: TeacherBlockPreview;
 } & TeacherBlockPreview;
 
 type PendingNodeDeletion = { nodeId: string } & NodeDeletionImpact;
@@ -201,7 +194,10 @@ type CanvasState = {
   isVisibilityPreviewing: boolean;
   isVisibilityChanging: boolean;
   pendingDependencyChange: PendingDependencyChange | null;
+  isDependencyPreviewing: boolean;
+  isDependencyChanging: boolean;
   pendingTeacherBlockChange: PendingTeacherBlockChange | null;
+  isTeacherBlockPreviewing: boolean;
   isTeacherBlockChanging: boolean;
   pendingNodeDeletion: PendingNodeDeletion | null;
   isNodeDeletionPreviewing: boolean;
@@ -241,7 +237,10 @@ const initialCanvasState: CanvasState = {
   isVisibilityPreviewing: false,
   isVisibilityChanging: false,
   pendingDependencyChange: null,
+  isDependencyPreviewing: false,
+  isDependencyChanging: false,
   pendingTeacherBlockChange: null,
+  isTeacherBlockPreviewing: false,
   isTeacherBlockChanging: false,
   pendingNodeDeletion: null,
   isNodeDeletionPreviewing: false,
@@ -436,38 +435,17 @@ function KeyboardShortcuts({
   );
 }
 
-function teacherBlockConfirmation(
+function teacherBlockPreviewForOperation(
+  pending: PendingTeacherBlockChange,
   operation: TeacherBlockOperation,
-  mode: TeacherBlockPreview['mode'],
-  count: number,
-) {
-  const nodes = count === 1 ? 'nodo' : 'nodos';
-  if (mode === 'BLOCK') {
-    return {
-      title: 'Confirmar bloqueo de rama',
-      description: `Bloquearás ${count} ${nodes}.`,
-      action: 'Bloquear rama',
-    };
+): TeacherBlockPreview | null {
+  if (operation === 'UNBLOCK') {
+    return pending.individualPreview ?? (pending.operation === operation ? pending : null);
   }
-  if (mode === 'UPSTREAM') {
-    return {
-      title: 'Desbloquear prerrequisitos',
-      description: `Desbloquearás ${count} ${nodes}, incluidos los prerrequisitos bloqueados.`,
-      action: `Desbloquear ${count} ${nodes}`,
-    };
+  if (operation === 'BRANCH_UNLOCK') {
+    return pending.branchPreview ?? (pending.operation === operation ? pending : null);
   }
-  if (mode === 'SINGLE') {
-    return {
-      title: 'Confirmar desbloqueo',
-      description: `Desbloquearás ${count} ${nodes}.`,
-      action: 'Desbloquear este nodo',
-    };
-  }
-  return {
-    title: 'Confirmar desbloqueo de rama',
-    description: `Desbloquearás ${count} ${nodes} elegibles de la rama.`,
-    action: 'Desbloquear rama',
-  };
+  return pending.operation === operation ? pending : null;
 }
 
 function sameTeacherBlockPreview(first: TeacherBlockPreview, second: TeacherBlockPreview) {
@@ -534,7 +512,10 @@ export default function RoadmapCanvas({
     isVisibilityPreviewing,
     isVisibilityChanging,
     pendingDependencyChange,
+    isDependencyPreviewing,
+    isDependencyChanging,
     pendingTeacherBlockChange,
+    isTeacherBlockPreviewing,
     isTeacherBlockChanging,
     pendingNodeDeletion,
     isNodeDeletionPreviewing,
@@ -828,6 +809,35 @@ export default function RoadmapCanvas({
     });
   }
 
+  async function loadTeacherBlockPreviewSet(
+    nodeId: string,
+    operation: TeacherBlockOperation,
+  ): Promise<PendingTeacherBlockChange | null> {
+    const preview = await previewTeacherBlock(nodeId, operation);
+    if (!preview) return null;
+
+    if ((operation === 'UNBLOCK' || operation === 'BRANCH_UNLOCK') && preview.mode !== 'UPSTREAM') {
+      const [individualPreview, branchPreview] = await Promise.all([
+        operation === 'UNBLOCK' ? Promise.resolve(preview) : previewTeacherBlock(nodeId, 'UNBLOCK'),
+        operation === 'BRANCH_UNLOCK'
+          ? Promise.resolve(preview)
+          : previewTeacherBlock(nodeId, 'BRANCH_UNLOCK'),
+      ]);
+
+      if (individualPreview?.mode === 'SINGLE' && branchPreview?.mode === 'BRANCH') {
+        return {
+          nodeId,
+          operation,
+          ...(operation === 'UNBLOCK' ? individualPreview : branchPreview),
+          individualPreview,
+          branchPreview,
+        };
+      }
+    }
+
+    return { nodeId, operation, ...preview };
+  }
+
   async function requestDependencyChange({
     source,
     target,
@@ -839,90 +849,151 @@ export default function RoadmapCanvas({
     sourceHandle?: string | null;
     targetHandle?: string | null;
   }) {
-    if (!source || !target) return;
-    const nodes = await previewRoadmapDependency(
-      source,
-      target,
-      sourceHandle ?? undefined,
-      targetHandle ?? undefined,
-    );
-    if (!nodes) return;
-    if (nodes.length === 0) {
-      void connectNodes(source, target, sourceHandle ?? undefined, targetHandle ?? undefined);
+    if (
+      !source ||
+      !target ||
+      pendingDependencyChange ||
+      isDependencyPreviewing ||
+      isDependencyChanging
+    )
       return;
-    }
-    dispatchCanvas({
-      type: 'update',
-      update: {
-        pendingDependencyChange: {
-          sourceNodeId: source,
-          targetNodeId: target,
-          sourceHandle: sourceHandle ?? undefined,
-          targetHandle: targetHandle ?? undefined,
-          nodes,
-        },
-      },
-    });
-  }
 
-  async function requestTeacherBlockChange(nodeId: string, operation: TeacherBlockOperation) {
-    const preview = await previewTeacherBlock(nodeId, operation);
-    if (preview)
-      dispatchCanvas({
-        type: 'update',
-        update: { pendingTeacherBlockChange: { nodeId, operation, ...preview } },
-      });
-  }
+    dispatchCanvas({ type: 'update', update: { isDependencyPreviewing: true } });
+    try {
+      const normalizedSourceHandle = sourceHandle ?? undefined;
+      const normalizedTargetHandle = targetHandle ?? undefined;
+      const nodes = await previewRoadmapDependency(
+        source,
+        target,
+        normalizedSourceHandle,
+        normalizedTargetHandle,
+      );
+      if (!nodes) return;
 
-  async function confirmTeacherBlockChange() {
-    if (!pendingTeacherBlockChange || isTeacherBlockChanging) return;
-    dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: true } });
-    const latestPreview = await previewTeacherBlock(
-      pendingTeacherBlockChange.nodeId,
-      pendingTeacherBlockChange.operation,
-    );
-    if (!latestPreview) {
-      dispatchCanvas({
-        type: 'update',
-        update: { pendingTeacherBlockChange: null, isTeacherBlockChanging: false },
-      });
-      return;
-    }
-    if (!sameTeacherBlockPreview(pendingTeacherBlockChange, latestPreview)) {
+      if (nodes.length === 0) {
+        dispatchCanvas({ type: 'update', update: { isDependencyChanging: true } });
+        try {
+          await connectNodes(source, target, normalizedSourceHandle, normalizedTargetHandle);
+        } finally {
+          dispatchCanvas({ type: 'update', update: { isDependencyChanging: false } });
+        }
+        return;
+      }
+
       dispatchCanvas({
         type: 'update',
         update: {
-          pendingTeacherBlockChange: { ...pendingTeacherBlockChange, ...latestPreview },
-          isTeacherBlockChanging: false,
+          pendingDependencyChange: {
+            sourceNodeId: source,
+            targetNodeId: target,
+            sourceHandle: normalizedSourceHandle,
+            targetHandle: normalizedTargetHandle,
+            nodes,
+          },
         },
       });
-      return;
+    } finally {
+      dispatchCanvas({ type: 'update', update: { isDependencyPreviewing: false } });
     }
-    dispatchCanvas({ type: 'update', update: { pendingTeacherBlockChange: null } });
-    const changed = await changeTeacherBlock(
-      pendingTeacherBlockChange.nodeId,
-      pendingTeacherBlockChange.operation,
-      pendingTeacherBlockChange.version,
-    );
-    if (!changed) {
-      const refreshedPreview = await previewTeacherBlock(
-        pendingTeacherBlockChange.nodeId,
-        pendingTeacherBlockChange.operation,
+  }
+
+  async function requestTeacherBlockChange(nodeId: string, operation: TeacherBlockOperation) {
+    if (pendingTeacherBlockChange || isTeacherBlockPreviewing || isTeacherBlockChanging) return;
+    dispatchCanvas({ type: 'update', update: { isTeacherBlockPreviewing: true } });
+    try {
+      const pending = await loadTeacherBlockPreviewSet(nodeId, operation);
+      if (pending)
+        dispatchCanvas({
+          type: 'update',
+          update: { pendingTeacherBlockChange: pending },
+        });
+    } finally {
+      dispatchCanvas({ type: 'update', update: { isTeacherBlockPreviewing: false } });
+    }
+  }
+
+  async function confirmDependencyChange() {
+    const pending = pendingDependencyChange;
+    if (!pending || isDependencyChanging) return;
+    dispatchCanvas({ type: 'update', update: { isDependencyChanging: true } });
+    try {
+      const connected = await connectNodes(
+        pending.sourceNodeId,
+        pending.targetNodeId,
+        pending.sourceHandle,
+        pending.targetHandle,
       );
-      if (refreshedPreview) {
+      if (connected) dispatchCanvas({ type: 'update', update: { pendingDependencyChange: null } });
+    } finally {
+      dispatchCanvas({ type: 'update', update: { isDependencyChanging: false } });
+    }
+  }
+
+  function handleDependencyAction(actionId: string) {
+    if (actionId === roadmapConfirmationActionIds.createDependency) void confirmDependencyChange();
+  }
+
+  async function confirmTeacherBlockChange(operation: TeacherBlockOperation) {
+    const pending = pendingTeacherBlockChange;
+    if (!pending || isTeacherBlockChanging) return;
+    const displayedPreview = teacherBlockPreviewForOperation(pending, operation);
+    if (!displayedPreview) return;
+
+    dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: true } });
+
+    try {
+      const latestPending = await loadTeacherBlockPreviewSet(pending.nodeId, operation);
+      const latestPreview = latestPending
+        ? teacherBlockPreviewForOperation(latestPending, operation)
+        : null;
+      if (!latestPreview) return;
+
+      if (!sameTeacherBlockPreview(displayedPreview, latestPreview)) {
         dispatchCanvas({
           type: 'update',
           update: {
-            pendingTeacherBlockChange: {
-              nodeId: pendingTeacherBlockChange.nodeId,
-              operation: pendingTeacherBlockChange.operation,
-              ...refreshedPreview,
-            },
+            pendingTeacherBlockChange: latestPending,
           },
         });
+        return;
       }
+
+      const changed = await changeTeacherBlock(pending.nodeId, operation, latestPreview.version);
+      if (changed) {
+        dispatchCanvas({ type: 'update', update: { pendingTeacherBlockChange: null } });
+        return;
+      }
+
+      const refreshedPending = await loadTeacherBlockPreviewSet(pending.nodeId, operation);
+      if (refreshedPending)
+        dispatchCanvas({
+          type: 'update',
+          update: { pendingTeacherBlockChange: refreshedPending },
+        });
+    } finally {
+      setPendingActionId(undefined);
+      dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: false } });
     }
-    dispatchCanvas({ type: 'update', update: { isTeacherBlockChanging: false } });
+  }
+
+  function handleTeacherBlockAction(actionId: string) {
+    const pending = pendingTeacherBlockChange;
+    if (!pending || isTeacherBlockChanging) return;
+
+    const operation =
+      actionId === roadmapConfirmationActionIds.blockTeacher
+        ? ('BLOCK' as const)
+        : actionId === roadmapConfirmationActionIds.unlockNode
+          ? ('UNBLOCK' as const)
+          : actionId === roadmapConfirmationActionIds.unlockBranch
+            ? ('BRANCH_UNLOCK' as const)
+            : actionId === roadmapConfirmationActionIds.unlockPrerequisites
+              ? pending.operation
+              : null;
+    if (!operation || !teacherBlockPreviewForOperation(pending, operation)) return;
+
+    setPendingActionId(actionId);
+    void confirmTeacherBlockChange(operation);
   }
 
   function clearSimpleConfirmation() {
@@ -1042,12 +1113,14 @@ export default function RoadmapCanvas({
       dispatchCanvas({ type: 'update', update: { selectedNodeId: nodeId } }),
     );
   };
-  const teacherBlockDialog = pendingTeacherBlockChange
-    ? teacherBlockConfirmation(
-        pendingTeacherBlockChange.operation,
-        pendingTeacherBlockChange.mode,
-        pendingTeacherBlockChange.nodes.length,
-      )
+  const teacherBlockPresentation = pendingTeacherBlockChange
+    ? roadmapTeacherBlockConfirmation({
+        roadmap,
+        nodeId: pendingTeacherBlockChange.nodeId,
+        preview: pendingTeacherBlockChange,
+        individualPreview: pendingTeacherBlockChange.individualPreview,
+        branchPreview: pendingTeacherBlockChange.branchPreview,
+      })
     : null;
   const visibilityDependencies = pendingVisibilityChange?.dependencies ?? [];
   const pendingVisibilityNode = pendingVisibilityChange
@@ -1336,136 +1409,37 @@ export default function RoadmapCanvas({
         }}
         onAction={handleVisibilityAction}
       />
-      <AlertDialog
-        open={Boolean(pendingDependencyChange)}
-        onOpenChange={(open) =>
-          !open && dispatchCanvas({ type: 'update', update: { pendingDependencyChange: null } })
+      <ConfirmationDialog
+        confirmation={
+          pendingDependencyChange
+            ? roadmapDependencyConfirmation({
+                roadmap,
+                sourceNodeId: pendingDependencyChange.sourceNodeId,
+                targetNodeId: pendingDependencyChange.targetNodeId,
+                nodes: pendingDependencyChange.nodes,
+              })
+            : null
         }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">Confirmar bloqueo</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta dependencia bloqueará persistentemente{' '}
-              {pendingDependencyChange?.nodes.length ?? 0}{' '}
-              {(pendingDependencyChange?.nodes.length ?? 0) === 1 ? 'nodo' : 'nodos'}.
-            </AlertDialogDescription>
-            <p className="text-sm text-muted-foreground">
-              Bloquear u ordenar dependencias puede afectar el acceso y progreso estudiantil.
-            </p>
-            <ul className="list-disc pl-5 text-sm text-muted-foreground">
-              {pendingDependencyChange?.nodes.map((node) => (
-                <li key={node.id}>{node.title}</li>
-              ))}
-            </ul>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              onClick={() => {
-                if (pendingDependencyChange)
-                  void connectNodes(
-                    pendingDependencyChange.sourceNodeId,
-                    pendingDependencyChange.targetNodeId,
-                    pendingDependencyChange.sourceHandle,
-                    pendingDependencyChange.targetHandle,
-                  );
-                dispatchCanvas({ type: 'update', update: { pendingDependencyChange: null } });
-              }}
-            >
-              Conectar y bloquear
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={Boolean(pendingTeacherBlockChange)}
-        onOpenChange={(open) =>
-          !open && dispatchCanvas({ type: 'update', update: { pendingTeacherBlockChange: null } })
+        pendingActionId={
+          isDependencyChanging ? roadmapConfirmationActionIds.createDependency : undefined
         }
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-semibold">
-              {teacherBlockDialog?.title}
-            </AlertDialogTitle>
-            <AlertDialogDescription>{teacherBlockDialog?.description}</AlertDialogDescription>
-            <p className="text-sm text-muted-foreground">
-              Esta acción puede afectar el acceso y progreso estudiantil.
-            </p>
-            <ul className="list-disc pl-5 text-sm text-muted-foreground">
-              {pendingTeacherBlockChange?.nodes.map((node) => (
-                <li key={node.id} className="flex items-center gap-2">
-                  {node.nodeType ? (
-                    <NodeTypeIcon
-                      icon={node.nodeType.icon}
-                      className="size-4 shrink-0"
-                      style={{ color: node.nodeType.color }}
-                      aria-label={node.nodeType.name}
-                    />
-                  ) : null}
-                  <span>{node.title}</span>
-                  {node.relation ? (
-                    <span className="text-xs">
-                      (
-                      {
-                        {
-                          SELECTED_NODE: 'Nodo seleccionado',
-                          PREREQUISITE: 'Prerrequisito',
-                          DEPENDENT: 'Dependiente',
-                        }[node.relation]
-                      }
-                      )
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-            {pendingTeacherBlockChange?.mode === 'SINGLE' ||
-            pendingTeacherBlockChange?.mode === 'BRANCH' ? (
-              <fieldset className="flex flex-col gap-2 text-sm text-foreground">
-                <legend className="font-medium">Alcance del desbloqueo</legend>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="unlock-scope"
-                    checked={pendingTeacherBlockChange.operation === 'UNBLOCK'}
-                    onChange={() =>
-                      void requestTeacherBlockChange(pendingTeacherBlockChange.nodeId, 'UNBLOCK')
-                    }
-                  />
-                  Solo este Nodo
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="unlock-scope"
-                    checked={pendingTeacherBlockChange.operation === 'BRANCH_UNLOCK'}
-                    onChange={() =>
-                      void requestTeacherBlockChange(
-                        pendingTeacherBlockChange.nodeId,
-                        'BRANCH_UNLOCK',
-                      )
-                    }
-                  />
-                  Este Nodo y su rama
-                </label>
-              </fieldset>
-            ) : null}
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              type="button"
-              disabled={isTeacherBlockChanging}
-              onClick={() => void confirmTeacherBlockChange()}
-            >
-              {teacherBlockDialog?.action}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onCancel={() => {
+          if (!isDependencyChanging)
+            dispatchCanvas({ type: 'update', update: { pendingDependencyChange: null } });
+        }}
+        onAction={handleDependencyAction}
+      />
+      <ConfirmationDialog
+        confirmation={teacherBlockPresentation}
+        pendingActionId={isTeacherBlockChanging ? pendingActionId : undefined}
+        onCancel={() => {
+          if (!isTeacherBlockChanging) {
+            setPendingActionId(undefined);
+            dispatchCanvas({ type: 'update', update: { pendingTeacherBlockChange: null } });
+          }
+        }}
+        onAction={handleTeacherBlockAction}
+      />
     </SidebarProvider>
   );
 }
