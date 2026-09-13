@@ -2,21 +2,30 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import type { NodeDeletionImpact } from '@/features/roadmap/types';
 import { roadmapActions, renderCanvas, useRoadmapMock } from './test-harness';
 
-test('shows the authoritative named deletion impact and deletes only after a fresh preview', async () => {
-  const user = userEvent.setup();
-  const impact = {
+function deletionImpact(version = 'delete-preview'): NodeDeletionImpact {
+  return {
     node: {
       title: 'Límites',
       nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
     },
+    dependencies: [],
+    resources: [],
+    version,
+  };
+}
+
+test('shows the authoritative named deletion impact and deletes only after a fresh preview', async () => {
+  const user = userEvent.setup();
+  const impact = {
+    ...deletionImpact(),
     dependencies: [
       { id: 'dependency-1', sourceTitle: 'Base', targetTitle: 'Límites' },
       { id: 'dependency-2', sourceTitle: 'Límites', targetTitle: 'Derivadas' },
     ],
     resources: [{ id: 'resource-1', title: 'Guía de ejercicios' }],
-    version: 'delete-preview',
   };
   const previewNodeDeletion = vi.fn().mockResolvedValue(impact);
   const deleteNode = vi.fn().mockResolvedValue(true);
@@ -42,6 +51,42 @@ test('shows the authoritative named deletion impact and deletes only after a fre
   expect(previewNodeDeletion).toHaveBeenCalledTimes(2);
 });
 
+test('blocks duplicate deletion previews while the authoritative preview is pending', async () => {
+  const user = userEvent.setup();
+  const impact = deletionImpact();
+  let resolvePreview!: (nextImpact: typeof impact) => void;
+  const previewNodeDeletion = vi.fn(
+    () => new Promise<typeof impact>((resolve) => (resolvePreview = resolve)),
+  );
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewNodeDeletion }));
+  renderCanvas(true);
+
+  const request = screen.getByRole('button', { name: 'Solicitar eliminar nodo' });
+  await user.click(request);
+  await user.click(request);
+
+  expect(previewNodeDeletion).toHaveBeenCalledTimes(1);
+  resolvePreview(impact);
+  expect(await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeTruthy();
+});
+
+test('clears the selected editor after successful node deletion', async () => {
+  const user = userEvent.setup();
+  const deleteNode = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ deleteNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
+  const dialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+  await user.click(within(dialog).getByRole('button', { name: 'Eliminar Nodo' }));
+
+  await waitFor(() => expect(deleteNode).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByTestId('editor-panel')).toBeNull());
+  expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('');
+});
+
 test('keeps preview-backed node deletion recoverable after a failed mutation', async () => {
   const user = userEvent.setup();
   const deleteNode = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
@@ -64,15 +109,7 @@ test('keeps preview-backed node deletion recoverable after a failed mutation', a
 
 test('updates a changed deletion impact and requires a renewed confirmation', async () => {
   const user = userEvent.setup();
-  const initialImpact = {
-    node: {
-      title: 'Límites',
-      nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
-    },
-    dependencies: [],
-    resources: [],
-    version: 'one',
-  };
+  const initialImpact = deletionImpact('one');
   const changedImpact = {
     ...initialImpact,
     dependencies: [{ id: 'dependency-1', sourceTitle: 'Base', targetTitle: 'Límites' }],

@@ -23,6 +23,10 @@ import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-workflow';
 import { useEditorDraftGuard } from '@/features/roadmap/canvas/editor-draft-guard';
+import {
+  useNodeDeletionWorkflow,
+  type NodeDeletionRequestOptions,
+} from '@/features/roadmap/canvas/node-deletion-workflow';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
@@ -32,14 +36,12 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import {
-  nodeDeletionConfirmation,
   roadmapNodeVisibilityConfirmation,
   roadmapConfirmationActionIds,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import { useRoadmap, type StructuralDependency } from '@/features/roadmap/useRoadmap';
 import type {
   CourseOfferingIdentifier,
-  NodeDeletionImpact,
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapNode,
@@ -85,8 +87,6 @@ type PendingVisibilityChange = {
   isVisible: boolean;
   dependencies: StructuralDependency[];
 };
-
-type PendingNodeDeletion = { nodeId: string; draftWasDiscarded: boolean } & NodeDeletionImpact;
 
 type PendingSimpleConfirmation = { kind: 'resetSimulation' };
 
@@ -215,29 +215,6 @@ function KeyboardShortcuts({
   );
 }
 
-function sameNodeDeletionImpact(first: NodeDeletionImpact, second: NodeDeletionImpact) {
-  return (
-    first.version === second.version &&
-    first.node.title === second.node.title &&
-    first.node.nodeType.name === second.node.nodeType.name &&
-    first.node.nodeType.icon === second.node.nodeType.icon &&
-    first.node.nodeType.color === second.node.nodeType.color &&
-    first.dependencies.length === second.dependencies.length &&
-    first.dependencies.every(
-      (dependency, index) =>
-        dependency.id === second.dependencies[index]?.id &&
-        dependency.sourceTitle === second.dependencies[index]?.sourceTitle &&
-        dependency.targetTitle === second.dependencies[index]?.targetTitle,
-    ) &&
-    first.resources.length === second.resources.length &&
-    first.resources.every(
-      (resource, index) =>
-        resource.id === second.resources[index]?.id &&
-        resource.title === second.resources[index]?.title,
-    )
-  );
-}
-
 export default function RoadmapCanvas({
   identifier,
   canEdit,
@@ -274,9 +251,6 @@ export default function RoadmapCanvas({
     useState<PendingVisibilityChange | null>(null);
   const [isVisibilityPreviewing, setIsVisibilityPreviewing] = useState(false);
   const [isVisibilityChanging, setIsVisibilityChanging] = useState(false);
-  const [pendingNodeDeletion, setPendingNodeDeletion] = useState<PendingNodeDeletion | null>(null);
-  const [isNodeDeletionPreviewing, setIsNodeDeletionPreviewing] = useState(false);
-  const [isNodeDeleting, setIsNodeDeleting] = useState(false);
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string>();
   const editorPanel = usePersistentPanelWidth({
@@ -292,6 +266,9 @@ export default function RoadmapCanvas({
   const previewCanvasButtonRef = useRef<HTMLButtonElement | null>(null);
   const roadmapGraphRef = useRef<RoadmapGraphHandle>(null);
   const editorDraftRef = useRef<RoadmapEditorDraftHandle>(null);
+  const nodeDeletionRequestRef = useRef<
+    (nodeId: string, options?: NodeDeletionRequestOptions) => void
+  >(() => {});
   const lastViewportRef = useRef<Viewport | null>(null);
   const successToastIdRef = useRef(0);
   const {
@@ -400,7 +377,7 @@ export default function RoadmapCanvas({
   function resumeEditorDraftDestination(destination: EditorDraftDiscardDestination) {
     switch (destination.kind) {
       case 'discardNodeDraft':
-        void previewAndRequestNodeDeletion(destination.nodeId, true);
+        nodeDeletionRequestRef.current(destination.nodeId, { draftWasDiscarded: true });
         return;
       case 'discardResourceDraft':
         dispatchCanvas({ type: 'openResourceComposer', nodeId: destination.nodeId });
@@ -415,6 +392,25 @@ export default function RoadmapCanvas({
     draftRef: editorDraftRef,
     onDiscard: resumeEditorDraftDestination,
   });
+  const requestEditorDraft = editorDraftGuard.request;
+
+  const requestEditorDraftDiscard = useCallback(
+    (nodeId: string) => requestEditorDraft({ kind: 'discardNodeDraft', nodeId }),
+    [requestEditorDraft],
+  );
+
+  const closeEditorAfterNodeDeletion = useCallback(() => {
+    dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
+  }, []);
+
+  const nodeDeletionWorkflow = useNodeDeletionWorkflow({
+    previewNodeDeletion,
+    deleteNode,
+    requestEditorDraftDiscard,
+    editorDraftRef,
+    closeEditor: closeEditorAfterNodeDeletion,
+  });
+  nodeDeletionRequestRef.current = nodeDeletionWorkflow.requestDeletion;
 
   function requestCanvasPreview() {
     if (editorDraftGuard.request({ kind: 'discardCanvasPreviewDraft' })) return;
@@ -469,61 +465,6 @@ export default function RoadmapCanvas({
       setIsVisibilityPreviewing(false);
     }
     return false;
-  }
-
-  async function previewAndRequestNodeDeletion(nodeId: string, draftWasDiscarded = false) {
-    if (pendingNodeDeletion || isNodeDeletionPreviewing || isNodeDeleting) return;
-    setIsNodeDeletionPreviewing(true);
-    try {
-      const impact = await previewNodeDeletion(nodeId);
-      if (impact) setPendingNodeDeletion({ nodeId, draftWasDiscarded, ...impact });
-    } finally {
-      setIsNodeDeletionPreviewing(false);
-    }
-  }
-
-  function requestNodeDeletion(nodeId: string) {
-    if (editorDraftGuard.request({ kind: 'discardNodeDraft', nodeId })) return;
-    void previewAndRequestNodeDeletion(nodeId);
-  }
-
-  async function confirmNodeDeletion() {
-    if (!pendingNodeDeletion || isNodeDeleting) return;
-    setIsNodeDeleting(true);
-    const latestImpact = await previewNodeDeletion(pendingNodeDeletion.nodeId);
-    if (!latestImpact) {
-      setIsNodeDeleting(false);
-      return;
-    }
-    if (!sameNodeDeletionImpact(pendingNodeDeletion, latestImpact)) {
-      setPendingNodeDeletion({
-        nodeId: pendingNodeDeletion.nodeId,
-        draftWasDiscarded: pendingNodeDeletion.draftWasDiscarded,
-        ...latestImpact,
-      });
-      setIsNodeDeleting(false);
-      return;
-    }
-    const deleted = await deleteNode(pendingNodeDeletion.nodeId, pendingNodeDeletion.version);
-    if (deleted) {
-      if (!pendingNodeDeletion.draftWasDiscarded) editorDraftRef.current?.reset();
-      dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
-      setPendingNodeDeletion(null);
-      setIsNodeDeleting(false);
-      return;
-    }
-    const refreshedImpact = await previewNodeDeletion(pendingNodeDeletion.nodeId);
-    if (refreshedImpact)
-      setPendingNodeDeletion({
-        nodeId: pendingNodeDeletion.nodeId,
-        draftWasDiscarded: pendingNodeDeletion.draftWasDiscarded,
-        ...refreshedImpact,
-      });
-    setIsNodeDeleting(false);
-  }
-
-  function handleNodeDeletionAction(actionId: string) {
-    if (actionId === roadmapConfirmationActionIds.deleteNode) void confirmNodeDeletion();
   }
 
   function handleVisibilityAction(actionId: string) {
@@ -730,7 +671,7 @@ export default function RoadmapCanvas({
               void requestVisibilityChange(nodeId, isVisible)
             }
             onRequestAddResource={openResourceComposer}
-            onRequestDelete={requestNodeDeletion}
+            onRequestDelete={nodeDeletionWorkflow.requestDeletion}
             topRightActions={
               !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
                 ? (getViewport) => (
@@ -836,23 +777,7 @@ export default function RoadmapCanvas({
           />
         )}
       </section>
-      <ConfirmationDialog
-        confirmation={
-          pendingNodeDeletion
-            ? nodeDeletionConfirmation({
-                nodeId: pendingNodeDeletion.nodeId,
-                node: pendingNodeDeletion.node,
-                dependencies: pendingNodeDeletion.dependencies,
-                resources: pendingNodeDeletion.resources,
-              })
-            : null
-        }
-        pendingActionId={isNodeDeleting ? roadmapConfirmationActionIds.deleteNode : undefined}
-        onCancel={() => {
-          if (!isNodeDeleting) setPendingNodeDeletion(null);
-        }}
-        onAction={handleNodeDeletionAction}
-      />
+      <ConfirmationDialog {...nodeDeletionWorkflow.confirmationDialog} />
       <ConfirmationDialog
         confirmation={
           pendingSimpleConfirmation

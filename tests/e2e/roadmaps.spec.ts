@@ -361,6 +361,131 @@ test('teacher API manages a node type, resources, and dependencies through their
   }
 });
 
+test('teacher deletes a Canvas node after reviewing its authoritative impact', async ({
+  page,
+}, testInfo) => {
+  const sourceTitle = uniqueName('Nodo Canvas para eliminar');
+  const targetTitle = uniqueName('Nodo Canvas relacionado');
+  const resourceTitle = uniqueName('Recurso Canvas relacionado');
+  const api = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  });
+  let sourceId: string | undefined;
+  let targetId: string | undefined;
+
+  try {
+    const sourceResponse = await api.post(roadmapPath('/nodes'), {
+      data: {
+        title: sourceTitle,
+        nodeTypeId: '00000000-0000-4000-8000-000000000001',
+        positionX: 0,
+        positionY: 0,
+      },
+    });
+    const targetResponse = await api.post(roadmapPath('/nodes'), {
+      data: {
+        title: targetTitle,
+        nodeTypeId: '00000000-0000-4000-8000-000000000001',
+        positionX: 240,
+        positionY: 0,
+      },
+    });
+    expect(sourceResponse.status()).toBe(201);
+    expect(targetResponse.status()).toBe(201);
+    const sourceNodeId: string = (await sourceResponse.json()).node.id;
+    const targetNodeId: string = (await targetResponse.json()).node.id;
+    sourceId = sourceNodeId;
+    targetId = targetNodeId;
+
+    const resourceResponse = await api.post(roadmapPath(`/nodes/${sourceNodeId}/resources`), {
+      data: {
+        title: resourceTitle,
+        url: 'https://example.test/canvas-deletion-resource',
+        type: 'LINK',
+      },
+    });
+    expect(resourceResponse.status()).toBe(201);
+
+    const dependencyResponse = await api.post(roadmapPath('/dependencies'), {
+      data: {
+        sourceNodeId,
+        targetNodeId,
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      },
+    });
+    expect(dependencyResponse.status()).toBe(201);
+
+    await authenticateAs(page.context(), fixture.daniela);
+    await page.goto('/courses/CC1002/2026/2');
+    await panRoadmapNodeIntoView(page, sourceNodeId);
+
+    const sourceNode = page.locator(`.react-flow__node[data-id="${sourceNodeId}"]`);
+    await sourceNode
+      .getByRole('button', { name: 'Abrir menú de acciones del nodo' })
+      .click();
+    const requestDelete = sourceNode.getByRole('button', { name: 'Eliminar nodo' });
+    await expect(requestDelete).toBeVisible();
+
+    const deletionPreviewPath = `/nodes/${sourceNodeId}?operation=DELETE`;
+    const initialPreviewPromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
+    );
+    await requestDelete.click();
+    const initialPreview = await initialPreviewPromise;
+    expect(initialPreview.status()).toBe(200);
+
+    const dialog = page.getByRole('alertdialog', { name: 'Eliminar Nodo' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('list', { name: 'Nodo que se eliminará' })).toContainText(
+      sourceTitle,
+    );
+    const dependencyList = dialog.getByRole('list', { name: 'Dependencias relacionadas' });
+    await expect(dependencyList).toContainText(sourceTitle);
+    await expect(dependencyList).toContainText(targetTitle);
+    await expect(dialog.getByRole('list', { name: 'Recursos que se eliminarán' })).toContainText(
+      resourceTitle,
+    );
+
+    const latestPreviewPromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
+    );
+    const deletionRequestPromise = page.waitForRequest(
+      (request) =>
+        request.method() === 'DELETE' && request.url().includes(`/nodes/${sourceNodeId}`),
+    );
+    const deletionResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' && response.url().includes(`/nodes/${sourceNodeId}`),
+    );
+    await dialog.getByRole('button', { name: 'Eliminar Nodo' }).click();
+    const [latestPreview, deletionRequest, deletionResponse] = await Promise.all([
+      latestPreviewPromise,
+      deletionRequestPromise,
+      deletionResponsePromise,
+    ]);
+    expect(latestPreview.status()).toBe(200);
+    expect(deletionResponse.status()).toBe(204);
+    expect(deletionRequest.headers()['x-node-delete-preview']).toBe(
+      (await latestPreview.json()).version,
+    );
+
+    await expect(dialog).toHaveCount(0);
+    await expect(sourceNode).toHaveCount(0);
+    const roadmap = await api.get(roadmapPath());
+    expect((await roadmap.json()).nodes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: sourceId })]),
+    );
+  } finally {
+    await deleteIfPresent(api, sourceId && roadmapPath(`/nodes/${sourceId}`));
+    await deleteIfPresent(api, targetId && roadmapPath(`/nodes/${targetId}`));
+    await api.dispose();
+  }
+});
+
 test('teacher uploads a file resource through the protected multipart endpoint', async ({}, testInfo) => {
   const api = await apiRequest.newContext({
     baseURL: testInfo.project.use.baseURL as string,
