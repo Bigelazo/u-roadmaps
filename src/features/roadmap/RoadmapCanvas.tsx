@@ -1,24 +1,11 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useReducer,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties } from 'react';
 import dynamic from 'next/dynamic';
-import {
-  CircleAlert,
-  Eye,
-  Keyboard,
-  PanelRightClose,
-  PanelRightOpen,
-  RotateCcw,
-} from 'lucide-react';
-import type { Viewport } from '@xyflow/react';
+import { CircleAlert, Eye, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
+import { KeyboardShortcuts } from '@/features/roadmap/canvas/KeyboardShortcuts';
+import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-workflow';
@@ -53,12 +40,11 @@ import {
   snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
-import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
+import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
-import { Kbd, KbdGroup } from '@/shared/ui/kbd';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 
@@ -79,133 +65,6 @@ type Props = {
   semester: number;
 };
 
-type PendingSimpleConfirmation = { kind: 'resetSimulation' };
-
-const simpleConfirmationActionIds = {
-  resetSimulation: 'reset-simulation',
-} as const;
-
-function simpleConfirmationPresentation(
-  confirmation: PendingSimpleConfirmation,
-): ConfirmationPresentation {
-  switch (confirmation.kind) {
-    case 'resetSimulation':
-      return {
-        title: 'Reiniciar progreso de previsualización',
-        description:
-          'Eliminarás las completaciones simuladas de este Canvas preview. No se eliminarán las Completions estudiantiles. Esta acción no se puede deshacer.',
-        intent: 'destructive',
-        actions: [{ id: simpleConfirmationActionIds.resetSimulation, label: 'Reiniciar progreso' }],
-      };
-  }
-}
-
-function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: ReactNode }) {
-  return (
-    <>
-      <dt className="flex min-h-5 min-w-0 items-center">{keys}</dt>
-      <dd className="leading-relaxed">{children}</dd>
-    </>
-  );
-}
-
-function KeyboardShortcuts({
-  isEditing,
-  isSidePanelOpen,
-}: {
-  isEditing: boolean;
-  isSidePanelOpen: boolean;
-}) {
-  return (
-    <details
-      aria-label="Atajos de teclado"
-      data-placement="roadmap"
-      className={cn(
-        'group pointer-events-auto absolute right-5 bottom-[18px] z-4 w-[min(23rem,calc(100%-2.5rem))] overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm',
-        isSidePanelOpen &&
-          'lg:right-[calc(var(--sidebar-width)+1.25rem)] lg:w-[min(23rem,calc(100%-var(--sidebar-width)-2.5rem))]',
-      )}
-    >
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 font-semibold text-foreground transition-colors outline-none marker:content-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
-        <span className="flex size-6 items-center justify-center rounded-md border border-border bg-muted text-primary">
-          <Keyboard className="size-3.5" aria-hidden="true" />
-        </span>
-        <span>Atajos de teclado</span>
-        <span className="ml-auto text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-          Ayuda
-        </span>
-      </summary>
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3 gap-y-3 border-t border-border px-3.5 py-3.5">
-        <KeyboardShortcut keys={<Kbd>Tab</Kbd>}>
-          Recorrer los controles y elementos del mapa.
-        </KeyboardShortcut>
-        <KeyboardShortcut
-          keys={
-            <KbdGroup className="flex-wrap">
-              <Kbd aria-label="Enter">↵</Kbd>
-              <span aria-hidden="true">/</span>
-              <Kbd aria-label="Espacio">␣</Kbd>
-            </KbdGroup>
-          }
-        >
-          Activar el control o seleccionar el elemento enfocado.
-        </KeyboardShortcut>
-        <KeyboardShortcut keys={<Kbd aria-label="Escape">Esc</Kbd>}>
-          Cerrar el detalle o panel del nodo seleccionado.
-        </KeyboardShortcut>
-        {isEditing ? (
-          <KeyboardShortcut keys={<Kbd>Flechas</Kbd>}>
-            Mover una cuadrícula el nodo seleccionado. <Kbd aria-label="Shift">⇧</Kbd> +{' '}
-            <Kbd>Flechas</Kbd> lo desplaza 5 cuadrículas.
-          </KeyboardShortcut>
-        ) : null}
-        {isEditing ? (
-          <KeyboardShortcut
-            keys={
-              <KbdGroup className="flex-wrap">
-                <Kbd aria-label="Suprimir">⌦</Kbd>
-                <span aria-hidden="true">/</span>
-                <Kbd aria-label="Retroceso">⌫</Kbd>
-              </KbdGroup>
-            }
-          >
-            Eliminar la dependencia seleccionada, con confirmación.
-          </KeyboardShortcut>
-        ) : null}
-        <KeyboardShortcut
-          keys={
-            <div className="flex flex-col items-start gap-1">
-              <KbdGroup className="w-fit flex-none">
-                <Kbd aria-label="Comando">⌘</Kbd>
-                <span aria-hidden="true">+</span>
-                <Kbd>B</Kbd>
-              </KbdGroup>
-              <KbdGroup className="w-fit flex-none">
-                <Kbd>Ctrl</Kbd>
-                <span aria-hidden="true">+</span>
-                <Kbd>B</Kbd>
-              </KbdGroup>
-            </div>
-          }
-        >
-          Ocultar o mostrar el panel lateral.
-        </KeyboardShortcut>
-        <KeyboardShortcut
-          keys={
-            <KbdGroup className="flex-wrap">
-              <Kbd>Inicio</Kbd>
-              <span aria-hidden="true">/</span>
-              <Kbd>Fin</Kbd>
-            </KbdGroup>
-          }
-        >
-          Con el borde del panel enfocado, establecer su ancho mínimo o máximo.
-        </KeyboardShortcut>
-      </dl>
-    </details>
-  );
-}
-
 export default function RoadmapCanvas({
   identifier,
   canEdit,
@@ -221,25 +80,12 @@ export default function RoadmapCanvas({
     selectedNodeId,
     isEditorOpen,
     isStudentDetailOpen,
-    restoreViewport,
     editorKey,
     teacherPreviewNode,
     isTeacherPreviewCompleted,
     resourceComposerRequest,
   } = canvasState;
-  const canvasMode = deriveCanvasMode({
-    canEdit,
-    canPreview,
-    isHistorical,
-    isCanvasPreview: canvasState.isCanvasPreview,
-  });
-  const { isHistorical: isHistoricalRoadmap, isCanvasPreview, isStudentExperience } = canvasMode;
-  const { canEditRoadmap, canPreviewCanvas, canEnterCanvasPreview, canResetCanvasPreview } =
-    canvasMode.capabilities;
-  const [pendingSimpleConfirmation, setPendingSimpleConfirmation] =
-    useState<PendingSimpleConfirmation | null>(null);
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
-  const [pendingActionId, setPendingActionId] = useState<string>();
   const editorPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:roadmap-editor-panel-width',
     initialWidth: 360,
@@ -250,13 +96,12 @@ export default function RoadmapCanvas({
   });
   const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
-  const previewCanvasButtonRef = useRef<HTMLButtonElement | null>(null);
   const roadmapGraphRef = useRef<RoadmapGraphHandle>(null);
   const editorDraftRef = useRef<RoadmapEditorDraftHandle>(null);
   const nodeDeletionRequestRef = useRef<
     (nodeId: string, options?: NodeDeletionRequestOptions) => void
   >(() => {});
-  const lastViewportRef = useRef<Viewport | null>(null);
+  const canvasPreviewDraftResumeRef = useRef<() => void>(() => {});
   const successToastIdRef = useRef(0);
   const {
     roadmap,
@@ -342,31 +187,7 @@ export default function RoadmapCanvas({
     [showSuccessToast, updateResource],
   );
 
-  function closeSelectedNode() {
-    dispatchCanvas({
-      type: 'closeSelectedNode',
-      panel: canEditRoadmap ? 'editor' : 'student',
-    });
-    requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
-  }
-
-  function closeTeacherPreview() {
-    dispatchCanvas({ type: 'closeTeacherPreview' });
-    requestAnimationFrame(() => previewButtonRef.current?.focus());
-  }
-
-  async function enterCanvasPreview(discardDraft = false) {
-    const loaded = await loadSimulation();
-    if (!loaded) return;
-    roadmapGraphRef.current?.closeActionMenus();
-    dispatchCanvas({
-      type: 'enterCanvasPreview',
-      viewport: lastViewportRef.current,
-      discardDraft,
-    });
-  }
-
-  function resumeEditorDraftDestination(destination: EditorDraftDiscardDestination) {
+  const resumeEditorDraftDestination = useCallback((destination: EditorDraftDiscardDestination) => {
     switch (destination.kind) {
       case 'discardNodeDraft':
         nodeDeletionRequestRef.current(destination.nodeId, { draftWasDiscarded: true });
@@ -375,10 +196,10 @@ export default function RoadmapCanvas({
         dispatchCanvas({ type: 'openResourceComposer', nodeId: destination.nodeId });
         return;
       case 'discardCanvasPreviewDraft':
-        void enterCanvasPreview(true);
+        canvasPreviewDraftResumeRef.current();
         return;
     }
-  }
+  }, []);
 
   const editorDraftGuard = useEditorDraftGuard({
     draftRef: editorDraftRef,
@@ -404,20 +225,79 @@ export default function RoadmapCanvas({
   });
   nodeDeletionRequestRef.current = nodeDeletionWorkflow.requestDeletion;
 
-  function requestCanvasPreview() {
-    if (editorDraftGuard.request({ kind: 'discardCanvasPreviewDraft' })) return;
-    void enterCanvasPreview();
+  const requestCanvasPreviewDraftDiscard = useCallback(
+    () => requestEditorDraft({ kind: 'discardCanvasPreviewDraft' }),
+    [requestEditorDraft],
+  );
+
+  const prepareCanvasPreview = useCallback((discardDraft: boolean) => {
+    dispatchCanvas({ type: 'prepareCanvasPreview', discardDraft });
+  }, []);
+
+  const restoreCanvasPreview = useCallback(
+    ({
+      selectedNodeId: previousSelectedNodeId,
+      isEditorOpen: wasEditorOpen,
+      isStudentDetailOpen: wasStudentDetailOpen,
+    }: {
+      selectedNodeId: string | null;
+      isEditorOpen: boolean;
+      isStudentDetailOpen: boolean;
+    }) => {
+      dispatchCanvas({
+        type: 'restoreCanvasPreview',
+        selectedNodeId: previousSelectedNodeId,
+        isEditorOpen: wasEditorOpen,
+        isStudentDetailOpen: wasStudentDetailOpen,
+      });
+    },
+    [],
+  );
+
+  const closeCanvasActionMenus = useCallback(() => {
+    roadmapGraphRef.current?.closeActionMenus();
+  }, []);
+
+  const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
+    currentView: { selectedNodeId, isEditorOpen, isStudentDetailOpen },
+    isHistorical: Boolean(isHistorical),
+    requestDraftDiscard: requestCanvasPreviewDraftDiscard,
+    loadSimulation,
+    completeSimulatedNode,
+    resetSimulation,
+    closeActionMenus: closeCanvasActionMenus,
+    onEnter: prepareCanvasPreview,
+    onExit: restoreCanvasPreview,
+  });
+  canvasPreviewDraftResumeRef.current = canvasPreviewWorkflow.resumeEntryAfterDraftDiscard;
+
+  const canvasMode = deriveCanvasMode({
+    canEdit,
+    canPreview,
+    isHistorical,
+    isCanvasPreview: canvasPreviewWorkflow.isActive,
+  });
+  const { isHistorical: isHistoricalRoadmap, isCanvasPreview, isStudentExperience } = canvasMode;
+  const { canEditRoadmap, canPreviewCanvas, canEnterCanvasPreview, canResetCanvasPreview } =
+    canvasMode.capabilities;
+
+  function closeSelectedNode() {
+    dispatchCanvas({
+      type: 'closeSelectedNode',
+      panel: canEditRoadmap ? 'editor' : 'student',
+    });
+    requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
+  }
+
+  function closeTeacherPreview() {
+    dispatchCanvas({ type: 'closeTeacherPreview' });
+    requestAnimationFrame(() => previewButtonRef.current?.focus());
   }
 
   function openResourceComposer(nodeId: string) {
     if (!canEditRoadmap || isCanvasPreview) return;
     if (editorDraftGuard.request({ kind: 'discardResourceDraft', nodeId })) return;
     dispatchCanvas({ type: 'openResourceComposer', nodeId });
-  }
-
-  function exitCanvasPreview() {
-    dispatchCanvas({ type: 'exitCanvasPreview' });
-    requestAnimationFrame(() => previewCanvasButtonRef.current?.focus());
   }
 
   useEffect(() => {
@@ -442,30 +322,6 @@ export default function RoadmapCanvas({
     window.addEventListener('keydown', handleKeyboardShortcut);
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
   }, [canEditRoadmap, isCanvasPreview, isEditorOpen, selectedNodeId, teacherPreviewNode]);
-
-  function clearSimpleConfirmation() {
-    setPendingActionId(undefined);
-    setPendingSimpleConfirmation(null);
-  }
-
-  async function confirmSimulationReset() {
-    if (pendingActionId) return;
-    setPendingActionId(simpleConfirmationActionIds.resetSimulation);
-    const succeeded = await resetSimulation();
-    if (succeeded) clearSimpleConfirmation();
-    else setPendingActionId(undefined);
-  }
-
-  function handleSimpleConfirmationAction(actionId: string) {
-    const confirmation = pendingSimpleConfirmation;
-    if (!confirmation || pendingActionId) return;
-
-    if (
-      confirmation.kind === 'resetSimulation' &&
-      actionId === simpleConfirmationActionIds.resetSimulation
-    )
-      void confirmSimulationReset();
-  }
 
   if (error && !roadmap) {
     return (
@@ -569,25 +425,12 @@ export default function RoadmapCanvas({
             />
           )}
           {isCanvasPreview ? (
-            <div className="pointer-events-auto absolute top-3 left-1/2 z-5 flex w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-border bg-card/95 p-2 shadow-lg shadow-black/5 backdrop-blur-sm sm:w-auto sm:flex-nowrap">
-              <p className="px-2 text-sm font-semibold text-foreground">
-                Previsualización del canvas
-              </p>
-              {canResetCanvasPreview ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPendingSimpleConfirmation({ kind: 'resetSimulation' })}
-                >
-                  <RotateCcw data-icon="inline-start" />
-                  Reiniciar progreso
-                </Button>
-              ) : null}
-              <Button type="button" size="sm" onClick={exitCanvasPreview}>
-                {isHistoricalRoadmap ? 'Volver al roadmap' : 'Ir al editor'}
-              </Button>
-            </div>
+            <CanvasPreviewToolbar
+              canReset={canResetCanvasPreview}
+              isHistorical={isHistoricalRoadmap}
+              onRequestReset={canvasPreviewWorkflow.requestReset}
+              onExit={canvasPreviewWorkflow.exit}
+            />
           ) : null}
           <RoadmapGraph
             ref={roadmapGraphRef}
@@ -617,10 +460,8 @@ export default function RoadmapCanvas({
                 nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
               );
             }}
-            onViewportChange={(viewport) => {
-              lastViewportRef.current = viewport;
-            }}
-            restoreViewport={restoreViewport}
+            onViewportChange={canvasPreviewWorkflow.onViewportChange}
+            restoreViewport={canvasPreviewWorkflow.restoreViewport}
             onRequestAccessAction={(nodeId, operation) =>
               teacherBlockWorkflow.requestChange(nodeId, operation)
             }
@@ -644,13 +485,13 @@ export default function RoadmapCanvas({
                       ) : null}
                       {canEnterCanvasPreview ? (
                         <Button
-                          ref={previewCanvasButtonRef}
+                          ref={canvasPreviewWorkflow.entryButtonRef}
                           aria-label="Previsualizar canvas"
                           title="Previsualizar canvas"
                           type="button"
                           size="icon"
                           variant="outline"
-                          onClick={requestCanvasPreview}
+                          onClick={canvasPreviewWorkflow.requestEntry}
                         >
                           <Eye />
                         </Button>
@@ -723,8 +564,8 @@ export default function RoadmapCanvas({
             }
             onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
             onComplete={(node) => {
-              if (isCanvasPreview && !isHistoricalRoadmap) void completeSimulatedNode(node.id);
-              else if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
+              if (canvasPreviewWorkflow.completeNode(node.id)) return;
+              if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
               else void completeNode(node.id);
             }}
             isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
@@ -735,16 +576,7 @@ export default function RoadmapCanvas({
         )}
       </section>
       <ConfirmationDialog {...nodeDeletionWorkflow.confirmationDialog} />
-      <ConfirmationDialog
-        confirmation={
-          pendingSimpleConfirmation
-            ? simpleConfirmationPresentation(pendingSimpleConfirmation)
-            : null
-        }
-        pendingActionId={pendingActionId}
-        onCancel={clearSimpleConfirmation}
-        onAction={handleSimpleConfirmationAction}
-      />
+      <ConfirmationDialog {...canvasPreviewWorkflow.confirmationDialog} />
       <ConfirmationDialog {...editorDraftGuard.confirmationDialog} />
       <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />
       <ConfirmationDialog {...nodeVisibilityWorkflow.confirmationDialog} />

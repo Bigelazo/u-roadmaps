@@ -1,22 +1,11 @@
-import type { Viewport } from '@xyflow/react';
 import type { StudentAccessibleRoadmapNode } from '@/features/roadmap/types';
 
 export type CanvasPanel = 'editor' | 'student' | 'none';
-
-export type CanvasPreviewReturnState = {
-  selectedNodeId: string | null;
-  isEditorOpen: boolean;
-  isStudentDetailOpen: boolean;
-  viewport: Viewport | null;
-};
 
 export type CanvasState = {
   selectedNodeId: string | null;
   isEditorOpen: boolean;
   isStudentDetailOpen: boolean;
-  isCanvasPreview: boolean;
-  previewReturnState: CanvasPreviewReturnState | null;
-  restoreViewport: Viewport | null;
   editorKey: number;
   teacherPreviewNode: StudentAccessibleRoadmapNode | null;
   isTeacherPreviewCompleted: boolean;
@@ -27,8 +16,13 @@ export type CanvasStateAction =
   | { type: 'closeEditor' }
   | { type: 'closeSelectedNode'; panel: Exclude<CanvasPanel, 'none'> }
   | { type: 'closeTeacherPreview' }
-  | { type: 'enterCanvasPreview'; viewport: Viewport | null; discardDraft: boolean }
-  | { type: 'exitCanvasPreview' }
+  | { type: 'prepareCanvasPreview'; discardDraft: boolean }
+  | {
+      type: 'restoreCanvasPreview';
+      selectedNodeId: string | null;
+      isEditorOpen: boolean;
+      isStudentDetailOpen: boolean;
+    }
   | { type: 'openResourceComposer'; nodeId: string }
   | { type: 'selectCreatedNode'; nodeId: string }
   | { type: 'selectNode'; nodeId: string; panel: CanvasPanel }
@@ -41,9 +35,6 @@ export const initialCanvasState: CanvasState = {
   selectedNodeId: null,
   isEditorOpen: false,
   isStudentDetailOpen: false,
-  isCanvasPreview: false,
-  previewReturnState: null,
-  restoreViewport: null,
   editorKey: 0,
   teacherPreviewNode: null,
   isTeacherPreviewCompleted: false,
@@ -69,36 +60,23 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
         isTeacherPreviewCompleted: false,
         isEditorOpen: true,
       };
-    case 'enterCanvasPreview':
+    case 'prepareCanvasPreview':
       return {
         ...state,
         editorKey: action.discardDraft ? state.editorKey + 1 : state.editorKey,
-        restoreViewport: null,
-        previewReturnState: {
-          selectedNodeId: state.selectedNodeId,
-          isEditorOpen: state.isEditorOpen,
-          isStudentDetailOpen: state.isStudentDetailOpen,
-          viewport: action.viewport,
-        },
         teacherPreviewNode: null,
         isTeacherPreviewCompleted: false,
         isStudentDetailOpen: false,
         isEditorOpen: false,
         selectedNodeId: null,
-        isCanvasPreview: true,
       };
-    case 'exitCanvasPreview': {
-      const previous = state.previewReturnState;
+    case 'restoreCanvasPreview':
       return {
         ...state,
-        isCanvasPreview: false,
-        selectedNodeId: previous?.selectedNodeId ?? null,
-        isEditorOpen: previous?.isEditorOpen ?? false,
-        isStudentDetailOpen: previous?.isStudentDetailOpen ?? false,
-        restoreViewport: previous?.viewport ?? null,
-        previewReturnState: null,
+        selectedNodeId: action.selectedNodeId,
+        isEditorOpen: action.isEditorOpen,
+        isStudentDetailOpen: action.isStudentDetailOpen,
       };
-    }
     case 'openResourceComposer':
       return {
         ...state,

@@ -5,52 +5,11 @@ import {
   type CanvasState,
 } from '@/features/roadmap/canvas/state';
 
-const viewport = { x: 120, y: -40, zoom: 1.25 };
-
 function state(overrides: Partial<CanvasState> = {}): CanvasState {
   return { ...initialCanvasState, ...overrides };
 }
 
 describe('canvas state transitions', () => {
-  test('enters and exits Canvas preview while preserving the previous selection, panels, and viewport', () => {
-    const beforePreview = state({
-      selectedNodeId: 'node-1',
-      isEditorOpen: true,
-      isStudentDetailOpen: false,
-      editorKey: 3,
-    });
-
-    const preview = canvasStateReducer(beforePreview, {
-      type: 'enterCanvasPreview',
-      viewport,
-      discardDraft: true,
-    });
-
-    expect(preview).toMatchObject({
-      selectedNodeId: null,
-      isEditorOpen: false,
-      isStudentDetailOpen: false,
-      isCanvasPreview: true,
-      editorKey: 4,
-      previewReturnState: {
-        selectedNodeId: 'node-1',
-        isEditorOpen: true,
-        isStudentDetailOpen: false,
-        viewport,
-      },
-      restoreViewport: null,
-    });
-
-    expect(canvasStateReducer(preview, { type: 'exitCanvasPreview' })).toMatchObject({
-      selectedNodeId: 'node-1',
-      isEditorOpen: true,
-      isStudentDetailOpen: false,
-      isCanvasPreview: false,
-      restoreViewport: viewport,
-      previewReturnState: null,
-    });
-  });
-
   test('opens a resource composer through an explicit transition and increments its request key', () => {
     const current = state({
       teacherPreviewNode: {

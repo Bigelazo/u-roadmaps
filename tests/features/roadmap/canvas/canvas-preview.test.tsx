@@ -114,6 +114,24 @@ test('keeps a failed Canvas preview reset recoverable', async () => {
   await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 });
 
+test('keeps a failed Canvas preview load recoverable', async () => {
+  const user = userEvent.setup();
+  const loadResults = [false, true];
+  useRoadmapMock.mockReturnValue(
+    roadmapActions({
+      simulationRoadmap: roadmap,
+      loadSimulation: async () => loadResults.shift() ?? true,
+    }),
+  );
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  expect(screen.queryByText('Previsualización del canvas')).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
+});
+
 test('does not restore a prior preview viewport when entering a later preview', async () => {
   const user = userEvent.setup();
   useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap: roadmap }));
@@ -128,6 +146,23 @@ test('does not restore a prior preview viewport when entering a later preview', 
   await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
 
   expect(screen.getByTestId('restored-viewport').textContent).toBe('none');
+});
+
+test('restores the selected Node and editor panel after one preview session', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap: roadmap }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
+  expect(screen.queryByTestId('editor-panel')).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
+  expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-1');
+  expect(screen.getByTestId('editor-panel')).toBeTruthy();
 });
 
 test('keeps a frozen teacher roadmap read-only and returns there from preview', async () => {
