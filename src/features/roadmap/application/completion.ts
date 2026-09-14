@@ -1,10 +1,15 @@
 import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
-import { nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import type { CourseOfferingIdentifier, StudentNodeAccess } from '@/features/roadmap/types';
-import { studentNodeAccessById } from '@/features/roadmap/domain/access';
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
+import {
+  loadRoadmapProjectionData,
+  loadCompletedNodeIds,
+  loadStudentNodeAccess,
+  projectStudentRoadmap,
+  projectTeacherRoadmap,
+} from '@/features/roadmap/application/completion-projection';
 
 type ParticipantRoadmapInput = { userId: string; identifier: CourseOfferingIdentifier };
 type CompleteNodeInput = ParticipantRoadmapInput & { nodeId: string };
@@ -21,35 +26,6 @@ function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BL
   );
 }
 
-async function nodeAccessById(
-  transaction: Prisma.TransactionClient,
-  { roadmapId, completedNodeIds }: { roadmapId: string; completedNodeIds: ReadonlySet<string> },
-) {
-  const [nodes, dependencies] = await Promise.all([
-    transaction.roadmapNode.findMany({
-      where: { roadmapId, isVisible: true },
-      select: { id: true, isTeacherBlocked: true },
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId } },
-      select: { sourceNodeId: true, targetNodeId: true },
-    }),
-  ]);
-  const visibleNodeIds = new Set(nodes.map((node) => node.id));
-  return {
-    nodes,
-    accessByNodeId: studentNodeAccessById({
-      nodes,
-      dependencies: dependencies.filter(
-        (dependency) =>
-          visibleNodeIds.has(dependency.sourceNodeId) &&
-          visibleNodeIds.has(dependency.targetNodeId),
-      ),
-      completedNodeIds,
-    }),
-  };
-}
-
 async function requireNodeAccess(
   transaction: Prisma.TransactionClient,
   {
@@ -58,7 +34,7 @@ async function requireNodeAccess(
     completedNodeIds,
   }: { roadmapId: string; nodeId: string; completedNodeIds: ReadonlySet<string> },
 ) {
-  const { nodes, accessByNodeId } = await nodeAccessById(transaction, {
+  const { nodes, accessByNodeId } = await loadStudentNodeAccess(transaction, {
     roadmapId,
     completedNodeIds,
   });
@@ -74,14 +50,15 @@ export async function requireStudentNodeAccess(
   transaction: Prisma.TransactionClient,
   { userId, roadmapId, nodeId }: StudentNodeAccessInput,
 ) {
-  const completions = await transaction.completion.findMany({
-    where: { userId, roadmapNode: { roadmapId } },
-    select: { roadmapNodeId: true },
+  const completedNodeIds = await loadCompletedNodeIds(transaction, {
+    kind: 'COMPLETION',
+    userId,
+    roadmapId,
   });
   return requireNodeAccess(transaction, {
     roadmapId,
     nodeId,
-    completedNodeIds: new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId)),
+    completedNodeIds,
   });
 }
 
@@ -136,149 +113,6 @@ async function requireCurrentRoadmap(
   }
 }
 
-async function studentRoadmapProjection(
-  transaction: Prisma.TransactionClient,
-  {
-    courseOffering,
-    roadmap,
-    identifier,
-    completedNodeIds,
-  }: {
-    courseOffering: {
-      id: string;
-      year: number;
-      semester: number;
-      course: { code: string; name: string; department: string };
-    };
-    roadmap: { id: string };
-    identifier: CourseOfferingIdentifier;
-    completedNodeIds: ReadonlySet<string>;
-  },
-) {
-  const [predefinedNodeTypes, customNodeTypes, roadmapNodes, dependencies] = await Promise.all([
-    transaction.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
-    transaction.nodeType.findMany({ where: { roadmapId: roadmap.id }, orderBy: { name: 'asc' } }),
-    transaction.roadmapNode.findMany({
-      where: { roadmapId: roadmap.id, isVisible: true },
-      orderBy: { title: 'asc' },
-      include: { resources: { orderBy: { title: 'asc' } } },
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId: roadmap.id } },
-      orderBy: { id: 'asc' },
-    }),
-  ]);
-  const visibleNodeIds = new Set(roadmapNodes.map((node) => node.id));
-  const visibleDependencies = dependencies.filter(
-    (dependency) =>
-      visibleNodeIds.has(dependency.sourceNodeId) && visibleNodeIds.has(dependency.targetNodeId),
-  );
-  const accessByNodeId = studentNodeAccessById({
-    nodes: roadmapNodes,
-    dependencies: visibleDependencies,
-    completedNodeIds,
-  });
-  return {
-    course: courseOffering.course,
-    courseOffering: {
-      id: courseOffering.id,
-      year: courseOffering.year,
-      semester: courseOffering.semester,
-    },
-    roadmap: { id: roadmap.id },
-    nodeTypes: [...predefinedNodeTypes, ...customNodeTypes].map((type) => ({
-      id: type.id,
-      name: type.name,
-      icon: type.icon,
-      color: type.color,
-      isPredefined: type.isPredefined,
-    })),
-    nodes: roadmapNodes.map((node) => {
-      const isCompleted = completedNodeIds.has(node.id);
-      const access = accessByNodeId.get(node.id);
-      if (access?.status === 'BLOCKED') {
-        return {
-          id: node.id,
-          title: node.title,
-          positionX: node.positionX,
-          positionY: node.positionY,
-          nodeTypeId: node.nodeTypeId,
-          access,
-        };
-      }
-      return {
-        ...nodeDto(node),
-        access,
-        isCompleted,
-        canComplete: !isCompleted,
-        resources: node.resources.map((resource) => resourceDto(resource, identifier)),
-      };
-    }),
-    dependencies: visibleDependencies.map((dependency) => ({
-      id: dependency.id,
-      sourceNodeId: dependency.sourceNodeId,
-      targetNodeId: dependency.targetNodeId,
-    })),
-  };
-}
-
-async function teacherRoadmapProjection(
-  transaction: Prisma.TransactionClient,
-  {
-    courseOffering,
-    roadmap,
-    identifier,
-  }: {
-    courseOffering: {
-      id: string;
-      year: number;
-      semester: number;
-      course: { code: string; name: string; department: string };
-    };
-    roadmap: { id: string };
-    identifier: CourseOfferingIdentifier;
-  },
-) {
-  const [predefinedNodeTypes, customNodeTypes, roadmapNodes, dependencies] = await Promise.all([
-    transaction.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
-    transaction.nodeType.findMany({ where: { roadmapId: roadmap.id }, orderBy: { name: 'asc' } }),
-    transaction.roadmapNode.findMany({
-      where: { roadmapId: roadmap.id },
-      orderBy: { title: 'asc' },
-      include: { resources: { orderBy: { title: 'asc' } } },
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId: roadmap.id } },
-      orderBy: { id: 'asc' },
-    }),
-  ]);
-  return {
-    course: courseOffering.course,
-    courseOffering: {
-      id: courseOffering.id,
-      year: courseOffering.year,
-      semester: courseOffering.semester,
-    },
-    roadmap: { id: roadmap.id },
-    nodeTypes: [...predefinedNodeTypes, ...customNodeTypes].map((type) => ({
-      id: type.id,
-      name: type.name,
-      icon: type.icon,
-      color: type.color,
-      isPredefined: type.isPredefined,
-    })),
-    nodes: roadmapNodes.map((node) => ({
-      ...nodeDto(node),
-      resources: node.resources.map((resource) => resourceDto(resource, identifier)),
-    })),
-    dependencies: dependencies.map((dependency) => ({
-      id: dependency.id,
-      sourceNodeId: dependency.sourceNodeId,
-      targetNodeId: dependency.targetNodeId,
-    })),
-  };
-}
-
 async function readRoadmapForParticipantUnsafe({ userId, identifier }: ParticipantRoadmapInput) {
   return prisma.$transaction(
     async (transaction) => {
@@ -287,18 +121,18 @@ async function readRoadmapForParticipantUnsafe({ userId, identifier }: Participa
         { userId, identifier },
       );
       if (participation.role === 'TEACHER') {
-        return teacherRoadmapProjection(transaction, { courseOffering, roadmap, identifier });
+        const data = await loadRoadmapProjectionData(transaction, { courseOffering, roadmap });
+        return projectTeacherRoadmap(data, identifier);
       }
-      const completions = await transaction.completion.findMany({
-        where: { userId, roadmapNode: { roadmapId: roadmap.id } },
-        select: { roadmapNodeId: true },
-      });
-      return studentRoadmapProjection(transaction, {
-        courseOffering,
-        roadmap,
-        identifier,
-        completedNodeIds: new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId)),
-      });
+      const [data, completedNodeIds] = await Promise.all([
+        loadRoadmapProjectionData(transaction, { courseOffering, roadmap }),
+        loadCompletedNodeIds(transaction, {
+          kind: 'COMPLETION',
+          userId,
+          roadmapId: roadmap.id,
+        }),
+      ]);
+      return projectStudentRoadmap(data, identifier, completedNodeIds);
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
@@ -319,6 +153,28 @@ async function withSerializableRetry<Result>(operation: () => Promise<Result>) {
     }
   }
   throw new Error('Completion transaction retry limit reached.');
+}
+
+type TeacherRoadmap = Awaited<ReturnType<typeof requireParticipantRoadmap>>;
+
+function withTeacherRoadmapTransaction<Result>(
+  { userId, identifier }: ParticipantRoadmapInput,
+  operation: (transaction: Prisma.TransactionClient, roadmap: TeacherRoadmap) => Promise<Result>,
+) {
+  return withSerializableRetry(() =>
+    prisma.$transaction(
+      async (transaction) => {
+        const roadmap = await requireParticipantRoadmap(
+          transaction,
+          { userId, identifier },
+          'TEACHER',
+        );
+        await requireCurrentRoadmap(transaction, roadmap.courseOffering);
+        return operation(transaction, roadmap);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
 }
 
 async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeInput) {
@@ -351,77 +207,60 @@ async function readSimulatedRoadmapUnsafe({ userId, identifier }: ParticipantRoa
         { userId, identifier },
         'TEACHER',
       );
-      const completions = await transaction.simulatedCompletion.findMany({
-        where: { participationId: participation.id, roadmapId: roadmap.id },
-        select: { roadmapNodeId: true },
-      });
-      return studentRoadmapProjection(transaction, {
-        courseOffering,
-        roadmap,
-        identifier,
-        completedNodeIds: new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId)),
-      });
+      const [data, completedNodeIds] = await Promise.all([
+        loadRoadmapProjectionData(transaction, { courseOffering, roadmap }),
+        loadCompletedNodeIds(transaction, {
+          kind: 'SIMULATED_COMPLETION',
+          participationId: participation.id,
+          roadmapId: roadmap.id,
+        }),
+      ]);
+      return projectStudentRoadmap(data, identifier, completedNodeIds);
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
 }
 
 async function completeSimulatedNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeInput) {
-  return withSerializableRetry(() =>
-    prisma.$transaction(
-      async (transaction) => {
-        const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
-          transaction,
-          { userId, identifier },
-          'TEACHER',
-        );
-        await requireCurrentRoadmap(transaction, courseOffering);
-        const completions = await transaction.simulatedCompletion.findMany({
-          where: { participationId: participation.id, roadmapId: roadmap.id },
-          select: { roadmapNodeId: true },
-        });
-        await requireNodeAccess(transaction, {
-          roadmapId: roadmap.id,
-          nodeId,
-          completedNodeIds: new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId)),
-        });
-        return transaction.simulatedCompletion.upsert({
-          where: {
-            participationId_roadmapNodeId: {
-              participationId: participation.id,
-              roadmapNodeId: nodeId,
-            },
-          },
-          update: {},
-          create: {
+  return withTeacherRoadmapTransaction(
+    { userId, identifier },
+    async (transaction, { courseOffering, participation, roadmap }) => {
+      const completedNodeIds = await loadCompletedNodeIds(transaction, {
+        kind: 'SIMULATED_COMPLETION',
+        participationId: participation.id,
+        roadmapId: roadmap.id,
+      });
+      await requireNodeAccess(transaction, {
+        roadmapId: roadmap.id,
+        nodeId,
+        completedNodeIds,
+      });
+      return transaction.simulatedCompletion.upsert({
+        where: {
+          participationId_roadmapNodeId: {
             participationId: participation.id,
-            courseOfferingId: courseOffering.id,
-            roadmapId: roadmap.id,
             roadmapNodeId: nodeId,
           },
-        });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+        },
+        update: {},
+        create: {
+          participationId: participation.id,
+          courseOfferingId: courseOffering.id,
+          roadmapId: roadmap.id,
+          roadmapNodeId: nodeId,
+        },
+      });
+    },
   );
 }
 
 async function resetSimulatedCompletionsUnsafe({ userId, identifier }: ParticipantRoadmapInput) {
-  return withSerializableRetry(() =>
-    prisma.$transaction(
-      async (transaction) => {
-        const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
-          transaction,
-          { userId, identifier },
-          'TEACHER',
-        );
-        await requireCurrentRoadmap(transaction, courseOffering);
-        return transaction.simulatedCompletion.deleteMany({
-          where: { participationId: participation.id, roadmapId: roadmap.id },
-        });
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+  return withTeacherRoadmapTransaction(
+    { userId, identifier },
+    async (transaction, { participation, roadmap }) =>
+      transaction.simulatedCompletion.deleteMany({
+        where: { participationId: participation.id, roadmapId: roadmap.id },
+      }),
   );
 }
 
