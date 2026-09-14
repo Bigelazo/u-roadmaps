@@ -1,7 +1,6 @@
 import { Keyboard } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Kbd, KbdGroup } from '@/shared/ui/kbd';
-import { cn } from 'cn';
 
 function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: ReactNode }) {
   return (
@@ -14,19 +13,14 @@ function KeyboardShortcut({ keys, children }: { keys: ReactNode; children: React
 
 type KeyboardShortcutsProps = {
   isEditing: boolean;
-  isSidePanelOpen: boolean;
 };
 
-export function KeyboardShortcuts({ isEditing, isSidePanelOpen }: KeyboardShortcutsProps) {
+export function KeyboardShortcuts({ isEditing }: KeyboardShortcutsProps) {
   return (
     <details
       aria-label="Atajos de teclado"
       data-placement="roadmap"
-      className={cn(
-        'group pointer-events-auto absolute right-5 bottom-[18px] z-4 w-[min(23rem,calc(100%-2.5rem))] overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm',
-        isSidePanelOpen &&
-          'lg:right-[calc(var(--sidebar-width)+1.25rem)] lg:w-[min(23rem,calc(100%-var(--sidebar-width)-2.5rem))]',
-      )}
+      className="group pointer-events-auto z-4 w-full overflow-hidden rounded-xl border border-border bg-card/95 text-xs text-muted-foreground shadow-lg shadow-black/5 backdrop-blur-sm"
     >
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 font-semibold text-foreground transition-colors outline-none marker:content-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset">
         <span className="flex size-6 items-center justify-center rounded-md border border-border bg-muted text-primary">

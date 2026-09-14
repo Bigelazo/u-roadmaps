@@ -24,7 +24,11 @@ vi.mock('@xyflow/react', () => ({
   Controls: ({ children }: { children: ReactNode }) => <>{children}</>,
   Handle: () => null,
   MarkerType: { ArrowClosed: 'arrow-closed' },
-  Panel: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Panel: ({ children, position, ...props }: { children: ReactNode; position: string }) => (
+    <div data-testid={`roadmap-panel-${position}`} {...props}>
+      {children}
+    </div>
+  ),
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
   ReactFlow: ({
     nodes,
@@ -389,6 +393,35 @@ test('does not expose automatic ordering when the Roadmap cannot be edited', () 
 
   expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
   expect(screen.queryByRole('alertdialog')).toBeNull();
+});
+
+test('places each roadmap overlay slot in its constrained viewport panel', () => {
+  render(
+    <RoadmapGraph
+      roadmap={roadmap}
+      canEdit={false}
+      onSelectNode={vi.fn()}
+      onMoveNode={vi.fn()}
+      onConnectNodes={vi.fn()}
+      onDeleteDependencies={vi.fn()}
+      onAutoLayout={vi.fn()}
+      overlaySlots={{
+        topLeft: <span data-testid="top-left-overlay">Metadata</span>,
+        topCenter: <span data-testid="top-center-overlay">Preview</span>,
+        bottomRight: <span data-testid="bottom-right-overlay">Feedback</span>,
+      }}
+    />,
+  );
+
+  expect(
+    within(screen.getByTestId('roadmap-panel-top-left')).getByTestId('top-left-overlay'),
+  ).toBeTruthy();
+  expect(
+    within(screen.getByTestId('roadmap-panel-top-center')).getByTestId('top-center-overlay'),
+  ).toBeTruthy();
+  expect(
+    within(screen.getByTestId('roadmap-panel-bottom-right')).getByTestId('bottom-right-overlay'),
+  ).toBeTruthy();
 });
 
 test('disables automatic ordering until the Roadmap has enough Nodes', async () => {

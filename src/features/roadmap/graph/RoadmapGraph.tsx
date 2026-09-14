@@ -192,13 +192,48 @@ type Props = NodeActionCallbacks & {
   onKeyboardNodeMove?: (nodeId: string, position: { x: number; y: number }) => void;
   selectedNodeId?: string | null;
   topRightActions?: (getViewport: () => NodeRect) => ReactNode;
+  overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: Viewport) => void;
   restoreViewport?: Viewport | null;
+};
+
+export type RoadmapGraphOverlaySlots = {
+  topLeft?: ReactNode;
+  topCenter?: ReactNode;
+  bottomRight?: ReactNode;
 };
 
 export type RoadmapGraphHandle = {
   closeActionMenus: () => void;
 };
+
+function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
+  return (
+    <>
+      {slots?.topLeft ? (
+        <Panel
+          position="top-left"
+          className="pointer-events-none z-4! m-4! max-w-[calc(100%-2rem)] sm:m-6! sm:max-w-md"
+        >
+          {slots.topLeft}
+        </Panel>
+      ) : null}
+      {slots?.topCenter ? (
+        <Panel position="top-center" className="mt-3! w-[calc(100%-2rem)] max-w-xl sm:w-auto">
+          {slots.topCenter}
+        </Panel>
+      ) : null}
+      {slots?.bottomRight ? (
+        <Panel
+          position="bottom-right"
+          className="pointer-events-none mr-5! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end [&>*]:col-start-1 [&>*]:row-start-1"
+        >
+          {slots.bottomRight}
+        </Panel>
+      ) : null}
+    </>
+  );
+}
 
 export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function RoadmapGraph(
   {
@@ -214,6 +249,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
     onKeyboardNodeMove,
     selectedNodeId,
     topRightActions,
+    overlaySlots,
     onViewportChange,
     restoreViewport,
     onRequestAccessAction,
@@ -520,6 +556,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
         fitViewOptions={roadmapFitViewOptions}
         proOptions={{ hideAttribution: true }}
       >
+        <RoadmapGraphOverlays slots={overlaySlots} />
         <RoadmapViewportControls />
         <RoadmapViewportRestorer viewport={restoreViewport} />
         <ActionMenuViewportAdjustment

@@ -2,6 +2,7 @@ import { forwardRef, type ReactNode, useImperativeHandle, useState } from 'react
 import { render } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 import { RoadmapCanvas as RoadmapCanvasComponent } from '@/features/roadmap';
+import type { RoadmapGraphOverlaySlots } from '@/features/roadmap/graph/RoadmapGraph';
 
 export const RoadmapCanvasForTest = RoadmapCanvasComponent;
 
@@ -154,6 +155,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onRequestVisibilityAction,
     onRequestAddResource,
     onRequestDelete,
+    overlaySlots,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
     onConnectNodes: (connection: {
@@ -183,8 +185,12 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         height: number;
       },
     ) => ReactNode;
+    overlaySlots?: RoadmapGraphOverlaySlots;
   }) => (
     <>
+      <div data-testid="roadmap-overlay-top-left">{overlaySlots?.topLeft}</div>
+      <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
+      <div data-testid="roadmap-overlay-bottom-right">{overlaySlots?.bottomRight}</div>
       {topRightActions?.(() => ({ x: 0, y: 0, width: 800, height: 600 }))}
       <output data-testid="selected-roadmap-node">{selectedNodeId}</output>
       <output data-testid="roadmap-mode">{canEdit ? 'editing' : 'student'}</output>

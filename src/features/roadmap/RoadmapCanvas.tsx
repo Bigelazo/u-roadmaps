@@ -401,37 +401,6 @@ export default function RoadmapCanvas({
           aria-label="Lienzo del roadmap"
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
-          <header className="pointer-events-none absolute top-4 left-4 z-4 max-w-[calc(100%-2rem)] sm:top-6 sm:left-6 sm:max-w-md">
-            <div className="flex flex-wrap items-center gap-2">
-              {canvasMode.isEditing ? <Badge variant="secondary">Modo edición</Badge> : null}
-            </div>
-            <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
-              {title}
-            </h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-              <span>{courseCode}</span>
-              <span aria-hidden="true">·</span>
-              <span>
-                {semester === 1 ? 'Otoño' : 'Primavera'} {year}
-              </span>
-            </p>
-          </header>
-          {error && <RoadmapErrorToast message={error} onDismiss={dismissError} />}
-          {successToast && (
-            <RoadmapSuccessToast
-              key={successToast.id}
-              message={successToast.message}
-              onDismiss={dismissSuccessToast}
-            />
-          )}
-          {isCanvasPreview ? (
-            <CanvasPreviewToolbar
-              canReset={canResetCanvasPreview}
-              isHistorical={isHistoricalRoadmap}
-              onRequestReset={canvasPreviewWorkflow.requestReset}
-              onExit={canvasPreviewWorkflow.exit}
-            />
-          ) : null}
           <RoadmapGraph
             ref={roadmapGraphRef}
             roadmap={displayedRoadmap}
@@ -516,9 +485,51 @@ export default function RoadmapCanvas({
                   )
                 : undefined
             }
+            overlaySlots={{
+              topLeft: (
+                <header>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canvasMode.isEditing ? <Badge variant="secondary">Modo edición</Badge> : null}
+                  </div>
+                  <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
+                    {title}
+                  </h1>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                    <span>{courseCode}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      {semester === 1 ? 'Otoño' : 'Primavera'} {year}
+                    </span>
+                  </p>
+                </header>
+              ),
+              topCenter: isCanvasPreview ? (
+                <CanvasPreviewToolbar
+                  canReset={canResetCanvasPreview}
+                  isHistorical={isHistoricalRoadmap}
+                  onRequestReset={canvasPreviewWorkflow.requestReset}
+                  onExit={canvasPreviewWorkflow.exit}
+                />
+              ) : null,
+              bottomRight: (
+                <>
+                  {error ? <RoadmapErrorToast message={error} onDismiss={dismissError} /> : null}
+                  {successToast ? (
+                    <RoadmapSuccessToast
+                      key={successToast.id}
+                      message={successToast.message}
+                      onDismiss={dismissSuccessToast}
+                    />
+                  ) : null}
+                  <KeyboardShortcuts
+                    key="roadmap-keyboard-shortcuts"
+                    isEditing={canvasMode.isEditing}
+                  />
+                </>
+              ),
+            }}
           />
         </div>
-        <KeyboardShortcuts isEditing={canvasMode.isEditing} isSidePanelOpen={isSidePanelOpen} />
         {canEditRoadmap && (
           <RoadmapEditor
             key={editorKey + ':' + (selectedNode?.id ?? 'none')}
