@@ -51,6 +51,7 @@ import type {
   RoadmapNodePlacement,
   RoadmapNodePosition,
   RoadmapViewport,
+  RoadmapViewportRestoration,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
@@ -67,6 +68,7 @@ export type {
   RoadmapNodePosition,
   RoadmapNodePositionCause,
   RoadmapViewport,
+  RoadmapViewportRestoration,
   StudentRoadmapGraphProjection,
   TeachingRoadmapGraphProjection,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
@@ -229,11 +231,18 @@ function RoadmapViewportControls() {
   );
 }
 
-function RoadmapViewportRestorer({ viewport }: { viewport?: RoadmapViewport | null }) {
+function RoadmapViewportRestorer({
+  restoration,
+}: {
+  restoration?: RoadmapViewportRestoration | null;
+}) {
   const { setViewport } = useReactFlow();
+  const appliedTokenRef = useRef<string | null>(null);
   useEffect(() => {
-    if (viewport) void setViewport(viewport);
-  }, [setViewport, viewport]);
+    if (!restoration || appliedTokenRef.current === restoration.token) return;
+    appliedTokenRef.current = restoration.token;
+    void setViewport(restoration.viewport);
+  }, [restoration, setViewport]);
   return null;
 }
 
@@ -291,7 +300,7 @@ export type RoadmapGraphProps = {
   topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
-  restoreViewport?: RoadmapViewport | null;
+  viewportRestoration?: RoadmapViewportRestoration | null;
 };
 
 export type RoadmapGraphOverlaySlots = {
@@ -341,7 +350,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
     topRightActions,
     overlaySlots,
     onViewportChange,
-    restoreViewport,
+    viewportRestoration,
   }: RoadmapGraphProps,
   ref,
 ) {
@@ -655,14 +664,17 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
             ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
             : undefined
         }
-        onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}
+        onMoveEnd={(event, viewport) => {
+          if (!event) return;
+          onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+        }}
         fitView
         fitViewOptions={roadmapFitViewOptions}
         proOptions={{ hideAttribution: true }}
       >
         <RoadmapGraphOverlays slots={overlaySlots} />
         <RoadmapViewportControls />
-        <RoadmapViewportRestorer viewport={restoreViewport} />
+        <RoadmapViewportRestorer restoration={viewportRestoration} />
         <ActionMenuViewportAdjustment
           nodeId={canEdit ? openActionMenuNodeId : null}
           containerRef={containerRef}

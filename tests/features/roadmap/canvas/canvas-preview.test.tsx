@@ -148,6 +148,23 @@ test('does not restore a prior preview viewport when entering a later preview', 
   expect(screen.getByTestId('restored-viewport').textContent).toBe('none');
 });
 
+test('retains the teaching viewport across later Canvas preview sessions', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap: roadmap }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Mover viewport a 100' }));
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  await user.click(screen.getByRole('button', { name: 'Mover viewport a 400' }));
+  await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
+  expect(screen.getByTestId('restored-viewport').textContent).toBe('100');
+
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+  await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
+
+  expect(screen.getByTestId('restored-viewport').textContent).toBe('100');
+});
+
 test('restores the selected Node and editor panel after one preview session', async () => {
   const user = userEvent.setup();
   useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap: roadmap }));

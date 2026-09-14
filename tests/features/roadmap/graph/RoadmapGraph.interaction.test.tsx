@@ -3,10 +3,18 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const { fitViewMock, screenToFlowPositionMock } = vi.hoisted(() => ({
-  fitViewMock: vi.fn(),
-  screenToFlowPositionMock: vi.fn((position: { x: number; y: number }) => position),
-}));
+const { fitViewMock, screenToFlowPositionMock, setViewportMock, reactFlowHandlers } = vi.hoisted(
+  () => ({
+    fitViewMock: vi.fn(),
+    screenToFlowPositionMock: vi.fn((position: { x: number; y: number }) => position),
+    setViewportMock: vi.fn(),
+    reactFlowHandlers: {
+      onMoveEnd: undefined as
+        | ((event: object | null, viewport: { x: number; y: number; zoom: number }) => void)
+        | undefined,
+    },
+  }),
+);
 
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
@@ -40,6 +48,7 @@ vi.mock('@xyflow/react', () => ({
     onConnect,
     onEdgesDelete,
     onNodeDragStop,
+    onMoveEnd,
     children,
   }: {
     nodes: { id: string; position: { x: number; y: number }; data: object; selected?: boolean }[];
@@ -56,9 +65,15 @@ vi.mock('@xyflow/react', () => ({
       event: unknown,
       node: { id: string; position: { x: number; y: number } },
     ) => void;
+    onMoveEnd?: (
+      event: object | null,
+      viewport: { x: number; y: number; zoom: number },
+    ) => void;
     children: ReactNode;
-  }) => (
-    <>
+  }) => {
+    reactFlowHandlers.onMoveEnd = onMoveEnd;
+    return (
+      <>
       {nodes.map((node) => (
         <output key={node.id} data-testid={`node-position-${node.id}`}>
           {`${node.position.x},${node.position.y}`}
@@ -78,6 +93,12 @@ vi.mock('@xyflow/react', () => ({
         onClick={() => onNodeDragStop?.(null, { id: 'node-1', position: { x: 27, y: 13 } })}
       >
         Finalizar arrastre
+      </button>
+      <button
+        type="button"
+        onClick={() => onMoveEnd?.({ type: 'pointerup' }, { x: 120, y: 80, zoom: 1.2 })}
+      >
+        Finalizar movimiento del viewport
       </button>
       <button
         type="button"
@@ -163,8 +184,9 @@ vi.mock('@xyflow/react', () => ({
         );
       })}
       {children}
-    </>
-  ),
+      </>
+    );
+  },
   applyEdgeChanges: <T,>(changes: T[], edges: T[]) => edges,
   applyNodeChanges: <T extends { id: string; position: { x: number; y: number } }>(
     changes: { id: string; type: string; position?: { x: number; y: number } }[],
@@ -180,7 +202,7 @@ vi.mock('@xyflow/react', () => ({
     fitView: fitViewMock,
     screenToFlowPosition: screenToFlowPositionMock,
     getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
-    setViewport: vi.fn(),
+    setViewport: setViewportMock,
   }),
 }));
 
@@ -276,6 +298,8 @@ beforeEach(() => {
   fitViewMock.mockReset();
   screenToFlowPositionMock.mockReset();
   screenToFlowPositionMock.mockImplementation((position) => position);
+  setViewportMock.mockReset();
+  reactFlowHandlers.onMoveEnd = undefined;
 });
 
 test('renders a student projection without graph editing mechanics', () => {
@@ -332,6 +356,62 @@ test('preserves the viewport when the editor panel width changes', async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+test('reports only settled user viewport movement through the Roadmap boundary', async () => {
+  const user = userEvent.setup();
+  const onViewportChange = vi.fn();
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap }}
+      onSelectNode={vi.fn()}
+      onViewportChange={onViewportChange}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Finalizar movimiento del viewport' }));
+
+  expect(onViewportChange).toHaveBeenCalledExactlyOnceWith({ x: 120, y: 80, zoom: 1.2 });
+});
+
+test('applies each viewport restoration token once without reporting an echoed movement', async () => {
+  const onViewportChange = vi.fn();
+  const restoration = { token: 'preview-return-1', viewport: { x: 120, y: 80, zoom: 1.2 } };
+  setViewportMock.mockImplementation((viewport) => reactFlowHandlers.onMoveEnd?.(null, viewport));
+  const { rerender } = render(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap }}
+      onSelectNode={vi.fn()}
+      onViewportChange={onViewportChange}
+      viewportRestoration={restoration}
+    />,
+  );
+
+  await waitFor(() =>
+    expect(setViewportMock).toHaveBeenCalledWith({ x: 120, y: 80, zoom: 1.2 }),
+  );
+  expect(onViewportChange).not.toHaveBeenCalled();
+
+  rerender(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap }}
+      onSelectNode={vi.fn()}
+      onViewportChange={onViewportChange}
+      viewportRestoration={{ token: 'preview-return-1', viewport: { x: 400, y: 0, zoom: 1 } }}
+    />,
+  );
+  expect(setViewportMock).toHaveBeenCalledOnce();
+
+  rerender(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap }}
+      onSelectNode={vi.fn()}
+      onViewportChange={onViewportChange}
+      viewportRestoration={{ token: 'preview-return-2', viewport: { x: 400, y: 0, zoom: 1 } }}
+    />,
+  );
+  await waitFor(() => expect(setViewportMock).toHaveBeenCalledTimes(2));
+  expect(onViewportChange).not.toHaveBeenCalled();
 });
 
 test('centers the roadmap from the canvas control', async () => {

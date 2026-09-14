@@ -487,7 +487,7 @@ export default function RoadmapCanvas({
             selectedNodeId={selectedNodeId}
             onClearSelectedNode={closeSelectedNode}
             onViewportChange={canvasPreviewWorkflow.onViewportChange}
-            restoreViewport={canvasPreviewWorkflow.restoreViewport}
+            viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
             topRightActions={
               !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
                 ? (findOpenPosition) => (

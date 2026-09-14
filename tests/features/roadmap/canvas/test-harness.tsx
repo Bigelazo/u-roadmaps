@@ -149,7 +149,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     topRightActions,
     projection,
     onViewportChange,
-    restoreViewport,
+    viewportRestoration,
     overlaySlots,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
@@ -157,7 +157,10 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     selectedNodeId?: string | null;
     projection: RoadmapGraphProjection;
     onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
-    restoreViewport?: { x: number; y: number; zoom: number } | null;
+    viewportRestoration?: {
+      token: string;
+      viewport: { x: number; y: number; zoom: number };
+    } | null;
     topRightActions?: (findOpenPosition: (title: string) => { x: number; y: number } | null) => ReactNode;
     overlaySlots?: RoadmapGraphOverlaySlots;
   }) => {
@@ -177,7 +180,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
           {projection.kind === 'teaching' ? 'teacher' : 'student'}
         </output>
         <output data-testid="displayed-roadmap">{projection.roadmap.roadmap.id}</output>
-        <output data-testid="restored-viewport">{restoreViewport?.x ?? 'none'}</output>
+        <output data-testid="restored-viewport">
+          {viewportRestoration?.viewport.x ?? 'none'}
+        </output>
         <button
           type="button"
           onClick={() => onSelectNode('blocked-node', document.createElement('div'))}

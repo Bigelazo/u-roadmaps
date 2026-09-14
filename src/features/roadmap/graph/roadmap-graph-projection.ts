@@ -28,6 +28,11 @@ export type RoadmapViewport = {
   readonly zoom: number;
 };
 
+export type RoadmapViewportRestoration = {
+  readonly token: string;
+  readonly viewport: RoadmapViewport;
+};
+
 export type RoadmapGraphEditingIntent =
   | NodeActionIntent
   | {

@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import type { RoadmapViewport } from '@/features/roadmap/graph/roadmap-graph-projection';
+import type {
+  RoadmapViewport,
+  RoadmapViewportRestoration,
+} from '@/features/roadmap/graph/roadmap-graph-projection';
 import type { ConfirmationDialogProps } from '@/shared/ui/confirmation-dialog';
 
 type CanvasPreviewReturnState = {
@@ -12,7 +15,7 @@ type CanvasPreviewReturnState = {
 };
 
 type CanvasPreviewSessionState =
-  | { kind: 'inactive'; restoreViewport: RoadmapViewport | null }
+  | { kind: 'inactive'; viewportRestoration: RoadmapViewportRestoration | null }
   | { kind: 'active'; returnState: CanvasPreviewReturnState };
 
 type SimulationResetState = 'idle' | 'awaiting-confirmation' | 'resetting';
@@ -52,13 +55,14 @@ export function useCanvasPreviewWorkflow({
 }: CanvasPreviewWorkflowOptions) {
   const [session, setSession] = useState<CanvasPreviewSessionState>({
     kind: 'inactive',
-    restoreViewport: null,
+    viewportRestoration: null,
   });
   const sessionRef = useRef<CanvasPreviewSessionState>(session);
   const [resetState, setResetState] = useState<SimulationResetState>('idle');
   const resetStateRef = useRef<SimulationResetState>('idle');
   const currentViewRef = useRef(currentView);
   const lastViewportRef = useRef<RoadmapViewport | null>(null);
+  const viewportRestorationTokenRef = useRef(0);
   const isEntryPendingRef = useRef(false);
   const entryButtonRef = useRef<HTMLButtonElement | null>(null);
   currentViewRef.current = currentView;
@@ -112,12 +116,21 @@ export function useCanvasPreviewWorkflow({
 
     const { viewport, ...returnView } = activeSession.returnState;
     transitionReset('idle');
-    transitionSession({ kind: 'inactive', restoreViewport: viewport });
+    transitionSession({
+      kind: 'inactive',
+      viewportRestoration: viewport
+        ? {
+            token: `canvas-preview-return-${++viewportRestorationTokenRef.current}`,
+            viewport,
+          }
+        : null,
+    });
     onExit(returnView);
     requestAnimationFrame(() => entryButtonRef.current?.focus());
   }, [onExit, transitionReset, transitionSession]);
 
   const onViewportChange = useCallback((viewport: RoadmapViewport) => {
+    if (sessionRef.current.kind === 'active') return;
     lastViewportRef.current = viewport;
   }, []);
 
@@ -167,7 +180,7 @@ export function useCanvasPreviewWorkflow({
 
   return {
     isActive: session.kind === 'active',
-    restoreViewport: session.kind === 'inactive' ? session.restoreViewport : null,
+    viewportRestoration: session.kind === 'inactive' ? session.viewportRestoration : null,
     entryButtonRef,
     requestEntry,
     resumeEntryAfterDraftDiscard,
