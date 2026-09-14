@@ -32,7 +32,7 @@ import {
   roadmapNodeSizeForTitle,
   snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
-import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
+import type { NodeActionCallbacks, NodeActionIntent } from '@/features/roadmap/graph/node-action';
 import {
   roadmapAutoLayoutConfirmation,
   roadmapConfirmationActionIds,
@@ -41,7 +41,6 @@ import { Button } from '@/shared/ui/button';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
-import { mapRoadmapGraph } from '@/features/roadmap/graph/map-roadmap-graph';
 import type {
   RoadmapGraphEditingIntent,
   RoadmapGraphEditing,
@@ -53,6 +52,7 @@ import type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import {
   layoutRoadmapGraph,
   type RoadmapLayoutDirection,
@@ -74,6 +74,90 @@ export type {
 const selectedEdgeColor = 'var(--primary)';
 const roadmapFitViewOptions = { padding: 0.28 };
 const roadmapDependencyHandles = ['top', 'right', 'bottom', 'left'] as const;
+const studentEdgeStroke = 'var(--ink)';
+
+type RoadmapGraphActionMenu = NodeActionCallbacks & {
+  openNodeId: string | null;
+  closingNodeId: string | null;
+  onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
+};
+
+function mapProjectionToFlow(
+  projection: RoadmapGraphProjection,
+  onDeleteDependency: (dependencyId: string) => void,
+  selectedNodeId: string | null | undefined,
+  actionMenu: RoadmapGraphActionMenu,
+) {
+  const { roadmap } = projection;
+  const isTeacherView = projection.kind === 'teaching';
+  const canEdit = isTeacherView && Boolean(projection.editing);
+  const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
+  const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
+  const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
+    const isHidden = 'isVisible' in node && !node.isVisible;
+    const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
+    const resources = 'resources' in node ? node.resources : [];
+    return {
+      id: node.id,
+      type: 'roadmap',
+      data: {
+        title: node.title,
+        typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
+        typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
+        typeIcon: nodeTypesById.get(node.nodeTypeId)?.icon ?? 'Shapes',
+        status: isTeacherView ? 'editing' : studentNodeStatus(node),
+        isHidden,
+        isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
+        fileCount: resources.filter((resource) => resource.type === 'FILE').length,
+        linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
+        blockReason,
+        canManageActions: canEdit,
+        isActionMenuOpen: actionMenu.openNodeId === node.id || actionMenu.closingNodeId === node.id,
+        isActionMenuClosing: actionMenu.closingNodeId === node.id,
+        onToggleActionMenu: actionMenu.onToggle,
+        onAction: actionMenu.onAction,
+      },
+      position: { x: node.positionX, y: node.positionY },
+      selected: node.id === selectedNodeId,
+      hidden: !isTeacherView && isHidden,
+      connectable: canEdit && !isHidden,
+      deletable: false,
+      selectable: canEdit || !blockReason,
+      focusable: true,
+      zIndex: actionMenu.openNodeId === node.id || actionMenu.closingNodeId === node.id ? 20 : 0,
+      ariaRole: blockReason ? 'button' : undefined,
+      domAttributes: blockReason ? { 'aria-disabled': true } : undefined,
+    };
+  });
+  const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
+    const defaultStroke = isTeacherView
+      ? (() => {
+          const sourceNode = nodesById.get(dependency.sourceNodeId);
+          return sourceNode && 'isCompleted' in sourceNode && sourceNode.isCompleted;
+        })()
+        ? 'var(--ink)'
+        : 'var(--steel)'
+      : studentEdgeStroke;
+    return {
+      id: dependency.id,
+      source: dependency.sourceNodeId,
+      target: dependency.targetNodeId,
+      sourceHandle: dependency.sourceHandle,
+      targetHandle: dependency.targetHandle,
+      type: 'dependency',
+      deletable: canEdit,
+      selectable: canEdit,
+      focusable: canEdit,
+      interactionWidth: canEdit ? undefined : 0,
+      domAttributes: canEdit ? undefined : { pointerEvents: 'none' },
+      className: canEdit ? 'roadmap-edge--editable' : 'roadmap-edge--student',
+      data: { defaultStroke, onDelete: canEdit ? onDeleteDependency : undefined },
+      style: { stroke: defaultStroke, strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: defaultStroke, width: 18, height: 18 },
+    };
+  });
+  return { nodes, edges };
+}
 
 function isRoadmapDependencyHandle(
   value: string,
@@ -336,19 +420,17 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   );
 }
 
-export function RoadmapGraph(
-  {
-    projection,
-    onSelectNode,
-    onClearSelectedNode,
-    selectedNodeId,
-    focusReturnRequest,
-    topRightActions,
-    overlaySlots,
-    onViewportChange,
-    viewportRestoration,
-  }: RoadmapGraphProps,
-) {
+export function RoadmapGraph({
+  projection,
+  onSelectNode,
+  onClearSelectedNode,
+  selectedNodeId,
+  focusReturnRequest,
+  topRightActions,
+  overlaySlots,
+  onViewportChange,
+  viewportRestoration,
+}: RoadmapGraphProps) {
   const editing: RoadmapGraphEditing | undefined =
     projection.kind === 'teaching' ? projection.editing : undefined;
   const canEdit = editing !== undefined;
@@ -449,17 +531,25 @@ export function RoadmapGraph(
     [canEdit, closingActionMenuNodeId, openActionMenuNodeId, requestNodeAction, toggleActionMenu],
   );
   const [flow, setFlow] = useState(() =>
-    mapRoadmapGraph(stableProjection, deleteDependency, selectedNodeId, actionMenu),
+    mapProjectionToFlow(stableProjection, deleteDependency, selectedNodeId, actionMenu),
   );
 
   useEffect(() => {
     setFlow(
-      mapRoadmapGraph(stableProjection, deleteDependency, selectedNodeIdRef.current, actionMenu),
+      mapProjectionToFlow(
+        stableProjection,
+        deleteDependency,
+        selectedNodeIdRef.current,
+        actionMenu,
+      ),
     );
   }, [actionMenu, deleteDependency, stableProjection]);
 
   const applyNodePositions = useCallback(
-    (cause: 'pointer' | 'keyboard' | 'automatic-layout', positions: readonly RoadmapNodePlacement[]) => {
+    (
+      cause: 'pointer' | 'keyboard' | 'automatic-layout',
+      positions: readonly RoadmapNodePlacement[],
+    ) => {
       const immutablePositions = freezeNodePositions(positions);
       if (immutablePositions.length === 0) return;
       const positionsByNodeId = new Map(
@@ -614,7 +704,8 @@ export function RoadmapGraph(
             ...current,
             nodes: applyNodeChanges(
               normalizedChanges.filter(
-                (change) => change.type !== 'remove' && (!movedWithKeyboard || change.type !== 'position'),
+                (change) =>
+                  change.type !== 'remove' && (!movedWithKeyboard || change.type !== 'position'),
               ),
               current.nodes,
             ),
