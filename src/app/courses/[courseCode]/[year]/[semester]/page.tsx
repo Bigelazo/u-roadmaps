@@ -35,6 +35,8 @@ export default async function CoursePage(
     courseOffering.participants[0] ?? (await synchronizeParticipation(user, identifier));
   const canPreview = participation?.role === 'TEACHER';
   const isHistorical = Boolean(
+    // This async Server Component evaluates the calendar for the current request.
+    // eslint-disable-next-line react-hooks/purity
     academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now(),
   );
   const canEdit = canPreview && !isHistorical;
