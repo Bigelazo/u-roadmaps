@@ -10,6 +10,10 @@ GitHub issues on `Bigelazo/u-roadmaps`, accessed via the `gh` CLI. See `docs/age
 
 Single-context layout — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### Testing
+
+Run E2E tests against the existing local PostgreSQL service. See `docs/agents/testing.md`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

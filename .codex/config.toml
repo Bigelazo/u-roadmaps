@@ -1,3 +1,5 @@
+default_permissions = "u-roadmaps"
+
 [mcp_servers.next_devtools]
 command = "npx"
 args = ["-y", "next-devtools-mcp@latest"]
@@ -12,3 +14,16 @@ args = ["shadcn@latest", "mcp"]
 
 [features]
 multi_agent = true
+network_proxy = true
+
+[permissions.u-roadmaps]
+description = "Edit this workspace and reach the local services required by U-Roadmaps tests."
+extends = ":workspace"
+
+[permissions.u-roadmaps.network]
+enabled = true
+allow_local_binding = true
+
+[permissions.u-roadmaps.network.domains]
+"localhost" = "allow"
+"127.0.0.1" = "allow"
