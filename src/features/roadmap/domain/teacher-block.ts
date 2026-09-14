@@ -76,9 +76,10 @@ export function decideTeacherBlock({
       mode = 'BRANCH';
       changedNodeIds = eligibleBranchUnlockNodeIds({
         dependencies,
-        teacherBlockedNodeIds: new Set(
-          nodes.filter((node) => node.isTeacherBlocked).map((node) => node.id),
-        ),
+        teacherBlockedNodeIds: nodes.reduce<Set<string>>((ids, node) => {
+          if (node.isTeacherBlocked) ids.add(node.id);
+          return ids;
+        }, new Set()),
         rootNodeId: nodeId,
       });
     }
@@ -87,14 +88,17 @@ export function decideTeacherBlock({
   return {
     kind: 'ALLOWED',
     mode,
-    nodes: nodes
-      .filter((node) => changedNodeIds.has(node.id))
-      .map(({ id, title, nodeType }) => ({
+    nodes: nodes.reduce<TeacherBlockImpact[]>((affectedNodes, node) => {
+      if (!changedNodeIds.has(node.id)) return affectedNodes;
+      const { id, title, nodeType } = node;
+      affectedNodes.push({
         id,
         title,
         ...(nodeType ? { nodeType } : {}),
         relation:
           id === nodeId ? 'SELECTED_NODE' : mode === 'UPSTREAM' ? 'PREREQUISITE' : 'DEPENDENT',
-      })),
+      });
+      return affectedNodes;
+    }, []),
   };
 }
