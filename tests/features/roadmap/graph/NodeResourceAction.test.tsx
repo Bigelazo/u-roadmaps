@@ -6,7 +6,7 @@ import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/Road
 
 test('keeps Add resource at 60° for hidden nodes and delegates to the selected node', async () => {
   const user = userEvent.setup();
-  const onRequestAddResource = vi.fn();
+  const onAction = vi.fn();
   const props = {
     id: 'hidden-node',
     type: 'roadmap',
@@ -20,7 +20,7 @@ test('keeps Add resource at 60° for hidden nodes and delegates to the selected 
       isTeacherBlocked: false,
       canManageActions: true,
       isActionMenuOpen: true,
-      onRequestAddResource,
+      onAction,
     },
     selected: false,
     selectable: true,
@@ -43,5 +43,5 @@ test('keeps Add resource at 60° for hidden nodes and delegates to the selected 
   const action = screen.getByRole('button', { name: 'Agregar recurso' });
   expect(action.getAttribute('data-angle')).toBe('60');
   await user.click(action);
-  expect(onRequestAddResource).toHaveBeenCalledWith('hidden-node');
+  expect(onAction).toHaveBeenCalledWith({ kind: 'add-resource', nodeId: 'hidden-node' });
 });

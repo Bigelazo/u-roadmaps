@@ -84,13 +84,10 @@ test('marks hidden teacher nodes with a distinct visual treatment and no visibil
   expect(hiddenBadge).toBeTruthy();
 });
 
-test('opens the teaching action menu independently and invokes its contextual actions', async () => {
+test('opens the teaching action menu independently and emits contextual Roadmap intents', async () => {
   const user = userEvent.setup();
   const onToggleActionMenu = vi.fn();
-  const onRequestAccessAction = vi.fn();
-  const onRequestVisibilityAction = vi.fn();
-  const onRequestAddResource = vi.fn();
-  const onRequestDelete = vi.fn();
+  const onAction = vi.fn();
   const props = {
     id: 'teacher-node',
     type: 'roadmap',
@@ -105,10 +102,7 @@ test('opens the teaching action menu independently and invokes its contextual ac
       canManageActions: true,
       isActionMenuOpen: false,
       onToggleActionMenu,
-      onRequestAccessAction,
-      onRequestVisibilityAction,
-      onRequestAddResource,
-      onRequestDelete,
+      onAction,
     },
     selected: false,
     selectable: true,
@@ -138,7 +132,11 @@ test('opens the teaching action menu independently and invokes its contextual ac
   expect(screen.getByRole('group', { name: 'Menú de acciones del nodo' })).toBeTruthy();
 
   await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
-  expect(onRequestAccessAction).toHaveBeenCalledWith('teacher-node', 'BLOCK');
+  expect(onAction).toHaveBeenCalledWith({
+    kind: 'change-teacher-block',
+    nodeId: 'teacher-node',
+    operation: 'BLOCK',
+  });
   const visibilityAction = screen.getByRole('button', { name: 'Ocultar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
   expect(screen.getByTestId('node-action-access-default-icon')).toBeTruthy();
@@ -150,19 +148,23 @@ test('opens the teaching action menu independently and invokes its contextual ac
   const resourceAction = screen.getByRole('button', { name: 'Agregar recurso' });
   expect(resourceAction.parentElement?.style.getPropertyValue('--angle')).toBe('60deg');
   await user.click(resourceAction);
-  expect(onRequestAddResource).toHaveBeenCalledWith('teacher-node');
+  expect(onAction).toHaveBeenCalledWith({ kind: 'add-resource', nodeId: 'teacher-node' });
   const deleteAction = screen.getByRole('button', { name: 'Eliminar nodo' });
   expect(deleteAction.parentElement?.style.getPropertyValue('--angle')).toBe('90deg');
   await user.click(deleteAction);
-  expect(onRequestDelete).toHaveBeenCalledWith('teacher-node');
+  expect(onAction).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: 'teacher-node' });
   await user.click(visibilityAction);
-  expect(onRequestVisibilityAction).toHaveBeenCalledWith('teacher-node', true);
+  expect(onAction).toHaveBeenCalledWith({
+    kind: 'change-visibility',
+    nodeId: 'teacher-node',
+    isVisible: false,
+  });
   expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
 });
 
 test('offers showing a hidden node without an access action', async () => {
   const user = userEvent.setup();
-  const onRequestVisibilityAction = vi.fn();
+  const onAction = vi.fn();
   const props = {
     id: 'hidden-teacher-node',
     type: 'roadmap',
@@ -176,7 +178,7 @@ test('offers showing a hidden node without an access action', async () => {
       isHidden: true,
       canManageActions: true,
       isActionMenuOpen: false,
-      onRequestVisibilityAction,
+      onAction,
     },
     selected: false,
     selectable: true,
@@ -214,11 +216,60 @@ test('offers showing a hidden node without an access action', async () => {
   expect(visibilityAction.parentElement?.style.getPropertyValue('--i')).toBe('0');
   expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('3');
   expect(
-    screen.getByRole('button', { name: 'Agregar recurso' }).parentElement?.style.getPropertyValue('--angle'),
+    screen
+      .getByRole('button', { name: 'Agregar recurso' })
+      .parentElement?.style.getPropertyValue('--angle'),
   ).toBe('60deg');
   await user.click(visibilityAction);
-  expect(onRequestVisibilityAction).toHaveBeenCalledWith('hidden-teacher-node', false);
+  expect(onAction).toHaveBeenCalledWith({
+    kind: 'change-visibility',
+    nodeId: 'hidden-teacher-node',
+    isVisible: true,
+  });
   expect(screen.getByRole('button', { name: 'Eliminar nodo' })).toBeTruthy();
+});
+
+test('offers the contextual unblock action for a visible teacher-blocked node', async () => {
+  const user = userEvent.setup();
+  const onAction = vi.fn();
+  const props = {
+    id: 'blocked-teacher-node',
+    type: 'roadmap',
+    data: {
+      title: 'Material bloqueado',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'editing' as const,
+      isTeacherBlocked: true,
+      isHidden: false,
+      canManageActions: true,
+      isActionMenuOpen: true,
+      onAction,
+    },
+    selected: false,
+    selectable: true,
+    draggable: true,
+    dragging: false,
+    deletable: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+  } as NodeProps<RoadmapFlowNode>;
+
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode {...props} />
+    </ReactFlowProvider>,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Desbloquear' }));
+  expect(onAction).toHaveBeenCalledWith({
+    kind: 'change-teacher-block',
+    nodeId: 'blocked-teacher-node',
+    operation: 'UNBLOCK',
+  });
 });
 
 test('keeps dependency handles mounted, but inert, for student nodes', () => {

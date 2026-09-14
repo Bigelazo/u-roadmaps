@@ -1,31 +1,31 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import type { Connection } from '@xyflow/react';
 import {
   roadmapConfirmationActionIds,
   roadmapDependencyConfirmation,
   roadmapDependencyDeletionConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
-import type { AnyRoadmapDto, TeacherBlockImpact } from '@/features/roadmap/types';
+import type {
+  AnyRoadmapDto,
+  RoadmapDependencyRequest,
+  TeacherBlockImpact,
+} from '@/features/roadmap/types';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
-
-type DependencyRequest = {
-  sourceNodeId: string;
-  targetNodeId: string;
-  sourceHandle?: string;
-  targetHandle?: string;
-};
 
 type DependencyCreationState =
   | { kind: 'idle' }
-  | { kind: 'previewing'; request: DependencyRequest }
+  | { kind: 'previewing'; request: RoadmapDependencyRequest }
   | {
       kind: 'awaiting-confirmation';
-      request: DependencyRequest;
+      request: RoadmapDependencyRequest;
       affectedNodes: TeacherBlockImpact[];
     }
-  | { kind: 'creating'; request: DependencyRequest; affectedNodes?: TeacherBlockImpact[] };
+  | {
+      kind: 'creating';
+      request: RoadmapDependencyRequest;
+      affectedNodes?: TeacherBlockImpact[];
+    };
 
 type DependencyDeletionState =
   | { kind: 'idle' }
@@ -90,7 +90,7 @@ export function useDependencyWorkflow({
   );
 
   const connectDependency = useCallback(
-    (request: DependencyRequest) =>
+    (request: RoadmapDependencyRequest) =>
       connectNodes(
         request.sourceNodeId,
         request.targetNodeId,
@@ -101,16 +101,8 @@ export function useDependencyWorkflow({
   );
 
   const requestCreation = useCallback(
-    (connection: Connection) => {
+    (request: RoadmapDependencyRequest) => {
       if (creationStateRef.current.kind !== 'idle') return;
-      if (!connection.source || !connection.target) return;
-
-      const request: DependencyRequest = {
-        sourceNodeId: connection.source,
-        targetNodeId: connection.target,
-        sourceHandle: connection.sourceHandle ?? undefined,
-        targetHandle: connection.targetHandle ?? undefined,
-      };
       transitionCreation({ kind: 'previewing', request });
 
       void (async () => {

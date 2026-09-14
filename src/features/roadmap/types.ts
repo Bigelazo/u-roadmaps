@@ -80,6 +80,13 @@ export type RoadmapDependency = {
 
 export type DependencyHandle = 'top' | 'right' | 'bottom' | 'left';
 
+export type RoadmapDependencyRequest = {
+  readonly sourceNodeId: string;
+  readonly targetNodeId: string;
+  readonly sourceHandle: DependencyHandle;
+  readonly targetHandle: DependencyHandle;
+};
+
 export type TeacherBlockOperation = 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK';
 
 export type TeacherBlockUnlockMode = 'BLOCK' | 'UPSTREAM' | 'SINGLE' | 'BRANCH';

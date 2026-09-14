@@ -1,18 +1,18 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import type { Viewport } from '@xyflow/react';
+import type { RoadmapViewport } from '@/features/roadmap/graph/roadmap-graph-projection';
 import type { ConfirmationDialogProps } from '@/shared/ui/confirmation-dialog';
 
 type CanvasPreviewReturnState = {
   selectedNodeId: string | null;
   isEditorOpen: boolean;
   isStudentDetailOpen: boolean;
-  viewport: Viewport | null;
+  viewport: RoadmapViewport | null;
 };
 
 type CanvasPreviewSessionState =
-  | { kind: 'inactive'; restoreViewport: Viewport | null }
+  | { kind: 'inactive'; restoreViewport: RoadmapViewport | null }
   | { kind: 'active'; returnState: CanvasPreviewReturnState };
 
 type SimulationResetState = 'idle' | 'awaiting-confirmation' | 'resetting';
@@ -58,7 +58,7 @@ export function useCanvasPreviewWorkflow({
   const [resetState, setResetState] = useState<SimulationResetState>('idle');
   const resetStateRef = useRef<SimulationResetState>('idle');
   const currentViewRef = useRef(currentView);
-  const lastViewportRef = useRef<Viewport | null>(null);
+  const lastViewportRef = useRef<RoadmapViewport | null>(null);
   const isEntryPendingRef = useRef(false);
   const entryButtonRef = useRef<HTMLButtonElement | null>(null);
   currentViewRef.current = currentView;
@@ -117,7 +117,7 @@ export function useCanvasPreviewWorkflow({
     requestAnimationFrame(() => entryButtonRef.current?.focus());
   }, [onExit, transitionReset, transitionSession]);
 
-  const onViewportChange = useCallback((viewport: Viewport) => {
+  const onViewportChange = useCallback((viewport: RoadmapViewport) => {
     lastViewportRef.current = viewport;
   }, []);
 

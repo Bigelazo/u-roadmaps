@@ -30,6 +30,7 @@ import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import {
   RoadmapGraph,
   type RoadmapGraphEditing,
+  type RoadmapGraphEditingIntent,
   type RoadmapGraphHandle,
   type RoadmapGraphProjection,
 } from '@/features/roadmap/graph/RoadmapGraph';
@@ -51,7 +52,6 @@ import type {
 import {
   findOpenRoadmapPosition,
   roadmapNodeSizeForTitle,
-  snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
@@ -341,40 +341,57 @@ export default function RoadmapCanvas({
   }, [canEditRoadmap, isCanvasPreview, isEditorOpen, selectedNodeId, teacherPreviewNode]);
 
   const displayedRoadmap = isCanvasPreview ? simulationRoadmap : roadmap;
+  const requestDependencyCreation = dependencyWorkflow.requestCreation;
+  const requestDependencyDeletion = dependencyWorkflow.requestDeletion;
+  const requestNodeDeletion = nodeDeletionWorkflow.requestDeletion;
   const requestTeacherBlockChange = teacherBlockWorkflow.requestChange;
   const requestVisibilityChange = nodeVisibilityWorkflow.requestChange;
+  const handleGraphEditingIntent = useCallback(
+    (intent: RoadmapGraphEditingIntent) => {
+      switch (intent.kind) {
+        case 'node-positions':
+          void Promise.all(
+            intent.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
+          );
+          return;
+        case 'create-dependency':
+          requestDependencyCreation(intent);
+          return;
+        case 'delete-dependencies':
+          requestDependencyDeletion([...intent.dependencyIds]);
+          return;
+        case 'change-teacher-block':
+          requestTeacherBlockChange(intent.nodeId, intent.operation);
+          return;
+        case 'change-visibility':
+          void requestVisibilityChange(intent.nodeId, !intent.isVisible);
+          return;
+        case 'add-resource':
+          openResourceComposer(intent.nodeId);
+          return;
+        case 'delete-node':
+          requestNodeDeletion(intent.nodeId);
+          return;
+      }
+    },
+    [
+      moveNode,
+      openResourceComposer,
+      requestDependencyCreation,
+      requestDependencyDeletion,
+      requestNodeDeletion,
+      requestTeacherBlockChange,
+      requestVisibilityChange,
+    ],
+  );
   const graphEditing = useMemo<RoadmapGraphEditing | undefined>(
     () =>
       canvasMode.isEditing
         ? {
-            onMoveNode: (_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position)),
-            onKeyboardNodeMove: (nodeId, position) =>
-              void moveNode(nodeId, snapToRoadmapGrid(position)),
-            onConnectNodes: dependencyWorkflow.requestCreation,
-            onDeleteDependencies: dependencyWorkflow.requestDeletion,
-            onAutoLayout: (nodes) => {
-              void Promise.all(
-                nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
-              );
-            },
-            onRequestAccessAction: (nodeId, operation) =>
-              requestTeacherBlockChange(nodeId, operation),
-            onRequestVisibilityAction: (nodeId, isVisible) =>
-              void requestVisibilityChange(nodeId, isVisible),
-            onRequestAddResource: openResourceComposer,
-            onRequestDelete: nodeDeletionWorkflow.requestDeletion,
+            onEditingIntent: handleGraphEditingIntent,
           }
         : undefined,
-    [
-      canvasMode.isEditing,
-      dependencyWorkflow.requestCreation,
-      dependencyWorkflow.requestDeletion,
-      moveNode,
-      nodeDeletionWorkflow.requestDeletion,
-      openResourceComposer,
-      requestTeacherBlockChange,
-      requestVisibilityChange,
-    ],
+    [canvasMode.isEditing, handleGraphEditingIntent],
   );
   const graphProjection = useMemo<RoadmapGraphProjection | null>(() => {
     if (!displayedRoadmap) return null;

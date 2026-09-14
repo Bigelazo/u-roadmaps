@@ -34,11 +34,25 @@ vi.mock('@xyflow/react', () => ({
     nodes,
     onNodesChange,
     onNodeClick,
+    onConnect,
+    onEdgesDelete,
+    onNodeDragStop,
     children,
   }: {
     nodes: { id: string; position: { x: number; y: number }; data: object; selected?: boolean }[];
     onNodesChange: (changes: unknown[]) => void;
     onNodeClick: (event: { currentTarget: HTMLElement }, node: (typeof nodes)[number]) => void;
+    onConnect?: (connection: {
+      source: string | null;
+      target: string | null;
+      sourceHandle?: string | null;
+      targetHandle?: string | null;
+    }) => void;
+    onEdgesDelete?: (edges: { id: string }[]) => void;
+    onNodeDragStop?: (
+      event: unknown,
+      node: { id: string; position: { x: number; y: number } },
+    ) => void;
     children: ReactNode;
   }) => (
     <>
@@ -51,6 +65,47 @@ vi.mock('@xyflow/react', () => ({
         }
       >
         Arrastrar nodo
+      </button>
+      <button
+        type="button"
+        onClick={() => onNodeDragStop?.(null, { id: 'node-1', position: { x: 20, y: 20 } })}
+      >
+        Finalizar arrastre
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onConnect?.({
+            source: 'node-1',
+            target: 'node-2',
+            sourceHandle: 'right',
+            targetHandle: 'left',
+          })
+        }
+      >
+        Conectar dependencia
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onConnect?.({
+            source: 'node-1',
+            target: 'node-2',
+            sourceHandle: null,
+            targetHandle: null,
+          })
+        }
+      >
+        Conectar dependencia sin puntos
+      </button>
+      <button type="button" onClick={() => onConnect?.({ source: null, target: 'node-2' })}>
+        Intentar conexión incompleta
+      </button>
+      <button
+        type="button"
+        onClick={() => onEdgesDelete?.([{ id: 'dependency-1' }, { id: 'dependency-2' }])}
+      >
+        Eliminar dependencias
       </button>
       <button type="button" onClick={() => onNodeClick({ currentTarget: document.body }, nodes[0])}>
         Seleccionar nodo
@@ -72,7 +127,7 @@ vi.mock('@xyflow/react', () => ({
           canManageActions?: boolean;
           isActionMenuOpen?: boolean;
           onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
-          onRequestAccessAction?: (nodeId: string, operation: 'BLOCK' | 'UNBLOCK') => void;
+          onAction?: (intent: RoadmapGraphEditingIntent) => void;
           isTeacherBlocked?: boolean;
         };
         if (!actionData.canManageActions) return null;
@@ -87,10 +142,11 @@ vi.mock('@xyflow/react', () => ({
               <button
                 type="button"
                 onClick={() =>
-                  actionData.onRequestAccessAction?.(
-                    node.id,
-                    actionData.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK',
-                  )
+                  actionData.onAction?.({
+                    kind: 'change-teacher-block',
+                    nodeId: node.id,
+                    operation: actionData.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK',
+                  })
                 }
               >
                 Ejecutar acceso {node.id}
@@ -124,6 +180,7 @@ vi.mock('@xyflow/react', () => ({
 import {
   RoadmapGraph,
   type RoadmapGraphEditing,
+  type RoadmapGraphEditingIntent,
   type RoadmapGraphHandle,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
@@ -181,15 +238,7 @@ const studentRoadmap: StudentRoadmapDto = {
 
 function editingCapability(overrides: Partial<RoadmapGraphEditing> = {}): RoadmapGraphEditing {
   return {
-    onMoveNode: vi.fn(),
-    onKeyboardNodeMove: vi.fn(),
-    onConnectNodes: vi.fn(),
-    onDeleteDependencies: vi.fn(),
-    onAutoLayout: vi.fn(),
-    onRequestAccessAction: vi.fn(),
-    onRequestVisibilityAction: vi.fn(),
-    onRequestAddResource: vi.fn(),
-    onRequestDelete: vi.fn(),
+    onEditingIntent: vi.fn(),
     ...overrides,
   };
 }
@@ -304,13 +353,13 @@ test('closes the selected node when Escape is pressed on the canvas node', async
 
 test('reports a keyboard node move for persistence', async () => {
   const user = userEvent.setup();
-  const onKeyboardNodeMove = vi.fn();
+  const onEditingIntent = vi.fn();
   render(
     <RoadmapGraph
       projection={{
         kind: 'teaching',
         roadmap,
-        editing: editingCapability({ onKeyboardNodeMove }),
+        editing: editingCapability({ onEditingIntent }),
       }}
       selectedNodeId="node-1"
       onSelectNode={vi.fn()}
@@ -319,18 +368,45 @@ test('reports a keyboard node move for persistence', async () => {
 
   screen.getByTestId('keyboard-node').focus();
   await user.keyboard('{ArrowRight}');
-  expect(onKeyboardNodeMove).toHaveBeenCalledWith('node-1', { x: 20, y: 0 });
+  expect(onEditingIntent).toHaveBeenCalledWith({
+    kind: 'node-positions',
+    cause: 'keyboard',
+    positions: [{ nodeId: 'node-1', position: { x: 20, y: 0 } }],
+  });
 });
 
-test('keeps one action menu open, closes it with Escape, and hands access changes to the canvas', async () => {
+test('emits the snapped pointer position supplied by React Flow', async () => {
   const user = userEvent.setup();
-  const onRequestAccessAction = vi.fn();
+  const onEditingIntent = vi.fn();
   render(
     <RoadmapGraph
       projection={{
         kind: 'teaching',
         roadmap,
-        editing: editingCapability({ onRequestAccessAction }),
+        editing: editingCapability({ onEditingIntent }),
+      }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Finalizar arrastre' }));
+
+  expect(onEditingIntent).toHaveBeenCalledWith({
+    kind: 'node-positions',
+    cause: 'pointer',
+    positions: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
+  });
+});
+
+test('keeps one action menu open, closes it with Escape, and emits a teacher-block intent', async () => {
+  const user = userEvent.setup();
+  const onEditingIntent = vi.fn();
+  render(
+    <RoadmapGraph
+      projection={{
+        kind: 'teaching',
+        roadmap,
+        editing: editingCapability({ onEditingIntent }),
       }}
       onSelectNode={vi.fn()}
     />,
@@ -347,7 +423,11 @@ test('keeps one action menu open, closes it with Escape, and hands access change
 
   await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
   await user.click(screen.getByRole('button', { name: 'Ejecutar acceso node-1' }));
-  expect(onRequestAccessAction).toHaveBeenCalledWith('node-1', 'BLOCK');
+  expect(onEditingIntent).toHaveBeenCalledWith({
+    kind: 'change-teacher-block',
+    nodeId: 'node-1',
+    operation: 'BLOCK',
+  });
   await waitFor(() =>
     expect(screen.queryByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeNull(),
   );
@@ -374,10 +454,14 @@ test('closes action menus when preview mode starts', async () => {
 
 test('requires confirmation before automatically ordering canvas nodes', async () => {
   const user = userEvent.setup();
-  const onAutoLayout = vi.fn();
+  const onEditingIntent = vi.fn();
   render(
     <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap, editing: editingCapability({ onAutoLayout }) }}
+      projection={{
+        kind: 'teaching',
+        roadmap,
+        editing: editingCapability({ onEditingIntent }),
+      }}
       onSelectNode={vi.fn()}
     />,
   );
@@ -391,10 +475,10 @@ test('requires confirmation before automatically ordering canvas nodes', async (
       'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
     ),
   ).toBeTruthy();
-  expect(onAutoLayout).not.toHaveBeenCalled();
+  expect(onEditingIntent).not.toHaveBeenCalled();
 
   await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
-  expect(onAutoLayout).not.toHaveBeenCalled();
+  expect(onEditingIntent).not.toHaveBeenCalled();
   await user.keyboard('{Enter}');
   expect(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Cancelar' }));
@@ -407,7 +491,71 @@ test('requires confirmation before automatically ordering canvas nodes', async (
     ),
   );
 
-  expect(onAutoLayout).toHaveBeenCalledTimes(1);
+  expect(onEditingIntent).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 'node-positions', cause: 'automatic-layout' }),
+  );
+});
+
+test('emits complete dependency intents and ignores incomplete connection gestures', async () => {
+  const user = userEvent.setup();
+  const onEditingIntent = vi.fn();
+  render(
+    <RoadmapGraph
+      projection={{
+        kind: 'teaching',
+        roadmap,
+        editing: editingCapability({ onEditingIntent }),
+      }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Conectar dependencia' }));
+  expect(onEditingIntent).toHaveBeenCalledWith({
+    kind: 'create-dependency',
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  });
+
+  onEditingIntent.mockClear();
+  await user.click(screen.getByRole('button', { name: 'Conectar dependencia sin puntos' }));
+  expect(onEditingIntent).toHaveBeenCalledWith({
+    kind: 'create-dependency',
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  });
+
+  onEditingIntent.mockClear();
+  await user.click(screen.getByRole('button', { name: 'Intentar conexión incompleta' }));
+  expect(onEditingIntent).not.toHaveBeenCalled();
+});
+
+test('emits an immutable collection when deleting Dependencies', async () => {
+  const user = userEvent.setup();
+  const onEditingIntent = vi.fn();
+  render(
+    <RoadmapGraph
+      projection={{
+        kind: 'teaching',
+        roadmap,
+        editing: editingCapability({ onEditingIntent }),
+      }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Eliminar dependencias' }));
+
+  const [intent] = onEditingIntent.mock.calls[0] as [RoadmapGraphEditingIntent];
+  expect(intent).toEqual({
+    kind: 'delete-dependencies',
+    dependencyIds: ['dependency-1', 'dependency-2'],
+  });
+  expect(intent.kind === 'delete-dependencies' && Object.isFrozen(intent.dependencyIds)).toBe(true);
 });
 
 test('does not expose automatic ordering when the Roadmap cannot be edited', () => {

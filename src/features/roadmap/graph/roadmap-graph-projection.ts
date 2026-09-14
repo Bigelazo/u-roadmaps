@@ -1,19 +1,48 @@
-import type { Connection, OnNodeDrag } from '@xyflow/react';
-import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
-import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
-import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
+import type {
+  RoadmapDependencyRequest,
+  RoadmapDto,
+  StudentRoadmapDto,
+} from '@/features/roadmap/types';
+import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
 
 /**
  * The complete graph-editing capability. Its presence is the only thing that
  * enables editing mechanics; individual operations are not independently
  * configurable at this seam.
  */
-export type RoadmapGraphEditing = Required<NodeActionCallbacks> & {
-  onMoveNode: OnNodeDrag<RoadmapFlowNode>;
-  onConnectNodes: (connection: Connection) => void;
-  onDeleteDependencies: (dependencyIds: string[]) => void;
-  onAutoLayout: (nodes: RoadmapFlowNode[]) => void;
-  onKeyboardNodeMove: (nodeId: string, position: { x: number; y: number }) => void;
+export type RoadmapNodePosition = {
+  readonly x: number;
+  readonly y: number;
+};
+
+export type RoadmapNodePlacement = {
+  readonly nodeId: string;
+  readonly position: RoadmapNodePosition;
+};
+
+export type RoadmapNodePositionCause = 'pointer' | 'keyboard' | 'automatic-layout';
+
+export type RoadmapViewport = {
+  readonly x: number;
+  readonly y: number;
+  readonly zoom: number;
+};
+
+export type RoadmapGraphEditingIntent =
+  | NodeActionIntent
+  | {
+      readonly kind: 'node-positions';
+      readonly cause: RoadmapNodePositionCause;
+      readonly positions: readonly RoadmapNodePlacement[];
+    }
+  | ({ readonly kind: 'create-dependency' } & RoadmapDependencyRequest)
+  | {
+      readonly kind: 'delete-dependencies';
+      readonly dependencyIds: readonly string[];
+    };
+
+export type RoadmapGraphEditing = {
+  onEditingIntent: (intent: RoadmapGraphEditingIntent) => void;
 };
 
 export type TeachingRoadmapGraphProjection = {

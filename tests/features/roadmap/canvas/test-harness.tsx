@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 import { RoadmapCanvas as RoadmapCanvasComponent } from '@/features/roadmap';
 import type {
-  RoadmapGraphEditing,
+  RoadmapGraphEditingIntent,
   RoadmapGraphOverlaySlots,
   RoadmapGraphProjection,
 } from '@/features/roadmap/graph/RoadmapGraph';
@@ -170,6 +170,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   }) => {
     const editing = projection.kind === 'teaching' ? projection.editing : undefined;
     const canEdit = editing !== undefined;
+    const emitEditingIntent = (intent: RoadmapGraphEditingIntent) =>
+      editing?.onEditingIntent(intent);
     return (
       <>
         <div data-testid="roadmap-overlay-top-left">{overlaySlots?.topLeft}</div>
@@ -192,19 +194,38 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         <button type="button" onClick={() => onSelectNode('node-1', document.createElement('div'))}>
           Activar nodo docente
         </button>
-        <button type="button" onClick={() => editing?.onRequestVisibilityAction('node-1', true)}>
+        <button
+          type="button"
+          onClick={() =>
+            emitEditingIntent({ kind: 'change-visibility', nodeId: 'node-1', isVisible: false })
+          }
+        >
           Solicitar ocultar nodo
         </button>
-        <button type="button" onClick={() => editing?.onRequestVisibilityAction('node-1', false)}>
+        <button
+          type="button"
+          onClick={() =>
+            emitEditingIntent({ kind: 'change-visibility', nodeId: 'node-1', isVisible: true })
+          }
+        >
           Solicitar mostrar nodo
         </button>
-        <button type="button" onClick={() => editing?.onRequestAddResource('node-1')}>
+        <button
+          type="button"
+          onClick={() => emitEditingIntent({ kind: 'add-resource', nodeId: 'node-1' })}
+        >
           Agregar recurso al nodo actual
         </button>
-        <button type="button" onClick={() => editing?.onRequestAddResource('node-2')}>
+        <button
+          type="button"
+          onClick={() => emitEditingIntent({ kind: 'add-resource', nodeId: 'node-2' })}
+        >
           Agregar recurso a otro nodo
         </button>
-        <button type="button" onClick={() => editing?.onRequestDelete('node-1')}>
+        <button
+          type="button"
+          onClick={() => emitEditingIntent({ kind: 'delete-node', nodeId: 'node-1' })}
+        >
           Solicitar eliminar nodo
         </button>
         <button
@@ -215,16 +236,22 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         </button>
         <button
           type="button"
-          onClick={() => editing?.onDeleteDependencies(['dependency-1', 'dependency-2'])}
+          onClick={() =>
+            emitEditingIntent({
+              kind: 'delete-dependencies',
+              dependencyIds: ['dependency-1', 'dependency-2'],
+            })
+          }
         >
           Solicitar eliminación de dependencias
         </button>
         <button
           type="button"
           onClick={() =>
-            editing?.onConnectNodes({
-              source: 'source-node',
-              target: 'target-node',
+            emitEditingIntent({
+              kind: 'create-dependency',
+              sourceNodeId: 'source-node',
+              targetNodeId: 'target-node',
               sourceHandle: 'right',
               targetHandle: 'left',
             })
@@ -235,12 +262,11 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         <button
           type="button"
           onClick={() =>
-            editing?.onAutoLayout([
-              {
-                id: 'node-1',
-                position: { x: 40, y: 80 },
-              } as Parameters<RoadmapGraphEditing['onAutoLayout']>[0][number],
-            ])
+            emitEditingIntent({
+              kind: 'node-positions',
+              cause: 'automatic-layout',
+              positions: [{ nodeId: 'node-1', position: { x: 40, y: 80 } }],
+            })
           }
         >
           Ordenar mapa
@@ -250,7 +276,13 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         </button>
         <button
           type="button"
-          onClick={() => editing?.onKeyboardNodeMove('node-1', { x: 20, y: 0 })}
+          onClick={() =>
+            emitEditingIntent({
+              kind: 'node-positions',
+              cause: 'keyboard',
+              positions: [{ nodeId: 'node-1', position: { x: 20, y: 0 } }],
+            })
+          }
         >
           Mover nodo con teclado
         </button>

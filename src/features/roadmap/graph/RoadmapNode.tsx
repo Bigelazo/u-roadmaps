@@ -153,10 +153,7 @@ function NodeActionMenu({
   isOpen,
   isClosing,
   onToggle,
-  onRequestAccessAction,
-  onRequestVisibilityAction,
-  onRequestAddResource,
-  onRequestDelete,
+  onAction,
 }: NodeActionCallbacks & {
   nodeId: string;
   hidden: boolean;
@@ -176,7 +173,12 @@ function NodeActionMenu({
             label: accessLabel,
             Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
             HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
-            onSelect: () => onRequestAccessAction?.(nodeId, teacherBlocked ? 'UNBLOCK' : 'BLOCK'),
+            onSelect: () =>
+              onAction?.({
+                kind: 'change-teacher-block',
+                nodeId,
+                operation: teacherBlocked ? 'UNBLOCK' : 'BLOCK',
+              }),
             angle: 0,
           },
         ]
@@ -186,7 +188,7 @@ function NodeActionMenu({
       label: visibilityLabel,
       Icon: hidden ? EyeOff : Eye,
       HoverIcon: hidden ? Eye : EyeOff,
-      onSelect: () => onRequestVisibilityAction?.(nodeId, !hidden),
+      onSelect: () => onAction?.({ kind: 'change-visibility', nodeId, isVisible: hidden }),
       angle: 30,
     },
     {
@@ -194,7 +196,7 @@ function NodeActionMenu({
       label: 'Agregar recurso',
       Icon: FilePlusCorner,
       HoverIcon: null,
-      onSelect: () => onRequestAddResource?.(nodeId),
+      onSelect: () => onAction?.({ kind: 'add-resource', nodeId }),
       angle: 60,
     },
     {
@@ -202,7 +204,7 @@ function NodeActionMenu({
       label: 'Eliminar nodo',
       Icon: Trash2,
       HoverIcon: null,
-      onSelect: () => onRequestDelete?.(nodeId),
+      onSelect: () => onAction?.({ kind: 'delete-node', nodeId }),
       angle: 90,
     },
   ];
@@ -425,10 +427,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
           isOpen={Boolean(data.isActionMenuOpen)}
           isClosing={Boolean(data.isActionMenuClosing)}
           onToggle={data.onToggleActionMenu}
-          onRequestAccessAction={data.onRequestAccessAction}
-          onRequestVisibilityAction={data.onRequestVisibilityAction}
-          onRequestAddResource={data.onRequestAddResource}
-          onRequestDelete={data.onRequestDelete}
+          onAction={data.onAction}
         />
       ) : hidden ? (
         <HiddenBadge />

@@ -171,15 +171,7 @@ const studentRoadmap: StudentRoadmapDto = {
 
 function editingCapability(overrides: Partial<RoadmapGraphEditing> = {}): RoadmapGraphEditing {
   return {
-    onMoveNode: vi.fn(),
-    onKeyboardNodeMove: vi.fn(),
-    onConnectNodes: vi.fn(),
-    onDeleteDependencies: vi.fn(),
-    onAutoLayout: vi.fn(),
-    onRequestAccessAction: vi.fn(),
-    onRequestVisibilityAction: vi.fn(),
-    onRequestAddResource: vi.fn(),
-    onRequestDelete: vi.fn(),
+    onEditingIntent: vi.fn(),
     ...overrides,
   };
 }
