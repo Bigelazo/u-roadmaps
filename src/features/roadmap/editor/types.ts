@@ -23,6 +23,12 @@ export type ResourceInput = {
   type: Resource['type'];
 };
 
+export type ResourceActionCallbacks = {
+  onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
+  onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
+  onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
+};
+
 export type ResourceEditorDraft = {
   value: ResourceInput;
   editingResourceId: string | null;
@@ -59,7 +65,7 @@ export type NodeTypeDraft = {
   color?: NodeTypeColor;
 };
 
-export type RoadmapEditorProps = {
+export type RoadmapEditorProps = ResourceActionCallbacks & {
   roadmap: RoadmapDto;
   selectedNode: RoadmapNode | undefined;
   isVisibilityPending: boolean;
@@ -70,9 +76,6 @@ export type RoadmapEditorProps = {
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
   onRequestTeacherBlock: (nodeId: string, operation: TeacherBlockOperation) => void;
   onDeleteNode: (nodeId: string) => Promise<boolean>;
-  onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
-  onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
-  onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onDeleteResource: (resourceId: string) => Promise<boolean>;
   onPreview: (node: StudentAccessibleRoadmapNode) => void;
   previewButtonRef: RefObject<HTMLButtonElement | null>;

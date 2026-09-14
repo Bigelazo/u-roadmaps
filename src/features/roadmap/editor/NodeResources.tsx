@@ -4,9 +4,9 @@ import type { Resource, RoadmapNode } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { ResourceComposer } from './ResourceComposer';
 import { ResourceList } from './ResourceList';
-import type { ResourceInput } from './types';
+import type { ResourceActionCallbacks, ResourceInput } from './types';
 
-type Props = {
+type Props = ResourceActionCallbacks & {
   node: RoadmapNode;
   resourceValue: ResourceInput;
   editingResourceId: string | null;
@@ -18,9 +18,6 @@ type Props = {
   onComposerClose: () => void;
   onModeChange: (mode: 'file' | 'link') => void;
   onSelectedFileChange: (file: File | null) => void;
-  onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
-  onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
-  onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onStartEditingResource: (resource: Resource) => void;
   onCancelResource: () => void;
   onDeleteResource: (resource: Resource) => void;

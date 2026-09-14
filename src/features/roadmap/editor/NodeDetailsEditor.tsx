@@ -21,10 +21,10 @@ import { Switch } from '@/shared/ui/switch';
 import { Textarea } from '@/shared/ui/textarea';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeResources } from './NodeResources';
-import type { NodeUpdate, ResourceInput } from './types';
+import type { NodeUpdate, ResourceActionCallbacks, ResourceInput } from './types';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 
-type Props = {
+type Props = ResourceActionCallbacks & {
   node: RoadmapNode;
   nodeTypes: RoadmapDto['nodeTypes'];
   nodeValue: NodeUpdate;
@@ -44,9 +44,6 @@ type Props = {
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
   onRequestTeacherBlock: (nodeId: string, operation: TeacherBlockOperation) => void;
-  onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
-  onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
-  onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onStartEditingResource: (resource: Resource) => void;
   onCancelResource: () => void;
   onDeleteNode: (node: RoadmapNode) => void;

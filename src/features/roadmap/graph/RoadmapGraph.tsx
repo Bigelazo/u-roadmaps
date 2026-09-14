@@ -31,7 +31,10 @@ import {
 } from '@xyflow/react';
 import { LayoutTemplate, Maximize } from 'lucide-react';
 import { roadmapGridSize, type NodeRect } from '@/features/roadmap/graph/geometry';
-import type { NodeAccessActionOperation } from '@/features/roadmap/graph/node-action';
+import type {
+  NodeAccessActionOperation,
+  NodeActionCallbacks,
+} from '@/features/roadmap/graph/node-action';
 import {
   roadmapAutoLayoutConfirmation,
   roadmapConfirmationActionIds,
@@ -176,7 +179,7 @@ function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): Roadmap
   };
 }
 
-type Props = {
+type Props = NodeActionCallbacks & {
   roadmap: AnyRoadmapDto;
   canEdit: boolean;
   isTeacherView?: boolean;
@@ -191,10 +194,6 @@ type Props = {
   topRightActions?: (getViewport: () => NodeRect) => ReactNode;
   onViewportChange?: (viewport: Viewport) => void;
   restoreViewport?: Viewport | null;
-  onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
-  onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
-  onRequestAddResource?: (nodeId: string) => void;
-  onRequestDelete?: (nodeId: string) => void;
 };
 
 export type RoadmapGraphHandle = {

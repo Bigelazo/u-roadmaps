@@ -17,32 +17,29 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
-import type { NodeAccessActionOperation } from '@/features/roadmap/graph/node-action';
+import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
-export type RoadmapNodeData = Record<string, unknown> & {
-  title: string;
-  typeColor: string;
-  typeName: string;
-  typeIcon: string;
-  status: RoadmapNodeStatus;
-  isHidden: boolean;
-  isTeacherBlocked: boolean;
-  fileCount?: number;
-  linkCount?: number;
-  blockReason?: StudentNodeBlockReason;
-  canManageActions?: boolean;
-  isActionMenuOpen?: boolean;
-  isActionMenuClosing?: boolean;
-  onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
-  onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
-  onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
-  onRequestAddResource?: (nodeId: string) => void;
-  onRequestDelete?: (nodeId: string) => void;
-};
+export type RoadmapNodeData = Record<string, unknown> &
+  NodeActionCallbacks & {
+    title: string;
+    typeColor: string;
+    typeName: string;
+    typeIcon: string;
+    status: RoadmapNodeStatus;
+    isHidden: boolean;
+    isTeacherBlocked: boolean;
+    fileCount?: number;
+    linkCount?: number;
+    blockReason?: StudentNodeBlockReason;
+    canManageActions?: boolean;
+    isActionMenuOpen?: boolean;
+    isActionMenuClosing?: boolean;
+    onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
+  };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
 
@@ -160,17 +157,13 @@ function NodeActionMenu({
   onRequestVisibilityAction,
   onRequestAddResource,
   onRequestDelete,
-}: {
+}: NodeActionCallbacks & {
   nodeId: string;
   hidden: boolean;
   teacherBlocked: boolean;
   isOpen: boolean;
   isClosing: boolean;
   onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
-  onRequestAccessAction?: (nodeId: string, operation: NodeAccessActionOperation) => void;
-  onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
-  onRequestAddResource?: (nodeId: string) => void;
-  onRequestDelete?: (nodeId: string) => void;
 }) {
   const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
   const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';

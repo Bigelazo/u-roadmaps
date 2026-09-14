@@ -3,7 +3,7 @@ import type { AnyRoadmapDto, RoadmapNodeDto } from '@/features/roadmap/types';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import type { RoadmapFlowNode, RoadmapNodeStatus } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
-import type { NodeAccessActionOperation } from '@/features/roadmap/graph/node-action';
+import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 
 const studentEdgeStroke = 'var(--ink)';
 
@@ -17,14 +17,10 @@ export function mapRoadmapGraph(
   canEdit: boolean,
   onDeleteDependency?: (dependencyId: string) => void,
   selectedNodeId?: string | null,
-  actionMenu?: {
+  actionMenu?: NodeActionCallbacks & {
     openNodeId: string | null;
     closingNodeId: string | null;
     onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
-    onRequestAccessAction: (nodeId: string, operation: NodeAccessActionOperation) => void;
-    onRequestVisibilityAction: (nodeId: string, isVisible: boolean) => void;
-    onRequestAddResource: (nodeId: string) => void;
-    onRequestDelete: (nodeId: string) => void;
   },
 ) {
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));

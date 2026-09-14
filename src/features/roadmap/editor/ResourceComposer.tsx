@@ -4,9 +4,9 @@ import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import type { Resource } from '@/features/roadmap/types';
 import { inputClassName } from './primitives';
-import type { ResourceInput } from './types';
+import type { ResourceActionCallbacks, ResourceInput } from './types';
 
-type Props = {
+type Props = ResourceActionCallbacks & {
   nodeId: string;
   resourceValue: ResourceInput;
   editingResourceId: string | null;
@@ -16,9 +16,6 @@ type Props = {
   onModeChange: (mode: 'file' | 'link') => void;
   onSelectedFileChange: (file: File | null) => void;
   onResourceChange: (value: ResourceInput) => void;
-  onAddResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
-  onUploadResource: (nodeId: string, file: File) => Promise<boolean>;
-  onUpdateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
   onClose: () => void;
 };
 
