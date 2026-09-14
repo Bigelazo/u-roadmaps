@@ -1,9 +1,13 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { expect, test, vi } from 'vitest';
+import { expect, expectTypeOf, test, vi } from 'vitest';
 import { useRoadmap } from '@/features/roadmap/useRoadmap';
+import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
 const firstOffering = { courseCode: 'MAT101', year: 2026, semester: 1 };
 const secondOffering = { courseCode: 'MAT102', year: 2026, semester: 1 };
+
+type TeachingRoadmapResult = ReturnType<typeof useRoadmap<'teaching'>>;
+type StudentRoadmapResult = ReturnType<typeof useRoadmap<'student'>>;
 
 function roadmap(title: string) {
   return {
@@ -82,6 +86,11 @@ test('loads, completes, and resets a teacher simulation through its student-mode
     expect(result.current.simulationRoadmap?.roadmap.id).toBe('simulation-after-reset'),
   );
   expect(result.current.roadmap?.roadmap.id).toBe('editing');
+  expectTypeOf<TeachingRoadmapResult['roadmap']>().toEqualTypeOf<RoadmapDto | null>();
+  expectTypeOf<StudentRoadmapResult['roadmap']>().toEqualTypeOf<StudentRoadmapDto | null>();
+  expectTypeOf<
+    TeachingRoadmapResult['simulationRoadmap']
+  >().toEqualTypeOf<StudentRoadmapDto | null>();
 });
 
 test('keeps simulation completion and reset errors visible after refreshing the projection', async () => {
@@ -179,7 +188,19 @@ test('keeps a saved node position when canvas preview replaces the editing proje
   };
   const previewRoadmap = {
     ...roadmap('preview'),
-    nodes: [{ ...editingRoadmap.nodes[0], positionX: 160, positionY: 80 }],
+    nodes: [
+      {
+        ...editingRoadmap.nodes[0],
+        positionX: 160,
+        positionY: 80,
+        isVisible: true,
+        access: { status: 'ACCESSIBLE' as const },
+        description: null,
+        isCompleted: false,
+        canComplete: true,
+        resources: [],
+      },
+    ],
   };
   const fetchMock = vi
     .fn()

@@ -2,7 +2,11 @@ import { forwardRef, type ReactNode, useImperativeHandle, useState } from 'react
 import { render } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 import { RoadmapCanvas as RoadmapCanvasComponent } from '@/features/roadmap';
-import type { RoadmapGraphOverlaySlots } from '@/features/roadmap/graph/RoadmapGraph';
+import type {
+  RoadmapGraphEditing,
+  RoadmapGraphOverlaySlots,
+  RoadmapGraphProjection,
+} from '@/features/roadmap/graph/RoadmapGraph';
 
 export const RoadmapCanvasForTest = RoadmapCanvasComponent;
 
@@ -140,43 +144,20 @@ vi.mock('next/dynamic', () => ({
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
     onSelectNode,
-    onConnectNodes,
-    onDeleteDependencies,
-    onAutoLayout,
     onClearSelectedNode,
-    onKeyboardNodeMove,
     selectedNodeId,
     topRightActions,
-    roadmap,
-    canEdit,
-    isTeacherView,
+    projection,
     onViewportChange,
     restoreViewport,
-    onRequestVisibilityAction,
-    onRequestAddResource,
-    onRequestDelete,
     overlaySlots,
   }: {
     onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
-    onConnectNodes: (connection: {
-      source: string | null;
-      target: string | null;
-      sourceHandle?: string | null;
-      targetHandle?: string | null;
-    }) => void;
-    onDeleteDependencies: (ids: string[]) => void;
-    onAutoLayout: (nodes: { id: string; position: { x: number; y: number } }[]) => void;
     onClearSelectedNode?: () => void;
-    onKeyboardNodeMove?: (nodeId: string, position: { x: number; y: number }) => void;
     selectedNodeId?: string | null;
-    roadmap: { roadmap: { id: string } };
-    canEdit: boolean;
-    isTeacherView?: boolean;
+    projection: RoadmapGraphProjection;
     onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
     restoreViewport?: { x: number; y: number; zoom: number } | null;
-    onRequestVisibilityAction?: (nodeId: string, isVisible: boolean) => void;
-    onRequestAddResource?: (nodeId: string) => void;
-    onRequestDelete?: (nodeId: string) => void;
     topRightActions?: (
       getViewport: () => {
         x: number;
@@ -186,83 +167,102 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       },
     ) => ReactNode;
     overlaySlots?: RoadmapGraphOverlaySlots;
-  }) => (
-    <>
-      <div data-testid="roadmap-overlay-top-left">{overlaySlots?.topLeft}</div>
-      <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
-      <div data-testid="roadmap-overlay-bottom-right">{overlaySlots?.bottomRight}</div>
-      {topRightActions?.(() => ({ x: 0, y: 0, width: 800, height: 600 }))}
-      <output data-testid="selected-roadmap-node">{selectedNodeId}</output>
-      <output data-testid="roadmap-mode">{canEdit ? 'editing' : 'student'}</output>
-      <output data-testid="roadmap-projection">{isTeacherView ? 'teacher' : 'student'}</output>
-      <output data-testid="displayed-roadmap">{roadmap.roadmap.id}</output>
-      <output data-testid="restored-viewport">{restoreViewport?.x ?? 'none'}</output>
-      <button
-        type="button"
-        onClick={() => onSelectNode('blocked-node', document.createElement('div'))}
-      >
-        Activar nodo bloqueado
-      </button>
-      <button type="button" onClick={() => onSelectNode('node-1', document.createElement('div'))}>
-        Activar nodo docente
-      </button>
-      <button type="button" onClick={() => onRequestVisibilityAction?.('node-1', true)}>
-        Solicitar ocultar nodo
-      </button>
-      <button type="button" onClick={() => onRequestVisibilityAction?.('node-1', false)}>
-        Solicitar mostrar nodo
-      </button>
-      <button type="button" onClick={() => onRequestAddResource?.('node-1')}>
-        Agregar recurso al nodo actual
-      </button>
-      <button type="button" onClick={() => onRequestAddResource?.('node-2')}>
-        Agregar recurso a otro nodo
-      </button>
-      <button type="button" onClick={() => onRequestDelete?.('node-1')}>
-        Solicitar eliminar nodo
-      </button>
-      <button
-        type="button"
-        onClick={() => onSelectNode('missing-node', document.createElement('div'))}
-      >
-        Activar nodo inexistente
-      </button>
-      <button type="button" onClick={() => onDeleteDependencies(['dependency-1', 'dependency-2'])}>
-        Solicitar eliminación de dependencias
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          onConnectNodes({
-            source: 'source-node',
-            target: 'target-node',
-            sourceHandle: 'right',
-            targetHandle: 'left',
-          })
-        }
-      >
-        Conectar rama bloqueada
-      </button>
-      <button
-        type="button"
-        onClick={() => onAutoLayout([{ id: 'node-1', position: { x: 40, y: 80 } }])}
-      >
-        Ordenar mapa
-      </button>
-      <button type="button" onClick={onClearSelectedNode}>
-        Cerrar nodo con Escape
-      </button>
-      <button type="button" onClick={() => onKeyboardNodeMove?.('node-1', { x: 20, y: 0 })}>
-        Mover nodo con teclado
-      </button>
-      <button type="button" onClick={() => onViewportChange?.({ x: 100, y: 0, zoom: 1 })}>
-        Mover viewport a 100
-      </button>
-      <button type="button" onClick={() => onViewportChange?.({ x: 400, y: 0, zoom: 1 })}>
-        Mover viewport a 400
-      </button>
-    </>
-  ),
+  }) => {
+    const editing = projection.kind === 'teaching' ? projection.editing : undefined;
+    const canEdit = editing !== undefined;
+    return (
+      <>
+        <div data-testid="roadmap-overlay-top-left">{overlaySlots?.topLeft}</div>
+        <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
+        <div data-testid="roadmap-overlay-bottom-right">{overlaySlots?.bottomRight}</div>
+        {topRightActions?.(() => ({ x: 0, y: 0, width: 800, height: 600 }))}
+        <output data-testid="selected-roadmap-node">{selectedNodeId}</output>
+        <output data-testid="roadmap-mode">{canEdit ? 'editing' : 'student'}</output>
+        <output data-testid="roadmap-projection">
+          {projection.kind === 'teaching' ? 'teacher' : 'student'}
+        </output>
+        <output data-testid="displayed-roadmap">{projection.roadmap.roadmap.id}</output>
+        <output data-testid="restored-viewport">{restoreViewport?.x ?? 'none'}</output>
+        <button
+          type="button"
+          onClick={() => onSelectNode('blocked-node', document.createElement('div'))}
+        >
+          Activar nodo bloqueado
+        </button>
+        <button type="button" onClick={() => onSelectNode('node-1', document.createElement('div'))}>
+          Activar nodo docente
+        </button>
+        <button type="button" onClick={() => editing?.onRequestVisibilityAction('node-1', true)}>
+          Solicitar ocultar nodo
+        </button>
+        <button type="button" onClick={() => editing?.onRequestVisibilityAction('node-1', false)}>
+          Solicitar mostrar nodo
+        </button>
+        <button type="button" onClick={() => editing?.onRequestAddResource('node-1')}>
+          Agregar recurso al nodo actual
+        </button>
+        <button type="button" onClick={() => editing?.onRequestAddResource('node-2')}>
+          Agregar recurso a otro nodo
+        </button>
+        <button type="button" onClick={() => editing?.onRequestDelete('node-1')}>
+          Solicitar eliminar nodo
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectNode('missing-node', document.createElement('div'))}
+        >
+          Activar nodo inexistente
+        </button>
+        <button
+          type="button"
+          onClick={() => editing?.onDeleteDependencies(['dependency-1', 'dependency-2'])}
+        >
+          Solicitar eliminación de dependencias
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            editing?.onConnectNodes({
+              source: 'source-node',
+              target: 'target-node',
+              sourceHandle: 'right',
+              targetHandle: 'left',
+            })
+          }
+        >
+          Conectar rama bloqueada
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            editing?.onAutoLayout([
+              {
+                id: 'node-1',
+                position: { x: 40, y: 80 },
+              } as Parameters<RoadmapGraphEditing['onAutoLayout']>[0][number],
+            ])
+          }
+        >
+          Ordenar mapa
+        </button>
+        <button type="button" onClick={onClearSelectedNode}>
+          Cerrar nodo con Escape
+        </button>
+        <button
+          type="button"
+          onClick={() => editing?.onKeyboardNodeMove('node-1', { x: 20, y: 0 })}
+        >
+          Mover nodo con teclado
+        </button>
+        <button type="button" onClick={() => onViewportChange?.({ x: 100, y: 0, zoom: 1 })}>
+          Mover viewport a 100
+        </button>
+        <button type="button" onClick={() => onViewportChange?.({ x: 400, y: 0, zoom: 1 })}>
+          Mover viewport a 400
+        </button>
+      </>
+    );
+  },
 }));
 
 vi.mock('@/features/roadmap/student/NodeDetail', () => ({

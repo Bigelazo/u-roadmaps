@@ -1,20 +1,20 @@
 import { MarkerType } from '@xyflow/react';
-import type { AnyRoadmapDto, RoadmapNodeDto } from '@/features/roadmap/types';
+import type { RoadmapNodeDto } from '@/features/roadmap/types';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import type { RoadmapFlowNode, RoadmapNodeStatus } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
+import type { RoadmapGraphProjection } from '@/features/roadmap/graph/roadmap-graph-projection';
 
 const studentEdgeStroke = 'var(--ink)';
 
-function nodeStatus(node: RoadmapNodeDto, canEdit: boolean): RoadmapNodeStatus {
-  if (canEdit) return 'editing';
+function nodeStatus(node: RoadmapNodeDto, isTeacherView: boolean): RoadmapNodeStatus {
+  if (isTeacherView) return 'editing';
   return studentNodeStatus(node);
 }
 
 export function mapRoadmapGraph(
-  roadmap: AnyRoadmapDto,
-  canEdit: boolean,
+  projection: RoadmapGraphProjection,
   onDeleteDependency?: (dependencyId: string) => void,
   selectedNodeId?: string | null,
   actionMenu?: NodeActionCallbacks & {
@@ -23,11 +23,14 @@ export function mapRoadmapGraph(
     onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
   },
 ) {
+  const { roadmap } = projection;
+  const isTeacherView = projection.kind === 'teaching';
+  const canEdit = isTeacherView && Boolean(projection.editing);
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
   const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
-    const blockReason = canEdit ? undefined : studentNodeBlockReason(node);
+    const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
     const resources = 'resources' in node ? node.resources : [];
     return {
       id: node.id,
@@ -37,9 +40,9 @@ export function mapRoadmapGraph(
         typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
         typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
         typeIcon: nodeTypesById.get(node.nodeTypeId)?.icon ?? 'Shapes',
-        status: nodeStatus(node, canEdit),
+        status: nodeStatus(node, isTeacherView),
         isHidden,
-        isTeacherBlocked: canEdit && 'isTeacherBlocked' in node && node.isTeacherBlocked,
+        isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
         fileCount: resources.filter((resource) => resource.type === 'FILE').length,
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
         blockReason,
@@ -55,7 +58,7 @@ export function mapRoadmapGraph(
       },
       position: { x: node.positionX, y: node.positionY },
       selected: node.id === selectedNodeId,
-      hidden: !canEdit && isHidden,
+      hidden: !isTeacherView && isHidden,
       connectable: canEdit && !isHidden,
       deletable: false,
       selectable: canEdit || !blockReason,
@@ -66,7 +69,7 @@ export function mapRoadmapGraph(
     };
   });
   const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
-    const defaultStroke = canEdit
+    const defaultStroke = isTeacherView
       ? (() => {
           const sourceNode = nodesById.get(dependency.sourceNodeId);
           return sourceNode && 'isCompleted' in sourceNode && sourceNode.isCompleted;

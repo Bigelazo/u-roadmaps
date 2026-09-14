@@ -6,6 +6,8 @@ import {
   type AnyRoadmapDto,
   type CourseOfferingIdentifier,
   type NodeDeletionImpact,
+  type RoadmapDto,
+  type StudentRoadmapDto,
   type TeacherBlockImpact,
   type TeacherBlockOperation,
   type TeacherBlockPreview,
@@ -25,6 +27,63 @@ type NodeUpdate = { title: string; description: string; nodeTypeId: string };
 type NewResource = { title: string; url: string; type: Resource['type'] };
 type ResourceUpdate = NewResource;
 type NodeTypeInput = { name: string; icon: NodeTypeIconId; color: NodeTypeColor };
+export type RoadmapProjectionKind = 'teaching' | 'student';
+type RoadmapForProjection<Projection extends RoadmapProjectionKind> = Projection extends 'teaching'
+  ? RoadmapDto
+  : Projection extends 'student'
+    ? StudentRoadmapDto
+    : AnyRoadmapDto;
+
+type RoadmapHookResult<Projection extends RoadmapProjectionKind> = {
+  roadmap: RoadmapForProjection<Projection> | null;
+  simulationRoadmap: StudentRoadmapDto | null;
+  error: string | null;
+  dismissError: () => void;
+  loadSimulation: () => Promise<boolean>;
+  addNode: (
+    node: NewNode,
+    position: Point,
+    onCreated?: (nodeId: string) => void,
+  ) => Promise<boolean>;
+  updateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
+  moveNode: (nodeId: string, position: { x: number; y: number }) => Promise<boolean>;
+  connectNodes: (
+    sourceNodeId: string,
+    targetNodeId: string,
+    sourceHandle?: string,
+    targetHandle?: string,
+  ) => Promise<boolean>;
+  previewRoadmapDependency: (
+    sourceNodeId: string,
+    targetNodeId: string,
+    sourceHandle?: string,
+    targetHandle?: string,
+  ) => Promise<TeacherBlockImpact[] | null>;
+  previewTeacherBlock: (
+    nodeId: string,
+    operation: TeacherBlockOperation,
+  ) => Promise<TeacherBlockPreview | null>;
+  changeTeacherBlock: (
+    nodeId: string,
+    operation: TeacherBlockOperation,
+    previewVersion?: string,
+  ) => Promise<boolean>;
+  deleteDependency: (dependencyId: string) => Promise<boolean>;
+  toggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
+  previewNodeVisibility: (nodeId: string) => Promise<StructuralDependency[] | null>;
+  previewNodeDeletion: (nodeId: string) => Promise<NodeDeletionImpact | null>;
+  deleteNode: (nodeId: string, previewVersion?: string) => Promise<boolean>;
+  addResource: (nodeId: string, resource: NewResource) => Promise<boolean>;
+  uploadResource: (nodeId: string, file: File) => Promise<boolean>;
+  updateResource: (resourceId: string, resource: ResourceUpdate) => Promise<boolean>;
+  deleteResource: (resourceId: string) => Promise<boolean>;
+  addNodeType: (nodeType: NodeTypeInput) => Promise<boolean>;
+  updateNodeType: (nodeTypeId: string, nodeType: NodeTypeInput) => Promise<boolean>;
+  deleteNodeType: (nodeTypeId: string) => Promise<boolean>;
+  completeNode: (nodeId: string) => Promise<boolean>;
+  completeSimulatedNode: (nodeId: string) => Promise<boolean>;
+  resetSimulation: () => Promise<boolean>;
+};
 export type StructuralDependency = {
   id: string;
   sourceNodeId: string;
@@ -40,7 +99,7 @@ function identifierKey(identifier: CourseOfferingIdentifier) {
   return `${identifier.courseCode}:${identifier.year}:${identifier.semester}`;
 }
 
-function isRoadmapDto(value: unknown): value is AnyRoadmapDto {
+function isAnyRoadmapDto(value: unknown): value is AnyRoadmapDto {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -49,6 +108,25 @@ function isRoadmapDto(value: unknown): value is AnyRoadmapDto {
     'nodeTypes' in value &&
     Array.isArray(value.nodeTypes)
   );
+}
+
+function isTeachingRoadmapDto(value: AnyRoadmapDto): value is RoadmapDto {
+  return value.nodes.every((node) => 'isVisible' in node && 'isTeacherBlocked' in node);
+}
+
+function isStudentRoadmapDto(value: AnyRoadmapDto): value is StudentRoadmapDto {
+  return value.nodes.every((node) => 'access' in node);
+}
+
+function isRoadmapForProjection<Projection extends RoadmapProjectionKind>(
+  value: unknown,
+  expectedProjection?: Projection,
+): value is RoadmapForProjection<Projection> {
+  if (!isAnyRoadmapDto(value)) return false;
+  if (!expectedProjection) return true;
+  return expectedProjection === 'teaching'
+    ? isTeachingRoadmapDto(value)
+    : isStudentRoadmapDto(value);
 }
 
 function apiErrorMessage(value: unknown) {
@@ -184,10 +262,13 @@ function withRoadmapNodePosition<T extends AnyRoadmapDto>(
   } as T;
 }
 
-export function useRoadmap(identifier: CourseOfferingIdentifier) {
-  const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
+export function useRoadmap<Projection extends RoadmapProjectionKind = RoadmapProjectionKind>(
+  identifier: CourseOfferingIdentifier,
+  expectedProjection?: Projection,
+): RoadmapHookResult<Projection> {
+  const [roadmap, setRoadmap] = useState<RoadmapForProjection<Projection> | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
-  const [simulationRoadmap, setSimulationRoadmap] = useState<AnyRoadmapDto | null>(null);
+  const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
   const [simulationRoadmapKey, setSimulationRoadmapKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -225,7 +306,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       ) {
         return false;
       }
-      if (!response.ok || !isRoadmapDto(body)) {
+      if (!response.ok || !isRoadmapForProjection(body, expectedProjection)) {
         setRoadmap(null);
         setRoadmapKey(requestKey);
         setError(message ?? 'No se pudo cargar el roadmap.');
@@ -255,7 +336,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       setErrorKey(requestKey);
       return false;
     }
-  }, [identifier]);
+  }, [expectedProjection, identifier]);
 
   useEffect(() => {
     void load();
@@ -297,7 +378,7 @@ export function useRoadmap(identifier: CourseOfferingIdentifier) {
       ) {
         return false;
       }
-      if (!response.ok || !isRoadmapDto(body)) {
+      if (!response.ok || !isRoadmapForProjection(body, 'student')) {
         setSimulationRoadmap(null);
         setSimulationRoadmapKey(requestKey);
         setError(message ?? 'No se pudo cargar la previsualización.');

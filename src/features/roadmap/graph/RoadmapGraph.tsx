@@ -25,31 +25,38 @@ import {
   type Connection,
   type EdgeChange,
   type NodeChange,
-  type OnNodeDrag,
   type Viewport,
   useReactFlow,
 } from '@xyflow/react';
 import { LayoutTemplate, Maximize } from 'lucide-react';
 import { roadmapGridSize, type NodeRect } from '@/features/roadmap/graph/geometry';
-import type {
-  NodeAccessActionOperation,
-  NodeActionCallbacks,
-} from '@/features/roadmap/graph/node-action';
+import type { NodeAccessActionOperation } from '@/features/roadmap/graph/node-action';
 import {
   roadmapAutoLayoutConfirmation,
   roadmapConfirmationActionIds,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import { Button } from '@/shared/ui/button';
 import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
-import type { AnyRoadmapDto } from '@/features/roadmap/types';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
 import { mapRoadmapGraph } from '@/features/roadmap/graph/map-roadmap-graph';
+import type {
+  RoadmapGraphEditing,
+  RoadmapGraphProjection,
+} from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
+import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import {
   layoutRoadmapGraph,
   type RoadmapLayoutDirection,
 } from '@/features/roadmap/graph/dagre-layout';
+
+export type {
+  RoadmapGraphEditing,
+  RoadmapGraphProjection,
+  StudentRoadmapGraphProjection,
+  TeachingRoadmapGraphProjection,
+} from '@/features/roadmap/graph/roadmap-graph-projection';
 
 const selectedEdgeColor = 'var(--primary)';
 const roadmapFitViewOptions = { padding: 0.28 };
@@ -179,17 +186,10 @@ function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): Roadmap
   };
 }
 
-type Props = NodeActionCallbacks & {
-  roadmap: AnyRoadmapDto;
-  canEdit: boolean;
-  isTeacherView?: boolean;
+export type RoadmapGraphProps = {
+  projection: RoadmapGraphProjection;
   onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
-  onMoveNode: OnNodeDrag<RoadmapFlowNode>;
-  onConnectNodes: (connection: Connection) => void;
-  onDeleteDependencies: (dependencyIds: string[]) => void;
-  onAutoLayout: (nodes: RoadmapFlowNode[]) => void;
   onClearSelectedNode?: () => void;
-  onKeyboardNodeMove?: (nodeId: string, position: { x: number; y: number }) => void;
   selectedNodeId?: string | null;
   topRightActions?: (getViewport: () => NodeRect) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
@@ -235,30 +235,30 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   );
 }
 
-export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function RoadmapGraph(
+export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(function RoadmapGraph(
   {
-    roadmap,
-    canEdit,
-    isTeacherView = canEdit,
+    projection,
     onSelectNode,
-    onMoveNode,
-    onConnectNodes,
-    onDeleteDependencies,
-    onAutoLayout,
     onClearSelectedNode,
-    onKeyboardNodeMove,
     selectedNodeId,
     topRightActions,
     overlaySlots,
     onViewportChange,
     restoreViewport,
-    onRequestAccessAction,
-    onRequestVisibilityAction,
-    onRequestAddResource,
-    onRequestDelete,
-  }: Props,
+  }: RoadmapGraphProps,
   ref,
 ) {
+  const editing: RoadmapGraphEditing | undefined =
+    projection.kind === 'teaching' ? projection.editing : undefined;
+  const canEdit = editing !== undefined;
+  const projectionKind = projection.kind;
+  const projectionRoadmap = projection.roadmap;
+  const stableProjection = useMemo<RoadmapGraphProjection>(() => {
+    if (projectionKind === 'student') {
+      return { kind: 'student', roadmap: projectionRoadmap as StudentRoadmapDto };
+    }
+    return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
+  }, [editing, projectionKind, projectionRoadmap]);
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const [autoLayoutConfirmation, setAutoLayoutConfirmation] =
     useState<ConfirmationPresentation | null>(null);
@@ -266,6 +266,11 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
   const [closingActionMenuNodeId, setClosingActionMenuNodeId] = useState<string | null>(null);
   const actionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const actionMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onDeleteDependencies = editing?.onDeleteDependencies;
+  const onRequestAccessAction = editing?.onRequestAccessAction;
+  const onRequestVisibilityAction = editing?.onRequestVisibilityAction;
+  const onRequestAddResource = editing?.onRequestAddResource;
+  const onRequestDelete = editing?.onRequestDelete;
   // El lienzo guarda las posiciones que el arrastre todavía no ha recargado, de
   // modo que solo un roadmap nuevo puede reemplazarlas. Las devoluciones viven
   // en una referencia para que un render del contenedor no rehaga el grafo.
@@ -297,7 +302,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
   }, [selectedNodeId]);
   const keyboardMovePendingRef = useRef(false);
   const deleteDependency = useCallback(
-    (dependencyId: string) => handlers.current.onDeleteDependencies([dependencyId]),
+    (dependencyId: string) => handlers.current.onDeleteDependencies?.([dependencyId]),
     [],
   );
   const beginClosingActionMenu = useCallback((nodeId: string) => {
@@ -380,20 +385,14 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
     ],
   );
   const [flow, setFlow] = useState(() =>
-    mapRoadmapGraph(roadmap, isTeacherView, deleteDependency, selectedNodeId, actionMenu),
+    mapRoadmapGraph(stableProjection, deleteDependency, selectedNodeId, actionMenu),
   );
 
   useEffect(() => {
     setFlow(
-      mapRoadmapGraph(
-        roadmap,
-        isTeacherView,
-        deleteDependency,
-        selectedNodeIdRef.current,
-        actionMenu,
-      ),
+      mapRoadmapGraph(stableProjection, deleteDependency, selectedNodeIdRef.current, actionMenu),
     );
-  }, [actionMenu, deleteDependency, isTeacherView, roadmap]);
+  }, [actionMenu, deleteDependency, stableProjection]);
 
   const previousSelectedNodeIdRef = useRef(selectedNodeId);
   useEffect(() => {
@@ -413,8 +412,8 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
   }, [selectedNodeId]);
 
   const connectNodes = useCallback(
-    (connection: Connection) => onConnectNodes(connection),
-    [onConnectNodes],
+    (connection: Connection) => editing?.onConnectNodes(connection),
+    [editing],
   );
 
   const applyAutoLayout = useCallback(() => {
@@ -422,8 +421,8 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
     const nodes = layoutRoadmapGraph(flow.nodes, flow.edges, direction);
     setFlow((current) => ({ ...current, nodes }));
     setLayoutDirection(direction);
-    onAutoLayout(nodes);
-  }, [flow.edges, flow.nodes, layoutDirection, onAutoLayout]);
+    editing?.onAutoLayout(nodes);
+  }, [editing, flow.edges, flow.nodes, layoutDirection]);
 
   const handleAutoLayoutAction = useCallback(
     (actionId: string) => {
@@ -496,7 +495,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
           if (movedWithKeyboard) {
             for (const change of changes) {
               if (change.type === 'position' && change.position)
-                onKeyboardNodeMove?.(change.id, change.position);
+                editing?.onKeyboardNodeMove(change.id, change.position);
             }
           }
         }}
@@ -541,14 +540,16 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, Props>(function Roadm
             : undefined
         }
         onNodeDragStop={
-          canEdit && !openActionMenuNodeId && !closingActionMenuNodeId ? onMoveNode : undefined
+          canEdit && !openActionMenuNodeId && !closingActionMenuNodeId
+            ? editing?.onMoveNode
+            : undefined
         }
         onConnect={
           canEdit && !openActionMenuNodeId && !closingActionMenuNodeId ? connectNodes : undefined
         }
         onEdgesDelete={
           canEdit && !openActionMenuNodeId && !closingActionMenuNodeId
-            ? (edges) => onDeleteDependencies(edges.map((edge) => edge.id))
+            ? (edges) => editing?.onDeleteDependencies(edges.map((edge) => edge.id))
             : undefined
         }
         onMoveEnd={(_event, viewport) => onViewportChange?.(viewport)}

@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import dynamic from 'next/dynamic';
 import { CircleAlert, Eye, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
@@ -19,7 +27,12 @@ import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
-import { RoadmapGraph, type RoadmapGraphHandle } from '@/features/roadmap/graph/RoadmapGraph';
+import {
+  RoadmapGraph,
+  type RoadmapGraphEditing,
+  type RoadmapGraphHandle,
+  type RoadmapGraphProjection,
+} from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
@@ -28,6 +41,7 @@ import type {
   CourseOfferingIdentifier,
   RoadmapDto,
   RoadmapNode,
+  StudentRoadmapDto,
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
 import type {
@@ -131,7 +145,7 @@ export default function RoadmapCanvas({
     loadSimulation,
     completeSimulatedNode,
     resetSimulation,
-  } = useRoadmap(identifier);
+  } = useRoadmap(identifier, canEdit || canPreview ? 'teaching' : 'student');
   const dependencyWorkflow = useDependencyWorkflow({
     roadmap,
     connectNodes,
@@ -294,11 +308,14 @@ export default function RoadmapCanvas({
     requestAnimationFrame(() => previewButtonRef.current?.focus());
   }
 
-  function openResourceComposer(nodeId: string) {
-    if (!canEditRoadmap || isCanvasPreview) return;
-    if (editorDraftGuard.request({ kind: 'discardResourceDraft', nodeId })) return;
-    dispatchCanvas({ type: 'openResourceComposer', nodeId });
-  }
+  const openResourceComposer = useCallback(
+    (nodeId: string) => {
+      if (!canEditRoadmap || isCanvasPreview) return;
+      if (requestEditorDraft({ kind: 'discardResourceDraft', nodeId })) return;
+      dispatchCanvas({ type: 'openResourceComposer', nodeId });
+    },
+    [canEditRoadmap, isCanvasPreview, requestEditorDraft],
+  );
 
   useEffect(() => {
     const handleKeyboardShortcut = (event: KeyboardEvent) => {
@@ -323,6 +340,49 @@ export default function RoadmapCanvas({
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
   }, [canEditRoadmap, isCanvasPreview, isEditorOpen, selectedNodeId, teacherPreviewNode]);
 
+  const displayedRoadmap = isCanvasPreview ? simulationRoadmap : roadmap;
+  const requestTeacherBlockChange = teacherBlockWorkflow.requestChange;
+  const requestVisibilityChange = nodeVisibilityWorkflow.requestChange;
+  const graphEditing = useMemo<RoadmapGraphEditing | undefined>(
+    () =>
+      canvasMode.isEditing
+        ? {
+            onMoveNode: (_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position)),
+            onKeyboardNodeMove: (nodeId, position) =>
+              void moveNode(nodeId, snapToRoadmapGrid(position)),
+            onConnectNodes: dependencyWorkflow.requestCreation,
+            onDeleteDependencies: dependencyWorkflow.requestDeletion,
+            onAutoLayout: (nodes) => {
+              void Promise.all(
+                nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
+              );
+            },
+            onRequestAccessAction: (nodeId, operation) =>
+              requestTeacherBlockChange(nodeId, operation),
+            onRequestVisibilityAction: (nodeId, isVisible) =>
+              void requestVisibilityChange(nodeId, isVisible),
+            onRequestAddResource: openResourceComposer,
+            onRequestDelete: nodeDeletionWorkflow.requestDeletion,
+          }
+        : undefined,
+    [
+      canvasMode.isEditing,
+      dependencyWorkflow.requestCreation,
+      dependencyWorkflow.requestDeletion,
+      moveNode,
+      nodeDeletionWorkflow.requestDeletion,
+      openResourceComposer,
+      requestTeacherBlockChange,
+      requestVisibilityChange,
+    ],
+  );
+  const graphProjection = useMemo<RoadmapGraphProjection | null>(() => {
+    if (!displayedRoadmap) return null;
+    return isStudentExperience
+      ? { kind: 'student', roadmap: displayedRoadmap as StudentRoadmapDto }
+      : { kind: 'teaching', roadmap: displayedRoadmap as RoadmapDto, editing: graphEditing };
+  }, [displayedRoadmap, graphEditing, isStudentExperience]);
+
   if (error && !roadmap) {
     return (
       <Alert variant="destructive" className="m-4 max-w-2xl">
@@ -344,8 +404,18 @@ export default function RoadmapCanvas({
       </Empty>
     );
   }
-
-  const displayedRoadmap = isCanvasPreview ? (simulationRoadmap ?? roadmap) : roadmap;
+  if (!displayedRoadmap || !graphProjection) {
+    return (
+      <Empty className="m-4 min-h-56 w-auto border bg-card">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Spinner aria-label="Cargando simulación" className="motion-reduce:animate-none" />
+          </EmptyMedia>
+          <EmptyTitle>Cargando simulación...</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
   const addNodeAtViewport = (
     node: Parameters<typeof addNode>[0],
@@ -403,9 +473,7 @@ export default function RoadmapCanvas({
         >
           <RoadmapGraph
             ref={roadmapGraphRef}
-            roadmap={displayedRoadmap}
-            canEdit={canvasMode.isEditing}
-            isTeacherView={!isStudentExperience}
+            projection={graphProjection}
             onSelectNode={(nodeId, trigger) => {
               const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
               if (isStudentExperience && isStudentBlockedNode(node)) return;
@@ -417,28 +485,9 @@ export default function RoadmapCanvas({
               });
             }}
             selectedNodeId={selectedNodeId}
-            onMoveNode={(_event, node) => void moveNode(node.id, snapToRoadmapGrid(node.position))}
-            onKeyboardNodeMove={(nodeId, position) =>
-              void moveNode(nodeId, snapToRoadmapGrid(position))
-            }
             onClearSelectedNode={closeSelectedNode}
-            onConnectNodes={dependencyWorkflow.requestCreation}
-            onDeleteDependencies={dependencyWorkflow.requestDeletion}
-            onAutoLayout={(nodes) => {
-              void Promise.all(
-                nodes.map((node) => moveNode(node.id, snapToRoadmapGrid(node.position))),
-              );
-            }}
             onViewportChange={canvasPreviewWorkflow.onViewportChange}
             restoreViewport={canvasPreviewWorkflow.restoreViewport}
-            onRequestAccessAction={(nodeId, operation) =>
-              teacherBlockWorkflow.requestChange(nodeId, operation)
-            }
-            onRequestVisibilityAction={(nodeId, isVisible) =>
-              void nodeVisibilityWorkflow.requestChange(nodeId, isVisible)
-            }
-            onRequestAddResource={openResourceComposer}
-            onRequestDelete={nodeDeletionWorkflow.requestDeletion}
             topRightActions={
               !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
                 ? (getViewport) => (

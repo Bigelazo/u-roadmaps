@@ -121,8 +121,12 @@ vi.mock('@xyflow/react', () => ({
   }),
 }));
 
-import { RoadmapGraph, type RoadmapGraphHandle } from '@/features/roadmap/graph/RoadmapGraph';
-import type { RoadmapDto } from '@/features/roadmap/types';
+import {
+  RoadmapGraph,
+  type RoadmapGraphEditing,
+  type RoadmapGraphHandle,
+} from '@/features/roadmap/graph/RoadmapGraph';
+import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
 const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },
@@ -158,6 +162,38 @@ const roadmap: RoadmapDto = {
   dependencies: [],
 };
 
+const studentRoadmap: StudentRoadmapDto = {
+  ...roadmap,
+  nodes: roadmap.nodes.map((node) => ({
+    id: node.id,
+    title: node.title,
+    positionX: node.positionX,
+    positionY: node.positionY,
+    nodeTypeId: node.nodeTypeId,
+    isVisible: true,
+    access: { status: 'ACCESSIBLE' as const },
+    description: node.description,
+    isCompleted: false,
+    canComplete: true,
+    resources: [],
+  })),
+};
+
+function editingCapability(overrides: Partial<RoadmapGraphEditing> = {}): RoadmapGraphEditing {
+  return {
+    onMoveNode: vi.fn(),
+    onKeyboardNodeMove: vi.fn(),
+    onConnectNodes: vi.fn(),
+    onDeleteDependencies: vi.fn(),
+    onAutoLayout: vi.fn(),
+    onRequestAccessAction: vi.fn(),
+    onRequestVisibilityAction: vi.fn(),
+    onRequestAddResource: vi.fn(),
+    onRequestDelete: vi.fn(),
+    ...overrides,
+  };
+}
+
 function GraphHarness({
   panelWidth = 360,
   roadmapData = roadmap,
@@ -168,17 +204,13 @@ function GraphHarness({
   initialSelectedNodeId?: string | null;
 }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(initialSelectedNodeId);
+  const [editing] = useState(() => editingCapability());
   return (
     <div style={{ width: panelWidth }}>
       <RoadmapGraph
-        roadmap={roadmapData}
-        canEdit
+        projection={{ kind: 'teaching', roadmap: roadmapData, editing }}
         selectedNodeId={selectedNodeId}
         onSelectNode={(nodeId) => setSelectedNodeId(nodeId)}
-        onMoveNode={vi.fn()}
-        onConnectNodes={vi.fn()}
-        onDeleteDependencies={vi.fn()}
-        onAutoLayout={vi.fn()}
       />
     </div>
   );
@@ -186,6 +218,25 @@ function GraphHarness({
 
 beforeEach(() => {
   fitViewMock.mockReset();
+});
+
+test('renders a student projection without graph editing mechanics', () => {
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'student', roadmap: studentRoadmap }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+
+  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Abrir acciones node-1' })).toBeNull();
+});
+
+test('renders a teaching projection without editing when the capability is absent', () => {
+  render(<RoadmapGraph projection={{ kind: 'teaching', roadmap }} onSelectNode={vi.fn()} />);
+
+  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Abrir acciones node-1' })).toBeNull();
 });
 
 test('keeps a dragged node position when selecting it before the roadmap reloads', async () => {
@@ -239,14 +290,9 @@ test('closes the selected node when Escape is pressed on the canvas node', async
   const onClearSelectedNode = vi.fn();
   render(
     <RoadmapGraph
-      roadmap={roadmap}
-      canEdit
+      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
       selectedNodeId="node-1"
       onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={vi.fn()}
       onClearSelectedNode={onClearSelectedNode}
     />,
   );
@@ -261,15 +307,13 @@ test('reports a keyboard node move for persistence', async () => {
   const onKeyboardNodeMove = vi.fn();
   render(
     <RoadmapGraph
-      roadmap={roadmap}
-      canEdit
+      projection={{
+        kind: 'teaching',
+        roadmap,
+        editing: editingCapability({ onKeyboardNodeMove }),
+      }}
       selectedNodeId="node-1"
       onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={vi.fn()}
-      onKeyboardNodeMove={onKeyboardNodeMove}
     />,
   );
 
@@ -283,14 +327,12 @@ test('keeps one action menu open, closes it with Escape, and hands access change
   const onRequestAccessAction = vi.fn();
   render(
     <RoadmapGraph
-      roadmap={roadmap}
-      canEdit
+      projection={{
+        kind: 'teaching',
+        roadmap,
+        editing: editingCapability({ onRequestAccessAction }),
+      }}
       onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={vi.fn()}
-      onRequestAccessAction={onRequestAccessAction}
     />,
   );
 
@@ -317,13 +359,8 @@ test('closes action menus when preview mode starts', async () => {
   render(
     <RoadmapGraph
       ref={ref}
-      roadmap={roadmap}
-      canEdit
+      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
       onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={vi.fn()}
     />,
   );
 
@@ -340,13 +377,8 @@ test('requires confirmation before automatically ordering canvas nodes', async (
   const onAutoLayout = vi.fn();
   render(
     <RoadmapGraph
-      roadmap={roadmap}
-      canEdit
+      projection={{ kind: 'teaching', roadmap, editing: editingCapability({ onAutoLayout }) }}
       onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={onAutoLayout}
     />,
   );
 
@@ -379,17 +411,7 @@ test('requires confirmation before automatically ordering canvas nodes', async (
 });
 
 test('does not expose automatic ordering when the Roadmap cannot be edited', () => {
-  render(
-    <RoadmapGraph
-      roadmap={roadmap}
-      canEdit={false}
-      onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={vi.fn()}
-    />,
-  );
+  render(<RoadmapGraph projection={{ kind: 'teaching', roadmap }} onSelectNode={vi.fn()} />);
 
   expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
   expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -398,13 +420,8 @@ test('does not expose automatic ordering when the Roadmap cannot be edited', () 
 test('places each roadmap overlay slot in its constrained viewport panel', () => {
   render(
     <RoadmapGraph
-      roadmap={roadmap}
-      canEdit={false}
+      projection={{ kind: 'teaching', roadmap }}
       onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={vi.fn()}
       overlaySlots={{
         topLeft: <span data-testid="top-left-overlay">Metadata</span>,
         topCenter: <span data-testid="top-center-overlay">Preview</span>,
@@ -428,13 +445,12 @@ test('disables automatic ordering until the Roadmap has enough Nodes', async () 
   const user = userEvent.setup();
   render(
     <RoadmapGraph
-      roadmap={{ ...roadmap, nodes: roadmap.nodes.slice(0, 1) }}
-      canEdit
+      projection={{
+        kind: 'teaching',
+        roadmap: { ...roadmap, nodes: roadmap.nodes.slice(0, 1) },
+        editing: editingCapability(),
+      }}
       onSelectNode={vi.fn()}
-      onMoveNode={vi.fn()}
-      onConnectNodes={vi.fn()}
-      onDeleteDependencies={vi.fn()}
-      onAutoLayout={vi.fn()}
     />,
   );
 

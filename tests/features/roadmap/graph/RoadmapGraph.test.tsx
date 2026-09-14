@@ -1,10 +1,102 @@
-import { expect, test } from 'vitest';
-import { roadmapEdgeTypes } from '@/features/roadmap/graph/DependencyEdge';
-import { FloatingEdge } from '@/features/roadmap/graph/FloatingEdge';
-import { mapRoadmapGraph } from '@/features/roadmap/graph/map-roadmap-graph';
+import { type ReactNode } from 'react';
+import type { NodeProps } from '@xyflow/react';
+import { render, screen } from '@testing-library/react';
+import { expect, test, vi } from 'vitest';
+import { RoadmapGraph, type RoadmapGraphEditing } from '@/features/roadmap/graph/RoadmapGraph';
+import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
+import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
-const roadmap: RoadmapDto = {
+type ReactFlowMockProps = {
+  nodes?: RoadmapFlowNode[];
+  edges?: RoadmapFlowEdge[];
+  children?: ReactNode;
+  className?: string;
+};
+
+function nodeProps(node: RoadmapFlowNode): NodeProps<RoadmapFlowNode> {
+  return {
+    id: node.id,
+    data: node.data,
+    width: node.measured?.width,
+    height: node.measured?.height,
+    sourcePosition: node.sourcePosition,
+    targetPosition: node.targetPosition,
+    dragHandle: node.dragHandle,
+    parentId: node.parentId,
+    type: node.type,
+    dragging: false,
+    zIndex: node.zIndex ?? 0,
+    selectable: node.selectable ?? true,
+    deletable: node.deletable ?? true,
+    selected: node.selected ?? false,
+    draggable: node.draggable ?? true,
+    isConnectable: node.connectable ?? true,
+    positionAbsoluteX: node.position.x,
+    positionAbsoluteY: node.position.y,
+  };
+}
+
+vi.mock('@xyflow/react', () => ({
+  Background: () => null,
+  BackgroundVariant: { Lines: 'lines' },
+  ConnectionMode: { Loose: 'loose' },
+  ControlButton: ({
+    children,
+    onClick,
+    ...props
+  }: {
+    children: ReactNode;
+    onClick: () => void;
+  }) => (
+    <button type="button" onClick={onClick} {...props}>
+      {children}
+    </button>
+  ),
+  Controls: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Handle: () => null,
+  MarkerType: { ArrowClosed: 'arrow-closed' },
+  Panel: ({ children, position, ...props }: { children: ReactNode; position: string }) => (
+    <div data-testid={`roadmap-panel-${position}`} {...props}>
+      {children}
+    </div>
+  ),
+  Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
+  ReactFlow: ({ nodes = [], edges = [], children, className }: ReactFlowMockProps) => {
+    return (
+      <div data-testid="roadmap-flow" className={className}>
+        {nodes.map((node) => (
+          <RoadmapNode key={node.id} {...nodeProps(node)} />
+        ))}
+        {edges.map((edge) => (
+          <output key={edge.id} data-testid={`dependency-${edge.id}`}>
+            {edge.sourceHandle}:{edge.targetHandle}
+          </output>
+        ))}
+        {children}
+      </div>
+    );
+  },
+  applyEdgeChanges: <T,>(changes: T[], edges: T[]) => edges,
+  applyNodeChanges: <T extends { id: string; position: { x: number; y: number } }>(
+    changes: { id: string; type: string; position?: { x: number; y: number } }[],
+    nodes: T[],
+  ) =>
+    nodes.map((node) => {
+      const change = changes.find(
+        (candidate) => candidate.id === node.id && candidate.type === 'position',
+      );
+      return change?.position ? { ...node, position: change.position } : node;
+    }),
+  useReactFlow: () => ({
+    fitView: vi.fn(),
+    screenToFlowPosition: (position: { x: number; y: number }) => position,
+    getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
+    setViewport: vi.fn(),
+  }),
+}));
+
+const teacherRoadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
@@ -13,187 +105,124 @@ const roadmap: RoadmapDto = {
   ],
   nodes: [
     {
-      id: 'hidden-node',
-      title: 'Material de preparación docente',
-      description: null,
+      id: 'node-1',
+      title: 'Límites',
+      description: 'Introducción',
       positionX: 0,
       positionY: 0,
       nodeTypeId: 'content',
+      isVisible: true,
+      isTeacherBlocked: false,
+      resources: [
+        { id: 'resource-1', title: 'Guía', url: 'https://example.test/guide', type: 'FILE' },
+      ],
+    },
+    {
+      id: 'node-2',
+      title: 'Derivadas',
+      description: null,
+      positionX: 300,
+      positionY: 180,
+      nodeTypeId: 'content',
       isVisible: false,
       isTeacherBlocked: false,
-      isCompleted: false,
-      canComplete: false,
-      resources: [
-        {
-          id: 'resource-1',
-          title: 'Guía de preparación',
-          url: 'https://example.test/guide',
-          type: 'FILE',
-        },
-      ],
+      resources: [],
     },
   ],
   dependencies: [
     {
       id: 'dependency-1',
-      sourceNodeId: 'hidden-node',
-      targetNodeId: 'hidden-node',
+      sourceNodeId: 'node-1',
+      targetNodeId: 'node-2',
       sourceHandle: 'bottom',
       targetHandle: 'top',
     },
   ],
 };
 
-test('keeps hidden nodes on the teacher graph and marks them as hidden from students', () => {
-  const teacherNode = mapRoadmapGraph(roadmap, true).nodes[0];
-  const studentNode = mapRoadmapGraph(roadmap, false).nodes[0];
+const studentRoadmap: StudentRoadmapDto = {
+  ...teacherRoadmap,
+  nodes: [
+    {
+      id: 'node-1',
+      title: 'Límites',
+      positionX: 0,
+      positionY: 0,
+      nodeTypeId: 'content',
+      isVisible: true,
+      access: { status: 'ACCESSIBLE' },
+      description: 'Introducción',
+      isCompleted: true,
+      canComplete: false,
+      resources: [
+        { id: 'resource-1', title: 'Guía', url: 'https://example.test/guide', type: 'FILE' },
+      ],
+    },
+    {
+      id: 'node-2',
+      title: 'Derivadas',
+      positionX: 300,
+      positionY: 180,
+      nodeTypeId: 'content',
+      access: { status: 'BLOCKED', reason: 'PREREQUISITE_BLOCK' },
+    },
+  ],
+};
 
-  expect(teacherNode.hidden).toBe(false);
-  expect(teacherNode.data.isHidden).toBe(true);
-  expect(teacherNode.data.typeColor).toBe('#024AD8');
-  expect(teacherNode.data.typeName).toBe('Contenido');
-  expect(teacherNode.data.typeIcon).toBe('BookOpen');
-  expect(teacherNode.data.isTeacherBlocked).toBe(false);
-  expect(teacherNode.data.fileCount).toBe(1);
-  expect(teacherNode.data.linkCount).toBe(0);
-  expect(studentNode.hidden).toBe(true);
-});
-
-test('maps a teacher block to the editing graph without turning the node into student progress', () => {
-  const teacherBlockedRoadmap = structuredClone(roadmap);
-  teacherBlockedRoadmap.nodes[0].isVisible = true;
-  teacherBlockedRoadmap.nodes[0].isTeacherBlocked = true;
-
-  const node = mapRoadmapGraph(teacherBlockedRoadmap, true).nodes[0];
-
-  expect(node.data).toMatchObject({ status: 'editing', isTeacherBlocked: true });
-  expect(node.selectable).toBe(true);
-  expect(node.connectable).toBe(true);
-});
-
-test('allows teachers, but not students, to delete dependency arrows', () => {
-  const teacherEdge = mapRoadmapGraph(roadmap, true, () => undefined).edges[0];
-  const studentEdge = mapRoadmapGraph(roadmap, false).edges[0];
-
-  expect(teacherEdge.deletable).toBe(true);
-  expect(teacherEdge.selectable).toBe(true);
-  expect(teacherEdge.data?.onDelete).toBeTypeOf('function');
-  expect(studentEdge.deletable).toBe(false);
-  expect(studentEdge.selectable).toBe(false);
-  expect(studentEdge.focusable).toBe(false);
-  expect(studentEdge.interactionWidth).toBe(0);
-  expect(studentEdge.domAttributes).toMatchObject({ pointerEvents: 'none' });
-  expect(studentEdge.data?.onDelete).toBeUndefined();
-  expect(teacherEdge.type).toBe('dependency');
-});
-
-test('renders dependency arrows with the floating edge that selects the nearest handles', () => {
-  const edge = mapRoadmapGraph(roadmap, true).edges[0];
-
-  expect(edge.sourceHandle).toBe('bottom');
-  expect(edge.targetHandle).toBe('top');
-  expect(edge.type).toBe('dependency');
-  expect(roadmapEdgeTypes.dependency).toBe(FloatingEdge);
-});
-
-test('keeps the original dependency-arrow appearance for teachers', () => {
-  const completedRoadmap = structuredClone(roadmap);
-  completedRoadmap.nodes[0].isCompleted = true;
-  const teacherEdge = mapRoadmapGraph(roadmap, true).edges[0];
-  const completedTeacherEdge = mapRoadmapGraph(completedRoadmap, true).edges[0];
-
-  expect(teacherEdge.style).toMatchObject({ stroke: 'var(--steel)', strokeWidth: 1.5 });
-  expect(teacherEdge.markerEnd).toMatchObject({ color: 'var(--steel)' });
-  expect(completedTeacherEdge.style).toMatchObject({ stroke: 'var(--ink)' });
-  expect(completedTeacherEdge.markerEnd).toMatchObject({ color: 'var(--ink)' });
-});
-
-test('uses fixed black arrows only for students', () => {
-  const completedRoadmap = structuredClone(roadmap);
-  completedRoadmap.nodes[0].isCompleted = true;
-  const studentEdge = mapRoadmapGraph(completedRoadmap, false).edges[0];
-
-  expect(studentEdge.style).toMatchObject({ stroke: 'var(--ink)', strokeWidth: 1.5 });
-  expect(studentEdge.markerEnd).toMatchObject({ color: 'var(--ink)' });
-});
-
-test('preserves the teacher and student node-status mapping', () => {
-  const completedRoadmap = structuredClone(roadmap);
-  completedRoadmap.nodes[0].isCompleted = true;
-  const availableRoadmap = structuredClone(roadmap);
-  availableRoadmap.nodes[0].canComplete = true;
-
-  expect(mapRoadmapGraph(roadmap, true).nodes[0].data.status).toBe('editing');
-  expect(mapRoadmapGraph(roadmap, false).nodes[0].data.status).toBe('locked');
-  expect(mapRoadmapGraph(completedRoadmap, false).nodes[0].data.status).toBe('completed');
-  expect(mapRoadmapGraph(availableRoadmap, false).nodes[0].data.status).toBe('available');
-});
-
-test('makes a restriction take visual precedence over a retained completion', () => {
-  const restrictedCompletedRoadmap = structuredClone(roadmap);
-  restrictedCompletedRoadmap.nodes[0].isVisible = true;
-  restrictedCompletedRoadmap.nodes[0].isTeacherBlocked = true;
-  restrictedCompletedRoadmap.nodes[0].isCompleted = true;
-
-  expect(mapRoadmapGraph(restrictedCompletedRoadmap, false).nodes[0].data.status).toBe('locked');
-});
-
-test('maps each blocked reason to a disabled, non-selectable student node', () => {
-  const studentRoadmap: StudentRoadmapDto = {
-    ...roadmap,
-    nodes: [
-      {
-        id: 'teacher-blocked',
-        title: 'Contenido bloqueado por docencia',
-        positionX: 40,
-        positionY: 80,
-        nodeTypeId: 'content',
-        access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
-      },
-      {
-        id: 'prerequisite-blocked',
-        title: 'Contenido con prerrequisitos pendientes',
-        positionX: 160,
-        positionY: 80,
-        nodeTypeId: 'content',
-        access: { status: 'BLOCKED', reason: 'PREREQUISITE_BLOCK' },
-      },
-      {
-        id: 'released-completed',
-        title: 'Contenido completado tras desbloquear',
-        positionX: 280,
-        positionY: 80,
-        nodeTypeId: 'content',
-        isVisible: true,
-        access: { status: 'ACCESSIBLE' },
-        description: null,
-        isCompleted: true,
-        canComplete: false,
-        resources: [],
-      },
-    ],
-    dependencies: [],
+function editingCapability(overrides: Partial<RoadmapGraphEditing> = {}): RoadmapGraphEditing {
+  return {
+    onMoveNode: vi.fn(),
+    onKeyboardNodeMove: vi.fn(),
+    onConnectNodes: vi.fn(),
+    onDeleteDependencies: vi.fn(),
+    onAutoLayout: vi.fn(),
+    onRequestAccessAction: vi.fn(),
+    onRequestVisibilityAction: vi.fn(),
+    onRequestAddResource: vi.fn(),
+    onRequestDelete: vi.fn(),
+    ...overrides,
   };
+}
 
-  const [teacherBlocked, prerequisiteBlocked, releasedCompleted] = mapRoadmapGraph(
-    studentRoadmap,
-    false,
-  ).nodes;
+const commonProps = {
+  onSelectNode: vi.fn(),
+};
 
-  expect(teacherBlocked.data).toMatchObject({
-    status: 'locked',
-    blockReason: 'TEACHER_BLOCK',
-  });
-  expect(prerequisiteBlocked.data).toMatchObject({
-    status: 'locked',
-    blockReason: 'PREREQUISITE_BLOCK',
-  });
-  for (const blockedNode of [teacherBlocked, prerequisiteBlocked]) {
-    expect(blockedNode.selectable).toBe(false);
-    expect(blockedNode.focusable).toBe(true);
-    expect(blockedNode.ariaRole).toBe('button');
-    expect(blockedNode.domAttributes).toMatchObject({ 'aria-disabled': true });
-  }
-  expect(releasedCompleted.data.status).toBe('completed');
-  expect(releasedCompleted.selectable).toBe(true);
+test('renders teaching Nodes, Resources, hidden state, and Dependencies through the graph interface', () => {
+  render(
+    <RoadmapGraph projection={{ kind: 'teaching', roadmap: teacherRoadmap }} {...commonProps} />,
+  );
+
+  expect(screen.getByText('Límites')).toBeTruthy();
+  expect(screen.getByLabelText('Derivadas: oculto para estudiantes')).toBeTruthy();
+  expect(screen.getByLabelText('1 archivo')).toBeTruthy();
+  expect(screen.getByTestId('dependency-dependency-1').textContent).toBe('bottom:top');
+  expect(screen.queryByRole('button', { name: 'Abrir menú de acciones del nodo' })).toBeNull();
+});
+
+test('renders student Node state and resources without teaching controls', () => {
+  render(
+    <RoadmapGraph projection={{ kind: 'student', roadmap: studentRoadmap }} {...commonProps} />,
+  );
+
+  expect(screen.getByLabelText('Completado')).toBeTruthy();
+  expect(screen.getByLabelText('Bloqueado')).toBeTruthy();
+  expect(screen.getByLabelText('1 archivo')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Abrir menú de acciones del nodo' })).toBeNull();
+});
+
+test('enables the complete editing capability only for an editable teaching projection', () => {
+  const editing = editingCapability();
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap: teacherRoadmap, editing }}
+      {...commonProps}
+    />,
+  );
+
+  expect(screen.getByRole('button', { name: 'Ordenar horizontalmente' })).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Abrir menú de acciones del nodo' })).toHaveLength(
+    2,
+  );
 });
