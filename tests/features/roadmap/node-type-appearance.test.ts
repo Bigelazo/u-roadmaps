@@ -1,7 +1,8 @@
 import { expect, test } from 'vitest';
 import { createElement } from 'react';
 import { render } from '@testing-library/react';
-import { NodeTypeIcon, nodeTypeIconRegistry } from '@/features/roadmap/node-type-icon-registry';
+import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
+import { nodeTypeIconRegistry } from '@/features/roadmap/node-type-icons';
 import {
   isNodeTypeColor,
   isNodeTypeIconId,
