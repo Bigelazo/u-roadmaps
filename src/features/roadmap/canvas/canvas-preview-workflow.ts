@@ -27,7 +27,6 @@ type CanvasPreviewWorkflowOptions = {
   loadSimulation: () => Promise<boolean>;
   completeSimulatedNode: (nodeId: string) => Promise<boolean>;
   resetSimulation: () => Promise<boolean>;
-  closeActionMenus: () => void;
   onEnter: (discardDraft: boolean) => void;
   onExit: (returnState: Omit<CanvasPreviewReturnState, 'viewport'>) => void;
 };
@@ -49,7 +48,6 @@ export function useCanvasPreviewWorkflow({
   loadSimulation,
   completeSimulatedNode,
   resetSimulation,
-  closeActionMenus,
   onEnter,
   onExit,
 }: CanvasPreviewWorkflowOptions) {
@@ -89,7 +87,6 @@ export function useCanvasPreviewWorkflow({
           ...currentViewRef.current,
           viewport: lastViewportRef.current,
         };
-        closeActionMenus();
         transitionSession({ kind: 'active', returnState });
         onEnter(discardDraft);
       } catch {
@@ -98,7 +95,7 @@ export function useCanvasPreviewWorkflow({
         isEntryPendingRef.current = false;
       }
     },
-    [closeActionMenus, loadSimulation, onEnter, transitionSession],
+    [loadSimulation, onEnter, transitionSession],
   );
 
   const requestEntry = useCallback(() => {

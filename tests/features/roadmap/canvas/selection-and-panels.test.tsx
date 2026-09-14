@@ -61,6 +61,19 @@ test('hides the editor when deselecting its node', async () => {
   expect(screen.queryByTestId('editor-panel')).toBeNull();
 });
 
+test('requests focus return only when an editor surface is explicitly closed', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  expect(screen.getByTestId('focus-return-request').textContent).toBe('');
+
+  await user.click(screen.getByRole('button', { name: 'Deseleccionar nodo' }));
+
+  expect(screen.getByTestId('focus-return-request').textContent).not.toBe('');
+});
+
 test('does not select a blocked student node', async () => {
   const user = userEvent.setup();
   useRoadmapMock.mockReturnValue(

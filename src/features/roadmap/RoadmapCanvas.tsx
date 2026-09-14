@@ -31,7 +31,6 @@ import {
   RoadmapGraph,
   type RoadmapGraphEditing,
   type RoadmapGraphEditingIntent,
-  type RoadmapGraphHandle,
   type RoadmapGraphProjection,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
@@ -86,6 +85,7 @@ export default function RoadmapCanvas({
   semester,
 }: Props) {
   const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
+  const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
   const {
     selectedNodeId,
     isEditorOpen,
@@ -104,15 +104,14 @@ export default function RoadmapCanvas({
     storageKey: 'u-roadmaps:student-node-detail-width',
     initialWidth: 426,
   });
-  const selectedNodeTriggerRef = useRef<HTMLElement | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
-  const roadmapGraphRef = useRef<RoadmapGraphHandle>(null);
   const editorDraftRef = useRef<RoadmapEditorDraftHandle>(null);
   const nodeDeletionRequestRef = useRef<
     (nodeId: string, options?: NodeDeletionRequestOptions) => void
   >(() => {});
   const canvasPreviewDraftResumeRef = useRef<() => void>(() => {});
   const successToastIdRef = useRef(0);
+  const focusReturnRequestIdRef = useRef(0);
   const {
     roadmap,
     error,
@@ -162,6 +161,10 @@ export default function RoadmapCanvas({
 
   const showSuccessToast = useCallback((message: string) => {
     setSuccessToast({ id: ++successToastIdRef.current, message });
+  }, []);
+
+  const requestNodeFocusReturn = useCallback(() => {
+    setFocusReturnRequest(`node-surface-close-${++focusReturnRequestIdRef.current}`);
   }, []);
 
   const updateNodeWithConfirmation = useCallback(
@@ -224,7 +227,8 @@ export default function RoadmapCanvas({
 
   const closeEditorAfterNodeDeletion = useCallback(() => {
     dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
-  }, []);
+    requestNodeFocusReturn();
+  }, [requestNodeFocusReturn]);
 
   const nodeDeletionWorkflow = useNodeDeletionWorkflow({
     previewNodeDeletion,
@@ -264,10 +268,6 @@ export default function RoadmapCanvas({
     [],
   );
 
-  const closeCanvasActionMenus = useCallback(() => {
-    roadmapGraphRef.current?.closeActionMenus();
-  }, []);
-
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
     currentView: { selectedNodeId, isEditorOpen, isStudentDetailOpen },
     isHistorical: Boolean(isHistorical),
@@ -275,7 +275,6 @@ export default function RoadmapCanvas({
     loadSimulation,
     completeSimulatedNode,
     resetSimulation,
-    closeActionMenus: closeCanvasActionMenus,
     onEnter: prepareCanvasPreview,
     onExit: restoreCanvasPreview,
   });
@@ -296,7 +295,7 @@ export default function RoadmapCanvas({
       type: 'closeSelectedNode',
       panel: canEditRoadmap ? 'editor' : 'student',
     });
-    requestAnimationFrame(() => selectedNodeTriggerRef.current?.focus());
+    requestNodeFocusReturn();
   }
 
   function closeTeacherPreview() {
@@ -472,12 +471,10 @@ export default function RoadmapCanvas({
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
           <RoadmapGraph
-            ref={roadmapGraphRef}
             projection={graphProjection}
-            onSelectNode={(nodeId, trigger) => {
+            onSelectNode={(nodeId) => {
               const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
               if (isStudentExperience && isStudentBlockedNode(node)) return;
-              selectedNodeTriggerRef.current = trigger;
               dispatchCanvas({
                 type: 'selectNode',
                 nodeId,
@@ -485,6 +482,7 @@ export default function RoadmapCanvas({
               });
             }}
             selectedNodeId={selectedNodeId}
+            focusReturnRequest={focusReturnRequest}
             onClearSelectedNode={closeSelectedNode}
             onViewportChange={canvasPreviewWorkflow.onViewportChange}
             viewportRestoration={canvasPreviewWorkflow.viewportRestoration}

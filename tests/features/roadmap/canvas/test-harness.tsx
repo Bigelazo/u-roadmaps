@@ -146,15 +146,17 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onSelectNode,
     onClearSelectedNode,
     selectedNodeId,
+    focusReturnRequest,
     topRightActions,
     projection,
     onViewportChange,
     viewportRestoration,
     overlaySlots,
   }: {
-    onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
+    onSelectNode: (nodeId: string) => void;
     onClearSelectedNode?: () => void;
     selectedNodeId?: string | null;
+    focusReturnRequest?: string | null;
     projection: RoadmapGraphProjection;
     onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
     viewportRestoration?: {
@@ -175,6 +177,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         <div data-testid="roadmap-overlay-bottom-right">{overlaySlots?.bottomRight}</div>
         {topRightActions?.(() => ({ x: 280, y: 260 }))}
         <output data-testid="selected-roadmap-node">{selectedNodeId}</output>
+        <output data-testid="focus-return-request">{focusReturnRequest}</output>
         <output data-testid="roadmap-mode">{canEdit ? 'editing' : 'student'}</output>
         <output data-testid="roadmap-projection">
           {projection.kind === 'teaching' ? 'teacher' : 'student'}
@@ -185,11 +188,11 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         </output>
         <button
           type="button"
-          onClick={() => onSelectNode('blocked-node', document.createElement('div'))}
+          onClick={() => onSelectNode('blocked-node')}
         >
           Activar nodo bloqueado
         </button>
-        <button type="button" onClick={() => onSelectNode('node-1', document.createElement('div'))}>
+        <button type="button" onClick={() => onSelectNode('node-1')}>
           Activar nodo docente
         </button>
         <button
@@ -228,7 +231,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         </button>
         <button
           type="button"
-          onClick={() => onSelectNode('missing-node', document.createElement('div'))}
+          onClick={() => onSelectNode('missing-node')}
         >
           Activar nodo inexistente
         </button>

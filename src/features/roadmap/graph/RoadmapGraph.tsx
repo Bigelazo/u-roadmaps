@@ -1,10 +1,8 @@
 'use client';
 
 import {
-  forwardRef,
   useCallback,
   useEffect,
-  useImperativeHandle,
   useMemo,
   useRef,
   useState,
@@ -294,9 +292,10 @@ function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): Roadmap
 
 export type RoadmapGraphProps = {
   projection: RoadmapGraphProjection;
-  onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
+  onSelectNode: (nodeId: string) => void;
   onClearSelectedNode?: () => void;
   selectedNodeId?: string | null;
+  focusReturnRequest?: string | null;
   topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
@@ -307,10 +306,6 @@ export type RoadmapGraphOverlaySlots = {
   topLeft?: ReactNode;
   topCenter?: ReactNode;
   bottomRight?: ReactNode;
-};
-
-export type RoadmapGraphHandle = {
-  closeActionMenus: () => void;
 };
 
 function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
@@ -341,18 +336,18 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   );
 }
 
-export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(function RoadmapGraph(
+export function RoadmapGraph(
   {
     projection,
     onSelectNode,
     onClearSelectedNode,
     selectedNodeId,
+    focusReturnRequest,
     topRightActions,
     overlaySlots,
     onViewportChange,
     viewportRestoration,
   }: RoadmapGraphProps,
-  ref,
 ) {
   const editing: RoadmapGraphEditing | undefined =
     projection.kind === 'teaching' ? projection.editing : undefined;
@@ -382,8 +377,10 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
     handlers.current = { onEditingIntent };
   }, [onEditingIntent]);
   const selectedNodeIdRef = useRef(selectedNodeId);
+  const lastSelectedNodeIdRef = useRef<string | null>(selectedNodeId ?? null);
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
+    if (selectedNodeId) lastSelectedNodeIdRef.current = selectedNodeId;
   }, [selectedNodeId]);
   const keyboardMovePendingRef = useRef(false);
   const emitEditingIntent = useCallback((intent: RoadmapGraphEditingIntent) => {
@@ -420,7 +417,9 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
     setOpenActionMenuNodeId(null);
     setClosingActionMenuNodeId(null);
   }, []);
-  useImperativeHandle(ref, () => ({ closeActionMenus }), [closeActionMenus]);
+  useEffect(() => {
+    if (!canEdit) closeActionMenus();
+  }, [canEdit, closeActionMenus]);
   const toggleActionMenu = useCallback(
     (nodeId: string, trigger: HTMLButtonElement) => {
       actionMenuTriggerRef.current = trigger;
@@ -537,6 +536,19 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const appliedFocusReturnRequestRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!focusReturnRequest || appliedFocusReturnRequestRef.current === focusReturnRequest) return;
+    appliedFocusReturnRequestRef.current = focusReturnRequest;
+    const selectedNodeId = lastSelectedNodeIdRef.current;
+    if (!selectedNodeId) return;
+    if (!projectionRoadmap.nodes.some((node) => node.id === selectedNodeId)) return;
+    const node = Array.from(
+      containerRef.current?.querySelectorAll<HTMLElement>('.react-flow__node') ?? [],
+    ).find((candidate) => candidate.dataset.id === selectedNodeId);
+    node?.focus();
+  }, [focusReturnRequest, projectionRoadmap]);
 
   return (
     <div
@@ -618,9 +630,9 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
             ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
           }))
         }
-        onNodeClick={(event, node) => {
+        onNodeClick={(_event, node) => {
           if (node.data.blockReason) return;
-          onSelectNode(node.id, event.currentTarget as HTMLElement);
+          onSelectNode(node.id);
         }}
         onPaneClick={() => {
           if (openActionMenuNodeId || closingActionMenuNodeId) closeActionMenu(false);
@@ -705,4 +717,4 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
       />
     </div>
   );
-});
+}

@@ -67,6 +67,30 @@ test('lets teachers enter the persistent student canvas preview, complete a node
   expect(screen.getByTestId('roadmap-mode').textContent).toBe('editing');
 });
 
+test('clears the selected Node for Canvas preview without requesting focus return', async () => {
+  const user = userEvent.setup();
+  const simulationRoadmap = {
+    ...roadmap,
+    nodes: [
+      {
+        ...roadmap.nodes[0],
+        access: { status: 'ACCESSIBLE' as const },
+        isCompleted: false,
+        canComplete: true,
+      },
+    ],
+  };
+  useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
+
+  expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
+  expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('');
+  expect(screen.getByTestId('focus-return-request').textContent).toBe('');
+});
+
 test('keeps a failed Canvas preview reset recoverable', async () => {
   const user = userEvent.setup();
   const simulationRoadmap = {

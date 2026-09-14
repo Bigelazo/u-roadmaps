@@ -1,4 +1,4 @@
-import { createRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -74,6 +74,17 @@ vi.mock('@xyflow/react', () => ({
     reactFlowHandlers.onMoveEnd = onMoveEnd;
     return (
       <>
+      {nodes.map((node) => (
+        <button
+          key={`rendered-${node.id}`}
+          type="button"
+          className="react-flow__node"
+          data-id={node.id}
+          data-testid={`rendered-node-${node.id}`}
+        >
+          Nodo renderizado {node.id}
+        </button>
+      ))}
       {nodes.map((node) => (
         <output key={node.id} data-testid={`node-position-${node.id}`}>
           {`${node.position.x},${node.position.y}`}
@@ -210,7 +221,6 @@ import {
   RoadmapGraph,
   type RoadmapGraphEditing,
   type RoadmapGraphEditingIntent,
-  type RoadmapGraphHandle,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
@@ -330,6 +340,85 @@ test('keeps a dragged node position when selecting it before the roadmap reloads
 
   await user.click(screen.getByRole('button', { name: 'Seleccionar nodo' }));
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('200,160');
+});
+
+test('emits only the selected Node identifier through the Roadmap boundary', async () => {
+  const user = userEvent.setup();
+  const onSelectNode = vi.fn();
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
+      onSelectNode={onSelectNode}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Seleccionar nodo' }));
+
+  expect(onSelectNode).toHaveBeenCalledExactlyOnceWith('node-1');
+});
+
+test('restores focus to the selected rendered Node after an explicit focus-return request', async () => {
+  const { rerender } = render(
+    <>
+      <button type="button">Fuera del canvas</button>
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
+        selectedNodeId="node-1"
+        onSelectNode={vi.fn()}
+      />
+    </>,
+  );
+  const outside = screen.getByRole('button', { name: 'Fuera del canvas' });
+  outside.focus();
+
+  rerender(
+    <>
+      <button type="button">Fuera del canvas</button>
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
+        selectedNodeId={null}
+        focusReturnRequest="close-node-1"
+        onSelectNode={vi.fn()}
+      />
+    </>,
+  );
+
+  await waitFor(() =>
+    expect(screen.getByTestId('rendered-node-node-1').matches(':focus')).toBe(true),
+  );
+});
+
+test('does not move focus when the requested rendered Node no longer exists', async () => {
+  const { rerender } = render(
+    <>
+      <button type="button">Fuera del canvas</button>
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
+        selectedNodeId="node-1"
+        onSelectNode={vi.fn()}
+      />
+    </>,
+  );
+  const outside = screen.getByRole('button', { name: 'Fuera del canvas' });
+  outside.focus();
+
+  rerender(
+    <>
+      <button type="button">Fuera del canvas</button>
+      <RoadmapGraph
+        projection={{
+          kind: 'teaching',
+          roadmap: { ...roadmap, nodes: roadmap.nodes.filter((node) => node.id !== 'node-1') },
+          editing: editingCapability(),
+        }}
+        selectedNodeId={null}
+        focusReturnRequest="close-missing-node"
+        onSelectNode={vi.fn()}
+      />
+    </>,
+  );
+
+  await waitFor(() => expect(outside.matches(':focus')).toBe(true));
 });
 
 test('keeps the selected node when refreshed roadmap data arrives', () => {
@@ -657,12 +746,10 @@ test('keeps one action menu open, closes it with Escape, and emits a teacher-blo
   );
 });
 
-test('closes action menus when preview mode starts', async () => {
+test('clears action-menu state when editing behavior is removed', async () => {
   const user = userEvent.setup();
-  const ref = createRef<RoadmapGraphHandle>();
-  render(
+  const { rerender } = render(
     <RoadmapGraph
-      ref={ref}
       projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
       onSelectNode={vi.fn()}
     />,
@@ -671,7 +758,13 @@ test('closes action menus when preview mode starts', async () => {
   await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
   expect(screen.getByRole('button', { name: 'Ejecutar acceso node-1' })).toBeTruthy();
 
-  act(() => ref.current?.closeActionMenus());
+  rerender(<RoadmapGraph projection={{ kind: 'teaching', roadmap }} onSelectNode={vi.fn()} />);
+  rerender(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
+      onSelectNode={vi.fn()}
+    />,
+  );
 
   expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
