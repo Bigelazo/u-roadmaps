@@ -1,7 +1,9 @@
 import { ApplicationError } from '@/shared/errors/types';
-import { parseCourseOfferingIdentifier } from '@/features/roadmap/domain/course-offering-identifier';
-import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import type { CourseOfferingIdentifierParams } from '@/features/roadmap/domain/course-offering-identifier';
+import {
+  parseCourseOfferingIdentifier,
+  type CourseOfferingIdentifier,
+  type CourseOfferingIdentifierParams,
+} from '@/features/roadmap';
 
 export function requireCourseOfferingIdentifier(
   params: CourseOfferingIdentifierParams,
