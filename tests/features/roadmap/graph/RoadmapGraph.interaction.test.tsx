@@ -56,19 +56,23 @@ vi.mock('@xyflow/react', () => ({
     children: ReactNode;
   }) => (
     <>
-      <output data-testid="node-position">{`${nodes[0].position.x},${nodes[0].position.y}`}</output>
+      {nodes.map((node) => (
+        <output key={node.id} data-testid={`node-position-${node.id}`}>
+          {`${node.position.x},${node.position.y}`}
+        </output>
+      ))}
       <output data-testid="selected-node">{nodes.find((node) => node.selected)?.id ?? ''}</output>
       <button
         type="button"
         onClick={() =>
-          onNodesChange([{ id: 'node-1', type: 'position', position: { x: 200, y: 160 } }])
+          onNodesChange([{ id: 'node-1', type: 'position', position: { x: 207, y: 153 } }])
         }
       >
         Arrastrar nodo
       </button>
       <button
         type="button"
-        onClick={() => onNodeDragStop?.(null, { id: 'node-1', position: { x: 20, y: 20 } })}
+        onClick={() => onNodeDragStop?.(null, { id: 'node-1', position: { x: 27, y: 13 } })}
       >
         Finalizar arrastre
       </button>
@@ -117,7 +121,7 @@ vi.mock('@xyflow/react', () => ({
         data-id="node-1"
         onKeyDown={(event) => {
           if (event.key === 'ArrowRight')
-            onNodesChange([{ id: 'node-1', type: 'position', position: { x: 20, y: 0 } }]);
+            onNodesChange([{ id: 'node-1', type: 'position', position: { x: 27, y: 13 } }]);
         }}
       >
         Nodo con teclado
@@ -293,10 +297,10 @@ test('keeps a dragged node position when selecting it before the roadmap reloads
   render(<GraphHarness />);
 
   await user.click(screen.getByRole('button', { name: 'Arrastrar nodo' }));
-  expect(screen.getByTestId('node-position').textContent).toBe('200,160');
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('200,160');
 
   await user.click(screen.getByRole('button', { name: 'Seleccionar nodo' }));
-  expect(screen.getByTestId('node-position').textContent).toBe('200,160');
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('200,160');
 });
 
 test('keeps the selected node when refreshed roadmap data arrives', () => {
@@ -368,10 +372,11 @@ test('reports a keyboard node move for persistence', async () => {
 
   screen.getByTestId('keyboard-node').focus();
   await user.keyboard('{ArrowRight}');
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
   expect(onEditingIntent).toHaveBeenCalledWith({
     kind: 'node-positions',
     cause: 'keyboard',
-    positions: [{ nodeId: 'node-1', position: { x: 20, y: 0 } }],
+    positions: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
   });
 });
 
@@ -390,6 +395,7 @@ test('emits the snapped pointer position supplied by React Flow', async () => {
   );
 
   await user.click(screen.getByRole('button', { name: 'Finalizar arrastre' }));
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
 
   expect(onEditingIntent).toHaveBeenCalledWith({
     kind: 'node-positions',
@@ -452,7 +458,7 @@ test('closes action menus when preview mode starts', async () => {
   expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
 
-test('requires confirmation before automatically ordering canvas nodes', async () => {
+test('proposes automatic ordering without moving Nodes until confirmation', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
   render(
@@ -467,6 +473,8 @@ test('requires confirmation before automatically ordering canvas nodes', async (
   );
 
   const layoutButton = screen.getByRole('button', { name: 'Ordenar horizontalmente' });
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
+  expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
   await user.click(layoutButton);
 
   const dialog = screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' });
@@ -479,6 +487,8 @@ test('requires confirmation before automatically ordering canvas nodes', async (
 
   await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
   expect(onEditingIntent).not.toHaveBeenCalled();
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
+  expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
   await user.keyboard('{Enter}');
   expect(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Cancelar' }));
@@ -491,9 +501,47 @@ test('requires confirmation before automatically ordering canvas nodes', async (
     ),
   );
 
-  expect(onEditingIntent).toHaveBeenCalledWith(
-    expect.objectContaining({ kind: 'node-positions', cause: 'automatic-layout' }),
+  expect(onEditingIntent).toHaveBeenCalledOnce();
+  const [intent] = onEditingIntent.mock.calls[0] as [RoadmapGraphEditingIntent];
+  expect(intent.kind).toBe('node-positions');
+  if (intent.kind !== 'node-positions') return;
+  expect(intent.cause).toBe('automatic-layout');
+  expect(intent.positions.map(({ nodeId }) => nodeId)).toEqual(['node-1', 'node-2']);
+  expect(Object.isFrozen(intent.positions)).toBe(true);
+  expect(Object.isFrozen(intent.positions[0])).toBe(true);
+  expect(Object.isFrozen(intent.positions[0].position)).toBe(true);
+  for (const { nodeId, position } of intent.positions)
+    expect(screen.getByTestId(`node-position-${nodeId}`).textContent).toBe(
+      `${position.x},${position.y}`,
+    );
+});
+
+test('dismisses an automatic-layout proposal when a newer Roadmap projection arrives', async () => {
+  const user = userEvent.setup();
+  const onEditingIntent = vi.fn();
+  const { rerender } = render(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap, editing: editingCapability({ onEditingIntent }) }}
+      onSelectNode={vi.fn()}
+    />,
   );
+
+  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  expect(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeTruthy();
+
+  const refreshedRoadmap = structuredClone(roadmap);
+  refreshedRoadmap.nodes[0].positionX = 40;
+  refreshedRoadmap.nodes[0].positionY = 60;
+  rerender(
+    <RoadmapGraph
+      projection={{ kind: 'teaching', roadmap: refreshedRoadmap, editing: editingCapability({ onEditingIntent }) }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+
+  expect(screen.queryByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeNull();
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('40,60');
+  expect(onEditingIntent).not.toHaveBeenCalled();
 });
 
 test('emits complete dependency intents and ignores incomplete connection gestures', async () => {

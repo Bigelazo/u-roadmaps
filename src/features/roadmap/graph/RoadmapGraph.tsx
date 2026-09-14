@@ -28,14 +28,18 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { LayoutTemplate, Maximize } from 'lucide-react';
-import { roadmapGridSize, type NodeRect } from '@/features/roadmap/graph/geometry';
+import {
+  roadmapGridSize,
+  snapToRoadmapGrid,
+  type NodeRect,
+} from '@/features/roadmap/graph/geometry';
 import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
 import {
   roadmapAutoLayoutConfirmation,
   roadmapConfirmationActionIds,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import { Button } from '@/shared/ui/button';
-import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
+import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
 import { mapRoadmapGraph } from '@/features/roadmap/graph/map-roadmap-graph';
@@ -102,6 +106,37 @@ function immutableNodePositions(
     })),
   );
 }
+
+function snappedNodePositions(
+  positions: readonly RoadmapNodePlacement[],
+): readonly RoadmapNodePlacement[] {
+  return freezeNodePositions(
+    positions.map(({ nodeId, position }) => ({
+      nodeId,
+      position: snapToRoadmapGrid(position),
+    })),
+  );
+}
+
+function changedNodePositions(
+  nodes: readonly RoadmapFlowNode[],
+  proposedPositions: readonly RoadmapNodePlacement[],
+): readonly RoadmapNodePlacement[] {
+  const positionsByNodeId = new Map(nodes.map((node) => [node.id, node.position]));
+  return proposedPositions.filter(({ nodeId, position }) => {
+    const currentPosition = positionsByNodeId.get(nodeId);
+    return (
+      currentPosition !== undefined &&
+      (currentPosition.x !== position.x || currentPosition.y !== position.y)
+    );
+  });
+}
+
+type AutoLayoutProposal = {
+  readonly roadmap: RoadmapDto;
+  readonly direction: RoadmapLayoutDirection;
+  readonly positions: readonly RoadmapNodePlacement[];
+};
 
 function RoadmapGraphToolbar({
   containerRef,
@@ -302,8 +337,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
     return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
   }, [editing, projectionKind, projectionRoadmap]);
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
-  const [autoLayoutConfirmation, setAutoLayoutConfirmation] =
-    useState<ConfirmationPresentation | null>(null);
+  const [autoLayoutProposal, setAutoLayoutProposal] = useState<AutoLayoutProposal | null>(null);
   const [openActionMenuNodeId, setOpenActionMenuNodeId] = useState<string | null>(null);
   const [closingActionMenuNodeId, setClosingActionMenuNodeId] = useState<string | null>(null);
   const actionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -396,6 +430,25 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
     );
   }, [actionMenu, deleteDependency, stableProjection]);
 
+  const applyNodePositions = useCallback(
+    (cause: 'pointer' | 'keyboard' | 'automatic-layout', positions: readonly RoadmapNodePlacement[]) => {
+      const immutablePositions = freezeNodePositions(positions);
+      if (immutablePositions.length === 0) return;
+      const positionsByNodeId = new Map(
+        immutablePositions.map(({ nodeId, position }) => [nodeId, position]),
+      );
+      setFlow((current) => ({
+        ...current,
+        nodes: current.nodes.map((node) => {
+          const position = positionsByNodeId.get(node.id);
+          return position ? { ...node, position } : node;
+        }),
+      }));
+      emitEditingIntent({ kind: 'node-positions', cause, positions: immutablePositions });
+    },
+    [emitEditingIntent],
+  );
+
   const previousSelectedNodeIdRef = useRef(selectedNodeId);
   useEffect(() => {
     if (previousSelectedNodeIdRef.current !== selectedNodeId && openActionMenuNodeId)
@@ -427,25 +480,31 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
     [emitEditingIntent],
   );
 
-  const applyAutoLayout = useCallback(() => {
+  const proposeAutoLayout = useCallback(() => {
     const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
-    const nodes = layoutRoadmapGraph(flow.nodes, flow.edges, direction);
-    setFlow((current) => ({ ...current, nodes }));
-    setLayoutDirection(direction);
-    emitEditingIntent({
-      kind: 'node-positions',
-      cause: 'automatic-layout',
-      positions: immutableNodePositions(nodes),
+    setAutoLayoutProposal({
+      roadmap: projectionRoadmap as RoadmapDto,
+      direction,
+      positions: immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction)),
     });
-  }, [emitEditingIntent, flow.edges, flow.nodes, layoutDirection]);
+  }, [flow.edges, flow.nodes, layoutDirection, projectionRoadmap]);
+
+  useEffect(() => {
+    if (autoLayoutProposal?.roadmap !== projectionRoadmap) setAutoLayoutProposal(null);
+  }, [autoLayoutProposal, projectionRoadmap]);
 
   const handleAutoLayoutAction = useCallback(
     (actionId: string) => {
       if (actionId !== roadmapConfirmationActionIds.autoLayout) return;
-      setAutoLayoutConfirmation(null);
-      applyAutoLayout();
+      if (!autoLayoutProposal || autoLayoutProposal.roadmap !== projectionRoadmap) return;
+      setAutoLayoutProposal(null);
+      setLayoutDirection(autoLayoutProposal.direction);
+      applyNodePositions(
+        'automatic-layout',
+        changedNodePositions(flow.nodes, autoLayoutProposal.positions),
+      );
     },
-    [applyAutoLayout],
+    [applyNodePositions, autoLayoutProposal, flow.nodes, projectionRoadmap],
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -500,27 +559,26 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
         onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) => {
           const movedWithKeyboard = keyboardMovePendingRef.current;
           keyboardMovePendingRef.current = false;
+          const positions = changes.flatMap((change) =>
+            change.type === 'position' && change.position
+              ? [{ nodeId: change.id, position: change.position }]
+              : [],
+          );
+          const normalizedChanges = changes.map((change) =>
+            change.type === 'position' && change.position
+              ? { ...change, position: snapToRoadmapGrid(change.position) }
+              : change,
+          );
           setFlow((current) => ({
             ...current,
             nodes: applyNodeChanges(
-              changes.filter((change) => change.type !== 'remove'),
+              normalizedChanges.filter(
+                (change) => change.type !== 'remove' && (!movedWithKeyboard || change.type !== 'position'),
+              ),
               current.nodes,
             ),
           }));
-          if (movedWithKeyboard) {
-            const positions = changes.flatMap((change) =>
-              change.type === 'position' && change.position
-                ? [{ nodeId: change.id, position: change.position }]
-                : [],
-            );
-            if (positions.length > 0) {
-              emitEditingIntent({
-                kind: 'node-positions',
-                cause: 'keyboard',
-                positions: freezeNodePositions(positions),
-              });
-            }
-          }
+          if (movedWithKeyboard) applyNodePositions('keyboard', snappedNodePositions(positions));
         }}
         onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
           setFlow((current) => ({
@@ -565,11 +623,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
         onNodeDragStop={
           canEdit && !openActionMenuNodeId && !closingActionMenuNodeId
             ? (_event, node) => {
-                emitEditingIntent({
-                  kind: 'node-positions',
-                  cause: 'pointer',
-                  positions: immutableNodePositions([node]),
-                });
+                applyNodePositions('pointer', snappedNodePositions(immutableNodePositions([node])));
               }
             : undefined
         }
@@ -599,7 +653,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
             layoutDirection={layoutDirection}
             showAutoLayout={canEdit}
             canAutoLayout={canEdit && flow.nodes.length >= 2}
-            onAutoLayout={() => setAutoLayoutConfirmation(roadmapAutoLayoutConfirmation)}
+            onAutoLayout={proposeAutoLayout}
             topRightActions={topRightActions}
           />
         ) : null}
@@ -612,8 +666,8 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
         />
       </ReactFlow>
       <ConfirmationDialog
-        confirmation={autoLayoutConfirmation}
-        onCancel={() => setAutoLayoutConfirmation(null)}
+        confirmation={autoLayoutProposal ? roadmapAutoLayoutConfirmation : null}
+        onCancel={() => setAutoLayoutProposal(null)}
         onAction={handleAutoLayoutAction}
       />
     </div>
