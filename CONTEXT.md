@@ -24,13 +24,21 @@ _Avoid_: Course offering, roadmap
 The calendar year and semester number that place a course offering in time.
 _Avoid_: Version, season
 
+**Course offering identifier (Identificador de curso)**:
+The composite identity of a Course offering, formed by its canonical Course code and Academic term. Surrounding whitespace does not distinguish one Course offering from another.
+_Avoid_: Roadmap identifier, academic identity, URL parameters
+
 **Academic history (Historial académico)**:
 A student's private record of course offerings retained in their institutional studies. Withdrawn offerings are absent as if never enrolled. Only that student can view the complete history; teaching staff see only offerings in which they also participate.
 _Avoid_: Public profile, current roster
 
 **Academic overview (Resumen académico)**:
-A student's read-only view of current and historical U-Campus courses, with current courses emphasized. Courses can appear before they have a roadmap; opening one then explains that no roadmap exists. Appearance in this view alone does not create a U-roadmaps participation.
+A participant's read-only view of current and historical U-Campus courses, with current courses emphasized. Synchronizing this view materializes each Course offering and the authenticated person's Participation even when no Roadmap exists; opening an offering without one explains that it has not been created yet.
 _Avoid_: Participation, roster synchronization
+
+**Personal academic synchronization (Sincronización académica personal)**:
+The reconciliation of an authenticated user's U-Campus courses and Institutional course positions into local Participations. A complete successful result can materialize, update, or deactivate Participations, while a failed or partial result leaves the corresponding prior information unchanged.
+_Avoid_: Roster synchronization, authentication, cache refresh
 
 **Student progress tracking (Seguimiento de estudiantes)**:
 The teaching staff's offering-scoped view of student Participations, combining basic institutional identity, Course section, participation activity, latest Platform entry, and a summary of Roadmap Completions.
@@ -49,7 +57,7 @@ A person identified institutionally by a unique, normalized RUT who can particip
 _Avoid_: Student, teacher
 
 **Participation (Participación)**:
-A user's membership in a course offering, materialized from U-Campus data, with exactly one student or teacher role. A student participation becomes inactive when a complete, successful roster snapshot reports the student's withdrawal; it then disappears from the student's records and revokes access without deleting the participation or its completions needed by teaching staff.
+A user's membership in a course offering, materialized from U-Campus data, with exactly one student, observer, or teaching-staff role. It becomes inactive when a complete, successful synchronization reports that the participant no longer belongs to the offering; it then disappears from that participant's Academic overview and revokes access without deleting the Participation or its Completions needed by teaching staff.
 _Avoid_: User role, account
 
 **Roster synchronization (Sincronización de participantes)**:
@@ -57,11 +65,11 @@ The reconciliation of a course offering's participants against a complete U-Camp
 _Avoid_: Authentication, additive import
 
 **Participation role (Rol de participación)**:
-The student or teaching-staff role held by a participation in one course offering. U-Campus students become students; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections. Auditors do not participate.
+The student, observer, or teaching-staff role held by a participation in one course offering. U-Campus students become students; observers retain a distinct observer role and follow the same Roadmap access and Completion rules as students, but are not academically evaluated and receive no passing or failing outcome for the Course offering; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections.
 _Avoid_: Function, global user role
 
 **Institutional course position (Cargo institucional de curso)**:
-The effective U-Campus position a participant holds in a course offering. When teaching positions differ across sections, the highest applies throughout the offering: teaching assistant, then auxiliary professor, then course professor. A coordinating professor remains a teaching participant who can edit but does not create or synchronize the roadmap. The position is retained alongside the simplified participation role.
+The effective U-Campus position a participant holds in a course offering. When several positions coincide, the effective priority from highest to lowest is course professor, coordinating professor, auxiliary professor, teaching assistant, student, then observer. A coordinating professor remains a teaching participant who can edit but does not create or synchronize the roadmap. An observer retains an observer Participation role with student-equivalent Roadmap capabilities, even if U-Campus incorrectly reports that position through its taught-courses source. The position is retained alongside the simplified participation role.
 _Avoid_: Participation role, global permission
 
 **U-Campus (U-Campus)**:
