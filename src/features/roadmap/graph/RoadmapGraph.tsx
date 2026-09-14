@@ -29,9 +29,10 @@ import {
 } from '@xyflow/react';
 import { LayoutTemplate, Maximize } from 'lucide-react';
 import {
+  findOpenRoadmapPosition,
   roadmapGridSize,
+  roadmapNodeSizeForTitle,
   snapToRoadmapGrid,
-  type NodeRect,
 } from '@/features/roadmap/graph/geometry';
 import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
 import {
@@ -48,6 +49,7 @@ import type {
   RoadmapGraphEditing,
   RoadmapGraphProjection,
   RoadmapNodePlacement,
+  RoadmapNodePosition,
   RoadmapViewport,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
@@ -145,13 +147,15 @@ function RoadmapGraphToolbar({
   canAutoLayout,
   onAutoLayout,
   topRightActions,
+  nodes,
 }: {
   containerRef: RefObject<HTMLDivElement | null>;
   layoutDirection: RoadmapLayoutDirection;
   showAutoLayout: boolean;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
-  topRightActions?: (getViewport: () => NodeRect) => ReactNode;
+  topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
+  nodes: readonly RoadmapFlowNode[];
 }) {
   const { screenToFlowPosition } = useReactFlow();
   const getViewport = useCallback(() => {
@@ -169,6 +173,22 @@ function RoadmapGraphToolbar({
       height: bottomRight.y - topLeft.y,
     };
   }, [containerRef, screenToFlowPosition]);
+  const findOpenPosition = useCallback(
+    (title: string) => {
+      const size = roadmapNodeSizeForTitle(title);
+      const viewport = getViewport();
+      return findOpenRoadmapPosition(
+        nodes.map((node) => ({ ...node.position, ...roadmapNodeSizeForTitle(node.data.title) })),
+        {
+          x: viewport.x + viewport.width / 2 - size.width / 2,
+          y: viewport.y + viewport.height / 2 - size.height / 2,
+        },
+        size,
+        viewport,
+      );
+    },
+    [getViewport, nodes],
+  );
 
   return (
     <Panel position="top-right" className="mt-5 mr-5">
@@ -187,7 +207,7 @@ function RoadmapGraphToolbar({
           </Button>
         ) : null}
         {topRightActions ? (
-          <div className="flex justify-end gap-1.5">{topRightActions(getViewport)}</div>
+          <div className="flex justify-end gap-1.5">{topRightActions(findOpenPosition)}</div>
         ) : null}
       </div>
     </Panel>
@@ -268,7 +288,7 @@ export type RoadmapGraphProps = {
   onSelectNode: (nodeId: string, trigger: HTMLElement) => void;
   onClearSelectedNode?: () => void;
   selectedNodeId?: string | null;
-  topRightActions?: (getViewport: () => NodeRect) => ReactNode;
+  topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   restoreViewport?: RoadmapViewport | null;
@@ -655,6 +675,7 @@ export const RoadmapGraph = forwardRef<RoadmapGraphHandle, RoadmapGraphProps>(fu
             canAutoLayout={canEdit && flow.nodes.length >= 2}
             onAutoLayout={proposeAutoLayout}
             topRightActions={topRightActions}
+            nodes={flow.nodes}
           />
         ) : null}
         <Background

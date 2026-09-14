@@ -3,7 +3,10 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const { fitViewMock } = vi.hoisted(() => ({ fitViewMock: vi.fn() }));
+const { fitViewMock, screenToFlowPositionMock } = vi.hoisted(() => ({
+  fitViewMock: vi.fn(),
+  screenToFlowPositionMock: vi.fn((position: { x: number; y: number }) => position),
+}));
 
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
@@ -175,7 +178,7 @@ vi.mock('@xyflow/react', () => ({
     }),
   useReactFlow: () => ({
     fitView: fitViewMock,
-    screenToFlowPosition: (position: { x: number; y: number }) => position,
+    screenToFlowPosition: screenToFlowPositionMock,
     getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
     setViewport: vi.fn(),
   }),
@@ -271,6 +274,8 @@ function GraphHarness({
 
 beforeEach(() => {
   fitViewMock.mockReset();
+  screenToFlowPositionMock.mockReset();
+  screenToFlowPositionMock.mockImplementation((position) => position);
 });
 
 test('renders a student projection without graph editing mechanics', () => {
@@ -336,6 +341,139 @@ test('centers the roadmap from the canvas control', async () => {
   await user.click(screen.getByRole('button', { name: 'Centrar mapa' }));
 
   expect(fitViewMock).toHaveBeenCalledWith({ padding: 0.28 });
+});
+
+test('offers toolbar content a snapped open position without exposing viewport geometry', async () => {
+  const user = userEvent.setup();
+  screenToFlowPositionMock.mockImplementation(({ x, y }) => ({ x: x + 7, y: y + 9 }));
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 1_000,
+    bottom: 1_000,
+    width: 1_000,
+    height: 1_000,
+    toJSON: () => ({}),
+  });
+  const requests: unknown[] = [];
+  try {
+    render(
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
+        onSelectNode={vi.fn()}
+        topRightActions={(findOpenPosition) => (
+          <button type="button" onClick={() => requests.push(findOpenPosition('Nuevo hito'))}>
+            Solicitar posición
+          </button>
+        )}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Solicitar posición' }));
+
+    expect(requests).toEqual([{ x: 400, y: 460 }]);
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
+
+test('finds a grid-aligned gap when toolbar content requests an occupied position', async () => {
+  const user = userEvent.setup();
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 1_000,
+    bottom: 1_000,
+    width: 1_000,
+    height: 1_000,
+    toJSON: () => ({}),
+  });
+  const occupiedRoadmap = structuredClone(roadmap);
+  occupiedRoadmap.nodes[0].positionX = 400;
+  occupiedRoadmap.nodes[0].positionY = 460;
+  let position: { x: number; y: number } | null = null;
+  try {
+    render(
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap: occupiedRoadmap, editing: editingCapability() }}
+        onSelectNode={vi.fn()}
+        topRightActions={(findOpenPosition) => (
+          <button type="button" onClick={() => (position = findOpenPosition('Nuevo hito'))}>
+            Solicitar posición libre
+          </button>
+        )}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Solicitar posición libre' }));
+
+    expect(position).toEqual({ x: 400, y: 360 });
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
+
+test('reports no available position to toolbar content when the title cannot fit or occupancy fills the graph', async () => {
+  const user = userEvent.setup();
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 200,
+    bottom: 100,
+    width: 200,
+    height: 100,
+    toJSON: () => ({}),
+  });
+  const responses: unknown[] = [];
+  try {
+    const { rerender } = render(
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap: { ...roadmap, nodes: [] }, editing: editingCapability() }}
+        onSelectNode={vi.fn()}
+        topRightActions={(findOpenPosition) => (
+          <button
+            type="button"
+            onClick={() => {
+              responses.push(findOpenPosition('Corto'));
+              responses.push(
+                findOpenPosition(
+                  'Un título deliberadamente muy largo que necesita varias líneas para leerse completo',
+                ),
+              );
+            }}
+          >
+            Solicitar posiciones
+          </button>
+        )}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Solicitar posiciones' }));
+    expect(responses).toEqual([{ x: 20, y: 20 }, null]);
+
+    rerender(
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
+        onSelectNode={vi.fn()}
+        topRightActions={(findOpenPosition) => (
+          <button type="button" onClick={() => responses.push(findOpenPosition('Corto'))}>
+            Solicitar posición ocupada
+          </button>
+        )}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Solicitar posición ocupada' }));
+
+    expect(responses.at(-1)).toBeNull();
+  } finally {
+    vi.restoreAllMocks();
+  }
 });
 
 test('closes the selected node when Escape is pressed on the canvas node', async () => {

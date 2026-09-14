@@ -49,10 +49,6 @@ import type {
   EditorDraftDiscardDestination,
   RoadmapEditorDraftHandle,
 } from '@/features/roadmap/editor/types';
-import {
-  findOpenRoadmapPosition,
-  roadmapNodeSizeForTitle,
-} from '@/features/roadmap/graph/geometry';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
@@ -434,24 +430,11 @@ export default function RoadmapCanvas({
     );
   }
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
-  const addNodeAtViewport = (
+  const addNodeAtOpenPosition = (
     node: Parameters<typeof addNode>[0],
-    viewport: { x: number; y: number; width: number; height: number },
+    findOpenPosition: (title: string) => { x: number; y: number } | null,
   ) => {
-    const size = roadmapNodeSizeForTitle(node.title);
-    const position = findOpenRoadmapPosition(
-      roadmap.nodes.map((roadmapNode) => ({
-        x: roadmapNode.positionX,
-        y: roadmapNode.positionY,
-        ...roadmapNodeSizeForTitle(roadmapNode.title),
-      })),
-      {
-        x: viewport.x + viewport.width / 2 - size.width / 2,
-        y: viewport.y + viewport.height / 2 - size.height / 2,
-      },
-      size,
-      viewport,
-    );
+    const position = findOpenPosition(node.title);
     if (!position) return Promise.resolve(false);
     return addNode(node, position, (nodeId) =>
       dispatchCanvas({ type: 'selectCreatedNode', nodeId }),
@@ -507,12 +490,12 @@ export default function RoadmapCanvas({
             restoreViewport={canvasPreviewWorkflow.restoreViewport}
             topRightActions={
               !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
-                ? (getViewport) => (
+                ? (findOpenPosition) => (
                     <>
                       {canEditRoadmap ? (
                         <NodeCreator
                           nodeTypes={roadmap.nodeTypes}
-                          onSubmit={(node) => addNodeAtViewport(node, getViewport())}
+                          onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
                           onCreateNodeType={addNodeType}
                           onUpdateNodeType={updateNodeType}
                           onDeleteNodeType={deleteNodeType}

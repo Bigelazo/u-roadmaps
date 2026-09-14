@@ -158,14 +158,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     projection: RoadmapGraphProjection;
     onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
     restoreViewport?: { x: number; y: number; zoom: number } | null;
-    topRightActions?: (
-      getViewport: () => {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      },
-    ) => ReactNode;
+    topRightActions?: (findOpenPosition: (title: string) => { x: number; y: number } | null) => ReactNode;
     overlaySlots?: RoadmapGraphOverlaySlots;
   }) => {
     const editing = projection.kind === 'teaching' ? projection.editing : undefined;
@@ -177,7 +170,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         <div data-testid="roadmap-overlay-top-left">{overlaySlots?.topLeft}</div>
         <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
         <div data-testid="roadmap-overlay-bottom-right">{overlaySlots?.bottomRight}</div>
-        {topRightActions?.(() => ({ x: 0, y: 0, width: 800, height: 600 }))}
+        {topRightActions?.(() => ({ x: 280, y: 260 }))}
         <output data-testid="selected-roadmap-node">{selectedNodeId}</output>
         <output data-testid="roadmap-mode">{canEdit ? 'editing' : 'student'}</output>
         <output data-testid="roadmap-projection">
