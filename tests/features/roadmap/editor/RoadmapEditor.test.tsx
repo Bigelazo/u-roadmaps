@@ -144,7 +144,7 @@ test('opens the existing resource composer and moves focus to its file field on 
   );
 
   const file = await screen.findByLabelText('Archivo');
-  await waitFor(() => expect(document.activeElement).toBe(file));
+  await waitFor(() => expect(file.matches(':focus')).toBe(true));
 });
 
 test('uses the shared node-panel chrome for an effortless mode transition', () => {
