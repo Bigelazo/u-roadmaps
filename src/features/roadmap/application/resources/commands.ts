@@ -2,12 +2,9 @@ import 'server-only';
 
 import { prisma } from '@/shared/server/db';
 import {
-  ApiError,
-  apiResult,
   requireResourceType,
   requireString,
   requireUrl,
-  requireUuid,
   resourceDto,
 } from '@/features/roadmap/application/roadmap';
 import {
@@ -21,6 +18,8 @@ import {
   saveUploadedFile,
   validateUploadedFile,
 } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { requireUuid } from '@/shared/validation';
+import { ApplicationError, applicationResult } from '@/shared/errors/server';
 
 type JsonObject = Record<string, unknown>;
 type ResourceInput = EditorInput & { id: string };
@@ -49,17 +48,17 @@ async function createRoadmapResourceUnsafe({
 
 function uploadedFileError(error: unknown): never {
   if (error instanceof Error && error.message === 'EMPTY_FILE') {
-    throw new ApiError(400, 'INVALID_REQUEST', 'El archivo seleccionado está vacío.');
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'El archivo seleccionado está vacío.');
   }
   if (error instanceof Error && error.message === 'FILE_TOO_LARGE') {
-    throw new ApiError(400, 'INVALID_REQUEST', 'El archivo no puede superar los 25 MB.');
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'El archivo no puede superar los 25 MB.');
   }
   throw error;
 }
 
 async function uploadRoadmapResourceUnsafe({ file, id, ...editor }: UploadedResourceInput) {
   if (!(file instanceof File)) {
-    throw new ApiError(400, 'INVALID_REQUEST', 'Debes seleccionar un archivo para subir.');
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'Debes seleccionar un archivo para subir.');
   }
   try {
     validateUploadedFile(file);
@@ -103,7 +102,11 @@ async function updateRoadmapResourceUnsafe({
     if ('url' in input) data.url = requireUrl(input.url);
     if ('type' in input) data.type = requireResourceType(input.type);
     if (Object.keys(data).length === 0)
-      throw new ApiError(400, 'INVALID_REQUEST', 'Debe indicar al menos un campo para actualizar.');
+      throw new ApplicationError(
+        400,
+        'INVALID_REQUEST',
+        'Debe indicar al menos un campo para actualizar.',
+      );
     return resourceDto(
       await transaction.resource.update({ where: { id: resource.id }, data }),
       editor.identifier,
@@ -122,17 +125,17 @@ async function removeRoadmapResourceUnsafe({ id, ...editor }: ResourceInput) {
 }
 
 export function createRoadmapResource(input: ResourceInput & { input: JsonObject }) {
-  return apiResult(() => createRoadmapResourceUnsafe(input));
+  return applicationResult(() => createRoadmapResourceUnsafe(input));
 }
 
 export function uploadRoadmapResource(input: UploadedResourceInput) {
-  return apiResult(() => uploadRoadmapResourceUnsafe(input));
+  return applicationResult(() => uploadRoadmapResourceUnsafe(input));
 }
 
 export function updateRoadmapResource(input: ResourceInput & { input: JsonObject }) {
-  return apiResult(() => updateRoadmapResourceUnsafe(input));
+  return applicationResult(() => updateRoadmapResourceUnsafe(input));
 }
 
 export function removeRoadmapResource(input: ResourceInput) {
-  return apiResult(() => removeRoadmapResourceUnsafe(input));
+  return applicationResult(() => removeRoadmapResourceUnsafe(input));
 }

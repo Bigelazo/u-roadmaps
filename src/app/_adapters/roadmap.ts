@@ -1,28 +1,18 @@
 import { ApplicationError } from '@/shared/errors/types';
-import type { CourseOfferingIdentifier } from '@/features/roadmap';
+import { parseCourseOfferingIdentifier } from '@/features/roadmap/domain/course-offering-identifier';
+import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
+import type { CourseOfferingIdentifierParams } from '@/features/roadmap/domain/course-offering-identifier';
 
-export function parseCourseOfferingIdentifier(params: {
-  courseCode: string;
-  year: string;
-  semester: string;
-}): CourseOfferingIdentifier {
-  const year = Number(params.year);
-  const semester = Number(params.semester);
-
-  if (
-    !params.courseCode.trim() ||
-    params.courseCode.trim().length > 20 ||
-    !Number.isInteger(year) ||
-    year < 1 ||
-    !Number.isInteger(semester) ||
-    ![1, 2].includes(semester)
-  ) {
+export function requireCourseOfferingIdentifier(
+  params: CourseOfferingIdentifierParams,
+): CourseOfferingIdentifier {
+  const identifier = parseCourseOfferingIdentifier(params);
+  if (!identifier) {
     throw new ApplicationError(
       400,
       'INVALID_ACADEMIC_IDENTITY',
       'El ramo, año y semestre no forman una identidad académica válida.',
     );
   }
-
-  return { courseCode: params.courseCode.trim(), year, semester };
+  return identifier;
 }

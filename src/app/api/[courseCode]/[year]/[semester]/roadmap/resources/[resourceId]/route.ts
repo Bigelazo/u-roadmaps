@@ -1,43 +1,42 @@
 import { NextResponse } from 'next/server';
 import {
-  handleApplicationResult as handleApiResult,
+  handleApplicationResult,
   parseJsonObject as parseJson,
-  throwApplicationError as throwApiError,
+  throwApplicationError,
 } from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import { requireAuthenticatedUser } from '@/shared/server/session';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { removeRoadmapResource, updateRoadmapResource } from '@/features/roadmap/server';
 
-type Context = {
-  params: Promise<{ courseCode: string; year: string; semester: string; resourceId: string }>;
-};
-
-export async function PATCH(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function PATCH(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/resources/[resourceId]'>,
+) {
+  return handleApplicationResult(async () => {
     const params = await context.params;
-    const identifier = parseCourseOfferingIdentifier(params);
-    const [body, user] = await Promise.all([
-      parseJson(request),
-      requireAuthenticatedUser().match((value) => value, throwApiError),
-    ]);
+    const identifier = requireCourseOfferingIdentifier(params);
+    const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
     const resource = await updateRoadmapResource({
       userId: user.id,
       identifier,
       id: params.resourceId,
       input: body,
-    }).match((value) => value, throwApiError);
+    }).match((value) => value, throwApplicationError);
     return NextResponse.json({ resource });
   });
 }
 
-export async function DELETE(_request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function DELETE(
+  _request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/resources/[resourceId]'>,
+) {
+  return handleApplicationResult(async () => {
     const params = await context.params;
-    const identifier = parseCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    const identifier = requireCourseOfferingIdentifier(params);
+    const user = await requireAuthenticatedUser();
     await removeRoadmapResource({ userId: user.id, identifier, id: params.resourceId }).match(
       (value) => value,
-      throwApiError,
+      throwApplicationError,
     );
     return new NextResponse(null, { status: 204 });
   });

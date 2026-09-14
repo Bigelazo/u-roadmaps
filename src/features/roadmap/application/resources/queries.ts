@@ -1,12 +1,7 @@
 import 'server-only';
 
 import { prisma } from '@/shared/server/db';
-import {
-  ApiError,
-  apiResult,
-  requireUuid,
-  resourceDto,
-} from '@/features/roadmap/application/roadmap';
+import { resourceDto } from '@/features/roadmap/application/roadmap';
 import {
   requireCourseOfferingParticipation,
   type RoadmapActor,
@@ -14,6 +9,8 @@ import {
 import { requireStudentNodeAccess } from '@/features/roadmap/application/completion';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import { readUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { requireUuid } from '@/shared/validation';
+import { ApplicationError, applicationResult } from '@/shared/errors/server';
 
 type NodeResourcesInput = {
   actor: RoadmapActor;
@@ -40,7 +37,7 @@ async function requireResourceRoadmap(actor: RoadmapActor, identifier: CourseOff
   );
   const roadmap = courseOffering.roadmap;
   if (!roadmap) {
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
@@ -57,7 +54,7 @@ async function requireStudentResourceAccess(
   node: { id: string; isVisible: boolean },
 ) {
   if (participation.role === 'STUDENT' && !node.isVisible) {
-    throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   }
   if (participation.role === 'STUDENT') {
     await prisma.$transaction((transaction) =>
@@ -76,7 +73,8 @@ async function getRoadmapNodeResourcesUnsafe({ actor, identifier, nodeId }: Node
   const node = await prisma.roadmapNode.findFirst({
     where: { id: parsedNodeId, roadmapId: roadmap.id },
   });
-  if (!node) throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!node)
+    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   await requireStudentResourceAccess(participation, roadmap.id, node);
   const resources = await prisma.resource.findMany({
     where: { roadmapNodeId: parsedNodeId },
@@ -99,7 +97,7 @@ async function downloadRoadmapResourceUnsafe({
     include: { roadmapNode: { select: { isVisible: true } } },
   });
   if (!resource || !resource.fileKey) {
-    throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
+    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
   }
   await requireStudentResourceAccess(participation, roadmap.id, {
     id: resource.roadmapNodeId,
@@ -112,14 +110,14 @@ async function downloadRoadmapResourceUnsafe({
       title: resource.title,
     };
   } catch {
-    throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
+    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
   }
 }
 
 export function getRoadmapNodeResources(input: NodeResourcesInput) {
-  return apiResult(() => getRoadmapNodeResourcesUnsafe(input));
+  return applicationResult(() => getRoadmapNodeResourcesUnsafe(input));
 }
 
 export function downloadRoadmapResource(input: ResourceDownloadInput) {
-  return apiResult(() => downloadRoadmapResourceUnsafe(input));
+  return applicationResult(() => downloadRoadmapResourceUnsafe(input));
 }

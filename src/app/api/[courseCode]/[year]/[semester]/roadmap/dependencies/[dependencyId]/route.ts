@@ -1,26 +1,21 @@
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult as handleApiResult,
-  throwApplicationError as throwApiError,
-} from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { deleteRoadmapDependency } from '@/features/roadmap/server';
-import { requireAuthenticatedUser } from '@/shared/server/session';
 
-type Context = {
-  params: Promise<{ courseCode: string; year: string; semester: string; dependencyId: string }>;
-};
-
-export async function DELETE(_request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function DELETE(
+  _request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/dependencies/[dependencyId]'>,
+) {
+  return handleApplicationResult(async () => {
     const params = await context.params;
-    const identifier = parseCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
-    await deleteRoadmapDependency({
-      userId: user.id,
-      identifier,
-      id: params.dependencyId,
-    }).match((value) => value, throwApiError);
+    const identifier = requireCourseOfferingIdentifier(params);
+    const user = await requireAuthenticatedUser();
+    await deleteRoadmapDependency({ userId: user.id, identifier, id: params.dependencyId }).match(
+      (value) => value,
+      throwApplicationError,
+    );
     return new NextResponse(null, { status: 204 });
   });
 }

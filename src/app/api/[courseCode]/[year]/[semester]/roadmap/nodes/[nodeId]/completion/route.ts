@@ -1,26 +1,22 @@
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult as handleApiResult,
-  throwApplicationError as throwApiError,
-} from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { completeNode } from '@/features/roadmap/server';
-import { requireAuthenticatedUser } from '@/shared/server/session';
 
-type Context = {
-  params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
-};
-
-export async function POST(_request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function POST(
+  _request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/completion'>,
+) {
+  return handleApplicationResult(async () => {
     const params = await context.params;
-    const identifier = parseCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+    const identifier = requireCourseOfferingIdentifier(params);
+    const user = await requireAuthenticatedUser();
     const completion = await completeNode({
       userId: user.id,
       identifier,
       nodeId: params.nodeId,
-    }).match((value) => value, throwApiError);
+    }).match((value) => value, throwApplicationError);
     return NextResponse.json({
       completion: {
         id: completion.id,

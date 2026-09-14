@@ -3,8 +3,6 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { Prisma, prisma } from '@/shared/server/db';
 import {
-  ApiError,
-  apiResult,
   findCycle,
   nodeDto,
   normalizeName,
@@ -14,9 +12,10 @@ import {
   requireNodeTypeIcon,
   requireFiniteNumber,
   requireString,
-  requireUuid,
   resourceDto,
 } from '@/features/roadmap/application/roadmap';
+import { requireUuid } from '@/shared/validation';
+import { ApplicationError, applicationResult } from '@/shared/errors/server';
 import type {
   NodeDeletionImpact,
   TeacherBlockOperation,
@@ -59,7 +58,11 @@ function structuralDependencies(
 function dependencyHandle(value: unknown, field: string, fallback: string) {
   const handle = optionalString(value, field, 6) ?? fallback;
   if (!['top', 'right', 'bottom', 'left'].includes(handle)) {
-    throw new ApiError(400, 'INVALID_REQUEST', `${field} debe ser un punto válido del nodo.`);
+    throw new ApplicationError(
+      400,
+      'INVALID_REQUEST',
+      `${field} debe ser un punto válido del nodo.`,
+    );
   }
   return handle;
 }
@@ -69,7 +72,7 @@ async function requireType(transaction: Prisma.TransactionClient, id: string, ro
     where: { id, OR: [{ isPredefined: true }, { roadmapId }] },
   });
   if (!nodeType) {
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'NODE_TYPE_NOT_FOUND',
       'El tipo no existe o no está disponible en este roadmap.',
@@ -85,14 +88,18 @@ async function requireCustomType(
 ) {
   const nodeType = await requireType(transaction, id, roadmapId);
   if (nodeType.isPredefined) {
-    throw new ApiError(409, 'PREDEFINED_TYPE_IMMUTABLE', 'Los tipos predefinidos son inmutables.');
+    throw new ApplicationError(
+      409,
+      'PREDEFINED_TYPE_IMMUTABLE',
+      'Los tipos predefinidos son inmutables.',
+    );
   }
   return nodeType;
 }
 
 async function withSerializableTransaction<T>(
   operation: (transaction: Prisma.TransactionClient) => Promise<T>,
-  concurrentModification: () => ApiError,
+  concurrentModification: () => ApplicationError,
 ) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -130,7 +137,7 @@ async function ensureTypeNameAvailable(
     },
   });
   if (existing) {
-    throw new ApiError(
+    throw new ApplicationError(
       409,
       'NODE_TYPE_NAME_CONFLICT',
       'Ya existe un tipo disponible con ese nombre.',
@@ -209,7 +216,7 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
       if (requestedVisibility !== undefined) data.isVisible = requestedVisibility;
       const hiddenAfterUpdate = requestedVisibility === false || !node.isVisible;
       if (Object.keys(data).length === 0)
-        throw new ApiError(
+        throw new ApplicationError(
           400,
           'INVALID_REQUEST',
           'Debe indicar al menos un campo para actualizar.',
@@ -246,7 +253,12 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
           : {}),
       };
     },
-    () => new ApiError(409, 'CONFLICT', 'La operación entra en conflicto con otra modificación.'),
+    () =>
+      new ApplicationError(
+        409,
+        'CONFLICT',
+        'La operación entra en conflicto con otra modificación.',
+      ),
   );
 }
 
@@ -262,7 +274,8 @@ async function nodeDeletionPreview(
       resources: { select: { id: true, title: true }, orderBy: [{ title: 'asc' }, { id: 'asc' }] },
     },
   });
-  if (!node) throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!node)
+    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   const dependencies = await transaction.dependency.findMany({
     where: { OR: [{ sourceNodeId: node.id }, { targetNodeId: node.id }] },
     select: {
@@ -301,7 +314,7 @@ async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDe
     async (transaction) => {
       const preview = await nodeDeletionPreview(transaction, { id, ...editor });
       if (previewVersion && previewVersion !== preview.version) {
-        throw new ApiError(
+        throw new ApplicationError(
           409,
           'NODE_DELETE_PREVIEW_STALE',
           'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
@@ -314,7 +327,12 @@ async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDe
       await transaction.roadmapNode.delete({ where: { id: requireUuid(id, 'nodeId') } });
       return resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : []));
     },
-    () => new ApiError(409, 'CONFLICT', 'La eliminación entra en conflicto con otra modificación.'),
+    () =>
+      new ApplicationError(
+        409,
+        'CONFLICT',
+        'La eliminación entra en conflicto con otra modificación.',
+      ),
   );
   await Promise.all(fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)));
 }
@@ -358,7 +376,7 @@ async function updateRoadmapNodeTypeUnsafe({
     if ('icon' in input) data.icon = requireNodeTypeIcon(input.icon);
     if ('color' in input) data.color = requireNodeTypeColor(input.color);
     if (Object.keys(data).length === 0)
-      throw new ApiError(
+      throw new ApplicationError(
         400,
         'INVALID_REQUEST',
         'Debe indicar nombre, ícono o color para actualizar.',
@@ -372,7 +390,7 @@ async function deleteRoadmapNodeTypeUnsafe({ id, ...editor }: WithId) {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const nodeType = await requireCustomType(transaction, requireUuid(id, 'typeId'), roadmap.id);
     if (await transaction.roadmapNode.count({ where: { nodeTypeId: nodeType.id } })) {
-      throw new ApiError(
+      throw new ApplicationError(
         409,
         'NODE_TYPE_IN_USE',
         'No se puede eliminar un tipo utilizado por nodos.',
@@ -402,13 +420,13 @@ async function prepareRoadmapDependency(
   const sourceHandle = dependencyHandle(input.sourceHandle, 'sourceHandle', 'right');
   const targetHandle = dependencyHandle(input.targetHandle, 'targetHandle', 'left');
   if (sourceNodeId === targetNodeId)
-    throw new ApiError(409, 'SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
+    throw new ApplicationError(409, 'SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
   const [sourceNode, targetNode] = await Promise.all([
     requireNode(transaction, sourceNodeId, roadmap.id),
     requireNode(transaction, targetNodeId, roadmap.id),
   ]);
   if (!sourceNode.isVisible || !targetNode.isVisible) {
-    throw new ApiError(
+    throw new ApplicationError(
       403,
       'HIDDEN_NODE_DEPENDENCY_FORBIDDEN',
       'No se pueden crear dependencias con nodos ocultos.',
@@ -424,10 +442,10 @@ async function prepareRoadmapDependency(
         dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId,
     )
   ) {
-    throw new ApiError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
+    throw new ApplicationError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
   }
   if (findCycle(dependencies, sourceNodeId, targetNodeId))
-    throw new ApiError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
+    throw new ApplicationError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
   return {
     roadmapId: roadmap.id,
     sourceNodeId,
@@ -454,7 +472,10 @@ async function teacherBlockedDependentNodes(
     select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
     orderBy: { title: 'asc' },
   });
-  const visibleNodeIds = new Set(nodes.filter((node) => node.isVisible).map((node) => node.id));
+  const visibleNodeIds = nodes.reduce<Set<string>>((ids, node) => {
+    if (node.isVisible) ids.add(node.id);
+    return ids;
+  }, new Set());
   const visibleDependencies = dependencies.filter(
     (dependency) =>
       visibleNodeIds.has(dependency.sourceNodeId) && visibleNodeIds.has(dependency.targetNodeId),
@@ -463,9 +484,12 @@ async function teacherBlockedDependentNodes(
     targetNodeId,
     ...transitiveDependentNodeIds(visibleDependencies, targetNodeId),
   ]);
-  return nodes
-    .filter((node) => node.isVisible && !node.isTeacherBlocked && affectedNodeIds.has(node.id))
-    .map(({ id, title }) => ({ id, title }));
+  return nodes.reduce<Array<{ id: string; title: string }>>((affectedNodes, node) => {
+    if (node.isVisible && !node.isTeacherBlocked && affectedNodeIds.has(node.id)) {
+      affectedNodes.push({ id: node.id, title: node.title });
+    }
+    return affectedNodes;
+  }, []);
 }
 
 async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
@@ -507,7 +531,7 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
       };
     },
     () =>
-      new ApiError(
+      new ApplicationError(
         409,
         'DEPENDENCY_CONFLICT',
         'La dependencia entra en conflicto con otra modificación.',
@@ -535,7 +559,11 @@ async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
       where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
     });
     if (!dependency)
-      throw new ApiError(404, 'DEPENDENCY_NOT_FOUND', 'La dependencia no existe en este roadmap.');
+      throw new ApplicationError(
+        404,
+        'DEPENDENCY_NOT_FOUND',
+        'La dependencia no existe en este roadmap.',
+      );
     await transaction.dependency.delete({ where: { id: dependency.id } });
   });
 }
@@ -596,16 +624,20 @@ async function teacherBlockPreview(
     } satisfies TeacherBlockPreview;
   }
   if (decision.reason === 'NODE_NOT_FOUND') {
-    throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   }
   if (decision.reason === 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN') {
-    throw new ApiError(
+    throw new ApplicationError(
       409,
       'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
       'Un nodo oculto no puede tener un bloqueo docente.',
     );
   }
-  throw new ApiError(409, 'INVALID_TEACHER_BLOCK_OPERATION', 'Operación de bloqueo no válida.');
+  throw new ApplicationError(
+    409,
+    'INVALID_TEACHER_BLOCK_OPERATION',
+    'Operación de bloqueo no válida.',
+  );
 }
 
 async function previewTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
@@ -622,7 +654,7 @@ async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
         input.operation !== 'BLOCK' &&
         (!input.previewVersion || input.previewVersion !== preview.version)
       ) {
-        throw new ApiError(
+        throw new ApplicationError(
           409,
           'TEACHER_BLOCK_PREVIEW_STALE',
           'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
@@ -636,58 +668,63 @@ async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
       }
       return preview;
     },
-    () => new ApiError(409, 'CONFLICT', 'La operación entra en conflicto con otra modificación.'),
+    () =>
+      new ApplicationError(
+        409,
+        'CONFLICT',
+        'La operación entra en conflicto con otra modificación.',
+      ),
   );
 }
 
 export function createRoadmapNode(input: WithInput) {
-  return apiResult(() => createRoadmapNodeUnsafe(input));
+  return applicationResult(() => createRoadmapNodeUnsafe(input));
 }
 
 export function updateRoadmapNode(input: WithId & { input: JsonObject }) {
-  return apiResult(() => updateRoadmapNodeUnsafe(input));
+  return applicationResult(() => updateRoadmapNodeUnsafe(input));
 }
 
 export function previewNodeVisibility(input: WithId) {
-  return apiResult(() => previewNodeVisibilityUnsafe(input));
+  return applicationResult(() => previewNodeVisibilityUnsafe(input));
 }
 
 export function previewNodeDeletion(input: WithId) {
-  return apiResult(() => previewNodeDeletionUnsafe(input));
+  return applicationResult(() => previewNodeDeletionUnsafe(input));
 }
 
 export function deleteRoadmapNode(input: WithDeletePreview) {
-  return apiResult(() => deleteRoadmapNodeUnsafe(input));
+  return applicationResult(() => deleteRoadmapNodeUnsafe(input));
 }
 
 export function createRoadmapNodeType(input: WithInput) {
-  return apiResult(() => createRoadmapNodeTypeUnsafe(input));
+  return applicationResult(() => createRoadmapNodeTypeUnsafe(input));
 }
 
 export function updateRoadmapNodeType(input: WithId & { input: JsonObject }) {
-  return apiResult(() => updateRoadmapNodeTypeUnsafe(input));
+  return applicationResult(() => updateRoadmapNodeTypeUnsafe(input));
 }
 
 export function deleteRoadmapNodeType(input: WithId) {
-  return apiResult(() => deleteRoadmapNodeTypeUnsafe(input));
+  return applicationResult(() => deleteRoadmapNodeTypeUnsafe(input));
 }
 
 export function createRoadmapDependency(input: WithInput) {
-  return apiResult(() => createRoadmapDependencyUnsafe(input));
+  return applicationResult(() => createRoadmapDependencyUnsafe(input));
 }
 
 export function previewRoadmapDependency(input: WithInput) {
-  return apiResult(() => previewRoadmapDependencyUnsafe(input));
+  return applicationResult(() => previewRoadmapDependencyUnsafe(input));
 }
 
 export function deleteRoadmapDependency(input: WithId) {
-  return apiResult(() => deleteRoadmapDependencyUnsafe(input));
+  return applicationResult(() => deleteRoadmapDependencyUnsafe(input));
 }
 
 export function previewTeacherBlock(input: WithTeacherBlockOperation) {
-  return apiResult(() => previewTeacherBlockUnsafe(input));
+  return applicationResult(() => previewTeacherBlockUnsafe(input));
 }
 
 export function changeTeacherBlock(input: WithTeacherBlockOperation) {
-  return apiResult(() => changeTeacherBlockUnsafe(input));
+  return applicationResult(() => changeTeacherBlockUnsafe(input));
 }

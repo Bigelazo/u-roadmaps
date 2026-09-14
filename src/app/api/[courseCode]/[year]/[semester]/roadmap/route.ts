@@ -1,35 +1,39 @@
 import { NextResponse } from 'next/server';
 import {
-  handleApplicationResult as handleApiResult,
+  handleApplicationResult,
   parseJsonObject as parseJson,
-  throwApplicationError as throwApiError,
+  throwApplicationError,
 } from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { createRoadmapForActor, readRoadmapForParticipant } from '@/features/roadmap/server';
-import { requireAuthenticatedUser } from '@/shared/server/session';
 
-type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
-
-export async function GET(_request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const identifier = parseCourseOfferingIdentifier(await context.params);
-    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+export async function GET(
+  _request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap'>,
+) {
+  return handleApplicationResult(async () => {
+    const identifier = requireCourseOfferingIdentifier(await context.params);
+    const user = await requireAuthenticatedUser();
     return NextResponse.json(
       await readRoadmapForParticipant({ userId: user.id, identifier }).match(
         (value) => value,
-        throwApiError,
+        throwApplicationError,
       ),
     );
   });
 }
 
-export async function POST(request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const identifier = parseCourseOfferingIdentifier(await context.params);
-    const actor = await requireAuthenticatedUser().match((value) => value, throwApiError);
+export async function POST(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap'>,
+) {
+  return handleApplicationResult(async () => {
+    const identifier = requireCourseOfferingIdentifier(await context.params);
+    const actor = await requireAuthenticatedUser();
     const roadmap = await createRoadmapForActor(actor, identifier, () => parseJson(request)).match(
       (value) => value,
-      throwApiError,
+      throwApplicationError,
     );
     return NextResponse.json({ roadmap: { id: roadmap.id }, ...identifier }, { status: 201 });
   });

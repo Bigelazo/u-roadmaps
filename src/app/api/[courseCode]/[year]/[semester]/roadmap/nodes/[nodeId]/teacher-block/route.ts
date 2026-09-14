@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult as handleApiResult,
-  throwApplicationError as throwApiError,
-} from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import type { TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock, previewTeacherBlock } from '@/features/roadmap/server';
 import { ApplicationError } from '@/shared/errors/types';
-import { requireAuthenticatedUser } from '@/shared/server/session';
-
-type Context = {
-  params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
-};
 
 function teacherBlockOperation(request: Request): TeacherBlockOperation {
   const operation = new URL(request.url).searchParams.get('operation');
@@ -26,55 +19,64 @@ function teacherBlockOperation(request: Request): TeacherBlockOperation {
 }
 
 async function teacherBlockInput(
-  context: Context,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
   operation: TeacherBlockOperation,
   request?: Request,
 ) {
-  const [params, user] = await Promise.all([
-    context.params,
-    requireAuthenticatedUser().match((value) => value, throwApiError),
-  ]);
+  const [params, user] = await Promise.all([context.params, requireAuthenticatedUser()]);
   return {
     userId: user.id,
-    identifier: parseCourseOfferingIdentifier(params),
+    identifier: requireCourseOfferingIdentifier(params),
     id: params.nodeId,
     operation,
     previewVersion: request?.headers.get('x-teacher-block-preview') ?? undefined,
   };
 }
 
-export async function GET(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function GET(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
+) {
+  return handleApplicationResult(async () => {
     const preview = await previewTeacherBlock(
       await teacherBlockInput(context, teacherBlockOperation(request)),
-    ).match((value) => value, throwApiError);
+    ).match((value) => value, throwApplicationError);
     return NextResponse.json(preview);
   });
 }
 
-export async function POST(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function POST(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
+) {
+  return handleApplicationResult(async () => {
     const result = await changeTeacherBlock(
       await teacherBlockInput(context, 'BLOCK', request),
-    ).match((value) => value, throwApiError);
+    ).match((value) => value, throwApplicationError);
     return NextResponse.json(result);
   });
 }
 
-export async function DELETE(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function DELETE(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
+) {
+  return handleApplicationResult(async () => {
     const result = await changeTeacherBlock(
       await teacherBlockInput(context, 'UNBLOCK', request),
-    ).match((value) => value, throwApiError);
+    ).match((value) => value, throwApplicationError);
     return NextResponse.json(result);
   });
 }
 
-export async function PATCH(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function PATCH(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
+) {
+  return handleApplicationResult(async () => {
     const result = await changeTeacherBlock(
       await teacherBlockInput(context, 'BRANCH_UNLOCK', request),
-    ).match((value) => value, throwApiError);
+    ).match((value) => value, throwApplicationError);
     return NextResponse.json(result);
   });
 }

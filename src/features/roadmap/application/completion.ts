@@ -1,9 +1,10 @@
 import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
-import { ApiError, apiResult, nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
+import { nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import type { CourseOfferingIdentifier, StudentNodeAccess } from '@/features/roadmap/types';
 import { studentNodeAccessById } from '@/features/roadmap/domain/access';
+import { ApplicationError, applicationResult } from '@/shared/errors/server';
 
 type ParticipantRoadmapInput = { userId: string; identifier: CourseOfferingIdentifier };
 type CompleteNodeInput = ParticipantRoadmapInput & { nodeId: string };
@@ -11,7 +12,7 @@ type StudentNodeAccessInput = { userId: string; roadmapId: string; nodeId: strin
 type RequiredRole = 'STUDENT' | 'TEACHER';
 
 function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>) {
-  return new ApiError(
+  return new ApplicationError(
     403,
     access.reason,
     access.reason === 'TEACHER_BLOCK'
@@ -62,7 +63,7 @@ async function requireNodeAccess(
     completedNodeIds,
   });
   if (!nodes.some((node) => node.id === nodeId)) {
-    throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   }
   const access = accessByNodeId.get(nodeId);
   if (!access || access.status === 'ACCESSIBLE') return;
@@ -94,7 +95,7 @@ async function requireParticipantRoadmap(
     include: { course: true, roadmap: true },
   });
   if (!courseOffering) {
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
@@ -104,10 +105,14 @@ async function requireParticipantRoadmap(
     where: { userId_courseOfferingId: { userId, courseOfferingId: courseOffering.id } },
   });
   if (!participation?.isActive || (requiredRole && participation.role !== requiredRole)) {
-    throw new ApiError(403, 'FORBIDDEN', 'No tienes participación vigente para esta operación.');
+    throw new ApplicationError(
+      403,
+      'FORBIDDEN',
+      'No tienes participación vigente para esta operación.',
+    );
   }
   if (!courseOffering.roadmap) {
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
@@ -127,7 +132,7 @@ async function requireCurrentRoadmap(
     select: { roadmapFreezeDate: true },
   });
   if (academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now()) {
-    throw new ApiError(403, 'ROADMAP_FROZEN', 'Este roadmap histórico es de sólo lectura.');
+    throw new ApplicationError(403, 'ROADMAP_FROZEN', 'Este roadmap histórico es de sólo lectura.');
   }
 }
 
@@ -421,21 +426,21 @@ async function resetSimulatedCompletionsUnsafe({ userId, identifier }: Participa
 }
 
 export function readRoadmapForParticipant(input: ParticipantRoadmapInput) {
-  return apiResult(() => readRoadmapForParticipantUnsafe(input));
+  return applicationResult(() => readRoadmapForParticipantUnsafe(input));
 }
 
 export function completeNode(input: CompleteNodeInput) {
-  return apiResult(() => completeNodeUnsafe(input));
+  return applicationResult(() => completeNodeUnsafe(input));
 }
 
 export function readSimulatedRoadmap(input: ParticipantRoadmapInput) {
-  return apiResult(() => readSimulatedRoadmapUnsafe(input));
+  return applicationResult(() => readSimulatedRoadmapUnsafe(input));
 }
 
 export function completeSimulatedNode(input: CompleteNodeInput) {
-  return apiResult(() => completeSimulatedNodeUnsafe(input));
+  return applicationResult(() => completeSimulatedNodeUnsafe(input));
 }
 
 export function resetSimulatedCompletions(input: ParticipantRoadmapInput) {
-  return apiResult(() => resetSimulatedCompletionsUnsafe(input));
+  return applicationResult(() => resetSimulatedCompletionsUnsafe(input));
 }

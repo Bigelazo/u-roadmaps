@@ -1,37 +1,38 @@
 import { NextResponse } from 'next/server';
 import {
-  handleApplicationResult as handleApiResult,
+  handleApplicationResult,
   parseJsonObject as parseJson,
-  throwApplicationError as throwApiError,
+  throwApplicationError,
 } from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { createRoadmapNode, getRoadmapNodesForActor } from '@/features/roadmap/server';
-import { requireAuthenticatedUser } from '@/shared/server/session';
 
-type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
-
-export async function POST(request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const identifier = parseCourseOfferingIdentifier(await context.params);
-    const [body, user] = await Promise.all([
-      parseJson(request),
-      requireAuthenticatedUser().match((value) => value, throwApiError),
-    ]);
+export async function POST(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes'>,
+) {
+  return handleApplicationResult(async () => {
+    const identifier = requireCourseOfferingIdentifier(await context.params);
+    const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
     const node = await createRoadmapNode({ userId: user.id, identifier, input: body }).match(
       (value) => value,
-      throwApiError,
+      throwApplicationError,
     );
     return NextResponse.json({ node }, { status: 201 });
   });
 }
 
-export async function GET(request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const identifier = parseCourseOfferingIdentifier(await context.params);
-    const actor = await requireAuthenticatedUser().match((value) => value, throwApiError);
+export async function GET(
+  _request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes'>,
+) {
+  return handleApplicationResult(async () => {
+    const identifier = requireCourseOfferingIdentifier(await context.params);
+    const actor = await requireAuthenticatedUser();
     const nodes = await getRoadmapNodesForActor(actor, identifier).match(
       (value) => value,
-      throwApiError,
+      throwApplicationError,
     );
     return NextResponse.json({ nodes });
   });

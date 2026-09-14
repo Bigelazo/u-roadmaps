@@ -8,78 +8,10 @@ import {
   type NodeTypeIconId,
 } from '@/features/roadmap/node-type-appearance';
 import { Prisma, prisma } from '@/shared/server/db';
-import {
-  ApplicationError as ApiError,
-  applicationResult as apiResult,
-} from '@/shared/errors/server';
-export {
-  ApplicationError as ApiError,
-  applicationResult as apiResult,
-} from '@/shared/errors/server';
+import { ApplicationError, applicationResult } from '@/shared/errors/server';
 export { wouldCreateDependencyCycle as findCycle } from '@/features/roadmap/domain/access';
 
 type JsonObject = Record<string, unknown>;
-
-export type ApiErrorCode =
-  | 'AUTH_CONFIGURATION_ERROR'
-  | 'CONFLICT'
-  | 'DEPENDENCY_CONFLICT'
-  | 'DEPENDENCY_CYCLE'
-  | 'DEPENDENCY_NOT_FOUND'
-  | 'DEVELOPMENT_PERSONA_NOT_FOUND'
-  | 'FORBIDDEN'
-  | 'HIDDEN_NODE_DEPENDENCY_FORBIDDEN'
-  | 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN'
-  | 'INTERNAL_ERROR'
-  | 'INVALID_ACADEMIC_IDENTITY'
-  | 'INVALID_AUTH_CALLBACK'
-  | 'INVALID_COLOR'
-  | 'INVALID_JSON'
-  | 'INVALID_REQUEST'
-  | 'INVALID_RESOURCE_TYPE'
-  | 'INVALID_URL'
-  | 'INVALID_VTI_CLAIMS'
-  | 'NODE_NOT_FOUND'
-  | 'NODE_TYPE_IN_USE'
-  | 'NODE_TYPE_NAME_CONFLICT'
-  | 'NODE_TYPE_NOT_FOUND'
-  | 'NOT_FOUND'
-  | 'PREREQUISITES_PENDING'
-  | 'PREDEFINED_TYPE_IMMUTABLE'
-  | 'PREREQUISITE_BLOCK'
-  | 'RESOURCE_NOT_FOUND'
-  | 'ROADMAP_CONFLICT'
-  | 'ROADMAP_NOT_FOUND'
-  | 'SELF_DEPENDENCY'
-  | 'TEACHER_BLOCK'
-  | 'TEACHER_BLOCKED_PREREQUISITE'
-  | 'UNAUTHENTICATED';
-
-export function parseCourseOfferingIdentifier(params: {
-  courseCode: string;
-  year: string;
-  semester: string;
-}): CourseOfferingIdentifier {
-  const year = Number(params.year);
-  const semester = Number(params.semester);
-
-  if (
-    !params.courseCode.trim() ||
-    params.courseCode.trim().length > 20 ||
-    !Number.isInteger(year) ||
-    year < 1 ||
-    !Number.isInteger(semester) ||
-    ![1, 2].includes(semester)
-  ) {
-    throw new ApiError(
-      400,
-      'INVALID_ACADEMIC_IDENTITY',
-      'El ramo, año y semestre no forman una identidad académica válida.',
-    );
-  }
-
-  return { courseCode: params.courseCode.trim(), year, semester };
-}
 
 export function normalizeName(name: string): string {
   return name.trim().toLocaleLowerCase('es-CL');
@@ -91,7 +23,7 @@ export function requireString(value: unknown, field: string, maxLength?: number)
     !value.trim() ||
     (maxLength !== undefined && value.trim().length > maxLength)
   ) {
-    throw new ApiError(400, 'INVALID_REQUEST', `${field} debe ser un texto no vacío.`);
+    throw new ApplicationError(400, 'INVALID_REQUEST', `${field} debe ser un texto no vacío.`);
   }
   return value.trim();
 }
@@ -107,24 +39,14 @@ export function optionalString(
 
 export function requireFiniteNumber(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new ApiError(400, 'INVALID_REQUEST', `${field} debe ser un número finito.`);
+    throw new ApplicationError(400, 'INVALID_REQUEST', `${field} debe ser un número finito.`);
   }
   return value;
 }
 
 export function requireBoolean(value: unknown, field: string): boolean {
   if (typeof value !== 'boolean') {
-    throw new ApiError(400, 'INVALID_REQUEST', `${field} debe ser booleano.`);
-  }
-  return value;
-}
-
-export function requireUuid(value: unknown, field: string): string {
-  if (
-    typeof value !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-  ) {
-    throw new ApiError(400, 'INVALID_REQUEST', `${field} debe ser un UUID válido.`);
+    throw new ApplicationError(400, 'INVALID_REQUEST', `${field} debe ser booleano.`);
   }
   return value;
 }
@@ -132,7 +54,7 @@ export function requireUuid(value: unknown, field: string): string {
 export function requireNodeTypeColor(value: unknown): NodeTypeColor {
   const color = requireString(value, 'color');
   if (!isNodeTypeColor(color)) {
-    throw new ApiError(
+    throw new ApplicationError(
       400,
       'INVALID_REQUEST',
       'color debe pertenecer a la paleta de tipos de nodo.',
@@ -144,7 +66,7 @@ export function requireNodeTypeColor(value: unknown): NodeTypeColor {
 export function requireNodeTypeIcon(value: unknown): NodeTypeIconId {
   const icon = requireString(value, 'icon');
   if (!isNodeTypeIconId(icon)) {
-    throw new ApiError(
+    throw new ApplicationError(
       400,
       'INVALID_REQUEST',
       'icon debe pertenecer al catálogo de íconos docentes.',
@@ -155,7 +77,7 @@ export function requireNodeTypeIcon(value: unknown): NodeTypeIconId {
 
 export function requireResourceType(value: unknown): 'FILE' | 'LINK' | 'VIDEO' {
   if (value !== 'FILE' && value !== 'LINK' && value !== 'VIDEO') {
-    throw new ApiError(400, 'INVALID_RESOURCE_TYPE', 'type debe ser FILE, LINK o VIDEO.');
+    throw new ApplicationError(400, 'INVALID_RESOURCE_TYPE', 'type debe ser FILE, LINK o VIDEO.');
   }
   return value;
 }
@@ -167,7 +89,7 @@ export function requireUrl(value: unknown): string {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
       throw new Error('Unsupported URL scheme');
   } catch {
-    throw new ApiError(400, 'INVALID_URL', 'url debe ser una URL válida.');
+    throw new ApplicationError(400, 'INVALID_URL', 'url debe ser una URL válida.');
   }
   return url;
 }
@@ -195,19 +117,6 @@ export function resourceDto(
   };
 }
 
-export async function parseJson(request: Request): Promise<JsonObject> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    throw new ApiError(400, 'INVALID_JSON', 'El cuerpo debe ser JSON válido.');
-  }
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new ApiError(400, 'INVALID_REQUEST', 'El cuerpo debe ser un objeto JSON.');
-  }
-  return body as JsonObject;
-}
-
 async function requireRoadmapUnsafe(identifier: CourseOfferingIdentifier) {
   const roadmap = await prisma.roadmap.findFirst({
     where: {
@@ -215,19 +124,13 @@ async function requireRoadmapUnsafe(identifier: CourseOfferingIdentifier) {
     },
   });
   if (!roadmap) {
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
     );
   }
   return roadmap;
-}
-
-export async function requireNodeInRoadmap(nodeId: string, roadmapId: string) {
-  const node = await prisma.roadmapNode.findFirst({ where: { id: nodeId, roadmapId } });
-  if (!node) throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
-  return node;
 }
 
 export function nodeDto(node: {
@@ -269,15 +172,19 @@ export async function getAvailableTypes(roadmapId: string) {
 export function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002')
-      throw new ApiError(
+      throw new ApplicationError(
         409,
         'CONFLICT',
         'La operación entra en conflicto con un recurso existente.',
       );
     if (error.code === 'P2025')
-      throw new ApiError(404, 'NOT_FOUND', 'El recurso solicitado no existe.');
+      throw new ApplicationError(404, 'NOT_FOUND', 'El recurso solicitado no existe.');
     if (error.code === 'P2034')
-      throw new ApiError(409, 'CONFLICT', 'La operación entra en conflicto con otra modificación.');
+      throw new ApplicationError(
+        409,
+        'CONFLICT',
+        'La operación entra en conflicto con otra modificación.',
+      );
   }
   throw error;
 }
@@ -295,7 +202,7 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
   });
 
   if (!roadmap)
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
@@ -371,7 +278,11 @@ async function createRoadmapUnsafe(identifier: CourseOfferingIdentifier, body: J
         }),
       ]);
       if (existingCourseOffering?.roadmap)
-        throw new ApiError(409, 'ROADMAP_CONFLICT', 'Ya existe un roadmap para este curso.');
+        throw new ApplicationError(
+          409,
+          'ROADMAP_CONFLICT',
+          'Ya existe un roadmap para este curso.',
+        );
       const name =
         courseBody?.name === undefined && existingCourse
           ? existingCourse.name
@@ -401,13 +312,13 @@ async function createRoadmapUnsafe(identifier: CourseOfferingIdentifier, body: J
 }
 
 export function requireRoadmap(identifier: CourseOfferingIdentifier) {
-  return apiResult(() => requireRoadmapUnsafe(identifier));
+  return applicationResult(() => requireRoadmapUnsafe(identifier));
 }
 
 export function getRoadmapDto(identifier: CourseOfferingIdentifier, includeHidden = true) {
-  return apiResult(() => getRoadmapDtoUnsafe(identifier, includeHidden));
+  return applicationResult(() => getRoadmapDtoUnsafe(identifier, includeHidden));
 }
 
 export function createRoadmap(identifier: CourseOfferingIdentifier, body: JsonObject) {
-  return apiResult(() => createRoadmapUnsafe(identifier, body));
+  return applicationResult(() => createRoadmapUnsafe(identifier, body));
 }

@@ -14,12 +14,10 @@ import {
 } from '@/features/roadmap/application/participation';
 import { applicationResult } from '@/shared/errors/server';
 
-type JsonObject = Record<string, unknown>;
-
 export function createRoadmapForActor(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
-  readInput: () => Promise<JsonObject>,
+  readInput: () => Promise<Record<string, unknown>>,
 ) {
   return applicationResult(async () => {
     await requireRoadmapCreationAccess(actor, identifier).match(

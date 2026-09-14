@@ -1,8 +1,8 @@
 import 'server-only';
 
 import type { Prisma } from '@/shared/server/db';
-import { ApiError } from '@/features/roadmap/application/roadmap';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
+import { ApplicationError } from '@/shared/errors/server';
 
 export type EditorInput = { userId: string; identifier: CourseOfferingIdentifier };
 
@@ -15,7 +15,7 @@ export async function requireEditorRoadmap(
     include: { roadmap: true },
   });
   if (!courseOffering) {
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
@@ -27,10 +27,14 @@ export async function requireEditorRoadmap(
     },
   });
   if (!participation?.isActive || participation.role !== 'TEACHER') {
-    throw new ApiError(403, 'FORBIDDEN', 'No tienes participación vigente para esta operación.');
+    throw new ApplicationError(
+      403,
+      'FORBIDDEN',
+      'No tienes participación vigente para esta operación.',
+    );
   }
   if (!courseOffering.roadmap) {
-    throw new ApiError(
+    throw new ApplicationError(
       404,
       'ROADMAP_NOT_FOUND',
       'El profesor todavía no ha creado un roadmap para este curso.',
@@ -45,7 +49,8 @@ export async function requireNode(
   roadmapId: string,
 ) {
   const node = await transaction.roadmapNode.findFirst({ where: { id, roadmapId } });
-  if (!node) throw new ApiError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!node)
+    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
   return node;
 }
 
@@ -58,6 +63,6 @@ export async function requireResource(
     where: { id, roadmapNode: { roadmapId } },
   });
   if (!resource)
-    throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
+    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
   return resource;
 }

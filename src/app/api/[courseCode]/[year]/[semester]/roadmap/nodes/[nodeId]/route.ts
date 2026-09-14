@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import {
-  handleApplicationResult as handleApiResult,
+  handleApplicationResult,
   parseJsonObject as parseJson,
-  throwApplicationError as throwApiError,
+  throwApplicationError,
 } from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { ApplicationError } from '@/shared/errors/types';
 import {
   deleteRoadmapNode,
@@ -12,11 +13,6 @@ import {
   previewNodeVisibility,
   updateRoadmapNode,
 } from '@/features/roadmap/server';
-import { requireAuthenticatedUser } from '@/shared/server/session';
-
-type Context = {
-  params: Promise<{ courseCode: string; year: string; semester: string; nodeId: string }>;
-};
 
 function previewOperation(request: Request) {
   const operation = new URL(request.url).searchParams.get('operation');
@@ -24,56 +20,70 @@ function previewOperation(request: Request) {
   throw new ApplicationError(400, 'INVALID_REQUEST', 'operation debe ser HIDE o DELETE.');
 }
 
-async function nodeInput(context: Context) {
-  const [params, user] = await Promise.all([
-    context.params,
-    requireAuthenticatedUser().match((value) => value, throwApiError),
-  ]);
+async function nodeInput(
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
+) {
+  const [params, user] = await Promise.all([context.params, requireAuthenticatedUser()]);
   return {
     userId: user.id,
-    identifier: parseCourseOfferingIdentifier(params),
+    identifier: requireCourseOfferingIdentifier(params),
     id: params.nodeId,
   };
 }
 
-async function deletionInput(context: Context, request: Request) {
+async function deletionInput(
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
+  request: Request,
+) {
   return {
     ...(await nodeInput(context)),
     previewVersion: request.headers.get('x-node-delete-preview') ?? undefined,
   };
 }
 
-export async function GET(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function GET(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
+) {
+  return handleApplicationResult(async () => {
     const operation = previewOperation(request);
     const input = await nodeInput(context);
-    const result = operation === 'HIDE' ? previewNodeVisibility(input) : previewNodeDeletion(input);
-    return NextResponse.json(await result.match((value) => value, throwApiError));
+    const preview =
+      operation === 'HIDE'
+        ? await previewNodeVisibility(input).match((value) => value, throwApplicationError)
+        : await previewNodeDeletion(input).match((value) => value, throwApplicationError);
+    return NextResponse.json(preview);
   });
 }
 
-export async function PATCH(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function PATCH(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
+) {
+  return handleApplicationResult(async () => {
     const [params, body, user] = await Promise.all([
       context.params,
       parseJson(request),
-      requireAuthenticatedUser().match((value) => value, throwApiError),
+      requireAuthenticatedUser(),
     ]);
     const result = await updateRoadmapNode({
       userId: user.id,
-      identifier: parseCourseOfferingIdentifier(params),
+      identifier: requireCourseOfferingIdentifier(params),
       id: params.nodeId,
       input: body,
-    }).match((value) => value, throwApiError);
+    }).match((value) => value, throwApplicationError);
     return NextResponse.json(result);
   });
 }
 
-export async function DELETE(request: Request, context: Context) {
-  return handleApiResult(async () => {
+export async function DELETE(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
+) {
+  return handleApplicationResult(async () => {
     await deleteRoadmapNode(await deletionInput(context, request)).match(
       (value) => value,
-      throwApiError,
+      throwApplicationError,
     );
     return new NextResponse(null, { status: 204 });
   });

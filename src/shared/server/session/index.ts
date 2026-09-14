@@ -3,9 +3,9 @@ import 'server-only';
 import { getServerSession, type NextAuthOptions, type Session } from 'next-auth';
 import { prisma } from '@/shared/server/db';
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
+import { isUuid } from '@/shared/validation';
 
 const sessionSecret = process.env.NEXTAUTH_SECRET;
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const authOptions: NextAuthOptions = {
   secret: sessionSecret,
@@ -34,9 +34,9 @@ export async function getApplicationSession(): Promise<Session | null> {
 
 export async function resolveSessionUser(session: Session | null) {
   const userId = session?.user?.id;
-  if (!userId || !uuidPattern.test(userId)) return null;
+  if (!isUuid(userId)) return null;
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  return user && { ...user, useLocalFixtureData: session.user.useLocalFixtureData === true };
+  return user && { ...user, useLocalFixtureData: session?.user?.useLocalFixtureData === true };
 }
 
 export function requireAuthenticatedUser() {

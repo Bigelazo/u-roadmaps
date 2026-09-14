@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
 import {
-  handleApplicationResult as handleApiResult,
+  handleApplicationResult,
   parseJsonObject as parseJson,
-  throwApplicationError as throwApiError,
+  throwApplicationError,
 } from '@/app/_adapters/http';
-import { parseCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { createRoadmapDependency, previewRoadmapDependency } from '@/features/roadmap/server';
-import { requireAuthenticatedUser } from '@/shared/server/session';
-
-type Context = { params: Promise<{ courseCode: string; year: string; semester: string }> };
 
 function dependencyPreviewQuery(request: Request) {
   const query = new URL(request.url).searchParams;
@@ -23,31 +21,34 @@ function dependencyPreviewQuery(request: Request) {
   return input;
 }
 
-export async function GET(request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const identifier = parseCourseOfferingIdentifier(await context.params);
-    const user = await requireAuthenticatedUser().match((value) => value, throwApiError);
+export async function GET(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/dependencies'>,
+) {
+  return handleApplicationResult(async () => {
+    const identifier = requireCourseOfferingIdentifier(await context.params);
+    const user = await requireAuthenticatedUser();
     const nodes = await previewRoadmapDependency({
       userId: user.id,
       identifier,
       input: dependencyPreviewQuery(request),
-    }).match((value) => value, throwApiError);
+    }).match((value) => value, throwApplicationError);
     return NextResponse.json(nodes);
   });
 }
 
-export async function POST(request: Request, context: Context) {
-  return handleApiResult(async () => {
-    const identifier = parseCourseOfferingIdentifier(await context.params);
-    const [body, user] = await Promise.all([
-      parseJson(request),
-      requireAuthenticatedUser().match((value) => value, throwApiError),
-    ]);
+export async function POST(
+  request: Request,
+  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/dependencies'>,
+) {
+  return handleApplicationResult(async () => {
+    const identifier = requireCourseOfferingIdentifier(await context.params);
+    const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
     const result = await createRoadmapDependency({
       userId: user.id,
       identifier,
       input: body,
-    }).match((value) => value, throwApiError);
+    }).match((value) => value, throwApplicationError);
     return NextResponse.json(result, { status: 201 });
   });
 }

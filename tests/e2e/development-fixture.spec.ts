@@ -1,5 +1,5 @@
 import { expect, request as apiRequest, test } from '@playwright/test';
-import { fixture, fixtureRoadmapPath, sessionCookie } from './helpers';
+import { authenticateAs, fixture, fixtureRoadmapPath, sessionCookie } from './helpers';
 
 function hasCycle(
   nodeIds: readonly string[],
@@ -99,6 +99,40 @@ test('the reset fixture exposes the three complete roadmap scenarios', async ({}
 
     const withoutRoadmap = await api.get(fixtureRoadmapPath(fixture.fi1001Current));
     expect(withoutRoadmap.status()).toBe(404);
+  } finally {
+    await api.dispose();
+  }
+});
+
+test('pages and Roadmap HTTP routes share the normalized Course offering identifier', async ({
+  page,
+}, testInfo) => {
+  const spacedCode = encodeURIComponent(` ${fixture.cc1002.courseCode} `);
+  const api = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  });
+
+  try {
+    const roadmap = await api.get(`/api/${spacedCode}/2026/2/roadmap`);
+    expect(roadmap.status()).toBe(200);
+    expect((await roadmap.json()).course.code).toBe(fixture.cc1002.courseCode);
+
+    await authenticateAs(page.context(), fixture.daniela);
+    await page.goto(`/courses/${spacedCode}/2026/2`);
+    await expect(page.locator('.react-flow__node').first()).toBeVisible();
+
+    const invalidApi = await api.get('/api/%20/2026/2/roadmap');
+    expect(invalidApi.status()).toBe(400);
+    await expect(invalidApi.json()).resolves.toEqual({
+      error: {
+        code: 'INVALID_ACADEMIC_IDENTITY',
+        message: 'El ramo, año y semestre no forman una identidad académica válida.',
+      },
+    });
+
+    const invalidPage = await page.goto('/courses/%20/2026/2');
+    expect(invalidPage?.status()).toBe(404);
   } finally {
     await api.dispose();
   }
