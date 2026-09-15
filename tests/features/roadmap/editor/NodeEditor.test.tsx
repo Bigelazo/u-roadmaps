@@ -62,9 +62,7 @@ function renderEditor(
     .mockResolvedValue({ status: 'committed' });
   const onIntent = vi.fn<(intent: NodeEditorIntent) => void>();
   const props: NodeEditorProps = {
-    node,
-    nodeTypes,
-    isVisibilityPending: false,
+    session: { node, nodeTypes, isVisibilityPending: false },
     perform,
     onIntent,
     ...overrides,
@@ -259,7 +257,10 @@ test('edits an existing Resource and retries a failed deletion through the same 
     .mockResolvedValueOnce({ status: 'committed' })
     .mockResolvedValueOnce({ status: 'rejected' })
     .mockResolvedValueOnce({ status: 'committed' });
-  renderEditor({ node: { ...node, resources: [resource] }, perform });
+  renderEditor({
+    session: { node: { ...node, resources: [resource] }, nodeTypes, isVisibilityPending: false },
+    perform,
+  });
 
   await user.click(screen.getByRole('button', { name: 'Editar recurso Guía de ejercicios' }));
   await user.clear(screen.getByPlaceholderText('Ej. Guía de ejercicios'));
@@ -320,6 +321,20 @@ test('projects the current draft through a preview intent and carries an opaque 
   });
 });
 
+test('projects an unsaved Node type through the public preview intent', async () => {
+  const user = userEvent.setup();
+  const { onIntent } = renderEditor();
+
+  await user.click(screen.getByRole('combobox', { name: 'Tipo' }));
+  await user.click(screen.getByText('Evaluación', { exact: true }));
+  await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
+
+  expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({
+    kind: 'preview-node-information',
+    node: { nodeTypeId: 'assessment' },
+  });
+});
+
 test('consumes a typed Resource command once and focuses its composer', async () => {
   const command = {
     id: 'command-1',
@@ -337,9 +352,7 @@ test('consumes a typed Resource command once and focuses its composer', async ()
 test('preserves a dirty draft while a same-Node canonical refresh updates its baseline', async () => {
   const user = userEvent.setup();
   const props: ComponentProps<typeof NodeEditor> = {
-    node,
-    nodeTypes,
-    isVisibilityPending: false,
+    session: { node, nodeTypes, isVisibilityPending: false },
     perform: vi.fn().mockResolvedValue({ status: 'committed' }),
     onIntent: vi.fn(),
   };
@@ -355,7 +368,10 @@ test('preserves a dirty draft while a same-Node canonical refresh updates its ba
   rerender(
     <SidebarProvider>
       <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} node={{ ...node, title: 'Cambio autorizado externamente' }} />
+        <NodeEditor
+          {...props}
+          session={{ ...props.session, node: { ...node, title: 'Cambio autorizado externamente' } }}
+        />
       </NodeEditorPanel>
     </SidebarProvider>,
   );
@@ -375,9 +391,7 @@ test('does not let a late Node result replace a refreshed same-Node baseline', a
       }),
   );
   const props: ComponentProps<typeof NodeEditor> = {
-    node,
-    nodeTypes,
-    isVisibilityPending: false,
+    session: { node, nodeTypes, isVisibilityPending: false },
     perform,
     onIntent: vi.fn(),
   };
@@ -397,7 +411,10 @@ test('does not let a late Node result replace a refreshed same-Node baseline', a
   rerender(
     <SidebarProvider>
       <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} node={{ ...node, title: 'Cambio autorizado externamente' }} />
+        <NodeEditor
+          {...props}
+          session={{ ...props.session, node: { ...node, title: 'Cambio autorizado externamente' } }}
+        />
       </NodeEditorPanel>
     </SidebarProvider>,
   );

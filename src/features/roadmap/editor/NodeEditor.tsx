@@ -17,7 +17,7 @@ import {
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import type { Resource, TeacherBlockOperation } from '@/features/roadmap/types';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
-import { NodeEditorProvider, type NodeEditorContextValue } from './context';
+import { NodeEditorProvider } from './context';
 import {
   createNodeEditorState,
   nodeDraftIsDirty,
@@ -50,9 +50,10 @@ function isCommitted(result: NodeEditorPerformResult) {
 }
 
 export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function NodeEditor(
-  { node, nodeTypes, isVisibilityPending, command, perform, onIntent },
+  { session, command, perform, onIntent },
   ref,
 ) {
+  const { node, nodeTypes, isVisibilityPending } = session;
   const [state, dispatch] = useReducer(nodeEditorReducer, node, createNodeEditorState);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -288,7 +289,7 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
     return () => cancelAnimationFrame(frame);
   }, [command, state.nodeId, transition]);
 
-  const contextValue = useMemo<NodeEditorContextValue | null>(() => {
+  const contextValue = useMemo(() => {
     const activeNode = state.nodeId === (node?.id ?? null) ? state.canonicalNode : null;
     if (!activeNode) return null;
     return {

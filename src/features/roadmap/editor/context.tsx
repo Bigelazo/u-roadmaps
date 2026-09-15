@@ -10,7 +10,7 @@ import type {
 import type { PendingEditorEffect } from './session';
 import type { NodeUpdate, ResourceInput, ResourceSession } from './types';
 
-export type NodeEditorContextValue = {
+type NodeEditorContextValue = {
   node: RoadmapNode;
   nodeTypes: RoadmapDto['nodeTypes'];
   nodeDraft: NodeUpdate;

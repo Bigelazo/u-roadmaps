@@ -37,6 +37,12 @@ export type NodeEditorEffect =
 
 export type NodeEditorPerformResult = { status: 'committed' } | { status: 'rejected' };
 
+export type NodeEditorEffectChannel = (
+  effect: NodeEditorEffect,
+) => Promise<NodeEditorPerformResult>;
+
+export type NodeEditorIntentChannel = (intent: NodeEditorIntent) => void;
+
 export type NodeEditorCommand = {
   id: string;
   kind: 'open-resource';
@@ -62,13 +68,17 @@ export type NodeEditorIntent =
   | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
   | { kind: 'delete-node'; nodeId: string };
 
-export type NodeEditorProps = {
+export type NodeEditorSession = {
   node: RoadmapNode | undefined;
   nodeTypes: RoadmapDto['nodeTypes'];
   isVisibilityPending: boolean;
+};
+
+export type NodeEditorProps = {
+  session: NodeEditorSession;
   command?: NodeEditorCommand;
-  perform: (effect: NodeEditorEffect) => Promise<NodeEditorPerformResult>;
-  onIntent: (intent: NodeEditorIntent) => void;
+  perform: NodeEditorEffectChannel;
+  onIntent: NodeEditorIntentChannel;
 };
 
 export type NodeEditorHandle = {

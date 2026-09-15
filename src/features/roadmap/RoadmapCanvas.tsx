@@ -651,9 +651,11 @@ export default function RoadmapCanvas({
           >
             <NodeEditor
               ref={nodeEditorRef}
-              node={selectedNode as RoadmapNode | undefined}
-              nodeTypes={roadmap.nodeTypes}
-              isVisibilityPending={nodeVisibilityWorkflow.isPending}
+              session={{
+                node: selectedNode as RoadmapNode | undefined,
+                nodeTypes: roadmap.nodeTypes,
+                isVisibilityPending: nodeVisibilityWorkflow.isPending,
+              }}
               command={resourceComposerCommand ?? undefined}
               perform={performEditorEffect}
               onIntent={handleNodeEditorIntent}

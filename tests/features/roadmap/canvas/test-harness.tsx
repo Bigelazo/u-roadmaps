@@ -6,12 +6,7 @@ import {
   editorDraftDiscardConfirmation,
   roadmapConfirmationActionIds,
 } from '@/features/roadmap/ui/roadmap-confirmation';
-import type {
-  NodeEditorEffect,
-  NodeEditorGuardReason,
-  NodeEditorIntent,
-  NodeEditorPerformResult,
-} from '@/features/roadmap/editor/types';
+import type { NodeEditorGuardReason, NodeEditorProps } from '@/features/roadmap/editor/types';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import type {
   RoadmapGraphEditingIntent,
@@ -27,29 +22,10 @@ export { useRoadmapMock };
 vi.mock('next/dynamic', () => ({
   default: () =>
     forwardRef(function NodeEditorMock(
-      {
-        node,
-        perform,
-        onIntent,
-        isVisibilityPending,
-      }: {
-        node?: {
-          id: string;
-          title: string;
-          description: string | null;
-          nodeTypeId: string;
-          positionX: number;
-          positionY: number;
-          isVisible: boolean;
-          isTeacherBlocked: boolean;
-          resources: [];
-        };
-        perform: (effect: NodeEditorEffect) => Promise<NodeEditorPerformResult>;
-        onIntent: (intent: NodeEditorIntent) => void;
-        isVisibilityPending: boolean;
-      },
+      { session, perform, onIntent }: Pick<NodeEditorProps, 'session' | 'perform' | 'onIntent'>,
       ref,
     ) {
+      const { node, isVisibilityPending } = session;
       const [isDirty, setIsDirty] = useState(false);
       const [guardReason, setGuardReason] = useState<NodeEditorGuardReason | null>(null);
       const [guardResolve, setGuardResolve] = useState<((proceed: boolean) => void) | null>(null);
