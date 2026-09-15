@@ -15,7 +15,12 @@ import {
   resourceDeletionConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
-import type { Resource, TeacherBlockOperation } from '@/features/roadmap/types';
+import type {
+  Resource,
+  RoadmapNode,
+  StudentAccessibleRoadmapNode,
+  TeacherBlockOperation,
+} from '@/features/roadmap/types';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
 import { NodeEditorProvider } from './context';
 import {
@@ -26,14 +31,15 @@ import {
   resourceSessionIsDirtyForNode,
   type NodeEditorAction,
 } from './session';
-import { projectNodeInformationPreview } from './node-information-preview';
 import type {
   NodeEditorEffect,
   NodeEditorGuardReason,
   NodeEditorHandle,
   NodeEditorProps,
   NodeEditorPerformResult,
+  NodeUpdate,
   ResourceInput,
+  ResourceSession,
 } from './types';
 
 function isGuardRelevant(reason: NodeEditorGuardReason, nodeId: string | null) {
@@ -47,6 +53,56 @@ function isGuardRelevant(reason: NodeEditorGuardReason, nodeId: string | null) {
 
 function isCommitted(result: NodeEditorPerformResult) {
   return result.status === 'committed';
+}
+
+function projectNodeInformationPreview(
+  node: RoadmapNode,
+  nodeValue: NodeUpdate,
+  resourceSession: ResourceSession,
+): StudentAccessibleRoadmapNode {
+  let resources = node.resources;
+
+  if (resourceSessionIsDirtyForNode(node, resourceSession)) {
+    if (resourceSession.kind === 'editing-existing') {
+      resources = node.resources.map((resource) =>
+        resource.id === resourceSession.resourceId
+          ? { ...resource, ...resourceSession.value }
+          : resource,
+      );
+    } else if (resourceSession.kind === 'adding-file' && resourceSession.selectedFile) {
+      resources = [
+        ...resources,
+        {
+          id: 'node-information-preview-file',
+          title: resourceSession.selectedFile.name,
+          url: '#',
+          type: 'FILE' as const,
+        },
+      ];
+    } else if (resourceSession.kind === 'adding-link') {
+      resources = [
+        ...resources,
+        {
+          id: 'node-information-preview-resource',
+          ...resourceSession.value,
+        },
+      ];
+    }
+  }
+
+  return {
+    id: node.id,
+    title: nodeValue.title,
+    description: nodeValue.description || null,
+    nodeTypeId: nodeValue.nodeTypeId,
+    positionX: node.positionX,
+    positionY: node.positionY,
+    isVisible: true,
+    access: { status: 'ACCESSIBLE' },
+    isCompleted: false,
+    canComplete: true,
+    resources,
+  };
 }
 
 export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function NodeEditor(

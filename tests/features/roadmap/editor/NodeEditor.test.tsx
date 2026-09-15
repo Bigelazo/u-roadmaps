@@ -431,6 +431,54 @@ test('projects an unsaved Node type through the public preview intent', async ()
   });
 });
 
+test('projects unsaved Resource sessions through the public preview intent', async () => {
+  const user = userEvent.setup();
+  const { onIntent } = renderEditor({
+    session: { node: { ...node, resources: [resource] }, nodeTypes, isVisibilityPending: false },
+  });
+
+  await user.click(screen.getByRole('button', { name: 'Editar recurso Guía de ejercicios' }));
+  await user.clear(screen.getByPlaceholderText('Ej. Guía de ejercicios'));
+  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía actualizada');
+  await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
+
+  expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({
+    kind: 'preview-node-information',
+    node: {
+      isVisible: true,
+      access: { status: 'ACCESSIBLE' },
+      isCompleted: false,
+      canComplete: true,
+      resources: [{ id: resource.id, title: 'Guía actualizada', url: resource.url, type: 'LINK' }],
+    },
+  });
+});
+
+test('includes a pending link Resource in the public preview intent', async () => {
+  const user = userEvent.setup();
+  const { onIntent } = renderEditor();
+
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
+  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía nueva');
+  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/nueva');
+  await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
+
+  expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({
+    kind: 'preview-node-information',
+    node: {
+      resources: [
+        {
+          id: 'node-information-preview-resource',
+          title: 'Guía nueva',
+          url: 'https://example.test/nueva',
+          type: 'LINK',
+        },
+      ],
+    },
+  });
+});
+
 test('consumes a typed Resource command once and focuses its composer', async () => {
   const command = {
     id: 'command-1',
