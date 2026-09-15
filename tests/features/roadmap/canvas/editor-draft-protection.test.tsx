@@ -103,3 +103,27 @@ test('protects a dirty draft of the same Node before opening deletion confirmati
   await waitFor(() => expect(previewNodeDeletion).toHaveBeenCalledWith('node-1'));
   expect(screen.getByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeTruthy();
 });
+
+test('routes NodeEditor deletion through the authoritative preview and mutation workflow', async () => {
+  const user = userEvent.setup();
+  const previewNodeDeletion = vi.fn().mockResolvedValue({
+    node: {
+      title: 'Límites',
+      nodeType: { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' },
+    },
+    dependencies: [],
+    resources: [],
+    version: 'delete-preview',
+  });
+  const deleteNode = vi.fn().mockResolvedValue(true);
+  useRoadmapMock.mockReturnValue(roadmapActions({ previewNodeDeletion, deleteNode }));
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
+  await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo desde el editor' }));
+  await waitFor(() => expect(previewNodeDeletion).toHaveBeenCalledWith('node-1'));
+  await user.click(screen.getByRole('button', { name: 'Eliminar Nodo' }));
+
+  await waitFor(() => expect(deleteNode).toHaveBeenCalledWith('node-1', 'delete-preview'));
+  expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('');
+});

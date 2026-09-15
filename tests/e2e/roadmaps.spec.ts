@@ -422,9 +422,7 @@ test('teacher deletes a Canvas node after reviewing its authoritative impact', a
     await panRoadmapNodeIntoView(page, sourceNodeId);
 
     const sourceNode = page.locator(`.react-flow__node[data-id="${sourceNodeId}"]`);
-    await sourceNode
-      .getByRole('button', { name: 'Abrir menú de acciones del nodo' })
-      .click();
+    await sourceNode.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
     const requestDelete = sourceNode.getByRole('button', { name: 'Eliminar nodo' });
     await expect(requestDelete).toBeVisible();
 
@@ -459,7 +457,8 @@ test('teacher deletes a Canvas node after reviewing its authoritative impact', a
     );
     const deletionResponsePromise = page.waitForResponse(
       (response) =>
-        response.request().method() === 'DELETE' && response.url().includes(`/nodes/${sourceNodeId}`),
+        response.request().method() === 'DELETE' &&
+        response.url().includes(`/nodes/${sourceNodeId}`),
     );
     await dialog.getByRole('button', { name: 'Eliminar Nodo' }).click();
     const [latestPreview, deletionRequest, deletionResponse] = await Promise.all([
@@ -980,6 +979,58 @@ test('teacher and student workflows render against the shared fixture', async ({
     await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
     await api.dispose();
   }
+});
+
+test('guards Node replacement and deselection without losing the editor session', async ({
+  page,
+}) => {
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/CC1002/2026/2');
+
+  await panRoadmapNodeIntoView(page, fixture.cc1002.firstNode);
+  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await expect(page.locator('#roadmap-editor-panel')).toBeVisible();
+
+  const firstDraftTitle = uniqueName('Borrador de reemplazo');
+  await page.getByLabel('Título', { exact: true }).fill(firstDraftTitle);
+
+  const secondNode = page.locator(`.react-flow__node[data-id="${fixture.cc1002.secondNode}"]`);
+  await panRoadmapNodeIntoView(page, fixture.cc1002.secondNode);
+  const secondNodeTitle = (await secondNode.locator('p').textContent())?.trim();
+  expect(secondNodeTitle).toBeTruthy();
+  await secondNode.click();
+
+  const replacementDialog = page.getByRole('alertdialog', {
+    name: 'Descartar cambios sin guardar',
+  });
+  await expect(replacementDialog).toBeVisible();
+  await expect(replacementDialog).toContainText(
+    'Seleccionar otro Nodo descartará el borrador actual.',
+  );
+  await replacementDialog.getByRole('button', { name: 'Seguir editando' }).click();
+  await expect(page.getByLabel('Título', { exact: true })).toHaveValue(firstDraftTitle);
+
+  await secondNode.click();
+  await replacementDialog.getByRole('button', { name: 'Descartar y continuar' }).click();
+  await expect(page.getByLabel('Título', { exact: true })).toHaveValue(secondNodeTitle!);
+
+  const secondDraftTitle = uniqueName('Borrador de cierre');
+  await page.getByLabel('Título', { exact: true }).fill(secondDraftTitle);
+  await page.getByRole('button', { name: 'Deseleccionar nodo', exact: true }).click();
+
+  const deselectionDialog = page.getByRole('alertdialog', {
+    name: 'Descartar cambios sin guardar',
+  });
+  await expect(deselectionDialog).toContainText('Cerrar este Nodo descartará el borrador actual.');
+  await deselectionDialog.getByRole('button', { name: 'Seguir editando' }).click();
+  await expect(page.getByLabel('Título', { exact: true })).toHaveValue(secondDraftTitle);
+
+  await page.getByRole('button', { name: 'Deseleccionar nodo', exact: true }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
+    .getByRole('button', { name: 'Descartar y continuar' })
+    .click();
+  await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
 });
 
 test('creating consecutive nodes keeps them visible, separated, selected, and persisted', async ({

@@ -178,6 +178,14 @@ test('does not guard a dirty Node when opening a Resource for that same Node', a
   expect(screen.queryByRole('alertdialog')).toBeNull();
 });
 
+test('proceeds immediately for a clean outside transition', async () => {
+  const ref = createRef<NodeEditorHandle>();
+  renderEditor({}, ref);
+
+  await expect(ref.current!.guardDraft({ kind: 'enter-canvas-preview' })).resolves.toBe(true);
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+});
+
 test('uploads a selected file and keeps the resource session on rejection', async () => {
   const user = userEvent.setup();
   const perform = vi.fn().mockResolvedValue({ status: 'rejected' } as const);
@@ -304,6 +312,94 @@ test('guards a dirty transition and resets only after confirmed discard', async 
   await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
   await expect(confirmed).resolves.toBe(true);
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe(node.title);
+});
+
+test('keeps the complete Node and Resource session unchanged when a guard is cancelled', async () => {
+  const user = userEvent.setup();
+  const ref = createRef<NodeEditorHandle>();
+  renderEditor({}, ref);
+
+  await user.clear(screen.getByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), 'Borrador del nodo');
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
+  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Borrador del recurso');
+  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/borrador');
+
+  const decision = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
+  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
+
+  await expect(decision).resolves.toBe(false);
+  expect(
+    (screen.getByLabelText('Título', { selector: '#edit-node-title' }) as HTMLInputElement).value,
+  ).toBe('Borrador del nodo');
+  expect(screen.getByText('Nuevo recurso')).toBeTruthy();
+  expect((screen.getByPlaceholderText('Ej. Guía de ejercicios') as HTMLInputElement).value).toBe(
+    'Borrador del recurso',
+  );
+  expect((screen.getByLabelText('Enlace') as HTMLInputElement).value).toBe(
+    'https://example.test/borrador',
+  );
+});
+
+test('resets the complete editing session before a guarded caller resumes', async () => {
+  const user = userEvent.setup();
+  const ref = createRef<NodeEditorHandle>();
+  const { onIntent } = renderEditor({}, ref);
+
+  await user.clear(screen.getByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), 'Borrador del nodo');
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
+  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Borrador del recurso');
+
+  const resumed = ref
+    .current!.guardDraft({ kind: 'deselect-node', nodeId: node.id })
+    .then((proceed) => {
+      if (!proceed) return;
+      expect(
+        (screen.getByLabelText('Título', { selector: '#edit-node-title' }) as HTMLInputElement)
+          .value,
+      ).toBe(node.title);
+      expect(screen.queryByText('Nuevo recurso')).toBeNull();
+      onIntent({ kind: 'close', nodeId: node.id });
+    });
+  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
+
+  await resumed;
+  expect(onIntent).toHaveBeenCalledWith({ kind: 'close', nodeId: node.id });
+});
+
+test('guards Node deletion in the editor and emits its intent only after discard', async () => {
+  const user = userEvent.setup();
+  const ref = createRef<NodeEditorHandle>();
+  const { onIntent } = renderEditor(
+    {
+      session: { node: { ...node, resources: [resource] }, nodeTypes, isVisibilityPending: false },
+    },
+    ref,
+  );
+
+  await user.clear(screen.getByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), 'Borrador');
+  await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
+  expect(onIntent).not.toHaveBeenCalledWith({ kind: 'delete-node', nodeId: node.id });
+  expect(
+    (screen.getByLabelText('Título', { selector: '#edit-node-title' }) as HTMLInputElement).value,
+  ).toBe('Borrador');
+
+  await user.click(screen.getByRole('button', { name: 'Eliminar' }));
+  await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
+  await waitFor(() =>
+    expect(onIntent).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: node.id }),
+  );
+  expect(
+    (screen.getByLabelText('Título', { selector: '#edit-node-title' }) as HTMLInputElement).value,
+  ).toBe(node.title);
 });
 
 test('projects the current draft through a preview intent and carries an opaque focus callback', async () => {

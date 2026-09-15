@@ -63,13 +63,18 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
   const handledCommandIdRef = useRef<string | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
 
+  const settleGuard = useCallback((proceed: boolean) => {
+    const resolve = guardResolverRef.current;
+    guardResolverRef.current = null;
+    resolve?.(proceed);
+  }, []);
+
   useEffect(() => {
     return () => {
       mountedRef.current = false;
-      guardResolverRef.current?.(false);
-      guardResolverRef.current = null;
+      settleGuard(false);
     };
-  }, []);
+  }, [settleGuard]);
 
   const transition = useCallback((action: NodeEditorAction) => {
     stateRef.current = nodeEditorReducer(stateRef.current, action);
@@ -78,11 +83,12 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
 
   useEffect(() => {
     if ((node?.id ?? null) !== stateRef.current.nodeId) {
+      if (stateRef.current.pendingGuard) settleGuard(false);
       transition({ type: 'replace-node', node });
     } else if (node) {
       transition({ type: 'canonical-refresh', node });
     }
-  }, [node, transition]);
+  }, [node, settleGuard, transition]);
 
   const guardDraft = useCallback(
     (reason: NodeEditorGuardReason) => {
@@ -354,20 +360,16 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
         !stateRef.current.pendingGuard
       )
         return;
-      const resolve = guardResolverRef.current;
-      guardResolverRef.current = null;
       transition({ type: 'confirm-guard' });
-      resolve?.(true);
+      settleGuard(true);
     },
-    [transition],
+    [settleGuard, transition],
   );
   const cancelGuard = useCallback(() => {
     if (!stateRef.current.pendingGuard) return;
-    const resolve = guardResolverRef.current;
-    guardResolverRef.current = null;
     transition({ type: 'cancel-guard' });
-    resolve?.(false);
-  }, [transition]);
+    settleGuard(false);
+  }, [settleGuard, transition]);
 
   const resourceDeletionPendingActionId =
     state.pendingEditorEffect?.effect.kind === 'delete-resource'

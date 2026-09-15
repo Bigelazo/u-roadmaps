@@ -144,6 +144,12 @@ vi.mock('next/dynamic', () => ({
                 <button type="button" onClick={() => setIsDirty(true)}>
                   Marcar borrador sin guardar
                 </button>
+                <button
+                  type="button"
+                  onClick={() => onIntent({ kind: 'delete-node', nodeId: node.id })}
+                >
+                  Solicitar eliminar nodo desde el editor
+                </button>
               </>
             ) : null}
           </aside>
