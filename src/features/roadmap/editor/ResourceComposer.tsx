@@ -1,40 +1,31 @@
 import { FileUp, Link2, Save, X } from 'lucide-react';
+import type { Resource } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
-import type { Resource } from '@/features/roadmap/types';
 import { inputClassName } from './primitives';
-import type { ResourceActionCallbacks, ResourceInput } from './types';
+import { useNodeEditorContext } from './context';
+import type { ResourceInput } from './types';
 
-type Props = ResourceActionCallbacks & {
-  nodeId: string;
-  resourceValue: ResourceInput;
-  editingResourceId: string | null;
-  editingResource: Resource | null;
+type Props = {
   mode: 'file' | 'link';
-  selectedFile: File | null;
+  editingResource: Resource | null;
   onModeChange: (mode: 'file' | 'link') => void;
-  onSelectedFileChange: (file: File | null) => void;
-  onResourceChange: (value: ResourceInput) => void;
   onClose: () => void;
 };
 
-export function ResourceComposer({
-  nodeId,
-  resourceValue,
-  editingResourceId,
-  editingResource,
-  mode,
-  selectedFile,
-  onModeChange,
-  onSelectedFileChange,
-  onResourceChange,
-  onAddResource,
-  onUploadResource,
-  onUpdateResource,
-  onClose,
-}: Props) {
-  const isEditingResource = Boolean(editingResourceId);
+function sessionValue(
+  session: ReturnType<typeof useNodeEditorContext>['resourceSession'],
+): ResourceInput {
+  return session.kind === 'closed' ? { title: '', url: '', type: 'LINK' } : session.value;
+}
+
+export function ResourceComposer({ mode, editingResource, onModeChange, onClose }: Props) {
+  const { resourceSession, changeResource, selectResourceFile, saveResource, pendingEditorEffect } =
+    useNodeEditorContext();
+  const isEditingResource = resourceSession.kind === 'editing-existing';
+  const resourceValue = sessionValue(resourceSession);
+  const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
   const hasChanges =
     !editingResource ||
     resourceValue.title !== editingResource.title ||
@@ -47,22 +38,14 @@ export function ResourceComposer({
       : hasChanges &&
         Boolean(resourceValue.title.trim()) &&
         (mode !== 'link' || hasRequiredLinkFields);
+  const isPending = Boolean(pendingEditorEffect);
 
   return (
     <form
       className="mb-4 flex flex-col gap-3 border-y border-dashed border-border py-4"
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-        if (!canSave) return;
-        const saved =
-          mode === 'file' && !isEditingResource
-            ? await onUploadResource(nodeId, selectedFile!)
-            : isEditingResource
-              ? await onUpdateResource(editingResourceId!, resourceValue)
-              : await onAddResource(nodeId, { ...resourceValue, type: 'LINK' });
-        if (saved) {
-          onClose();
-        }
+        if (canSave && !isPending) saveResource();
       }}
     >
       <div className="flex items-center justify-between gap-2">
@@ -114,7 +97,7 @@ export function ResourceComposer({
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
-              onSelectedFileChange(event.dataTransfer.files.item(0));
+              selectResourceFile(event.dataTransfer.files.item(0));
             }}
           >
             <FileUp className="mb-2 size-5 text-primary" />
@@ -128,7 +111,7 @@ export function ResourceComposer({
               id="resource-file"
               className="sr-only"
               type="file"
-              onChange={(event) => onSelectedFileChange(event.target.files?.item(0) ?? null)}
+              onChange={(event) => selectResourceFile(event.target.files?.item(0) ?? null)}
             />
           </label>
           <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
@@ -142,9 +125,7 @@ export function ResourceComposer({
               className={inputClassName}
               placeholder="Ej. Guía de ejercicios"
               value={resourceValue.title}
-              onChange={(event) =>
-                onResourceChange({ ...resourceValue, title: event.target.value })
-              }
+              onChange={(event) => changeResource({ ...resourceValue, title: event.target.value })}
               required
             />
           </Field>
@@ -157,9 +138,7 @@ export function ResourceComposer({
                 type="url"
                 placeholder="https://"
                 value={resourceValue.url}
-                onChange={(event) =>
-                  onResourceChange({ ...resourceValue, url: event.target.value })
-                }
+                onChange={(event) => changeResource({ ...resourceValue, url: event.target.value })}
                 required
               />
             </Field>
@@ -167,7 +146,7 @@ export function ResourceComposer({
         </FieldGroup>
       )}
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={!canSave}>
+        <Button type="submit" size="sm" disabled={!canSave || isPending}>
           <Save data-icon="inline-start" />
           {isEditingResource
             ? mode === 'link'

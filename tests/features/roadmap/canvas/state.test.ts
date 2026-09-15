@@ -10,7 +10,7 @@ function state(overrides: Partial<CanvasState> = {}): CanvasState {
 }
 
 describe('canvas state transitions', () => {
-  test('opens a resource composer through an explicit transition and increments its request key', () => {
+  test('opens a resource composer through a typed one-shot command', () => {
     const current = state({
       teacherPreviewNode: {
         id: 'old-node',
@@ -26,17 +26,25 @@ describe('canvas state transitions', () => {
         resources: [],
       },
       isTeacherPreviewCompleted: true,
-      resourceComposerRequest: 2,
+      resourceComposerCommand: null,
     });
 
     expect(
-      canvasStateReducer(current, { type: 'openResourceComposer', nodeId: 'new-node' }),
+      canvasStateReducer(current, {
+        type: 'openResourceComposer',
+        command: { id: 'command-3', kind: 'open-resource', nodeId: 'new-node', mode: 'file' },
+      }),
     ).toMatchObject({
       selectedNodeId: 'new-node',
       isEditorOpen: true,
       teacherPreviewNode: null,
       isTeacherPreviewCompleted: false,
-      resourceComposerRequest: 3,
+      resourceComposerCommand: {
+        id: 'command-3',
+        kind: 'open-resource',
+        nodeId: 'new-node',
+        mode: 'file',
+      },
     });
   });
 

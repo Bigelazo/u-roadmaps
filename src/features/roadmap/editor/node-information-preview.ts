@@ -1,15 +1,6 @@
 import type { RoadmapNode, StudentAccessibleRoadmapNode } from '@/features/roadmap/types';
-import type { NodeUpdate, ResourceEditorDraft } from './types';
-
-export function emptyResourceEditorDraft(): ResourceEditorDraft {
-  return {
-    value: { title: '', url: '', type: 'LINK' },
-    editingResourceId: null,
-    isOpen: false,
-    mode: 'file',
-    selectedFile: null,
-  };
-}
+import type { NodeUpdate, ResourceSession } from './types';
+import { resourceSessionIsDirtyForNode } from './session';
 
 function nodeFormHasChanges(node: RoadmapNode, value: NodeUpdate) {
   return (
@@ -19,63 +10,56 @@ function nodeFormHasChanges(node: RoadmapNode, value: NodeUpdate) {
   );
 }
 
-function resourceDraftHasChanges(node: RoadmapNode, draft: ResourceEditorDraft) {
-  if (!draft.isOpen) return false;
-  if (!draft.editingResourceId) {
-    return Boolean(draft.selectedFile || draft.value.title.trim() || draft.value.url.trim());
-  }
-
-  const resource = node.resources.find((item) => item.id === draft.editingResourceId);
-  return (
-    !resource ||
-    draft.value.title !== resource.title ||
-    draft.value.url !== resource.url ||
-    draft.value.type !== resource.type
-  );
-}
-
 export function hasUnsavedNodeInformation(
   node: RoadmapNode,
   nodeValue: NodeUpdate,
-  resourceDraft: ResourceEditorDraft,
+  resourceSession: ResourceSession,
 ) {
-  return nodeFormHasChanges(node, nodeValue) || resourceDraftHasChanges(node, resourceDraft);
+  return (
+    nodeFormHasChanges(node, nodeValue) || resourceSessionIsDirtyForNode(node, resourceSession)
+  );
 }
 
 export function projectNodeInformationPreview(
   node: RoadmapNode,
   nodeValue: NodeUpdate,
-  resourceDraft: ResourceEditorDraft,
+  resourceSession: ResourceSession,
 ): StudentAccessibleRoadmapNode {
-  const resourceChanges = resourceDraftHasChanges(node, resourceDraft);
   let resources = node.resources;
 
-  if (resourceChanges && resourceDraft.editingResourceId) {
-    resources = node.resources.map((resource) =>
-      resource.id === resourceDraft.editingResourceId
-        ? { ...resource, ...resourceDraft.value }
-        : resource,
-    );
-  } else if (resourceChanges && !resourceDraft.editingResourceId) {
-    const resource = resourceDraft.selectedFile
-      ? {
+  if (resourceSessionIsDirtyForNode(node, resourceSession)) {
+    if (resourceSession.kind === 'editing-existing') {
+      resources = node.resources.map((resource) =>
+        resource.id === resourceSession.resourceId
+          ? { ...resource, ...resourceSession.value }
+          : resource,
+      );
+    } else if (resourceSession.kind === 'adding-file' && resourceSession.selectedFile) {
+      resources = [
+        ...resources,
+        {
           id: 'node-information-preview-file',
-          title: resourceDraft.selectedFile.name,
+          title: resourceSession.selectedFile.name,
           url: '#',
           type: 'FILE' as const,
-        }
-      : {
+        },
+      ];
+    } else if (resourceSession.kind === 'adding-link') {
+      resources = [
+        ...resources,
+        {
           id: 'node-information-preview-resource',
-          ...resourceDraft.value,
-        };
-    resources = [...resources, resource];
+          ...resourceSession.value,
+        },
+      ];
+    }
   }
 
   return {
     id: node.id,
     title: nodeValue.title,
     description: nodeValue.description || null,
-    nodeTypeId: node.nodeTypeId,
+    nodeTypeId: nodeValue.nodeTypeId,
     positionX: node.positionX,
     positionY: node.positionY,
     isVisible: true,

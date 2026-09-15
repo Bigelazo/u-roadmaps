@@ -153,7 +153,11 @@ test('confirms that a node update was saved successfully', async () => {
   expect(
     await screen.findByRole('status', { name: 'Cambios guardados exitosamente.' }),
   ).toBeTruthy();
-  expect(updateNode).toHaveBeenCalledWith('node-1', { title: 'Límites' });
+  expect(updateNode).toHaveBeenCalledWith('node-1', {
+    title: 'Límites',
+    description: '',
+    nodeTypeId: 'content',
+  });
 });
 
 test('confirms that a link was saved successfully', async () => {

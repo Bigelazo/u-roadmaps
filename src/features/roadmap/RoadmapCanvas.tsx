@@ -17,16 +17,19 @@ import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-previ
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-workflow';
-import { useEditorDraftGuard } from '@/features/roadmap/canvas/editor-draft-guard';
-import {
-  useNodeDeletionWorkflow,
-  type NodeDeletionRequestOptions,
-} from '@/features/roadmap/canvas/node-deletion-workflow';
+import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
 import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
+import type {
+  NodeEditorEffect,
+  NodeEditorHandle,
+  NodeEditorGuardReason,
+  NodeEditorIntent,
+  NodeEditorPerformResult,
+} from '@/features/roadmap/editor/types';
 import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
   RoadmapGraph,
@@ -45,10 +48,6 @@ import type {
   StudentRoadmapDto,
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
-import type {
-  EditorDraftDiscardDestination,
-  RoadmapEditorDraftHandle,
-} from '@/features/roadmap/editor/types';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
@@ -58,9 +57,8 @@ import { Button } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 
-const RoadmapEditor = dynamic(
-  () =>
-    import('@/features/roadmap/editor/RoadmapEditor').then(({ RoadmapEditor }) => RoadmapEditor),
+const NodeEditor = dynamic(
+  () => import('@/features/roadmap/editor/NodeEditor').then(({ NodeEditor }) => NodeEditor),
   { ssr: false },
 );
 
@@ -91,10 +89,10 @@ export default function RoadmapCanvas({
     selectedNodeId,
     isEditorOpen,
     isStudentDetailOpen,
-    editorKey,
     teacherPreviewNode,
     isTeacherPreviewCompleted,
-    resourceComposerRequest,
+    resourceComposerCommand,
+    teacherPreviewFocusReturn,
   } = canvasState;
   const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const editorPanel = usePersistentPanelWidth({
@@ -105,12 +103,8 @@ export default function RoadmapCanvas({
     storageKey: 'u-roadmaps:student-node-detail-width',
     initialWidth: 426,
   });
-  const previewButtonRef = useRef<HTMLButtonElement | null>(null);
-  const editorDraftRef = useRef<RoadmapEditorDraftHandle>(null);
-  const nodeDeletionRequestRef = useRef<
-    (nodeId: string, options?: NodeDeletionRequestOptions) => void
-  >(() => {});
-  const canvasPreviewDraftResumeRef = useRef<() => void>(() => {});
+  const nodeEditorRef = useRef<NodeEditorHandle>(null);
+  const resourceCommandIdRef = useRef(0);
   const successToastIdRef = useRef(0);
   const focusReturnRequestIdRef = useRef(0);
   const {
@@ -201,29 +195,41 @@ export default function RoadmapCanvas({
     [showSuccessToast, updateResource],
   );
 
-  const resumeEditorDraftDestination = useCallback((destination: EditorDraftDiscardDestination) => {
-    switch (destination.kind) {
-      case 'discardNodeDraft':
-        nodeDeletionRequestRef.current(destination.nodeId, { draftWasDiscarded: true });
-        return;
-      case 'discardResourceDraft':
-        dispatchCanvas({ type: 'openResourceComposer', nodeId: destination.nodeId });
-        return;
-      case 'discardCanvasPreviewDraft':
-        canvasPreviewDraftResumeRef.current();
-        return;
-    }
-  }, []);
+  const performEditorEffect = useCallback(
+    async (effect: NodeEditorEffect): Promise<NodeEditorPerformResult> => {
+      let succeeded = false;
+      switch (effect.kind) {
+        case 'update-node':
+          succeeded = await updateNodeWithConfirmation(effect.nodeId, effect.value);
+          break;
+        case 'add-resource':
+          succeeded = await addResourceWithConfirmation(effect.nodeId, effect.resource);
+          break;
+        case 'upload-resource':
+          succeeded = await uploadResource(effect.nodeId, effect.file);
+          break;
+        case 'update-resource':
+          succeeded = await updateResourceWithConfirmation(effect.resourceId, effect.resource);
+          break;
+        case 'delete-resource':
+          succeeded = await deleteResource(effect.resourceId);
+          break;
+      }
+      return { status: succeeded ? 'committed' : 'rejected' };
+    },
+    [
+      addResourceWithConfirmation,
+      deleteResource,
+      updateNodeWithConfirmation,
+      updateResourceWithConfirmation,
+      uploadResource,
+    ],
+  );
 
-  const editorDraftGuard = useEditorDraftGuard({
-    draftRef: editorDraftRef,
-    onDiscard: resumeEditorDraftDestination,
-  });
-  const requestEditorDraft = editorDraftGuard.request;
-
-  const requestEditorDraftDiscard = useCallback(
-    (nodeId: string) => requestEditorDraft({ kind: 'discardNodeDraft', nodeId }),
-    [requestEditorDraft],
+  const guardEditorDraft = useCallback(
+    (reason: NodeEditorGuardReason) =>
+      nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
+    [],
   );
 
   const closeEditorAfterNodeDeletion = useCallback(() => {
@@ -234,19 +240,12 @@ export default function RoadmapCanvas({
   const nodeDeletionWorkflow = useNodeDeletionWorkflow({
     previewNodeDeletion,
     deleteNode,
-    requestEditorDraftDiscard,
-    editorDraftRef,
+    guardDraft: guardEditorDraft,
     closeEditor: closeEditorAfterNodeDeletion,
   });
-  nodeDeletionRequestRef.current = nodeDeletionWorkflow.requestDeletion;
 
-  const requestCanvasPreviewDraftDiscard = useCallback(
-    () => requestEditorDraft({ kind: 'discardCanvasPreviewDraft' }),
-    [requestEditorDraft],
-  );
-
-  const prepareCanvasPreview = useCallback((discardDraft: boolean) => {
-    dispatchCanvas({ type: 'prepareCanvasPreview', discardDraft });
+  const prepareCanvasPreview = useCallback(() => {
+    dispatchCanvas({ type: 'prepareCanvasPreview' });
   }, []);
 
   const restoreCanvasPreview = useCallback(
@@ -272,14 +271,13 @@ export default function RoadmapCanvas({
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
     currentView: { selectedNodeId, isEditorOpen, isStudentDetailOpen },
     isHistorical: Boolean(isHistorical),
-    requestDraftDiscard: requestCanvasPreviewDraftDiscard,
+    guardDraft: () => guardEditorDraft({ kind: 'enter-canvas-preview' }),
     loadSimulation,
     completeSimulatedNode,
     resetSimulation,
     onEnter: prepareCanvasPreview,
     onExit: restoreCanvasPreview,
   });
-  canvasPreviewDraftResumeRef.current = canvasPreviewWorkflow.resumeEntryAfterDraftDiscard;
 
   const canvasMode = deriveCanvasMode({
     canEdit,
@@ -291,26 +289,47 @@ export default function RoadmapCanvas({
   const { canEditRoadmap, canPreviewCanvas, canEnterCanvasPreview, canResetCanvasPreview } =
     canvasMode.capabilities;
 
-  function closeSelectedNode() {
+  const closeSelectedNodeNow = useCallback(() => {
     dispatchCanvas({
       type: 'closeSelectedNode',
       panel: canEditRoadmap ? 'editor' : 'student',
     });
     requestNodeFocusReturn();
-  }
+  }, [canEditRoadmap, requestNodeFocusReturn]);
 
-  function closeTeacherPreview() {
+  const closeSelectedNode = useCallback(() => {
+    if (canEditRoadmap && selectedNodeId && !isCanvasPreview) {
+      void guardEditorDraft({ kind: 'deselect-node', nodeId: selectedNodeId }).then((proceed) => {
+        if (proceed) closeSelectedNodeNow();
+      });
+      return;
+    }
+    closeSelectedNodeNow();
+  }, [canEditRoadmap, closeSelectedNodeNow, guardEditorDraft, isCanvasPreview, selectedNodeId]);
+
+  const closeTeacherPreview = useCallback(() => {
+    const focusReturn = teacherPreviewFocusReturn;
     dispatchCanvas({ type: 'closeTeacherPreview' });
-    requestAnimationFrame(() => previewButtonRef.current?.focus());
-  }
+    requestAnimationFrame(() => focusReturn?.());
+  }, [teacherPreviewFocusReturn]);
 
   const openResourceComposer = useCallback(
     (nodeId: string) => {
       if (!canEditRoadmap || isCanvasPreview) return;
-      if (requestEditorDraft({ kind: 'discardResourceDraft', nodeId })) return;
-      dispatchCanvas({ type: 'openResourceComposer', nodeId });
+      void guardEditorDraft({ kind: 'open-resource', nodeId }).then((proceed) => {
+        if (!proceed) return;
+        dispatchCanvas({
+          type: 'openResourceComposer',
+          command: {
+            id: `open-resource-${++resourceCommandIdRef.current}`,
+            kind: 'open-resource',
+            nodeId,
+            mode: 'file',
+          },
+        });
+      });
     },
-    [canEditRoadmap, isCanvasPreview, requestEditorDraft],
+    [canEditRoadmap, guardEditorDraft, isCanvasPreview],
   );
 
   useEffect(() => {
@@ -334,7 +353,14 @@ export default function RoadmapCanvas({
     };
     window.addEventListener('keydown', handleKeyboardShortcut);
     return () => window.removeEventListener('keydown', handleKeyboardShortcut);
-  }, [canEditRoadmap, isCanvasPreview, isEditorOpen, selectedNodeId, teacherPreviewNode]);
+  }, [
+    canEditRoadmap,
+    closeTeacherPreview,
+    isCanvasPreview,
+    isEditorOpen,
+    selectedNodeId,
+    teacherPreviewNode,
+  ]);
 
   const displayedRoadmap = isCanvasPreview ? simulationRoadmap : roadmap;
   const requestDependencyCreation = dependencyWorkflow.requestCreation;
@@ -342,6 +368,32 @@ export default function RoadmapCanvas({
   const requestNodeDeletion = nodeDeletionWorkflow.requestDeletion;
   const requestTeacherBlockChange = teacherBlockWorkflow.requestChange;
   const requestVisibilityChange = nodeVisibilityWorkflow.requestChange;
+  const handleNodeEditorIntent = useCallback(
+    (intent: NodeEditorIntent) => {
+      switch (intent.kind) {
+        case 'close':
+          closeSelectedNodeNow();
+          return;
+        case 'preview-node-information':
+          dispatchCanvas({
+            type: 'showTeacherPreview',
+            node: intent.node,
+            focusReturn: intent.returnFocus,
+          });
+          return;
+        case 'change-visibility':
+          void requestVisibilityChange(intent.nodeId, intent.isVisible);
+          return;
+        case 'change-teacher-block':
+          requestTeacherBlockChange(intent.nodeId, intent.operation);
+          return;
+        case 'delete-node':
+          requestNodeDeletion(intent.nodeId, { draftWasDiscarded: true });
+          return;
+      }
+    },
+    [closeSelectedNodeNow, requestNodeDeletion, requestTeacherBlockChange, requestVisibilityChange],
+  );
   const handleGraphEditingIntent = useCallback(
     (intent: RoadmapGraphEditingIntent) => {
       switch (intent.kind) {
@@ -476,11 +528,24 @@ export default function RoadmapCanvas({
             onSelectNode={(nodeId) => {
               const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
               if (isStudentExperience && isStudentBlockedNode(node)) return;
-              dispatchCanvas({
-                type: 'selectNode',
-                nodeId,
-                panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
-              });
+              const select = () =>
+                dispatchCanvas({
+                  type: 'selectNode',
+                  nodeId,
+                  panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
+                });
+              if (
+                canEditRoadmap &&
+                !isCanvasPreview &&
+                selectedNodeId &&
+                selectedNodeId !== nodeId
+              ) {
+                void guardEditorDraft({ kind: 'replace-node', nodeId }).then((proceed) => {
+                  if (proceed) select();
+                });
+                return;
+              }
+              select();
             }}
             selectedNodeId={selectedNodeId}
             focusReturnRequest={focusReturnRequest}
@@ -584,28 +649,14 @@ export default function RoadmapCanvas({
             panelWidth={editorPanel.width}
             onPanelWidthChange={editorPanel.setWidth}
           >
-            <RoadmapEditor
-              key={editorKey + ':' + (selectedNode?.id ?? 'none')}
-              roadmap={roadmap as RoadmapDto}
-              selectedNode={selectedNode as RoadmapNode | undefined}
-              ref={editorDraftRef}
+            <NodeEditor
+              ref={nodeEditorRef}
+              node={selectedNode as RoadmapNode | undefined}
+              nodeTypes={roadmap.nodeTypes}
               isVisibilityPending={nodeVisibilityWorkflow.isPending}
-              resourceComposerRequest={resourceComposerRequest}
-              onClose={closeSelectedNode}
-              onUpdateNode={updateNodeWithConfirmation}
-              onToggleVisibility={nodeVisibilityWorkflow.requestChange}
-              onRequestTeacherBlock={(nodeId, operation) =>
-                teacherBlockWorkflow.requestChange(nodeId, operation)
-              }
-              onDeleteNode={deleteNode}
-              onAddResource={addResourceWithConfirmation}
-              onUploadResource={uploadResource}
-              onUpdateResource={updateResourceWithConfirmation}
-              onDeleteResource={deleteResource}
-              onPreview={(node) => {
-                dispatchCanvas({ type: 'showTeacherPreview', node });
-              }}
-              previewButtonRef={previewButtonRef}
+              command={resourceComposerCommand ?? undefined}
+              perform={performEditorEffect}
+              onIntent={handleNodeEditorIntent}
             />
           </NodeEditorPanel>
         )}
@@ -639,7 +690,6 @@ export default function RoadmapCanvas({
       </section>
       <ConfirmationDialog {...nodeDeletionWorkflow.confirmationDialog} />
       <ConfirmationDialog {...canvasPreviewWorkflow.confirmationDialog} />
-      <ConfirmationDialog {...editorDraftGuard.confirmationDialog} />
       <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />
       <ConfirmationDialog {...nodeVisibilityWorkflow.confirmationDialog} />
       <ConfirmationDialog {...dependencyWorkflow.creationDialog} />

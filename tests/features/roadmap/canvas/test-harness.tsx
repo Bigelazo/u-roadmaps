@@ -2,6 +2,17 @@ import { forwardRef, type ReactNode, useImperativeHandle, useState } from 'react
 import { render } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 import { RoadmapCanvas as RoadmapCanvasComponent } from '@/features/roadmap';
+import {
+  editorDraftDiscardConfirmation,
+  roadmapConfirmationActionIds,
+} from '@/features/roadmap/ui/roadmap-confirmation';
+import type {
+  NodeEditorEffect,
+  NodeEditorGuardReason,
+  NodeEditorIntent,
+  NodeEditorPerformResult,
+} from '@/features/roadmap/editor/types';
+import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import type {
   RoadmapGraphEditingIntent,
   RoadmapGraphOverlaySlots,
@@ -15,126 +26,167 @@ export { useRoadmapMock };
 
 vi.mock('next/dynamic', () => ({
   default: () =>
-    forwardRef(function RoadmapEditorMock(
+    forwardRef(function NodeEditorMock(
       {
-        selectedNode,
-        onToggle,
-        onClose,
-        onPreview,
-        onRequestTeacherBlock,
-        onToggleVisibility,
-        onUpdateNode,
-        onAddResource,
+        node,
+        perform,
+        onIntent,
         isVisibilityPending,
       }: {
-        selectedNode?: { id: string; isTeacherBlocked: boolean };
-        onToggle: () => void;
-        onClose: () => void;
-        onPreview: (node: {
+        node?: {
           id: string;
           title: string;
           description: string | null;
           nodeTypeId: string;
           positionX: number;
           positionY: number;
-          isVisible: true;
-          access: { status: 'ACCESSIBLE' };
-          isCompleted: boolean;
-          canComplete: boolean;
+          isVisible: boolean;
+          isTeacherBlocked: boolean;
           resources: [];
-        }) => void;
-        onRequestTeacherBlock: (
-          nodeId: string,
-          operation: 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK',
-        ) => void;
-        onToggleVisibility: (nodeId: string, isVisible: boolean) => void;
-        onUpdateNode: (nodeId: string, node: unknown) => Promise<boolean>;
-        onAddResource: (nodeId: string, resource: unknown) => Promise<boolean>;
+        };
+        perform: (effect: NodeEditorEffect) => Promise<NodeEditorPerformResult>;
+        onIntent: (intent: NodeEditorIntent) => void;
         isVisibilityPending: boolean;
       },
       ref,
     ) {
       const [isDirty, setIsDirty] = useState(false);
+      const [guardReason, setGuardReason] = useState<NodeEditorGuardReason | null>(null);
+      const [guardResolve, setGuardResolve] = useState<((proceed: boolean) => void) | null>(null);
       useImperativeHandle(
         ref,
         () => ({
-          draftNodeId: selectedNode?.id ?? null,
-          isDirty,
-          reset: () => setIsDirty(false),
+          guardDraft: (reason: NodeEditorGuardReason) => {
+            const isRelevant =
+              reason.kind === 'enter-canvas-preview' ||
+              (reason.kind === 'replace-node' || reason.kind === 'open-resource'
+                ? reason.nodeId !== node?.id
+                : reason.nodeId === node?.id);
+            if (!isDirty || !isRelevant) return Promise.resolve(true);
+            return new Promise<boolean>((resolve) => {
+              setGuardReason(reason);
+              setGuardResolve(() => resolve);
+            });
+          },
         }),
-        [isDirty, selectedNode?.id],
+        [isDirty, node?.id],
       );
 
       return (
-        <aside data-testid="editor-panel">
-          <button type="button" onClick={onToggle}>
-            Ocultar panel de edición
-          </button>
-          {selectedNode ? (
-            <>
-              <button type="button" onClick={onClose}>
-                Deseleccionar nodo
-              </button>
-              <button type="button" onClick={() => onRequestTeacherBlock(selectedNode.id, 'BLOCK')}>
-                Bloquear rama
-              </button>
-              <button
-                type="button"
-                onClick={() => onRequestTeacherBlock(selectedNode.id, 'UNBLOCK')}
-              >
-                Desbloquear
-              </button>
-              <button
-                type="button"
-                disabled={isVisibilityPending}
-                onClick={() => onToggleVisibility(selectedNode.id, true)}
-              >
-                Ocultar para estudiantes
-              </button>
-              <button
-                type="button"
-                onClick={() => void onUpdateNode(selectedNode.id, { title: 'Límites' })}
-              >
-                Guardar cambios
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  void onAddResource(selectedNode.id, {
-                    title: 'Guía de ejercicios',
-                    url: 'https://example.test/guia',
-                    type: 'LINK',
-                  })
-                }
-              >
-                Guardar enlace
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  onPreview({
-                    id: selectedNode.id,
-                    title: 'Vista previa docente',
-                    description: 'Borrador visible',
-                    nodeTypeId: 'content',
-                    positionX: 0,
-                    positionY: 0,
-                    isVisible: true,
-                    access: { status: 'ACCESSIBLE' },
-                    isCompleted: false,
-                    canComplete: true,
-                    resources: [],
-                  })
-                }
-              >
-                Previsualizar
-              </button>
-              <button type="button" onClick={() => setIsDirty(true)}>
-                Marcar borrador sin guardar
-              </button>
-            </>
-          ) : null}
-        </aside>
+        <>
+          <aside data-testid="editor-panel">
+            {node ? (
+              <>
+                <button type="button" onClick={() => onIntent({ kind: 'close', nodeId: node.id })}>
+                  Deseleccionar nodo
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onIntent({ kind: 'change-teacher-block', nodeId: node.id, operation: 'BLOCK' })
+                  }
+                >
+                  Bloquear rama
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onIntent({
+                      kind: 'change-teacher-block',
+                      nodeId: node.id,
+                      operation: 'UNBLOCK',
+                    })
+                  }
+                >
+                  Desbloquear
+                </button>
+                <button
+                  type="button"
+                  disabled={isVisibilityPending}
+                  onClick={() =>
+                    onIntent({ kind: 'change-visibility', nodeId: node.id, isVisible: true })
+                  }
+                >
+                  Ocultar para estudiantes
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void perform({
+                      kind: 'update-node',
+                      nodeId: node.id,
+                      value: {
+                        title: 'Límites',
+                        description: node.description ?? '',
+                        nodeTypeId: node.nodeTypeId,
+                      },
+                    })
+                  }
+                >
+                  Guardar cambios
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void perform({
+                      kind: 'add-resource',
+                      nodeId: node.id,
+                      resource: {
+                        title: 'Guía de ejercicios',
+                        url: 'https://example.test/guia',
+                        type: 'LINK',
+                      },
+                    })
+                  }
+                >
+                  Guardar enlace
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onIntent({
+                      kind: 'preview-node-information',
+                      node: {
+                        id: node.id,
+                        title: 'Vista previa docente',
+                        description: 'Borrador visible',
+                        nodeTypeId: 'content',
+                        positionX: 0,
+                        positionY: 0,
+                        isVisible: true,
+                        access: { status: 'ACCESSIBLE' },
+                        isCompleted: false,
+                        canComplete: true,
+                        resources: [],
+                      },
+                      returnFocus: () => {},
+                    })
+                  }
+                >
+                  Previsualizar
+                </button>
+                <button type="button" onClick={() => setIsDirty(true)}>
+                  Marcar borrador sin guardar
+                </button>
+              </>
+            ) : null}
+          </aside>
+          <ConfirmationDialog
+            confirmation={guardReason ? editorDraftDiscardConfirmation(guardReason) : null}
+            onCancel={() => {
+              guardResolve?.(false);
+              setGuardReason(null);
+              setGuardResolve(null);
+            }}
+            onAction={(actionId) => {
+              if (actionId !== roadmapConfirmationActionIds.discardEditorDraft) return;
+              setIsDirty(false);
+              guardResolve?.(true);
+              setGuardReason(null);
+              setGuardResolve(null);
+            }}
+          />
+        </>
       );
     }),
 }));

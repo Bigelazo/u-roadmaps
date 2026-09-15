@@ -6,7 +6,7 @@ import type {
   TeacherBlockImpact,
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
-import type { EditorDraftDiscardDestination } from '@/features/roadmap/editor/types';
+import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 
 type NodeTypePresentation = {
@@ -97,14 +97,14 @@ export const roadmapAutoLayoutConfirmation = {
 } as const satisfies ConfirmationPresentation;
 
 export function editorDraftDiscardConfirmation(
-  destination: EditorDraftDiscardDestination,
+  destination: NodeEditorGuardReason,
 ): ConfirmationPresentation {
   switch (destination.kind) {
-    case 'discardNodeDraft':
+    case 'replace-node':
       return {
         title: 'Descartar cambios sin guardar',
         description:
-          'Eliminar este Nodo descartará su borrador actual. Puedes seguir editando o descartarlo para continuar.',
+          'Seleccionar otro Nodo descartará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
         intent: 'warning',
         cancelLabel: 'Seguir editando',
         actions: [
@@ -114,7 +114,7 @@ export function editorDraftDiscardConfirmation(
           },
         ],
       };
-    case 'discardResourceDraft':
+    case 'open-resource':
       return {
         title: 'Descartar cambios sin guardar',
         description:
@@ -128,7 +128,35 @@ export function editorDraftDiscardConfirmation(
           },
         ],
       };
-    case 'discardCanvasPreviewDraft':
+    case 'deselect-node':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'Cerrar este Nodo descartará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [
+          {
+            id: roadmapConfirmationActionIds.discardEditorDraft,
+            label: 'Descartar y continuar',
+          },
+        ],
+      };
+    case 'delete-node':
+      return {
+        title: 'Descartar cambios sin guardar',
+        description:
+          'Eliminar este Nodo descartará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
+        intent: 'warning',
+        cancelLabel: 'Seguir editando',
+        actions: [
+          {
+            id: roadmapConfirmationActionIds.discardEditorDraft,
+            label: 'Descartar y continuar',
+          },
+        ],
+      };
+    case 'enter-canvas-preview':
       return {
         title: 'Descartar cambios sin guardar',
         description:

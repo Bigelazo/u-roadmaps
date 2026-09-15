@@ -30,7 +30,7 @@ const clientComponentFiles = [
   'src/features/roadmap/RoadmapErrorToast.tsx',
   'src/features/roadmap/useRoadmap.ts',
   'src/features/roadmap/editor/NodeCreator.tsx',
-  'src/features/roadmap/editor/RoadmapEditor.tsx',
+  'src/features/roadmap/editor/NodeEditor.tsx',
   'src/features/roadmap/graph/FloatingEdge.tsx',
   'src/features/roadmap/graph/RoadmapGraph.tsx',
   'src/features/roadmap/student/NodeDetail.tsx',

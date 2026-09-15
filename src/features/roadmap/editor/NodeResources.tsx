@@ -1,64 +1,29 @@
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
-import type { Resource, RoadmapNode } from '@/features/roadmap/types';
+import type { Resource } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
+import { useNodeEditorContext } from './context';
 import { ResourceComposer } from './ResourceComposer';
 import { ResourceList } from './ResourceList';
-import type { ResourceActionCallbacks, ResourceInput } from './types';
 
-type Props = ResourceActionCallbacks & {
-  node: RoadmapNode;
-  resourceValue: ResourceInput;
-  editingResourceId: string | null;
-  isComposerOpen: boolean;
-  mode: 'file' | 'link';
-  selectedFile: File | null;
-  onResourceChange: (value: ResourceInput) => void;
-  onComposerOpen: (mode: 'file' | 'link') => void;
-  onComposerClose: () => void;
-  onModeChange: (mode: 'file' | 'link') => void;
-  onSelectedFileChange: (file: File | null) => void;
-  onStartEditingResource: (resource: Resource) => void;
-  onCancelResource: () => void;
-  onDeleteResource: (resource: Resource) => void;
-};
+function composerMode(
+  session: ReturnType<typeof useNodeEditorContext>['resourceSession'],
+): 'file' | 'link' {
+  if (session.kind === 'adding-link') return 'link';
+  if (session.kind === 'editing-existing' && session.value.type !== 'FILE') return 'link';
+  return 'file';
+}
 
-export function NodeResources({
-  node,
-  resourceValue,
-  editingResourceId,
-  isComposerOpen,
-  mode,
-  selectedFile,
-  onResourceChange,
-  onComposerOpen,
-  onComposerClose,
-  onModeChange,
-  onSelectedFileChange,
-  onAddResource,
-  onUploadResource,
-  onUpdateResource,
-  onStartEditingResource,
-  onCancelResource,
-  onDeleteResource,
-}: Props) {
-  const [localComposerOpen, setLocalComposerOpen] = useState(false);
-  const [localMode, setLocalMode] = useState<'file' | 'link'>('file');
-  const [localSelectedFile, setLocalSelectedFile] = useState<File | null>(null);
-  const composerOpen = isComposerOpen || localComposerOpen;
-  const composerMode = isComposerOpen ? mode : localMode;
-  const composerSelectedFile = isComposerOpen ? selectedFile : localSelectedFile;
-  const openComposer = (nextMode: 'file' | 'link') => {
-    setLocalMode(nextMode);
-    setLocalSelectedFile(null);
-    setLocalComposerOpen(true);
-    onComposerOpen(nextMode);
-  };
-  const closeComposer = () => {
-    setLocalComposerOpen(false);
-    setLocalSelectedFile(null);
-    onComposerClose();
-  };
+export function NodeResources() {
+  const {
+    node,
+    resourceSession,
+    openResource,
+    closeResource,
+    changeResourceMode,
+    editResource,
+    requestResourceDeletion,
+  } = useNodeEditorContext();
+  const isComposerOpen = resourceSession.kind !== 'closed';
 
   return (
     <section className="border-t border-border pt-5">
@@ -71,53 +36,31 @@ export function NodeResources({
             Recursos <span className="text-muted-foreground">({node.resources.length})</span>
           </h3>
         </div>
-        {!composerOpen && (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              onCancelResource();
-              openComposer('file');
-            }}
-          >
+        {!isComposerOpen && (
+          <Button type="button" size="sm" onClick={() => openResource('file')}>
             <Plus data-icon="inline-start" />
             Recurso
           </Button>
         )}
       </div>
       <div className="pt-4 pb-6">
-        {composerOpen && (
+        {isComposerOpen && (
           <ResourceComposer
-            nodeId={node.id}
-            resourceValue={resourceValue}
-            editingResourceId={editingResourceId}
+            mode={composerMode(resourceSession)}
             editingResource={
-              node.resources.find((resource) => resource.id === editingResourceId) ?? null
+              resourceSession.kind === 'editing-existing'
+                ? (node.resources.find((resource) => resource.id === resourceSession.resourceId) ??
+                  null)
+                : null
             }
-            mode={composerMode}
-            selectedFile={composerSelectedFile}
-            onModeChange={(nextMode) => {
-              setLocalMode(nextMode);
-              onModeChange(nextMode);
-            }}
-            onSelectedFileChange={(file) => {
-              setLocalSelectedFile(file);
-              onSelectedFileChange(file);
-            }}
-            onResourceChange={onResourceChange}
-            onAddResource={onAddResource}
-            onUploadResource={onUploadResource}
-            onUpdateResource={onUpdateResource}
-            onClose={closeComposer}
+            onClose={closeResource}
+            onModeChange={changeResourceMode}
           />
         )}
         <ResourceList
           resources={node.resources}
-          onEdit={(item) => {
-            onStartEditingResource(item);
-            openComposer(item.type === 'FILE' ? 'file' : 'link');
-          }}
-          onDelete={onDeleteResource}
+          onEdit={(resource: Resource) => editResource(resource)}
+          onDelete={requestResourceDeletion}
         />
       </div>
     </section>

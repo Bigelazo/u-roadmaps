@@ -23,11 +23,11 @@ type SimulationResetState = 'idle' | 'awaiting-confirmation' | 'resetting';
 type CanvasPreviewWorkflowOptions = {
   currentView: Omit<CanvasPreviewReturnState, 'viewport'>;
   isHistorical: boolean;
-  requestDraftDiscard: () => boolean;
+  guardDraft: () => Promise<boolean>;
   loadSimulation: () => Promise<boolean>;
   completeSimulatedNode: (nodeId: string) => Promise<boolean>;
   resetSimulation: () => Promise<boolean>;
-  onEnter: (discardDraft: boolean) => void;
+  onEnter: () => void;
   onExit: (returnState: Omit<CanvasPreviewReturnState, 'viewport'>) => void;
 };
 
@@ -44,7 +44,7 @@ const resetSimulationConfirmation = {
 export function useCanvasPreviewWorkflow({
   currentView,
   isHistorical,
-  requestDraftDiscard,
+  guardDraft,
   loadSimulation,
   completeSimulatedNode,
   resetSimulation,
@@ -75,37 +75,31 @@ export function useCanvasPreviewWorkflow({
     setResetState(next);
   }, []);
 
-  const enter = useCallback(
-    async (discardDraft: boolean) => {
-      if (isEntryPendingRef.current || sessionRef.current.kind === 'active') return;
-      isEntryPendingRef.current = true;
-      try {
-        const loaded = await loadSimulation();
-        if (!loaded) return;
+  const enter = useCallback(async () => {
+    if (isEntryPendingRef.current || sessionRef.current.kind === 'active') return;
+    isEntryPendingRef.current = true;
+    try {
+      const loaded = await loadSimulation();
+      if (!loaded) return;
 
-        const returnState = {
-          ...currentViewRef.current,
-          viewport: lastViewportRef.current,
-        };
-        transitionSession({ kind: 'active', returnState });
-        onEnter(discardDraft);
-      } catch {
-        // useRoadmap reports the failure; leaving the session inactive makes retrying possible.
-      } finally {
-        isEntryPendingRef.current = false;
-      }
-    },
-    [loadSimulation, onEnter, transitionSession],
-  );
+      const returnState = {
+        ...currentViewRef.current,
+        viewport: lastViewportRef.current,
+      };
+      transitionSession({ kind: 'active', returnState });
+      onEnter();
+    } catch {
+      // useRoadmap reports the failure; leaving the session inactive makes retrying possible.
+    } finally {
+      isEntryPendingRef.current = false;
+    }
+  }, [loadSimulation, onEnter, transitionSession]);
 
   const requestEntry = useCallback(() => {
-    if (requestDraftDiscard()) return;
-    void enter(false);
-  }, [enter, requestDraftDiscard]);
-
-  const resumeEntryAfterDraftDiscard = useCallback(() => {
-    void enter(true);
-  }, [enter]);
+    void guardDraft().then((proceed) => {
+      if (proceed) void enter();
+    });
+  }, [enter, guardDraft]);
 
   const exit = useCallback(() => {
     const activeSession = sessionRef.current;
@@ -180,7 +174,6 @@ export function useCanvasPreviewWorkflow({
     viewportRestoration: session.kind === 'inactive' ? session.viewportRestoration : null,
     entryButtonRef,
     requestEntry,
-    resumeEntryAfterDraftDiscard,
     exit,
     onViewportChange,
     requestReset,

@@ -1,11 +1,4 @@
 import { Eye, EyeOff, LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
-import type { RefObject } from 'react';
-import type {
-  Resource,
-  RoadmapDto,
-  RoadmapNode,
-  TeacherBlockOperation,
-} from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import {
   Field,
@@ -21,39 +14,11 @@ import { Switch } from '@/shared/ui/switch';
 import { Textarea } from '@/shared/ui/textarea';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeResources } from './NodeResources';
-import type { NodeUpdate, ResourceActionCallbacks, ResourceInput } from './types';
+import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 
-type Props = ResourceActionCallbacks & {
-  node: RoadmapNode;
-  nodeTypes: RoadmapDto['nodeTypes'];
-  nodeValue: NodeUpdate;
-  resourceValue: ResourceInput;
-  editingResourceId: string | null;
-  isResourceComposerOpen: boolean;
-  isVisibilityPending: boolean;
-  resourceMode: 'file' | 'link';
-  selectedResourceFile: File | null;
-  isDirty: boolean;
-  onNodeChange: (value: NodeUpdate) => void;
-  onResourceChange: (value: ResourceInput) => void;
-  onResourceComposerOpen: (mode: 'file' | 'link') => void;
-  onResourceComposerClose: () => void;
-  onResourceModeChange: (mode: 'file' | 'link') => void;
-  onSelectedResourceFileChange: (file: File | null) => void;
-  onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
-  onToggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
-  onRequestTeacherBlock: (nodeId: string, operation: TeacherBlockOperation) => void;
-  onStartEditingResource: (resource: Resource) => void;
-  onCancelResource: () => void;
-  onDeleteNode: (node: RoadmapNode) => void;
-  onDeleteResource: (resource: Resource) => void;
-  onPreview: () => void;
-  previewButtonRef: RefObject<HTMLButtonElement | null>;
-  onClose: () => void;
-};
-
-function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeTypes' | 'onClose'>) {
+function NodeHeader() {
+  const { node, nodeTypes, closeNode } = useNodeEditorContext();
   const type = nodeTypes.find((nodeType) => nodeType.id === node.nodeTypeId);
 
   return (
@@ -69,7 +34,7 @@ function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeType
           variant="ghost"
           aria-label="Deseleccionar nodo"
           title="Deseleccionar nodo"
-          onClick={onClose}
+          onClick={closeNode}
         >
           <X />
         </Button>
@@ -78,38 +43,24 @@ function NodeHeader({ node, nodeTypes, onClose }: Pick<Props, 'node' | 'nodeType
   );
 }
 
-function NodeForm({
-  node,
-  nodeTypes,
-  nodeValue,
-  onNodeChange,
-  onUpdateNode,
-  isDirty,
-  onPreview,
-  previewButtonRef,
-}: Pick<
-  Props,
-  | 'node'
-  | 'nodeTypes'
-  | 'nodeValue'
-  | 'onNodeChange'
-  | 'onUpdateNode'
-  | 'isDirty'
-  | 'onPreview'
-  | 'previewButtonRef'
->) {
-  const hasChanges =
-    nodeValue.title !== node.title ||
-    nodeValue.description !== (node.description ?? '') ||
-    nodeValue.nodeTypeId !== node.nodeTypeId;
-  const canSave = hasChanges && Boolean(nodeValue.title.trim());
+function NodeForm() {
+  const {
+    nodeTypes,
+    nodeDraft,
+    isDirty,
+    canSaveNode,
+    changeNodeDraft,
+    saveNode,
+    previewNodeInformation,
+    previewButtonRef,
+  } = useNodeEditorContext();
 
   return (
     <form
       className="flex flex-col gap-4 py-5"
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-        if (canSave) await onUpdateNode(node.id, nodeValue);
+        if (canSaveNode) saveNode();
       }}
     >
       <FieldGroup>
@@ -118,8 +69,8 @@ function NodeForm({
           <Input
             id="edit-node-title"
             className={inputClassName}
-            value={nodeValue.title}
-            onChange={(event) => onNodeChange({ ...nodeValue, title: event.target.value })}
+            value={nodeDraft.title}
+            onChange={(event) => changeNodeDraft({ ...nodeDraft, title: event.target.value })}
             required
           />
         </Field>
@@ -129,8 +80,8 @@ function NodeForm({
           </FieldLabel>
           <Textarea
             id="edit-node-description"
-            value={nodeValue.description}
-            onChange={(event) => onNodeChange({ ...nodeValue, description: event.target.value })}
+            value={nodeDraft.description}
+            onChange={(event) => changeNodeDraft({ ...nodeDraft, description: event.target.value })}
           />
         </Field>
         <Field>
@@ -138,17 +89,22 @@ function NodeForm({
           <NodeTypeSelect
             id="edit-node-type"
             nodeTypes={nodeTypes}
-            value={nodeValue.nodeTypeId}
-            onValueChange={(nodeTypeId) => onNodeChange({ ...nodeValue, nodeTypeId })}
+            value={nodeDraft.nodeTypeId}
+            onValueChange={(nodeTypeId) => changeNodeDraft({ ...nodeDraft, nodeTypeId })}
           />
         </Field>
       </FieldGroup>
       <div className="grid grid-cols-2 gap-2">
-        <Button type="submit" disabled={!canSave}>
+        <Button type="submit" disabled={!canSaveNode}>
           <Save data-icon="inline-start" />
           Guardar cambios
         </Button>
-        <Button ref={previewButtonRef} type="button" variant="outline" onClick={onPreview}>
+        <Button
+          ref={previewButtonRef}
+          type="button"
+          variant="outline"
+          onClick={previewNodeInformation}
+        >
           <Eye data-icon="inline-start" />
           {isDirty ? 'Previsualizar cambios' : 'Previsualizar'}
         </Button>
@@ -157,12 +113,9 @@ function NodeForm({
   );
 }
 
-function NodeStatus({
-  node,
-  isVisibilityPending,
-  onToggleVisibility,
-  onRequestTeacherBlock,
-}: Pick<Props, 'node' | 'isVisibilityPending' | 'onToggleVisibility' | 'onRequestTeacherBlock'>) {
+function NodeStatus() {
+  const { node, isVisibilityPending, toggleVisibility, requestTeacherBlock } =
+    useNodeEditorContext();
   const accessStatus = node.isTeacherBlocked
     ? 'Acceso restringido por docencia'
     : 'Sin restricciones docentes';
@@ -190,7 +143,7 @@ function NodeStatus({
               id="node-visible"
               checked={node.isVisible}
               disabled={isVisibilityPending}
-              onCheckedChange={() => void onToggleVisibility(node.id, node.isVisible)}
+              onCheckedChange={toggleVisibility}
             />
           </Field>
           <Separator className="mx-3 w-auto" />
@@ -229,7 +182,7 @@ function NodeStatus({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => onRequestTeacherBlock(node.id, 'UNBLOCK')}
+                  onClick={() => requestTeacherBlock('UNBLOCK')}
                 >
                   <LockKeyholeOpen data-icon="inline-start" />
                   Desbloquear
@@ -239,7 +192,7 @@ function NodeStatus({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => onRequestTeacherBlock(node.id, 'BLOCK')}
+                  onClick={() => requestTeacherBlock('BLOCK')}
                 >
                   <LockKeyhole data-icon="inline-start" />
                   Bloquear rama
@@ -252,7 +205,9 @@ function NodeStatus({
   );
 }
 
-function NodeDangerZone({ node, onDeleteNode }: Pick<Props, 'node' | 'onDeleteNode'>) {
+function NodeDangerZone() {
+  const { requestNodeDeletion } = useNodeEditorContext();
+
   return (
     <section className="border-t border-border py-5">
       <div className="flex items-center justify-between gap-3">
@@ -262,7 +217,7 @@ function NodeDangerZone({ node, onDeleteNode }: Pick<Props, 'node' | 'onDeleteNo
           </p>
           <h3 className="mt-0.5 font-heading text-base font-semibold">Eliminar este nodo</h3>
         </div>
-        <Button type="button" variant="destructive" size="sm" onClick={() => onDeleteNode(node)}>
+        <Button type="button" variant="destructive" size="sm" onClick={requestNodeDeletion}>
           <Trash2 data-icon="inline-start" />
           Eliminar
         </Button>
@@ -271,77 +226,15 @@ function NodeDangerZone({ node, onDeleteNode }: Pick<Props, 'node' | 'onDeleteNo
   );
 }
 
-export function NodeDetailsEditor({
-  node,
-  nodeTypes,
-  nodeValue,
-  resourceValue,
-  editingResourceId,
-  isResourceComposerOpen,
-  isVisibilityPending,
-  resourceMode,
-  selectedResourceFile,
-  isDirty,
-  onNodeChange,
-  onResourceChange,
-  onResourceComposerOpen,
-  onResourceComposerClose,
-  onResourceModeChange,
-  onSelectedResourceFileChange,
-  onUpdateNode,
-  onToggleVisibility,
-  onRequestTeacherBlock,
-  onAddResource,
-  onUploadResource,
-  onUpdateResource,
-  onStartEditingResource,
-  onCancelResource,
-  onDeleteNode,
-  onDeleteResource,
-  onPreview,
-  previewButtonRef,
-  onClose,
-}: Props) {
+export function NodeDetailsEditor() {
   return (
     <div>
-      <NodeHeader node={node} nodeTypes={nodeTypes} onClose={onClose} />
+      <NodeHeader />
       <div className="px-6">
-        <NodeForm
-          node={node}
-          nodeTypes={nodeTypes}
-          nodeValue={nodeValue}
-          onNodeChange={onNodeChange}
-          onUpdateNode={onUpdateNode}
-          isDirty={isDirty}
-          onPreview={onPreview}
-          previewButtonRef={previewButtonRef}
-        />
-        <NodeStatus
-          node={node}
-          isVisibilityPending={isVisibilityPending}
-          onToggleVisibility={onToggleVisibility}
-          onRequestTeacherBlock={onRequestTeacherBlock}
-        />
-        <NodeDangerZone node={node} onDeleteNode={onDeleteNode} />
-        <NodeResources
-          node={node}
-          resourceValue={resourceValue}
-          editingResourceId={editingResourceId}
-          isComposerOpen={isResourceComposerOpen}
-          mode={resourceMode}
-          selectedFile={selectedResourceFile}
-          onResourceChange={onResourceChange}
-          onComposerOpen={onResourceComposerOpen}
-          onComposerClose={onResourceComposerClose}
-          onModeChange={onResourceModeChange}
-          onSelectedFileChange={onSelectedResourceFileChange}
-          onAddResource={onAddResource}
-          onUploadResource={onUploadResource}
-          onUpdateResource={onUpdateResource}
-          onStartEditingResource={onStartEditingResource}
-          onCancelResource={onCancelResource}
-          onDeleteResource={onDeleteResource}
-        />
+        <NodeForm />
+        <NodeStatus />
+        <NodeDangerZone />
+        <NodeResources />
       </div>
     </div>
   );

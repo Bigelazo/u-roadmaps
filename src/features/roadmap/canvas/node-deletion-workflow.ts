@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useRef, useState, type RefObject } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   nodeDeletionConfirmation,
   roadmapConfirmationActionIds,
 } from '@/features/roadmap/ui/roadmap-confirmation';
-import type { RoadmapEditorDraftHandle } from '@/features/roadmap/editor/types';
+import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type { NodeDeletionImpact } from '@/features/roadmap/types';
 import type { ConfirmationDialogProps } from '@/shared/ui/confirmation-dialog';
 
@@ -35,14 +35,12 @@ type RevalidatingState = Extract<NodeDeletionWorkflowState, { kind: 'revalidatin
 type MutatingState = Extract<NodeDeletionWorkflowState, { kind: 'mutating' }>;
 
 type StateTransition =
-  | NodeDeletionWorkflowState
-  | ((state: NodeDeletionWorkflowState) => NodeDeletionWorkflowState);
+  NodeDeletionWorkflowState | ((state: NodeDeletionWorkflowState) => NodeDeletionWorkflowState);
 
 type NodeDeletionWorkflowOptions = {
   previewNodeDeletion: (nodeId: string) => Promise<NodeDeletionImpact | null>;
   deleteNode: (nodeId: string, previewVersion?: string) => Promise<boolean>;
-  requestEditorDraftDiscard: (nodeId: string) => boolean;
-  editorDraftRef: RefObject<RoadmapEditorDraftHandle | null>;
+  guardDraft: NodeEditorHandle['guardDraft'];
   closeEditor: () => void;
 };
 
@@ -93,8 +91,7 @@ function sameNodeDeletionImpact(first: NodeDeletionImpact, second: NodeDeletionI
 export function useNodeDeletionWorkflow({
   previewNodeDeletion,
   deleteNode,
-  requestEditorDraftDiscard,
-  editorDraftRef,
+  guardDraft,
   closeEditor,
 }: NodeDeletionWorkflowOptions) {
   const [state, setState] = useState<NodeDeletionWorkflowState>({ kind: 'idle' });
@@ -114,9 +111,7 @@ export function useNodeDeletionWorkflow({
       void previewNodeDeletion(nodeId)
         .then((impact) => {
           transition(
-            impact
-              ? awaitingConfirmation({ nodeId, draftWasDiscarded, impact })
-              : { kind: 'idle' },
+            impact ? awaitingConfirmation({ nodeId, draftWasDiscarded, impact }) : { kind: 'idle' },
           );
         })
         .catch(() => transition({ kind: 'idle' }));
@@ -127,10 +122,15 @@ export function useNodeDeletionWorkflow({
   const requestDeletion = useCallback(
     (nodeId: string, { draftWasDiscarded = false }: NodeDeletionRequestOptions = {}) => {
       if (stateRef.current.kind !== 'idle') return;
-      if (!draftWasDiscarded && requestEditorDraftDiscard(nodeId)) return;
+      if (!draftWasDiscarded) {
+        void guardDraft({ kind: 'delete-node', nodeId }).then((proceed) => {
+          if (proceed) previewDeletion(nodeId, true);
+        });
+        return;
+      }
       previewDeletion(nodeId, draftWasDiscarded);
     },
-    [previewDeletion, requestEditorDraftDiscard],
+    [guardDraft, previewDeletion],
   );
 
   const cancel = useCallback(() => {
@@ -190,7 +190,6 @@ export function useNodeDeletionWorkflow({
       }
 
       if (deleted) {
-        if (!pending.draftWasDiscarded) editorDraftRef.current?.reset();
         closeEditor();
         transition({ kind: 'idle' });
         return;
@@ -210,7 +209,7 @@ export function useNodeDeletionWorkflow({
         }),
       );
     })();
-  }, [closeEditor, deleteNode, editorDraftRef, previewNodeDeletion, transition]);
+  }, [closeEditor, deleteNode, previewNodeDeletion, transition]);
 
   const handleAction = useCallback(
     (actionId: string) => {
