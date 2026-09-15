@@ -73,6 +73,21 @@ test('routes resource transitions through the NodeEditor guard', async () => {
   );
 });
 
+test('publishes an opaque typed Resource command with its target selection', async () => {
+  const user = userEvent.setup();
+  useRoadmapMock.mockReturnValue(roadmapActions());
+  renderCanvas(true);
+
+  await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
+
+  await waitFor(() =>
+    expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-2'),
+  );
+  expect(screen.getByTestId('node-editor-command-id').textContent).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
+});
+
 test('starts Node deletion only when NodeEditor permits its guard', async () => {
   const user = userEvent.setup();
   nodeEditorGuardMock.mockResolvedValueOnce(false);

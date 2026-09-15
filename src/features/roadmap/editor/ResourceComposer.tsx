@@ -43,6 +43,7 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
   return (
     <form
       className="mb-4 flex flex-col gap-3 border-y border-dashed border-border py-4"
+      aria-label="Editor de recurso"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSave && !isPending) saveResource();

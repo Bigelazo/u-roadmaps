@@ -20,7 +20,7 @@ export { nodeEditorGuardMock, useRoadmapMock };
 vi.mock('next/dynamic', () => ({
   default: () =>
     forwardRef(function NodeEditorMock(
-      { session, perform, onIntent }: Pick<NodeEditorProps, 'session' | 'perform' | 'onIntent'>,
+      { session, command, perform, onIntent }: NodeEditorProps,
       ref,
     ) {
       const { node, isVisibilityPending } = session;
@@ -28,6 +28,7 @@ vi.mock('next/dynamic', () => ({
 
       return (
         <aside data-testid="editor-panel">
+          <output data-testid="node-editor-command-id">{command?.id}</output>
           {node ? (
             <>
               <button type="button" onClick={() => onIntent({ kind: 'close', nodeId: node.id })}>

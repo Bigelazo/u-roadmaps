@@ -445,6 +445,82 @@ test('consumes a typed Resource command once and focuses its composer', async ()
   expect(screen.getAllByText('Nuevo recurso')).toHaveLength(1);
 });
 
+test('waits for a typed Resource command target before consuming it', async () => {
+  const targetNode = { ...node, id: 'node-2', title: 'Derivadas' };
+  const command = {
+    id: 'command-for-node-2',
+    kind: 'open-resource' as const,
+    nodeId: targetNode.id,
+    mode: 'link' as const,
+  };
+  const props: ComponentProps<typeof NodeEditor> = {
+    session: { node, nodeTypes, isVisibilityPending: false },
+    command,
+    perform: vi.fn().mockResolvedValue({ status: 'committed' }),
+    onIntent: vi.fn(),
+  };
+  const { rerender } = render(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <NodeEditor {...props} />
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
+
+  expect(screen.queryByText('Nuevo recurso')).toBeNull();
+  rerender(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <NodeEditor {...props} session={{ ...props.session, node: targetNode }} />
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
+
+  const composer = await screen.findByRole('form', { name: 'Editor de recurso' });
+  const title = within(composer).getByLabelText('Título');
+  await waitFor(() => expect(title.matches(':focus')).toBe(true));
+});
+
+test('does not reopen or reset a Resource session when the same command is redelivered', async () => {
+  const user = userEvent.setup();
+  const command = {
+    id: 'command-1',
+    kind: 'open-resource' as const,
+    nodeId: node.id,
+    mode: 'link' as const,
+  };
+  const props: ComponentProps<typeof NodeEditor> = {
+    session: { node, nodeTypes, isVisibilityPending: false },
+    command,
+    perform: vi.fn().mockResolvedValue({ status: 'committed' }),
+    onIntent: vi.fn(),
+  };
+  const { rerender } = render(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <NodeEditor {...props} />
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
+  const composer = await screen.findByRole('form', { name: 'Editor de recurso' });
+  const title = within(composer).getByLabelText('Título');
+  await user.type(title, 'Apuntes');
+
+  rerender(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <NodeEditor {...props} command={{ ...command }} />
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
+
+  const redeliveredComposer = screen.getByRole('form', { name: 'Editor de recurso' });
+  expect((within(redeliveredComposer).getByLabelText('Título') as HTMLInputElement).value).toBe(
+    'Apuntes',
+  );
+  expect(screen.getAllByText('Nuevo recurso')).toHaveLength(1);
+});
+
 test('preserves a dirty draft while a same-Node canonical refresh updates its baseline', async () => {
   const user = userEvent.setup();
   const props: ComponentProps<typeof NodeEditor> = {

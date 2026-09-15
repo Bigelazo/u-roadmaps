@@ -104,7 +104,6 @@ export default function RoadmapCanvas({
     initialWidth: 426,
   });
   const nodeEditorRef = useRef<NodeEditorHandle>(null);
-  const resourceCommandIdRef = useRef(0);
   const successToastIdRef = useRef(0);
   const focusReturnRequestIdRef = useRef(0);
   const {
@@ -321,7 +320,7 @@ export default function RoadmapCanvas({
         dispatchCanvas({
           type: 'openResourceComposer',
           command: {
-            id: `open-resource-${++resourceCommandIdRef.current}`,
+            id: crypto.randomUUID(),
             kind: 'open-resource',
             nodeId,
             mode: 'file',
