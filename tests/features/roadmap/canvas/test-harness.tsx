@@ -18,7 +18,6 @@ vi.mock('next/dynamic', () => ({
     forwardRef(function RoadmapEditorMock(
       {
         selectedNode,
-        isOpen,
         onToggle,
         onClose,
         onPreview,
@@ -29,7 +28,6 @@ vi.mock('next/dynamic', () => ({
         isVisibilityPending,
       }: {
         selectedNode?: { id: string; isTeacherBlocked: boolean };
-        isOpen: boolean;
         onToggle: () => void;
         onClose: () => void;
         onPreview: (node: {
@@ -67,7 +65,7 @@ vi.mock('next/dynamic', () => ({
         [isDirty, selectedNode?.id],
       );
 
-      return isOpen ? (
+      return (
         <aside data-testid="editor-panel">
           <button type="button" onClick={onToggle}>
             Ocultar panel de edición
@@ -137,7 +135,7 @@ vi.mock('next/dynamic', () => ({
             </>
           ) : null}
         </aside>
-      ) : null;
+      );
     }),
 }));
 
@@ -163,7 +161,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
       token: string;
       viewport: { x: number; y: number; zoom: number };
     } | null;
-    topRightActions?: (findOpenPosition: (title: string) => { x: number; y: number } | null) => ReactNode;
+    topRightActions?: (
+      findOpenPosition: (title: string) => { x: number; y: number } | null,
+    ) => ReactNode;
     overlaySlots?: RoadmapGraphOverlaySlots;
   }) => {
     const editing = projection.kind === 'teaching' ? projection.editing : undefined;
@@ -183,13 +183,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
           {projection.kind === 'teaching' ? 'teacher' : 'student'}
         </output>
         <output data-testid="displayed-roadmap">{projection.roadmap.roadmap.id}</output>
-        <output data-testid="restored-viewport">
-          {viewportRestoration?.viewport.x ?? 'none'}
-        </output>
-        <button
-          type="button"
-          onClick={() => onSelectNode('blocked-node')}
-        >
+        <output data-testid="restored-viewport">{viewportRestoration?.viewport.x ?? 'none'}</output>
+        <button type="button" onClick={() => onSelectNode('blocked-node')}>
           Activar nodo bloqueado
         </button>
         <button type="button" onClick={() => onSelectNode('node-1')}>
@@ -229,10 +224,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         >
           Solicitar eliminar nodo
         </button>
-        <button
-          type="button"
-          onClick={() => onSelectNode('missing-node')}
-        >
+        <button type="button" onClick={() => onSelectNode('missing-node')}>
           Activar nodo inexistente
         </button>
         <button

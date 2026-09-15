@@ -69,7 +69,6 @@ export type RoadmapEditorProps = ResourceActionCallbacks & {
   roadmap: RoadmapDto;
   selectedNode: RoadmapNode | undefined;
   isVisibilityPending: boolean;
-  isOpen: boolean;
   resourceComposerRequest?: number;
   onClose: () => void;
   onUpdateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
@@ -79,6 +78,4 @@ export type RoadmapEditorProps = ResourceActionCallbacks & {
   onDeleteResource: (resourceId: string) => Promise<boolean>;
   onPreview: (node: StudentAccessibleRoadmapNode) => void;
   previewButtonRef: RefObject<HTMLButtonElement | null>;
-  panelWidth: number;
-  onPanelWidthChange: (width: number) => void;
 };

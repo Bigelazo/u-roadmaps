@@ -83,7 +83,9 @@ test('clears the selected editor after successful node deletion', async () => {
   await user.click(within(dialog).getByRole('button', { name: 'Eliminar Nodo' }));
 
   await waitFor(() => expect(deleteNode).toHaveBeenCalledTimes(1));
-  await waitFor(() => expect(screen.queryByTestId('editor-panel')).toBeNull());
+  await waitFor(() =>
+    expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true),
+  );
   expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('');
 });
 

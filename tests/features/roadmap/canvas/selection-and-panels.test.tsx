@@ -9,10 +9,10 @@ test('starts with the editor closed and opens it when selecting a node', async (
   useRoadmapMock.mockReturnValue(roadmapActions());
   renderCanvas(true);
 
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
-  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(false);
 });
 
 test('replaces the editor with the shared student detail and keeps its completion local', async () => {
@@ -24,7 +24,7 @@ test('replaces the editor with the shared student detail and keeps its completio
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
   await user.click(screen.getByRole('button', { name: 'Previsualizar' }));
 
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
   expect(screen.getByTestId('student-detail').textContent).toContain('Vista previa docente');
   expect(screen.getByTestId('student-detail').textContent).toContain('available');
   expect(screen.getByTestId('student-detail').getAttribute('data-panel-width')).toBe('360');
@@ -47,7 +47,7 @@ test('replaces a node information preview with the editor when selecting a node'
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
 
   expect(screen.queryByTestId('student-detail')).toBeNull();
-  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(false);
 });
 
 test('hides the editor when deselecting its node', async () => {
@@ -58,7 +58,7 @@ test('hides the editor when deselecting its node', async () => {
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
   await user.click(screen.getByRole('button', { name: 'Deseleccionar nodo' }));
 
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
 });
 
 test('requests focus return only when an editor surface is explicitly closed', async () => {

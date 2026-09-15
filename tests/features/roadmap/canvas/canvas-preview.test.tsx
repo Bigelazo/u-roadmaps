@@ -199,7 +199,7 @@ test('restores the selected Node and editor panel after one preview session', as
 
   await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
   expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
 
   await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
   expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-1');

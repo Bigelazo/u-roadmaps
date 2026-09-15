@@ -27,6 +27,7 @@ import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block
 import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
 import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
+import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
   RoadmapGraph,
   type RoadmapGraphEditing,
@@ -578,32 +579,35 @@ export default function RoadmapCanvas({
           />
         </div>
         {canEditRoadmap && (
-          <RoadmapEditor
-            key={editorKey + ':' + (selectedNode?.id ?? 'none')}
-            roadmap={roadmap as RoadmapDto}
-            selectedNode={selectedNode as RoadmapNode | undefined}
-            ref={editorDraftRef}
-            isVisibilityPending={nodeVisibilityWorkflow.isPending}
+          <NodeEditorPanel
             isOpen={canvasMode.isEditing && isEditorOpen}
-            resourceComposerRequest={resourceComposerRequest}
-            onClose={closeSelectedNode}
-            onUpdateNode={updateNodeWithConfirmation}
-            onToggleVisibility={nodeVisibilityWorkflow.requestChange}
-            onRequestTeacherBlock={(nodeId, operation) =>
-              teacherBlockWorkflow.requestChange(nodeId, operation)
-            }
-            onDeleteNode={deleteNode}
-            onAddResource={addResourceWithConfirmation}
-            onUploadResource={uploadResource}
-            onUpdateResource={updateResourceWithConfirmation}
-            onDeleteResource={deleteResource}
-            onPreview={(node) => {
-              dispatchCanvas({ type: 'showTeacherPreview', node });
-            }}
-            previewButtonRef={previewButtonRef}
             panelWidth={editorPanel.width}
             onPanelWidthChange={editorPanel.setWidth}
-          />
+          >
+            <RoadmapEditor
+              key={editorKey + ':' + (selectedNode?.id ?? 'none')}
+              roadmap={roadmap as RoadmapDto}
+              selectedNode={selectedNode as RoadmapNode | undefined}
+              ref={editorDraftRef}
+              isVisibilityPending={nodeVisibilityWorkflow.isPending}
+              resourceComposerRequest={resourceComposerRequest}
+              onClose={closeSelectedNode}
+              onUpdateNode={updateNodeWithConfirmation}
+              onToggleVisibility={nodeVisibilityWorkflow.requestChange}
+              onRequestTeacherBlock={(nodeId, operation) =>
+                teacherBlockWorkflow.requestChange(nodeId, operation)
+              }
+              onDeleteNode={deleteNode}
+              onAddResource={addResourceWithConfirmation}
+              onUploadResource={uploadResource}
+              onUpdateResource={updateResourceWithConfirmation}
+              onDeleteResource={deleteResource}
+              onPreview={(node) => {
+                dispatchCanvas({ type: 'showTeacherPreview', node });
+              }}
+              previewButtonRef={previewButtonRef}
+            />
+          </NodeEditorPanel>
         )}
         {(isStudentExperience || teacherPreviewNode) && (
           <StudentNodeDetail

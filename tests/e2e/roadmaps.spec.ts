@@ -1125,10 +1125,25 @@ test('uses the teaching width for node information preview and keeps shortcuts o
   await expect(editorPanel).toBeVisible();
   const editorBox = (await editorPanel.boundingBox())!;
 
-  await page.getByRole('button', { name: 'Previsualizar', exact: true }).click();
+  const resourceTitle = 'Guía temporal del panel';
+  const resourceUrl = 'https://example.test/panel-draft';
+  await page.getByRole('button', { name: 'Recurso', exact: true }).click();
+  await page.getByRole('tab', { name: 'Enlace', exact: true }).click();
+  await page.getByPlaceholder('Ej. Guía de ejercicios').fill(resourceTitle);
+  await page.getByLabel('Enlace', { exact: true }).fill(resourceUrl);
+  const previewButton = page.getByRole('button', { name: 'Previsualizar cambios', exact: true });
+  await previewButton.click();
+
   const studentPanel = page.locator('#student-node-detail-panel');
   await expect(studentPanel).toBeVisible();
+  await expect(editorPanel).toBeHidden();
   await expect.poll(async () => (await studentPanel.boundingBox())?.width).toBe(editorBox.width);
+  await expect(studentPanel).toContainText(resourceTitle);
+  await page.getByRole('button', { name: 'Cerrar detalle', exact: true }).click();
+  await expect(editorPanel).toBeVisible();
+  await expect(page.getByPlaceholder('Ej. Guía de ejercicios')).toHaveValue(resourceTitle);
+  await expect(page.getByLabel('Enlace', { exact: true })).toHaveValue(resourceUrl);
+  await expect(previewButton).toBeFocused();
 
   const canvas = page.getByLabel('Lienzo del roadmap');
   const shortcuts = page.locator('details[aria-label="Atajos de teclado"]');

@@ -21,10 +21,10 @@ test('closes the selected-node sidebar on Escape without tying that behavior to 
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
-  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(false);
 
   await user.click(screen.getByRole('button', { name: 'Cerrar nodo con Escape' }));
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
 });
 
 test('closes the editor sidebar on Escape when the selected node is no longer available', async () => {
@@ -33,10 +33,10 @@ test('closes the editor sidebar on Escape when the selected node is no longer av
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo inexistente' }));
-  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(false);
 
   await user.keyboard('{Escape}');
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
 });
 
 test('persists a position reached with the keyboard', async () => {
@@ -57,11 +57,11 @@ test('toggles the selected editor sidebar with the platform shortcut', async () 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
 
   await user.keyboard('{Meta>}b{/Meta}');
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
 
   await user.keyboard('{Meta>}b{/Meta}');
-  expect(screen.getByTestId('editor-panel')).toBeTruthy();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(false);
 
   await user.keyboard('{Control>}b{/Control}');
-  expect(screen.queryByTestId('editor-panel')).toBeNull();
+  expect(screen.getByLabelText('Panel de edición del roadmap').hasAttribute('hidden')).toBe(true);
 });

@@ -5,6 +5,7 @@ import { expect, test, vi } from 'vitest';
 import { RoadmapEditor } from '@/features/roadmap/editor/RoadmapEditor';
 import type { RoadmapEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
+import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 
 const node: RoadmapNode = {
@@ -43,10 +44,16 @@ const roadmap: RoadmapDto = {
   dependencies: [],
 };
 
-type EditorHarnessProps = RoadmapEditorProps;
+type EditorHarnessProps = RoadmapEditorProps & {
+  isOpen?: boolean;
+};
 
-function EditorHarness(props: EditorHarnessProps) {
-  return <RoadmapEditor {...props} />;
+function EditorHarness({ isOpen = true, ...props }: EditorHarnessProps) {
+  return (
+    <NodeEditorPanel isOpen={isOpen} panelWidth={360} onPanelWidthChange={vi.fn()}>
+      <RoadmapEditor {...props} />
+    </NodeEditorPanel>
+  );
 }
 
 function editorProps(overrides: Partial<EditorHarnessProps> = {}): EditorHarnessProps {
@@ -54,7 +61,6 @@ function editorProps(overrides: Partial<EditorHarnessProps> = {}): EditorHarness
     roadmap,
     selectedNode: node,
     isVisibilityPending: false,
-    isOpen: true,
     onClose: vi.fn(),
     onUpdateNode: vi.fn().mockResolvedValue(true),
     onToggleVisibility: vi.fn().mockResolvedValue(true),
@@ -66,8 +72,6 @@ function editorProps(overrides: Partial<EditorHarnessProps> = {}): EditorHarness
     onDeleteResource: vi.fn().mockResolvedValue(true),
     onPreview: vi.fn(),
     previewButtonRef: createRef<HTMLButtonElement>(),
-    panelWidth: 360,
-    onPanelWidthChange: vi.fn(),
     ...overrides,
   };
 }
@@ -136,6 +140,39 @@ test('continues treating a retained draft as dirty after the editor panel closes
   expect(screen.getByRole('button', { name: 'Previsualizar cambios' })).toBeTruthy();
 });
 
+test('keeps an active resource draft when the panel is hidden and reopened', async () => {
+  const user = userEvent.setup();
+  const props = editorProps();
+  const { rerender } = render(
+    <SidebarProvider>
+      <EditorHarness {...props} />
+    </SidebarProvider>,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
+  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía nueva');
+  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/nueva');
+
+  rerender(
+    <SidebarProvider>
+      <EditorHarness {...props} isOpen={false} />
+    </SidebarProvider>,
+  );
+  rerender(
+    <SidebarProvider>
+      <EditorHarness {...props} isOpen />
+    </SidebarProvider>,
+  );
+
+  expect((screen.getByPlaceholderText('Ej. Guía de ejercicios') as HTMLInputElement).value).toBe(
+    'Guía nueva',
+  );
+  expect((screen.getByLabelText('Enlace') as HTMLInputElement).value).toBe(
+    'https://example.test/nueva',
+  );
+});
+
 test('opens the existing resource composer and moves focus to its file field on request', async () => {
   render(
     <SidebarProvider>
@@ -145,19 +182,6 @@ test('opens the existing resource composer and moves focus to its file field on 
 
   const file = await screen.findByLabelText('Archivo');
   await waitFor(() => expect(file.matches(':focus')).toBe(true));
-});
-
-test('uses the shared node-panel chrome for an effortless mode transition', () => {
-  render(
-    <SidebarProvider>
-      <EditorHarness {...editorProps()} />
-    </SidebarProvider>,
-  );
-
-  const panel = screen.getByLabelText('Panel de edición del roadmap');
-  expect(panel.className).toContain('bg-card');
-  expect(panel.className).toContain('shadow-(--shadow-roadmap-panel)');
-  expect(screen.getByRole('group', { name: 'Acciones del nodo' })).toBeTruthy();
 });
 
 test('confirms node deletion with declarative consequences and preserves a cancelled draft', async () => {
