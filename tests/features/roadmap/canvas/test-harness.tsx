@@ -1,13 +1,8 @@
-import { forwardRef, type ReactNode, useImperativeHandle, useState } from 'react';
+import { forwardRef, type ReactNode, useImperativeHandle } from 'react';
 import { render } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
 import { RoadmapCanvas as RoadmapCanvasComponent } from '@/features/roadmap';
-import {
-  editorDraftDiscardConfirmation,
-  roadmapConfirmationActionIds,
-} from '@/features/roadmap/ui/roadmap-confirmation';
-import type { NodeEditorGuardReason, NodeEditorProps } from '@/features/roadmap/editor/types';
-import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
+import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type {
   RoadmapGraphEditingIntent,
   RoadmapGraphOverlaySlots,
@@ -16,8 +11,11 @@ import type {
 
 export const RoadmapCanvasForTest = RoadmapCanvasComponent;
 
-const { useRoadmapMock } = vi.hoisted(() => ({ useRoadmapMock: vi.fn() }));
-export { useRoadmapMock };
+const { nodeEditorGuardMock, useRoadmapMock } = vi.hoisted(() => ({
+  nodeEditorGuardMock: vi.fn(),
+  useRoadmapMock: vi.fn(),
+}));
+export { nodeEditorGuardMock, useRoadmapMock };
 
 vi.mock('next/dynamic', () => ({
   default: () =>
@@ -26,149 +24,109 @@ vi.mock('next/dynamic', () => ({
       ref,
     ) {
       const { node, isVisibilityPending } = session;
-      const [isDirty, setIsDirty] = useState(false);
-      const [guardReason, setGuardReason] = useState<NodeEditorGuardReason | null>(null);
-      const [guardResolve, setGuardResolve] = useState<((proceed: boolean) => void) | null>(null);
-      useImperativeHandle(
-        ref,
-        () => ({
-          guardDraft: (reason: NodeEditorGuardReason) => {
-            const isRelevant =
-              reason.kind === 'enter-canvas-preview' ||
-              (reason.kind === 'replace-node' || reason.kind === 'open-resource'
-                ? reason.nodeId !== node?.id
-                : reason.nodeId === node?.id);
-            if (!isDirty || !isRelevant) return Promise.resolve(true);
-            return new Promise<boolean>((resolve) => {
-              setGuardReason(reason);
-              setGuardResolve(() => resolve);
-            });
-          },
-        }),
-        [isDirty, node?.id],
-      );
+      useImperativeHandle(ref, () => ({ guardDraft: nodeEditorGuardMock }), []);
 
       return (
-        <>
-          <aside data-testid="editor-panel">
-            {node ? (
-              <>
-                <button type="button" onClick={() => onIntent({ kind: 'close', nodeId: node.id })}>
-                  Deseleccionar nodo
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onIntent({ kind: 'change-teacher-block', nodeId: node.id, operation: 'BLOCK' })
-                  }
-                >
-                  Bloquear rama
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onIntent({
-                      kind: 'change-teacher-block',
-                      nodeId: node.id,
-                      operation: 'UNBLOCK',
-                    })
-                  }
-                >
-                  Desbloquear
-                </button>
-                <button
-                  type="button"
-                  disabled={isVisibilityPending}
-                  onClick={() =>
-                    onIntent({ kind: 'change-visibility', nodeId: node.id, isVisible: true })
-                  }
-                >
-                  Ocultar para estudiantes
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void perform({
-                      kind: 'update-node',
-                      nodeId: node.id,
-                      value: {
-                        title: 'Límites',
-                        description: node.description ?? '',
-                        nodeTypeId: node.nodeTypeId,
-                      },
-                    })
-                  }
-                >
-                  Guardar cambios
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void perform({
-                      kind: 'add-resource',
-                      nodeId: node.id,
-                      resource: {
-                        title: 'Guía de ejercicios',
-                        url: 'https://example.test/guia',
-                        type: 'LINK',
-                      },
-                    })
-                  }
-                >
-                  Guardar enlace
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onIntent({
-                      kind: 'preview-node-information',
-                      node: {
-                        id: node.id,
-                        title: 'Vista previa docente',
-                        description: 'Borrador visible',
-                        nodeTypeId: 'content',
-                        positionX: 0,
-                        positionY: 0,
-                        isVisible: true,
-                        access: { status: 'ACCESSIBLE' },
-                        isCompleted: false,
-                        canComplete: true,
-                        resources: [],
-                      },
-                      returnFocus: () => {},
-                    })
-                  }
-                >
-                  Previsualizar
-                </button>
-                <button type="button" onClick={() => setIsDirty(true)}>
-                  Marcar borrador sin guardar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onIntent({ kind: 'delete-node', nodeId: node.id })}
-                >
-                  Solicitar eliminar nodo desde el editor
-                </button>
-              </>
-            ) : null}
-          </aside>
-          <ConfirmationDialog
-            confirmation={guardReason ? editorDraftDiscardConfirmation(guardReason) : null}
-            onCancel={() => {
-              guardResolve?.(false);
-              setGuardReason(null);
-              setGuardResolve(null);
-            }}
-            onAction={(actionId) => {
-              if (actionId !== roadmapConfirmationActionIds.discardEditorDraft) return;
-              setIsDirty(false);
-              guardResolve?.(true);
-              setGuardReason(null);
-              setGuardResolve(null);
-            }}
-          />
-        </>
+        <aside data-testid="editor-panel">
+          {node ? (
+            <>
+              <button type="button" onClick={() => onIntent({ kind: 'close', nodeId: node.id })}>
+                Deseleccionar nodo
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onIntent({ kind: 'change-teacher-block', nodeId: node.id, operation: 'BLOCK' })
+                }
+              >
+                Bloquear rama
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onIntent({
+                    kind: 'change-teacher-block',
+                    nodeId: node.id,
+                    operation: 'UNBLOCK',
+                  })
+                }
+              >
+                Desbloquear
+              </button>
+              <button
+                type="button"
+                disabled={isVisibilityPending}
+                onClick={() =>
+                  onIntent({ kind: 'change-visibility', nodeId: node.id, isVisible: true })
+                }
+              >
+                Ocultar para estudiantes
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void perform({
+                    kind: 'update-node',
+                    nodeId: node.id,
+                    value: {
+                      title: 'Límites',
+                      description: node.description ?? '',
+                      nodeTypeId: node.nodeTypeId,
+                    },
+                  })
+                }
+              >
+                Guardar cambios
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void perform({
+                    kind: 'add-resource',
+                    nodeId: node.id,
+                    resource: {
+                      title: 'Guía de ejercicios',
+                      url: 'https://example.test/guia',
+                      type: 'LINK',
+                    },
+                  })
+                }
+              >
+                Guardar enlace
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onIntent({
+                    kind: 'preview-node-information',
+                    node: {
+                      id: node.id,
+                      title: 'Vista previa docente',
+                      description: 'Borrador visible',
+                      nodeTypeId: 'content',
+                      positionX: 0,
+                      positionY: 0,
+                      isVisible: true,
+                      access: { status: 'ACCESSIBLE' },
+                      isCompleted: false,
+                      canComplete: true,
+                      resources: [],
+                    },
+                    returnFocus: () => {},
+                  })
+                }
+              >
+                Previsualizar
+              </button>
+              <button
+                type="button"
+                onClick={() => onIntent({ kind: 'delete-node', nodeId: node.id })}
+              >
+                Solicitar eliminar nodo desde el editor
+              </button>
+            </>
+          ) : null}
+        </aside>
       );
     }),
 }));
@@ -223,6 +181,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
         </button>
         <button type="button" onClick={() => onSelectNode('node-1')}>
           Activar nodo docente
+        </button>
+        <button type="button" onClick={() => onSelectNode('node-2')}>
+          Activar segundo nodo docente
         </button>
         <button
           type="button"
@@ -357,6 +318,8 @@ vi.mock('@/features/roadmap/student/NodeDetail', () => ({
 vi.mock('@/features/roadmap/useRoadmap', () => ({ useRoadmap: useRoadmapMock }));
 
 beforeEach(() => {
+  nodeEditorGuardMock.mockReset();
+  nodeEditorGuardMock.mockResolvedValue(true);
   useRoadmapMock.mockReset();
 });
 

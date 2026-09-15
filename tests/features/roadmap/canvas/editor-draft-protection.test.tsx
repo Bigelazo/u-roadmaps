@@ -2,36 +2,38 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
-import { roadmap, roadmapActions, renderCanvas, useRoadmapMock } from './test-harness';
+import {
+  nodeEditorGuardMock,
+  roadmap,
+  roadmapActions,
+  renderCanvas,
+  useRoadmapMock,
+} from './test-harness';
 
-test('confirms before discarding an unsaved editor draft to enter the canvas preview', async () => {
+test('does not enter canvas preview when NodeEditor cancels its guard', async () => {
   const user = userEvent.setup();
+  nodeEditorGuardMock.mockResolvedValueOnce(false);
   const loadSimulation = vi.fn().mockResolvedValue(true);
   useRoadmapMock.mockReturnValue(roadmapActions({ simulationRoadmap: roadmap, loadSimulation }));
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
-  await user.click(screen.getByRole('button', { name: 'Marcar borrador sin guardar' }));
   await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
 
-  expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
-  expect(
-    screen
-      .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
-      .getAttribute('data-intent'),
-  ).toBe('warning');
+  await waitFor(() =>
+    expect(nodeEditorGuardMock).toHaveBeenCalledWith({ kind: 'enter-canvas-preview' }),
+  );
   expect(loadSimulation).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
   expect(screen.queryByText('Previsualización del canvas')).toBeNull();
-  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
-  await user.click(screen.getByRole('button', { name: 'Descartar y previsualizar' }));
 
+  await user.click(screen.getByRole('button', { name: 'Previsualizar canvas' }));
   await waitFor(() => expect(loadSimulation).toHaveBeenCalledTimes(1));
   expect(screen.getByText('Previsualización del canvas')).toBeTruthy();
 });
 
-test('opens a resource composer without warning for the current draft and confirms only before replacing it', async () => {
+test('routes resource transitions through the NodeEditor guard', async () => {
   const user = userEvent.setup();
+  nodeEditorGuardMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
   useRoadmapMock.mockReturnValue(
     roadmapActions({
       roadmap: {
@@ -50,29 +52,30 @@ test('opens a resource composer without warning for the current draft and confir
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
-  await user.click(screen.getByRole('button', { name: 'Marcar borrador sin guardar' }));
   await user.click(screen.getByRole('button', { name: 'Agregar recurso al nodo actual' }));
-  expect(screen.queryByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeNull();
-
-  await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
-  expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
-  expect(
-    screen
-      .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
-      .getAttribute('data-intent'),
-  ).toBe('warning');
-  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
+  await waitFor(() =>
+    expect(nodeEditorGuardMock).toHaveBeenCalledWith({ kind: 'open-resource', nodeId: 'node-1' }),
+  );
   expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-1');
 
   await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
-  await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
+  await waitFor(() =>
+    expect(nodeEditorGuardMock).toHaveBeenLastCalledWith({
+      kind: 'open-resource',
+      nodeId: 'node-2',
+    }),
+  );
+  expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-1');
+
+  await user.click(screen.getByRole('button', { name: 'Agregar recurso a otro nodo' }));
   await waitFor(() =>
     expect(screen.getByTestId('selected-roadmap-node').textContent).toBe('node-2'),
   );
 });
 
-test('protects a dirty draft of the same Node before opening deletion confirmation', async () => {
+test('starts Node deletion only when NodeEditor permits its guard', async () => {
   const user = userEvent.setup();
+  nodeEditorGuardMock.mockResolvedValueOnce(false);
   const previewNodeDeletion = vi.fn().mockResolvedValue({
     node: {
       title: 'Límites',
@@ -86,20 +89,13 @@ test('protects a dirty draft of the same Node before opening deletion confirmati
   renderCanvas(true);
 
   await user.click(screen.getByRole('button', { name: 'Activar nodo docente' }));
-  await user.click(screen.getByRole('button', { name: 'Marcar borrador sin guardar' }));
   await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
-  expect(screen.getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeTruthy();
-  expect(
-    screen
-      .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
-      .getAttribute('data-intent'),
-  ).toBe('warning');
+  await waitFor(() =>
+    expect(nodeEditorGuardMock).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: 'node-1' }),
+  );
   expect(previewNodeDeletion).not.toHaveBeenCalled();
 
-  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
-  expect(screen.queryByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Solicitar eliminar nodo' }));
-  await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
   await waitFor(() => expect(previewNodeDeletion).toHaveBeenCalledWith('node-1'));
   expect(screen.getByRole('alertdialog', { name: 'Eliminar Nodo' })).toBeTruthy();
 });
