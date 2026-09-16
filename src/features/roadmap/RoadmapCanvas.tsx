@@ -40,7 +40,7 @@ import {
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
-import { useRoadmap } from '@/features/roadmap/useRoadmap';
+import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
 import type {
   CourseOfferingIdentifier,
   RoadmapDto,
@@ -67,6 +67,7 @@ type Props = {
   canEdit?: boolean;
   canPreview?: boolean;
   isHistorical?: boolean;
+  renderFeedbackOutsideGraph?: boolean;
   title: string;
   courseCode: string;
   year: number;
@@ -78,6 +79,7 @@ export default function RoadmapCanvas({
   canEdit,
   canPreview,
   isHistorical,
+  renderFeedbackOutsideGraph = false,
   title,
   courseCode,
   year,
@@ -134,7 +136,13 @@ export default function RoadmapCanvas({
     loadSimulation,
     completeSimulatedNode,
     resetSimulation,
-  } = useRoadmap(identifier, canEdit || canPreview ? 'teaching' : 'student');
+  } = useRoadmapCanvasSession({
+    courseOffering: { identifier, title },
+    experience: {
+      kind: canEdit || canPreview ? 'teaching' : 'student',
+      term: isHistorical ? 'historical' : 'current',
+    },
+  });
   const dependencyWorkflow = useDependencyWorkflow({
     roadmap,
     connectNodes,
@@ -206,12 +214,14 @@ export default function RoadmapCanvas({
           break;
         case 'upload-resource':
           succeeded = await uploadResource(effect.nodeId, effect.file);
+          if (succeeded) showSuccessToast('Recurso guardado exitosamente.');
           break;
         case 'update-resource':
           succeeded = await updateResourceWithConfirmation(effect.resourceId, effect.resource);
           break;
         case 'delete-resource':
           succeeded = await deleteResource(effect.resourceId);
+          if (succeeded) showSuccessToast('Recurso eliminado exitosamente.');
           break;
       }
       return { status: succeeded ? 'committed' : 'rejected' };
@@ -222,6 +232,7 @@ export default function RoadmapCanvas({
       updateNodeWithConfirmation,
       updateResourceWithConfirmation,
       uploadResource,
+      showSuccessToast,
     ],
   );
 
@@ -625,8 +636,10 @@ export default function RoadmapCanvas({
               ) : null,
               bottomRight: (
                 <>
-                  {error ? <RoadmapErrorToast message={error} onDismiss={dismissError} /> : null}
-                  {successToast ? (
+                  {!renderFeedbackOutsideGraph && error ? (
+                    <RoadmapErrorToast message={error} onDismiss={dismissError} />
+                  ) : null}
+                  {!renderFeedbackOutsideGraph && successToast ? (
                     <RoadmapSuccessToast
                       key={successToast.id}
                       message={successToast.message}
@@ -641,6 +654,18 @@ export default function RoadmapCanvas({
               ),
             }}
           />
+          {renderFeedbackOutsideGraph ? (
+            <div className="pointer-events-none absolute right-4 bottom-4 z-5 flex flex-col gap-2">
+              {error ? <RoadmapErrorToast message={error} onDismiss={dismissError} /> : null}
+              {successToast ? (
+                <RoadmapSuccessToast
+                  key={successToast.id}
+                  message={successToast.message}
+                  onDismiss={dismissSuccessToast}
+                />
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {canEditRoadmap && (
           <NodeEditorPanel
@@ -680,7 +705,11 @@ export default function RoadmapCanvas({
             onComplete={(node) => {
               if (canvasPreviewWorkflow.completeNode(node.id)) return;
               if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
-              else void completeNode(node.id);
+              else {
+                void completeNode(node.id).then((succeeded) => {
+                  if (succeeded) showSuccessToast('Nodo completado.');
+                });
+              }
             }}
             isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
             nodeTypes={roadmap.nodeTypes}

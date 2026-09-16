@@ -1,7 +1,7 @@
 import { forwardRef, type ReactNode, useImperativeHandle } from 'react';
 import { render } from '@testing-library/react';
 import { beforeEach, vi } from 'vitest';
-import { RoadmapCanvas as RoadmapCanvasComponent } from '@/features/roadmap';
+import RoadmapCanvasComponent from '@/features/roadmap/RoadmapCanvas';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type {
   RoadmapGraphEditingIntent,

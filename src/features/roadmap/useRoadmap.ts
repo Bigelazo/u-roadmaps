@@ -265,6 +265,7 @@ function withRoadmapNodePosition<T extends AnyRoadmapDto>(
 export function useRoadmap<Projection extends RoadmapProjectionKind = RoadmapProjectionKind>(
   identifier: CourseOfferingIdentifier,
   expectedProjection?: Projection,
+  enabled = true,
 ): RoadmapHookResult<Projection> {
   const [roadmap, setRoadmap] = useState<RoadmapForProjection<Projection> | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
@@ -285,6 +286,7 @@ export function useRoadmap<Projection extends RoadmapProjectionKind = RoadmapPro
   }, [key]);
 
   const load = useCallback(async () => {
+    if (!enabled) return false;
     const requestKey = identifierKey(identifier);
     if (activeIdentifierRef.current !== requestKey) return false;
 
@@ -336,9 +338,10 @@ export function useRoadmap<Projection extends RoadmapProjectionKind = RoadmapPro
       setErrorKey(requestKey);
       return false;
     }
-  }, [expectedProjection, identifier]);
+  }, [enabled, expectedProjection, identifier]);
 
   useEffect(() => {
+    if (!enabled) return;
     void load();
     return () => {
       controllerRef.current?.abort();
@@ -346,7 +349,7 @@ export function useRoadmap<Projection extends RoadmapProjectionKind = RoadmapPro
       requestVersionRef.current += 1;
       simulationRequestVersionRef.current += 1;
     };
-  }, [load]);
+  }, [enabled, load]);
 
   const dismissError = useCallback(() => {
     lastMutationErrorRef.current = null;
@@ -355,6 +358,7 @@ export function useRoadmap<Projection extends RoadmapProjectionKind = RoadmapPro
   }, []);
 
   const loadSimulation = useCallback(async () => {
+    if (!enabled) return false;
     const requestKey = identifierKey(identifier);
     if (activeIdentifierRef.current !== requestKey) return false;
 
@@ -408,7 +412,7 @@ export function useRoadmap<Projection extends RoadmapProjectionKind = RoadmapPro
       setErrorKey(requestKey);
       return false;
     }
-  }, [identifier]);
+  }, [enabled, identifier]);
 
   const mutate = useCallback(
     async (
