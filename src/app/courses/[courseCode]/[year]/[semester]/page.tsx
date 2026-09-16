@@ -1,4 +1,4 @@
-import { parseCourseOfferingIdentifier, RoadmapCanvas } from '@/features/roadmap';
+import { parseCourseOfferingIdentifier, RoadmapCanvas, RoadmapCanvasSession } from '@/features/roadmap';
 import { synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
@@ -44,17 +44,24 @@ export default async function CoursePage(
 
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
-      <RoadmapCanvas
-        key={`${identifier.courseCode}-${identifier.year}-${identifier.semester}`}
-        identifier={identifier}
-        canEdit={canEdit}
-        canPreview={canPreview}
-        isHistorical={isHistorical}
-        title={courseName}
-        courseCode={identifier.courseCode}
-        year={identifier.year}
-        semester={identifier.semester}
-      />
+      {canPreview ? (
+        <RoadmapCanvas
+          key={`${identifier.courseCode}-${identifier.year}-${identifier.semester}`}
+          identifier={identifier}
+          canEdit={canEdit}
+          canPreview={canPreview}
+          isHistorical={isHistorical}
+          title={courseName}
+          courseCode={identifier.courseCode}
+          year={identifier.year}
+          semester={identifier.semester}
+        />
+      ) : (
+        <RoadmapCanvasSession
+          courseOffering={{ identifier, title: courseName }}
+          experience={{ kind: 'student', term: isHistorical ? 'historical' : 'current' }}
+        />
+      )}
     </main>
   );
 }
