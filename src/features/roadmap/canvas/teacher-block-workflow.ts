@@ -392,5 +392,5 @@ export function useTeacherBlockWorkflow({
     onAction: handleAction,
   };
 
-  return { requestChange, confirmationDialog };
+  return { requestChange, isBusy: state.kind !== 'idle', confirmationDialog };
 }

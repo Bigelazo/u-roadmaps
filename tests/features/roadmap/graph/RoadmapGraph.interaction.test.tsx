@@ -769,7 +769,7 @@ test('clears action-menu state when editing behavior is removed', async () => {
   expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
 
-test('proposes automatic ordering without moving Nodes until confirmation', async () => {
+test('translates automatic-layout geometry into a session confirmation intent without moving Nodes', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
   render(
@@ -788,49 +788,22 @@ test('proposes automatic ordering without moving Nodes until confirmation', asyn
   expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
   await user.click(layoutButton);
 
-  const dialog = screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' });
-  expect(
-    within(dialog).getByText(
-      'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
-    ),
-  ).toBeTruthy();
-  expect(onEditingIntent).not.toHaveBeenCalled();
-
-  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
-  expect(onEditingIntent).not.toHaveBeenCalled();
-  expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
-  expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
-  await user.keyboard('{Enter}');
-  expect(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: 'Cancelar' }));
-
-  await user.click(layoutButton);
-  await user.click(
-    within(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).getByRole(
-      'button',
-      { name: 'Ordenar nodos' },
-    ),
-  );
-
   expect(onEditingIntent).toHaveBeenCalledOnce();
   const [intent] = onEditingIntent.mock.calls[0] as [RoadmapGraphEditingIntent];
-  expect(intent.kind).toBe('node-positions');
-  if (intent.kind !== 'node-positions') return;
-  expect(intent.cause).toBe('automatic-layout');
+  expect(intent.kind).toBe('request-automatic-layout');
+  if (intent.kind !== 'request-automatic-layout') return;
   expect(intent.positions.map(({ nodeId }) => nodeId)).toEqual(['node-1', 'node-2']);
   expect(Object.isFrozen(intent.positions)).toBe(true);
   expect(Object.isFrozen(intent.positions[0])).toBe(true);
   expect(Object.isFrozen(intent.positions[0].position)).toBe(true);
-  for (const { nodeId, position } of intent.positions)
-    expect(screen.getByTestId(`node-position-${nodeId}`).textContent).toBe(
-      `${position.x},${position.y}`,
-    );
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
+  expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
 });
 
-test('dismisses an automatic-layout proposal when a newer Roadmap projection arrives', async () => {
+test('emits a fresh automatic-layout request for each gesture', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
-  const { rerender } = render(
+  render(
     <RoadmapGraph
       projection={{ kind: 'teaching', roadmap, editing: editingCapability({ onEditingIntent }) }}
       onSelectNode={vi.fn()}
@@ -838,21 +811,11 @@ test('dismisses an automatic-layout proposal when a newer Roadmap projection arr
   );
 
   await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
-  expect(screen.getByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeTruthy();
-
-  const refreshedRoadmap = structuredClone(roadmap);
-  refreshedRoadmap.nodes[0].positionX = 40;
-  refreshedRoadmap.nodes[0].positionY = 60;
-  rerender(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap: refreshedRoadmap, editing: editingCapability({ onEditingIntent }) }}
-      onSelectNode={vi.fn()}
-    />,
+  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  expect(onEditingIntent).toHaveBeenCalledTimes(2);
+  expect(onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'request-automatic-layout')).toBe(
+    true,
   );
-
-  expect(screen.queryByRole('alertdialog', { name: 'Confirmar ordenamiento' })).toBeNull();
-  expect(screen.getByTestId('node-position-node-1').textContent).toBe('40,60');
-  expect(onEditingIntent).not.toHaveBeenCalled();
 });
 
 test('emits complete dependency intents and ignores incomplete connection gestures', async () => {

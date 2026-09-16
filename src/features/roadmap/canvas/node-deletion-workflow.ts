@@ -241,5 +241,5 @@ export function useNodeDeletionWorkflow({
     onAction: handleAction,
   };
 
-  return { requestDeletion, confirmationDialog };
+  return { requestDeletion, isBusy: state.kind !== 'idle', confirmationDialog };
 }

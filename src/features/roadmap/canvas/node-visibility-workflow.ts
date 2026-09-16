@@ -131,6 +131,7 @@ export function useNodeVisibilityWorkflow({
   return {
     requestChange,
     isPending: state.kind === 'previewing' || state.kind === 'mutating',
+    isBusy: state.kind !== 'idle',
     confirmationDialog,
   };
 }

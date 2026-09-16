@@ -177,6 +177,7 @@ export function useCanvasPreviewWorkflow({
     exit,
     onViewportChange,
     requestReset,
+    isResetPending: resetState !== 'idle',
     completeNode,
     confirmationDialog,
   };

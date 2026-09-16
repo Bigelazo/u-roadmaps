@@ -33,12 +33,7 @@ import {
   snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
 import type { NodeActionCallbacks, NodeActionIntent } from '@/features/roadmap/graph/node-action';
-import {
-  roadmapAutoLayoutConfirmation,
-  roadmapConfirmationActionIds,
-} from '@/features/roadmap/ui/roadmap-confirmation';
 import { Button } from '@/shared/ui/button';
-import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
 import type {
@@ -218,12 +213,6 @@ function changedNodePositions(
   });
 }
 
-type AutoLayoutProposal = {
-  readonly roadmap: RoadmapDto;
-  readonly direction: RoadmapLayoutDirection;
-  readonly positions: readonly RoadmapNodePlacement[];
-};
-
 function RoadmapGraphToolbar({
   containerRef,
   layoutDirection,
@@ -384,6 +373,7 @@ export type RoadmapGraphProps = {
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
+  confirmedAutomaticLayout?: { token: string; direction: RoadmapLayoutDirection } | null;
 };
 
 export type RoadmapGraphOverlaySlots = {
@@ -430,6 +420,7 @@ export function RoadmapGraph({
   overlaySlots,
   onViewportChange,
   viewportRestoration,
+  confirmedAutomaticLayout,
 }: RoadmapGraphProps) {
   const editing: RoadmapGraphEditing | undefined =
     projection.kind === 'teaching' ? projection.editing : undefined;
@@ -443,7 +434,13 @@ export function RoadmapGraph({
     return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
   }, [editing, projectionKind, projectionRoadmap]);
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
-  const [autoLayoutProposal, setAutoLayoutProposal] = useState<AutoLayoutProposal | null>(null);
+  const appliedAutomaticLayoutTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!confirmedAutomaticLayout || appliedAutomaticLayoutTokenRef.current === confirmedAutomaticLayout.token)
+      return;
+    appliedAutomaticLayoutTokenRef.current = confirmedAutomaticLayout.token;
+    setLayoutDirection(confirmedAutomaticLayout.direction);
+  }, [confirmedAutomaticLayout]);
   const [openActionMenuNodeId, setOpenActionMenuNodeId] = useState<string | null>(null);
   const [closingActionMenuNodeId, setClosingActionMenuNodeId] = useState<string | null>(null);
   const actionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -600,30 +597,13 @@ export function RoadmapGraph({
 
   const proposeAutoLayout = useCallback(() => {
     const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
-    setAutoLayoutProposal({
-      roadmap: projectionRoadmap as RoadmapDto,
+    const positions = immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction));
+    emitEditingIntent({
+      kind: 'request-automatic-layout',
+      positions: freezeNodePositions(changedNodePositions(flow.nodes, positions)),
       direction,
-      positions: immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction)),
     });
-  }, [flow.edges, flow.nodes, layoutDirection, projectionRoadmap]);
-
-  useEffect(() => {
-    if (autoLayoutProposal?.roadmap !== projectionRoadmap) setAutoLayoutProposal(null);
-  }, [autoLayoutProposal, projectionRoadmap]);
-
-  const handleAutoLayoutAction = useCallback(
-    (actionId: string) => {
-      if (actionId !== roadmapConfirmationActionIds.autoLayout) return;
-      if (!autoLayoutProposal || autoLayoutProposal.roadmap !== projectionRoadmap) return;
-      setAutoLayoutProposal(null);
-      setLayoutDirection(autoLayoutProposal.direction);
-      applyNodePositions(
-        'automatic-layout',
-        changedNodePositions(flow.nodes, autoLayoutProposal.positions),
-      );
-    },
-    [applyNodePositions, autoLayoutProposal, flow.nodes, projectionRoadmap],
-  );
+  }, [emitEditingIntent, flow.edges, flow.nodes, layoutDirection]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const appliedFocusReturnRequestRef = useRef<string | null>(null);
@@ -801,11 +781,6 @@ export function RoadmapGraph({
           size={1}
         />
       </ReactFlow>
-      <ConfirmationDialog
-        confirmation={autoLayoutProposal ? roadmapAutoLayoutConfirmation : null}
-        onCancel={() => setAutoLayoutProposal(null)}
-        onAction={handleAutoLayoutAction}
-      />
     </div>
   );
 }

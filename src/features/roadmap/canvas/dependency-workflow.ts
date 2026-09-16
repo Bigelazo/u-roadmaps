@@ -245,6 +245,7 @@ export function useDependencyWorkflow({
   return {
     requestCreation,
     requestDeletion,
+    isBusy: creationState.kind !== 'idle' || deletionState.kind !== 'idle',
     creationDialog,
     deletionDialog,
   };

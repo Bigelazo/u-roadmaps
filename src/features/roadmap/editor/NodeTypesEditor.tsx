@@ -3,12 +3,7 @@ import { useState } from 'react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
-import {
-  nodeTypeDeletionConfirmation,
-  roadmapConfirmationActionIds,
-} from '@/features/roadmap/ui/roadmap-confirmation';
 import { Button } from '@/shared/ui/button';
-import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { NodeTypeForm } from './NodeTypeForm';
 import type { NodeTypeDraft, NodeTypeInput } from './types';
 import { DialogTitle } from '@/shared/ui/dialog';
@@ -20,7 +15,7 @@ type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];
   onAdd: (value: NodeTypeInput) => Promise<boolean>;
   onUpdate: (id: string, value: NodeTypeInput) => Promise<boolean>;
-  onDelete: (id: string) => Promise<boolean>;
+  onRequestDelete: (nodeType: RoadmapDto['nodeTypes'][number]) => void;
 };
 
 function NodeTypeListIcon({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
@@ -34,38 +29,14 @@ function NodeTypeListIcon({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
   );
 }
 
-export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props) {
+export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onRequestDelete }: Props) {
   const [value, setValue] = useState<NodeTypeDraft>({ name: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [pendingDeletion, setPendingDeletion] = useState<RoadmapDto['nodeTypes'][number] | null>(
-    null,
-  );
-  const [pendingDeletionActionId, setPendingDeletionActionId] = useState<string>();
   const isEditing = editingId !== null;
 
   function closeEditor() {
     setValue({ name: '' });
     setEditingId(null);
-  }
-
-  function cancelPendingDeletion() {
-    if (pendingDeletionActionId) return;
-    setPendingDeletion(null);
-  }
-
-  function handlePendingDeletionAction(actionId: string) {
-    if (!pendingDeletion || pendingDeletionActionId) return;
-    if (actionId !== roadmapConfirmationActionIds.deleteNodeType) return;
-
-    setPendingDeletionActionId(actionId);
-    void (async () => {
-      try {
-        const deleted = await onDelete(pendingDeletion.id);
-        if (deleted) setPendingDeletion(null);
-      } finally {
-        setPendingDeletionActionId(undefined);
-      }
-    })();
   }
 
   return (
@@ -128,7 +99,7 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
                   variant="ghost"
                   className="size-8! min-h-0! p-0!"
                   aria-label={`Eliminar tipo ${type.name}`}
-                  onClick={() => setPendingDeletion(type)}
+                  onClick={() => onRequestDelete(type)}
                 >
                   <Trash2 className="size-4" />
                 </Button>
@@ -137,12 +108,6 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onDelete }: Props)
           </li>
         ))}
       </ul>
-      <ConfirmationDialog
-        confirmation={pendingDeletion ? nodeTypeDeletionConfirmation(pendingDeletion) : null}
-        pendingActionId={pendingDeletionActionId}
-        onCancel={cancelPendingDeletion}
-        onAction={handlePendingDeletionAction}
-      />
     </>
   );
 }

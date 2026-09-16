@@ -4,6 +4,7 @@ import type {
   StudentRoadmapDto,
 } from '@/features/roadmap/types';
 import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
+import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 
 /**
  * The complete graph-editing capability. Its presence is the only thing that
@@ -44,6 +45,12 @@ export type RoadmapGraphEditingIntent =
   | {
       readonly kind: 'delete-dependencies';
       readonly dependencyIds: readonly string[];
+    }
+  | {
+      /** Geometry is calculated in Graph; confirmation and persistence belong to the session. */
+      readonly kind: 'request-automatic-layout';
+      readonly positions: readonly RoadmapNodePlacement[];
+      readonly direction: RoadmapLayoutDirection;
     };
 
 export type RoadmapGraphEditing = {

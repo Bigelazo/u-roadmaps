@@ -27,7 +27,7 @@ type Props = {
   onSubmit: (node: NodeInput) => Promise<boolean>;
   onCreateNodeType: (nodeType: NodeTypeInput) => Promise<boolean>;
   onUpdateNodeType: (nodeTypeId: string, nodeType: NodeTypeInput) => Promise<boolean>;
-  onDeleteNodeType: (nodeTypeId: string) => Promise<boolean>;
+  onRequestDeleteNodeType: (nodeType: RoadmapDto['nodeTypes'][number]) => void;
 };
 
 export function NodeCreator({
@@ -35,7 +35,7 @@ export function NodeCreator({
   onSubmit,
   onCreateNodeType,
   onUpdateNodeType,
-  onDeleteNodeType,
+  onRequestDeleteNodeType,
 }: Props) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNodeDialogOpen, setIsNodeDialogOpen] = useState(false);
@@ -181,7 +181,7 @@ export function NodeCreator({
             nodeTypes={nodeTypes}
             onAdd={onCreateNodeType}
             onUpdate={onUpdateNodeType}
-            onDelete={onDeleteNodeType}
+            onRequestDelete={onRequestDeleteNodeType}
           />
         </DialogContent>
       </Dialog>

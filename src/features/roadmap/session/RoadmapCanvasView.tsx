@@ -49,6 +49,7 @@ import type {
   RoadmapNode,
   StudentRoadmapDto,
   StudentRoadmapNode,
+  TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
@@ -58,6 +59,60 @@ import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
+import {
+  nodeTypeDeletionConfirmation,
+  roadmapAutoLayoutConfirmation,
+  roadmapConfirmationActionIds,
+} from '@/features/roadmap/ui/roadmap-confirmation';
+
+type ExclusiveConfirmationSource =
+  | 'automatic-layout'
+  | 'canvas-preview'
+  | 'dependency-creation'
+  | 'dependency-deletion'
+  | 'node-deletion'
+  | 'node-type-deletion'
+  | 'node-visibility'
+  | 'teacher-block';
+
+type AutomaticLayoutRequest = {
+  positions: Extract<RoadmapGraphEditingIntent, { kind: 'request-automatic-layout' }>['positions'];
+  direction: Extract<RoadmapGraphEditingIntent, { kind: 'request-automatic-layout' }>['direction'];
+  isPending: boolean;
+};
+
+/** Private vocabulary: Graph and NodeEditor events are translated before reaching the session. */
+type RoadmapCanvasIntent =
+  | { kind: 'close-selected-node' }
+  | { kind: 'preview-node-information' } & Extract<
+      NodeEditorIntent,
+      { kind: 'preview-node-information' }
+    >
+  | { kind: 'change-visibility'; nodeId: string; isVisible: boolean }
+  | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
+  | { kind: 'delete-node'; nodeId: string; draftWasDiscarded?: boolean }
+  | Extract<RoadmapGraphEditingIntent, { kind: 'node-positions' | 'request-automatic-layout' }>
+  | Extract<RoadmapGraphEditingIntent, { kind: 'create-dependency' | 'delete-dependencies' }>
+  | { kind: 'add-resource'; nodeId: string };
+
+function canvasIntentFromNodeEditor(intent: NodeEditorIntent): RoadmapCanvasIntent {
+  switch (intent.kind) {
+    case 'close':
+      return { kind: 'close-selected-node' };
+    case 'preview-node-information':
+      return intent;
+    case 'change-visibility':
+    case 'change-teacher-block':
+      return intent;
+    case 'delete-node':
+      return { ...intent, draftWasDiscarded: true };
+  }
+}
+
+function canvasIntentFromGraph(intent: RoadmapGraphEditingIntent): RoadmapCanvasIntent {
+  if (intent.kind === 'change-visibility') return { ...intent, isVisible: !intent.isVisible };
+  return intent;
+}
 
 const NodeEditor = dynamic(
   () => import('@/features/roadmap/editor/NodeEditor').then(({ NodeEditor }) => NodeEditor),
@@ -158,6 +213,34 @@ export function RoadmapCanvasView({
     previewNodeVisibility,
     toggleVisibility,
   });
+  const [exclusiveConfirmation, setExclusiveConfirmation] =
+    useState<ExclusiveConfirmationSource | null>(null);
+  const exclusiveConfirmationRef = useRef<ExclusiveConfirmationSource | null>(null);
+  const exclusiveBusySeenRef = useRef(false);
+  const [automaticLayout, setAutomaticLayout] = useState<AutomaticLayoutRequest | null>(null);
+  const [confirmedAutomaticLayout, setConfirmedAutomaticLayout] = useState<{
+    token: string;
+    direction: AutomaticLayoutRequest['direction'];
+  } | null>(null);
+  const automaticLayoutTokenRef = useRef(0);
+  const [nodeTypeDeletion, setNodeTypeDeletion] = useState<{
+    nodeType: RoadmapDto['nodeTypes'][number];
+    isPending: boolean;
+  } | null>(null);
+  const requestExclusiveConfirmation = useCallback(
+    (source: ExclusiveConfirmationSource, request: () => void) => {
+      if (exclusiveConfirmationRef.current) return false;
+      exclusiveConfirmationRef.current = source;
+      exclusiveBusySeenRef.current = false;
+      setExclusiveConfirmation(source);
+      request();
+      return true;
+    },
+    [],
+  );
+  useEffect(() => {
+    exclusiveConfirmationRef.current = exclusiveConfirmation;
+  }, [exclusiveConfirmation]);
   useEffect(() => {
     feedback?.reportError(roadmap ? error : null, dismissError);
   }, [dismissError, error, feedback, roadmap]);
@@ -286,6 +369,34 @@ export function RoadmapCanvasView({
     onExit: restoreCanvasPreview,
   });
 
+  useEffect(() => {
+    if (!exclusiveConfirmation) return;
+    const sourceIsBusy = {
+      'automatic-layout': automaticLayout !== null,
+      'canvas-preview': canvasPreviewWorkflow.isResetPending,
+      'dependency-creation': dependencyWorkflow.isBusy,
+      'dependency-deletion': dependencyWorkflow.isBusy,
+      'node-deletion': nodeDeletionWorkflow.isBusy,
+      'node-type-deletion': nodeTypeDeletion !== null,
+      'node-visibility': nodeVisibilityWorkflow.isBusy,
+      'teacher-block': teacherBlockWorkflow.isBusy,
+    }[exclusiveConfirmation];
+    if (sourceIsBusy) {
+      exclusiveBusySeenRef.current = true;
+      return;
+    }
+    if (exclusiveBusySeenRef.current) setExclusiveConfirmation(null);
+  }, [
+    automaticLayout,
+    canvasPreviewWorkflow.isResetPending,
+    dependencyWorkflow.isBusy,
+    exclusiveConfirmation,
+    nodeDeletionWorkflow.isBusy,
+    nodeTypeDeletion,
+    nodeVisibilityWorkflow.isBusy,
+    teacherBlockWorkflow.isBusy,
+  ]);
+
   const canvasMode = deriveCanvasMode({
     canEdit,
     canPreview,
@@ -370,15 +481,90 @@ export function RoadmapCanvasView({
   ]);
 
   const displayedRoadmap = isCanvasPreview ? simulationRoadmap : roadmap;
-  const requestDependencyCreation = dependencyWorkflow.requestCreation;
-  const requestDependencyDeletion = dependencyWorkflow.requestDeletion;
-  const requestNodeDeletion = nodeDeletionWorkflow.requestDeletion;
-  const requestTeacherBlockChange = teacherBlockWorkflow.requestChange;
-  const requestVisibilityChange = nodeVisibilityWorkflow.requestChange;
-  const handleNodeEditorIntent = useCallback(
-    (intent: NodeEditorIntent) => {
+  const requestDependencyCreation = useCallback(
+    (...args: Parameters<typeof dependencyWorkflow.requestCreation>) =>
+      requestExclusiveConfirmation('dependency-creation', () =>
+        dependencyWorkflow.requestCreation(...args),
+      ),
+    [dependencyWorkflow, requestExclusiveConfirmation],
+  );
+  const requestDependencyDeletion = useCallback(
+    (...args: Parameters<typeof dependencyWorkflow.requestDeletion>) =>
+      requestExclusiveConfirmation('dependency-deletion', () =>
+        dependencyWorkflow.requestDeletion(...args),
+      ),
+    [dependencyWorkflow, requestExclusiveConfirmation],
+  );
+  const requestNodeDeletion = useCallback(
+    (nodeId: string, options: { draftWasDiscarded?: boolean } = {}) => {
+      const begin = () =>
+        requestExclusiveConfirmation('node-deletion', () =>
+          nodeDeletionWorkflow.requestDeletion(nodeId, { draftWasDiscarded: true }),
+        );
+      if (options.draftWasDiscarded) return begin();
+      void guardEditorDraft({ kind: 'delete-node', nodeId }).then((proceed) => {
+        if (proceed) begin();
+      });
+      return false;
+    },
+    [guardEditorDraft, nodeDeletionWorkflow, requestExclusiveConfirmation],
+  );
+  const requestTeacherBlockChange = useCallback(
+    (...args: Parameters<typeof teacherBlockWorkflow.requestChange>) =>
+      requestExclusiveConfirmation('teacher-block', () => teacherBlockWorkflow.requestChange(...args)),
+    [requestExclusiveConfirmation, teacherBlockWorkflow],
+  );
+  const requestVisibilityChange = useCallback(
+    (...args: Parameters<typeof nodeVisibilityWorkflow.requestChange>) =>
+      requestExclusiveConfirmation('node-visibility', () =>
+        void nodeVisibilityWorkflow.requestChange(...args),
+      ),
+    [nodeVisibilityWorkflow, requestExclusiveConfirmation],
+  );
+  const requestAutomaticLayout = useCallback(
+    (positions: AutomaticLayoutRequest['positions'], direction: AutomaticLayoutRequest['direction']) => {
+      if (positions.length === 0) return;
+      requestExclusiveConfirmation('automatic-layout', () =>
+        setAutomaticLayout({ positions, direction, isPending: false }),
+      );
+    },
+    [requestExclusiveConfirmation],
+  );
+  const confirmAutomaticLayout = useCallback(async (actionId: string) => {
+    if (actionId !== roadmapConfirmationActionIds.autoLayout || !automaticLayout?.positions.length)
+      return;
+    setAutomaticLayout((current) => (current ? { ...current, isPending: true } : null));
+    await Promise.all(
+      automaticLayout.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
+    );
+    setConfirmedAutomaticLayout({
+      token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
+      direction: automaticLayout.direction,
+    });
+    setAutomaticLayout(null);
+  }, [automaticLayout, moveNode]);
+  const requestNodeTypeDeletion = useCallback(
+    (nodeType: RoadmapDto['nodeTypes'][number]) => {
+      requestExclusiveConfirmation('node-type-deletion', () =>
+        setNodeTypeDeletion({ nodeType, isPending: false }),
+      );
+    },
+    [requestExclusiveConfirmation],
+  );
+  const confirmNodeTypeDeletion = useCallback(
+    async (actionId: string) => {
+      if (actionId !== roadmapConfirmationActionIds.deleteNodeType || !nodeTypeDeletion) return;
+      setNodeTypeDeletion((current) => (current ? { ...current, isPending: true } : null));
+      const deleted = await deleteNodeType(nodeTypeDeletion.nodeType.id);
+      if (deleted) setNodeTypeDeletion(null);
+      else setNodeTypeDeletion((current) => (current ? { ...current, isPending: false } : null));
+    },
+    [deleteNodeType, nodeTypeDeletion],
+  );
+  const handleCanvasIntent = useCallback(
+    (intent: RoadmapCanvasIntent) => {
       switch (intent.kind) {
-        case 'close':
+        case 'close-selected-node':
           closeSelectedNodeNow();
           return;
         case 'preview-node-information':
@@ -395,19 +581,15 @@ export function RoadmapCanvasView({
           requestTeacherBlockChange(intent.nodeId, intent.operation);
           return;
         case 'delete-node':
-          requestNodeDeletion(intent.nodeId, { draftWasDiscarded: true });
+          requestNodeDeletion(intent.nodeId, { draftWasDiscarded: intent.draftWasDiscarded });
           return;
-      }
-    },
-    [closeSelectedNodeNow, requestNodeDeletion, requestTeacherBlockChange, requestVisibilityChange],
-  );
-  const handleGraphEditingIntent = useCallback(
-    (intent: RoadmapGraphEditingIntent) => {
-      switch (intent.kind) {
         case 'node-positions':
           void Promise.all(
             intent.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
           );
+          return;
+        case 'request-automatic-layout':
+          requestAutomaticLayout(intent.positions, intent.direction);
           return;
         case 'create-dependency':
           requestDependencyCreation(intent);
@@ -415,29 +597,30 @@ export function RoadmapCanvasView({
         case 'delete-dependencies':
           requestDependencyDeletion([...intent.dependencyIds]);
           return;
-        case 'change-teacher-block':
-          requestTeacherBlockChange(intent.nodeId, intent.operation);
-          return;
-        case 'change-visibility':
-          void requestVisibilityChange(intent.nodeId, !intent.isVisible);
-          return;
         case 'add-resource':
           openResourceComposer(intent.nodeId);
-          return;
-        case 'delete-node':
-          requestNodeDeletion(intent.nodeId);
           return;
       }
     },
     [
+      closeSelectedNodeNow,
       moveNode,
       openResourceComposer,
       requestDependencyCreation,
       requestDependencyDeletion,
       requestNodeDeletion,
       requestTeacherBlockChange,
+      requestAutomaticLayout,
       requestVisibilityChange,
     ],
+  );
+  const handleNodeEditorIntent = useCallback(
+    (intent: NodeEditorIntent) => handleCanvasIntent(canvasIntentFromNodeEditor(intent)),
+    [handleCanvasIntent],
+  );
+  const handleGraphEditingIntent = useCallback(
+    (intent: RoadmapGraphEditingIntent) => handleCanvasIntent(canvasIntentFromGraph(intent)),
+    [handleCanvasIntent],
   );
   const graphEditing = useMemo<RoadmapGraphEditing | undefined>(
     () =>
@@ -559,6 +742,7 @@ export function RoadmapCanvasView({
             onClearSelectedNode={closeSelectedNode}
             onViewportChange={canvasPreviewWorkflow.onViewportChange}
             viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
+            confirmedAutomaticLayout={confirmedAutomaticLayout}
             topRightActions={
               !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
                 ? (findOpenPosition) => (
@@ -569,7 +753,7 @@ export function RoadmapCanvasView({
                           onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
                           onCreateNodeType={addNodeType}
                           onUpdateNodeType={updateNodeType}
-                          onDeleteNodeType={deleteNodeType}
+                          onRequestDeleteNodeType={requestNodeTypeDeletion}
                         />
                       ) : null}
                       {canEnterCanvasPreview ? (
@@ -627,7 +811,9 @@ export function RoadmapCanvasView({
                 <CanvasPreviewToolbar
                   canReset={canResetCanvasPreview}
                   isHistorical={isHistoricalRoadmap}
-                  onRequestReset={canvasPreviewWorkflow.requestReset}
+                  onRequestReset={() =>
+                    requestExclusiveConfirmation('canvas-preview', canvasPreviewWorkflow.requestReset)
+                  }
                   onExit={canvasPreviewWorkflow.exit}
                 />
               ) : null,
@@ -694,12 +880,47 @@ export function RoadmapCanvasView({
           />
         )}
       </section>
-      <ConfirmationDialog {...nodeDeletionWorkflow.confirmationDialog} />
-      <ConfirmationDialog {...canvasPreviewWorkflow.confirmationDialog} />
-      <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />
-      <ConfirmationDialog {...nodeVisibilityWorkflow.confirmationDialog} />
-      <ConfirmationDialog {...dependencyWorkflow.creationDialog} />
-      <ConfirmationDialog {...teacherBlockWorkflow.confirmationDialog} />
+      <ConfirmationDialog
+        {...(exclusiveConfirmation === 'automatic-layout'
+          ? {
+              confirmation: automaticLayout ? roadmapAutoLayoutConfirmation : null,
+              pendingActionId: automaticLayout?.isPending
+                ? roadmapConfirmationActionIds.autoLayout
+                : undefined,
+              onCancel: () => setAutomaticLayout(null),
+              onAction: (actionId: string) => void confirmAutomaticLayout(actionId),
+            }
+          : exclusiveConfirmation === 'node-type-deletion'
+            ? {
+                confirmation: nodeTypeDeletion
+                  ? nodeTypeDeletionConfirmation(nodeTypeDeletion.nodeType)
+                  : null,
+                pendingActionId: nodeTypeDeletion?.isPending
+                  ? roadmapConfirmationActionIds.deleteNodeType
+                  : undefined,
+                onCancel: () => {
+                  if (!nodeTypeDeletion?.isPending) setNodeTypeDeletion(null);
+                },
+                onAction: (actionId: string) => void confirmNodeTypeDeletion(actionId),
+              }
+            : exclusiveConfirmation === 'node-deletion'
+              ? nodeDeletionWorkflow.confirmationDialog
+              : exclusiveConfirmation === 'canvas-preview'
+                ? canvasPreviewWorkflow.confirmationDialog
+                : exclusiveConfirmation === 'dependency-deletion'
+                  ? dependencyWorkflow.deletionDialog
+                  : exclusiveConfirmation === 'node-visibility'
+                    ? nodeVisibilityWorkflow.confirmationDialog
+                    : exclusiveConfirmation === 'dependency-creation'
+                      ? dependencyWorkflow.creationDialog
+                      : exclusiveConfirmation === 'teacher-block'
+                        ? teacherBlockWorkflow.confirmationDialog
+                        : {
+                            confirmation: null,
+                            onCancel: () => undefined,
+                            onAction: () => undefined,
+                          })}
+      />
     </SidebarProvider>
   );
 }

@@ -1,5 +1,5 @@
-import { forwardRef, useImperativeHandle } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import {
@@ -94,13 +94,54 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
     projection,
     onSelectNode,
+    selectedNodeId,
+    topRightActions,
   }: {
-    projection: { roadmap: { nodes: Array<{ id: string; title: string }> } };
+    projection: {
+      roadmap: { nodes: Array<{ id: string; title: string }> };
+      kind: 'teaching' | 'student';
+      editing?: { onEditingIntent: (intent: unknown) => void };
+    };
     onSelectNode: (nodeId: string) => void;
+    selectedNodeId?: string | null;
+    topRightActions?: (findOpenPosition: (title: string) => { x: number; y: number } | null) =>
+      ReactNode;
   }) => (
-    <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
-      {projection.roadmap.nodes[0].title}
-    </button>
+    <>
+      {topRightActions?.(() => ({ x: 480, y: 240 }))}
+      <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
+      <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
+        {projection.roadmap.nodes[0].title}
+      </button>
+      {projection.kind === 'teaching' && projection.editing ? (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              projection.editing?.onEditingIntent({
+                kind: 'node-positions',
+                cause: 'pointer',
+                positions: [{ nodeId: 'node-1', position: { x: 120, y: 80 } }],
+              })
+            }
+          >
+            Mover nodo
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              projection.editing?.onEditingIntent({
+                kind: 'request-automatic-layout',
+                positions: [{ nodeId: 'node-1', position: { x: 320, y: 160 } }],
+                direction: 'LR',
+              })
+            }
+          >
+            Solicitar ordenamiento
+          </button>
+        </>
+      ) : null}
+    </>
   ),
 }));
 
@@ -256,5 +297,35 @@ describe('RoadmapCanvasSession', () => {
     expect(saved.nodes[0]).toHaveProperty('resources', [
       { id: 'resource-1', title: 'apuntes.pdf', url: 'apuntes.pdf', type: 'FILE' },
     ]);
+  });
+
+  test('routes construction through the public session and persists the confirmed layout', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...teachingInput} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Crear en el mapa' }));
+    await user.click(await screen.findByText('Crear nodo'));
+    await user.type(screen.getByLabelText('Título'), 'Derivadas');
+    await user.click(screen.getByRole('button', { name: 'Agregar nodo' }));
+    await waitFor(() => expect(screen.getByTestId('selected-node-id').textContent).toBe('node-2'));
+
+    await user.click(screen.getByRole('button', { name: 'Mover nodo' }));
+    await waitFor(async () => {
+      const saved = await persistence.load(teachingInput);
+      expect(saved.nodes[0]).toMatchObject({ positionX: 120, positionY: 80 });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Solicitar ordenamiento' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ordenamiento' });
+    await user.click(within(dialog).getByRole('button', { name: 'Ordenar nodos' }));
+    await waitFor(async () => {
+      const saved = await persistence.load(teachingInput);
+      expect(saved.nodes[0]).toMatchObject({ positionX: 320, positionY: 160 });
+    });
   });
 });
