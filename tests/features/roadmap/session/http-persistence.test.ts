@@ -69,9 +69,14 @@ test('uploads a file Resource as multipart form data without setting its boundar
 test('translates a server Resource failure into the existing user-facing message', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(
-      Response.json({ error: { message: 'El recurso no pertenece al roadmap.' } }, { status: 404 }),
-    ),
+    vi
+      .fn()
+      .mockResolvedValue(
+        Response.json(
+          { error: { message: 'El recurso no pertenece al roadmap.' } },
+          { status: 404 },
+        ),
+      ),
   );
 
   await expect(

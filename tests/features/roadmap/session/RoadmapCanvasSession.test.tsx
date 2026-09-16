@@ -3,10 +3,10 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import {
-  InMemoryRoadmapCanvasSessionProvider,
   RoadmapCanvasSession,
   createInMemoryRoadmapSessionPersistence,
 } from '@/features/roadmap/session';
+import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
@@ -174,7 +174,7 @@ describe('RoadmapCanvasSession', () => {
     const user = userEvent.setup();
     const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
     render(
-      <InMemoryRoadmapCanvasSessionProvider persistence={persistence}>
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
         <RoadmapCanvasSession
           courseOffering={{
             identifier: { courseCode: 'CC1001', year: 2026, semester: 2 },
@@ -182,7 +182,7 @@ describe('RoadmapCanvasSession', () => {
           }}
           experience={{ kind: 'student', term: 'current' }}
         />
-      </InMemoryRoadmapCanvasSessionProvider>,
+      </RoadmapCanvasSessionPersistenceProvider>,
     );
 
     const node = await screen.findByRole('button', { name: 'Límites' });
@@ -199,7 +199,7 @@ describe('RoadmapCanvasSession', () => {
       complete: vi.fn().mockRejectedValue(new Error('No se pudo completar el nodo.')),
     };
     render(
-      <InMemoryRoadmapCanvasSessionProvider persistence={persistence}>
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
         <RoadmapCanvasSession
           courseOffering={{
             identifier: { courseCode: 'CC1001', year: 2026, semester: 2 },
@@ -207,7 +207,7 @@ describe('RoadmapCanvasSession', () => {
           }}
           experience={{ kind: 'student', term: 'current' }}
         />
-      </InMemoryRoadmapCanvasSessionProvider>,
+      </RoadmapCanvasSessionPersistenceProvider>,
     );
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));
@@ -226,9 +226,9 @@ describe('RoadmapCanvasSession', () => {
     const user = userEvent.setup();
     const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
     render(
-      <InMemoryRoadmapCanvasSessionProvider persistence={persistence}>
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
         <RoadmapCanvasSession {...teachingInput} />
-      </InMemoryRoadmapCanvasSessionProvider>,
+      </RoadmapCanvasSessionPersistenceProvider>,
     );
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));

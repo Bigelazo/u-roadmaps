@@ -1,7 +1,7 @@
 # Alineación intrínseca de títulos del roadmap
 
 **Fecha:** 2026-09-05  
-**Alcance:** la etiqueta del nodo en `RoadmapNode.tsx` y las filas de dependencias del diálogo de ocultación en `RoadmapCanvas.tsx`. Este documento no propone cambios de producto ni de la geometría de los nodos.
+**Alcance:** la etiqueta del nodo en `RoadmapNode.tsx` y las filas de dependencias del diálogo de ocultación en `RoadmapCanvasView.tsx`. Este documento no propone cambios de producto ni de la geometría de los nodos.
 
 ## Conclusión
 

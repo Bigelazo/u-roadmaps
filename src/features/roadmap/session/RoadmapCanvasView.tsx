@@ -20,8 +20,6 @@ import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-work
 import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
 import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
-import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
-import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import type {
   NodeEditorEffect,
@@ -41,6 +39,10 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
+import {
+  RoadmapCanvasFeedback,
+  useRoadmapCanvasFeedback,
+} from '@/features/roadmap/session/feedback';
 import type {
   CourseOfferingIdentifier,
   RoadmapDto,
@@ -67,19 +69,17 @@ type Props = {
   canEdit?: boolean;
   canPreview?: boolean;
   isHistorical?: boolean;
-  renderFeedbackOutsideGraph?: boolean;
   title: string;
   courseCode: string;
   year: number;
   semester: number;
 };
 
-export default function RoadmapCanvas({
+export function RoadmapCanvasView({
   identifier,
   canEdit,
   canPreview,
   isHistorical,
-  renderFeedbackOutsideGraph = false,
   title,
   courseCode,
   year,
@@ -96,7 +96,6 @@ export default function RoadmapCanvas({
     resourceComposerCommand,
     teacherPreviewFocusReturn,
   } = canvasState;
-  const [successToast, setSuccessToast] = useState<{ id: number; message: string } | null>(null);
   const editorPanel = usePersistentPanelWidth({
     storageKey: 'u-roadmaps:roadmap-editor-panel-width',
     initialWidth: 360,
@@ -106,7 +105,6 @@ export default function RoadmapCanvas({
     initialWidth: 426,
   });
   const nodeEditorRef = useRef<NodeEditorHandle>(null);
-  const successToastIdRef = useRef(0);
   const focusReturnRequestIdRef = useRef(0);
   const {
     roadmap,
@@ -143,6 +141,7 @@ export default function RoadmapCanvas({
       term: isHistorical ? 'historical' : 'current',
     },
   });
+  const feedback = useRoadmapCanvasFeedback();
   const dependencyWorkflow = useDependencyWorkflow({
     roadmap,
     connectNodes,
@@ -159,11 +158,9 @@ export default function RoadmapCanvas({
     previewNodeVisibility,
     toggleVisibility,
   });
-  const dismissSuccessToast = useCallback(() => setSuccessToast(null), []);
-
-  const showSuccessToast = useCallback((message: string) => {
-    setSuccessToast({ id: ++successToastIdRef.current, message });
-  }, []);
+  useEffect(() => {
+    feedback?.reportError(roadmap ? error : null, dismissError);
+  }, [dismissError, error, feedback, roadmap]);
 
   const requestNodeFocusReturn = useCallback(() => {
     setFocusReturnRequest(`node-surface-close-${++focusReturnRequestIdRef.current}`);
@@ -172,26 +169,26 @@ export default function RoadmapCanvas({
   const updateNodeWithConfirmation = useCallback(
     async (...args: Parameters<typeof updateNode>) => {
       const succeeded = await updateNode(...args);
-      if (succeeded) showSuccessToast('Cambios guardados exitosamente.');
+      if (succeeded) feedback?.showSuccess('Cambios guardados exitosamente.');
       return succeeded;
     },
-    [showSuccessToast, updateNode],
+    [feedback, updateNode],
   );
 
   const addResourceWithConfirmation = useCallback(
     async (...args: Parameters<typeof addResource>) => {
       const succeeded = await addResource(...args);
-      if (succeeded) showSuccessToast('Enlace guardado exitosamente.');
+      if (succeeded) feedback?.showSuccess('Enlace guardado exitosamente.');
       return succeeded;
     },
-    [addResource, showSuccessToast],
+    [addResource, feedback],
   );
 
   const updateResourceWithConfirmation = useCallback(
     async (...args: Parameters<typeof updateResource>) => {
       const succeeded = await updateResource(...args);
       if (succeeded) {
-        showSuccessToast(
+        feedback?.showSuccess(
           args[1].type === 'LINK'
             ? 'Enlace guardado exitosamente.'
             : 'Recurso guardado exitosamente.',
@@ -199,7 +196,7 @@ export default function RoadmapCanvas({
       }
       return succeeded;
     },
-    [showSuccessToast, updateResource],
+    [feedback, updateResource],
   );
 
   const performEditorEffect = useCallback(
@@ -214,14 +211,14 @@ export default function RoadmapCanvas({
           break;
         case 'upload-resource':
           succeeded = await uploadResource(effect.nodeId, effect.file);
-          if (succeeded) showSuccessToast('Recurso guardado exitosamente.');
+          if (succeeded) feedback?.showSuccess('Recurso guardado exitosamente.');
           break;
         case 'update-resource':
           succeeded = await updateResourceWithConfirmation(effect.resourceId, effect.resource);
           break;
         case 'delete-resource':
           succeeded = await deleteResource(effect.resourceId);
-          if (succeeded) showSuccessToast('Recurso eliminado exitosamente.');
+          if (succeeded) feedback?.showSuccess('Recurso eliminado exitosamente.');
           break;
       }
       return { status: succeeded ? 'committed' : 'rejected' };
@@ -232,7 +229,7 @@ export default function RoadmapCanvas({
       updateNodeWithConfirmation,
       updateResourceWithConfirmation,
       uploadResource,
-      showSuccessToast,
+      feedback,
     ],
   );
 
@@ -636,16 +633,6 @@ export default function RoadmapCanvas({
               ) : null,
               bottomRight: (
                 <>
-                  {!renderFeedbackOutsideGraph && error ? (
-                    <RoadmapErrorToast message={error} onDismiss={dismissError} />
-                  ) : null}
-                  {!renderFeedbackOutsideGraph && successToast ? (
-                    <RoadmapSuccessToast
-                      key={successToast.id}
-                      message={successToast.message}
-                      onDismiss={dismissSuccessToast}
-                    />
-                  ) : null}
                   <KeyboardShortcuts
                     key="roadmap-keyboard-shortcuts"
                     isEditing={canvasMode.isEditing}
@@ -654,18 +641,7 @@ export default function RoadmapCanvas({
               ),
             }}
           />
-          {renderFeedbackOutsideGraph ? (
-            <div className="pointer-events-none absolute right-4 bottom-4 z-5 flex flex-col gap-2">
-              {error ? <RoadmapErrorToast message={error} onDismiss={dismissError} /> : null}
-              {successToast ? (
-                <RoadmapSuccessToast
-                  key={successToast.id}
-                  message={successToast.message}
-                  onDismiss={dismissSuccessToast}
-                />
-              ) : null}
-            </div>
-          ) : null}
+          <RoadmapCanvasFeedback />
         </div>
         {canEditRoadmap && (
           <NodeEditorPanel
@@ -707,7 +683,7 @@ export default function RoadmapCanvas({
               if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
               else {
                 void completeNode(node.id).then((succeeded) => {
-                  if (succeeded) showSuccessToast('Nodo completado.');
+                  if (succeeded) feedback?.showSuccess('Nodo completado.');
                 });
               }
             }}

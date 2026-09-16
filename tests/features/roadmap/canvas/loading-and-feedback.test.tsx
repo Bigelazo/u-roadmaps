@@ -10,7 +10,7 @@ import {
   useRoadmapMock,
 } from './test-harness';
 
-test('announces the loading state and renders a named error when the roadmap cannot load', () => {
+test('announces the loading state and renders a named error when the roadmap cannot load', async () => {
   useRoadmapMock.mockReturnValue(roadmapActions({ roadmap: null }));
   const { rerender } = renderCanvas();
 
@@ -30,7 +30,7 @@ test('announces the loading state and renders a named error when the roadmap can
     />,
   );
 
-  expect(screen.getByRole('alert').textContent).toBe(
+  expect((await screen.findByRole('alert')).textContent).toBe(
     'Error al cargar el roadmapNo se pudo cargar el roadmap.',
   );
 });
@@ -81,31 +81,37 @@ test('uses Otoño for first-semester roadmaps', () => {
 
 test('surfaces a mutation error as a dismissible toast over the canvas', async () => {
   const user = userEvent.setup();
-  const dismissError = vi.fn();
+  const connectNodes = vi.fn().mockResolvedValue(false);
   useRoadmapMock.mockReturnValue(
-    roadmapActions({ error: 'La dependencia ya existe.', dismissError }),
+    roadmapActions({ error: 'La dependencia ya existe.', connectNodes }),
   );
   renderCanvas(true);
 
-  expect(screen.getByRole('alert', { name: 'La dependencia ya existe.' }).textContent).toBe(
-    'La dependencia ya existe.',
-  );
+  await user.click(screen.getByRole('button', { name: 'Conectar rama bloqueada' }));
+
+  expect(
+    (await screen.findByRole('alert', { name: 'La dependencia ya existe.' })).textContent,
+  ).toBe('La dependencia ya existe.');
 
   await user.click(screen.getByRole('button', { name: 'Cerrar alerta' }));
-  expect(dismissError).toHaveBeenCalled();
+  expect(screen.queryByRole('alert', { name: 'La dependencia ya existe.' })).toBeNull();
 });
 
 test('surfaces a concurrent hidden-node dependency error over the canvas', async () => {
-  const dismissError = vi.fn();
+  const connectNodes = vi.fn().mockResolvedValue(false);
   useRoadmapMock.mockReturnValue(
     roadmapActions({
       error: 'No se pueden crear dependencias con nodos ocultos.',
-      dismissError,
+      connectNodes,
     }),
   );
   renderCanvas(true);
 
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Conectar rama bloqueada' }));
+
   expect(
-    screen.getByRole('alert', { name: 'No se pueden crear dependencias con nodos ocultos.' }),
+    await screen.findByRole('alert', {
+      name: 'No se pueden crear dependencias con nodos ocultos.',
+    }),
   ).toBeTruthy();
 });

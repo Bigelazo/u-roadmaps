@@ -255,10 +255,11 @@ test('keeps radial node actions evenly sized and separated', async ({ page }) =>
   await page.goto('/courses/CC1002/2026/2');
 
   const node = page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`);
-  const trigger = node.getByRole('button', { name: 'Abrir menú de acciones del nodo' });
+  const trigger = node.locator('button[aria-expanded]');
   await trigger.click();
   await page.waitForTimeout(450);
   await page.mouse.move(0, 0);
+  await expect(trigger).toHaveCSS('transform', 'none');
 
   const controls = [
     node.getByRole('button', { name: 'Cerrar menú de acciones del nodo' }),
@@ -274,7 +275,6 @@ test('keeps radial node actions evenly sized and separated', async ({ page }) =>
       return box;
     }),
   );
-
   for (const box of boxes) {
     expect(box.width).toBeCloseTo(boxes[0].width, 1);
     expect(box.height).toBeCloseTo(boxes[0].height, 1);

@@ -28,13 +28,9 @@ import type {
   RoadmapCanvasSessionPersistence,
   RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
+import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 
 const persistenceContext = createContext<RoadmapCanvasSessionPersistence | null>(null);
-
-function sessionKey(input: RoadmapCanvasSessionInput) {
-  const { courseCode, year, semester } = input.courseOffering.identifier;
-  return `${courseCode}:${year}:${semester}:${input.experience.kind}:${input.experience.term}`;
-}
 
 function messageFor(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback;
@@ -97,6 +93,10 @@ type InjectedSessionResult = {
   resetSimulation: () => Promise<boolean>;
 };
 
+type PersistenceSnapshot = RoadmapCanvasSessionPersistence & {
+  initialRoadmap?: AnyRoadmapDto;
+};
+
 export function RoadmapCanvasSessionPersistenceProvider({
   persistence,
   children,
@@ -111,16 +111,18 @@ function useInjectedSession(
   input: RoadmapCanvasSessionInput,
   persistence: RoadmapCanvasSessionPersistence | null,
 ): InjectedSessionResult {
-  const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
+  const initialRoadmap = (persistence as PersistenceSnapshot | null)?.initialRoadmap ?? null;
+  const initialRoadmapKey = initialRoadmap ? roadmapCanvasSessionKey(input) : null;
+  const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(initialRoadmap);
   const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
-  const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
+  const [roadmapKey, setRoadmapKey] = useState<string | null>(initialRoadmapKey);
   const [simulationKey, setSimulationKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const activeKeyRef = useRef(sessionKey(input));
+  const activeKeyRef = useRef(roadmapCanvasSessionKey(input));
   const requestVersionRef = useRef(0);
   const simulationVersionRef = useRef(0);
-  const key = sessionKey(input);
+  const key = roadmapCanvasSessionKey(input);
   const courseCode = input.courseOffering.identifier.courseCode;
   const year = input.courseOffering.identifier.year;
   const semester = input.courseOffering.identifier.semester;
@@ -141,7 +143,7 @@ function useInjectedSession(
   const refresh = useCallback(async () => {
     if (!persistence) return false;
     const requestVersion = ++requestVersionRef.current;
-    const requestKey = sessionKey(stableInput);
+    const requestKey = roadmapCanvasSessionKey(stableInput);
     const loadedRoadmap = await persistence.load(stableInput);
     if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
       return false;
@@ -156,9 +158,9 @@ function useInjectedSession(
     activeKeyRef.current = key;
     const requestVersion = ++requestVersionRef.current;
     const simulationVersion = ++simulationVersionRef.current;
-    setRoadmap(null);
+    if (initialRoadmapKey !== key) setRoadmap(null);
     setSimulationRoadmap(null);
-    setRoadmapKey(null);
+    if (initialRoadmapKey !== key) setRoadmapKey(null);
     setSimulationKey(null);
     setError(null);
     setErrorKey(null);
@@ -178,7 +180,7 @@ function useInjectedSession(
       requestVersionRef.current += 1;
       simulationVersionRef.current = Math.max(simulationVersionRef.current, simulationVersion + 1);
     };
-  }, [key, persistence, stableInput]);
+  }, [initialRoadmapKey, key, persistence, stableInput]);
 
   const dismissError = useCallback(() => {
     setError(null);
@@ -187,10 +189,11 @@ function useInjectedSession(
 
   const mutate = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string, reload = true) => {
-      const requestKey = sessionKey(stableInput);
+      const requestKey = roadmapCanvasSessionKey(stableInput);
       try {
         const result = await operation();
-        if (reload && !(await refresh())) return { success: false, result };
+        if (reload) await refresh();
+        if (activeKeyRef.current !== requestKey) return { success: false, result };
         if (activeKeyRef.current === requestKey) {
           setError(null);
           setErrorKey(null);
@@ -209,7 +212,7 @@ function useInjectedSession(
 
   const preview = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string) => {
-      const requestKey = sessionKey(stableInput);
+      const requestKey = roadmapCanvasSessionKey(stableInput);
       try {
         const result = await operation();
         return activeKeyRef.current === requestKey ? result : null;
@@ -226,7 +229,7 @@ function useInjectedSession(
 
   const loadSimulation = useCallback(async () => {
     if (!persistence?.loadSimulation) return missingOperation('cargar previsualización');
-    const requestKey = sessionKey(stableInput);
+    const requestKey = roadmapCanvasSessionKey(stableInput);
     const requestVersion = ++simulationVersionRef.current;
     try {
       const loadedSimulation = await persistence.loadSimulation(stableInput);

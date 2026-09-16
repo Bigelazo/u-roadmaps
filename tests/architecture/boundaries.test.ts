@@ -32,7 +32,7 @@ test.each([
   {
     name: 'a Client Component imports server-only code',
     code: "import '@/shared/server/session';",
-    filePath: 'src/features/roadmap/RoadmapCanvas.tsx',
+    filePath: 'src/features/roadmap/session/RoadmapCanvasView.tsx',
     ruleId: 'no-restricted-imports',
   },
 ])(

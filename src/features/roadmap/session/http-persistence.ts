@@ -4,6 +4,7 @@ import type { NodeUpdate } from '@/features/roadmap/editor/types';
 import type {
   AnyRoadmapDto,
   NodeDeletionImpact,
+  RoadmapDto,
   StudentRoadmapDto,
   TeacherBlockImpact,
   TeacherBlockOperation,
@@ -54,6 +55,20 @@ function isRoadmap(value: unknown): value is AnyRoadmapDto {
 
 function isStudentRoadmap(value: unknown): value is StudentRoadmapDto {
   return isRoadmap(value) && value.nodes.every((node) => isRecord(node) && 'access' in node);
+}
+
+function isTeachingRoadmap(value: unknown): value is RoadmapDto {
+  return (
+    isRoadmap(value) &&
+    value.nodes.every(
+      (node) =>
+        isRecord(node) &&
+        'isVisible' in node &&
+        typeof node.isVisible === 'boolean' &&
+        'isTeacherBlocked' in node &&
+        typeof node.isTeacherBlocked === 'boolean',
+    )
+  );
 }
 
 function isTeacherBlockImpact(value: unknown): value is TeacherBlockImpact {
@@ -146,7 +161,9 @@ async function mutate(
 export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistence = {
   async load(input) {
     const body = await request(input, '', {}, 'No se pudo cargar el roadmap.');
-    if (!isRoadmap(body)) throw new Error('No se pudo cargar el roadmap.');
+    const validProjection =
+      input.experience.kind === 'teaching' ? isTeachingRoadmap(body) : isStudentRoadmap(body);
+    if (!validProjection) throw new Error('No se pudo cargar el roadmap.');
     return body;
   },
 

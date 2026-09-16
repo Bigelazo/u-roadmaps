@@ -20,6 +20,7 @@ test('confirms, cancels, and deletes every selected dependency', async () => {
   expect(deleteDependency).toHaveBeenCalledTimes(2);
   expect(deleteDependency).toHaveBeenNthCalledWith(1, 'dependency-1');
   expect(deleteDependency).toHaveBeenNthCalledWith(2, 'dependency-2');
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
 
   deleteDependency.mockClear();
   await user.click(screen.getByRole('button', { name: 'Solicitar eliminación de dependencias' }));

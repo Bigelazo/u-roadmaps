@@ -1,17 +1,14 @@
 'use client';
 
-import RoadmapCanvas from '@/features/roadmap/RoadmapCanvas';
+import { RoadmapCanvasView } from '@/features/roadmap/session/RoadmapCanvasView';
 import {
   RoadmapCanvasSessionPersistenceProvider,
   httpRoadmapCanvasSessionPersistence,
   useRoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/session';
+import { RoadmapCanvasFeedbackProvider } from '@/features/roadmap/session/feedback';
+import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
-
-function sessionKey(input: RoadmapCanvasSessionInput) {
-  const { courseCode, year, semester } = input.courseOffering.identifier;
-  return `${courseCode}:${year}:${semester}:${input.experience.kind}:${input.experience.term}`;
-}
 
 /**
  * The only public root for a Roadmap canvas interaction. The legacy-looking
@@ -23,8 +20,8 @@ export function RoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
   const isHistorical = input.experience.term === 'historical';
   const configuredPersistence = useRoadmapCanvasSessionPersistence();
   const view = (
-    <RoadmapCanvas
-      key={sessionKey(input)}
+    <RoadmapCanvasView
+      key={roadmapCanvasSessionKey(input)}
       identifier={input.courseOffering.identifier}
       title={input.courseOffering.title}
       courseCode={input.courseOffering.identifier.courseCode}
@@ -33,15 +30,16 @@ export function RoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
       canEdit={isTeaching && !isHistorical}
       canPreview={isTeaching}
       isHistorical={isHistorical}
-      renderFeedbackOutsideGraph
     />
   );
 
+  const viewWithFeedback = <RoadmapCanvasFeedbackProvider>{view}</RoadmapCanvasFeedbackProvider>;
+
   return configuredPersistence ? (
-    view
+    viewWithFeedback
   ) : (
     <RoadmapCanvasSessionPersistenceProvider persistence={httpRoadmapCanvasSessionPersistence}>
-      {view}
+      {viewWithFeedback}
     </RoadmapCanvasSessionPersistenceProvider>
   );
 }

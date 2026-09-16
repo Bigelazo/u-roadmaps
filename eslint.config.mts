@@ -26,7 +26,7 @@ const clientComponentFiles = [
   'src/app/_components/CreateRoadmapButton.tsx',
   'src/app/_components/SessionButton.tsx',
   'src/development/components/DevelopmentBar.tsx',
-  'src/features/roadmap/RoadmapCanvas.tsx',
+  'src/features/roadmap/session/RoadmapCanvasView.tsx',
   'src/features/roadmap/RoadmapErrorToast.tsx',
   'src/features/roadmap/useRoadmap.ts',
   'src/features/roadmap/editor/NodeCreator.tsx',

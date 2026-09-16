@@ -1110,9 +1110,7 @@ test('creating consecutive nodes keeps them visible, separated, selected, and pe
       ),
     );
   } finally {
-    await Promise.all(
-      nodeIds.map((nodeId) => deleteIfPresent(api, roadmapPath(`/nodes/${nodeId}`))),
-    );
+    for (const nodeId of nodeIds) await deleteIfPresent(api, roadmapPath(`/nodes/${nodeId}`));
     await api.dispose();
   }
 });

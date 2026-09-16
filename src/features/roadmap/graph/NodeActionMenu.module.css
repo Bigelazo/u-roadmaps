@@ -24,8 +24,8 @@
 }
 
 .menuRing {
-  /* 32 px controls touch neither their neighbour nor the trigger at 30°. */
-  --radius: 4rem;
+  /* 32 px controls keep a visible gap from their neighbours at 30°. */
+  --radius: 6rem;
   --action-size: 2rem;
   position: absolute;
   top: 50%;

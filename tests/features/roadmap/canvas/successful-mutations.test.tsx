@@ -106,18 +106,20 @@ test('manages node types from the floating canvas button', async () => {
   });
 
   await user.click(
-    within(managementDialog).getByRole('button', { name: 'Eliminar tipo Laboratorio' }),
+    within(managementDialog).getByRole('button', { name: 'Eliminar tipo Laboratorio de código' }),
   );
   const deletionDialog = await screen.findByRole('alertdialog', {
     name: 'Confirmar eliminación',
   });
   expect(deletionDialog.getAttribute('data-intent')).toBe('destructive');
-  expect(within(deletionDialog).getByRole('listitem', { name: 'Laboratorio' })).toBeTruthy();
+  expect(
+    within(deletionDialog).getByRole('listitem', { name: 'Laboratorio de código' }),
+  ).toBeTruthy();
   await user.click(within(deletionDialog).getByRole('button', { name: 'Cancelar' }));
   expect(deleteNodeType).not.toHaveBeenCalled();
 
   await user.click(
-    within(managementDialog).getByRole('button', { name: 'Eliminar tipo Laboratorio' }),
+    within(managementDialog).getByRole('button', { name: 'Eliminar tipo Laboratorio de código' }),
   );
   const retryDialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
   const confirm = within(retryDialog).getByRole('button', { name: 'Eliminar' });
