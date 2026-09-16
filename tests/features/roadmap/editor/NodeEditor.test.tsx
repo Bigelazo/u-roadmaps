@@ -479,6 +479,32 @@ test('includes a pending link Resource in the public preview intent', async () =
   });
 });
 
+test('includes a selected file Resource in the public preview intent', async () => {
+  const user = userEvent.setup();
+  const { onIntent } = renderEditor();
+
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  await user.upload(
+    screen.getByLabelText('Archivo'),
+    new File(['guía'], 'guia-de-limites.pdf', { type: 'application/pdf' }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
+
+  expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({
+    kind: 'preview-node-information',
+    node: {
+      resources: [
+        {
+          id: 'node-information-preview-file',
+          title: 'guia-de-limites.pdf',
+          url: '#',
+          type: 'FILE',
+        },
+      ],
+    },
+  });
+});
+
 test('consumes a typed Resource command once and focuses its composer', async () => {
   const command = {
     id: 'command-1',
