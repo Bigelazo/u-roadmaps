@@ -16,7 +16,6 @@ import { KeyboardShortcuts } from '@/features/roadmap/canvas/KeyboardShortcuts';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
-import { useDependencyWorkflow } from '@/features/roadmap/canvas/dependency-workflow';
 import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
 import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
@@ -84,15 +83,19 @@ type AutomaticLayoutRequest = {
 /** Private vocabulary: Graph and NodeEditor events are translated before reaching the session. */
 type RoadmapCanvasIntent =
   | { kind: 'close-selected-node' }
-  | { kind: 'preview-node-information' } & Extract<
+  | ({ kind: 'preview-node-information' } & Extract<
       NodeEditorIntent,
       { kind: 'preview-node-information' }
-    >
+    >)
   | { kind: 'change-visibility'; nodeId: string; isVisible: boolean }
   | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
   | { kind: 'delete-node'; nodeId: string; draftWasDiscarded?: boolean }
   | Extract<RoadmapGraphEditingIntent, { kind: 'node-positions' | 'request-automatic-layout' }>
-  | Extract<RoadmapGraphEditingIntent, { kind: 'create-dependency' | 'delete-dependencies' }>
+  | {
+      kind: 'request-dependency-creation';
+      request: Extract<RoadmapGraphEditingIntent, { kind: 'create-dependency' }>;
+    }
+  | { kind: 'request-dependency-deletion'; dependencyIds: string[] }
   | { kind: 'add-resource'; nodeId: string };
 
 function canvasIntentFromNodeEditor(intent: NodeEditorIntent): RoadmapCanvasIntent {
@@ -111,6 +114,10 @@ function canvasIntentFromNodeEditor(intent: NodeEditorIntent): RoadmapCanvasInte
 
 function canvasIntentFromGraph(intent: RoadmapGraphEditingIntent): RoadmapCanvasIntent {
   if (intent.kind === 'change-visibility') return { ...intent, isVisible: !intent.isVisible };
+  if (intent.kind === 'create-dependency')
+    return { kind: 'request-dependency-creation', request: intent };
+  if (intent.kind === 'delete-dependencies')
+    return { kind: 'request-dependency-deletion', dependencyIds: [...intent.dependencyIds] };
   return intent;
 }
 
@@ -168,11 +175,9 @@ export function RoadmapCanvasView({
     addNode,
     updateNode,
     moveNode,
-    connectNodes,
-    previewRoadmapDependency,
     previewTeacherBlock,
     changeTeacherBlock,
-    deleteDependency,
+    dependencyWorkflow,
     toggleVisibility,
     previewNodeVisibility,
     previewNodeDeletion,
@@ -197,12 +202,6 @@ export function RoadmapCanvasView({
     },
   });
   const feedback = useRoadmapCanvasFeedback();
-  const dependencyWorkflow = useDependencyWorkflow({
-    roadmap,
-    connectNodes,
-    previewRoadmapDependency,
-    deleteDependency,
-  });
   const teacherBlockWorkflow = useTeacherBlockWorkflow({
     roadmap,
     previewTeacherBlock,
@@ -511,18 +510,24 @@ export function RoadmapCanvasView({
   );
   const requestTeacherBlockChange = useCallback(
     (...args: Parameters<typeof teacherBlockWorkflow.requestChange>) =>
-      requestExclusiveConfirmation('teacher-block', () => teacherBlockWorkflow.requestChange(...args)),
+      requestExclusiveConfirmation('teacher-block', () =>
+        teacherBlockWorkflow.requestChange(...args),
+      ),
     [requestExclusiveConfirmation, teacherBlockWorkflow],
   );
   const requestVisibilityChange = useCallback(
     (...args: Parameters<typeof nodeVisibilityWorkflow.requestChange>) =>
-      requestExclusiveConfirmation('node-visibility', () =>
-        void nodeVisibilityWorkflow.requestChange(...args),
+      requestExclusiveConfirmation(
+        'node-visibility',
+        () => void nodeVisibilityWorkflow.requestChange(...args),
       ),
     [nodeVisibilityWorkflow, requestExclusiveConfirmation],
   );
   const requestAutomaticLayout = useCallback(
-    (positions: AutomaticLayoutRequest['positions'], direction: AutomaticLayoutRequest['direction']) => {
+    (
+      positions: AutomaticLayoutRequest['positions'],
+      direction: AutomaticLayoutRequest['direction'],
+    ) => {
       if (positions.length === 0) return;
       requestExclusiveConfirmation('automatic-layout', () =>
         setAutomaticLayout({ positions, direction, isPending: false }),
@@ -530,19 +535,25 @@ export function RoadmapCanvasView({
     },
     [requestExclusiveConfirmation],
   );
-  const confirmAutomaticLayout = useCallback(async (actionId: string) => {
-    if (actionId !== roadmapConfirmationActionIds.autoLayout || !automaticLayout?.positions.length)
-      return;
-    setAutomaticLayout((current) => (current ? { ...current, isPending: true } : null));
-    await Promise.all(
-      automaticLayout.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
-    );
-    setConfirmedAutomaticLayout({
-      token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
-      direction: automaticLayout.direction,
-    });
-    setAutomaticLayout(null);
-  }, [automaticLayout, moveNode]);
+  const confirmAutomaticLayout = useCallback(
+    async (actionId: string) => {
+      if (
+        actionId !== roadmapConfirmationActionIds.autoLayout ||
+        !automaticLayout?.positions.length
+      )
+        return;
+      setAutomaticLayout((current) => (current ? { ...current, isPending: true } : null));
+      await Promise.all(
+        automaticLayout.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
+      );
+      setConfirmedAutomaticLayout({
+        token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
+        direction: automaticLayout.direction,
+      });
+      setAutomaticLayout(null);
+    },
+    [automaticLayout, moveNode],
+  );
   const requestNodeTypeDeletion = useCallback(
     (nodeType: RoadmapDto['nodeTypes'][number]) => {
       requestExclusiveConfirmation('node-type-deletion', () =>
@@ -591,11 +602,11 @@ export function RoadmapCanvasView({
         case 'request-automatic-layout':
           requestAutomaticLayout(intent.positions, intent.direction);
           return;
-        case 'create-dependency':
-          requestDependencyCreation(intent);
+        case 'request-dependency-creation':
+          requestDependencyCreation(intent.request);
           return;
-        case 'delete-dependencies':
-          requestDependencyDeletion([...intent.dependencyIds]);
+        case 'request-dependency-deletion':
+          requestDependencyDeletion(intent.dependencyIds);
           return;
         case 'add-resource':
           openResourceComposer(intent.nodeId);
@@ -812,7 +823,10 @@ export function RoadmapCanvasView({
                   canReset={canResetCanvasPreview}
                   isHistorical={isHistoricalRoadmap}
                   onRequestReset={() =>
-                    requestExclusiveConfirmation('canvas-preview', canvasPreviewWorkflow.requestReset)
+                    requestExclusiveConfirmation(
+                      'canvas-preview',
+                      canvasPreviewWorkflow.requestReset,
+                    )
                   }
                   onExit={canvasPreviewWorkflow.exit}
                 />

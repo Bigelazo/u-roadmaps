@@ -11,6 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { useRoadmap } from '@/features/roadmap/useRoadmap';
+import {
+  useRoadmapDependencyWorkflow,
+  type RoadmapDependencyWorkflow,
+} from '@/features/roadmap/session/dependency-workflow';
+import { useRoadmapCanvasFeedback } from '@/features/roadmap/session/feedback';
 import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type {
   AnyRoadmapDto,
@@ -91,6 +96,7 @@ type InjectedSessionResult = {
   completeNode: (nodeId: string) => Promise<boolean>;
   completeSimulatedNode: (nodeId: string) => Promise<boolean>;
   resetSimulation: () => Promise<boolean>;
+  dependencyWorkflow: RoadmapDependencyWorkflow;
 };
 
 type PersistenceSnapshot = RoadmapCanvasSessionPersistence & {
@@ -111,6 +117,7 @@ function useInjectedSession(
   input: RoadmapCanvasSessionInput,
   persistence: RoadmapCanvasSessionPersistence | null,
 ): InjectedSessionResult {
+  const feedback = useRoadmapCanvasFeedback();
   const initialRoadmap = (persistence as PersistenceSnapshot | null)?.initialRoadmap ?? null;
   const initialRoadmapKey = initialRoadmap ? roadmapCanvasSessionKey(input) : null;
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(initialRoadmap);
@@ -552,6 +559,20 @@ function useInjectedSession(
     return loadSimulation();
   }, [loadSimulation, mutate, persistence, stableInput]);
 
+  const dependencyWorkflow = useRoadmapDependencyWorkflow({
+    roadmap: roadmapKey === key ? roadmap : null,
+    previewRoadmapDependency,
+    connectNodes,
+    deleteDependency,
+    onCreationSuccess: () => feedback?.showSuccess('Dependencia creada exitosamente.'),
+    onDeletionSuccess: (deletedCount) =>
+      feedback?.showSuccess(
+        deletedCount === 1
+          ? 'Dependencia eliminada exitosamente.'
+          : 'Dependencias eliminadas exitosamente.',
+      ),
+  });
+
   return {
     roadmap: roadmapKey === key ? roadmap : null,
     simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
@@ -580,6 +601,7 @@ function useInjectedSession(
     completeNode,
     completeSimulatedNode,
     resetSimulation,
+    dependencyWorkflow,
   };
 }
 
@@ -591,7 +613,7 @@ export function useRoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
     persistence === null,
   );
   const injected = useInjectedSession(input, persistence);
-  return persistence ? injected : legacy;
+  return persistence ? injected : (legacy as unknown as InjectedSessionResult);
 }
 
 export function useRoadmapCanvasSessionPersistence() {

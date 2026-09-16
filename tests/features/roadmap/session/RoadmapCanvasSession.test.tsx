@@ -104,8 +104,9 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     };
     onSelectNode: (nodeId: string) => void;
     selectedNodeId?: string | null;
-    topRightActions?: (findOpenPosition: (title: string) => { x: number; y: number } | null) =>
-      ReactNode;
+    topRightActions?: (
+      findOpenPosition: (title: string) => { x: number; y: number } | null,
+    ) => ReactNode;
   }) => (
     <>
       {topRightActions?.(() => ({ x: 480, y: 240 }))}
@@ -138,6 +139,42 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
             }
           >
             Solicitar ordenamiento
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              projection.editing?.onEditingIntent({
+                kind: 'create-dependency',
+                sourceNodeId: 'node-1',
+                targetNodeId: 'node-2',
+                sourceHandle: 'right',
+                targetHandle: 'left',
+              })
+            }
+          >
+            Crear dependencia
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              projection.editing?.onEditingIntent({
+                kind: 'delete-dependencies',
+                dependencyIds: ['dependency-1'],
+              })
+            }
+          >
+            Eliminar dependencia
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              projection.editing?.onEditingIntent({
+                kind: 'delete-dependencies',
+                dependencyIds: ['dependency-1', 'dependency-2'],
+              })
+            }
+          >
+            Eliminar dependencias
           </button>
         </>
       ) : null}
@@ -198,6 +235,54 @@ const teachingRoadmap: RoadmapDto = {
       isVisible: true,
       isTeacherBlocked: false,
       resources: [],
+    },
+  ],
+};
+
+const teacherBlockedRoadmap: RoadmapDto = {
+  ...teachingRoadmap,
+  nodes: [
+    {
+      id: 'node-1',
+      title: 'Límites',
+      description: 'Información guardada',
+      nodeTypeId: 'content',
+      positionX: 0,
+      positionY: 0,
+      isVisible: true,
+      isTeacherBlocked: true,
+      resources: [],
+    },
+    {
+      id: 'node-2',
+      title: 'Derivadas',
+      description: null,
+      nodeTypeId: 'content',
+      positionX: 160,
+      positionY: 0,
+      isVisible: true,
+      isTeacherBlocked: false,
+      resources: [],
+    },
+  ],
+};
+
+const twoDependenciesRoadmap: RoadmapDto = {
+  ...teacherBlockedRoadmap,
+  dependencies: [
+    {
+      id: 'dependency-1',
+      sourceNodeId: 'node-1',
+      targetNodeId: 'node-2',
+      sourceHandle: 'right',
+      targetHandle: 'left',
+    },
+    {
+      id: 'dependency-2',
+      sourceNodeId: 'node-2',
+      targetNodeId: 'node-1',
+      sourceHandle: 'right',
+      targetHandle: 'left',
     },
   ],
 };
@@ -327,5 +412,96 @@ describe('RoadmapCanvasSession', () => {
       const saved = await persistence.load(teachingInput);
       expect(saved.nodes[0]).toMatchObject({ positionX: 320, positionY: 160 });
     });
+  });
+
+  test('routes Dependency creation and deletion through the public session', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence({
+      ...teacherBlockedRoadmap,
+      nodes: teacherBlockedRoadmap.nodes.map((node) =>
+        node.id === 'node-1' ? { ...node, isTeacherBlocked: false } : node,
+      ),
+    });
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...teachingInput} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Crear dependencia' }));
+    expect(
+      await screen.findByRole('status', { name: 'Dependencia creada exitosamente.' }),
+    ).toBeTruthy();
+    expect((await persistence.load(teachingInput)).dependencies).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar dependencia' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
+    expect(
+      await screen.findByRole('status', { name: 'Dependencia eliminada exitosamente.' }),
+    ).toBeTruthy();
+    await waitFor(async () =>
+      expect((await persistence.load(teachingInput)).dependencies).toEqual([]),
+    );
+  });
+
+  test('confirms an impacted Dependency creation through the public session', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teacherBlockedRoadmap);
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...teachingInput} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Crear dependencia' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo' });
+    expect(dialog.textContent).toContain('Derivadas');
+    expect((await persistence.load(teachingInput)).dependencies).toEqual([]);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Conectar y bloquear' }));
+    expect(
+      await screen.findByRole('status', { name: 'Dependencia creada exitosamente.' }),
+    ).toBeTruthy();
+    expect((await persistence.load(teachingInput)).nodes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'node-2', isTeacherBlocked: true })]),
+    );
+  });
+
+  test('retries only failed Dependency deletions through the public session', async () => {
+    const user = userEvent.setup();
+    const memory = createInMemoryRoadmapSessionPersistence(twoDependenciesRoadmap);
+    let shouldFail = true;
+    const persistence = {
+      ...memory,
+      async deleteDependency(...args: Parameters<NonNullable<typeof memory.deleteDependency>>) {
+        if (args[1] === 'dependency-2' && shouldFail) {
+          shouldFail = false;
+          throw new Error('No se pudo eliminar la dependencia.');
+        }
+        return memory.deleteDependency!(...args);
+      },
+    };
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...teachingInput} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Eliminar dependencias' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' })).getByRole(
+        'button',
+        { name: 'Eliminar' },
+      ),
+    );
+    const retryDialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+    expect(retryDialog.textContent).toContain('esta dependencia');
+    expect((await memory.load(teachingInput)).dependencies).toEqual([
+      expect.objectContaining({ id: 'dependency-2' }),
+    ]);
+
+    await user.click(within(retryDialog).getByRole('button', { name: 'Eliminar' }));
+    await waitFor(async () => expect((await memory.load(teachingInput)).dependencies).toEqual([]));
   });
 });

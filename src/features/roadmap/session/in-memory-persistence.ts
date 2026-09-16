@@ -1,4 +1,8 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
+import {
+  transitiveDependentNodeIds,
+  wouldCreateDependencyCycle,
+} from '@/features/roadmap/domain/access';
 import type {
   AnyRoadmapDto,
   NodeDeletionImpact,
@@ -110,6 +114,49 @@ function dependencyId(roadmap: AnyRoadmapDto) {
   return `dependency-${roadmap.dependencies.length + 1}`;
 }
 
+function dependencyImpact(
+  roadmap: AnyRoadmapDto,
+  sourceNodeId: string,
+  targetNodeId: string,
+): TeacherBlockImpact[] {
+  const sourceNode = roadmap.nodes.find(({ id }) => id === sourceNodeId);
+  const targetNode = roadmap.nodes.find(({ id }) => id === targetNodeId);
+  if (
+    !sourceNode ||
+    !targetNode ||
+    !('isTeacherBlocked' in sourceNode) ||
+    !('isTeacherBlocked' in targetNode)
+  )
+    throw new Error('La dependencia no existe en este roadmap.');
+  if (!sourceNode.isVisible || !targetNode.isVisible)
+    throw new Error('No se pueden crear dependencias con nodos ocultos.');
+  if (
+    roadmap.dependencies.some(
+      (dependency) =>
+        dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId,
+    )
+  )
+    throw new Error('La dependencia ya existe.');
+  if (wouldCreateDependencyCycle(roadmap.dependencies, sourceNodeId, targetNodeId))
+    throw new Error('La dependencia formaría un ciclo.');
+  if (!sourceNode.isTeacherBlocked) return [];
+
+  const affectedNodeIds = new Set([
+    targetNodeId,
+    ...transitiveDependentNodeIds(roadmap.dependencies, targetNodeId),
+  ]);
+  return roadmap.nodes
+    .filter(
+      (node) =>
+        'isTeacherBlocked' in node &&
+        node.isVisible &&
+        !node.isTeacherBlocked &&
+        affectedNodeIds.has(node.id),
+    )
+    .map(({ id, title }) => ({ id, title }))
+    .sort((left, right) => left.title.localeCompare(right.title));
+}
+
 function nodeTypeFor(roadmap: AnyRoadmapDto, nodeId: string) {
   const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
   const nodeType = roadmap.nodeTypes.find((candidate) => candidate.id === node?.nodeTypeId);
@@ -202,6 +249,7 @@ export function createInMemoryRoadmapSessionPersistence(
       sourceHandle = 'right',
       targetHandle = 'left',
     ) {
+      const affectedNodes = dependencyImpact(roadmap, sourceNodeId, targetNodeId);
       const dependency: RoadmapDependency = {
         id: dependencyId(roadmap),
         sourceNodeId,
@@ -209,11 +257,19 @@ export function createInMemoryRoadmapSessionPersistence(
         sourceHandle: sourceHandle as RoadmapDependency['sourceHandle'],
         targetHandle: targetHandle as RoadmapDependency['targetHandle'],
       };
-      roadmap = { ...roadmap, dependencies: [...roadmap.dependencies, dependency] };
+      roadmap = {
+        ...roadmap,
+        dependencies: [...roadmap.dependencies, dependency],
+        nodes: roadmap.nodes.map((node) =>
+          affectedNodes.some(({ id }) => id === node.id) && 'isTeacherBlocked' in node
+            ? { ...node, isTeacherBlocked: true }
+            : node,
+        ),
+      } as AnyRoadmapDto;
     },
 
-    async previewRoadmapDependency() {
-      return [] as TeacherBlockImpact[];
+    async previewRoadmapDependency(_input, sourceNodeId, targetNodeId) {
+      return dependencyImpact(roadmap, sourceNodeId, targetNodeId);
     },
 
     async previewTeacherBlock(
@@ -242,6 +298,8 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async deleteDependency(_input: RoadmapCanvasSessionInput, dependencyIdToDelete: string) {
+      if (!roadmap.dependencies.some(({ id }) => id === dependencyIdToDelete))
+        throw new Error('La dependencia no existe en este roadmap.');
       roadmap = {
         ...roadmap,
         dependencies: roadmap.dependencies.filter(({ id }) => id !== dependencyIdToDelete),

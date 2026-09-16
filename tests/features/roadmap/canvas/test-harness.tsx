@@ -469,7 +469,11 @@ function createSessionPersistence(actions: TestRoadmapActions): RoadmapCanvasSes
         [sourceNodeId, targetNodeId, sourceHandle, targetHandle],
         'No se pudo crear la dependencia.',
       );
-      await memory.connectNodes!(input, sourceNodeId, targetNodeId, sourceHandle, targetHandle);
+      if (
+        initialRoadmap.nodes.some(({ id }) => id === sourceNodeId) &&
+        initialRoadmap.nodes.some(({ id }) => id === targetNodeId)
+      )
+        await memory.connectNodes!(input, sourceNodeId, targetNodeId, sourceHandle, targetHandle);
     },
     async previewRoadmapDependency(input, sourceNodeId, targetNodeId, sourceHandle, targetHandle) {
       const result = await runAction(
@@ -509,7 +513,8 @@ function createSessionPersistence(actions: TestRoadmapActions): RoadmapCanvasSes
     },
     async deleteDependency(input, dependencyId) {
       await runAction('deleteDependency', [dependencyId], 'No se pudo eliminar la dependencia.');
-      await memory.deleteDependency!(input, dependencyId);
+      if (initialRoadmap.dependencies.some(({ id }) => id === dependencyId))
+        await memory.deleteDependency!(input, dependencyId);
     },
     async toggleVisibility(input, nodeId, isVisible) {
       await runAction(
