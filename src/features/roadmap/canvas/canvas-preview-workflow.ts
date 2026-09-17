@@ -89,7 +89,7 @@ export function useCanvasPreviewWorkflow({
       transitionSession({ kind: 'active', returnState });
       onEnter();
     } catch {
-      // useRoadmap reports the failure; leaving the session inactive makes retrying possible.
+      // The session reports the failure; leaving it inactive makes retrying possible.
     } finally {
       isEntryPendingRef.current = false;
     }

@@ -10,7 +10,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useRoadmap } from '@/features/roadmap/useRoadmap';
 import {
   useRoadmapDependencyWorkflow,
   type RoadmapDependencyWorkflow,
@@ -39,7 +38,9 @@ import type {
 } from '@/features/roadmap/session/types';
 import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 
-const persistenceContext = createContext<RoadmapCanvasSessionPersistence | null>(null);
+const persistenceContext = createContext<RoadmapCanvasSessionPersistence>(
+  httpRoadmapCanvasSessionPersistence,
+);
 
 function messageFor(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback;
@@ -150,9 +151,9 @@ export function RoadmapCanvasSessionPersistenceProvider({
 
 function useInjectedSession(
   input: RoadmapCanvasSessionInput,
-  persistence: RoadmapCanvasSessionPersistence | null,
+  persistence: RoadmapCanvasSessionPersistence,
 ): InjectedSessionResult {
-  const initialRoadmap = (persistence as PersistenceSnapshot | null)?.initialRoadmap ?? null;
+  const initialRoadmap = (persistence as PersistenceSnapshot).initialRoadmap ?? null;
   const initialRoadmapKey = initialRoadmap ? roadmapCanvasSessionKey(input) : null;
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(initialRoadmap);
   const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
@@ -182,7 +183,6 @@ function useInjectedSession(
   );
 
   const refresh = useCallback(async () => {
-    if (!persistence) return false;
     const requestVersion = ++requestVersionRef.current;
     const requestKey = roadmapCanvasSessionKey(stableInput);
     const loadedRoadmap = await persistence.load(stableInput);
@@ -195,7 +195,6 @@ function useInjectedSession(
   }, [persistence, stableInput]);
 
   useEffect(() => {
-    if (!persistence) return;
     activeKeyRef.current = key;
     const requestVersion = ++requestVersionRef.current;
     const simulationVersion = ++simulationVersionRef.current;
@@ -629,13 +628,7 @@ export function useRoadmapCanvasSession(
   options: RoadmapCanvasSessionOptions = {},
 ): InjectedSessionResult & RoadmapCanvasSessionWorkflows {
   const persistence = useContext(persistenceContext);
-  const legacy = useRoadmap(
-    input.courseOffering.identifier,
-    input.experience.kind,
-    persistence === null,
-  );
-  const injected = useInjectedSession(input, persistence);
-  const active = persistence ? injected : (legacy as unknown as InjectedSessionResult);
+  const active = useInjectedSession(input, persistence);
   const feedback = useRoadmapCanvasFeedback();
   const guardDraft = options.guardDraft ?? allowAnyDraft;
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
@@ -687,9 +680,3 @@ export function useRoadmapCanvasSession(
     nodeDeletionWorkflow,
   };
 }
-
-export function useRoadmapCanvasSessionPersistence() {
-  return useContext(persistenceContext);
-}
-
-export { httpRoadmapCanvasSessionPersistence };

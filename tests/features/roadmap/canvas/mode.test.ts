@@ -3,7 +3,7 @@ import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 
 describe('deriveCanvasMode', () => {
   test('derives the ordinary student experience when no teaching capability is granted', () => {
-    const mode = deriveCanvasMode({ canEdit: false, canPreview: false });
+    const mode = deriveCanvasMode({ experience: { kind: 'student', term: 'current' } });
 
     expect(mode).toEqual({
       isEditing: false,
@@ -21,7 +21,7 @@ describe('deriveCanvasMode', () => {
   });
 
   test('derives read-only teaching separately from the student experience', () => {
-    const mode = deriveCanvasMode({ canEdit: false, canPreview: true });
+    const mode = deriveCanvasMode({ experience: { kind: 'teaching', term: 'historical' } });
 
     expect(mode.isReadOnlyTeaching).toBe(true);
     expect(mode.isStudentExperience).toBe(false);
@@ -31,20 +31,18 @@ describe('deriveCanvasMode', () => {
 
   test('makes Canvas preview a student experience without losing historical restrictions', () => {
     const mode = deriveCanvasMode({
-      canEdit: true,
-      canPreview: true,
-      isHistorical: true,
+      experience: { kind: 'teaching', term: 'historical' },
       isCanvasPreview: true,
     });
 
     expect(mode).toEqual({
       isEditing: false,
-      isReadOnlyTeaching: false,
+      isReadOnlyTeaching: true,
       isStudentExperience: true,
       isHistorical: true,
       isCanvasPreview: true,
       capabilities: {
-        canEditRoadmap: true,
+        canEditRoadmap: false,
         canPreviewCanvas: true,
         canEnterCanvasPreview: false,
         canResetCanvasPreview: false,

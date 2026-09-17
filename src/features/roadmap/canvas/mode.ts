@@ -1,7 +1,7 @@
+import type { RoadmapCanvasExperience } from '@/features/roadmap/session/types';
+
 export type CanvasModeInput = {
-  canEdit?: boolean;
-  canPreview?: boolean;
-  isHistorical?: boolean;
+  experience: RoadmapCanvasExperience;
   isCanvasPreview?: boolean;
 };
 
@@ -21,14 +21,12 @@ export type CanvasMode = {
   capabilities: CanvasCapabilities;
 };
 
-export function deriveCanvasMode({
-  canEdit = false,
-  canPreview = canEdit,
-  isHistorical = false,
-  isCanvasPreview = false,
-}: CanvasModeInput): CanvasMode {
-  const isReadOnlyTeaching = canPreview && !canEdit;
-  const isStudentExperience = (!canEdit && !isReadOnlyTeaching) || isCanvasPreview;
+export function deriveCanvasMode({ experience, isCanvasPreview = false }: CanvasModeInput): CanvasMode {
+  const isTeaching = experience.kind === 'teaching';
+  const isHistorical = experience.term === 'historical';
+  const canEdit = isTeaching && !isHistorical;
+  const isReadOnlyTeaching = isTeaching && isHistorical;
+  const isStudentExperience = !isTeaching || isCanvasPreview;
 
   return {
     isEditing: canEdit && !isCanvasPreview,
@@ -38,8 +36,8 @@ export function deriveCanvasMode({
     isCanvasPreview,
     capabilities: {
       canEditRoadmap: canEdit,
-      canPreviewCanvas: canPreview,
-      canEnterCanvasPreview: canPreview && !isCanvasPreview,
+      canPreviewCanvas: isTeaching,
+      canEnterCanvasPreview: isTeaching && !isCanvasPreview,
       canResetCanvasPreview: isCanvasPreview && !isHistorical,
     },
   };

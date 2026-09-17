@@ -39,13 +39,13 @@ import {
   useRoadmapCanvasFeedback,
 } from '@/features/roadmap/session/feedback';
 import type {
-  CourseOfferingIdentifier,
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapDto,
   StudentRoadmapNode,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
+import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
@@ -122,27 +122,11 @@ const NodeEditor = dynamic(
   { ssr: false },
 );
 
-type Props = {
-  identifier: CourseOfferingIdentifier;
-  canEdit?: boolean;
-  canPreview?: boolean;
-  isHistorical?: boolean;
-  title: string;
-  courseCode: string;
-  year: number;
-  semester: number;
-};
+type Props = { input: RoadmapCanvasSessionInput };
 
-export function RoadmapCanvasView({
-  identifier,
-  canEdit,
-  canPreview,
-  isHistorical,
-  title,
-  courseCode,
-  year,
-  semester,
-}: Props) {
+export function RoadmapCanvasView({ input }: Props) {
+  const { identifier, title } = input.courseOffering;
+  const { courseCode, year, semester } = identifier;
   const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
   const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
   const {
@@ -220,13 +204,7 @@ export function RoadmapCanvasView({
     simulationRoadmap,
     canvasPreviewWorkflow,
   } = useRoadmapCanvasSession(
-    {
-      courseOffering: { identifier, title },
-      experience: {
-        kind: canEdit || canPreview ? 'teaching' : 'student',
-        term: isHistorical ? 'historical' : 'current',
-      },
-    },
+    input,
     {
       guardDraft: guardEditorDraft,
       closeEditor: closeEditorAfterNodeDeletion,
@@ -366,9 +344,7 @@ export function RoadmapCanvasView({
   ]);
 
   const canvasMode = deriveCanvasMode({
-    canEdit,
-    canPreview,
-    isHistorical,
+    experience: input.experience,
     isCanvasPreview: canvasPreviewWorkflow.isActive,
   });
   const { isHistorical: isHistoricalRoadmap, isCanvasPreview, isStudentExperience } = canvasMode;

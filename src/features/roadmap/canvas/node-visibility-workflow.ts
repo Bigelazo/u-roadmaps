@@ -6,8 +6,13 @@ import {
   roadmapNodeVisibilityConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { AnyRoadmapDto } from '@/features/roadmap/types';
-import type { StructuralDependency } from '@/features/roadmap/useRoadmap';
 import type { ConfirmationDialogProps } from '@/shared/ui/confirmation-dialog';
+
+type StructuralDependency = {
+  id: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+};
 
 type NodeVisibilityWorkflowRoadmap = Pick<AnyRoadmapDto, 'nodes' | 'nodeTypes'>;
 
