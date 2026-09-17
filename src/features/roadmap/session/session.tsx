@@ -15,6 +15,7 @@ import {
   useRoadmapDependencyWorkflow,
   type RoadmapDependencyWorkflow,
 } from '@/features/roadmap/session/dependency-workflow';
+import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
 import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
@@ -103,18 +104,35 @@ type InjectedSessionResult = {
 
 type RoadmapCanvasSessionWorkflows = {
   dependencyWorkflow: RoadmapDependencyWorkflow;
+  canvasPreviewWorkflow: ReturnType<typeof useCanvasPreviewWorkflow>;
   teacherBlockWorkflow: ReturnType<typeof useTeacherBlockWorkflow>;
   nodeVisibilityWorkflow: ReturnType<typeof useNodeVisibilityWorkflow>;
   nodeDeletionWorkflow: ReturnType<typeof useNodeDeletionWorkflow>;
 };
 
+type CanvasPreviewView = {
+  selectedNodeId: string | null;
+  isEditorOpen: boolean;
+  isStudentDetailOpen: boolean;
+};
+
 export type RoadmapCanvasSessionOptions = {
   guardDraft?: NodeEditorHandle['guardDraft'];
   closeEditor?: () => void;
+  canvasPreview?: {
+    currentView: CanvasPreviewView;
+    onEnter: () => void;
+    onExit: (returnState: CanvasPreviewView) => void;
+  };
 };
 
 const allowAnyDraft = async () => true;
 const noop = () => undefined;
+const initialCanvasPreviewView: CanvasPreviewView = {
+  selectedNodeId: null,
+  isEditorOpen: false,
+  isStudentDetailOpen: false,
+};
 
 type PersistenceSnapshot = RoadmapCanvasSessionPersistence & {
   initialRoadmap?: AnyRoadmapDto;
@@ -619,6 +637,17 @@ export function useRoadmapCanvasSession(
   const injected = useInjectedSession(input, persistence);
   const active = persistence ? injected : (legacy as unknown as InjectedSessionResult);
   const feedback = useRoadmapCanvasFeedback();
+  const guardDraft = options.guardDraft ?? allowAnyDraft;
+  const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
+    currentView: options.canvasPreview?.currentView ?? initialCanvasPreviewView,
+    isHistorical: input.experience.term === 'historical',
+    guardDraft: () => guardDraft({ kind: 'enter-canvas-preview' }),
+    loadSimulation: active.loadSimulation,
+    completeSimulatedNode: active.completeSimulatedNode,
+    resetSimulation: active.resetSimulation,
+    onEnter: options.canvasPreview?.onEnter ?? noop,
+    onExit: options.canvasPreview?.onExit ?? noop,
+  });
   const dependencyWorkflow = useRoadmapDependencyWorkflow({
     roadmap: active.roadmap,
     previewRoadmapDependency: active.previewRoadmapDependency,
@@ -645,12 +674,13 @@ export function useRoadmapCanvasSession(
   const nodeDeletionWorkflow = useNodeDeletionWorkflow({
     previewNodeDeletion: active.previewNodeDeletion,
     deleteNode: active.deleteNode,
-    guardDraft: options.guardDraft ?? allowAnyDraft,
+    guardDraft,
     closeEditor: options.closeEditor ?? noop,
   });
 
   return {
     ...active,
+    canvasPreviewWorkflow,
     dependencyWorkflow,
     teacherBlockWorkflow,
     nodeVisibilityWorkflow,

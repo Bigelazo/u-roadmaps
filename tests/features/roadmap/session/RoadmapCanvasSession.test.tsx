@@ -126,6 +126,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onSelectNode,
     selectedNodeId,
     topRightActions,
+    overlaySlots,
   }: {
     projection: {
       roadmap: { nodes: Array<{ id: string; title: string }> };
@@ -137,10 +138,13 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     topRightActions?: (
       findOpenPosition: (title: string) => { x: number; y: number } | null,
     ) => ReactNode;
+    overlaySlots?: { topCenter?: ReactNode };
   }) => (
     <>
       {topRightActions?.(() => ({ x: 480, y: 240 }))}
+      <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
+      <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
       {projection.roadmap.nodes[0] ? (
         <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
           {projection.roadmap.nodes[0].title}
@@ -218,12 +222,14 @@ vi.mock('@/features/roadmap/student/NodeDetail', () => ({
   StudentNodeDetail: ({
     node,
     onComplete,
+    isReadOnly,
   }: {
     node?: { id: string; title: string };
     onComplete: (node: { id: string }) => void;
+    isReadOnly?: boolean;
   }) =>
     node ? (
-      <button type="button" onClick={() => onComplete(node)}>
+      <button type="button" disabled={isReadOnly} onClick={() => onComplete(node)}>
         Completar {node.title}
       </button>
     ) : null,
@@ -378,6 +384,69 @@ describe('RoadmapCanvasSession', () => {
     await waitFor(() =>
       expect(screen.queryByRole('alert', { name: 'No se pudo completar el nodo.' })).toBeNull(),
     );
+  });
+
+  test('routes current teaching Canvas preview through the session and isolates simulated Completions', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...teachingInput} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Previsualizar canvas' }));
+    expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
+    expect(screen.getByTestId('roadmap-mode').textContent).toBe('student');
+    expect(screen.getByTestId('selected-node-id').textContent).toBe('');
+
+    await user.click(screen.getByRole('button', { name: 'Límites' }));
+    await user.click(screen.getByRole('button', { name: 'Completar Límites' }));
+    await waitFor(async () =>
+      expect((await persistence.loadSimulation!(teachingInput)).nodes[0]).toMatchObject({
+        isCompleted: true,
+      }),
+    );
+    expect((await persistence.load(teachingInput)).nodes[0]).not.toHaveProperty('isCompleted');
+
+    await user.click(screen.getByRole('button', { name: 'Reiniciar progreso' }));
+    const dialog = await screen.findByRole('alertdialog', {
+      name: 'Reiniciar progreso de previsualización',
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Reiniciar progreso' }));
+    await waitFor(async () =>
+      expect((await persistence.loadSimulation!(teachingInput)).nodes[0]).toMatchObject({
+        isCompleted: false,
+      }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
+    expect(screen.queryByText('Previsualización del canvas')).toBeNull();
+  });
+
+  test('keeps historical teaching Canvas preview read-only through the session', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          courseOffering={teachingInput.courseOffering}
+          experience={{ kind: 'teaching', term: 'historical' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Previsualizar canvas' }));
+    expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Volver al roadmap' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reiniciar progreso' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Límites' }));
+    expect(
+      (screen.getByRole('button', { name: 'Completar Límites' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Volver al roadmap' }));
+    expect(screen.queryByText('Previsualización del canvas')).toBeNull();
   });
 
   test('routes current teaching Node and Resource edits through the public session', async () => {

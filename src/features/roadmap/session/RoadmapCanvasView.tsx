@@ -13,7 +13,6 @@ import dynamic from 'next/dynamic';
 import { CircleAlert, Eye, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { KeyboardShortcuts } from '@/features/roadmap/canvas/KeyboardShortcuts';
-import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
@@ -177,6 +176,28 @@ export function RoadmapCanvasView({
     dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
     requestNodeFocusReturn();
   }, [requestNodeFocusReturn]);
+  const prepareCanvasPreview = useCallback(() => {
+    dispatchCanvas({ type: 'prepareCanvasPreview' });
+  }, []);
+  const restoreCanvasPreview = useCallback(
+    ({
+      selectedNodeId: previousSelectedNodeId,
+      isEditorOpen: wasEditorOpen,
+      isStudentDetailOpen: wasStudentDetailOpen,
+    }: {
+      selectedNodeId: string | null;
+      isEditorOpen: boolean;
+      isStudentDetailOpen: boolean;
+    }) => {
+      dispatchCanvas({
+        type: 'restoreCanvasPreview',
+        selectedNodeId: previousSelectedNodeId,
+        isEditorOpen: wasEditorOpen,
+        isStudentDetailOpen: wasStudentDetailOpen,
+      });
+    },
+    [],
+  );
   const {
     roadmap,
     error,
@@ -197,9 +218,7 @@ export function RoadmapCanvasView({
     deleteNodeType,
     completeNode,
     simulationRoadmap,
-    loadSimulation,
-    completeSimulatedNode,
-    resetSimulation,
+    canvasPreviewWorkflow,
   } = useRoadmapCanvasSession(
     {
       courseOffering: { identifier, title },
@@ -211,6 +230,11 @@ export function RoadmapCanvasView({
     {
       guardDraft: guardEditorDraft,
       closeEditor: closeEditorAfterNodeDeletion,
+      canvasPreview: {
+        currentView: { selectedNodeId, isEditorOpen, isStudentDetailOpen },
+        onEnter: prepareCanvasPreview,
+        onExit: restoreCanvasPreview,
+      },
     },
   );
   const feedback = useRoadmapCanvasFeedback();
@@ -312,41 +336,6 @@ export function RoadmapCanvasView({
       feedback,
     ],
   );
-
-  const prepareCanvasPreview = useCallback(() => {
-    dispatchCanvas({ type: 'prepareCanvasPreview' });
-  }, []);
-
-  const restoreCanvasPreview = useCallback(
-    ({
-      selectedNodeId: previousSelectedNodeId,
-      isEditorOpen: wasEditorOpen,
-      isStudentDetailOpen: wasStudentDetailOpen,
-    }: {
-      selectedNodeId: string | null;
-      isEditorOpen: boolean;
-      isStudentDetailOpen: boolean;
-    }) => {
-      dispatchCanvas({
-        type: 'restoreCanvasPreview',
-        selectedNodeId: previousSelectedNodeId,
-        isEditorOpen: wasEditorOpen,
-        isStudentDetailOpen: wasStudentDetailOpen,
-      });
-    },
-    [],
-  );
-
-  const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
-    currentView: { selectedNodeId, isEditorOpen, isStudentDetailOpen },
-    isHistorical: Boolean(isHistorical),
-    guardDraft: () => guardEditorDraft({ kind: 'enter-canvas-preview' }),
-    loadSimulation,
-    completeSimulatedNode,
-    resetSimulation,
-    onEnter: prepareCanvasPreview,
-    onExit: restoreCanvasPreview,
-  });
 
   useEffect(() => {
     if (!exclusiveConfirmation) return;
