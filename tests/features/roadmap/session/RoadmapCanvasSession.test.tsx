@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import {
@@ -12,12 +12,42 @@ import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
 vi.mock('next/dynamic', () => ({
   default: () =>
-    forwardRef(function NodeEditorMock({ session, perform }: NodeEditorProps, ref) {
+    forwardRef(function NodeEditorMock({ session, perform, onIntent }: NodeEditorProps, ref) {
       useImperativeHandle(ref, () => ({ guardDraft: vi.fn().mockResolvedValue(true) }), []);
       if (!session.node) return null;
       const resource = session.node.resources[0];
       return (
         <aside>
+          <button
+            type="button"
+            onClick={() =>
+              onIntent({
+                kind: 'change-teacher-block',
+                nodeId: session.node!.id,
+                operation: 'BLOCK',
+              })
+            }
+          >
+            Bloquear rama
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onIntent({
+                kind: 'change-visibility',
+                nodeId: session.node!.id,
+                isVisible: true,
+              })
+            }
+          >
+            Ocultar para estudiantes
+          </button>
+          <button
+            type="button"
+            onClick={() => onIntent({ kind: 'delete-node', nodeId: session.node!.id })}
+          >
+            Eliminar nodo
+          </button>
           <button
             type="button"
             onClick={() =>
@@ -111,9 +141,11 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     <>
       {topRightActions?.(() => ({ x: 480, y: 240 }))}
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
-      <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
-        {projection.roadmap.nodes[0].title}
-      </button>
+      {projection.roadmap.nodes[0] ? (
+        <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
+          {projection.roadmap.nodes[0].title}
+        </button>
+      ) : null}
       {projection.kind === 'teaching' && projection.editing ? (
         <>
           <button
@@ -419,7 +451,9 @@ describe('RoadmapCanvasSession', () => {
     const persistence = createInMemoryRoadmapSessionPersistence({
       ...teacherBlockedRoadmap,
       nodes: teacherBlockedRoadmap.nodes.map((node) =>
-        node.id === 'node-1' ? { ...node, isTeacherBlocked: false } : node,
+        node.id === 'node-1'
+          ? ({ ...node, isTeacherBlocked: false } as RoadmapDto['nodes'][number])
+          : node,
       ),
     });
     render(
@@ -442,6 +476,59 @@ describe('RoadmapCanvasSession', () => {
     ).toBeTruthy();
     await waitFor(async () =>
       expect((await persistence.load(teachingInput)).dependencies).toEqual([]),
+    );
+  });
+
+  test('routes Node visibility and deletion through one public session confirmation', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...teachingInput} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Límites' }));
+    const deleteNodeButton = screen.getByRole('button', { name: 'Eliminar nodo' });
+    await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
+    const visibilityDialog = await screen.findByRole('alertdialog', {
+      name: 'Confirmar ocultación',
+    });
+
+    fireEvent.click(deleteNodeButton);
+    expect(screen.getByRole('alertdialog', { name: 'Confirmar ocultación' })).toBe(
+      visibilityDialog,
+    );
+
+    await user.click(within(visibilityDialog).getByRole('button', { name: 'Ocultar' }));
+    await waitFor(async () =>
+      expect((await persistence.load(teachingInput)).nodes[0]).toMatchObject({ isVisible: false }),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Eliminar nodo' }));
+    const deletionDialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
+    await user.click(within(deletionDialog).getByRole('button', { name: 'Eliminar Nodo' }));
+    await waitFor(async () => expect((await persistence.load(teachingInput)).nodes).toEqual([]));
+  });
+
+  test('routes Teacher block through the public session workflow', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...teachingInput} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Límites' }));
+    await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo de rama' });
+    await user.click(within(dialog).getByRole('button', { name: 'Bloquear rama' }));
+
+    await waitFor(async () =>
+      expect((await persistence.load(teachingInput)).nodes[0]).toMatchObject({
+        isTeacherBlocked: true,
+      }),
     );
   });
 

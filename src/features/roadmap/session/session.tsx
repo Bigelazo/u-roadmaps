@@ -15,6 +15,9 @@ import {
   useRoadmapDependencyWorkflow,
   type RoadmapDependencyWorkflow,
 } from '@/features/roadmap/session/dependency-workflow';
+import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
+import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
+import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { useRoadmapCanvasFeedback } from '@/features/roadmap/session/feedback';
 import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type {
@@ -26,7 +29,7 @@ import type {
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
 import type { Point } from '@/features/roadmap/graph/geometry';
-import type { NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
+import type { NodeEditorHandle, NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
 import type {
   NewRoadmapNode,
   RoadmapCanvasSessionInput,
@@ -96,8 +99,22 @@ type InjectedSessionResult = {
   completeNode: (nodeId: string) => Promise<boolean>;
   completeSimulatedNode: (nodeId: string) => Promise<boolean>;
   resetSimulation: () => Promise<boolean>;
-  dependencyWorkflow: RoadmapDependencyWorkflow;
 };
+
+type RoadmapCanvasSessionWorkflows = {
+  dependencyWorkflow: RoadmapDependencyWorkflow;
+  teacherBlockWorkflow: ReturnType<typeof useTeacherBlockWorkflow>;
+  nodeVisibilityWorkflow: ReturnType<typeof useNodeVisibilityWorkflow>;
+  nodeDeletionWorkflow: ReturnType<typeof useNodeDeletionWorkflow>;
+};
+
+export type RoadmapCanvasSessionOptions = {
+  guardDraft?: NodeEditorHandle['guardDraft'];
+  closeEditor?: () => void;
+};
+
+const allowAnyDraft = async () => true;
+const noop = () => undefined;
 
 type PersistenceSnapshot = RoadmapCanvasSessionPersistence & {
   initialRoadmap?: AnyRoadmapDto;
@@ -117,7 +134,6 @@ function useInjectedSession(
   input: RoadmapCanvasSessionInput,
   persistence: RoadmapCanvasSessionPersistence | null,
 ): InjectedSessionResult {
-  const feedback = useRoadmapCanvasFeedback();
   const initialRoadmap = (persistence as PersistenceSnapshot | null)?.initialRoadmap ?? null;
   const initialRoadmapKey = initialRoadmap ? roadmapCanvasSessionKey(input) : null;
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(initialRoadmap);
@@ -559,20 +575,6 @@ function useInjectedSession(
     return loadSimulation();
   }, [loadSimulation, mutate, persistence, stableInput]);
 
-  const dependencyWorkflow = useRoadmapDependencyWorkflow({
-    roadmap: roadmapKey === key ? roadmap : null,
-    previewRoadmapDependency,
-    connectNodes,
-    deleteDependency,
-    onCreationSuccess: () => feedback?.showSuccess('Dependencia creada exitosamente.'),
-    onDeletionSuccess: (deletedCount) =>
-      feedback?.showSuccess(
-        deletedCount === 1
-          ? 'Dependencia eliminada exitosamente.'
-          : 'Dependencias eliminadas exitosamente.',
-      ),
-  });
-
   return {
     roadmap: roadmapKey === key ? roadmap : null,
     simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
@@ -601,11 +603,13 @@ function useInjectedSession(
     completeNode,
     completeSimulatedNode,
     resetSimulation,
-    dependencyWorkflow,
   };
 }
 
-export function useRoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
+export function useRoadmapCanvasSession(
+  input: RoadmapCanvasSessionInput,
+  options: RoadmapCanvasSessionOptions = {},
+): InjectedSessionResult & RoadmapCanvasSessionWorkflows {
   const persistence = useContext(persistenceContext);
   const legacy = useRoadmap(
     input.courseOffering.identifier,
@@ -613,7 +617,45 @@ export function useRoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
     persistence === null,
   );
   const injected = useInjectedSession(input, persistence);
-  return persistence ? injected : (legacy as unknown as InjectedSessionResult);
+  const active = persistence ? injected : (legacy as unknown as InjectedSessionResult);
+  const feedback = useRoadmapCanvasFeedback();
+  const dependencyWorkflow = useRoadmapDependencyWorkflow({
+    roadmap: active.roadmap,
+    previewRoadmapDependency: active.previewRoadmapDependency,
+    connectNodes: active.connectNodes,
+    deleteDependency: active.deleteDependency,
+    onCreationSuccess: () => feedback?.showSuccess('Dependencia creada exitosamente.'),
+    onDeletionSuccess: (deletedCount) =>
+      feedback?.showSuccess(
+        deletedCount === 1
+          ? 'Dependencia eliminada exitosamente.'
+          : 'Dependencias eliminadas exitosamente.',
+      ),
+  });
+  const teacherBlockWorkflow = useTeacherBlockWorkflow({
+    roadmap: active.roadmap,
+    previewTeacherBlock: active.previewTeacherBlock,
+    changeTeacherBlock: active.changeTeacherBlock,
+  });
+  const nodeVisibilityWorkflow = useNodeVisibilityWorkflow({
+    roadmap: active.roadmap,
+    previewNodeVisibility: active.previewNodeVisibility,
+    toggleVisibility: active.toggleVisibility,
+  });
+  const nodeDeletionWorkflow = useNodeDeletionWorkflow({
+    previewNodeDeletion: active.previewNodeDeletion,
+    deleteNode: active.deleteNode,
+    guardDraft: options.guardDraft ?? allowAnyDraft,
+    closeEditor: options.closeEditor ?? noop,
+  });
+
+  return {
+    ...active,
+    dependencyWorkflow,
+    teacherBlockWorkflow,
+    nodeVisibilityWorkflow,
+    nodeDeletionWorkflow,
+  };
 }
 
 export function useRoadmapCanvasSessionPersistence() {

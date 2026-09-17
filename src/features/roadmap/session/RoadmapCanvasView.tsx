@@ -16,9 +16,6 @@ import { KeyboardShortcuts } from '@/features/roadmap/canvas/KeyboardShortcuts';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
-import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
-import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
-import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
 import type {
   NodeEditorEffect,
@@ -168,6 +165,18 @@ export function RoadmapCanvasView({
   });
   const nodeEditorRef = useRef<NodeEditorHandle>(null);
   const focusReturnRequestIdRef = useRef(0);
+  const requestNodeFocusReturn = useCallback(() => {
+    setFocusReturnRequest(`node-surface-close-${++focusReturnRequestIdRef.current}`);
+  }, []);
+  const guardEditorDraft = useCallback(
+    (reason: NodeEditorGuardReason) =>
+      nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
+    [],
+  );
+  const closeEditorAfterNodeDeletion = useCallback(() => {
+    dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
+    requestNodeFocusReturn();
+  }, [requestNodeFocusReturn]);
   const {
     roadmap,
     error,
@@ -175,13 +184,10 @@ export function RoadmapCanvasView({
     addNode,
     updateNode,
     moveNode,
-    previewTeacherBlock,
-    changeTeacherBlock,
     dependencyWorkflow,
-    toggleVisibility,
-    previewNodeVisibility,
-    previewNodeDeletion,
-    deleteNode,
+    teacherBlockWorkflow,
+    nodeVisibilityWorkflow,
+    nodeDeletionWorkflow,
     addResource,
     uploadResource,
     updateResource,
@@ -194,24 +200,20 @@ export function RoadmapCanvasView({
     loadSimulation,
     completeSimulatedNode,
     resetSimulation,
-  } = useRoadmapCanvasSession({
-    courseOffering: { identifier, title },
-    experience: {
-      kind: canEdit || canPreview ? 'teaching' : 'student',
-      term: isHistorical ? 'historical' : 'current',
+  } = useRoadmapCanvasSession(
+    {
+      courseOffering: { identifier, title },
+      experience: {
+        kind: canEdit || canPreview ? 'teaching' : 'student',
+        term: isHistorical ? 'historical' : 'current',
+      },
     },
-  });
+    {
+      guardDraft: guardEditorDraft,
+      closeEditor: closeEditorAfterNodeDeletion,
+    },
+  );
   const feedback = useRoadmapCanvasFeedback();
-  const teacherBlockWorkflow = useTeacherBlockWorkflow({
-    roadmap,
-    previewTeacherBlock,
-    changeTeacherBlock,
-  });
-  const nodeVisibilityWorkflow = useNodeVisibilityWorkflow({
-    roadmap,
-    previewNodeVisibility,
-    toggleVisibility,
-  });
   const [exclusiveConfirmation, setExclusiveConfirmation] =
     useState<ExclusiveConfirmationSource | null>(null);
   const exclusiveConfirmationRef = useRef<ExclusiveConfirmationSource | null>(null);
@@ -243,10 +245,6 @@ export function RoadmapCanvasView({
   useEffect(() => {
     feedback?.reportError(roadmap ? error : null, dismissError);
   }, [dismissError, error, feedback, roadmap]);
-
-  const requestNodeFocusReturn = useCallback(() => {
-    setFocusReturnRequest(`node-surface-close-${++focusReturnRequestIdRef.current}`);
-  }, []);
 
   const updateNodeWithConfirmation = useCallback(
     async (...args: Parameters<typeof updateNode>) => {
@@ -314,24 +312,6 @@ export function RoadmapCanvasView({
       feedback,
     ],
   );
-
-  const guardEditorDraft = useCallback(
-    (reason: NodeEditorGuardReason) =>
-      nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
-    [],
-  );
-
-  const closeEditorAfterNodeDeletion = useCallback(() => {
-    dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
-    requestNodeFocusReturn();
-  }, [requestNodeFocusReturn]);
-
-  const nodeDeletionWorkflow = useNodeDeletionWorkflow({
-    previewNodeDeletion,
-    deleteNode,
-    guardDraft: guardEditorDraft,
-    closeEditor: closeEditorAfterNodeDeletion,
-  });
 
   const prepareCanvasPreview = useCallback(() => {
     dispatchCanvas({ type: 'prepareCanvasPreview' });
