@@ -356,6 +356,100 @@ describe('RoadmapCanvasSession', () => {
     expect(await screen.findByRole('status', { name: 'Nodo completado.' })).not.toBeNull();
   });
 
+  test('resets feedback and ignores a delayed response when the Course offering changes', async () => {
+    const user = userEvent.setup();
+    let resolvePreviousRoadmap!: (value: StudentRoadmapDto) => void;
+    const previousRoadmap = new Promise<StudentRoadmapDto>((resolve) => {
+      resolvePreviousRoadmap = resolve;
+    });
+    const nextRoadmap: StudentRoadmapDto = {
+      ...roadmap,
+      nodes: [{ ...roadmap.nodes[0], title: 'Derivadas' }],
+    };
+    const finalRoadmap: StudentRoadmapDto = {
+      ...roadmap,
+      nodes: [{ ...roadmap.nodes[0], title: 'Integrales' }],
+    };
+    const persistence = {
+      load: vi.fn(({ courseOffering }: { courseOffering: { identifier: { courseCode: string } } }) =>
+        courseOffering.identifier.courseCode === 'CC1001'
+          ? previousRoadmap
+          : Promise.resolve(
+              courseOffering.identifier.courseCode === 'CC1002' ? nextRoadmap : finalRoadmap,
+            ),
+      ),
+      complete: vi.fn().mockResolvedValue(undefined),
+    };
+    const { rerender } = render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          courseOffering={{
+            identifier: { courseCode: 'CC1001', year: 2026, semester: 2 },
+            title: 'Programación I',
+          }}
+          experience={{ kind: 'student', term: 'current' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await waitFor(() => expect(persistence.load).toHaveBeenCalledTimes(1));
+
+    rerender(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          courseOffering={{
+            identifier: { courseCode: 'CC1002', year: 2026, semester: 2 },
+            title: 'Cálculo I',
+          }}
+          experience={{ kind: 'student', term: 'current' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Derivadas' }));
+    await user.click(screen.getByRole('button', { name: 'Completar Derivadas' }));
+    expect(await screen.findByRole('status', { name: 'Nodo completado.' })).toBeTruthy();
+
+    rerender(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          courseOffering={{
+            identifier: { courseCode: 'CC1003', year: 2026, semester: 2 },
+            title: 'Álgebra I',
+          }}
+          experience={{ kind: 'student', term: 'current' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    expect(screen.queryByRole('status', { name: 'Nodo completado.' })).toBeNull();
+    resolvePreviousRoadmap(roadmap);
+    expect(await screen.findByRole('button', { name: 'Integrales' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Límites' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Derivadas' })).toBeNull();
+  });
+
+  test('runs a historical student experience through the public session as read-only', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          courseOffering={{
+            identifier: { courseCode: 'CC1001', year: 2026, semester: 2 },
+            title: 'Programación I',
+          }}
+          experience={{ kind: 'student', term: 'historical' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Límites' }));
+    expect((screen.getByRole('button', { name: 'Completar Límites' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
   test('keeps the loaded offering visible after a later completion failure and lets the student dismiss it', async () => {
     const user = userEvent.setup();
     const persistence = {

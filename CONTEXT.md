@@ -52,6 +52,14 @@ _Avoid_: Curriculum, course version
 The ordered succession of roadmap versions for the same course across academic terms. Each version can identify the version from which it was copied so their evolution can be observed.
 _Avoid_: Course offering, edit history
 
+**Roadmap change (Cambio del roadmap)**:
+A teaching-staff modification that meaningfully changes a participant's Roadmap content or access. It retains enough context to explain what changed even when the affected element no longer exists.
+_Avoid_: Canvas movement, visual-only edit, notification
+
+**Change summary (Resumen de cambios)**:
+A participant-facing notice that briefly represents one or more pending Roadmap changes from the same Roadmap. It may present repeated changes as an aggregate rather than enumerate every individual modification.
+_Avoid_: Roadmap change, audit log
+
 **User (Usuario)**:
 A person identified institutionally by a unique, normalized RUT who can participate in multiple course offerings. Their institutional email is unique but may be updated; conflicting identifiers must not be merged silently.
 _Avoid_: Student, teacher
@@ -151,6 +159,10 @@ _Avoid_: Progress state, mutable progress
 **Canvas preview (Previsualización del canvas)**:
 A teaching-staff simulation of a Roadmap's student experience that follows the same access and progress rules without representing or changing any actual student's Participation or Completion.
 _Avoid_: Preview, teacher progress, student impersonation, preview completion
+
+**Roadmap canvas session (Sesión del canvas del roadmap)**:
+A participant's active interaction with one Course offering's Roadmap, encompassing the current teaching, student, or Canvas preview experience together with any selected Node or pending confirmation. It ends when the participant leaves for another Course offering and is distinct from authentication.
+_Avoid_: VTI session, browser session, Canvas preview
 
 **Node information preview (Previsualización de información del nodo)**:
 A teaching-staff inspection of a Node's information through the same view available to a student who can access that Node, projecting any unsaved change that is visible in that view. Unlike Canvas preview, it does not evaluate the Node's visibility, Teacher block, or Prerequisite block.

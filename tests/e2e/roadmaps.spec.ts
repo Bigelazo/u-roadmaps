@@ -1033,6 +1033,95 @@ test('guards Node replacement and deselection without losing the editor session'
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
 });
 
+test('teacher can save consecutive changes to the same Node', async ({ page }, testInfo) => {
+  const initialTitle = uniqueName('Nodo de guardados consecutivos');
+  const firstTitle = uniqueName('Primera modificación');
+  const firstDescription = 'Descripción guardada inicialmente';
+  const secondTitle = uniqueName('Segunda modificación');
+  const secondDescription = 'Descripción guardada después';
+  const controlTypeName = uniqueName('Control');
+  const api = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  });
+  let nodeId: string | undefined;
+  let controlTypeId: string | undefined;
+
+  try {
+    const createdType = await api.post(roadmapPath('/node-types'), {
+      data: { name: controlTypeName, icon: 'Shapes', color: '#024AD8' },
+    });
+    expect(createdType.status()).toBe(201);
+    const createdControlTypeId: string = (await createdType.json()).nodeType.id;
+    controlTypeId = createdControlTypeId;
+
+    const created = await api.post(roadmapPath('/nodes'), {
+      data: {
+        title: initialTitle,
+        nodeTypeId: '00000000-0000-4000-8000-000000000001',
+        positionX: 0,
+        positionY: 0,
+      },
+    });
+    expect(created.status()).toBe(201);
+    const createdNodeId: string = (await created.json()).node.id;
+    nodeId = createdNodeId;
+
+    await authenticateAs(page.context(), fixture.daniela);
+    await page.goto('/courses/CC1002/2026/2');
+    await panRoadmapNodeIntoView(page, createdNodeId);
+    await page.locator(`.react-flow__node[data-id="${createdNodeId}"]`).click();
+
+    const title = page.getByLabel('Título', { exact: true });
+    const description = page.getByLabel(/Descripción/);
+    const type = page.getByRole('combobox', { name: 'Tipo' });
+    const save = page.getByRole('button', { name: 'Guardar cambios' });
+    await title.fill(firstTitle);
+    await description.fill(firstDescription);
+    await type.click();
+    await page.getByRole('option', { name: 'Evaluación' }).click();
+    await expect(save).toBeEnabled();
+    const firstSave = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PATCH' &&
+        response.url().includes(`/nodes/${createdNodeId}`),
+    );
+    await save.click();
+    expect((await firstSave).status()).toBe(200);
+    await expect(save).toBeDisabled();
+
+    await title.fill(secondTitle);
+    await description.fill(secondDescription);
+    await type.click();
+    await page.getByRole('option', { name: controlTypeName }).click();
+    await expect(save).toBeEnabled();
+    const secondSave = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PATCH' &&
+        response.url().includes(`/nodes/${createdNodeId}`),
+    );
+    await save.click();
+    expect((await secondSave).status()).toBe(200);
+    await expect(save).toBeDisabled();
+
+    const roadmap = await api.get(roadmapPath());
+    expect((await roadmap.json()).nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: createdNodeId,
+          title: secondTitle,
+          description: secondDescription,
+          nodeTypeId: createdControlTypeId,
+        }),
+      ]),
+    );
+  } finally {
+    await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
+    await deleteIfPresent(api, controlTypeId && roadmapPath(`/node-types/${controlTypeId}`));
+    await api.dispose();
+  }
+});
+
 test('creating consecutive nodes keeps them visible, separated, selected, and persisted', async ({
   page,
 }, testInfo) => {

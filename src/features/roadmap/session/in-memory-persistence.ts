@@ -3,6 +3,7 @@ import {
   transitiveDependentNodeIds,
   wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
+import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import type {
   AnyRoadmapDto,
   NodeDeletionImpact,
@@ -163,6 +164,32 @@ function nodeTypeFor(roadmap: AnyRoadmapDto, nodeId: string) {
   return nodeType ?? { name: 'Sin tipo', icon: 'Shapes', color: '#000000' };
 }
 
+function teacherBlockDecision(
+  roadmap: AnyRoadmapDto,
+  nodeId: string,
+  operation: TeacherBlockOperation,
+) {
+  return decideTeacherBlock({
+    nodes: roadmap.nodes.flatMap((node) => {
+      if (!('isTeacherBlocked' in node)) return [];
+      return [{ ...node, nodeType: nodeTypeFor(roadmap, node.id) }];
+    }),
+    dependencies: roadmap.dependencies,
+    nodeId,
+    operation,
+  });
+}
+
+function teacherBlockPreview(
+  roadmap: AnyRoadmapDto,
+  nodeId: string,
+  operation: TeacherBlockOperation,
+): TeacherBlockPreview {
+  const decision = teacherBlockDecision(roadmap, nodeId, operation);
+  if (decision.kind === 'REJECTED') throw new Error('No se pudo cambiar el bloqueo docente.');
+  return { ...decision, version: 'in-memory-preview' };
+}
+
 /** Test adapter for the public Roadmap canvas session seam. */
 export function createInMemoryRoadmapSessionPersistence(
   initialRoadmap: AnyRoadmapDto,
@@ -277,12 +304,7 @@ export function createInMemoryRoadmapSessionPersistence(
       nodeId: string,
       operation: TeacherBlockOperation,
     ) {
-      const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
-      return {
-        mode: operation === 'BLOCK' ? 'BLOCK' : 'SINGLE',
-        nodes: node ? [{ id: node.id, title: node.title, relation: 'SELECTED_NODE' }] : [],
-        version: 'in-memory-preview',
-      } as TeacherBlockPreview;
+      return teacherBlockPreview(roadmap, nodeId, operation);
     },
 
     async changeTeacherBlock(
@@ -290,11 +312,20 @@ export function createInMemoryRoadmapSessionPersistence(
       nodeId: string,
       operation: TeacherBlockOperation,
     ) {
-      mutateNode(nodeId, (node) =>
-        'isTeacherBlocked' in node
-          ? ({ ...node, isTeacherBlocked: operation === 'BLOCK' } as AnyRoadmapDto['nodes'][number])
-          : node,
-      );
+      const preview = teacherBlockPreview(roadmap, nodeId, operation);
+      const changedNodeIds = new Set(preview.nodes.map((node) => node.id));
+      roadmap = {
+        ...roadmap,
+        nodes: roadmap.nodes.map((node) =>
+          changedNodeIds.has(node.id) && 'isTeacherBlocked' in node
+            ? ({
+                ...node,
+                isTeacherBlocked: operation === 'BLOCK',
+              } as AnyRoadmapDto['nodes'][number])
+            : node,
+        ),
+      } as AnyRoadmapDto;
+      simulation = null;
     },
 
     async deleteDependency(_input: RoadmapCanvasSessionInput, dependencyIdToDelete: string) {
