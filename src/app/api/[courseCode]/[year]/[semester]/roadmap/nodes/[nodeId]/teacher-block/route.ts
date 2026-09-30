@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { deliverRoadmapNodeNotifications } from '@/app/_adapters/roadmap-node-notifications';
 import type { TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock, previewTeacherBlock } from '@/features/roadmap/server';
 import { ApplicationError } from '@/shared/errors/types';
@@ -33,6 +34,17 @@ async function teacherBlockInput(
   };
 }
 
+async function applyTeacherBlock(input: Awaited<ReturnType<typeof teacherBlockInput>>) {
+  const result = await changeTeacherBlock(input).match((value) => value, throwApplicationError);
+  const { notifications, ...response } = result;
+  await deliverRoadmapNodeNotifications({
+    actorId: input.userId,
+    identifier: input.identifier,
+    notifications,
+  });
+  return response;
+}
+
 export async function GET(
   request: Request,
   context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
@@ -50,10 +62,9 @@ export async function POST(
   context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
 ) {
   return handleApplicationResult(async () => {
-    const result = await changeTeacherBlock(
-      await teacherBlockInput(context, 'BLOCK', request),
-    ).match((value) => value, throwApplicationError);
-    return NextResponse.json(result);
+    return NextResponse.json(
+      await applyTeacherBlock(await teacherBlockInput(context, 'BLOCK', request)),
+    );
   });
 }
 
@@ -62,10 +73,9 @@ export async function DELETE(
   context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
 ) {
   return handleApplicationResult(async () => {
-    const result = await changeTeacherBlock(
-      await teacherBlockInput(context, 'UNBLOCK', request),
-    ).match((value) => value, throwApplicationError);
-    return NextResponse.json(result);
+    return NextResponse.json(
+      await applyTeacherBlock(await teacherBlockInput(context, 'UNBLOCK', request)),
+    );
   });
 }
 
@@ -74,9 +84,8 @@ export async function PATCH(
   context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
 ) {
   return handleApplicationResult(async () => {
-    const result = await changeTeacherBlock(
-      await teacherBlockInput(context, 'BRANCH_UNLOCK', request),
-    ).match((value) => value, throwApplicationError);
-    return NextResponse.json(result);
+    return NextResponse.json(
+      await applyTeacherBlock(await teacherBlockInput(context, 'BRANCH_UNLOCK', request)),
+    );
   });
 }

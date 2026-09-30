@@ -29,11 +29,11 @@ import {
   type EditorInput,
 } from '@/features/roadmap/application/editor-access';
 import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
-import { studentNodeAccessById } from '@/features/roadmap/access';
 import {
+  accessTransitionNotifications,
+  projectAccessSnapshot,
   visibilityNotifications,
   type AccessSnapshot,
-  type NodeNotificationDescriptor,
 } from '@/features/roadmap/application/node-change-notifications';
 
 type JsonObject = Record<string, unknown>;
@@ -72,15 +72,9 @@ async function captureAccessSnapshot(
     }),
     transaction.participation.findMany({
       where: { courseOffering: { roadmap: { id: roadmapId } }, isActive: true },
-      select: { userId: true, role: true },
+      select: { userId: true, role: true, isActive: true },
     }),
   ]);
-  const visibleNodes = nodes.filter((node) => node.isVisible);
-  const visibleIds = new Set(visibleNodes.map(({ id }) => id));
-  const visibleDependencies = dependencies.filter(
-    ({ sourceNodeId, targetNodeId }) =>
-      visibleIds.has(sourceNodeId) && visibleIds.has(targetNodeId),
-  );
   const studentIds = participants
     .filter(({ role }) => role === 'STUDENT')
     .map(({ userId }) => userId);
@@ -90,33 +84,7 @@ async function captureAccessSnapshot(
         select: { userId: true, roadmapNodeId: true },
       })
     : [];
-  const completionIdsByUser = new Map<string, Set<string>>();
-  for (const completion of completions) {
-    const ids = completionIdsByUser.get(completion.userId) ?? new Set<string>();
-    ids.add(completion.roadmapNodeId);
-    completionIdsByUser.set(completion.userId, ids);
-  }
-  const accessibleByUser = new Map<string, ReadonlySet<string>>();
-  for (const participant of participants) {
-    const accessible =
-      participant.role === 'TEACHER'
-        ? new Set(
-            visibleNodes.filter(({ isTeacherBlocked }) => !isTeacherBlocked).map(({ id }) => id),
-          )
-        : new Set(
-            [
-              ...studentNodeAccessById({
-                nodes: visibleNodes,
-                dependencies: visibleDependencies,
-                completedNodeIds: completionIdsByUser.get(participant.userId) ?? new Set(),
-              }),
-            ]
-              .filter(([, access]) => access.status === 'ACCESSIBLE')
-              .map(([id]) => id),
-          );
-    accessibleByUser.set(participant.userId, accessible);
-  }
-  return { nodes, accessibleByUser, participants };
+  return projectAccessSnapshot({ nodes, dependencies, participants, completions });
 }
 
 function structuralDependencies(
@@ -708,8 +676,9 @@ async function previewNodeVisibilityUnsafe(input: WithId) {
 async function teacherBlockPreview(
   transaction: Prisma.TransactionClient,
   { id, ...editor }: WithTeacherBlockOperation,
+  authorizedRoadmap?: { id: string },
 ) {
-  const roadmap = await requireEditorRoadmap(transaction, editor);
+  const roadmap = authorizedRoadmap ?? (await requireEditorRoadmap(transaction, editor));
   const nodeId = requireUuid(id, 'nodeId');
   const [nodes, dependencies] = await Promise.all([
     transaction.roadmapNode.findMany({
@@ -767,7 +736,8 @@ async function previewTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
 async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
   return withSerializableTransaction(
     async (transaction) => {
-      const preview = await teacherBlockPreview(transaction, input);
+      const roadmap = await requireEditorRoadmap(transaction, input);
+      const preview = await teacherBlockPreview(transaction, input, roadmap);
       if (
         input.operation !== 'BLOCK' &&
         (!input.previewVersion || input.previewVersion !== preview.version)
@@ -778,13 +748,23 @@ async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
           'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
         );
       }
+      const before = await captureAccessSnapshot(transaction, roadmap.id);
       if (preview.nodes.length > 0) {
         await transaction.roadmapNode.updateMany({
           where: { id: { in: preview.nodes.map((node) => node.id) } },
           data: { isTeacherBlocked: input.operation === 'BLOCK' },
         });
       }
-      return preview;
+      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      return {
+        ...preview,
+        notifications: accessTransitionNotifications({
+          before,
+          after,
+          actorId: input.userId,
+          roadmapId: roadmap.id,
+        }),
+      };
     },
     () =>
       new ApplicationError(

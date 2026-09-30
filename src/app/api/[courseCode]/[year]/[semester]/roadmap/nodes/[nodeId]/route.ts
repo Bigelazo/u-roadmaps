@@ -6,6 +6,7 @@ import {
 } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { deliverRoadmapNodeNotifications } from '@/app/_adapters/roadmap-node-notifications';
 import { ApplicationError } from '@/shared/errors/types';
 import {
   deleteRoadmapNode,
@@ -67,35 +68,27 @@ export async function PATCH(
       parseJson(request),
       requireAuthenticatedUser(),
     ]);
+    const identifier = requireCourseOfferingIdentifier(params);
     const result = await updateRoadmapNode({
       userId: user.id,
-      identifier: requireCourseOfferingIdentifier(params),
+      identifier,
       id: params.nodeId,
       input: body,
     }).match((value) => value, throwApplicationError);
     if (result.notification) {
       await deliverNodeChange({
         userId: user.id,
-        ...requireCourseOfferingIdentifier(params),
+        ...identifier,
         nodeId: result.node.id,
         changeKind: result.notification.kind,
         changedFields: result.notification.changedFields,
       }).catch(() => undefined);
     }
-    for (const notification of result.notifications ?? []) {
-      await deliverNodeChange({
-        userId: user.id,
-        ...requireCourseOfferingIdentifier(params),
-        nodeId: notification.nodeId,
-        roadmapId: notification.roadmapId,
-        changeKind: notification.changeKind,
-        changedFields: [],
-        nodeTitle: notification.nodeTitle,
-        nodeTypeName: notification.nodeTypeName,
-        recipientIds: notification.recipientIds,
-        targetKind: notification.targetKind,
-      }).catch(() => undefined);
-    }
+    await deliverRoadmapNodeNotifications({
+      actorId: user.id,
+      identifier,
+      notifications: result.notifications ?? [],
+    });
     const response = { ...result };
     delete response.notification;
     delete response.notifications;
@@ -110,20 +103,11 @@ export async function DELETE(
   return handleApplicationResult(async () => {
     const input = await deletionInput(context, request);
     const result = await deleteRoadmapNode(input).match((value) => value, throwApplicationError);
-    for (const notification of result.notifications) {
-      await deliverNodeChange({
-        userId: input.userId,
-        ...input.identifier,
-        nodeId: notification.nodeId,
-        roadmapId: notification.roadmapId,
-        changeKind: notification.changeKind,
-        changedFields: [],
-        nodeTitle: notification.nodeTitle,
-        nodeTypeName: notification.nodeTypeName,
-        recipientIds: notification.recipientIds,
-        targetKind: notification.targetKind,
-      }).catch(() => undefined);
-    }
+    await deliverRoadmapNodeNotifications({
+      actorId: input.userId,
+      identifier: input.identifier,
+      notifications: result.notifications,
+    });
     return new NextResponse(null, { status: 204 });
   });
 }
