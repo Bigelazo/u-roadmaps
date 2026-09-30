@@ -1,0 +1,64 @@
+import type { ActiveRecipientLookup, NodeChangeNotice, NotificationTransport } from '../contracts';
+import { NotificationTransportError } from '../contracts';
+
+const REQUEST_TIMEOUT_MS = 3_000;
+export async function emitNodeChange(
+  notice: NodeChangeNotice,
+  transport: NotificationTransport,
+  findActiveRecipients: ActiveRecipientLookup,
+  workflowId: string,
+) {
+  if (!workflowId || !notice.recipients.length) return;
+  for (let offset = 0; offset < notice.recipients.length; offset += 500) {
+    const recipients = notice.recipients.slice(offset, offset + 500);
+    await transport
+      .ensureSubscribers({ eventId: notice.eventId, recipients })
+      .catch(() => undefined);
+  }
+  for (let offset = 0; offset < notice.recipients.length; offset += 100) {
+    const batch = notice.recipients.slice(offset, offset + 100);
+    const transactionId = `${notice.eventId}:${notice.changeKind}:${offset}`;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const activeIds = await findActiveRecipients(batch.map(({ userId }) => userId));
+        if (!activeIds.length) break;
+        await withTimeout(
+          transport.trigger({
+            workflowId,
+            roadmapId: notice.roadmapId,
+            eventId: notice.eventId,
+            transactionId,
+            recipients: activeIds,
+            payload: {
+              roadmapId: notice.roadmapId,
+              courseCode: notice.courseCode,
+              year: notice.year,
+              semester: notice.semester,
+              targetKind: 'node',
+              nodeId: notice.nodeId,
+              changeKind: notice.changeKind,
+              occurredAt: notice.occurredAt.toISOString(),
+              eventCount: 1,
+              actorName: notice.actorName,
+            },
+          }),
+          REQUEST_TIMEOUT_MS,
+        );
+        break;
+      } catch (error) {
+        if (error instanceof NotificationTransportError && !error.retryable) break;
+        if (attempt === 1) break;
+      }
+    }
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new NotificationTransportError('Notification transport timed out.', true)),
+      timeoutMs,
+    );
+    promise.then(resolve, reject).finally(() => clearTimeout(timeout));
+  });
+}

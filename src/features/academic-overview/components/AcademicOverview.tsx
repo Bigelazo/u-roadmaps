@@ -15,6 +15,7 @@ import type {
   AcademicOverviewPage,
   AcademicOverviewTerm,
 } from '../types';
+import { NotificationCountButton } from '@/features/notifications/components/NotificationsInbox';
 
 const institutionalPositionDetails: Record<
   AcademicOverviewInstitutionalPosition,
@@ -50,9 +51,11 @@ type RoadmapCreationAction = (props: {
 function CourseRow({
   course,
   renderRoadmapCreation,
+  notificationsEnabled,
 }: Readonly<{
   course: AcademicOverviewCourse;
   renderRoadmapCreation: RoadmapCreationAction;
+  notificationsEnabled: boolean;
 }>) {
   const position = course.institutionalPosition
     ? institutionalPositionDetails[course.institutionalPosition]
@@ -97,14 +100,25 @@ function CourseRow({
             {course.hasRoadmap ? 'Roadmap disponible' : 'Sin roadmap'}
           </p>
           {course.hasRoadmap ? (
-            <Link
-              aria-label={`Abrir roadmap de ${course.name}`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              href={`/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`}
-            >
-              Abrir roadmap
-              <ArrowUpRight aria-hidden="true" size={16} />
-            </Link>
+            <>
+              <NotificationCountButton
+                enabled={notificationsEnabled}
+                filter={{
+                  courseCode: course.courseCode,
+                  year: course.year,
+                  semester: course.semester,
+                }}
+                label={`el curso ${course.name}`}
+              />
+              <Link
+                aria-label={`Abrir roadmap de ${course.name}`}
+                className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                href={`/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`}
+              >
+                Abrir roadmap
+                <ArrowUpRight aria-hidden="true" size={16} />
+              </Link>
+            </>
           ) : course.canCreateRoadmap ? (
             renderRoadmapCreation({
               courseCode: course.courseCode,
@@ -122,7 +136,12 @@ function CourseRow({
 function CourseList({
   term,
   renderRoadmapCreation,
-}: Readonly<{ term: AcademicOverviewTerm; renderRoadmapCreation: RoadmapCreationAction }>) {
+  notificationsEnabled,
+}: Readonly<{
+  term: AcademicOverviewTerm;
+  renderRoadmapCreation: RoadmapCreationAction;
+  notificationsEnabled: boolean;
+}>) {
   return (
     <ul className="divide-y divide-fog overflow-hidden rounded-xl border border-fog bg-card">
       {term.courses.map((course) => (
@@ -130,6 +149,7 @@ function CourseList({
           course={course}
           key={`${course.courseCode}:${course.year}:${course.semester}`}
           renderRoadmapCreation={renderRoadmapCreation}
+          notificationsEnabled={notificationsEnabled}
         />
       ))}
     </ul>
@@ -139,7 +159,12 @@ function CourseList({
 function AcademicTermSection({
   term,
   renderRoadmapCreation,
-}: Readonly<{ term: AcademicOverviewTerm; renderRoadmapCreation: RoadmapCreationAction }>) {
+  notificationsEnabled,
+}: Readonly<{
+  term: AcademicOverviewTerm;
+  renderRoadmapCreation: RoadmapCreationAction;
+  notificationsEnabled: boolean;
+}>) {
   const id = `term-${term.year}-${term.semester}`;
 
   return (
@@ -155,7 +180,11 @@ function AcademicTermSection({
           {term.courses.length} {term.courses.length === 1 ? 'curso' : 'cursos'}
         </p>
       </div>
-      <CourseList renderRoadmapCreation={renderRoadmapCreation} term={term} />
+      <CourseList
+        notificationsEnabled={notificationsEnabled}
+        renderRoadmapCreation={renderRoadmapCreation}
+        term={term}
+      />
     </section>
   );
 }
@@ -163,7 +192,12 @@ function AcademicTermSection({
 export function AcademicOverview({
   overview,
   renderRoadmapCreation,
-}: Readonly<{ overview: AcademicOverviewPage; renderRoadmapCreation: RoadmapCreationAction }>) {
+  notificationsEnabled,
+}: Readonly<{
+  overview: AcademicOverviewPage;
+  renderRoadmapCreation: RoadmapCreationAction;
+  notificationsEnabled: boolean;
+}>) {
   const [currentTerm, ...previousTerms] = overview.terms;
 
   return (
@@ -211,6 +245,7 @@ export function AcademicOverview({
             <div className="flex flex-col gap-12 md:gap-16">
               {currentTerm ? (
                 <AcademicTermSection
+                  notificationsEnabled={notificationsEnabled}
                   renderRoadmapCreation={renderRoadmapCreation}
                   term={currentTerm}
                 />
@@ -252,6 +287,7 @@ export function AcademicOverview({
                             </div>
                             <AccordionContent className="pb-4">
                               <CourseList
+                                notificationsEnabled={notificationsEnabled}
                                 renderRoadmapCreation={renderRoadmapCreation}
                                 term={term}
                               />

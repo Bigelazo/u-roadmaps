@@ -108,6 +108,8 @@ export type RoadmapCanvasExperience =
   | { readonly kind: 'teaching'; readonly term: 'current' | 'historical' };
 
 export type RoadmapCanvasSessionInput = {
+  readonly notificationsEnabled?: boolean;
+  readonly targetNodeId?: string;
   readonly courseOffering: {
     readonly identifier: CourseOfferingIdentifier;
     readonly title: string;

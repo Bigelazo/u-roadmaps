@@ -7,6 +7,7 @@ import {
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { createRoadmapNode, getRoadmapNodesForActor } from '@/features/roadmap/server';
+import { deliverNodeChange } from '@/features/notifications/server';
 
 export async function POST(
   request: Request,
@@ -19,6 +20,15 @@ export async function POST(
       (value) => value,
       throwApplicationError,
     );
+    if (node.isVisible) {
+      await deliverNodeChange({
+        userId: user.id,
+        ...identifier,
+        nodeId: node.id,
+        changeKind: 'node-available',
+        changedFields: [],
+      }).catch(() => undefined);
+    }
     return NextResponse.json({ node }, { status: 201 });
   });
 }

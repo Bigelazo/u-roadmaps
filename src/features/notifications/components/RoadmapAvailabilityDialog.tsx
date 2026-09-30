@@ -1,6 +1,5 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelectedNotification } from './NotificationsInbox';
 import {
@@ -16,49 +15,64 @@ import { Button } from '@/shared/ui/button';
 
 type Props = Readonly<{
   noticeId: string | null;
+  courseCode: string;
+  year: number;
+  semester: number;
   courseName: string;
-  actorName: string;
-  occurredAt: string;
 }>;
 
-export function RoadmapAvailabilityDialog({ noticeId, courseName, actorName, occurredAt }: Props) {
+function stringValue(value: unknown, fallback: string) {
+  return typeof value === 'string' && value.length <= 256 ? value : fallback;
+}
+
+export function RoadmapAvailabilityDialog({
+  noticeId,
+  courseCode,
+  year,
+  semester,
+  courseName,
+}: Props) {
   const router = useRouter();
-  const { notification, select } = useSelectedNotification();
-  const acknowledgedNotice = useRef<string | null>(null);
-  const [readError, setReadError] = useState(false);
-  const date = new Date(occurredAt);
-  const effectiveDate = Number.isNaN(date.getTime())
-    ? 'Fecha no disponible'
-    : new Intl.DateTimeFormat('es-CL', { dateStyle: 'long', timeStyle: 'short' }).format(date);
-
-  const markRead = useCallback(() => {
-    if (!notification) return;
-    setReadError(false);
-    void notification.read().then(
-      () => select(null),
-      () => setReadError(true),
-    );
-  }, [notification, select]);
-
-  useEffect(() => {
-    if (!noticeId || notification?.id !== noticeId || acknowledgedNotice.current === noticeId)
-      return;
-    acknowledgedNotice.current = noticeId;
-    markRead();
-  }, [markRead, noticeId, notification]);
+  const { notification } = useSelectedNotification();
+  const data = notification?.id === noticeId ? (notification.data ?? {}) : null;
+  const noticeMatchesCourse = Boolean(
+    data && data.courseCode === courseCode && data.year === year && data.semester === semester,
+  );
+  const changeKind = noticeMatchesCourse ? data?.changeKind : null;
+  const occurredAt = noticeMatchesCourse ? stringValue(data?.occurredAt, '') : '';
+  const date = occurredAt ? new Date(occurredAt) : null;
+  const effectiveDate =
+    date && !Number.isNaN(date.getTime())
+      ? new Intl.DateTimeFormat('es-CL', { dateStyle: 'long', timeStyle: 'short' }).format(date)
+      : 'Fecha no disponible';
+  const actorName = noticeMatchesCourse
+    ? stringValue(data?.actorName, 'Equipo docente')
+    : 'Equipo docente';
+  const open = Boolean(noticeId && notification?.id === noticeId && noticeMatchesCourse);
 
   function close() {
     router.replace(window.location.pathname, { scroll: false });
   }
 
+  const title =
+    changeKind === 'node-available'
+      ? 'Nodo disponible'
+      : changeKind === 'node-updated'
+        ? 'Nodo actualizado'
+        : 'Roadmap disponible';
+  const description =
+    changeKind === 'node-available'
+      ? `Se agregó un Nodo al Roadmap de ${courseName}.`
+      : changeKind === 'node-updated'
+        ? `Se actualizó un Nodo del Roadmap de ${courseName}.`
+        : `Se creó el Roadmap de ${courseName} para que puedas comenzar a recorrerlo.`;
+
   return (
-    <Dialog open={Boolean(noticeId)} onOpenChange={(open) => !open && close()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && close()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Roadmap disponible</DialogTitle>
-          <DialogDescription>
-            Se creó el roadmap de {courseName} para que puedas comenzar a recorrerlo.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <dl className="grid gap-2 text-sm">
           <div>
@@ -70,14 +84,6 @@ export function RoadmapAvailabilityDialog({ noticeId, courseName, actorName, occ
             <dd className="text-muted-foreground">{effectiveDate}</dd>
           </div>
         </dl>
-        {readError ? (
-          <p className="text-sm text-destructive" role="alert">
-            No se pudo reconocer el aviso.{' '}
-            <button className="font-semibold underline" onClick={markRead} type="button">
-              Reintentar
-            </button>
-          </p>
-        ) : null}
         <DialogFooter>
           <DialogClose
             render={

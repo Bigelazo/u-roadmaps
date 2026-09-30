@@ -54,6 +54,8 @@ import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
+import { useNotificationAcknowledgement } from '@/features/notifications/components/NotificationsInbox';
+import { NotificationCountButton } from '@/features/notifications';
 import {
   nodeTypeDeletionConfirmation,
   roadmapAutoLayoutConfirmation,
@@ -425,6 +427,60 @@ export function RoadmapCanvasView({ input }: Props) {
   ]);
 
   const displayedRoadmap = isCanvasPreview ? simulationRoadmap : roadmap;
+  const [acknowledgementError, setAcknowledgementError] = useState(false);
+  const acknowledgementInputRef = useRef<{
+    roadmapId: string;
+    nodeId?: string;
+    accessibleNodeIds?: ReadonlySet<string>;
+  } | null>(null);
+  const acknowledgedRoadmapRef = useRef<string | null>(null);
+  const openedNodeRef = useRef<string | null>(null);
+  const { acknowledge, retry } = useNotificationAcknowledgement();
+  const accessibleNodeIds = useMemo(() => {
+    if (!roadmap) return new Set<string>();
+    return new Set(roadmap.nodes.flatMap((node) => {
+      if ('isVisible' in node && !node.isVisible) return [];
+      if ('access' in node && node.access?.status === 'BLOCKED') return [];
+      if ('isTeacherBlocked' in node && node.isTeacherBlocked) return [];
+      return [node.id];
+    }));
+  }, [roadmap]);
+  useEffect(() => {
+    if (!input.notificationsEnabled || !roadmap || isCanvasPreview) return;
+    const roadmapId = roadmap.roadmap.id;
+    if (acknowledgedRoadmapRef.current === roadmapId) return;
+    acknowledgedRoadmapRef.current = roadmapId;
+    const operation = { roadmapId, accessibleNodeIds };
+    acknowledgementInputRef.current = operation;
+    void acknowledge(operation).then((success) => setAcknowledgementError(!success));
+  }, [acknowledge, accessibleNodeIds, input.notificationsEnabled, isCanvasPreview, roadmap]);
+  const deepLinkHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    const nodeId = input.targetNodeId;
+    if (!nodeId || !roadmap || deepLinkHandledRef.current === nodeId) return;
+    deepLinkHandledRef.current = nodeId;
+    if (!accessibleNodeIds.has(nodeId)) return;
+    dispatchCanvas({
+      type: 'selectNode',
+      nodeId,
+      panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
+    });
+  }, [accessibleNodeIds, canEditRoadmap, input.targetNodeId, isStudentExperience, roadmap]);
+  useEffect(() => {
+    if (!input.notificationsEnabled || !roadmap || isCanvasPreview) return;
+    const isNodeOpen = isStudentExperience ? isStudentDetailOpen : isEditorOpen;
+    if (!isNodeOpen || !selectedNodeId) {
+      openedNodeRef.current = null;
+      return;
+    }
+    const node = roadmap.nodes.find((candidate) => candidate.id === selectedNodeId);
+    const openKey = `${roadmap.roadmap.id}:${selectedNodeId}`;
+    if (!node || !accessibleNodeIds.has(node.id) || openedNodeRef.current === openKey) return;
+    openedNodeRef.current = openKey;
+    const operation = { roadmapId: roadmap.roadmap.id, nodeId: node.id };
+    acknowledgementInputRef.current = operation;
+    void acknowledge(operation).then((success) => setAcknowledgementError(!success));
+  }, [acknowledge, accessibleNodeIds, input.notificationsEnabled, isCanvasPreview, isEditorOpen, isStudentDetailOpen, isStudentExperience, roadmap, selectedNodeId]);
   const requestDependencyCreation = useCallback(
     (...args: Parameters<typeof dependencyWorkflow.requestCreation>) =>
       requestExclusiveConfirmation('dependency-creation', () =>
@@ -664,6 +720,19 @@ export function RoadmapCanvasView({ input }: Props) {
           isSidePanelOpen ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]' : 'lg:grid-cols-1',
         )}
       >
+        {acknowledgementError ? (
+          <div className="absolute top-2 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm shadow" role="status">
+            No se pudieron reconocer algunos avisos.
+            <button
+              className="font-semibold underline"
+              onClick={() => {
+                const operation = acknowledgementInputRef.current;
+                if (operation) void retry(operation).then((success) => setAcknowledgementError(!success));
+              }}
+              type="button"
+            >Reintentar</button>
+          </div>
+        ) : null}
         <div
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
@@ -671,6 +740,7 @@ export function RoadmapCanvasView({ input }: Props) {
         >
           <RoadmapGraph
             projection={graphProjection}
+            notificationsEnabled={Boolean(input.notificationsEnabled)}
             onSelectNode={(nodeId) => {
               const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
               if (isStudentExperience && isStudentBlockedNode(node)) return;
@@ -751,6 +821,11 @@ export function RoadmapCanvasView({ input }: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     {canvasMode.isEditing ? <Badge variant="secondary">Modo edición</Badge> : null}
                   </div>
+                  {!isCanvasPreview ? (
+                    <div className="mt-2">
+                      <NotificationCountButton enabled={Boolean(input.notificationsEnabled)} filter={{ roadmapId: roadmap.roadmap.id }} label="este Roadmap" />
+                    </div>
+                  ) : null}
                   <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
                     {title}
                   </h1>

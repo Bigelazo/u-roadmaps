@@ -1,1 +1,6 @@
-export { NotificationsInbox, NotificationsProvider, RoadmapAvailabilityDialog } from './client';
+export {
+  NotificationsInbox,
+  NotificationsProvider,
+  NotificationCountButton,
+  RoadmapAvailabilityDialog,
+} from './client';

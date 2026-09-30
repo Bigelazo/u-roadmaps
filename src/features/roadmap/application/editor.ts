@@ -243,11 +243,21 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
         data,
         include: { resources: { orderBy: { title: 'asc' } } },
       });
+      const changedFields = [
+        data.title !== undefined && data.title !== node.title ? 'title' : null,
+        data.description !== undefined && data.description !== node.description
+          ? 'description'
+          : null,
+        data.nodeTypeId !== undefined && data.nodeTypeId !== node.nodeTypeId ? 'nodeType' : null,
+      ].filter((field): field is 'title' | 'description' | 'nodeType' => field !== null);
       return {
         node: {
           ...nodeDto(updated),
           resources: updated.resources.map((resource) => resourceDto(resource, editor.identifier)),
         },
+        ...(node.isVisible && updated.isVisible && changedFields.length > 0
+          ? { notification: { kind: 'node-updated' as const, changedFields } }
+          : {}),
         ...(requestedVisibility !== undefined
           ? { dependencies: structuralDependencies(removedDependencies) }
           : {}),

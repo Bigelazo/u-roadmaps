@@ -82,6 +82,7 @@ function mapProjectionToFlow(
   onDeleteDependency: (dependencyId: string) => void,
   selectedNodeId: string | null | undefined,
   actionMenu: RoadmapGraphActionMenu,
+  notificationsEnabled = false,
 ) {
   const { roadmap } = projection;
   const isTeacherView = projection.kind === 'teaching';
@@ -96,6 +97,8 @@ function mapProjectionToFlow(
       id: node.id,
       type: 'roadmap',
       data: {
+        roadmapId: roadmap.roadmap.id,
+        notificationsEnabled,
         title: node.title,
         typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
         typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
@@ -412,6 +415,7 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
 
 export function RoadmapGraph({
   projection,
+  notificationsEnabled,
   onSelectNode,
   onClearSelectedNode,
   selectedNodeId,
@@ -528,7 +532,7 @@ export function RoadmapGraph({
     [canEdit, closingActionMenuNodeId, openActionMenuNodeId, requestNodeAction, toggleActionMenu],
   );
   const [flow, setFlow] = useState(() =>
-    mapProjectionToFlow(stableProjection, deleteDependency, selectedNodeId, actionMenu),
+    mapProjectionToFlow(stableProjection, deleteDependency, selectedNodeId, actionMenu, notificationsEnabled),
   );
 
   useEffect(() => {
@@ -538,9 +542,10 @@ export function RoadmapGraph({
         deleteDependency,
         selectedNodeIdRef.current,
         actionMenu,
+        notificationsEnabled,
       ),
     );
-  }, [actionMenu, deleteDependency, stableProjection]);
+  }, [actionMenu, deleteDependency, notificationsEnabled, stableProjection]);
 
   const applyNodePositions = useCallback(
     (

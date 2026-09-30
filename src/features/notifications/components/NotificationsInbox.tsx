@@ -1,23 +1,93 @@
 'use client';
 
 import { NovuProvider } from '@novu/nextjs';
-import { useCounts, useNotifications } from '@novu/nextjs/hooks';
+import { useCounts, useNotifications, useNovu } from '@novu/nextjs/hooks';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Bell, X } from 'lucide-react';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import type { InboxIdentity } from '../server';
 
 type NotificationRecord = NonNullable<ReturnType<typeof useNotifications>['notifications']>[number];
+type NotificationDataFilter = Record<string, string | number>;
+
+export function NotificationCountButton({
+  filter,
+  label,
+  enabled = true,
+}: {
+  filter: NotificationDataFilter;
+  label: string;
+  enabled?: boolean;
+}) {
+  if (!enabled) return null;
+  return <NotificationCount filter={filter} label={label} />;
+}
+
+function NotificationCount({ filter, label }: { filter: NotificationDataFilter; label: string }) {
+  const openInbox = useOpenNotificationInbox();
+  const { counts } = useCounts({ filters: [{ read: false, data: filter }] });
+  const count = counts?.[0]?.count ?? 0;
+  if (count === 0) return null;
+  return (
+    <button
+      aria-label={`${count} avisos sin leer para ${label}`}
+      className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={() => openInbox(filter)}
+      type="button"
+    >
+      <Bell aria-hidden="true" size={16} />
+      <span>{count}</span>
+    </button>
+  );
+}
 
 const SelectedNotificationContext = createContext<{
   notification: NotificationRecord | null;
   select: (notification: NotificationRecord | null) => void;
-}>({ notification: null, select: () => undefined });
+  filter: NotificationDataFilter | undefined;
+  openInbox: (filter?: NotificationDataFilter) => void;
+  resetFilter: () => void;
+}>({
+  notification: null,
+  select: () => undefined,
+  filter: undefined,
+  openInbox: () => undefined,
+  resetFilter: () => undefined,
+});
+const InboxOpenContext = createContext<{ open: boolean; setOpen: (open: boolean) => void }>({
+  open: false,
+  setOpen: () => undefined,
+});
+type AcknowledgeInput = {
+  roadmapId: string;
+  nodeId?: string;
+  accessibleNodeIds?: ReadonlySet<string>;
+};
+const NotificationAcknowledgementContext = createContext<{
+  acknowledge: (input: AcknowledgeInput) => Promise<boolean>;
+  retry: (input: AcknowledgeInput) => Promise<boolean>;
+}>({ acknowledge: async () => true, retry: async () => true });
+
+export function useNotificationAcknowledgement() {
+  return useContext(NotificationAcknowledgementContext);
+}
 
 export function useSelectedNotification() {
   return useContext(SelectedNotificationContext);
+}
+
+export function useOpenNotificationInbox() {
+  return useContext(SelectedNotificationContext).openInbox;
 }
 
 function stringField(data: Record<string, unknown>, field: string) {
@@ -46,20 +116,29 @@ function NotificationRow({
   onSelect: (notification: NotificationRecord) => void;
 }) {
   const [seenError, setSeenError] = useState(false);
+  const rowRef = useRef<HTMLLIElement>(null);
 
   const markSeen = useCallback(() => {
     void notification.seen().then(
-      () => setSeenError(false),
+      ({ error }) => setSeenError(Boolean(error)),
       () => setSeenError(true),
     );
   }, [notification]);
 
   useEffect(() => {
-    markSeen();
+    const row = rowRef.current;
+    if (!row) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry?.isIntersecting) return;
+      markSeen();
+      observer.disconnect();
+    });
+    observer.observe(row);
+    return () => observer.disconnect();
   }, [markSeen]);
 
   return (
-    <li>
+    <li ref={rowRef}>
       <div className="border-b">
         <button
           className="flex min-h-16 w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -91,9 +170,9 @@ function NotificationRow({
 }
 
 function InboxBell() {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen } = useContext(InboxOpenContext);
   const router = useRouter();
-  const { select } = useSelectedNotification();
+  const { select, filter, openInbox, resetFilter } = useSelectedNotification();
   const {
     counts,
     isLoading: countsLoading,
@@ -102,7 +181,7 @@ function InboxBell() {
     filters: [{ read: false }],
   });
   const { notifications, isLoading, isFetching, hasMore, error, fetchMore, refetch } =
-    useNotifications({ limit: 10 });
+    useNotifications({ limit: 10, data: filter });
   const unreadCount = counts?.[0]?.count ?? 0;
 
   function selectNotification(notification: NotificationRecord) {
@@ -110,14 +189,13 @@ function InboxBell() {
     const courseCode = stringField(data, 'courseCode');
     const year = numberField(data, 'year');
     const semester = numberField(data, 'semester');
-    const occurredAt = stringField(data, 'occurredAt');
-    if (!courseCode || year === null || semester === null || !occurredAt) return;
+    if (!courseCode || year === null || semester === null) return;
 
     const params = new URLSearchParams({
       notice: notification.id,
-      actor: stringField(data, 'actorName') ?? 'Equipo docente',
-      occurredAt,
     });
+    const nodeId = stringField(data, 'nodeId');
+    if (data.targetKind === 'node' && nodeId) params.set('targetNode', nodeId);
     select(notification);
     router.push(
       `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}?${params.toString()}`,
@@ -126,7 +204,13 @@ function InboxBell() {
   }
 
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+    <PopoverPrimitive.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) resetFilter();
+      }}
+    >
       <PopoverPrimitive.Trigger
         aria-label={
           countsError
@@ -134,6 +218,7 @@ function InboxBell() {
             : `Avisos${unreadCount > 0 ? `, ${unreadCount} sin leer` : ''}`
         }
         className="relative inline-flex size-11 items-center justify-center rounded-md text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+        onClick={() => openInbox()}
         type="button"
       >
         <Bell aria-hidden="true" size={20} />
@@ -240,7 +325,7 @@ export function NotificationsProvider({
           apiUrl={identity.apiUrl}
           socketUrl={identity.socketUrl}
         >
-          {children}
+          <NotificationAcknowledgementProvider>{children}</NotificationAcknowledgementProvider>
         </NovuProvider>
       ) : (
         children
@@ -249,11 +334,124 @@ export function NotificationsProvider({
   );
 }
 
+function NotificationAcknowledgementProvider({ children }: { children: ReactNode }) {
+  const novu = useNovu();
+  const pending = useRef(
+    new Map<
+      string,
+      { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean }
+    >(),
+  );
+  const keyFor = (input: AcknowledgeInput) => `${input.roadmapId}:${input.nodeId ?? 'roadmap'}`;
+
+  const readNotifications = useCallback(
+    async (
+      input: AcknowledgeInput,
+      snapshot: { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean },
+    ) => {
+      const remaining: NotificationRecord[] = [];
+      for (const record of snapshot.records) {
+        try {
+          const result = await record.read();
+          if (result.error) remaining.push(record);
+        } catch {
+          remaining.push(record);
+        }
+      }
+      snapshot.records = remaining;
+      pending.current.set(keyFor(input), snapshot);
+      return remaining.length === 0;
+    },
+    [],
+  );
+
+  const collectSnapshot = useCallback(
+    async (
+      input: AcknowledgeInput,
+      snapshot: { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean },
+    ) => {
+      const knownIds = new Set(snapshot.records.map(({ id }) => id));
+      let after: string | undefined;
+      do {
+        const page = await novu.notifications.list({
+          data: { roadmapId: input.roadmapId },
+          read: false,
+          limit: 100,
+          createdLte: snapshot.createdLte,
+          ...(after ? { after } : {}),
+          useCache: false,
+        });
+        if (page.error || !page.data) {
+          snapshot.listingIncomplete = true;
+          return false;
+        }
+        for (const record of page.data.notifications) {
+          const data = record.data ?? {};
+          const isNodeNotice = data.targetKind === 'node' && typeof data.nodeId === 'string';
+          const eligible = input.nodeId
+            ? isNodeNotice && data.nodeId === input.nodeId
+            : !isNodeNotice || !input.accessibleNodeIds?.has(data.nodeId as string);
+          if (eligible && !knownIds.has(record.id)) {
+            snapshot.records.push(record);
+            knownIds.add(record.id);
+          }
+        }
+        const last = page.data.notifications.at(-1);
+        after = page.data.hasMore ? last?.id : undefined;
+        if (page.data.hasMore && !after) {
+          snapshot.listingIncomplete = true;
+          return false;
+        }
+      } while (after);
+      snapshot.listingIncomplete = false;
+      return true;
+    },
+    [novu],
+  );
+
+  const acknowledge = useCallback(
+    async (input: AcknowledgeInput) => {
+      const snapshot = { records: [], createdLte: Date.now(), listingIncomplete: true };
+      pending.current.set(keyFor(input), snapshot);
+      if (!(await collectSnapshot(input, snapshot))) return false;
+      return readNotifications(input, snapshot);
+    },
+    [collectSnapshot, readNotifications],
+  );
+
+  const retry = useCallback(
+    async (input: AcknowledgeInput) => {
+      const snapshot = pending.current.get(keyFor(input));
+      if (!snapshot) return true;
+      if (snapshot.listingIncomplete && !(await collectSnapshot(input, snapshot))) return false;
+      return readNotifications(input, snapshot);
+    },
+    [collectSnapshot, readNotifications],
+  );
+
+  return (
+    <NotificationAcknowledgementContext.Provider value={{ acknowledge, retry }}>
+      {children}
+    </NotificationAcknowledgementContext.Provider>
+  );
+}
+
 function SelectedNotificationProvider({ children }: { children: ReactNode }) {
   const [notification, select] = useState<NotificationRecord | null>(null);
+  const [filter, setFilter] = useState<NotificationDataFilter | undefined>();
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const openInbox = useCallback((nextFilter?: NotificationDataFilter) => {
+    setFilter(nextFilter);
+    setInboxOpen(true);
+  }, []);
+  const resetFilter = useCallback(() => setFilter(undefined), []);
   return (
-    <SelectedNotificationContext.Provider value={{ notification, select }}>
-      {children}
+    <SelectedNotificationContext.Provider
+      value={{ notification, select, filter, openInbox, resetFilter }}
+    >
+      <InboxOpenContext.Provider value={{ open: inboxOpen, setOpen: setInboxOpen }}>
+        {children}
+      </InboxOpenContext.Provider>
     </SelectedNotificationContext.Provider>
   );
 }

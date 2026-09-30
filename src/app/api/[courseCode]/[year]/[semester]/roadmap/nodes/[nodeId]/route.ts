@@ -13,6 +13,7 @@ import {
   previewNodeVisibility,
   updateRoadmapNode,
 } from '@/features/roadmap/server';
+import { deliverNodeChange } from '@/features/notifications/server';
 
 function previewOperation(request: Request) {
   const operation = new URL(request.url).searchParams.get('operation');
@@ -72,7 +73,16 @@ export async function PATCH(
       id: params.nodeId,
       input: body,
     }).match((value) => value, throwApplicationError);
-    return NextResponse.json(result);
+    if (result.notification) {
+      await deliverNodeChange({
+        userId: user.id,
+        ...requireCourseOfferingIdentifier(params),
+        ...result.notification,
+        nodeId: result.node.id,
+      }).catch(() => undefined);
+    }
+    const { notification: _notification, ...response } = result;
+    return NextResponse.json(response);
   });
 }
 

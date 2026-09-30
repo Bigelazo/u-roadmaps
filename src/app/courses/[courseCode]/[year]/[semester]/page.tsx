@@ -50,6 +50,8 @@ export default async function CoursePage(
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
       <RoadmapCanvasSession
+        notificationsEnabled={Boolean(inboxIdentity)}
+        targetNodeId={singleSearchParam(searchParams.targetNode) ?? undefined}
         courseOffering={{ identifier, title: courseName }}
         experience={{
           kind: isTeaching ? 'teaching' : 'student',
@@ -59,9 +61,10 @@ export default async function CoursePage(
       {inboxIdentity && singleSearchParam(searchParams.notice) ? (
         <RoadmapAvailabilityDialog
           noticeId={singleSearchParam(searchParams.notice)}
-          courseName={singleSearchParam(searchParams.course) ?? courseName}
-          actorName={singleSearchParam(searchParams.actor) ?? 'Equipo docente'}
-          occurredAt={singleSearchParam(searchParams.occurredAt) ?? ''}
+          courseCode={identifier.courseCode}
+          year={identifier.year}
+          semester={identifier.semester}
+          courseName={courseName}
         />
       ) : null}
     </main>

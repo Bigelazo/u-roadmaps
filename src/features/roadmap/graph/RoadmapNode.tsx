@@ -21,11 +21,16 @@ import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
+import { Bell } from 'lucide-react';
+import { useCounts } from '@novu/nextjs/hooks';
+import { useOpenNotificationInbox } from '@/features/notifications/components/NotificationsInbox';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> &
   NodeActionCallbacks & {
     title: string;
+    roadmapId?: string;
+    notificationsEnabled?: boolean;
     typeColor: string;
     typeName: string;
     typeIcon: string;
@@ -42,6 +47,29 @@ export type RoadmapNodeData = Record<string, unknown> &
   };
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
+
+function NodeUnreadBadge({ enabled, roadmapId, nodeId }: { enabled: boolean; roadmapId: string; nodeId: string }) {
+  const openInbox = useOpenNotificationInbox();
+  const { counts } = useCounts({ filters: [{ read: false, data: { roadmapId, nodeId } }] });
+  if (!enabled) return null;
+  const count = counts?.[0]?.count ?? 0;
+  if (count === 0) return null;
+  return (
+    <button
+      aria-label={`${count} avisos sin leer para este Nodo`}
+      className="absolute top-[-10px] right-[-10px] z-10 flex size-8 items-center justify-center rounded-full border-2 border-card bg-primary text-primary-foreground shadow-sm"
+      onClick={(event) => {
+        event.stopPropagation();
+        openInbox({ roadmapId, nodeId });
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+      type="button"
+    >
+      <Bell aria-hidden="true" className="size-4" />
+      <span className="text-[10px] leading-none font-bold">{count > 99 ? '99+' : count}</span>
+    </button>
+  );
+}
 
 function NodeTypeBadge({
   icon,
@@ -463,6 +491,9 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
             />
           ))
         : null}
+      {data.notificationsEnabled && data.roadmapId && !hidden && !locked && !teacherBlocked ? (
+        <NodeUnreadBadge enabled roadmapId={data.roadmapId} nodeId={id} />
+      ) : null}
     </div>
   );
 }

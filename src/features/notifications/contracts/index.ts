@@ -5,3 +5,4 @@ export type {
   RoadmapAvailabilityRecipient,
 } from './roadmap-availability';
 export { NotificationTransportError } from './roadmap-availability';
+export type { NodeChangeNotice, NodeChangeRecipient } from './node-change';
