@@ -29,6 +29,12 @@ import {
   type EditorInput,
 } from '@/features/roadmap/application/editor-access';
 import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { studentNodeAccessById } from '@/features/roadmap/access';
+import {
+  visibilityNotifications,
+  type AccessSnapshot,
+  type NodeNotificationDescriptor,
+} from '@/features/roadmap/application/node-change-notifications';
 
 type JsonObject = Record<string, unknown>;
 type WithInput = EditorInput & { input: JsonObject };
@@ -44,6 +50,74 @@ type StructuralDependency = {
   sourceNodeId: string;
   targetNodeId: string;
 };
+
+async function captureAccessSnapshot(
+  transaction: Prisma.TransactionClient,
+  roadmapId: string,
+): Promise<AccessSnapshot> {
+  const [nodes, dependencies, participants] = await Promise.all([
+    transaction.roadmapNode.findMany({
+      where: { roadmapId },
+      select: {
+        id: true,
+        title: true,
+        isVisible: true,
+        isTeacherBlocked: true,
+        nodeType: { select: { name: true } },
+      },
+    }),
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId } },
+      select: { sourceNodeId: true, targetNodeId: true },
+    }),
+    transaction.participation.findMany({
+      where: { courseOffering: { roadmap: { id: roadmapId } }, isActive: true },
+      select: { userId: true, role: true },
+    }),
+  ]);
+  const visibleNodes = nodes.filter((node) => node.isVisible);
+  const visibleIds = new Set(visibleNodes.map(({ id }) => id));
+  const visibleDependencies = dependencies.filter(
+    ({ sourceNodeId, targetNodeId }) =>
+      visibleIds.has(sourceNodeId) && visibleIds.has(targetNodeId),
+  );
+  const studentIds = participants
+    .filter(({ role }) => role === 'STUDENT')
+    .map(({ userId }) => userId);
+  const completions = studentIds.length
+    ? await transaction.completion.findMany({
+        where: { userId: { in: studentIds }, roadmapNode: { roadmapId } },
+        select: { userId: true, roadmapNodeId: true },
+      })
+    : [];
+  const completionIdsByUser = new Map<string, Set<string>>();
+  for (const completion of completions) {
+    const ids = completionIdsByUser.get(completion.userId) ?? new Set<string>();
+    ids.add(completion.roadmapNodeId);
+    completionIdsByUser.set(completion.userId, ids);
+  }
+  const accessibleByUser = new Map<string, ReadonlySet<string>>();
+  for (const participant of participants) {
+    const accessible =
+      participant.role === 'TEACHER'
+        ? new Set(
+            visibleNodes.filter(({ isTeacherBlocked }) => !isTeacherBlocked).map(({ id }) => id),
+          )
+        : new Set(
+            [
+              ...studentNodeAccessById({
+                nodes: visibleNodes,
+                dependencies: visibleDependencies,
+                completedNodeIds: completionIdsByUser.get(participant.userId) ?? new Set(),
+              }),
+            ]
+              .filter(([, access]) => access.status === 'ACCESSIBLE')
+              .map(([id]) => id),
+          );
+    accessibleByUser.set(participant.userId, accessible);
+  }
+  return { nodes, accessibleByUser, participants };
+}
 
 function structuralDependencies(
   dependencies: readonly StructuralDependency[],
@@ -195,6 +269,10 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
       const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
       const requestedVisibility =
         'isVisible' in input ? requireBoolean(input.isVisible, 'isVisible') : undefined;
+      const beforeVisibility =
+        requestedVisibility === undefined
+          ? null
+          : await captureAccessSnapshot(transaction, roadmap.id);
       const data: {
         title?: string;
         description?: string | null;
@@ -250,6 +328,17 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
           : null,
         data.nodeTypeId !== undefined && data.nodeTypeId !== node.nodeTypeId ? 'nodeType' : null,
       ].filter((field): field is 'title' | 'description' | 'nodeType' => field !== null);
+      const notifications =
+        beforeVisibility && requestedVisibility !== node.isVisible
+          ? visibilityNotifications({
+              before: beforeVisibility,
+              after: await captureAccessSnapshot(transaction, roadmap.id),
+              actorId: editor.userId,
+              targetNodeId: node.id,
+              targetChange: requestedVisibility ? 'node-available' : 'node-retired',
+              roadmapId: roadmap.id,
+            })
+          : [];
       return {
         node: {
           ...nodeDto(updated),
@@ -261,6 +350,7 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
         ...(requestedVisibility !== undefined
           ? { dependencies: structuralDependencies(removedDependencies) }
           : {}),
+        ...(notifications.length ? { notifications } : {}),
       };
     },
     () =>
@@ -320,7 +410,7 @@ async function previewNodeDeletionUnsafe(input: WithId) {
 }
 
 async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDeletePreview) {
-  const fileKeys = await withSerializableTransaction(
+  const deletion = await withSerializableTransaction(
     async (transaction) => {
       const preview = await nodeDeletionPreview(transaction, { id, ...editor });
       if (previewVersion && previewVersion !== preview.version) {
@@ -334,8 +424,23 @@ async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDe
         where: { roadmapNodeId: requireUuid(id, 'nodeId'), fileKey: { not: null } },
         select: { fileKey: true },
       });
+      const roadmap = await requireEditorRoadmap(transaction, editor);
+      const before = await captureAccessSnapshot(transaction, roadmap.id);
       await transaction.roadmapNode.delete({ where: { id: requireUuid(id, 'nodeId') } });
-      return resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : []));
+      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      return {
+        fileKeys: resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : [])),
+        notifications: visibilityNotifications({
+          before,
+          after,
+          actorId: editor.userId,
+          targetNodeId: id,
+          targetChange: before.nodes.some((node) => node.id === id && node.isVisible)
+            ? 'node-deleted'
+            : undefined,
+          roadmapId: roadmap.id,
+        }),
+      };
     },
     () =>
       new ApplicationError(
@@ -344,7 +449,10 @@ async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDe
         'La eliminación entra en conflicto con otra modificación.',
       ),
   );
-  await Promise.all(fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)));
+  await Promise.all(
+    deletion.fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)),
+  );
+  return { notifications: deletion.notifications };
 }
 
 async function createRoadmapNodeTypeUnsafe({ input, ...editor }: WithInput) {

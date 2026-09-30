@@ -4,3 +4,4 @@ export {
   NotificationCountButton,
   RoadmapAvailabilityDialog,
 } from './client';
+export { UnavailableNoticeFallback } from './components/UnavailableNoticeFallback';

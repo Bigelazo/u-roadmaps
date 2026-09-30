@@ -7,6 +7,26 @@ import type {
 import { NotificationTransportError } from '../contracts';
 
 const REQUEST_TIMEOUT_MS = 3_000;
+
+function nodeMessage(notice: NodeChangeNotice) {
+  const label =
+    notice.changeKind === 'node-available'
+      ? 'Nodo disponible'
+      : notice.changeKind === 'node-updated'
+        ? 'Nodo actualizado'
+        : notice.changeKind === 'node-retired'
+          ? 'Nodo retirado'
+          : notice.changeKind === 'node-deleted'
+            ? 'Nodo eliminado'
+            : 'Nodo bloqueado';
+  const type =
+    notice.changeKind === 'node-deleted' && notice.nodeTypeName
+      ? ` Tipo anterior: ${notice.nodeTypeName}.`
+      : '';
+  const body = `${label}: ${notice.actorName} informó este cambio en el Roadmap de ${notice.courseCode}.${type}`;
+  return { noticeTitle: notice.nodeTitle.slice(0, 256), noticeBody: body.slice(0, 256), label };
+}
+
 export async function emitNodeScopedChange(
   notice: NodeChangeNotice | ResourceChangeNotice,
   transport: NotificationTransport,
@@ -14,6 +34,7 @@ export async function emitNodeScopedChange(
   workflowId: string,
 ) {
   if (!workflowId || !notice.recipients.length) return;
+  const message = 'resourceTitle' in notice ? null : nodeMessage(notice);
   for (let offset = 0; offset < notice.recipients.length; offset += 500) {
     const recipients = notice.recipients.slice(offset, offset + 500);
     await transport
@@ -41,10 +62,20 @@ export async function emitNodeScopedChange(
               semester: notice.semester,
               targetKind: 'node',
               nodeId: notice.nodeId,
+              ...('resourceTitle' in notice ? {} : { nodeTitle: notice.nodeTitle }),
+              ...('nodeTypeName' in notice && notice.nodeTypeName
+                ? { nodeTypeName: notice.nodeTypeName }
+                : {}),
+              ...('targetKind' in notice && notice.targetKind
+                ? { targetKind: notice.targetKind }
+                : {}),
               changeKind: notice.changeKind,
               occurredAt: notice.occurredAt.toISOString(),
               eventCount: 1,
               actorName: notice.actorName,
+              ...(message
+                ? { noticeTitle: message.noticeTitle, noticeBody: message.noticeBody }
+                : {}),
               ...('resourceTitle' in notice ? { resourceTitle: notice.resourceTitle } : {}),
             },
           }),

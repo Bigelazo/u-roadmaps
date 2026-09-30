@@ -82,8 +82,23 @@ export async function PATCH(
         changedFields: result.notification.changedFields,
       }).catch(() => undefined);
     }
+    for (const notification of result.notifications ?? []) {
+      await deliverNodeChange({
+        userId: user.id,
+        ...requireCourseOfferingIdentifier(params),
+        nodeId: notification.nodeId,
+        roadmapId: notification.roadmapId,
+        changeKind: notification.changeKind,
+        changedFields: [],
+        nodeTitle: notification.nodeTitle,
+        nodeTypeName: notification.nodeTypeName,
+        recipientIds: notification.recipientIds,
+        targetKind: notification.targetKind,
+      }).catch(() => undefined);
+    }
     const response = { ...result };
     delete response.notification;
+    delete response.notifications;
     return NextResponse.json(response);
   });
 }
@@ -93,10 +108,22 @@ export async function DELETE(
   context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
 ) {
   return handleApplicationResult(async () => {
-    await deleteRoadmapNode(await deletionInput(context, request)).match(
-      (value) => value,
-      throwApplicationError,
-    );
+    const input = await deletionInput(context, request);
+    const result = await deleteRoadmapNode(input).match((value) => value, throwApplicationError);
+    for (const notification of result.notifications) {
+      await deliverNodeChange({
+        userId: input.userId,
+        ...input.identifier,
+        nodeId: notification.nodeId,
+        roadmapId: notification.roadmapId,
+        changeKind: notification.changeKind,
+        changedFields: [],
+        nodeTitle: notification.nodeTitle,
+        nodeTypeName: notification.nodeTypeName,
+        recipientIds: notification.recipientIds,
+        targetKind: notification.targetKind,
+      }).catch(() => undefined);
+    }
     return new NextResponse(null, { status: 204 });
   });
 }

@@ -147,6 +147,11 @@ export async function deliverNodeChange(input: {
   nodeId: string;
   changeKind: NodeChangeNotice['changeKind'];
   changedFields: NodeChangeNotice['changedFields'];
+  nodeTitle?: string;
+  nodeTypeName?: string;
+  roadmapId?: string;
+  recipientIds?: readonly string[];
+  targetKind?: 'node' | 'roadmap';
 }) {
   if (!notificationsEnabled()) return;
   const workflowId = process.env.NOVU_WORKFLOW_NODE_CHANGE;
@@ -163,34 +168,66 @@ export async function deliverNodeChange(input: {
       },
     },
   });
+  const offering = node?.roadmap.courseOffering;
   if (
-    !node?.isVisible ||
-    node.roadmap.courseOffering.courseCode !== input.courseCode ||
-    node.roadmap.courseOffering.year !== input.year ||
-    node.roadmap.courseOffering.semester !== input.semester
+    (offering &&
+      (offering.courseCode !== input.courseCode ||
+        offering.year !== input.year ||
+        offering.semester !== input.semester)) ||
+    (!node && (!input.recipientIds || !input.nodeTitle))
   )
     return;
-
-  const offering = node.roadmap.courseOffering;
-  const recipients = await eligibleNodeRecipients({
-    node,
-    courseOfferingId: offering.id,
-    actorId: input.userId,
-  });
+  const offeringInfo =
+    offering ??
+    (await prisma.courseOffering.findUnique({
+      where: {
+        courseCode_year_semester: {
+          courseCode: input.courseCode,
+          year: input.year,
+          semester: input.semester,
+        },
+      },
+      include: { course: true },
+    }));
+  if (!offeringInfo) return;
+  const roadmapId = input.roadmapId ?? node?.roadmapId;
+  if (!roadmapId) return;
+  const recipients = input.recipientIds
+    ? await prisma.participation
+        .findMany({
+          where: {
+            courseOfferingId: offeringInfo.id,
+            isActive: true,
+            userId: { in: [...input.recipientIds], not: input.userId },
+          },
+          include: { user: { select: { id: true, name: true } } },
+        })
+        .then((participants) =>
+          participants.map(({ user }) => ({ userId: user.id, name: user.name })),
+        )
+    : node?.isVisible
+      ? await eligibleNodeRecipients({
+          node,
+          courseOfferingId: offering!.id,
+          actorId: input.userId,
+        })
+      : [];
   if (!recipients.length) return;
 
   const notice: NodeChangeNotice = {
     eventId: randomUUID(),
-    roadmapId: node.roadmapId,
-    courseOfferingId: offering.id,
-    courseCode: offering.courseCode,
-    year: offering.year,
-    semester: offering.semester,
-    courseName: offering.course.name,
-    nodeId: node.id,
-    nodeTitle: node.title,
+    roadmapId,
+    courseOfferingId: offeringInfo.id,
+    courseCode: offeringInfo.courseCode,
+    year: offeringInfo.year,
+    semester: offeringInfo.semester,
+    courseName: offeringInfo.course.name,
+    nodeId: input.nodeId,
+    nodeTitle: input.nodeTitle ?? node!.title,
     changeKind: input.changeKind,
     changedFields: input.changedFields,
+    ...(input.nodeTypeName ? { nodeTypeName: input.nodeTypeName } : {}),
+    ...(input.targetKind ? { targetKind: input.targetKind } : {}),
     actorId: input.userId,
     actorName:
       (await prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }))
@@ -204,7 +241,7 @@ export async function deliverNodeChange(input: {
     novuTransport,
     async (userIds) => {
       const active = await prisma.participation.findMany({
-        where: { courseOfferingId: offering.id, userId: { in: [...userIds] }, isActive: true },
+        where: { courseOfferingId: offeringInfo.id, userId: { in: [...userIds] }, isActive: true },
         select: { userId: true },
       });
       return active.map(({ userId }) => userId);

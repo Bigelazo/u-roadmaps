@@ -18,8 +18,11 @@ type NodeScopedNotice = Readonly<{
 
 export type NodeChangeNotice = NodeScopedNotice &
   Readonly<{
-    changeKind: 'node-available' | 'node-updated';
+    changeKind:
+      'node-available' | 'node-updated' | 'node-retired' | 'node-deleted' | 'node-blocked';
     changedFields: readonly ('title' | 'description' | 'nodeType')[];
+    nodeTypeName?: string;
+    targetKind?: 'node' | 'roadmap';
   }>;
 
 export type ResourceChangeNotice = NodeScopedNotice &

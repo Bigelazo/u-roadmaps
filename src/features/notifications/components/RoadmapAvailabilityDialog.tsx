@@ -43,6 +43,16 @@ export function RoadmapAvailabilityDialog({
     changeKind === 'resource-added' ||
     changeKind === 'resource-updated' ||
     changeKind === 'resource-removed';
+  const nodeTitle = noticeMatchesCourse ? stringValue(data?.nodeTitle, '') : '';
+  const nodeTypeName = noticeMatchesCourse ? stringValue(data?.nodeTypeName, '') : '';
+  const nodeChange =
+    changeKind === 'node-available' ||
+    changeKind === 'node-updated' ||
+    changeKind === 'node-retired' ||
+    changeKind === 'node-deleted' ||
+    changeKind === 'node-blocked';
+  const preservedNodeTitle =
+    nodeTitle || (nodeChange ? stringValue(notification?.subject, '') : '');
   const occurredAt = noticeMatchesCourse ? stringValue(data?.occurredAt, '') : '';
   const date = occurredAt ? new Date(occurredAt) : null;
   const effectiveDate =
@@ -64,14 +74,27 @@ export function RoadmapAvailabilityDialog({
       ? 'Nodo disponible'
       : changeKind === 'node-updated'
         ? 'Nodo actualizado'
-        : 'Roadmap disponible';
-  const description = resourceChange
-    ? stringValue(notification?.body, `Se modificó un recurso en ${courseName}.`)
-    : changeKind === 'node-available'
-      ? `Se agregó un Nodo al Roadmap de ${courseName}.`
-      : changeKind === 'node-updated'
-        ? `Se actualizó un Nodo del Roadmap de ${courseName}.`
-        : `Se creó el Roadmap de ${courseName} para que puedas comenzar a recorrerlo.`;
+        : changeKind === 'node-retired'
+          ? 'Nodo retirado'
+          : changeKind === 'node-deleted'
+            ? 'Nodo eliminado'
+            : changeKind === 'node-blocked'
+              ? 'Nodo bloqueado'
+              : 'Roadmap disponible';
+  const description =
+    resourceChange || (nodeChange && notification?.body)
+      ? stringValue(notification?.body, `Se modificó un recurso en ${courseName}.`)
+      : changeKind === 'node-available'
+        ? `Se agregó un Nodo al Roadmap de ${courseName}.`
+        : changeKind === 'node-updated'
+          ? `Se actualizó un Nodo del Roadmap de ${courseName}.`
+          : changeKind === 'node-retired'
+            ? `Se retiró un Nodo visible del Roadmap de ${courseName}.`
+            : changeKind === 'node-deleted'
+              ? `Se eliminó un Nodo del Roadmap de ${courseName}.`
+              : changeKind === 'node-blocked'
+                ? `Un Nodo del Roadmap de ${courseName} dejó de estar disponible.`
+                : `Se creó el Roadmap de ${courseName} para que puedas comenzar a recorrerlo.`;
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && close()}>
@@ -80,6 +103,14 @@ export function RoadmapAvailabilityDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {preservedNodeTitle ? (
+          <div className="rounded-md border bg-muted/40 p-3 text-sm">
+            <p className="font-semibold">{preservedNodeTitle}</p>
+            {changeKind === 'node-deleted' && nodeTypeName ? (
+              <p className="text-muted-foreground">Tipo: {nodeTypeName}</p>
+            ) : null}
+          </div>
+        ) : null}
         <dl className="grid gap-2 text-sm">
           <div>
             <dt className="font-semibold">Autor</dt>
