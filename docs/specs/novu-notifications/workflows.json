@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "provider": "Novu",
+  "environment": "configured per deployment",
+  "workflows": [
+    {
+      "identifier": "roadmap-available",
+      "class": "roadmap-availability",
+      "delivery": "in-app",
+      "digest": false,
+      "firstEvent": "immediate",
+      "input": {
+        "roadmapId": "uuid",
+        "courseCode": "string",
+        "year": "number",
+        "semester": "number",
+        "targetKind": "roadmap",
+        "changeKind": "roadmap-available",
+        "occurredAt": "ISO-8601 UTC string",
+        "eventCount": 1,
+        "actorName": "string"
+      },
+      "inApp": {
+        "subject": "Roadmap disponible: {{payload.courseCode}}",
+        "body": "{{payload.actorName}} creó el roadmap de {{payload.courseCode}}.",
+        "data": [
+          "roadmapId",
+          "courseCode",
+          "year",
+          "semester",
+          "targetKind",
+          "changeKind",
+          "occurredAt",
+          "eventCount",
+          "actorName"
+        ]
+      }
+    },
+    {
+      "identifier": "roadmap-node-changed",
+      "class": "node-change",
+      "delivery": "in-app",
+      "digest": { "mode": "regular-when-events-repeat", "windowSeconds": 60 },
+      "dataSchema": "roadmapId, courseCode, year, semester, targetKind, nodeId, changeKind, occurredAt, eventCount, actorName"
+    },
+    {
+      "identifier": "roadmap-path-changed",
+      "class": "path-change",
+      "delivery": "in-app",
+      "digest": { "mode": "regular-when-events-repeat", "windowSeconds": 60 },
+      "dataSchema": "roadmapId, courseCode, year, semester, targetKind, changeKind, occurredAt, eventCount, actorName"
+    },
+    {
+      "identifier": "roadmap-resource-changed",
+      "class": "resource-change",
+      "delivery": "in-app",
+      "digest": { "mode": "regular-when-events-repeat", "windowSeconds": 60 },
+      "dataSchema": "roadmapId, courseCode, year, semester, targetKind, nodeId, changeKind, occurredAt, eventCount, actorName"
+    },
+    {
+      "identifier": "roadmap-classification-changed",
+      "class": "classification-change",
+      "delivery": "in-app",
+      "digest": { "mode": "regular-when-events-repeat", "windowSeconds": 60 },
+      "dataSchema": "roadmapId, courseCode, year, semester, targetKind, changeKind, occurredAt, eventCount, actorName"
+    }
+  ]
+}

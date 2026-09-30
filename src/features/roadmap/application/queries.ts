@@ -26,7 +26,7 @@ export function createRoadmapForActor(
         throw error;
       },
     );
-    return createRoadmap(identifier, await readInput()).match(
+    return createRoadmap(identifier, await readInput(), actor).match(
       (value) => value,
       (error) => {
         throw error;

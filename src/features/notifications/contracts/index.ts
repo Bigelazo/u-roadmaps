@@ -1,0 +1,7 @@
+export type {
+  ActiveRecipientLookup,
+  NotificationTransport,
+  RoadmapAvailabilityNotice,
+  RoadmapAvailabilityRecipient,
+} from './roadmap-availability';
+export { NotificationTransportError } from './roadmap-availability';

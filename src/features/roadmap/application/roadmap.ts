@@ -260,14 +260,18 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
 
 // El curso puede llegar sin descripción cuando ya está materializado desde
 // U-Campus. En ese caso conserva el nombre y el departamento registrados.
-async function createRoadmapUnsafe(identifier: CourseOfferingIdentifier, body: JsonObject) {
+async function createRoadmapUnsafe(
+  identifier: CourseOfferingIdentifier,
+  body: JsonObject,
+  actor: { id: string; name?: string },
+) {
   const courseBody =
     body.course && typeof body.course === 'object' && !Array.isArray(body.course)
       ? (body.course as JsonObject)
       : undefined;
 
   try {
-    const roadmap = await prisma.$transaction(async (transaction) => {
+    const creation = await prisma.$transaction(async (transaction) => {
       const [existingCourse, existingCourseOffering] = await Promise.all([
         transaction.course.findUnique({ where: { code: identifier.courseCode } }),
         transaction.courseOffering.findUnique({
@@ -301,11 +305,37 @@ async function createRoadmapUnsafe(identifier: CourseOfferingIdentifier, body: J
         (await transaction.courseOffering.create({
           data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
         }));
-      return transaction.roadmap.create({
+      const roadmap = await transaction.roadmap.create({
         data: { courseOfferingId: materializedCourseOffering.id },
       });
+      const recipients = await transaction.participation.findMany({
+        where: { courseOfferingId: materializedCourseOffering.id, isActive: true },
+        select: { userId: true, user: { select: { name: true } } },
+      });
+      return {
+        roadmap,
+        courseOfferingId: materializedCourseOffering.id,
+        courseName: course.name,
+        recipients: recipients.map(({ userId, user }) => ({ userId, name: user.name })),
+        occurredAt: new Date(),
+      };
     });
-    return roadmap;
+    return {
+      roadmap: creation.roadmap,
+      availabilityNotice: {
+        eventId: creation.roadmap.id,
+        roadmapId: creation.roadmap.id,
+        courseOfferingId: creation.courseOfferingId,
+        courseCode: identifier.courseCode,
+        year: identifier.year,
+        semester: identifier.semester,
+        courseName: creation.courseName,
+        actorId: actor.id,
+        actorName: actor.name ?? actor.id,
+        occurredAt: creation.occurredAt,
+        recipients: creation.recipients.filter(({ userId }) => userId !== actor.id),
+      },
+    };
   } catch (error) {
     handlePrismaError(error);
   }
@@ -319,6 +349,10 @@ export function getRoadmapDto(identifier: CourseOfferingIdentifier, includeHidde
   return applicationResult(() => getRoadmapDtoUnsafe(identifier, includeHidden));
 }
 
-export function createRoadmap(identifier: CourseOfferingIdentifier, body: JsonObject) {
-  return applicationResult(() => createRoadmapUnsafe(identifier, body));
+export function createRoadmap(
+  identifier: CourseOfferingIdentifier,
+  body: JsonObject,
+  actor: { id: string; name?: string },
+) {
+  return applicationResult(() => createRoadmapUnsafe(identifier, body, actor));
 }

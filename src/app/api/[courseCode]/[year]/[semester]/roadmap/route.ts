@@ -7,6 +7,7 @@ import {
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { createRoadmapForActor, readRoadmapForParticipant } from '@/features/roadmap/server';
+import { deliverRoadmapAvailability } from '@/features/notifications/server';
 
 export async function GET(
   _request: Request,
@@ -31,10 +32,14 @@ export async function POST(
   return handleApplicationResult(async () => {
     const identifier = requireCourseOfferingIdentifier(await context.params);
     const actor = await requireAuthenticatedUser();
-    const roadmap = await createRoadmapForActor(actor, identifier, () => parseJson(request)).match(
+    const created = await createRoadmapForActor(actor, identifier, () => parseJson(request)).match(
       (value) => value,
       throwApplicationError,
     );
-    return NextResponse.json({ roadmap: { id: roadmap.id }, ...identifier }, { status: 201 });
+    await deliverRoadmapAvailability(created.availabilityNotice);
+    return NextResponse.json(
+      { roadmap: { id: created.roadmap.id }, ...identifier },
+      { status: 201 },
+    );
   });
 }

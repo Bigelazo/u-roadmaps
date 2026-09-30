@@ -3,11 +3,15 @@ import { synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
+import { RoadmapAvailabilityDialog } from '@/features/notifications';
 
 export default async function CoursePage(
   props: PageProps<'/courses/[courseCode]/[year]/[semester]'>,
 ) {
   const params = await props.params;
+  const searchParams = await props.searchParams;
+  const singleSearchParam = (value: string | string[] | undefined) =>
+    typeof value === 'string' ? value : null;
   const identifier = parseCourseOfferingIdentifier(params);
   if (!identifier) notFound();
 
@@ -49,6 +53,12 @@ export default async function CoursePage(
           kind: isTeaching ? 'teaching' : 'student',
           term: isHistorical ? 'historical' : 'current',
         }}
+      />
+      <RoadmapAvailabilityDialog
+        noticeId={singleSearchParam(searchParams.notice)}
+        courseName={singleSearchParam(searchParams.course) ?? courseName}
+        actorName={singleSearchParam(searchParams.actor) ?? 'Equipo docente'}
+        occurredAt={singleSearchParam(searchParams.occurredAt) ?? ''}
       />
     </main>
   );

@@ -1,10 +1,13 @@
 import Link from 'next/link';
 import { Network } from 'lucide-react';
 import SessionButton from './SessionButton';
+import { NotificationsInbox } from '@/features/notifications';
+import type { InboxIdentity } from '@/features/notifications/server';
 
 type GlobalNavigationProps = Readonly<{
   isAuthenticated: boolean;
   userName: string | null;
+  inboxIdentity?: InboxIdentity | null;
 }>;
 
 function navbarUserName(name: string) {
@@ -13,7 +16,11 @@ function navbarUserName(name: string) {
   return [parts[0], ...parts.slice(-2)].join(' ');
 }
 
-export default function GlobalNavigation({ isAuthenticated, userName }: GlobalNavigationProps) {
+export default function GlobalNavigation({
+  isAuthenticated,
+  userName,
+  inboxIdentity,
+}: GlobalNavigationProps) {
   return (
     <header className="sticky top-0 z-20 box-border h-16 border-b bg-background">
       <div className="mx-auto flex h-full max-w-360 items-center px-4 sm:px-6">
@@ -25,6 +32,9 @@ export default function GlobalNavigation({ isAuthenticated, userName }: GlobalNa
           <span className="text-xl font-bold tracking-[-0.04em]">U-Roadmaps</span>
         </Link>
         <div className="ml-auto flex min-w-0 items-center gap-3">
+          {isAuthenticated && inboxIdentity ? (
+            <NotificationsInbox identity={inboxIdentity} />
+          ) : null}
           {userName ? (
             <span
               className="max-w-44 truncate text-sm font-medium text-foreground sm:max-w-72"

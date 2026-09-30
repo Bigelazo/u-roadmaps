@@ -26,6 +26,8 @@
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@dagrejs/dagre": "^3.1.1",
+    "@novu/api": "3.19.1",
+    "@novu/nextjs": "3.19.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@xyflow/react": "12.11.3",

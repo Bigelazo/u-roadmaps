@@ -16,6 +16,7 @@ const roadmapEditingPositions: readonly MufasaInstitutionalCoursePosition[] = [
 
 export type AcademicUser = Readonly<{
   id: string;
+  name?: string;
   rut: string | null;
   useLocalFixtureData?: boolean;
 }>;
