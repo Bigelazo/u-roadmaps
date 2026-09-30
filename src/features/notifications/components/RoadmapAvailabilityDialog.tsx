@@ -1,8 +1,8 @@
 'use client';
 
-import { useNotifications } from '@novu/nextjs/hooks';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSelectedNotification } from './NotificationsInbox';
 import {
   Dialog,
   DialogClose,
@@ -23,20 +23,29 @@ type Props = Readonly<{
 
 export function RoadmapAvailabilityDialog({ noticeId, courseName, actorName, occurredAt }: Props) {
   const router = useRouter();
-  const { notifications } = useNotifications({ limit: 10 });
+  const { notification, select } = useSelectedNotification();
   const acknowledgedNotice = useRef<string | null>(null);
+  const [readError, setReadError] = useState(false);
   const date = new Date(occurredAt);
   const effectiveDate = Number.isNaN(date.getTime())
     ? 'Fecha no disponible'
     : new Intl.DateTimeFormat('es-CL', { dateStyle: 'long', timeStyle: 'short' }).format(date);
 
+  const markRead = useCallback(() => {
+    if (!notification) return;
+    setReadError(false);
+    void notification.read().then(
+      () => select(null),
+      () => setReadError(true),
+    );
+  }, [notification, select]);
+
   useEffect(() => {
-    if (!noticeId || acknowledgedNotice.current === noticeId) return;
-    const notice = notifications?.find((item) => item.id === noticeId);
-    if (!notice) return;
+    if (!noticeId || notification?.id !== noticeId || acknowledgedNotice.current === noticeId)
+      return;
     acknowledgedNotice.current = noticeId;
-    void notice.read();
-  }, [noticeId, notifications]);
+    markRead();
+  }, [markRead, noticeId, notification]);
 
   function close() {
     router.replace(window.location.pathname, { scroll: false });
@@ -61,6 +70,14 @@ export function RoadmapAvailabilityDialog({ noticeId, courseName, actorName, occ
             <dd className="text-muted-foreground">{effectiveDate}</dd>
           </div>
         </dl>
+        {readError ? (
+          <p className="text-sm text-destructive" role="alert">
+            No se pudo reconocer el aviso.{' '}
+            <button className="font-semibold underline" onClick={markRead} type="button">
+              Reintentar
+            </button>
+          </p>
+        ) : null}
         <DialogFooter>
           <DialogClose
             render={

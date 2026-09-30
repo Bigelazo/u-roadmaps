@@ -3,13 +3,22 @@
 import { NovuProvider } from '@novu/nextjs';
 import { useCounts, useNotifications } from '@novu/nextjs/hooks';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
-import { Bell } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Bell, X } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import type { InboxIdentity } from '../server';
 
 type NotificationRecord = NonNullable<ReturnType<typeof useNotifications>['notifications']>[number];
+
+const SelectedNotificationContext = createContext<{
+  notification: NotificationRecord | null;
+  select: (notification: NotificationRecord | null) => void;
+}>({ notification: null, select: () => undefined });
+
+export function useSelectedNotification() {
+  return useContext(SelectedNotificationContext);
+}
 
 function stringField(data: Record<string, unknown>, field: string) {
   const value = data[field];
@@ -36,21 +45,47 @@ function NotificationRow({
   notification: NotificationRecord;
   onSelect: (notification: NotificationRecord) => void;
 }) {
-  useEffect(() => {
-    notification.seen();
+  const [seenError, setSeenError] = useState(false);
+
+  const markSeen = useCallback(() => {
+    void notification.seen().then(
+      () => setSeenError(false),
+      () => setSeenError(true),
+    );
   }, [notification]);
+
+  useEffect(() => {
+    markSeen();
+  }, [markSeen]);
 
   return (
     <li>
-      <button
-        className="flex min-h-16 w-full flex-col items-start gap-1 border-b px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-        onClick={() => onSelect(notification)}
-        type="button"
-      >
-        <span className="font-semibold">{notification.subject ?? 'Aviso de U-Roadmaps'}</span>
-        <span className="text-sm text-muted-foreground">{notification.body}</span>
-        <time className="text-xs text-muted-foreground">{notificationDate(notification)}</time>
-      </button>
+      <div className="border-b">
+        <button
+          className="flex min-h-16 w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          onClick={() => onSelect(notification)}
+          type="button"
+        >
+          <span className="font-semibold">{notification.subject ?? 'Aviso de U-Roadmaps'}</span>
+          <span className="text-sm text-muted-foreground">{notification.body}</span>
+          <time className="text-xs text-muted-foreground">{notificationDate(notification)}</time>
+        </button>
+        {seenError ? (
+          <div
+            className="flex items-center justify-between px-4 pb-2 text-xs text-destructive"
+            role="status"
+          >
+            <span>No se pudo marcar como visto.</span>
+            <button
+              className="min-h-11 px-2 font-semibold underline"
+              onClick={markSeen}
+              type="button"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : null}
+      </div>
     </li>
   );
 }
@@ -58,6 +93,7 @@ function NotificationRow({
 function InboxBell() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const { select } = useSelectedNotification();
   const {
     counts,
     isLoading: countsLoading,
@@ -82,6 +118,7 @@ function InboxBell() {
       actor: stringField(data, 'actorName') ?? 'Equipo docente',
       occurredAt,
     });
+    select(notification);
     router.push(
       `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}?${params.toString()}`,
     );
@@ -107,17 +144,34 @@ function InboxBell() {
         ) : null}
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Positioner align="end" side="bottom" sideOffset={8}>
-          <PopoverPrimitive.Popup className="z-50 max-h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none">
-            <div className="border-b px-4 py-3">
+        <PopoverPrimitive.Positioner
+          align="end"
+          className="max-lg:!fixed max-lg:!inset-0 max-lg:!translate-x-0 max-lg:!translate-y-0"
+          side="bottom"
+          sideOffset={8}
+        >
+          <PopoverPrimitive.Popup className="z-50 max-h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none max-lg:h-dvh max-lg:max-h-dvh max-lg:w-screen max-lg:max-w-none max-lg:rounded-none lg:rounded-xl">
+            <div className="flex items-center justify-between border-b px-4 py-3">
               <h2 className="font-heading text-base font-semibold">Avisos</h2>
-              {countsError ? (
-                <p className="mt-1 text-sm text-destructive" role="status">
-                  No se pudo actualizar el contador.
-                </p>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {countsError ? (
+                  <p className="mt-1 text-sm text-destructive" role="status">
+                    No se pudo actualizar el contador.
+                  </p>
+                ) : null}
+                <Button
+                  aria-label="Cerrar avisos"
+                  className="lg:hidden"
+                  onClick={() => setOpen(false)}
+                  size="icon"
+                  type="button"
+                  variant="ghost"
+                >
+                  <X aria-hidden="true" size={20} />
+                </Button>
+              </div>
             </div>
-            <div className="max-h-[calc(min(32rem,100dvh-6rem)-4rem)] overflow-y-auto">
+            <div className="max-h-[calc(min(32rem,100dvh-6rem)-4rem)] overflow-y-auto max-lg:h-[calc(100dvh-4rem)] max-lg:max-h-none">
               {isLoading && !notifications ? (
                 <p className="p-6 text-center text-sm text-muted-foreground" role="status">
                   Cargando avisos…
@@ -176,19 +230,31 @@ export function NotificationsProvider({
   identity: InboxIdentity | null;
   children: ReactNode;
 }) {
-  if (!identity) return children;
-
   return (
-    <NovuProvider
-      key={identity.subscriber}
-      applicationIdentifier={identity.applicationIdentifier}
-      subscriber={identity.subscriber}
-      subscriberHash={identity.subscriberHash}
-      apiUrl={identity.apiUrl}
-      socketUrl={identity.socketUrl}
-    >
+    <SelectedNotificationProvider key={identity?.subscriber ?? 'anonymous'}>
+      {identity ? (
+        <NovuProvider
+          applicationIdentifier={identity.applicationIdentifier}
+          subscriber={identity.subscriber}
+          subscriberHash={identity.subscriberHash}
+          apiUrl={identity.apiUrl}
+          socketUrl={identity.socketUrl}
+        >
+          {children}
+        </NovuProvider>
+      ) : (
+        children
+      )}
+    </SelectedNotificationProvider>
+  );
+}
+
+function SelectedNotificationProvider({ children }: { children: ReactNode }) {
+  const [notification, select] = useState<NotificationRecord | null>(null);
+  return (
+    <SelectedNotificationContext.Provider value={{ notification, select }}>
       {children}
-    </NovuProvider>
+    </SelectedNotificationContext.Provider>
   );
 }
 

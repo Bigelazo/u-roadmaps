@@ -4,6 +4,7 @@ import { getApplicationSession, resolveSessionUser } from '@/shared/server/sessi
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapAvailabilityDialog } from '@/features/notifications';
+import { getInboxIdentity } from '@/features/notifications/server';
 
 export default async function CoursePage(
   props: PageProps<'/courses/[courseCode]/[year]/[semester]'>,
@@ -44,6 +45,7 @@ export default async function CoursePage(
     academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now(),
   );
   const courseName = courseOffering.course.name ?? identifier.courseCode;
+  const inboxIdentity = getInboxIdentity(user.id);
 
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
@@ -54,12 +56,14 @@ export default async function CoursePage(
           term: isHistorical ? 'historical' : 'current',
         }}
       />
-      <RoadmapAvailabilityDialog
-        noticeId={singleSearchParam(searchParams.notice)}
-        courseName={singleSearchParam(searchParams.course) ?? courseName}
-        actorName={singleSearchParam(searchParams.actor) ?? 'Equipo docente'}
-        occurredAt={singleSearchParam(searchParams.occurredAt) ?? ''}
-      />
+      {inboxIdentity && singleSearchParam(searchParams.notice) ? (
+        <RoadmapAvailabilityDialog
+          noticeId={singleSearchParam(searchParams.notice)}
+          courseName={singleSearchParam(searchParams.course) ?? courseName}
+          actorName={singleSearchParam(searchParams.actor) ?? 'Equipo docente'}
+          occurredAt={singleSearchParam(searchParams.occurredAt) ?? ''}
+        />
+      ) : null}
     </main>
   );
 }
