@@ -44,6 +44,7 @@ export function RoadmapAvailabilityDialog({
     changeKind === 'resource-updated' ||
     changeKind === 'resource-removed';
   const pathChange = changeKind === 'dependency-added' || changeKind === 'dependency-removed';
+  const classificationChange = changeKind === 'classification-updated';
   const nodeTitle = noticeMatchesCourse ? stringValue(data?.nodeTitle, '') : '';
   const nodeTypeName = noticeMatchesCourse ? stringValue(data?.nodeTypeName, '') : '';
   const nodeChange =
@@ -71,8 +72,11 @@ export function RoadmapAvailabilityDialog({
 
   const title = resourceChange
     ? stringValue(notification?.subject, 'Cambio de recurso')
-    : pathChange
-      ? stringValue(notification?.subject, 'Ruta actualizada')
+    : pathChange || classificationChange
+      ? stringValue(
+          notification?.subject,
+          classificationChange ? 'Clasificación actualizada' : 'Ruta actualizada',
+        )
       : changeKind === 'node-available'
         ? 'Nodo disponible'
         : changeKind === 'node-updated'
@@ -85,12 +89,14 @@ export function RoadmapAvailabilityDialog({
                 ? 'Nodo bloqueado'
                 : 'Roadmap disponible';
   const description =
-    resourceChange || pathChange || (nodeChange && notification?.body)
+    resourceChange || pathChange || classificationChange || (nodeChange && notification?.body)
       ? stringValue(
           notification?.body,
           pathChange
             ? `Se actualizó la ruta del Roadmap de ${courseName}.`
-            : `Se modificó un recurso en ${courseName}.`,
+            : classificationChange
+              ? `Se actualizó la clasificación del Roadmap de ${courseName}.`
+              : `Se modificó un recurso en ${courseName}.`,
         )
       : changeKind === 'node-available'
         ? `Se agregó un Nodo al Roadmap de ${courseName}.`

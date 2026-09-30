@@ -6,6 +6,7 @@ import {
 } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { deliverRoadmapClassificationChange } from '@/features/notifications/server';
 import { deleteRoadmapNodeType, updateRoadmapNodeType } from '@/features/roadmap/server';
 
 export async function PATCH(
@@ -16,13 +17,20 @@ export async function PATCH(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
-    const nodeType = await updateRoadmapNodeType({
+    const result = await updateRoadmapNodeType({
       userId: user.id,
       identifier,
       id: params.typeId,
       input: body,
     }).match((value) => value, throwApplicationError);
-    return NextResponse.json({ nodeType });
+    if (result.notification) {
+      await deliverRoadmapClassificationChange({
+        userId: user.id,
+        identifier,
+        ...result.notification,
+      }).catch(() => undefined);
+    }
+    return NextResponse.json({ nodeType: result.nodeType });
   });
 }
 

@@ -30,6 +30,7 @@ import {
 } from '@/features/roadmap/application/editor-access';
 import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
 import { dependencyChangeNotifications } from '@/features/roadmap/application/dependency-change-notifications';
+import { nodeTypeClassificationNotification } from '@/features/roadmap/application/node-type-classification-notifications';
 import {
   accessTransitionNotifications,
   projectAccessSnapshot,
@@ -468,7 +469,31 @@ async function updateRoadmapNodeTypeUnsafe({
         'INVALID_REQUEST',
         'Debe indicar nombre, ícono o color para actualizar.',
       );
-    return typeDto(await transaction.nodeType.update({ where: { id: nodeType.id }, data }));
+    const updated = await transaction.nodeType.update({ where: { id: nodeType.id }, data });
+    let notification: ReturnType<typeof nodeTypeClassificationNotification> | undefined;
+    if (data.name !== undefined && data.name !== nodeType.name) {
+      const visibleNodeCount = await transaction.roadmapNode.count({
+        where: { roadmapId: roadmap.id, nodeTypeId: nodeType.id, isVisible: true },
+      });
+      if (visibleNodeCount > 0) {
+        const participants = await transaction.participation.findMany({
+          where: { courseOfferingId: roadmap.courseOfferingId, isActive: true },
+          select: { userId: true, isActive: true },
+        });
+        notification = nodeTypeClassificationNotification({
+          roadmapId: roadmap.id,
+          previousTypeName: nodeType.name,
+          nextTypeName: updated.name,
+          visibleNodeCount,
+          actorId: editor.userId,
+          participants,
+        });
+      }
+    }
+    return {
+      nodeType: typeDto(updated),
+      ...(notification ? { notification } : {}),
+    };
   });
 }
 

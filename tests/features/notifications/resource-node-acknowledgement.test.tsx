@@ -115,6 +115,15 @@ test('entering a Roadmap recognizes route notices and blocked Nodes while access
     },
     read: vi.fn(async () => ({ error: null })),
   };
+  const classificationNotice = {
+    id: 'classification-notice',
+    data: {
+      roadmapId: 'roadmap-id',
+      targetKind: 'roadmap',
+      changeKind: 'classification-updated',
+    },
+    read: vi.fn(async () => ({ error: null })),
+  };
   const accessibleNodeNotice = {
     id: 'accessible-node-notice',
     data: {
@@ -127,7 +136,7 @@ test('entering a Roadmap recognizes route notices and blocked Nodes while access
   };
   novu.notifications.list.mockResolvedValue({
     data: {
-      notifications: [pathNotice, blockedNodeNotice, accessibleNodeNotice],
+      notifications: [pathNotice, classificationNotice, blockedNodeNotice, accessibleNodeNotice],
       hasMore: false,
     },
   });
@@ -152,6 +161,7 @@ test('entering a Roadmap recognizes route notices and blocked Nodes while access
   });
 
   expect(pathNotice.read).toHaveBeenCalledOnce();
+  expect(classificationNotice.read).toHaveBeenCalledOnce();
   expect(blockedNodeNotice.read).toHaveBeenCalledOnce();
   expect(accessibleNodeNotice.read).not.toHaveBeenCalled();
 });
