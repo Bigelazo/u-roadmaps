@@ -16,6 +16,10 @@ export {
   updateRoadmapNodeType,
 } from '@/features/roadmap/application/editor';
 export type { NodeNotificationDescriptor } from '@/features/roadmap/application/node-change-notifications';
+export type {
+  DependencyNotificationBatch,
+  DependencyPathNotificationDescriptor,
+} from '@/features/roadmap/application/dependency-change-notifications';
 export {
   createRoadmapResource,
   downloadRoadmapResource,

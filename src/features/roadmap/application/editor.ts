@@ -29,6 +29,7 @@ import {
   type EditorInput,
 } from '@/features/roadmap/application/editor-access';
 import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { dependencyChangeNotifications } from '@/features/roadmap/application/dependency-change-notifications';
 import {
   accessTransitionNotifications,
   projectAccessSnapshot,
@@ -492,7 +493,8 @@ type PreparedRoadmapDependency = {
   targetNodeId: string;
   sourceHandle: string;
   targetHandle: string;
-  sourceNode: { isTeacherBlocked: boolean };
+  sourceNode: { title: string; isVisible: boolean; isTeacherBlocked: boolean };
+  targetNode: { title: string; isVisible: boolean };
   dependencies: Array<{ sourceNodeId: string; targetNodeId: string }>;
 };
 
@@ -539,6 +541,7 @@ async function prepareRoadmapDependency(
     sourceHandle,
     targetHandle,
     sourceNode,
+    targetNode,
     dependencies,
   };
 }
@@ -582,6 +585,7 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
   return withSerializableTransaction(
     async (transaction) => {
       const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
+      const before = await captureAccessSnapshot(transaction, prepared.roadmapId);
       const [dependency, nodes] = await Promise.all([
         transaction.dependency.create({
           data: {
@@ -605,6 +609,7 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
           data: { isTeacherBlocked: true },
         });
       }
+      const after = await captureAccessSnapshot(transaction, prepared.roadmapId);
       return {
         dependency: {
           id: dependency.id,
@@ -614,6 +619,15 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
           targetHandle: prepared.targetHandle,
         },
         nodes,
+        notifications: dependencyChangeNotifications({
+          before,
+          after,
+          actorId: editor.userId,
+          roadmapId: prepared.roadmapId,
+          changeKind: 'dependency-added',
+          sourceNode: prepared.sourceNode,
+          targetNode: prepared.targetNode,
+        }),
       };
     },
     () =>
@@ -638,20 +652,45 @@ async function previewRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
 }
 
 async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
-  return prisma.$transaction(async (transaction) => {
-    const roadmap = await requireEditorRoadmap(transaction, editor);
-    const dependencyId = requireUuid(id, 'dependencyId');
-    const dependency = await transaction.dependency.findFirst({
-      where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
-    });
-    if (!dependency)
-      throw new ApplicationError(
-        404,
-        'DEPENDENCY_NOT_FOUND',
-        'La dependencia no existe en este roadmap.',
-      );
-    await transaction.dependency.delete({ where: { id: dependency.id } });
-  });
+  return withSerializableTransaction(
+    async (transaction) => {
+      const roadmap = await requireEditorRoadmap(transaction, editor);
+      const dependencyId = requireUuid(id, 'dependencyId');
+      const dependency = await transaction.dependency.findFirst({
+        where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
+        include: {
+          sourceNode: { select: { title: true, isVisible: true } },
+          targetNode: { select: { title: true, isVisible: true } },
+        },
+      });
+      if (!dependency)
+        throw new ApplicationError(
+          404,
+          'DEPENDENCY_NOT_FOUND',
+          'La dependencia no existe en este roadmap.',
+        );
+      const before = await captureAccessSnapshot(transaction, roadmap.id);
+      await transaction.dependency.delete({ where: { id: dependency.id } });
+      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      return {
+        notifications: dependencyChangeNotifications({
+          before,
+          after,
+          actorId: editor.userId,
+          roadmapId: roadmap.id,
+          changeKind: 'dependency-removed',
+          sourceNode: dependency.sourceNode,
+          targetNode: dependency.targetNode,
+        }),
+      };
+    },
+    () =>
+      new ApplicationError(
+        409,
+        'DEPENDENCY_CONFLICT',
+        'La dependencia entra en conflicto con otra modificación.',
+      ),
+  );
 }
 
 async function nodeVisibilityPreview(transaction: Prisma.TransactionClient, input: WithId) {

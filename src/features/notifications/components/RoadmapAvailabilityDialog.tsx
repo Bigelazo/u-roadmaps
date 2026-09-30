@@ -43,6 +43,7 @@ export function RoadmapAvailabilityDialog({
     changeKind === 'resource-added' ||
     changeKind === 'resource-updated' ||
     changeKind === 'resource-removed';
+  const pathChange = changeKind === 'dependency-added' || changeKind === 'dependency-removed';
   const nodeTitle = noticeMatchesCourse ? stringValue(data?.nodeTitle, '') : '';
   const nodeTypeName = noticeMatchesCourse ? stringValue(data?.nodeTypeName, '') : '';
   const nodeChange =
@@ -70,20 +71,27 @@ export function RoadmapAvailabilityDialog({
 
   const title = resourceChange
     ? stringValue(notification?.subject, 'Cambio de recurso')
-    : changeKind === 'node-available'
-      ? 'Nodo disponible'
-      : changeKind === 'node-updated'
-        ? 'Nodo actualizado'
-        : changeKind === 'node-retired'
-          ? 'Nodo retirado'
-          : changeKind === 'node-deleted'
-            ? 'Nodo eliminado'
-            : changeKind === 'node-blocked'
-              ? 'Nodo bloqueado'
-              : 'Roadmap disponible';
+    : pathChange
+      ? stringValue(notification?.subject, 'Ruta actualizada')
+      : changeKind === 'node-available'
+        ? 'Nodo disponible'
+        : changeKind === 'node-updated'
+          ? 'Nodo actualizado'
+          : changeKind === 'node-retired'
+            ? 'Nodo retirado'
+            : changeKind === 'node-deleted'
+              ? 'Nodo eliminado'
+              : changeKind === 'node-blocked'
+                ? 'Nodo bloqueado'
+                : 'Roadmap disponible';
   const description =
-    resourceChange || (nodeChange && notification?.body)
-      ? stringValue(notification?.body, `Se modificó un recurso en ${courseName}.`)
+    resourceChange || pathChange || (nodeChange && notification?.body)
+      ? stringValue(
+          notification?.body,
+          pathChange
+            ? `Se actualizó la ruta del Roadmap de ${courseName}.`
+            : `Se modificó un recurso en ${courseName}.`,
+        )
       : changeKind === 'node-available'
         ? `Se agregó un Nodo al Roadmap de ${courseName}.`
         : changeKind === 'node-updated'

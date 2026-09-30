@@ -6,10 +6,12 @@ import { studentNodeAccessById } from '@/features/roadmap/access';
 import type {
   NodeChangeNotice,
   RoadmapAvailabilityNotice,
+  RoadmapPathChangeNotice,
   ResourceChangeNotice,
 } from './contracts';
 import { emitRoadmapAvailability } from './application/emit-roadmap-availability';
 import { emitNodeScopedChange } from './application/emit-node-scoped-change';
+import { emitRoadmapPathChange } from './application/emit-roadmap-path-change';
 import { novuTransport } from './infrastructure/novu-transport';
 import { createSubscriberHash } from './infrastructure/subscriber-hash';
 
@@ -242,6 +244,69 @@ export async function deliverNodeChange(input: {
     async (userIds) => {
       const active = await prisma.participation.findMany({
         where: { courseOfferingId: offeringInfo.id, userId: { in: [...userIds] }, isActive: true },
+        select: { userId: true },
+      });
+      return active.map(({ userId }) => userId);
+    },
+    workflowId,
+  ).catch(() => undefined);
+}
+
+export async function deliverRoadmapPathChange(input: {
+  userId: string;
+  identifier: { courseCode: string; year: number; semester: number };
+  roadmapId: string;
+  changeKind: RoadmapPathChangeNotice['changeKind'];
+  dependentNodeTitle: string;
+  prerequisiteNodeTitle: string;
+  recipientIds: readonly string[];
+}) {
+  if (!notificationsEnabled()) return;
+  const workflowId = process.env.NOVU_WORKFLOW_PATH_CHANGE;
+  if (!workflowId || input.recipientIds.length === 0) return;
+
+  const [offering, actor] = await Promise.all([
+    prisma.courseOffering.findUnique({
+      where: { courseCode_year_semester: input.identifier },
+      include: { roadmap: { select: { id: true } } },
+    }),
+    prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }),
+  ]);
+  if (!offering || offering.roadmap?.id !== input.roadmapId) return;
+
+  const participants = await prisma.participation.findMany({
+    where: {
+      courseOfferingId: offering.id,
+      isActive: true,
+      userId: { in: [...input.recipientIds], not: input.userId },
+    },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  const recipients = participants.map(({ user }) => ({ userId: user.id, name: user.name }));
+  if (!recipients.length) return;
+
+  const notice: RoadmapPathChangeNotice = {
+    eventId: randomUUID(),
+    roadmapId: input.roadmapId,
+    courseOfferingId: offering.id,
+    courseCode: offering.courseCode,
+    year: offering.year,
+    semester: offering.semester,
+    changeKind: input.changeKind,
+    dependentNodeTitle: input.dependentNodeTitle,
+    prerequisiteNodeTitle: input.prerequisiteNodeTitle,
+    actorId: input.userId,
+    actorName: actor?.name ?? 'Equipo docente',
+    occurredAt: new Date(),
+    recipients,
+  };
+
+  await emitRoadmapPathChange(
+    notice,
+    novuTransport,
+    async (userIds) => {
+      const active = await prisma.participation.findMany({
+        where: { courseOfferingId: offering.id, userId: { in: [...userIds] }, isActive: true },
         select: { userId: true },
       });
       return active.map(({ userId }) => userId);
