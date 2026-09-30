@@ -1,9 +1,14 @@
-import type { ActiveRecipientLookup, NodeChangeNotice, NotificationTransport } from '../contracts';
+import type {
+  ActiveRecipientLookup,
+  NodeChangeNotice,
+  NotificationTransport,
+  ResourceChangeNotice,
+} from '../contracts';
 import { NotificationTransportError } from '../contracts';
 
 const REQUEST_TIMEOUT_MS = 3_000;
-export async function emitNodeChange(
-  notice: NodeChangeNotice,
+export async function emitNodeScopedChange(
+  notice: NodeChangeNotice | ResourceChangeNotice,
   transport: NotificationTransport,
   findActiveRecipients: ActiveRecipientLookup,
   workflowId: string,
@@ -40,6 +45,7 @@ export async function emitNodeChange(
               occurredAt: notice.occurredAt.toISOString(),
               eventCount: 1,
               actorName: notice.actorName,
+              ...('resourceTitle' in notice ? { resourceTitle: notice.resourceTitle } : {}),
             },
           }),
           REQUEST_TIMEOUT_MS,

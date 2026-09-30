@@ -107,21 +107,34 @@ async function updateRoadmapResourceUnsafe({
         'INVALID_REQUEST',
         'Debe indicar al menos un campo para actualizar.',
       );
-    return resourceDto(
-      await transaction.resource.update({ where: { id: resource.id }, data }),
-      editor.identifier,
+    const changed = Object.entries(data).some(
+      ([field, value]) => resource[field as 'title' | 'url' | 'type'] !== value,
     );
+    const updated = changed
+      ? await transaction.resource.update({ where: { id: resource.id }, data })
+      : resource;
+    return {
+      resource: resourceDto(updated, editor.identifier),
+      ...(changed
+        ? { notification: { nodeId: resource.roadmapNodeId, resourceTitle: updated.title } }
+        : {}),
+    };
   });
 }
 
 async function removeRoadmapResourceUnsafe({ id, ...editor }: ResourceInput) {
-  const fileKey = await prisma.$transaction(async (transaction) => {
+  const deleted = await prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
     await transaction.resource.delete({ where: { id: resource.id } });
-    return resource.fileKey;
+    return {
+      fileKey: resource.fileKey,
+      nodeId: resource.roadmapNodeId,
+      resourceTitle: resource.title,
+    };
   });
-  if (fileKey) await deleteUploadedFile(fileKey).catch(() => undefined);
+  if (deleted.fileKey) await deleteUploadedFile(deleted.fileKey).catch(() => undefined);
+  return { nodeId: deleted.nodeId, resourceTitle: deleted.resourceTitle };
 }
 
 export function createRoadmapResource(input: ResourceInput & { input: JsonObject }) {

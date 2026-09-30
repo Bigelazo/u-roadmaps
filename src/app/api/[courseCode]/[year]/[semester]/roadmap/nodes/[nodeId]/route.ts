@@ -77,11 +77,13 @@ export async function PATCH(
       await deliverNodeChange({
         userId: user.id,
         ...requireCourseOfferingIdentifier(params),
-        ...result.notification,
         nodeId: result.node.id,
+        changeKind: result.notification.kind,
+        changedFields: result.notification.changedFields,
       }).catch(() => undefined);
     }
-    const { notification: _notification, ...response } = result;
+    const response = { ...result };
+    delete response.notification;
     return NextResponse.json(response);
   });
 }

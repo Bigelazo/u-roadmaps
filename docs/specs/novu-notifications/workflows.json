@@ -55,7 +55,35 @@
       "class": "resource-change",
       "delivery": "in-app",
       "digest": { "mode": "regular-when-events-repeat", "windowSeconds": 60 },
-      "dataSchema": "roadmapId, courseCode, year, semester, targetKind, nodeId, changeKind, occurredAt, eventCount, actorName"
+      "input": {
+        "roadmapId": "uuid",
+        "courseCode": "string",
+        "year": "number",
+        "semester": "number",
+        "targetKind": "node",
+        "nodeId": "uuid",
+        "changeKind": "resource-added | resource-updated | resource-removed",
+        "occurredAt": "ISO-8601 UTC string",
+        "eventCount": 1,
+        "actorName": "string",
+        "resourceTitle": "string"
+      },
+      "inApp": {
+        "subject": "Cambio de recurso: {{payload.resourceTitle}}",
+        "body": "{{payload.actorName}} modificó un recurso en un Nodo del Roadmap de {{payload.courseCode}}.",
+        "data": [
+          "roadmapId",
+          "courseCode",
+          "year",
+          "semester",
+          "targetKind",
+          "nodeId",
+          "changeKind",
+          "occurredAt",
+          "eventCount",
+          "actorName"
+        ]
+      }
     },
     {
       "identifier": "roadmap-classification-changed",

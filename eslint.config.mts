@@ -183,6 +183,24 @@ export default defineConfig([
               },
             },
             {
+              from: {
+                element: {
+                  type: 'feature',
+                  captured: { feature: 'notifications' },
+                  fileInternalPath: 'server.ts',
+                },
+              },
+              allow: {
+                to: {
+                  element: {
+                    type: 'feature',
+                    captured: { feature: 'roadmap' },
+                    fileInternalPath: 'access.ts',
+                  },
+                },
+              },
+            },
+            {
               from: { element: { type: 'integration' } },
               allow: {
                 to: {

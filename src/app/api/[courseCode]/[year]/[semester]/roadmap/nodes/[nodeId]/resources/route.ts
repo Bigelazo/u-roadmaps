@@ -11,6 +11,7 @@ import {
   getRoadmapNodeResources,
   uploadRoadmapResource,
 } from '@/features/roadmap/server';
+import { deliverResourceChange } from '@/features/notifications/server';
 
 export async function POST(
   request: Request,
@@ -20,24 +21,27 @@ export async function POST(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const user = await requireAuthenticatedUser();
-    if (request.headers.get('content-type')?.startsWith('multipart/form-data')) {
-      const formData = await request.formData();
-      const file = formData.get('file');
-      const resource = await uploadRoadmapResource({
-        userId: user.id,
-        identifier,
-        id: params.nodeId,
-        file,
-      }).match((value) => value, throwApplicationError);
-      return NextResponse.json({ resource }, { status: 201 });
-    }
-    const body = await parseJson(request);
-    const resource = await createRoadmapResource({
+    const resourceResult = request.headers.get('content-type')?.startsWith('multipart/form-data')
+      ? uploadRoadmapResource({
+          userId: user.id,
+          identifier,
+          id: params.nodeId,
+          file: (await request.formData()).get('file'),
+        })
+      : createRoadmapResource({
+          userId: user.id,
+          identifier,
+          id: params.nodeId,
+          input: await parseJson(request),
+        });
+    const resource = await resourceResult.match((value) => value, throwApplicationError);
+    await deliverResourceChange({
       userId: user.id,
       identifier,
-      id: params.nodeId,
-      input: body,
-    }).match((value) => value, throwApplicationError);
+      nodeId: params.nodeId,
+      resourceTitle: resource.title,
+      changeKind: 'resource-added',
+    });
     return NextResponse.json({ resource }, { status: 201 });
   });
 }

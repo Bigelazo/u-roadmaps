@@ -39,6 +39,10 @@ export function RoadmapAvailabilityDialog({
     data && data.courseCode === courseCode && data.year === year && data.semester === semester,
   );
   const changeKind = noticeMatchesCourse ? data?.changeKind : null;
+  const resourceChange =
+    changeKind === 'resource-added' ||
+    changeKind === 'resource-updated' ||
+    changeKind === 'resource-removed';
   const occurredAt = noticeMatchesCourse ? stringValue(data?.occurredAt, '') : '';
   const date = occurredAt ? new Date(occurredAt) : null;
   const effectiveDate =
@@ -54,14 +58,16 @@ export function RoadmapAvailabilityDialog({
     router.replace(window.location.pathname, { scroll: false });
   }
 
-  const title =
-    changeKind === 'node-available'
+  const title = resourceChange
+    ? stringValue(notification?.subject, 'Cambio de recurso')
+    : changeKind === 'node-available'
       ? 'Nodo disponible'
       : changeKind === 'node-updated'
         ? 'Nodo actualizado'
         : 'Roadmap disponible';
-  const description =
-    changeKind === 'node-available'
+  const description = resourceChange
+    ? stringValue(notification?.body, `Se modificó un recurso en ${courseName}.`)
+    : changeKind === 'node-available'
       ? `Se agregó un Nodo al Roadmap de ${courseName}.`
       : changeKind === 'node-updated'
         ? `Se actualizó un Nodo del Roadmap de ${courseName}.`
