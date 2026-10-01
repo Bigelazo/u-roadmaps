@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
-import { prisma } from '@/shared/server/db';
+import { prisma, type Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
 import type {
   NodeChangeNotice,
@@ -12,16 +12,15 @@ import type {
 } from './contracts';
 import {
   storeRoadmapAvailability,
+  storeNodeChange,
   findOwnNotice,
   noticeRecord,
   noticeFilter,
+  prepareOwnNoticeOpening as prepareNoticeOpening,
+  prepareOwnNodeOpening as prepareNodeOpening,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
-export {
-  listOwnNotices,
-  acknowledgeOwnNotices,
-  prepareOwnNoticeOpening,
-} from './infrastructure/own-inbox';
+export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
 import { emitNodeScopedChange } from './application/emit-node-scoped-change';
 import { emitRoadmapPathChange } from './application/emit-roadmap-path-change';
 import { emitRoadmapClassificationChange } from './application/emit-roadmap-classification-change';
@@ -176,10 +175,15 @@ export async function deliverNodeChange(input: {
   roadmapId?: string;
   recipientIds?: readonly string[];
   targetKind?: 'node' | 'roadmap';
+  availabilitySource?: 'publication';
 }) {
-  if (!notificationsEnabled()) return;
-  const workflowId = process.env.NOVU_WORKFLOW_NODE_CHANGE;
-  if (!workflowId) return;
+  const ownNodeChange =
+    input.changeKind === 'node-updated' ||
+    (input.changeKind === 'node-available' &&
+      (!input.recipientIds || input.availabilitySource === 'publication'));
+  if (!ownNodeChange && !notificationsEnabled()) return;
+  const workflowId = process.env.NOVU_WORKFLOW_NODE_CHANGE ?? '';
+  if (!ownNodeChange && !workflowId) return;
 
   const node = await prisma.roadmapNode.findUnique({
     where: { id: input.nodeId },
@@ -259,6 +263,13 @@ export async function deliverNodeChange(input: {
     occurredAt: new Date(),
     recipients,
   };
+
+  if (ownNodeChange) {
+    await storeNodeChange(notice).catch(() => {
+      console.warn('Node notice delivery failed', { eventId: notice.eventId });
+    });
+    return;
+  }
 
   await emitNodeScopedChange(
     notice,
@@ -469,4 +480,54 @@ export async function deliverResourceChange(input: {
   } catch {
     // Notification delivery is best-effort and cannot change a committed resource mutation.
   }
+}
+
+async function accessibleNodes(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  roadmapId: string,
+) {
+  const participation = await transaction.participation.findFirst({
+    where: { userId, isActive: true, courseOffering: { roadmap: { id: roadmapId } } },
+    select: { role: true },
+  });
+  if (!participation)
+    throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
+  const [nodes, dependencies, completions] = await Promise.all([
+    transaction.roadmapNode.findMany({
+      where: { roadmapId, isVisible: true },
+      select: { id: true, isTeacherBlocked: true },
+    }),
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId } },
+      select: { sourceNodeId: true, targetNodeId: true },
+    }),
+    transaction.completion.findMany({
+      where: { userId, roadmapNode: { roadmapId } },
+      select: { roadmapNodeId: true },
+    }),
+  ]);
+  if (participation.role === 'TEACHER')
+    return new Set(nodes.filter((node) => !node.isTeacherBlocked).map((node) => node.id));
+  const visible = new Set(nodes.map((node) => node.id));
+  return new Set(
+    [
+      ...studentNodeAccessById({
+        nodes,
+        dependencies: dependencies.filter(
+          (edge) => visible.has(edge.sourceNodeId) && visible.has(edge.targetNodeId),
+        ),
+        completedNodeIds: new Set(completions.map((completion) => completion.roadmapNodeId)),
+      }),
+    ]
+      .filter(([, access]) => access.status === 'ACCESSIBLE')
+      .map(([id]) => id),
+  );
+}
+
+export function prepareOwnNodeOpening(userId: string, input: Record<string, unknown>) {
+  return prepareNodeOpening(userId, input, accessibleNodes);
+}
+export function prepareOwnNoticeOpening(userId: string, roadmapId: string) {
+  return prepareNoticeOpening(userId, roadmapId, accessibleNodes);
 }

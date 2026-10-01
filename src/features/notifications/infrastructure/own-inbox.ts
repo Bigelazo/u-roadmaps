@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
 import { projectDigestNotification } from '../digest-projection';
-import type { RoadmapAvailabilityNotice } from '../contracts';
+import { nodeMessage } from '../application/emit-node-scoped-change';
+import type { NodeChangeNotice, RoadmapAvailabilityNotice } from '../contracts';
 
 export async function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
   const participants = await prisma.participation.findMany({
@@ -35,6 +36,92 @@ export async function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice
       ...projection,
     })),
     skipDuplicates: true,
+  });
+}
+
+export async function storeNodeChange(notice: NodeChangeNotice) {
+  const participants = await prisma.participation.findMany({
+    where: {
+      courseOfferingId: notice.courseOfferingId,
+      isActive: true,
+      userId: { in: notice.recipients.map(({ userId }) => userId), not: notice.actorId },
+    },
+    select: { userId: true },
+  });
+  const projection = projectDigestNotification(
+    {
+      ...notice,
+      ...nodeMessage(notice),
+      targetKind: 'node',
+      occurredAt: notice.occurredAt.toISOString(),
+      eventCount: 1,
+      digestKey: notice.eventId,
+    },
+    [],
+  );
+  await prisma.roadmapNotice.createMany({
+    data: participants.map(({ userId }) => ({
+      eventId: notice.eventId,
+      recipientId: userId,
+      roadmapId: notice.roadmapId,
+      courseOfferingId: notice.courseOfferingId,
+      occurredAt: notice.occurredAt,
+      ...projection,
+    })),
+    skipDuplicates: true,
+  });
+}
+
+export type NoticeNodeAccess = (
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  roadmapId: string,
+) => Promise<ReadonlySet<string>>;
+
+export async function prepareOwnNodeOpening(
+  userId: string,
+  input: Record<string, unknown>,
+  accessibleNodes: NoticeNodeAccess,
+) {
+  const roadmapId = uuid(input.roadmapId);
+  const nodeId = uuid(input.nodeId);
+  const operationId = uuid(input.operationId);
+  return prisma.$transaction(async (transaction) => {
+    const existing = await transaction.noticeAcknowledgement.findUnique({
+      where: { recipientId_operationId: { recipientId: userId, operationId } },
+    });
+    if (existing) {
+      if (existing.roadmapId !== roadmapId)
+        throw new ApplicationError(400, 'INVALID_REQUEST', 'Apertura inválida.');
+      return { roadmapId, operationId };
+    }
+    if (input.retry === true) {
+      throw new ApplicationError(404, 'NOT_FOUND', 'Apertura de Nodo no encontrada.');
+    }
+    const accessible = await accessibleNodes(transaction, userId, roadmapId);
+    if (!accessible.has(nodeId))
+      throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Nodo.');
+    const notices = await transaction.roadmapNotice.findMany({
+      where: {
+        recipientId: userId,
+        roadmapId,
+        acknowledgedAt: null,
+        data: { path: ['nodeId'], equals: nodeId },
+      },
+      select: { id: true },
+    });
+    await transaction.noticeAcknowledgement.upsert({
+      where: { recipientId_operationId: { recipientId: userId, operationId } },
+      update: {},
+      create: {
+        recipientId: userId,
+        operationId,
+        roadmapId,
+        openedAt: new Date(),
+        noticeIds: notices.map(({ id }) => id),
+      },
+    });
+    return { roadmapId, operationId };
   });
 }
 
@@ -136,11 +223,24 @@ export async function findOwnNotice(userId: string, id: string) {
 
 // Capture committed, visible identities on the server when the Roadmap opens.
 // Retrying recognition can never expand this set, even if delivery committed later.
-export async function prepareOwnNoticeOpening(userId: string, roadmapId: string) {
+export async function prepareOwnNoticeOpening(
+  userId: string,
+  roadmapId: string,
+  accessibleNodes: NoticeNodeAccess,
+) {
   return prisma.$transaction(async (transaction) => {
+    const accessible = await accessibleNodes(transaction, userId, roadmapId);
     const notices = await transaction.roadmapNotice.findMany({
       where: { recipientId: userId, roadmapId, acknowledgedAt: null },
-      select: { id: true },
+      select: { id: true, data: true },
+    });
+    const generalNotices = notices.filter(({ data }) => {
+      const context = data as Record<string, unknown>;
+      return (
+        context.targetKind !== 'node' ||
+        typeof context.nodeId !== 'string' ||
+        !accessible.has(context.nodeId)
+      );
     });
     const operation = await transaction.noticeAcknowledgement.create({
       data: {
@@ -148,7 +248,7 @@ export async function prepareOwnNoticeOpening(userId: string, roadmapId: string)
         operationId: randomUUID(),
         roadmapId,
         openedAt: new Date(),
-        noticeIds: notices.map(({ id }) => id),
+        noticeIds: generalNotices.map(({ id }) => id),
       },
     });
     return operation.operationId;

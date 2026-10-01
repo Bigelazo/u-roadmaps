@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
   prisma: {
     roadmapNode: { findUnique: vi.fn() },
+    roadmapNotice: { createMany: vi.fn() },
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
@@ -85,4 +86,40 @@ test('retained deletion context routes to the Roadmap and rechecks active recipi
       }),
     }),
   );
+});
+
+test('accessible Node notices persist without external notification configuration', async () => {
+  vi.stubEnv('NOVU_SECRET_KEY', '');
+  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
+  await deliverNodeChange({
+    userId: 'author-id',
+    courseCode: 'CC3002',
+    year: 2026,
+    semester: 2,
+    nodeId: 'visible-node-id',
+    roadmapId: 'roadmap-id',
+    changeKind: 'node-available',
+    availabilitySource: 'publication',
+    changedFields: [],
+    nodeTitle: 'Evaluación final',
+    recipientIds: ['student-id'],
+  });
+  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
+    skipDuplicates: true,
+    data: [
+      expect.objectContaining({
+        recipientId: 'student-id',
+        roadmapId: 'roadmap-id',
+        subject: 'Evaluación final',
+        occurredAt: expect.any(Date),
+        data: expect.objectContaining({
+          nodeId: 'visible-node-id',
+          actorName: 'Docente autora',
+          changeKind: 'node-available',
+          targetKind: 'node',
+        }),
+      }),
+    ],
+  });
+  expect(trigger).not.toHaveBeenCalled();
 });

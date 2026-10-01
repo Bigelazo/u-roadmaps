@@ -327,3 +327,13 @@ export async function acknowledgeOwnInbox(input: NoticeAcknowledgementOperation)
   });
   window.dispatchEvent(new Event(refreshEvent));
 }
+
+export async function prepareOwnInboxNodeOpening(
+  input: NoticeAcknowledgementOperation & { nodeId: string; retry: boolean },
+) {
+  await request('/openings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}

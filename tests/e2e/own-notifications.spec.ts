@@ -5,6 +5,12 @@ import { developmentFixtureIds } from '@/development';
 import { expect, test } from '@playwright/test';
 import { authenticateAs, fixture, sessionCookie } from './helpers';
 
+// Both browser projects share PostgreSQL; earlier mutation tests now deliver Node notices.
+// Each Inbox scenario owns a clean notice fixture, independent of project ordering.
+test.beforeEach(() => {
+  fixtureSql('DELETE FROM "NoticeAcknowledgement"; DELETE FROM "RoadmapNotice";');
+});
+
 test('own Inbox requires authentication and isolates notice identities', async ({
   request,
   page,

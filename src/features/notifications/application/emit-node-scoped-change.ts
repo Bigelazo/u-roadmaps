@@ -6,7 +6,7 @@ import type {
 } from '../contracts';
 import { sendNotice } from './send-notice';
 
-function nodeMessage(notice: NodeChangeNotice) {
+export function nodeMessage(notice: NodeChangeNotice) {
   const label =
     notice.changeKind === 'node-available'
       ? 'Nodo disponible'

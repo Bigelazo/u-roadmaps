@@ -6,10 +6,12 @@ export async function deliverRoadmapNodeNotifications({
   actorId,
   identifier,
   notifications,
+  publishedNodeId,
 }: {
   actorId: string;
   identifier: CourseOfferingIdentifier;
   notifications: readonly NodeNotificationDescriptor[];
+  publishedNodeId?: string;
 }) {
   for (const notification of notifications) {
     await deliverNodeChange({
@@ -23,6 +25,9 @@ export async function deliverRoadmapNodeNotifications({
       nodeTypeName: notification.nodeTypeName,
       recipientIds: notification.recipientIds,
       targetKind: notification.targetKind,
+      ...(notification.nodeId === publishedNodeId && notification.changeKind === 'node-available'
+        ? { availabilitySource: 'publication' as const }
+        : {}),
     }).catch(() => undefined);
   }
 }

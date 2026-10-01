@@ -10,7 +10,7 @@ const input = {
   experience: { kind: 'teaching' as const, term: 'current' as const },
 };
 
-const roadmap: RoadmapDto = {
+const roadmap = {
   course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
@@ -68,12 +68,14 @@ const roadmap: RoadmapDto = {
       targetHandle: 'left',
     },
   ],
-};
+} satisfies RoadmapDto;
 
 test('models upstream Node unlock through the same Teacher block policy as production', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
-  await expect(persistence.previewTeacherBlock!(input, 'selected', 'UNBLOCK')).resolves.toMatchObject({
+  await expect(
+    persistence.previewTeacherBlock!(input, 'selected', 'UNBLOCK'),
+  ).resolves.toMatchObject({
     mode: 'UPSTREAM',
     nodes: [
       { id: 'prerequisite', relation: 'PREREQUISITE' },

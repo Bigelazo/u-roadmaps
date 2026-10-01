@@ -5,6 +5,7 @@ import {
   OwnInboxContext,
   LegacyInboxContext,
   acknowledgeOwnInbox,
+  prepareOwnInboxNodeOpening,
   getOwnInboxRecord,
   useCounts,
   useNotifications,
@@ -376,19 +377,25 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
   const inbox = useInboxClient();
   const own = useContext(OwnInboxContext);
   const legacyEnabled = useContext(LegacyInboxContext);
-  const ownOperations = useRef(new Map<string, NoticeAcknowledgementOperation | null>());
+  const ownOperations = useRef(
+    new Map<string, (NoticeAcknowledgementOperation & { nodeId?: string }) | null>(),
+  );
   const acknowledgeOwn = useCallback(
     async (input: AcknowledgeInput, retry: boolean) => {
-      if (!own || input.nodeId) return true;
-      const key = input.roadmapId;
+      if (!own) return true;
+      const key = `${input.roadmapId}:${input.nodeId ?? 'roadmap'}`;
       const operation = retry
         ? ownOperations.current.get(key)
-        : input.openingId
-          ? { roadmapId: key, operationId: input.openingId }
-          : null;
+        : input.nodeId
+          ? { roadmapId: input.roadmapId, nodeId: input.nodeId, operationId: crypto.randomUUID() }
+          : input.openingId
+            ? { roadmapId: input.roadmapId, operationId: input.openingId }
+            : null;
       ownOperations.current.set(key, operation ?? null);
       if (!operation) return false;
       try {
+        if (operation.nodeId)
+          await prepareOwnInboxNodeOpening({ ...operation, nodeId: operation.nodeId, retry });
         await acknowledgeOwnInbox(operation);
         return true;
       } catch {

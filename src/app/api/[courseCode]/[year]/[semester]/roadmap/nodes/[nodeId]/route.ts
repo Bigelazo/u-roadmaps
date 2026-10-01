@@ -88,6 +88,7 @@ export async function PATCH(
       actorId: user.id,
       identifier,
       notifications: result.notifications ?? [],
+      ...(body.isVisible === true ? { publishedNodeId: result.node.id } : {}),
     });
     const response = { ...result };
     delete response.notification;
