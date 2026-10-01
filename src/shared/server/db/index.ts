@@ -19,7 +19,7 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma && globalForPrisma.prismaConnectionString === connectionString
     ? globalForPrisma.prisma
-    : new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+    : new PrismaClient({ adapter: new PrismaPg({ connectionString, options: '-c timezone=UTC' }) });
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;

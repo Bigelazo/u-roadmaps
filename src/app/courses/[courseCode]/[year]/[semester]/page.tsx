@@ -4,7 +4,7 @@ import { getApplicationSession, resolveSessionUser } from '@/shared/server/sessi
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapAvailabilityDialog } from '@/features/notifications';
-import { getInboxIdentity } from '@/features/notifications/server';
+import { getInboxIdentity, prepareOwnNoticeOpening } from '@/features/notifications/server';
 
 export default async function CoursePage(
   props: PageProps<'/courses/[courseCode]/[year]/[semester]'>,
@@ -87,11 +87,15 @@ export default async function CoursePage(
   );
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
+  const notificationOpeningId = courseOffering.roadmap
+    ? await prepareOwnNoticeOpening(user.id, courseOffering.roadmap.id).catch(() => null)
+    : null;
 
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
       <RoadmapCanvasSession
         notificationsEnabled={Boolean(inboxIdentity)}
+        notificationOpeningId={notificationOpeningId}
         targetNodeId={targetNodeId}
         courseOffering={{ identifier, title: courseName }}
         experience={{

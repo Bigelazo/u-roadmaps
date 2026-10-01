@@ -5,10 +5,8 @@ const { novu } = vi.hoisted(() => ({
   novu: { on: vi.fn(() => () => undefined), notifications: { list: vi.fn() } },
 }));
 
-vi.mock('@novu/nextjs', () => ({
-  NovuProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
 vi.mock('@novu/nextjs/hooks', () => ({
+  NovuProvider: ({ children }: { children: React.ReactNode }) => children,
   useCounts: () => ({ counts: [] }),
   useNotifications: () => ({ notifications: [] }),
   useNovu: () => novu,

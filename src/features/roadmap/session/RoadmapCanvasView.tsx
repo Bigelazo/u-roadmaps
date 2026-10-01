@@ -134,6 +134,7 @@ export function RoadmapCanvasView({ input }: Props) {
   const [acknowledgementError, setAcknowledgementError] = useState(false);
   const acknowledgementInputRef = useRef<{
     roadmapId: string;
+    openingId?: string | null;
     nodeId?: string;
     accessibleNodeIds?: ReadonlySet<string>;
   } | null>(null);
@@ -437,10 +438,17 @@ export function RoadmapCanvasView({ input }: Props) {
     const roadmapId = roadmap.roadmap.id;
     if (acknowledgedRoadmapRef.current === roadmapId) return;
     acknowledgedRoadmapRef.current = roadmapId;
-    const operation = { roadmapId, accessibleNodeIds };
+    const operation = { roadmapId, accessibleNodeIds, openingId: input.notificationOpeningId };
     acknowledgementInputRef.current = operation;
     void acknowledge(operation).then((success) => setAcknowledgementError(!success));
-  }, [acknowledge, accessibleNodeIds, input.notificationsEnabled, isCanvasPreview, roadmap]);
+  }, [
+    acknowledge,
+    accessibleNodeIds,
+    input.notificationsEnabled,
+    input.notificationOpeningId,
+    isCanvasPreview,
+    roadmap,
+  ]);
   const deepLinkHandledRef = useRef<string | null>(null);
   useEffect(() => {
     const nodeId = input.targetNodeId;

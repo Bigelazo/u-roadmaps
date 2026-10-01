@@ -109,6 +109,7 @@ export type RoadmapCanvasExperience =
 
 export type RoadmapCanvasSessionInput = {
   readonly notificationsEnabled?: boolean;
+  readonly notificationOpeningId?: string | null;
   readonly targetNodeId?: string;
   readonly courseOffering: {
     readonly identifier: CourseOfferingIdentifier;

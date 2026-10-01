@@ -10,7 +10,18 @@ import type {
   RoadmapPathChangeNotice,
   ResourceChangeNotice,
 } from './contracts';
-import { emitRoadmapAvailability } from './application/emit-roadmap-availability';
+import {
+  storeRoadmapAvailability,
+  findOwnNotice,
+  noticeRecord,
+  noticeFilter,
+} from './infrastructure/own-inbox';
+import { ApplicationError } from '@/shared/errors/server';
+export {
+  listOwnNotices,
+  acknowledgeOwnNotices,
+  prepareOwnNoticeOpening,
+} from './infrastructure/own-inbox';
 import { emitNodeScopedChange } from './application/emit-node-scoped-change';
 import { emitRoadmapPathChange } from './application/emit-roadmap-path-change';
 import { emitRoadmapClassificationChange } from './application/emit-roadmap-classification-change';
@@ -19,10 +30,11 @@ import { createSubscriberHash } from './infrastructure/subscriber-hash';
 
 export type InboxIdentity = Readonly<{
   subscriber: string;
-  subscriberHash: string;
-  applicationIdentifier: string;
+  own?: boolean;
   apiUrl?: string;
   socketUrl?: string;
+  subscriberHash: string;
+  applicationIdentifier: string;
 }>;
 
 export function notificationsEnabled() {
@@ -32,21 +44,45 @@ export function notificationsEnabled() {
   );
 }
 
-export function getInboxIdentity(userId: string): InboxIdentity | null {
-  const applicationIdentifier = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER;
-  const secretKey = process.env.NOVU_SECRET_KEY;
-  if (!notificationsEnabled() || !applicationIdentifier || !secretKey) return null;
-
+export function getInboxIdentity(userId: string): InboxIdentity {
+  const applicationIdentifier = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER ?? '';
+  const secretKey = process.env.NOVU_SECRET_KEY ?? '';
   return {
-    subscriber: userId,
-    subscriberHash: createSubscriberHash(userId, secretKey),
-    applicationIdentifier,
+    own: true,
     ...(process.env.NEXT_PUBLIC_NOVU_API_URL
       ? { apiUrl: process.env.NEXT_PUBLIC_NOVU_API_URL }
       : {}),
     ...(process.env.NEXT_PUBLIC_NOVU_SOCKET_URL
       ? { socketUrl: process.env.NEXT_PUBLIC_NOVU_SOCKET_URL }
       : {}),
+    subscriber: userId,
+    subscriberHash: notificationsEnabled() ? createSubscriberHash(userId, secretKey) : '',
+    applicationIdentifier: notificationsEnabled() ? applicationIdentifier : '',
+  };
+}
+
+export async function getOwnNotice(userId: string, id: string) {
+  return noticeRecord(await findOwnNotice(userId, id));
+}
+
+export async function markOwnNotice(userId: string, id: string, input: Record<string, unknown>) {
+  if (input.action !== 'seen' && input.action !== 'read') {
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'Acción de aviso inválida.');
+  }
+  const notice = await findOwnNotice(userId, id);
+  const field = input.action === 'seen' ? 'seenAt' : 'acknowledgedAt';
+  await prisma.roadmapNotice.updateMany({
+    where: { id: notice.id, recipientId: userId, [field]: null },
+    data: { [field]: new Date() },
+  });
+  return getOwnNotice(userId, id);
+}
+
+export async function countOwnNotices(userId: string, params: URLSearchParams) {
+  return {
+    count: await prisma.roadmapNotice.count({
+      where: { ...noticeFilter(params), recipientId: userId, acknowledgedAt: null },
+    }),
   };
 }
 
@@ -120,27 +156,11 @@ async function eligibleNodeRecipients({
 }
 
 export async function deliverRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
-  const workflowId = process.env.NOVU_WORKFLOW_ROADMAP_AVAILABLE;
-  if (!notificationsEnabled() || !workflowId) return;
-
-  await emitRoadmapAvailability(
-    notice,
-    novuTransport,
-    async (userIds) => {
-      const active = await prisma.participation.findMany({
-        where: {
-          courseOfferingId: notice.courseOfferingId,
-          userId: { in: [...userIds] },
-          isActive: true,
-        },
-        select: { userId: true },
-      });
-      return active.map(({ userId }) => userId);
-    },
-    workflowId,
-  ).catch(() => {
-    // Novu is best-effort: delivery cannot change the committed mutation result.
-  });
+  try {
+    await storeRoadmapAvailability(notice);
+  } catch {
+    console.warn('Roadmap availability delivery failed', { eventId: notice.eventId });
+  }
 }
 
 export async function deliverNodeChange(input: {

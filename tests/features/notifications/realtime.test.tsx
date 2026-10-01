@@ -9,10 +9,8 @@ const { listeners, list, countsRefetch, feedRefetch } = vi.hoisted(() => ({
   feedRefetch: vi.fn(async () => undefined),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock('@novu/nextjs', () => ({
-  NovuProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
 vi.mock('@novu/nextjs/hooks', () => ({
+  NovuProvider: ({ children }: { children: React.ReactNode }) => children,
   useCounts: () => ({ counts: [{ count: 1 }], refetch: countsRefetch }),
   useNotifications: () => ({ notifications: [], refetch: feedRefetch }),
   useNovu: () => ({

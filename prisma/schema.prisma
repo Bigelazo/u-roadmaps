@@ -126,6 +126,7 @@ model User {
   name               String          @db.VarChar(200)
   institutionalEmail String          @unique @db.VarChar(320)
   rut                String?         @unique @db.VarChar(20)
+  notices            RoadmapNotice[]
   participations     Participation[]
   completions        Completion[]
 }
@@ -189,4 +190,35 @@ enum ResourceType {
 enum ParticipationRole {
   STUDENT
   TEACHER
+}
+
+// Notices retain context even if the Roadmap or Participation later disappears.
+model RoadmapNotice {
+  id              String   @id @default(uuid()) @db.Uuid
+  eventId         String
+  recipientId     String   @db.Uuid
+  recipient       User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmapId       String   @db.Uuid
+  courseOfferingId String  @db.Uuid
+  subject         String
+  body            String
+  data            Json
+  occurredAt      DateTime @db.Timestamptz(3)
+  availableAt     DateTime @default(now()) @db.Timestamptz(3)
+  seenAt          DateTime? @db.Timestamptz(3)
+  acknowledgedAt  DateTime? @db.Timestamptz(3)
+
+  @@unique([eventId, recipientId])
+  @@index([recipientId, availableAt, id])
+  @@index([recipientId, roadmapId, acknowledgedAt])
+}
+
+model NoticeAcknowledgement {
+  recipientId String @db.Uuid
+  operationId String @db.Uuid
+  roadmapId String @db.Uuid
+  openedAt DateTime @db.Timestamptz(3)
+  noticeIds String[] @db.Uuid @default([])
+
+  @@id([recipientId, operationId])
 }

@@ -1,7 +1,17 @@
 'use client';
 
-import { NovuProvider } from '@novu/nextjs';
-import { useCounts, useNotifications, useNovu } from '@novu/nextjs/hooks';
+import {
+  InboxDriverProvider,
+  OwnInboxContext,
+  LegacyInboxContext,
+  acknowledgeOwnInbox,
+  getOwnInboxRecord,
+  useCounts,
+  useNotifications,
+  useInboxClient,
+  type InboxRecord,
+  type NoticeAcknowledgementOperation,
+} from './inbox-driver';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Bell, X } from 'lucide-react';
 import {
@@ -22,7 +32,7 @@ import {
   subscribeToRoadmapRecovery,
 } from '@/shared/client/roadmap-events';
 
-type NotificationRecord = NonNullable<ReturnType<typeof useNotifications>['notifications']>[number];
+type NotificationRecord = InboxRecord;
 type NotificationDataFilter = Record<string, string | number>;
 
 export function NotificationCountButton({
@@ -40,7 +50,7 @@ export function NotificationCountButton({
 
 function NotificationCount({ filter, label }: { filter: NotificationDataFilter; label: string }) {
   const openInbox = useOpenNotificationInbox();
-  const { counts, refetch } = useCounts({ filters: [{ read: false, data: filter }] });
+  const { counts, refetch, error } = useCounts({ filters: [{ read: false, data: filter }] });
   useEffect(
     () =>
       subscribeToRoadmapRecovery(() => {
@@ -49,16 +59,20 @@ function NotificationCount({ filter, label }: { filter: NotificationDataFilter; 
     [refetch],
   );
   const count = counts?.[0]?.count ?? 0;
-  if (count === 0) return null;
+  if (count === 0 && !error) return null;
   return (
     <button
-      aria-label={`${count} avisos sin leer para ${label}`}
+      aria-label={
+        error
+          ? `Avisos para ${label}, contador no disponible`
+          : `${count} avisos sin leer para ${label}`
+      }
       className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
       onClick={() => openInbox(filter)}
       type="button"
     >
       <Bell aria-hidden="true" size={16} />
-      <span>{count}</span>
+      <span>{error ? '?' : count}</span>
     </button>
   );
 }
@@ -82,6 +96,7 @@ const InboxOpenContext = createContext<{ open: boolean; setOpen: (open: boolean)
 });
 type AcknowledgeInput = {
   roadmapId: string;
+  openingId?: string | null;
   nodeId?: string;
   accessibleNodeIds?: ReadonlySet<string>;
 };
@@ -203,6 +218,11 @@ function InboxBell() {
       }),
     [refetch, refetchCounts],
   );
+  useEffect(() => {
+    if (!open) return;
+    void refetch();
+    void refetchCounts();
+  }, [open, refetch, refetchCounts]);
   const unreadCount = counts?.[0]?.count ?? 0;
 
   function selectNotification(notification: NotificationRecord) {
@@ -337,27 +357,46 @@ export function NotificationsProvider({
   children: ReactNode;
 }) {
   return (
-    <SelectedNotificationProvider key={identity?.subscriber ?? 'anonymous'}>
+    <div className="contents" key={identity?.subscriber ?? 'anonymous'}>
       {identity ? (
-        <NovuProvider
-          applicationIdentifier={identity.applicationIdentifier}
-          subscriber={identity.subscriber}
-          subscriberHash={identity.subscriberHash}
-          apiUrl={identity.apiUrl}
-          socketUrl={identity.socketUrl}
-        >
-          <NotificationRealtimeBridge />
-          <NotificationAcknowledgementProvider>{children}</NotificationAcknowledgementProvider>
-        </NovuProvider>
+        <InboxDriverProvider identity={identity}>
+          <SelectedNotificationProvider>
+            <NotificationRealtimeBridge />
+            <NotificationAcknowledgementProvider>{children}</NotificationAcknowledgementProvider>
+          </SelectedNotificationProvider>
+        </InboxDriverProvider>
       ) : (
-        children
+        <SelectedNotificationProvider>{children}</SelectedNotificationProvider>
       )}
-    </SelectedNotificationProvider>
+    </div>
   );
 }
 
 function NotificationAcknowledgementProvider({ children }: { children: ReactNode }) {
-  const novu = useNovu();
+  const inbox = useInboxClient();
+  const own = useContext(OwnInboxContext);
+  const legacyEnabled = useContext(LegacyInboxContext);
+  const ownOperations = useRef(new Map<string, NoticeAcknowledgementOperation | null>());
+  const acknowledgeOwn = useCallback(
+    async (input: AcknowledgeInput, retry: boolean) => {
+      if (!own || input.nodeId) return true;
+      const key = input.roadmapId;
+      const operation = retry
+        ? ownOperations.current.get(key)
+        : input.openingId
+          ? { roadmapId: key, operationId: input.openingId }
+          : null;
+      ownOperations.current.set(key, operation ?? null);
+      if (!operation) return false;
+      try {
+        await acknowledgeOwnInbox(operation);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [own],
+  );
   const pending = useRef(
     new Map<
       string,
@@ -392,10 +431,14 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
       input: AcknowledgeInput,
       snapshot: { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean },
     ) => {
+      if (own && !legacyEnabled) {
+        snapshot.listingIncomplete = false;
+        return true;
+      }
       const knownIds = new Set(snapshot.records.map(({ id }) => id));
       let after: string | undefined;
       do {
-        const page = await novu.notifications.list({
+        const page = await inbox.list({
           data: { roadmapId: input.roadmapId },
           read: false,
           limit: 100,
@@ -430,27 +473,29 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
       snapshot.listingIncomplete = false;
       return true;
     },
-    [novu],
+    [inbox, own, legacyEnabled],
   );
 
   const acknowledge = useCallback(
     async (input: AcknowledgeInput) => {
       const snapshot = { records: [], createdLte: Date.now(), listingIncomplete: true };
       pending.current.set(keyFor(input), snapshot);
+      const ownResult = await acknowledgeOwn(input, false);
       if (!(await collectSnapshot(input, snapshot))) return false;
-      return readNotifications(input, snapshot);
+      return (await readNotifications(input, snapshot)) && ownResult;
     },
-    [collectSnapshot, readNotifications],
+    [collectSnapshot, readNotifications, acknowledgeOwn],
   );
 
   const retry = useCallback(
     async (input: AcknowledgeInput) => {
       const snapshot = pending.current.get(keyFor(input));
-      if (!snapshot) return true;
+      const ownResult = await acknowledgeOwn(input, true);
+      if (!snapshot) return ownResult;
       if (snapshot.listingIncomplete && !(await collectSnapshot(input, snapshot))) return false;
-      return readNotifications(input, snapshot);
+      return (await readNotifications(input, snapshot)) && ownResult;
     },
-    [collectSnapshot, readNotifications],
+    [collectSnapshot, readNotifications, acknowledgeOwn],
   );
 
   return (
@@ -463,6 +508,21 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
 function SelectedNotificationProvider({ children }: { children: ReactNode }) {
   const [notification, select] = useState<NotificationRecord | null>(null);
   const [filter, setFilter] = useState<NotificationDataFilter | undefined>();
+  const own = useContext(OwnInboxContext);
+  useEffect(() => {
+    if (!own) return;
+    const id = new URLSearchParams(window.location.search).get('notice');
+    if (!id) return;
+    let active = true;
+    void getOwnInboxRecord(id)
+      .then((record) => {
+        if (active) select(record);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [own]);
   const [inboxOpen, setInboxOpen] = useState(false);
   const openInbox = useCallback((nextFilter?: NotificationDataFilter) => {
     setFilter(nextFilter);
@@ -500,10 +560,9 @@ const roadmapChangeKinds = new Set([
 ]);
 
 function NotificationRealtimeBridge() {
-  const novu = useNovu();
+  const inbox = useInboxClient();
   useEffect(() => {
-    const stopReceived = novu.on('notifications.notification_received', ({ result }) => {
-      const data = result?.data;
+    const stopReceived = inbox.subscribeReceived((data) => {
       if (!data || !roadmapChangeKinds.has(data.changeKind as string)) return;
       if (
         typeof data.courseCode !== 'string' ||
@@ -519,11 +578,11 @@ function NotificationRealtimeBridge() {
         }),
       );
     });
-    const stopConnected = novu.on('socket.connect.resolved', requestRoadmapRecovery);
+    const stopConnected = inbox.subscribeConnected(requestRoadmapRecovery);
     return () => {
       stopReceived();
       stopConnected();
     };
-  }, [novu]);
+  }, [inbox]);
   return null;
 }

@@ -22,8 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
 import { Bell } from 'lucide-react';
-import { useCounts } from '@novu/nextjs/hooks';
-import { useOpenNotificationInbox } from '@/features/notifications/client';
+import { useNotificationCounts, useOpenNotificationInbox } from '@/features/notifications/client';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> &
@@ -58,7 +57,9 @@ function NodeUnreadBadge({
   nodeId: string;
 }) {
   const openInbox = useOpenNotificationInbox();
-  const { counts } = useCounts({ filters: [{ read: false, data: { roadmapId, nodeId } }] });
+  const { counts } = useNotificationCounts({
+    filters: [{ read: false, data: { roadmapId, nodeId } }],
+  });
   if (!enabled) return null;
   const count = counts?.[0]?.count ?? 0;
   if (count === 0) return null;

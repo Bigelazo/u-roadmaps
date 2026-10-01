@@ -25,7 +25,7 @@ test('a teacher previews, completes, resets, and exits the persistent student ca
 
     await expect(page.getByText('Previsualización del canvas')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Crear en el mapa' })).toHaveCount(0);
-    await page.locator(`.react-flow__node[data-id="${node.id}"]`).click({ force: true });
+    await page.locator(`.react-flow__node[data-id="${node.id}"]`).click();
     await page.getByRole('button', { name: 'Completar' }).click();
     await expect.poll(async () => {
       const updated = await (await api.get(roadmapPath('/simulation'))).json();
