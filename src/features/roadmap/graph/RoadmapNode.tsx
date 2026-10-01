@@ -196,20 +196,20 @@ function NodeActionMenu({
   const actions = [
     ...(!hidden
       ? [
-          {
-            id: 'access',
-            label: accessLabel,
-            Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
-            HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
-            onSelect: () =>
-              onAction?.({
-                kind: 'change-teacher-block',
-                nodeId,
-                operation: teacherBlocked ? 'UNBLOCK' : 'BLOCK',
-              }),
-            angle: 0,
-          },
-        ]
+        {
+          id: 'access',
+          label: accessLabel,
+          Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
+          HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
+          onSelect: () =>
+            onAction?.({
+              kind: 'change-teacher-block',
+              nodeId,
+              operation: teacherBlocked ? 'UNBLOCK' : 'BLOCK',
+            }),
+          angle: 0,
+        },
+      ]
       : []),
     {
       id: 'visibility',
@@ -367,11 +367,15 @@ function NodeResourceSummary({
   ].filter((group) => group.count > 0);
 
   if (!resourceGroups.length) return null;
+  const hasSingleResource = resourceGroups.length === 1;
 
   return (
     <div
       data-testid="roadmap-node-resources"
-      className="absolute bottom-3 left-4 flex items-center gap-2.5 text-xs font-bold tabular-nums"
+      className={cn(
+        'absolute top-[-10px] right-[-10px] z-10 grid place-items-center rounded-md border-2 border-card bg-card text-xs font-bold tabular-nums shadow-sm',
+        hasSingleResource ? 'size-6 grid-cols-1' : 'h-6 w-12 grid-cols-2 gap-1',
+      )}
     >
       {resourceGroups.map(({ count, Icon, label, className }) => (
         <Tooltip key={label}>
@@ -380,7 +384,7 @@ function NodeResourceSummary({
             render={
               <span
                 className={cn(
-                  'flex items-center gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  'relative flex size-3 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   className,
                 )}
                 role="img"
@@ -389,8 +393,13 @@ function NodeResourceSummary({
               />
             }
           >
-            <Icon className="size-3.5" aria-hidden="true" />
-            <span aria-hidden="true">{count}</span>
+            <Icon className="size-3" aria-hidden="true" />
+            <span
+              aria-hidden="true"
+              className="absolute right-[-3px] bottom-[-3px] rounded-sm bg-card px-0.5 text-[8px] leading-none"
+            >
+              {count}
+            </span>
           </TooltipTrigger>
           <TooltipContent side="bottom">{label}</TooltipContent>
         </Tooltip>
@@ -405,7 +414,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
   const teacherBlocked = editing && data.isTeacherBlocked;
-  const surface = hidden || locked || teacherBlocked ? 'var(--cloud)' : '#fff';
+  const blocked = locked || teacherBlocked;
   return (
     <div
       data-slot="roadmap-card"
@@ -420,14 +429,16 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-              'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
-              !hidden && 'shadow-(--shadow-roadmap-node)',
-            ),
+            'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
+            !hidden && 'shadow-(--shadow-roadmap-node)',
+          ),
       )}
       style={{
         width: size.width,
         height: size.height,
-        backgroundColor: surface,
+        backgroundColor: blocked
+          ? 'color-mix(in srgb, var(--graphite) 20%, var(--card))'
+          : `color-mix(in srgb, ${data.typeColor} 3%, var(--card))`,
         backgroundImage: hidden
           ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 11px)`
           : undefined,
@@ -436,12 +447,12 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
     >
       <div
         data-testid="roadmap-node-content"
-        className="flex h-full items-center justify-center gap-2.5"
+        className="flex h-full min-w-0 items-center justify-start gap-2.5"
       >
         <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={data.typeColor} />
         <p
           title={data.title}
-          className="min-w-0 text-left text-[15.5px] leading-tight font-medium wrap-break-word text-ink"
+          className="line-clamp-2 min-w-0 text-left text-[15.5px] leading-tight font-medium wrap-break-word text-ink"
         >
           {data.title}
         </p>
@@ -466,30 +477,30 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       )}
       {!hidden
         ? (
-            [
-              ['top', Position.Top],
-              ['right', Position.Right],
-              ['bottom', Position.Bottom],
-              ['left', Position.Left],
-            ] as const
-          ).map(([id, position]) => (
-            <Handle
-              key={id}
-              id={id}
-              data-testid="roadmap-node-handle"
-              type="source"
-              position={position}
-              isConnectable={editing}
-              style={{
-                width: 12,
-                height: 12,
-                background: 'var(--primary)',
-                border: '2px solid var(--card)',
-                visibility: editing ? 'visible' : 'hidden',
-                pointerEvents: editing ? 'auto' : 'none',
-              }}
-            />
-          ))
+          [
+            ['top', Position.Top],
+            ['right', Position.Right],
+            ['bottom', Position.Bottom],
+            ['left', Position.Left],
+          ] as const
+        ).map(([id, position]) => (
+          <Handle
+            key={id}
+            id={id}
+            data-testid="roadmap-node-handle"
+            type="source"
+            position={position}
+            isConnectable={editing}
+            style={{
+              width: 12,
+              height: 12,
+              background: 'var(--primary)',
+              border: '2px solid var(--card)',
+              visibility: editing ? 'visible' : 'hidden',
+              pointerEvents: editing ? 'auto' : 'none',
+            }}
+          />
+        ))
         : null}
       {data.notificationsEnabled && data.roadmapId && !hidden && !locked && !teacherBlocked ? (
         <NodeUnreadBadge enabled roadmapId={data.roadmapId} nodeId={id} />

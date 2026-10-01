@@ -542,7 +542,7 @@ test('offers toolbar content a snapped open position without exposing viewport g
 
     await user.click(screen.getByRole('button', { name: 'Solicitar posición' }));
 
-    expect(requests).toEqual([{ x: 400, y: 460 }]);
+    expect(requests).toEqual([{ x: 420, y: 460 }]);
   } finally {
     vi.restoreAllMocks();
   }
@@ -580,7 +580,7 @@ test('finds a grid-aligned gap when toolbar content requests an occupied positio
 
     await user.click(screen.getByRole('button', { name: 'Solicitar posición libre' }));
 
-    expect(position).toEqual({ x: 400, y: 360 });
+    expect(position).toEqual({ x: 420, y: 360 });
   } finally {
     vi.restoreAllMocks();
   }
@@ -624,7 +624,7 @@ test('reports no available position to toolbar content when the title cannot fit
     );
 
     await user.click(screen.getByRole('button', { name: 'Solicitar posiciones' }));
-    expect(responses).toEqual([{ x: 20, y: 20 }, null]);
+    expect(responses).toEqual([{ x: 40, y: 20 }, null]);
 
     rerender(
       <RoadmapGraph
