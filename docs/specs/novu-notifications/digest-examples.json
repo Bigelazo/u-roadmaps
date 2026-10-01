@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 1,
+  "subscriberId": "subscriber-a",
+  "cases": [
+    {
+      "workflowId": "roadmap-available",
+      "payload": {
+        "roadmapId": "roadmap-a",
+        "courseCode": "CC1001",
+        "year": 2026,
+        "semester": 2,
+        "targetKind": "roadmap",
+        "changeKind": "roadmap-available",
+        "occurredAt": "2026-09-30T09:00:30.000Z",
+        "eventCount": 1,
+        "actorName": "Luis Soto",
+        "digestKey": "roadmap:roadmap-a:general"
+      },
+      "digestEvents": [
+        {
+          "id": "roadmap-available-repeat-1",
+          "time": "2026-09-30T09:00:20.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "roadmap",
+            "changeKind": "roadmap-available",
+            "occurredAt": "2026-09-30T09:00:20.000Z",
+            "eventCount": 1,
+            "actorName": "Ana Pérez",
+            "digestKey": "roadmap:roadmap-a:general"
+          }
+        },
+        {
+          "id": "roadmap-available-repeat-2",
+          "time": "2026-09-30T09:00:30.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "roadmap",
+            "changeKind": "roadmap-available",
+            "occurredAt": "2026-09-30T09:00:30.000Z",
+            "eventCount": 1,
+            "actorName": "Luis Soto",
+            "digestKey": "roadmap:roadmap-a:general"
+          }
+        }
+      ],
+      "expectedProjection": {
+        "subject": "Resumen de cambios · Roadmap de CC1001",
+        "body": "Se agruparon 2 cambios. Último cambio: Luis Soto creó el roadmap de CC1001.",
+        "data": {
+          "roadmapId": "roadmap-a",
+          "courseCode": "CC1001",
+          "year": 2026,
+          "semester": 2,
+          "targetKind": "roadmap",
+          "changeKind": "roadmap-available",
+          "occurredAt": "2026-09-30T09:00:30.000Z",
+          "eventCount": 2,
+          "actorName": "Luis Soto"
+        }
+      }
+    },
+    {
+      "workflowId": "roadmap-node-changed",
+      "payload": {
+        "roadmapId": "roadmap-a",
+        "courseCode": "CC1001",
+        "year": 2026,
+        "semester": 2,
+        "targetKind": "node",
+        "nodeId": "node-a",
+        "nodeTitle": "Unidad 1",
+        "changeKind": "node-blocked",
+        "occurredAt": "2026-09-30T09:00:30.000Z",
+        "eventCount": 1,
+        "actorName": "Luis Soto",
+        "noticeTitle": "Unidad 1",
+        "noticeBody": "Nodo bloqueado: Luis Soto bloqueó Unidad 1.",
+        "digestKey": "roadmap:roadmap-a:node:node-a"
+      },
+      "digestEvents": [
+        {
+          "id": "roadmap-node-changed-repeat-1",
+          "time": "2026-09-30T09:00:20.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "node",
+            "nodeId": "node-a",
+            "nodeTitle": "Unidad 1",
+            "changeKind": "node-updated",
+            "occurredAt": "2026-09-30T09:00:20.000Z",
+            "eventCount": 1,
+            "actorName": "Ana Pérez",
+            "noticeTitle": "Unidad 1",
+            "noticeBody": "Nodo actualizado: Ana Pérez actualizó Unidad 1.",
+            "digestKey": "roadmap:roadmap-a:node:node-a"
+          }
+        },
+        {
+          "id": "roadmap-node-changed-repeat-2",
+          "time": "2026-09-30T09:00:30.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "node",
+            "nodeId": "node-a",
+            "nodeTitle": "Unidad 1",
+            "changeKind": "node-blocked",
+            "occurredAt": "2026-09-30T09:00:30.000Z",
+            "eventCount": 1,
+            "actorName": "Luis Soto",
+            "noticeTitle": "Unidad 1",
+            "noticeBody": "Nodo bloqueado: Luis Soto bloqueó Unidad 1.",
+            "digestKey": "roadmap:roadmap-a:node:node-a"
+          }
+        }
+      ],
+      "expectedProjection": {
+        "subject": "Resumen de cambios · Nodo «Unidad 1»",
+        "body": "Se agruparon 2 cambios. Último cambio: Nodo bloqueado: Luis Soto bloqueó Unidad 1.",
+        "data": {
+          "roadmapId": "roadmap-a",
+          "courseCode": "CC1001",
+          "year": 2026,
+          "semester": 2,
+          "targetKind": "node",
+          "nodeId": "node-a",
+          "changeKind": "node-blocked",
+          "occurredAt": "2026-09-30T09:00:30.000Z",
+          "eventCount": 2,
+          "actorName": "Luis Soto"
+        }
+      }
+    },
+    {
+      "workflowId": "roadmap-path-changed",
+      "payload": {
+        "roadmapId": "roadmap-a",
+        "courseCode": "CC1001",
+        "year": 2026,
+        "semester": 2,
+        "targetKind": "roadmap",
+        "changeKind": "dependency-removed",
+        "occurredAt": "2026-09-30T09:00:30.000Z",
+        "eventCount": 1,
+        "actorName": "Luis Soto",
+        "noticeTitle": "Ruta actualizada",
+        "noticeBody": "Luis Soto quitó «Unidad 1» de la ruta.",
+        "digestKey": "roadmap:roadmap-a:general"
+      },
+      "digestEvents": [
+        {
+          "id": "roadmap-path-changed-repeat-1",
+          "time": "2026-09-30T09:00:20.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "roadmap",
+            "changeKind": "dependency-added",
+            "occurredAt": "2026-09-30T09:00:20.000Z",
+            "eventCount": 1,
+            "actorName": "Ana Pérez",
+            "noticeTitle": "Ruta actualizada",
+            "noticeBody": "Ana Pérez agregó «Unidad 1» a la ruta.",
+            "digestKey": "roadmap:roadmap-a:general"
+          }
+        },
+        {
+          "id": "roadmap-path-changed-repeat-2",
+          "time": "2026-09-30T09:00:30.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "roadmap",
+            "changeKind": "dependency-removed",
+            "occurredAt": "2026-09-30T09:00:30.000Z",
+            "eventCount": 1,
+            "actorName": "Luis Soto",
+            "noticeTitle": "Ruta actualizada",
+            "noticeBody": "Luis Soto quitó «Unidad 1» de la ruta.",
+            "digestKey": "roadmap:roadmap-a:general"
+          }
+        }
+      ],
+      "expectedProjection": {
+        "subject": "Resumen de cambios · Roadmap de CC1001",
+        "body": "Se agruparon 2 cambios. Último cambio: Luis Soto quitó «Unidad 1» de la ruta.",
+        "data": {
+          "roadmapId": "roadmap-a",
+          "courseCode": "CC1001",
+          "year": 2026,
+          "semester": 2,
+          "targetKind": "roadmap",
+          "changeKind": "dependency-removed",
+          "occurredAt": "2026-09-30T09:00:30.000Z",
+          "eventCount": 2,
+          "actorName": "Luis Soto"
+        }
+      }
+    },
+    {
+      "workflowId": "roadmap-resource-changed",
+      "payload": {
+        "roadmapId": "roadmap-a",
+        "courseCode": "CC1001",
+        "year": 2026,
+        "semester": 2,
+        "targetKind": "node",
+        "nodeId": "node-a",
+        "nodeTitle": "Unidad 1",
+        "resourceTitle": "Guía 2",
+        "changeKind": "resource-updated",
+        "occurredAt": "2026-09-30T09:00:30.000Z",
+        "eventCount": 1,
+        "actorName": "Luis Soto",
+        "noticeTitle": "Cambio de recurso: Guía 2",
+        "noticeBody": "Luis Soto modificó un recurso en un Nodo del Roadmap de CC1001.",
+        "digestKey": "roadmap:roadmap-a:node:node-a"
+      },
+      "digestEvents": [
+        {
+          "id": "roadmap-resource-changed-repeat-1",
+          "time": "2026-09-30T09:00:20.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "node",
+            "nodeId": "node-a",
+            "nodeTitle": "Unidad 1",
+            "resourceTitle": "Guía 1",
+            "changeKind": "resource-added",
+            "occurredAt": "2026-09-30T09:00:20.000Z",
+            "eventCount": 1,
+            "actorName": "Ana Pérez",
+            "noticeTitle": "Cambio de recurso: Guía 1",
+            "noticeBody": "Ana Pérez modificó un recurso en un Nodo del Roadmap de CC1001.",
+            "digestKey": "roadmap:roadmap-a:node:node-a"
+          }
+        },
+        {
+          "id": "roadmap-resource-changed-repeat-2",
+          "time": "2026-09-30T09:00:30.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "node",
+            "nodeId": "node-a",
+            "nodeTitle": "Unidad 1",
+            "resourceTitle": "Guía 2",
+            "changeKind": "resource-updated",
+            "occurredAt": "2026-09-30T09:00:30.000Z",
+            "eventCount": 1,
+            "actorName": "Luis Soto",
+            "noticeTitle": "Cambio de recurso: Guía 2",
+            "noticeBody": "Luis Soto modificó un recurso en un Nodo del Roadmap de CC1001.",
+            "digestKey": "roadmap:roadmap-a:node:node-a"
+          }
+        }
+      ],
+      "expectedProjection": {
+        "subject": "Resumen de cambios · Nodo «Unidad 1»",
+        "body": "Se agruparon 2 cambios. Último cambio: Luis Soto modificó «Guía 2» en el Nodo «Unidad 1» del Roadmap de CC1001.",
+        "data": {
+          "roadmapId": "roadmap-a",
+          "courseCode": "CC1001",
+          "year": 2026,
+          "semester": 2,
+          "targetKind": "node",
+          "nodeId": "node-a",
+          "changeKind": "resource-updated",
+          "occurredAt": "2026-09-30T09:00:30.000Z",
+          "eventCount": 2,
+          "actorName": "Luis Soto"
+        }
+      }
+    },
+    {
+      "workflowId": "roadmap-classification-changed",
+      "payload": {
+        "roadmapId": "roadmap-a",
+        "courseCode": "CC1001",
+        "year": 2026,
+        "semester": 2,
+        "targetKind": "roadmap",
+        "changeKind": "classification-updated",
+        "occurredAt": "2026-09-30T09:00:30.000Z",
+        "eventCount": 1,
+        "actorName": "Luis Soto",
+        "noticeTitle": "Tipo «Lectura» → «Material guiado»",
+        "noticeBody": "Luis Soto actualizó la clasificación del Roadmap de CC1001.",
+        "digestKey": "roadmap:roadmap-a:general"
+      },
+      "digestEvents": [
+        {
+          "id": "roadmap-classification-changed-repeat-1",
+          "time": "2026-09-30T09:00:20.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "roadmap",
+            "changeKind": "classification-updated",
+            "occurredAt": "2026-09-30T09:00:20.000Z",
+            "eventCount": 1,
+            "actorName": "Ana Pérez",
+            "noticeTitle": "Tipo «Lectura» → «Lecturas guiadas»",
+            "noticeBody": "Ana Pérez actualizó la clasificación del Roadmap de CC1001.",
+            "digestKey": "roadmap:roadmap-a:general"
+          }
+        },
+        {
+          "id": "roadmap-classification-changed-repeat-2",
+          "time": "2026-09-30T09:00:30.000Z",
+          "payload": {
+            "roadmapId": "roadmap-a",
+            "courseCode": "CC1001",
+            "year": 2026,
+            "semester": 2,
+            "targetKind": "roadmap",
+            "changeKind": "classification-updated",
+            "occurredAt": "2026-09-30T09:00:30.000Z",
+            "eventCount": 1,
+            "actorName": "Luis Soto",
+            "noticeTitle": "Tipo «Lectura» → «Material guiado»",
+            "noticeBody": "Luis Soto actualizó la clasificación del Roadmap de CC1001.",
+            "digestKey": "roadmap:roadmap-a:general"
+          }
+        }
+      ],
+      "expectedProjection": {
+        "subject": "Resumen de cambios · Roadmap de CC1001",
+        "body": "Se agruparon 2 cambios. Último cambio: Luis Soto actualizó la clasificación del Roadmap de CC1001: Tipo «Lectura» → «Material guiado».",
+        "data": {
+          "roadmapId": "roadmap-a",
+          "courseCode": "CC1001",
+          "year": 2026,
+          "semester": 2,
+          "targetKind": "roadmap",
+          "changeKind": "classification-updated",
+          "occurredAt": "2026-09-30T09:00:30.000Z",
+          "eventCount": 2,
+          "actorName": "Luis Soto"
+        }
+      }
+    }
+  ],
+  "note": "Each digestEvents list includes later repeats only. The first event was delivered immediately and is excluded."
+}

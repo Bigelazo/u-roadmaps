@@ -2,6 +2,7 @@ import 'server-only';
 
 import { Novu } from '@novu/api';
 import { NotificationTransportError, type NotificationTransport } from '../contracts';
+import { buildNotificationDigestKey } from './digest-key';
 
 let novuClient: Novu | null = null;
 
@@ -66,9 +67,20 @@ export const novuTransport: NotificationTransport = {
     }
   },
   async trigger({ workflowId, transactionId, recipients, payload }) {
+    const roadmapId = payload.roadmapId;
+    if (typeof roadmapId !== 'string') {
+      throw new NotificationTransportError('Notification Roadmap is missing.', false);
+    }
+    const nodeId = typeof payload.nodeId === 'string' ? payload.nodeId : undefined;
+
     try {
       await client().trigger(
-        { workflowId, transactionId, to: [...recipients], payload },
+        {
+          workflowId,
+          transactionId,
+          to: [...recipients],
+          payload: { ...payload, digestKey: buildNotificationDigestKey(roadmapId, nodeId) },
+        },
         transactionId,
         { timeoutMs: 3_000 },
       );

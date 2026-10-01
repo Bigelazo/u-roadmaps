@@ -87,8 +87,11 @@ test('targets the owning Node, excludes the author, and includes eligible studen
       payload: expect.objectContaining({
         targetKind: 'node',
         nodeId: input.nodeId,
+        nodeTitle: 'Unidad 1',
         changeKind: 'resource-added',
         resourceTitle: input.resourceTitle,
+        noticeTitle: 'Cambio de recurso: Guía de ejercicios',
+        noticeBody: 'Docente autora modificó un recurso en un Nodo del Roadmap de CC3002.',
       }),
     }),
   );
