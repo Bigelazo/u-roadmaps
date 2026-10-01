@@ -3,8 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
 import { projectDigestNotification } from '../digest-projection';
-import { nodeMessage } from '../application/emit-node-scoped-change';
-import type { NodeChangeNotice, RoadmapAvailabilityNotice } from '../contracts';
+import { nodeMessage, resourceMessage } from '../application/emit-node-scoped-change';
+import type {
+  NodeChangeNotice,
+  RoadmapAvailabilityNotice,
+  ResourceChangeNotice,
+} from '../contracts';
 
 export async function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
   const participants = await prisma.participation.findMany({
@@ -39,7 +43,7 @@ export async function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice
   });
 }
 
-export async function storeNodeChange(notice: NodeChangeNotice) {
+async function storeNodeScopedNotice(notice: NodeChangeNotice | ResourceChangeNotice) {
   const participants = await prisma.participation.findMany({
     where: {
       courseOfferingId: notice.courseOfferingId,
@@ -48,10 +52,11 @@ export async function storeNodeChange(notice: NodeChangeNotice) {
     },
     select: { userId: true },
   });
+  const message = 'resourceTitle' in notice ? resourceMessage(notice) : nodeMessage(notice);
   const projection = projectDigestNotification(
     {
       ...notice,
-      ...nodeMessage(notice),
+      ...message,
       targetKind: 'node',
       occurredAt: notice.occurredAt.toISOString(),
       eventCount: 1,
@@ -67,9 +72,22 @@ export async function storeNodeChange(notice: NodeChangeNotice) {
       courseOfferingId: notice.courseOfferingId,
       occurredAt: notice.occurredAt,
       ...projection,
+      data: {
+        ...projection.data,
+        nodeTitle: notice.nodeTitle,
+        ...('resourceTitle' in notice ? { resourceTitle: notice.resourceTitle } : {}),
+      },
     })),
     skipDuplicates: true,
   });
+}
+
+export function storeNodeChange(notice: NodeChangeNotice) {
+  return storeNodeScopedNotice(notice);
+}
+
+export function storeResourceChange(notice: ResourceChangeNotice) {
+  return storeNodeScopedNotice(notice);
 }
 
 export type NoticeNodeAccess = (

@@ -7,6 +7,7 @@ const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
     dependency: { findMany: vi.fn() },
     completion: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
+    roadmapNotice: { createMany: vi.fn() },
   },
   ensureSubscribers: vi.fn(),
   trigger: vi.fn(),
@@ -28,8 +29,8 @@ const input = {
 };
 
 beforeEach(() => {
-  process.env.NOVU_NOTIFICATIONS_ENABLED = 'true';
-  process.env.NOVU_WORKFLOW_RESOURCE_CHANGE = 'roadmap-resource-changed';
+  vi.stubEnv('NOVU_SECRET_KEY', '');
+  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
   prisma.roadmapNode.findUnique.mockResolvedValue({
     id: input.nodeId,
     title: 'Unidad 1',
@@ -64,11 +65,10 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
-  delete process.env.NOVU_NOTIFICATIONS_ENABLED;
-  delete process.env.NOVU_WORKFLOW_RESOURCE_CHANGE;
+  vi.unstubAllEnvs();
 });
 
-test('targets the owning Node, excludes the author, and includes eligible students and teachers', async () => {
+test('stores an own Resource notice for eligible recipients without Novu configuration', async () => {
   await deliverResourceChange(input);
 
   expect(prisma.participation.findMany).toHaveBeenCalledWith(
@@ -80,21 +80,31 @@ test('targets the owning Node, excludes the author, and includes eligible studen
       }),
     }),
   );
-  expect(trigger).toHaveBeenCalledWith(
-    expect.objectContaining({
-      workflowId: 'roadmap-resource-changed',
-      recipients: ['teacher-id', 'student-id'],
-      payload: expect.objectContaining({
-        targetKind: 'node',
-        nodeId: input.nodeId,
-        nodeTitle: 'Unidad 1',
-        changeKind: 'resource-added',
-        resourceTitle: input.resourceTitle,
-        noticeTitle: 'Cambio de recurso: Guía de ejercicios',
-        noticeBody: 'Docente autora modificó un recurso en un Nodo del Roadmap de CC3002.',
-      }),
-    }),
-  );
+  expect(ensureSubscribers).not.toHaveBeenCalled();
+  expect(trigger).not.toHaveBeenCalled();
+  const records = prisma.roadmapNotice.createMany.mock.calls[0]?.[0].data;
+  expect(records).toHaveLength(2);
+  expect(records.map(({ recipientId }: { recipientId: string }) => recipientId).sort()).toEqual([
+    'student-id',
+    'teacher-id',
+  ]);
+  expect(records[0]).toMatchObject({
+    eventId: expect.any(String),
+    roadmapId: 'roadmap-id',
+    courseOfferingId: 'offering-id',
+    subject: 'Cambio de recurso: Guía de ejercicios',
+    body: 'Docente autora modificó un recurso en un Nodo del Roadmap de CC3002.',
+    data: {
+      targetKind: 'node',
+      nodeId: input.nodeId,
+      nodeTitle: 'Unidad 1',
+      changeKind: 'resource-added',
+      resourceTitle: input.resourceTitle,
+      actorName: 'Docente autora',
+      occurredAt: expect.any(String),
+    },
+  });
+  expect(JSON.stringify(records)).not.toMatch(/https?:|description|bytes/i);
   expect(prisma.completion.findMany).toHaveBeenCalledWith(
     expect.objectContaining({ where: expect.objectContaining({ userId: { in: ['student-id'] } }) }),
   );
@@ -125,7 +135,7 @@ test('does not deliver a Resource notice when the owning Node is blocked', async
 
   await deliverResourceChange(input);
 
-  expect(trigger).not.toHaveBeenCalled();
+  expect(prisma.roadmapNotice.createMany).not.toHaveBeenCalled();
 });
 
 test('keeps teachers eligible when students cannot access the Node through prerequisites', async () => {
@@ -148,7 +158,11 @@ test('keeps teachers eligible when students cannot access the Node through prere
 
   await deliverResourceChange(input);
 
-  expect(trigger).toHaveBeenCalledWith(expect.objectContaining({ recipients: ['teacher-id'] }));
+  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: [expect.objectContaining({ recipientId: 'teacher-id' })],
+    }),
+  );
   expect(prisma.completion.findMany).toHaveBeenCalledWith(
     expect.objectContaining({ where: expect.objectContaining({ userId: { in: ['student-id'] } }) }),
   );

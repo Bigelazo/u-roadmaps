@@ -25,7 +25,7 @@ export function nodeMessage(notice: NodeChangeNotice) {
   return { noticeTitle: notice.nodeTitle.slice(0, 256), noticeBody: body.slice(0, 256), label };
 }
 
-function resourceMessage(notice: ResourceChangeNotice) {
+export function resourceMessage(notice: ResourceChangeNotice) {
   const noticeTitle = `Cambio de recurso: ${notice.resourceTitle}`.slice(0, 256);
   const noticeBody =
     `${notice.actorName} modificó un recurso en un Nodo del Roadmap de ${notice.courseCode}.`.slice(

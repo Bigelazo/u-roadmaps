@@ -13,6 +13,7 @@ import type {
 import {
   storeRoadmapAvailability,
   storeNodeChange,
+  storeResourceChange,
   findOwnNotice,
   noticeRecord,
   noticeFilter,
@@ -425,9 +426,6 @@ export async function deliverResourceChange(input: {
   changeKind: ResourceChangeNotice['changeKind'];
 }) {
   try {
-    if (!notificationsEnabled()) return;
-    const workflowId = process.env.NOVU_WORKFLOW_RESOURCE_CHANGE;
-    if (!workflowId) return;
     const node = await prisma.roadmapNode.findUnique({
       where: { id: input.nodeId },
       include: { roadmap: { include: { courseOffering: { include: { course: true } } } } },
@@ -465,18 +463,7 @@ export async function deliverResourceChange(input: {
       occurredAt: new Date(),
       recipients,
     };
-    await emitNodeScopedChange(
-      notice,
-      novuTransport,
-      async (userIds) => {
-        const active = await prisma.participation.findMany({
-          where: { courseOfferingId: offering.id, userId: { in: [...userIds] }, isActive: true },
-          select: { userId: true },
-        });
-        return active.map(({ userId }) => userId);
-      },
-      workflowId,
-    );
+    await storeResourceChange(notice);
   } catch {
     // Notification delivery is best-effort and cannot change a committed resource mutation.
   }

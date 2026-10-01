@@ -77,6 +77,238 @@ function cleanupNotices(nodeIds: string[]) {
     fixtureSql(`DELETE FROM "RoadmapNotice" WHERE "data"->>'nodeId' = '${id}';`);
 }
 
+test('Resource notices persist context and share their Node destination and acknowledgement', async ({
+  request,
+  page,
+}) => {
+  const author = { cookie: await sessionCookie(fixture.daniela) };
+  const student = fixture.cc1002StudentWithoutProgress;
+  const studentHeaders = { cookie: await sessionCookie(student) };
+  const teacher = fixture.nicolas;
+  const inactive = fixture.cc1002WithdrawnStudent;
+  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  const nodeIds: string[] = [];
+  let remainingResourceIds: string[] = [];
+  const resourceTitle = `E2E material ${crypto.randomUUID()}.pdf`;
+  const updatedTitle = `E2E material revisado ${crypto.randomUUID()}.pdf`;
+  const secondResourceTitle = `E2E material de otra Unidad ${crypto.randomUUID()}`;
+  const lateResourceTitle = `E2E material posterior ${crypto.randomUUID()}`;
+
+  const createNode = async (title: string, positionX: number) => {
+    const response = await request.post(roadmapPath('/nodes'), {
+      headers: author,
+      data: {
+        title,
+        description: 'Detalle original',
+        nodeTypeId: roadmap.nodeTypes[0].id,
+        positionX,
+        positionY: 0,
+      },
+    });
+    expect(response.status()).toBe(201);
+    const nodeId = (await response.json()).node.id;
+    nodeIds.push(nodeId);
+    return nodeId;
+  };
+  const getNotices = async (userId: string, nodeId: string) => {
+    const response = await request.get(
+      `/api/notifications?roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}&limit=100`,
+      { headers: { cookie: await sessionCookie(userId) } },
+    );
+    expect(response.status()).toBe(200);
+    return (await response.json()).notifications as Array<{
+      id: string;
+      subject: string;
+      body: string;
+      createdAt: string;
+      read: boolean;
+      data: Record<string, unknown>;
+    }>;
+  };
+  const resourceNotices = async (userId: string, nodeId: string) =>
+    (await getNotices(userId, nodeId)).filter(
+      (notice) => typeof notice.data.resourceTitle === 'string',
+    );
+  const count = async (nodeId: string) =>
+    (
+      await (
+        await request.get(
+          `/api/notifications/counts?roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}`,
+          { headers: studentHeaders },
+        )
+      ).json()
+    ).count;
+
+  try {
+    const nodeId = await createNode(`Recurso destino ${crypto.randomUUID()}`, 4000);
+    const otherNodeId = await createNode(`Otra Unidad ${crypto.randomUUID()}`, 4400);
+    const initialNodeCount = await count(nodeId);
+    const initialOtherNodeCount = await count(otherNodeId);
+    const resourcePath = roadmapPath(`/nodes/${nodeId}/resources`);
+
+    const uploaded = await request.post(resourcePath, {
+      headers: author,
+      multipart: {
+        file: {
+          name: resourceTitle,
+          mimeType: 'application/pdf',
+          buffer: Buffer.from('%PDF-1.7 E2E resource'),
+        },
+      },
+    });
+    expect(uploaded.status()).toBe(201);
+    const uploadedResource = (await uploaded.json()).resource;
+    remainingResourceIds.push(uploadedResource.id);
+    const afterUpload = await resourceNotices(student, nodeId);
+    expect(afterUpload).toHaveLength(1);
+    expect(afterUpload[0]).toMatchObject({
+      subject: `Cambio de recurso: ${resourceTitle}`,
+      data: {
+        targetKind: 'node',
+        nodeId,
+        resourceTitle,
+        changeKind: 'resource-added',
+      },
+    });
+
+    const failedUpdate = await request.patch(roadmapPath(`/resources/${uploadedResource.id}`), {
+      headers: author,
+      data: { url: 'not-a-valid-url' },
+    });
+    expect(failedUpdate.status()).toBe(400);
+    expect(await resourceNotices(student, nodeId)).toHaveLength(1);
+
+    const identicalUpdate = await request.patch(roadmapPath(`/resources/${uploadedResource.id}`), {
+      headers: author,
+      data: { title: resourceTitle },
+    });
+    expect(identicalUpdate.status()).toBe(200);
+    expect(await resourceNotices(student, nodeId)).toHaveLength(1);
+
+    const updated = await request.patch(roadmapPath(`/resources/${uploadedResource.id}`), {
+      headers: author,
+      data: { title: updatedTitle },
+    });
+    expect(updated.status()).toBe(200);
+    const removed = await request.delete(roadmapPath(`/resources/${uploadedResource.id}`), {
+      headers: author,
+    });
+    expect(removed.status()).toBe(204);
+    remainingResourceIds = remainingResourceIds.filter((id) => id !== uploadedResource.id);
+
+    const otherResource = await request.post(roadmapPath(`/nodes/${otherNodeId}/resources`), {
+      headers: author,
+      data: {
+        title: secondResourceTitle,
+        url: 'https://example.test/other-resource',
+        type: 'LINK',
+      },
+    });
+    expect(otherResource.status()).toBe(201);
+    const otherResourceId = (await otherResource.json()).resource.id;
+    remainingResourceIds.push(otherResourceId);
+
+    const nodeChange = await request.patch(roadmapPath(`/nodes/${nodeId}`), {
+      headers: author,
+      data: { description: 'Detalle actualizado' },
+    });
+    expect(nodeChange.status()).toBe(200);
+
+    await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 4);
+    await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
+    const noticesBeforeOpening = await getNotices(student, nodeId);
+    expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('node-updated');
+    expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain(
+      'resource-added',
+    );
+
+    const studentResourceNotices = await resourceNotices(student, nodeId);
+    expect(studentResourceNotices).toHaveLength(3);
+    expect(studentResourceNotices.map((notice) => notice.data.changeKind).sort()).toEqual([
+      'resource-added',
+      'resource-removed',
+      'resource-updated',
+    ]);
+    const deletionNotice = studentResourceNotices.find(
+      (notice) => notice.data.changeKind === 'resource-removed',
+    );
+    expect(deletionNotice).toMatchObject({
+      subject: `Cambio de recurso: ${updatedTitle}`,
+      read: false,
+      data: {
+        nodeId,
+        nodeTitle: expect.any(String),
+        resourceTitle: updatedTitle,
+        actorName: 'Daniela Rojas Mella',
+        occurredAt: expect.any(String),
+      },
+    });
+    expect(Number.isNaN(Date.parse(deletionNotice!.createdAt))).toBe(false);
+    expect(Number.isNaN(Date.parse(String(deletionNotice!.data.occurredAt)))).toBe(false);
+    expect(JSON.stringify(studentResourceNotices)).not.toMatch(/https?:|description|bytes/i);
+
+    expect(await resourceNotices(fixture.daniela, nodeId)).toHaveLength(0);
+    expect(await resourceNotices(inactive, nodeId)).toHaveLength(0);
+    expect(await resourceNotices(teacher, nodeId)).toHaveLength(3);
+
+    await authenticateAs(page.context(), student);
+    await page.goto('/academic-overview');
+    await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+    await page
+      .getByRole('button', { name: new RegExp(updatedTitle) })
+      .first()
+      .click();
+    await expect(page).toHaveURL(new RegExp(`targetNode=${nodeId}`));
+    await expect(
+      page.getByRole('dialog', { name: `Cambio de recurso: ${updatedTitle}` }),
+    ).toBeVisible();
+    await expect.poll(() => count(nodeId)).toBe(0);
+    expect(await count(otherNodeId)).toBe(initialOtherNodeCount + 1);
+
+    const lateResource = await request.post(resourcePath, {
+      headers: author,
+      data: {
+        title: lateResourceTitle,
+        url: 'https://example.test/late-resource',
+        type: 'LINK',
+      },
+    });
+    expect(lateResource.status()).toBe(201);
+    const lateResourceId = (await lateResource.json()).resource.id;
+    remainingResourceIds.push(lateResourceId);
+    await expect.poll(() => count(nodeId)).toBe(1);
+
+    const otherNodeResourceNotices = await resourceNotices(student, otherNodeId);
+    expect(otherNodeResourceNotices).toHaveLength(1);
+    const cascadeKindsBefore = (await resourceNotices(student, nodeId)).map(
+      (notice) => notice.data.changeKind,
+    );
+    const cascade = await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
+    expect(cascade.status()).toBe(204);
+    const cascadeNotices = await resourceNotices(student, nodeId);
+    expect(cascadeNotices.map((notice) => notice.data.changeKind)).toEqual(cascadeKindsBefore);
+    expect(cascadeNotices.some((notice) => notice.data.changeKind === 'resource-removed')).toBe(
+      true,
+    );
+
+    const otherNodeDelete = await request.delete(roadmapPath(`/nodes/${otherNodeId}`), {
+      headers: author,
+    });
+    expect(otherNodeDelete.status()).toBe(204);
+    const afterOtherCascade = await resourceNotices(student, otherNodeId);
+    expect(afterOtherCascade).toHaveLength(1);
+    expect(afterOtherCascade[0]?.data.changeKind).toBe('resource-added');
+  } finally {
+    for (const resourceId of remainingResourceIds) {
+      await request.delete(roadmapPath(`/resources/${resourceId}`), { headers: author });
+    }
+    for (const nodeId of nodeIds.reverse()) {
+      await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
+    }
+    cleanupNotices(nodeIds);
+  }
+});
+
 test('Node opening captures every page, preserves later arrivals and other Nodes through retry and refresh', async ({
   request,
   page,
