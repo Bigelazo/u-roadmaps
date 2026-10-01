@@ -1,10 +1,11 @@
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
+import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change-signal';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
@@ -430,6 +431,68 @@ describe('RoadmapCanvasSession', () => {
     resolvePreviousRoadmap(roadmap);
     expect(await screen.findByRole('button', { name: 'Integrales' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Límites' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Derivadas' })).toBeNull();
+  });
+
+  test('ignores unrelated signals and an older Roadmap refetch that finishes last', async () => {
+    let resolveOlder!: (value: StudentRoadmapDto) => void;
+    let resolveLatest!: (value: StudentRoadmapDto) => void;
+    const older = new Promise<StudentRoadmapDto>((resolve) => {
+      resolveOlder = resolve;
+    });
+    const latest = new Promise<StudentRoadmapDto>((resolve) => {
+      resolveLatest = resolve;
+    });
+    let loadCount = 0;
+    const persistence = {
+      load: vi.fn(() => {
+        loadCount += 1;
+        return loadCount === 1 ? Promise.resolve(roadmap) : loadCount === 2 ? older : latest;
+      }),
+      complete: vi.fn().mockResolvedValue(undefined),
+    };
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          courseOffering={{
+            identifier: { courseCode: 'CC1001', year: 2026, semester: 2 },
+            title: 'Programación I',
+          }}
+          experience={{ kind: 'student', term: 'current' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+    await screen.findByRole('button', { name: 'Límites' });
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
+          detail: { courseCode: 'CC1002', year: 2026, semester: 2 },
+        }),
+      );
+    });
+    expect(persistence.load).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      for (let index = 0; index < 2; index += 1) {
+        window.dispatchEvent(
+          new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
+            detail: { courseCode: 'CC1001', year: 2026, semester: 2 },
+          }),
+        );
+      }
+    });
+    await waitFor(() => expect(persistence.load).toHaveBeenCalledTimes(3));
+    await act(async () => {
+      resolveLatest({ ...roadmap, nodes: [{ ...roadmap.nodes[0], title: 'Integrales' }] });
+      await latest;
+    });
+    await screen.findByRole('button', { name: 'Integrales' });
+    await act(async () => {
+      resolveOlder({ ...roadmap, nodes: [{ ...roadmap.nodes[0], title: 'Derivadas' }] });
+      await older;
+    });
+    expect(screen.getByRole('button', { name: 'Integrales' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Derivadas' })).toBeNull();
   });
 

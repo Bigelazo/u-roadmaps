@@ -10,7 +10,7 @@ import {
   type CSSProperties,
 } from 'react';
 import dynamic from 'next/dynamic';
-import { CircleAlert, Eye, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { CircleAlert, Eye, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
@@ -45,7 +45,7 @@ import type {
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
-import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
@@ -130,6 +130,7 @@ export function RoadmapCanvasView({ input }: Props) {
   const { courseCode, year, semester } = identifier;
   const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
   const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
+  const [syncedSelectionNotice, setSyncedSelectionNotice] = useState<string | null>(null);
   const [acknowledgementError, setAcknowledgementError] = useState(false);
   const acknowledgementInputRef = useRef<{
     roadmapId: string;
@@ -139,6 +140,7 @@ export function RoadmapCanvasView({ input }: Props) {
   const acknowledgedRoadmapRef = useRef<string | null>(null);
   const openedNodeRef = useRef<string | null>(null);
   const { acknowledge, retry } = useNotificationAcknowledgement();
+  const canvasFocusRef = useRef<HTMLDivElement>(null);
   const {
     selectedNodeId,
     isEditorOpen,
@@ -440,7 +442,10 @@ export function RoadmapCanvasView({ input }: Props) {
     const nodeId = input.targetNodeId;
     if (!nodeId || !roadmap || deepLinkHandledRef.current === nodeId) return;
     deepLinkHandledRef.current = nodeId;
-    if (!accessibleNodeIds.has(nodeId)) return;
+    if (!accessibleNodeIds.has(nodeId)) {
+      setSyncedSelectionNotice('Este Nodo ya no está disponible. Puedes revisar el Roadmap actualizado.');
+      return;
+    }
     dispatchCanvas({
       type: 'selectNode',
       nodeId,
@@ -472,6 +477,20 @@ export function RoadmapCanvasView({ input }: Props) {
     roadmap,
     selectedNodeId,
   ]);
+  useEffect(() => {
+    if (!isStudentExperience || !isStudentDetailOpen || !selectedNodeId || !roadmap) return;
+    const selected = roadmap.nodes.find((node) => node.id === selectedNodeId);
+    if (selected && !isStudentBlockedNode(selected)) return;
+
+    dispatchCanvas({ type: 'closeSelectedNode', panel: 'student' });
+    setSyncedSelectionNotice(
+      selected
+        ? 'El Nodo seleccionado ahora está bloqueado. Se cerró su detalle.'
+        : 'El Nodo seleccionado ya no está disponible. Se cerró su detalle.',
+    );
+    if (selected) requestNodeFocusReturn();
+    else requestAnimationFrame(() => canvasFocusRef.current?.focus());
+  }, [isStudentDetailOpen, isStudentExperience, requestNodeFocusReturn, roadmap, selectedNodeId]);
   const requestDependencyCreation = useCallback(
     (...args: Parameters<typeof dependencyWorkflow.requestCreation>) =>
       requestExclusiveConfirmation('dependency-creation', () =>
@@ -726,6 +745,7 @@ export function RoadmapCanvasView({ input }: Props) {
           </div>
         ) : null}
         <div
+          ref={canvasFocusRef}
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
@@ -737,6 +757,7 @@ export function RoadmapCanvasView({ input }: Props) {
               const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
               if (isStudentExperience && isStudentBlockedNode(node)) return;
               const select = () => {
+                setSyncedSelectionNotice(null);
                 dispatchCanvas({
                   type: 'selectNode',
                   nodeId,
@@ -866,6 +887,25 @@ export function RoadmapCanvasView({ input }: Props) {
             }}
           />
           <RoadmapCanvasFeedback />
+          {syncedSelectionNotice ? (
+            <Alert
+              role="status"
+              className="absolute bottom-5 left-5 z-5 w-[min(23rem,calc(100%-2.5rem))] bg-card shadow-sm"
+            >
+              <AlertDescription>{syncedSelectionNotice}</AlertDescription>
+              <AlertAction>
+                <Button
+                  aria-label="Cerrar aviso de actualización"
+                  onClick={() => setSyncedSelectionNotice(null)}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </AlertAction>
+            </Alert>
+          ) : null}
         </div>
         {canEditRoadmap && (
           <NodeEditorPanel
