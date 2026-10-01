@@ -15,6 +15,7 @@ export type CanvasState = {
 
 export type CanvasStateAction =
   | { type: 'closeEditor' }
+  | { type: 'reconcileSelection'; removed: boolean; preserveEditorDraft?: boolean }
   | { type: 'closeSelectedNode'; panel: Exclude<CanvasPanel, 'none'> }
   | { type: 'closeTeacherPreview' }
   | { type: 'prepareCanvasPreview' }
@@ -48,6 +49,14 @@ export const initialCanvasState: CanvasState = {
 
 export function canvasStateReducer(state: CanvasState, action: CanvasStateAction): CanvasState {
   switch (action.type) {
+    case 'reconcileSelection':
+      return {
+        ...state,
+        selectedNodeId: action.removed ? null : state.selectedNodeId,
+        isStudentDetailOpen: false,
+        isEditorOpen: action.preserveEditorDraft ? state.isEditorOpen : false,
+        teacherPreviewNode: null,
+      };
     case 'closeEditor':
       return { ...state, isEditorOpen: false };
     case 'closeSelectedNode':

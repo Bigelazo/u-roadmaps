@@ -96,6 +96,32 @@ test('two open sessions refetch the authoritative Roadmap after a Novu change si
     await expect(student.getByRole('heading', { name: 'Nodo sincronizado' })).toBeVisible();
     await expect(student.locator(`.react-flow__node[data-id="${nodeId}"]`)).toHaveClass(/selected/);
 
+    // A missed signal is repaired on reconnect; a transient failure retains detail.
+    expect(
+      (
+        await teacherContext.request.patch(nodePath, {
+          data: { description: 'Cambio recuperado sin aviso' },
+        })
+      ).status(),
+    ).toBe(200);
+    await student.route(
+      `**${roadmapPath()}`,
+      async (route) => {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Fallo transitorio de actualización' } }),
+        });
+      },
+      { times: 1 },
+    );
+    await student.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect(student.getByText('Fallo transitorio de actualización')).toBeVisible();
+    await expect(student.getByRole('heading', { name: 'Nodo sincronizado' })).toBeVisible();
+    await student.getByRole('button', { name: 'Reintentar actualización' }).click();
+    await expect(student.getByText('Cambio recuperado sin aviso', { exact: true })).toBeVisible();
+    await expect(student.getByText('Fallo transitorio de actualización')).toBeHidden();
+
     const blocked = await teacherContext.request.post(`${nodePath}/teacher-block`);
     expect(blocked.status()).toBe(200);
     const afterBlock = await deliverNovuSignal(student);
@@ -108,6 +134,7 @@ test('two open sessions refetch the authoritative Roadmap after a Novu change si
       ]),
     );
     await expect(student.getByRole('heading', { name: 'Nodo sincronizado' })).toBeHidden();
+    await expect(student.locator(`.react-flow__node[data-id="${nodeId}"]`)).toHaveClass(/selected/);
     await expect(student.getByRole('status')).toContainText('ahora está bloqueado');
     await expect(
       student.locator(`.react-flow__node[data-id="${nodeId}"]`).getByRole('img', {
@@ -154,8 +181,84 @@ test('two open sessions refetch the authoritative Roadmap after a Novu change si
     await expect(student.getByRole('heading', { name: 'Nodo sincronizado' })).toBeHidden();
     await expect(student.getByRole('status')).toContainText('ya no está disponible');
     await expect(student.getByLabel('Lienzo del roadmap')).toBeFocused();
+    await student.route(
+      `**${roadmapPath()}`,
+      (route) =>
+        route.fulfill({
+          status: 403,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { message: 'Participación inactiva' } }),
+        }),
+      { times: 1 },
+    );
+    await student.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect(student).toHaveURL(/academic-overview\?accessLost=1/);
+    await expect(
+      student.getByRole('status').filter({ hasText: 'ya no tiene acceso' }),
+    ).toContainText('ya no tiene acceso');
   } finally {
     await deleteIfPresent(teacherContext, nodeId);
     await Promise.all([teacherContext.close(), studentContext.close()]);
+  }
+});
+
+test('a teacher keeps a local draft and resolves incompatible remote edits before saving', async ({
+  browser,
+}, testInfo) => {
+  const baseURL = testInfo.project.use.baseURL as string;
+  const author = await browser.newContext({ baseURL });
+  const recipient = await browser.newContext({ baseURL });
+  let nodeId = '';
+  try {
+    await Promise.all([
+      authenticateAs(author, fixture.daniela),
+      authenticateAs(recipient, fixture.nicolas),
+    ]);
+    const response = await author.request.post(roadmapPath('/nodes'), {
+      data: {
+        title: 'Borrador compartido',
+        nodeTypeId: '00000000-0000-4000-8000-000000000001',
+        positionX: 300,
+        positionY: 100,
+      },
+    });
+    expect(response.status()).toBe(201);
+    nodeId = (await response.json()).node.id;
+    const page = await recipient.newPage();
+    await page.goto('/courses/CC1002/2026/2');
+    await panNodeIntoView(page, nodeId);
+    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+    await page.getByLabel('Título', { exact: true }).fill('Mi borrador local');
+    expect(
+      (
+        await author.request.patch(roadmapPath(`/nodes/${nodeId}`), {
+          data: { title: 'Edición de otra persona' },
+        })
+      ).status(),
+    ).toBe(200);
+    await deliverNovuSignal(page);
+    await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Mi borrador local');
+    await expect(page.getByRole('status')).toContainText('cambió mientras editabas');
+    await expect(page.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+    const canonical = await author.request.get(roadmapPath());
+    expect(
+      (await canonical.json()).nodes.find((node: { id: string }) => node.id === nodeId).title,
+    ).toBe('Edición de otra persona');
+    await page
+      .getByRole('button', { name: 'Conservar mi borrador sobre la versión actual' })
+      .click();
+    await expect(page.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled();
+    expect((await author.request.delete(roadmapPath(`/nodes/${nodeId}`))).status()).toBe(204);
+    await deliverNovuSignal(page);
+    await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Mi borrador local');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Conservamos tu borrador local' }),
+    ).toContainText('fue eliminado');
+    await expect(page.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+    await expect(page.getByLabel('Lienzo del roadmap')).toBeFocused();
+    nodeId = '';
+  } finally {
+    await deleteIfPresent(author, nodeId);
+    await Promise.all([author.close(), recipient.close()]);
   }
 });

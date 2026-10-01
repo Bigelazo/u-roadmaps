@@ -822,3 +822,27 @@ describe('RoadmapCanvasSession', () => {
     await waitFor(async () => expect((await memory.load(teachingInput)).dependencies).toEqual([]));
   });
 });
+
+test('current teaching sessions recover missed changes and retain the last projection on transient failure', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+  const load = vi.spyOn(persistence, 'load');
+  render(
+    <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+      <RoadmapCanvasSession {...teachingInput} />
+    </RoadmapCanvasSessionPersistenceProvider>,
+  );
+  await screen.findByRole('button', { name: 'Límites' });
+  await persistence.updateNode!(teachingInput, 'node-1', {
+    title: 'Cambio remoto',
+    description: '',
+    nodeTypeId: teachingRoadmap.nodes[0].nodeTypeId,
+  });
+  act(() => window.dispatchEvent(new Event('online')));
+  await screen.findByRole('button', { name: 'Cambio remoto' });
+  load.mockRejectedValueOnce(new Error('Fallo transitorio'));
+  act(() => window.dispatchEvent(new Event('online')));
+  await screen.findByText('Fallo transitorio');
+  expect(screen.getByRole('button', { name: 'Cambio remoto' })).toBeTruthy();
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar actualización' }));
+  await waitFor(() => expect(screen.queryByText('Fallo transitorio')).toBeNull());
+});

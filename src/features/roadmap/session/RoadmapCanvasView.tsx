@@ -198,6 +198,8 @@ export function RoadmapCanvasView({ input }: Props) {
     roadmap,
     error,
     dismissError,
+    retryRefresh,
+    accessLost,
     addNode,
     updateNode,
     moveNode,
@@ -421,12 +423,14 @@ export function RoadmapCanvasView({ input }: Props) {
   const displayedRoadmap = isCanvasPreview ? simulationRoadmap : roadmap;
   const accessibleNodeIds = useMemo(() => {
     if (!roadmap) return new Set<string>();
-    return new Set(roadmap.nodes.flatMap((node) => {
-      if ('isVisible' in node && !node.isVisible) return [];
-      if ('access' in node && node.access?.status === 'BLOCKED') return [];
-      if ('isTeacherBlocked' in node && node.isTeacherBlocked) return [];
-      return [node.id];
-    }));
+    return new Set(
+      roadmap.nodes.flatMap((node) => {
+        if ('isVisible' in node && !node.isVisible) return [];
+        if ('access' in node && node.access?.status === 'BLOCKED') return [];
+        if ('isTeacherBlocked' in node && node.isTeacherBlocked) return [];
+        return [node.id];
+      }),
+    );
   }, [roadmap]);
   useEffect(() => {
     if (!input.notificationsEnabled || !roadmap || isCanvasPreview) return;
@@ -443,7 +447,9 @@ export function RoadmapCanvasView({ input }: Props) {
     if (!nodeId || !roadmap || deepLinkHandledRef.current === nodeId) return;
     deepLinkHandledRef.current = nodeId;
     if (!accessibleNodeIds.has(nodeId)) {
-      setSyncedSelectionNotice('Este Nodo ya no está disponible. Puedes revisar el Roadmap actualizado.');
+      setSyncedSelectionNotice(
+        'Este Nodo ya no está disponible. Puedes revisar el Roadmap actualizado.',
+      );
       return;
     }
     dispatchCanvas({
@@ -478,11 +484,16 @@ export function RoadmapCanvasView({ input }: Props) {
     selectedNodeId,
   ]);
   useEffect(() => {
-    if (!isStudentExperience || !isStudentDetailOpen || !selectedNodeId || !roadmap) return;
-    const selected = roadmap.nodes.find((node) => node.id === selectedNodeId);
-    if (selected && !isStudentBlockedNode(selected)) return;
-
-    dispatchCanvas({ type: 'closeSelectedNode', panel: 'student' });
+    if (!selectedNodeId || !displayedRoadmap) return;
+    const selected = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
+    const blocked = isStudentExperience && isStudentBlockedNode(selected);
+    if (selected && !blocked) return;
+    if (blocked && !isStudentDetailOpen) return;
+    dispatchCanvas({
+      type: 'reconcileSelection',
+      removed: !selected,
+      preserveEditorDraft: canEditRoadmap && Boolean(nodeEditorRef.current?.hasDraft?.()),
+    });
     setSyncedSelectionNotice(
       selected
         ? 'El Nodo seleccionado ahora está bloqueado. Se cerró su detalle.'
@@ -490,7 +501,14 @@ export function RoadmapCanvasView({ input }: Props) {
     );
     if (selected) requestNodeFocusReturn();
     else requestAnimationFrame(() => canvasFocusRef.current?.focus());
-  }, [isStudentDetailOpen, isStudentExperience, requestNodeFocusReturn, roadmap, selectedNodeId]);
+  }, [
+    canEditRoadmap,
+    displayedRoadmap,
+    isStudentDetailOpen,
+    isStudentExperience,
+    requestNodeFocusReturn,
+    selectedNodeId,
+  ]);
   const requestDependencyCreation = useCallback(
     (...args: Parameters<typeof dependencyWorkflow.requestCreation>) =>
       requestExclusiveConfirmation('dependency-creation', () =>
@@ -660,12 +678,20 @@ export function RoadmapCanvasView({ input }: Props) {
       : { kind: 'teaching', roadmap: displayedRoadmap as RoadmapDto, editing: graphEditing };
   }, [displayedRoadmap, graphEditing, isStudentExperience]);
 
+  if (accessLost) {
+    return <LostRoadmapAccess />;
+  }
   if (error && !roadmap) {
     return (
       <Alert variant="destructive" className="m-4 max-w-2xl">
         <CircleAlert aria-hidden="true" />
         <AlertTitle>Error al cargar el roadmap</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription>
+          {error}
+          <Button type="button" onClick={retryRefresh}>
+            Reintentar actualización
+          </Button>
+        </AlertDescription>
       </Alert>
     );
   }
@@ -731,7 +757,10 @@ export function RoadmapCanvasView({ input }: Props) {
         )}
       >
         {acknowledgementError ? (
-          <div className="absolute top-2 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm shadow" role="status">
+          <div
+            className="absolute top-2 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm shadow"
+            role="status"
+          >
             No se pudieron reconocer algunos avisos.
             <button
               className="font-semibold underline"
@@ -741,7 +770,9 @@ export function RoadmapCanvasView({ input }: Props) {
                 void retry(operation).then((success) => setAcknowledgementError(!success));
               }}
               type="button"
-            >Reintentar</button>
+            >
+              Reintentar
+            </button>
           </div>
         ) : null}
         <div
@@ -887,6 +918,11 @@ export function RoadmapCanvasView({ input }: Props) {
             }}
           />
           <RoadmapCanvasFeedback />
+          {error ? (
+            <Button className="absolute right-5 bottom-20" type="button" onClick={retryRefresh}>
+              Reintentar actualización
+            </Button>
+          ) : null}
           {syncedSelectionNotice ? (
             <Alert
               role="status"
@@ -1000,5 +1036,18 @@ export function RoadmapCanvasView({ input }: Props) {
                           })}
       />
     </SidebarProvider>
+  );
+}
+
+function LostRoadmapAccess() {
+  useEffect(() => {
+    window.location.replace('/academic-overview?accessLost=1');
+  }, []);
+  return (
+    <Alert role="status">
+      <AlertDescription>
+        Tu Participación ya no tiene acceso a este Roadmap. Volviendo al Resumen académico.
+      </AlertDescription>
+    </Alert>
   );
 }

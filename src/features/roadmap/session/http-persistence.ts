@@ -1,3 +1,4 @@
+import { RoadmapAccessLostError } from './access-lost';
 import { roadmapUrl } from '@/features/roadmap/client';
 import type { Point } from '@/features/roadmap/graph/geometry';
 import type { NodeUpdate } from '@/features/roadmap/editor/types';
@@ -144,7 +145,12 @@ async function request(
     roadmapUrl(input.courseOffering.identifier, suffix),
     headers === undefined ? init : { ...init, headers },
   );
-  if (!response.ok) throw new Error(await failureMessage(response, fallback));
+  if (!response.ok) {
+    const message = await failureMessage(response, fallback);
+    if (!suffix && [401, 403, 404].includes(response.status))
+      throw new RoadmapAccessLostError(message);
+    throw new Error(message);
+  }
   if (response.status === 204) return undefined;
   return response.json();
 }
@@ -168,7 +174,12 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async loadSimulation(input) {
-    const body = await request(input, '/simulation', {}, 'No se pudo cargar la previsualización.');
+    const body = await request(
+      input,
+      '/simulation',
+      { cache: 'no-store' },
+      'No se pudo cargar la previsualización.',
+    );
     if (!isStudentRoadmap(body)) throw new Error('No se pudo cargar la previsualización.');
     return body;
   },

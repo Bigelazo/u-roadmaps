@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 const { novu } = vi.hoisted(() => ({
-  novu: { notifications: { list: vi.fn() } },
+  novu: { on: vi.fn(() => () => undefined), notifications: { list: vi.fn() } },
 }));
 
 vi.mock('@novu/nextjs', () => ({

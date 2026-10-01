@@ -16,6 +16,11 @@ import {
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import type { InboxIdentity } from '../server';
+import {
+  ROADMAP_CHANGE_RECEIVED_EVENT,
+  requestRoadmapRecovery,
+  subscribeToRoadmapRecovery,
+} from '@/shared/client/roadmap-events';
 
 type NotificationRecord = NonNullable<ReturnType<typeof useNotifications>['notifications']>[number];
 type NotificationDataFilter = Record<string, string | number>;
@@ -35,7 +40,14 @@ export function NotificationCountButton({
 
 function NotificationCount({ filter, label }: { filter: NotificationDataFilter; label: string }) {
   const openInbox = useOpenNotificationInbox();
-  const { counts } = useCounts({ filters: [{ read: false, data: filter }] });
+  const { counts, refetch } = useCounts({ filters: [{ read: false, data: filter }] });
+  useEffect(
+    () =>
+      subscribeToRoadmapRecovery(() => {
+        void refetch().catch(() => undefined);
+      }),
+    [refetch],
+  );
   const count = counts?.[0]?.count ?? 0;
   if (count === 0) return null;
   return (
@@ -177,11 +189,20 @@ function InboxBell() {
     counts,
     isLoading: countsLoading,
     error: countsError,
+    refetch: refetchCounts,
   } = useCounts({
     filters: [{ read: false }],
   });
   const { notifications, isLoading, isFetching, hasMore, error, fetchMore, refetch } =
     useNotifications({ limit: 10, data: filter });
+  useEffect(
+    () =>
+      subscribeToRoadmapRecovery(() => {
+        void refetch().catch(() => undefined);
+        void refetchCounts().catch(() => undefined);
+      }),
+    [refetch, refetchCounts],
+  );
   const unreadCount = counts?.[0]?.count ?? 0;
 
   function selectNotification(notification: NotificationRecord) {
@@ -325,6 +346,7 @@ export function NotificationsProvider({
           apiUrl={identity.apiUrl}
           socketUrl={identity.socketUrl}
         >
+          <NotificationRealtimeBridge />
           <NotificationAcknowledgementProvider>{children}</NotificationAcknowledgementProvider>
         </NovuProvider>
       ) : (
@@ -460,4 +482,48 @@ function SelectedNotificationProvider({ children }: { children: ReactNode }) {
 
 export function NotificationsInbox({ identity }: { identity: InboxIdentity }) {
   return <InboxBell key={identity.subscriber} />;
+}
+
+const roadmapChangeKinds = new Set([
+  'roadmap-available',
+  'node-available',
+  'node-updated',
+  'node-retired',
+  'node-deleted',
+  'node-blocked',
+  'resource-added',
+  'resource-updated',
+  'resource-removed',
+  'dependency-added',
+  'dependency-removed',
+  'classification-updated',
+]);
+
+function NotificationRealtimeBridge() {
+  const novu = useNovu();
+  useEffect(() => {
+    const stopReceived = novu.on('notifications.notification_received', ({ result }) => {
+      const data = result?.data;
+      if (!data || !roadmapChangeKinds.has(data.changeKind as string)) return;
+      if (
+        typeof data.courseCode !== 'string' ||
+        !data.courseCode.trim() ||
+        data.courseCode.trim().length > 20
+      )
+        return;
+      if (!Number.isSafeInteger(data.year) || (data.year as number) < 1) return;
+      if (data.semester !== 1 && data.semester !== 2) return;
+      window.dispatchEvent(
+        new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
+          detail: { courseCode: data.courseCode.trim(), year: data.year, semester: data.semester },
+        }),
+      );
+    });
+    const stopConnected = novu.on('socket.connect.resolved', requestRoadmapRecovery);
+    return () => {
+      stopReceived();
+      stopConnected();
+    };
+  }, [novu]);
+  return null;
 }

@@ -14,6 +14,8 @@ import {
   roadmapConfirmationActionIds,
   resourceDeletionConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
+import { Alert, AlertDescription } from '@/shared/ui/alert';
+import { Button } from '@/shared/ui/button';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import type {
   Resource,
@@ -138,7 +140,9 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
   }, []);
 
   useEffect(() => {
-    if ((node?.id ?? null) !== stateRef.current.nodeId) {
+    if (!node && nodeEditorStateIsDirty(stateRef.current)) {
+      transition({ type: 'canonical-refresh', node });
+    } else if ((node?.id ?? null) !== stateRef.current.nodeId) {
       if (stateRef.current.pendingGuard) settleGuard(false);
       transition({ type: 'replace-node', node });
     } else if (node) {
@@ -162,12 +166,16 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
     [transition],
   );
 
-  useImperativeHandle(ref, () => ({ guardDraft }), [guardDraft]);
+  useImperativeHandle(
+    ref,
+    () => ({ guardDraft, hasDraft: () => nodeEditorStateIsDirty(stateRef.current) }),
+    [guardDraft],
+  );
 
   const startEffect = useCallback(
     (effect: NodeEditorEffect) => {
       const current = stateRef.current;
-      if (current.pendingEditorEffect || !current.nodeId) return;
+      if (current.pendingEditorEffect || current.remoteConflict || !current.nodeId) return;
 
       const pending = {
         id: ++effectIdRef.current,
@@ -352,7 +360,8 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
   }, [command, state.nodeId, transition]);
 
   const contextValue = useMemo(() => {
-    const activeNode = state.nodeId === (node?.id ?? null) ? state.canonicalNode : null;
+    const activeNode =
+      state.nodeId === (node?.id ?? null) || state.remoteDeleted ? state.canonicalNode : null;
     if (!activeNode) return null;
     return {
       node: activeNode,
@@ -362,6 +371,7 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
       isDirty: nodeEditorStateIsDirty(state),
       isNodeDirty: nodeDraftIsDirty(activeNode, state.nodeDraft),
       canSaveNode:
+        !state.remoteConflict &&
         !state.pendingEditorEffect &&
         nodeDraftIsDirty(activeNode, state.nodeDraft) &&
         Boolean(state.nodeDraft.title.trim()),
@@ -434,6 +444,24 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
 
   return (
     <>
+      {state.remoteConflict ? (
+        <Alert role="status">
+          <AlertDescription>
+            {state.remoteDeleted
+              ? 'Este Nodo fue eliminado. Conservamos tu borrador local; no se puede guardar.'
+              : 'El Nodo cambió mientras editabas. Conservamos tu borrador local. Revisa la versión actual antes de guardar.'}
+            {!state.remoteDeleted ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => transition({ type: 'resolve-remote-conflict' })}
+              >
+                Conservar mi borrador sobre la versión actual
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {contextValue ? (
         <NodeEditorProvider value={contextValue}>
           <NodeDetailsEditor />

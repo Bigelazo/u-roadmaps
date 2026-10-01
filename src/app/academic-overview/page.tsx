@@ -18,6 +18,12 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
 
   return (
     <>
+      {searchParams.accessLost === '1' ? (
+        <p role="status" className="mx-auto mt-6 max-w-3xl p-4">
+          Tu Participación ya no tiene acceso a este Roadmap. Puedes revisar tus Cursos en el
+          Resumen académico.
+        </p>
+      ) : null}
       {noticeId ? <UnavailableNoticeFallback noticeId={noticeId} reason={reason} /> : null}
       <AcademicOverview
         overview={await getAcademicOverviewPage(user)}

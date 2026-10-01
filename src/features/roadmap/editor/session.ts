@@ -16,17 +16,21 @@ export type PendingEditorEffect = {
 
 export type NodeEditorState = {
   epoch: number;
+  remoteConflict: boolean;
+  remoteDeleted: boolean;
   nodeId: string | null;
   canonicalNode: RoadmapNode | null;
   nodeDraft: NodeUpdate;
   resourceSession: ResourceSession;
   pendingEditorEffect: PendingEditorEffect | null;
+  confirmedEditorEffect: NodeEditorEffect | null;
   pendingResourceDeletion: Resource | null;
   pendingGuard: NodeEditorGuardReason | null;
   consumedCommandIds: readonly string[];
 };
 
 export type NodeEditorAction =
+  | { type: 'resolve-remote-conflict' }
   | { type: 'replace-node'; node: RoadmapNode | undefined }
   | { type: 'canonical-refresh'; node: RoadmapNode | undefined }
   | { type: 'change-node-draft'; value: NodeUpdate }
@@ -155,11 +159,14 @@ function createState(
 ): NodeEditorState {
   return {
     epoch,
+    remoteConflict: false,
+    remoteDeleted: false,
     nodeId: node?.id ?? null,
     canonicalNode: node ?? null,
     nodeDraft: nodeUpdateFromNode(node),
     resourceSession: emptyResourceSession(),
     pendingEditorEffect: null,
+    confirmedEditorEffect: null,
     pendingResourceDeletion: null,
     pendingGuard: null,
     consumedCommandIds,
@@ -170,6 +177,57 @@ export function createNodeEditorState(node: RoadmapNode | undefined) {
   return createState(node, 0);
 }
 
+function refreshMatchesPendingEffect(state: NodeEditorState, next: RoadmapNode) {
+  const previous = state.canonicalNode;
+  const effect = state.pendingEditorEffect?.effect ?? state.confirmedEditorEffect;
+  if (
+    !previous ||
+    !effect ||
+    previous.isVisible !== next.isVisible ||
+    previous.isTeacherBlocked !== next.isTeacherBlocked
+  )
+    return false;
+  if (effect.kind === 'update-node') {
+    return (
+      !nodeDraftIsDirty(next, effect.value) &&
+      JSON.stringify(previous.resources) === JSON.stringify(next.resources)
+    );
+  }
+  if (nodeDraftIsDirty(previous, nodeUpdateFromNode(next))) return false;
+  switch (effect.kind) {
+    case 'update-resource':
+      return (
+        JSON.stringify(next.resources) ===
+        JSON.stringify(
+          previous.resources.map((resource) =>
+            resource.id === effect.resourceId ? { ...resource, ...effect.resource } : resource,
+          ),
+        )
+      );
+    case 'delete-resource':
+      return (
+        JSON.stringify(next.resources) ===
+        JSON.stringify(previous.resources.filter((resource) => resource.id !== effect.resourceId))
+      );
+    case 'add-resource':
+    case 'upload-resource': {
+      const added = next.resources.filter(
+        (resource) => !previous.resources.some(({ id }) => id === resource.id),
+      );
+      const retained = next.resources.filter((resource) =>
+        previous.resources.some(({ id }) => id === resource.id),
+      );
+      return (
+        JSON.stringify(retained) === JSON.stringify(previous.resources) &&
+        added.length === 1 &&
+        (effect.kind === 'add-resource'
+          ? sameResourceInput(added[0], effect.resource)
+          : added[0].type === 'FILE' && added[0].title === effect.file.name)
+      );
+    }
+  }
+}
+
 export function nodeEditorReducer(
   state: NodeEditorState,
   action: NodeEditorAction,
@@ -177,11 +235,29 @@ export function nodeEditorReducer(
   switch (action.type) {
     case 'replace-node':
       return createState(action.node, state.epoch + 1, state.consumedCommandIds);
+    case 'resolve-remote-conflict':
+      return state.remoteDeleted ? state : { ...state, remoteConflict: false };
     case 'canonical-refresh': {
-      if ((action.node?.id ?? null) !== state.nodeId) return state;
-      if (!action.node) return state;
+      if (!action.node) return { ...state, remoteConflict: true, remoteDeleted: true };
+      if (action.node.id !== state.nodeId) return state;
       if (nodeEditorStateIsDirty(state)) {
-        return { ...state, epoch: state.epoch + 1, canonicalNode: action.node };
+        const previous = state.canonicalNode;
+        const changed =
+          previous &&
+          (nodeDraftIsDirty(previous, nodeUpdateFromNode(action.node)) ||
+            previous.isVisible !== action.node.isVisible ||
+            previous.isTeacherBlocked !== action.node.isTeacherBlocked ||
+            JSON.stringify(previous.resources) !== JSON.stringify(action.node.resources));
+        return {
+          ...state,
+          epoch: state.epoch + 1,
+          canonicalNode: action.node,
+          remoteConflict:
+            state.remoteConflict ||
+            Boolean(changed && !refreshMatchesPendingEffect(state, action.node)),
+          remoteDeleted: false,
+          confirmedEditorEffect: null,
+        };
       }
       return {
         ...state,
@@ -189,6 +265,7 @@ export function nodeEditorReducer(
         canonicalNode: action.node,
         nodeDraft: nodeUpdateFromNode(action.node),
         resourceSession: emptyResourceSession(),
+        confirmedEditorEffect: null,
       };
     }
     case 'change-node-draft':
@@ -290,7 +367,12 @@ export function nodeEditorReducer(
       if (!pending || pending.id !== action.effectId || pending.epoch !== action.epoch)
         return state;
 
-      const next = { ...state, pendingEditorEffect: null };
+      const next = {
+        ...state,
+        pendingEditorEffect: null,
+        confirmedEditorEffect:
+          action.status === 'committed' ? pending.effect : state.confirmedEditorEffect,
+      };
       if (pending.epoch !== state.epoch || action.status === 'rejected') return next;
 
       switch (pending.effect.kind) {

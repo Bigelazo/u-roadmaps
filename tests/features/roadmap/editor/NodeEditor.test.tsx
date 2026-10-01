@@ -670,3 +670,74 @@ test('does not let a late Node result replace a refreshed same-Node baseline', a
   await screen.findByRole('button', { name: 'Previsualizar cambios' });
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador local');
 });
+
+test('a remote title edit during a pending save still requires explicit draft resolution', async () => {
+  const user = userEvent.setup();
+  const perform = vi.fn(() => new Promise<NodeEditorPerformResult>(() => undefined));
+  const view = renderEditor({ perform });
+  await user.clear(screen.getByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), 'Borrador en vuelo');
+  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  view.rerender(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <NodeEditor
+          {...view.props}
+          session={{
+            ...view.props.session,
+            node: { ...node, title: 'Edición remota incompatible' },
+          }}
+        />
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
+  expect(await screen.findByRole('status')).toHaveProperty(
+    'textContent',
+    expect.stringContaining('cambió mientras editabas'),
+  );
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador en vuelo');
+  expect(
+    (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  expect(perform).toHaveBeenCalledOnce();
+});
+
+test('a confirmed save arriving after a second local edit does not become a remote conflict', async () => {
+  const user = userEvent.setup();
+  let resolveSave!: (result: NodeEditorPerformResult) => void;
+  const perform = vi.fn(
+    () =>
+      new Promise<NodeEditorPerformResult>((resolve) => {
+        resolveSave = resolve;
+      }),
+  );
+  const view = renderEditor({ perform });
+  await user.clear(screen.getByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), 'Primera edición');
+  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await user.clear(screen.getByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), 'Segunda edición');
+  resolveSave({ status: 'committed' });
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  view.rerender(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <NodeEditor
+          {...view.props}
+          session={{ ...view.props.session, node: { ...node, title: 'Primera edición' } }}
+        />
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
+  await waitFor(() =>
+    expect(
+      (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
+    ).toBe(false),
+  );
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Segunda edición');
+  expect(screen.queryByText(/cambió mientras editabas/)).toBeNull();
+});

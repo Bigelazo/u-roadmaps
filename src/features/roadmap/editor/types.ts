@@ -82,6 +82,7 @@ export type NodeEditorProps = {
 };
 
 export type NodeEditorHandle = {
+  hasDraft?: () => boolean;
   guardDraft: (reason: NodeEditorGuardReason) => Promise<boolean>;
 };
 

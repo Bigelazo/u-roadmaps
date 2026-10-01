@@ -37,7 +37,13 @@ import type {
   RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
 import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
-import { subscribeToRoadmapChanges } from '@/features/roadmap/session/change-signal';
+import {
+  subscribeToRoadmapChanges,
+  subscribeToRoadmapRecovery,
+  requestRoadmapRecovery,
+} from '@/features/roadmap/session/change-signal';
+
+import { RoadmapAccessLostError } from './access-lost';
 
 const persistenceContext = createContext<RoadmapCanvasSessionPersistence>(
   httpRoadmapCanvasSessionPersistence,
@@ -56,6 +62,8 @@ type InjectedSessionResult = {
   simulationRoadmap: StudentRoadmapDto | null;
   error: string | null;
   dismissError: () => void;
+  retryRefresh: () => void;
+  accessLost: boolean;
   loadSimulation: () => Promise<boolean>;
   addNode: (
     node: NewRoadmapNode,
@@ -160,6 +168,7 @@ function useInjectedSession(
   const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(initialRoadmapKey);
   const [simulationKey, setSimulationKey] = useState<string | null>(null);
+  const [accessLost, setAccessLost] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const activeKeyRef = useRef(roadmapCanvasSessionKey(input));
@@ -198,20 +207,18 @@ function useInjectedSession(
       if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
         return false;
       }
+      if (cause instanceof RoadmapAccessLostError) {
+        setRoadmap(null);
+        setSimulationRoadmap(null);
+        setAccessLost(true);
+      }
       throw cause;
     }
   }, [persistence, stableInput]);
 
   useEffect(() => {
-    if (experienceKind !== 'student' || experienceTerm !== 'current') return;
-    return subscribeToRoadmapChanges((changedOffering) => {
-      if (
-        changedOffering.courseCode !== courseCode ||
-        changedOffering.year !== year ||
-        changedOffering.semester !== semester
-      ) {
-        return;
-      }
+    if (experienceTerm !== 'current') return;
+    const recover = () => {
       void refresh().then(
         (loaded) => {
           if (loaded) {
@@ -221,15 +228,30 @@ function useInjectedSession(
         },
         (cause: unknown) => {
           if (activeKeyRef.current !== key) return;
-          setError(messageFor(cause, 'No se pudo actualizar el roadmap. Recarga la página.'));
+          setError(messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'));
           setErrorKey(key);
         },
       );
+    };
+    const stopChanges = subscribeToRoadmapChanges((changedOffering) => {
+      if (
+        changedOffering.courseCode !== courseCode ||
+        changedOffering.year !== year ||
+        changedOffering.semester !== semester
+      )
+        return;
+      recover();
     });
-  }, [courseCode, experienceKind, experienceTerm, key, refresh, semester, year]);
+    const stopRecovery = subscribeToRoadmapRecovery(recover);
+    return () => {
+      stopChanges();
+      stopRecovery();
+    };
+  }, [courseCode, experienceTerm, key, refresh, semester, year]);
 
   useEffect(() => {
     activeKeyRef.current = key;
+    setAccessLost(false);
     const requestVersion = ++requestVersionRef.current;
     const simulationVersion = ++simulationVersionRef.current;
     if (initialRoadmapKey !== key) setRoadmap(null);
@@ -246,11 +268,16 @@ function useInjectedSession(
       },
       (cause: unknown) => {
         if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== key) return;
+        if (cause instanceof RoadmapAccessLostError) {
+          setRoadmap(null);
+          setAccessLost(true);
+        }
         setError(messageFor(cause, 'No se pudo cargar el roadmap.'));
         setErrorKey(key);
       },
     );
     return () => {
+      activeKeyRef.current = '';
       requestVersionRef.current += 1;
       simulationVersionRef.current = Math.max(simulationVersionRef.current, simulationVersion + 1);
     };
@@ -631,6 +658,8 @@ function useInjectedSession(
     simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
     error: errorKey === key ? error : null,
     dismissError,
+    retryRefresh: requestRoadmapRecovery,
+    accessLost,
     loadSimulation,
     addNode,
     updateNode,
@@ -675,6 +704,10 @@ export function useRoadmapCanvasSession(
     onEnter: options.canvasPreview?.onEnter ?? noop,
     onExit: options.canvasPreview?.onExit ?? noop,
   });
+  const { roadmap: canonicalRoadmap, loadSimulation: reloadPreview } = active;
+  useEffect(() => {
+    if (canvasPreviewWorkflow.isActive && canonicalRoadmap) void reloadPreview();
+  }, [canonicalRoadmap, reloadPreview, canvasPreviewWorkflow.isActive]);
   const dependencyWorkflow = useRoadmapDependencyWorkflow({
     roadmap: active.roadmap,
     previewRoadmapDependency: active.previewRoadmapDependency,
