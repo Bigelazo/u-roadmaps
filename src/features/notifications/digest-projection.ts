@@ -37,7 +37,6 @@ export function projectDigestNotification(payload: Payload, events: readonly unk
   const occurredAt = effectiveTimestamp(latest.payload.occurredAt);
   const nodeId = optionalString(latest.payload.nodeId);
   const nodeTitle = optionalString(latest.payload.nodeTitle);
-  const resourceTitle = optionalString(latest.payload.resourceTitle);
   const noticeBody = optionalString(latest.payload.noticeBody) ?? defaultBody(latest.payload);
   const scope = nodeId ? `Nodo${nodeTitle ? ` «${nodeTitle}»` : ''}` : `Roadmap de ${courseCode}`;
   const subject = summary

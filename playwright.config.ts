@@ -22,7 +22,7 @@ export default defineConfig({
     },
     url: 'http://localhost:3200',
     reuseExistingServer: false,
-    timeout: 30_000,
+    timeout: 120_000,
   },
   projects: [
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },

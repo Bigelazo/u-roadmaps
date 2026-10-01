@@ -53,8 +53,8 @@ import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
-import { useNotificationAcknowledgement } from '@/features/notifications/components/NotificationsInbox';
-import { NotificationCountButton } from '@/features/notifications';
+import { useNotificationAcknowledgement } from '@/features/notifications/client';
+import { NotificationCountButton } from '@/features/notifications/client';
 import {
   nodeTypeDeletionConfirmation,
   roadmapAutoLayoutConfirmation,

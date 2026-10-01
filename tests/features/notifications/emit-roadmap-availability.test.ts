@@ -41,8 +41,7 @@ test('provisions active participants and sends the contracted scalar payload aft
 
   expect(transport.ensureSubscribers).toHaveBeenCalledOnce();
   expect(lookup).toHaveBeenCalledWith(['student-0', 'student-1']);
-  expect(trigger).toHaveBeenCalledOnce();
-  expect(trigger).toHaveBeenCalledWith(
+  expect(trigger).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       workflowId: 'roadmap-available',
       transactionId: 'roadmap-1:roadmap-available:0',

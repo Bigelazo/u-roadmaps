@@ -23,7 +23,7 @@ import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
 import { Bell } from 'lucide-react';
 import { useCounts } from '@novu/nextjs/hooks';
-import { useOpenNotificationInbox } from '@/features/notifications/components/NotificationsInbox';
+import { useOpenNotificationInbox } from '@/features/notifications/client';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> &
@@ -48,7 +48,15 @@ export type RoadmapNodeData = Record<string, unknown> &
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
 
-function NodeUnreadBadge({ enabled, roadmapId, nodeId }: { enabled: boolean; roadmapId: string; nodeId: string }) {
+function NodeUnreadBadge({
+  enabled,
+  roadmapId,
+  nodeId,
+}: {
+  enabled: boolean;
+  roadmapId: string;
+  nodeId: string;
+}) {
   const openInbox = useOpenNotificationInbox();
   const { counts } = useCounts({ filters: [{ read: false, data: { roadmapId, nodeId } }] });
   if (!enabled) return null;
@@ -196,20 +204,20 @@ function NodeActionMenu({
   const actions = [
     ...(!hidden
       ? [
-        {
-          id: 'access',
-          label: accessLabel,
-          Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
-          HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
-          onSelect: () =>
-            onAction?.({
-              kind: 'change-teacher-block',
-              nodeId,
-              operation: teacherBlocked ? 'UNBLOCK' : 'BLOCK',
-            }),
-          angle: 0,
-        },
-      ]
+          {
+            id: 'access',
+            label: accessLabel,
+            Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
+            HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
+            onSelect: () =>
+              onAction?.({
+                kind: 'change-teacher-block',
+                nodeId,
+                operation: teacherBlocked ? 'UNBLOCK' : 'BLOCK',
+              }),
+            angle: 0,
+          },
+        ]
       : []),
     {
       id: 'visibility',
@@ -429,9 +437,9 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
         locked
           ? 'cursor-not-allowed opacity-[0.88] shadow-none'
           : cn(
-            'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
-            !hidden && 'shadow-(--shadow-roadmap-node)',
-          ),
+              'cursor-pointer transition-shadow hover:shadow-(--shadow-roadmap-node-hover)',
+              !hidden && 'shadow-(--shadow-roadmap-node)',
+            ),
       )}
       style={{
         width: size.width,
@@ -477,30 +485,30 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       )}
       {!hidden
         ? (
-          [
-            ['top', Position.Top],
-            ['right', Position.Right],
-            ['bottom', Position.Bottom],
-            ['left', Position.Left],
-          ] as const
-        ).map(([id, position]) => (
-          <Handle
-            key={id}
-            id={id}
-            data-testid="roadmap-node-handle"
-            type="source"
-            position={position}
-            isConnectable={editing}
-            style={{
-              width: 12,
-              height: 12,
-              background: 'var(--primary)',
-              border: '2px solid var(--card)',
-              visibility: editing ? 'visible' : 'hidden',
-              pointerEvents: editing ? 'auto' : 'none',
-            }}
-          />
-        ))
+            [
+              ['top', Position.Top],
+              ['right', Position.Right],
+              ['bottom', Position.Bottom],
+              ['left', Position.Left],
+            ] as const
+          ).map(([id, position]) => (
+            <Handle
+              key={id}
+              id={id}
+              data-testid="roadmap-node-handle"
+              type="source"
+              position={position}
+              isConnectable={editing}
+              style={{
+                width: 12,
+                height: 12,
+                background: 'var(--primary)',
+                border: '2px solid var(--card)',
+                visibility: editing ? 'visible' : 'hidden',
+                pointerEvents: editing ? 'auto' : 'none',
+              }}
+            />
+          ))
         : null}
       {data.notificationsEnabled && data.roadmapId && !hidden && !locked && !teacherBlocked ? (
         <NodeUnreadBadge enabled roadmapId={data.roadmapId} nodeId={id} />

@@ -1,6 +1,5 @@
 import {
   accessTransitionNotifications,
-  projectAccessSnapshot,
   type AccessSnapshot,
   type NodeNotificationDescriptor,
 } from './node-change-notifications';

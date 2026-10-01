@@ -15,7 +15,7 @@ import type {
   AcademicOverviewPage,
   AcademicOverviewTerm,
 } from '../types';
-import { NotificationCountButton } from '@/features/notifications/components/NotificationsInbox';
+import { NotificationCountButton } from '@/features/notifications/client';
 
 const institutionalPositionDetails: Record<
   AcademicOverviewInstitutionalPosition,

@@ -200,10 +200,8 @@ test('bounds every projected string to 256 characters', () => {
   );
 
   expect(Object.values(result.data).filter((value) => typeof value === 'string')).toHaveLength(7);
-  for (const value of Object.values(result.data)) {
-    if (typeof value === 'string') {
-      expect(Array.from(value).length).toBeLessThanOrEqual(256);
-    }
+  for (const value of Object.values(result.data).filter((value) => typeof value === 'string')) {
+    expect(Array.from(value).length).toBeLessThanOrEqual(256);
   }
   expect(Array.from(result.subject).length).toBeLessThanOrEqual(256);
   expect(Array.from(result.body).length).toBeLessThanOrEqual(256);

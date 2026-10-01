@@ -183,6 +183,24 @@ export default defineConfig([
               },
             },
             {
+              // Participant-facing features consume only the notification client API.
+              from: {
+                element: {
+                  type: 'feature',
+                  captured: { feature: ['roadmap', 'academic-overview'] },
+                },
+              },
+              allow: {
+                to: {
+                  element: {
+                    type: 'feature',
+                    captured: { feature: 'notifications' },
+                    fileInternalPath: 'client.ts',
+                  },
+                },
+              },
+            },
+            {
               from: {
                 element: {
                   type: 'feature',
