@@ -2,9 +2,7 @@ import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, test, vi } from 'vitest';
-import {
-  RoadmapCanvasSession,
-} from '@/features/roadmap/session';
+import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
@@ -126,6 +124,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onSelectNode,
     selectedNodeId,
     topRightActions,
+    bottomRightActions,
     overlaySlots,
   }: {
     projection: {
@@ -138,10 +137,14 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     topRightActions?: (
       findOpenPosition: (title: string) => { x: number; y: number } | null,
     ) => ReactNode;
+    bottomRightActions?: (
+      findOpenPosition: (title: string) => { x: number; y: number } | null,
+    ) => ReactNode;
     overlaySlots?: { topCenter?: ReactNode };
   }) => (
     <>
       {topRightActions?.(() => ({ x: 480, y: 240 }))}
+      {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
       <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
       <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
@@ -371,12 +374,13 @@ describe('RoadmapCanvasSession', () => {
       nodes: [{ ...roadmap.nodes[0], title: 'Integrales' }],
     };
     const persistence = {
-      load: vi.fn(({ courseOffering }: { courseOffering: { identifier: { courseCode: string } } }) =>
-        courseOffering.identifier.courseCode === 'CC1001'
-          ? previousRoadmap
-          : Promise.resolve(
-              courseOffering.identifier.courseCode === 'CC1002' ? nextRoadmap : finalRoadmap,
-            ),
+      load: vi.fn(
+        ({ courseOffering }: { courseOffering: { identifier: { courseCode: string } } }) =>
+          courseOffering.identifier.courseCode === 'CC1001'
+            ? previousRoadmap
+            : Promise.resolve(
+                courseOffering.identifier.courseCode === 'CC1002' ? nextRoadmap : finalRoadmap,
+              ),
       ),
       complete: vi.fn().mockResolvedValue(undefined),
     };
@@ -445,9 +449,9 @@ describe('RoadmapCanvasSession', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));
-    expect((screen.getByRole('button', { name: 'Completar Límites' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByRole('button', { name: 'Completar Límites' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   test('keeps the loaded offering visible after a later completion failure and lets the student dismiss it', async () => {
@@ -489,7 +493,7 @@ describe('RoadmapCanvasSession', () => {
       </RoadmapCanvasSessionPersistenceProvider>,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Previsualizar canvas' }));
+    await user.click(await screen.findByRole('button', { name: 'Vista estudiante' }));
     expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
     expect(screen.getByTestId('roadmap-mode').textContent).toBe('student');
     expect(screen.getByTestId('selected-node-id').textContent).toBe('');
@@ -530,7 +534,7 @@ describe('RoadmapCanvasSession', () => {
       </RoadmapCanvasSessionPersistenceProvider>,
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Previsualizar canvas' }));
+    await user.click(await screen.findByRole('button', { name: 'Vista estudiante' }));
     expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Volver al roadmap' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Reiniciar progreso' })).toBeNull();

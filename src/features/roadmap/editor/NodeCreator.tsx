@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import { CirclePlus, Plus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
@@ -18,6 +18,7 @@ import {
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { Textarea } from '@/shared/ui/textarea';
+import styles from './NodeCreator.module.css';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeTypesEditor } from './NodeTypesEditor';
 import type { NodeInput, NodeTypeInput } from './types';
@@ -40,6 +41,7 @@ export function NodeCreator({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNodeDialogOpen, setIsNodeDialogOpen] = useState(false);
   const [isNodeTypesDialogOpen, setIsNodeTypesDialogOpen] = useState(false);
+  const menuLayerRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState<NodeInput>(() => ({
     title: '',
     description: '',
@@ -52,38 +54,51 @@ export function NodeCreator({
     : (nodeTypes[0]?.id ?? '');
 
   return (
-    <>
+    <div ref={menuLayerRef} className={styles.menuLayer}>
       <Menu.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
         <Menu.Trigger
           aria-label="Crear en el mapa"
           title="Crear en el mapa"
-          render={<Button type="button" size="icon" className="cursor-pointer rounded-full" />}
-          onMouseDown={() => setIsMenuOpen(true)}
+          render={
+            <Button
+              type="button"
+              size="icon-lg"
+              className={`${styles.trigger} ${isMenuOpen ? styles.triggerOpen : ''}`}
+            />
+          }
         >
-          <Plus aria-hidden="true" />
+          <span
+            aria-hidden="true"
+            className={`${styles.menuIcon} ${isMenuOpen ? styles.menuIconOpen : ''}`}
+          >
+            <span className={styles.menuLine} />
+            <span className={styles.menuLine} />
+            <span className={styles.menuLine} />
+          </span>
         </Menu.Trigger>
-        <Menu.Portal>
-          <Menu.Positioner align="end" side="bottom" sideOffset={8}>
-            <Menu.Popup className="z-40 min-w-52 rounded-lg border border-border bg-popover p-1.5 text-sm shadow-lg outline-none">
+        <Menu.Portal container={menuLayerRef}>
+          <Menu.Positioner align="end" side="top" sideOffset={-34} className={styles.positioner}>
+            <Menu.Popup className={styles.menu}>
               <Menu.Item
-                className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-3 text-left outline-none data-highlighted:bg-muted"
+                className={styles.menuItem}
                 onClick={() => {
                   setIsMenuOpen(false);
                   setIsNodeDialogOpen(true);
                 }}
               >
-                <CirclePlus className="size-4" aria-hidden="true" />
+                <CirclePlus aria-hidden="true" />
                 Crear nodo
               </Menu.Item>
               <Menu.Item
-                className="flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-3 text-left outline-none data-highlighted:bg-muted"
+                className={styles.menuItem}
+                aria-label="Gestionar tipos de nodo"
                 onClick={() => {
                   setIsMenuOpen(false);
                   setIsNodeTypesDialogOpen(true);
                 }}
               >
-                <Shapes className="size-4" aria-hidden="true" />
-                Gestionar tipos de nodo
+                <Shapes aria-hidden="true" />
+                Tipos de nodo
               </Menu.Item>
             </Menu.Popup>
           </Menu.Positioner>
@@ -175,8 +190,13 @@ export function NodeCreator({
         </DialogContent>
       </Dialog>
       <Dialog open={isNodeTypesDialogOpen} onOpenChange={setIsNodeTypesDialogOpen}>
-        <DialogContent>
-          <DialogHeader></DialogHeader>
+        <DialogContent className="gap-5 sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Tipos de nodo</DialogTitle>
+            <DialogDescription>
+              Organiza el contenido del roadmap con categorías, iconos y colores.
+            </DialogDescription>
+          </DialogHeader>
           <NodeTypesEditor
             nodeTypes={nodeTypes}
             onAdd={onCreateNodeType}
@@ -185,6 +205,6 @@ export function NodeCreator({
           />
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

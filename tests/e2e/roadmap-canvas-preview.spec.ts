@@ -21,7 +21,7 @@ test('a teacher previews, completes, resets, and exits the persistent student ca
 
     await authenticateAs(page.context(), fixture.daniela);
     await page.goto('/courses/CC1002/2026/2');
-    await page.getByRole('button', { name: 'Previsualizar canvas' }).click();
+    await page.getByRole('button', { name: 'Vista estudiante' }).click();
 
     await expect(page.getByText('Previsualización del canvas')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Crear en el mapa' })).toHaveCount(0);
@@ -43,7 +43,7 @@ test('a teacher previews, completes, resets, and exits the persistent student ca
     }).toBe(false);
 
     await page.getByRole('button', { name: 'Ir al editor' }).click();
-    await expect(page.getByRole('button', { name: 'Previsualizar canvas' })).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeFocused();
   } finally {
     await api.delete(roadmapPath('/simulation'));
     await api.dispose();

@@ -1251,7 +1251,7 @@ test('keeps the teaching panel width across reloads without changing the student
   await expect(page.locator('.react-flow__node').first()).toBeInViewport();
 });
 
-test('uses the teaching width for node information preview and keeps shortcuts on the canvas', async ({
+test('uses the teaching width for node information preview', async ({
   page,
 }) => {
   await authenticateAs(page.context(), fixture.daniela);
@@ -1282,19 +1282,6 @@ test('uses the teaching width for node information preview and keeps shortcuts o
   await expect(page.getByPlaceholder('Ej. Guía de ejercicios')).toHaveValue(resourceTitle);
   await expect(page.getByLabel('Enlace', { exact: true })).toHaveValue(resourceUrl);
   await expect(previewButton).toBeFocused();
-
-  const canvas = page.getByLabel('Lienzo del roadmap');
-  const shortcuts = page.locator('details[aria-label="Atajos de teclado"]');
-  await expect(canvas).toBeVisible();
-  await expect(shortcuts).toBeVisible();
-  const [canvasBox, shortcutsBox] = (await Promise.all([
-    canvas.boundingBox(),
-    shortcuts.boundingBox(),
-  ])) as [
-    NonNullable<Awaited<ReturnType<typeof canvas.boundingBox>>>,
-    NonNullable<Awaited<ReturnType<typeof shortcuts.boundingBox>>>,
-  ];
-  expect(shortcutsBox.x + shortcutsBox.width).toBeLessThanOrEqual(canvasBox.x + canvasBox.width);
 });
 
 test('withdrawn participations remain local to their course offering', async ({ page }) => {
