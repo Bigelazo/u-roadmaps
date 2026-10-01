@@ -27,6 +27,16 @@ function nodeMessage(notice: NodeChangeNotice) {
   return { noticeTitle: notice.nodeTitle.slice(0, 256), noticeBody: body.slice(0, 256), label };
 }
 
+function resourceMessage(notice: ResourceChangeNotice) {
+  const noticeTitle = `Cambio de recurso: ${notice.resourceTitle}`.slice(0, 256);
+  const noticeBody =
+    `${notice.actorName} modificó un recurso en un Nodo del Roadmap de ${notice.courseCode}.`.slice(
+      0,
+      256,
+    );
+  return { noticeTitle, noticeBody };
+}
+
 export async function emitNodeScopedChange(
   notice: NodeChangeNotice | ResourceChangeNotice,
   transport: NotificationTransport,
@@ -34,7 +44,7 @@ export async function emitNodeScopedChange(
   workflowId: string,
 ) {
   if (!workflowId || !notice.recipients.length) return;
-  const message = 'resourceTitle' in notice ? null : nodeMessage(notice);
+  const message = 'resourceTitle' in notice ? resourceMessage(notice) : nodeMessage(notice);
   for (let offset = 0; offset < notice.recipients.length; offset += 500) {
     const recipients = notice.recipients.slice(offset, offset + 500);
     await transport
@@ -62,7 +72,9 @@ export async function emitNodeScopedChange(
               semester: notice.semester,
               targetKind: 'node',
               nodeId: notice.nodeId,
-              ...('resourceTitle' in notice ? {} : { nodeTitle: notice.nodeTitle }),
+              nodeTitle: notice.nodeTitle,
+              noticeTitle: message.noticeTitle,
+              noticeBody: message.noticeBody,
               ...('nodeTypeName' in notice && notice.nodeTypeName
                 ? { nodeTypeName: notice.nodeTypeName }
                 : {}),
@@ -73,9 +85,6 @@ export async function emitNodeScopedChange(
               occurredAt: notice.occurredAt.toISOString(),
               eventCount: 1,
               actorName: notice.actorName,
-              ...(message
-                ? { noticeTitle: message.noticeTitle, noticeBody: message.noticeBody }
-                : {}),
               ...('resourceTitle' in notice ? { resourceTitle: notice.resourceTitle } : {}),
             },
           }),

@@ -25,7 +25,7 @@ test('loads a teaching projection through the existing roadmap route', async () 
   vi.stubGlobal('fetch', fetchMock);
 
   await expect(httpRoadmapCanvasSessionPersistence.load(input)).resolves.toEqual(roadmap);
-  expect(fetchMock).toHaveBeenCalledWith('/api/CC1001/2026/2/roadmap', {});
+  expect(fetchMock).toHaveBeenCalledWith('/api/CC1001/2026/2/roadmap', { cache: 'no-store' });
 });
 
 test('serializes link Resource updates as JSON while preserving the server contract', async () => {

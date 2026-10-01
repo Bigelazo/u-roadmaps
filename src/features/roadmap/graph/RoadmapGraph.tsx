@@ -223,6 +223,7 @@ function RoadmapGraphToolbar({
   canAutoLayout,
   onAutoLayout,
   topRightActions,
+  bottomRightActions,
   nodes,
 }: {
   containerRef: RefObject<HTMLDivElement | null>;
@@ -231,6 +232,9 @@ function RoadmapGraphToolbar({
   canAutoLayout: boolean;
   onAutoLayout: () => void;
   topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
+  bottomRightActions?: (
+    findOpenPosition: (title: string) => RoadmapNodePosition | null,
+  ) => ReactNode;
   nodes: readonly RoadmapFlowNode[];
 }) {
   const { screenToFlowPosition } = useReactFlow();
@@ -267,26 +271,36 @@ function RoadmapGraphToolbar({
   );
 
   return (
-    <Panel position="top-right" className="mt-5 mr-5">
-      <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
-        {showAutoLayout ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="justify-start sm:justify-center"
-            disabled={!canAutoLayout}
-            onClick={onAutoLayout}
-          >
-            <LayoutTemplate data-icon="inline-start" />
-            Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
-          </Button>
-        ) : null}
-        {topRightActions ? (
-          <div className="flex justify-end gap-1.5">{topRightActions(findOpenPosition)}</div>
-        ) : null}
-      </div>
-    </Panel>
+    <>
+      <Panel position="top-right" className="mt-5 mr-5">
+        <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
+          {showAutoLayout ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="justify-start sm:justify-center"
+              disabled={!canAutoLayout}
+              onClick={onAutoLayout}
+            >
+              <LayoutTemplate data-icon="inline-start" />
+              Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
+            </Button>
+          ) : null}
+          {topRightActions ? (
+            <div className="flex justify-end gap-1.5">{topRightActions(findOpenPosition)}</div>
+          ) : null}
+        </div>
+      </Panel>
+      {bottomRightActions ? (
+        <Panel
+          position="bottom-right"
+          className="pointer-events-none mr-5! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end [&>*]:col-start-1 [&>*]:row-start-1"
+        >
+          <div className="pointer-events-auto">{bottomRightActions(findOpenPosition)}</div>
+        </Panel>
+      ) : null}
+    </>
   );
 }
 
@@ -368,11 +382,13 @@ function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): Roadmap
 
 export type RoadmapGraphProps = {
   projection: RoadmapGraphProjection;
+  notificationsEnabled?: boolean;
   onSelectNode: (nodeId: string) => void;
   onClearSelectedNode?: () => void;
   selectedNodeId?: string | null;
   focusReturnRequest?: string | null;
   topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
+  bottomRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
@@ -421,6 +437,7 @@ export function RoadmapGraph({
   selectedNodeId,
   focusReturnRequest,
   topRightActions,
+  bottomRightActions,
   overlaySlots,
   onViewportChange,
   viewportRestoration,
@@ -669,9 +686,6 @@ export function RoadmapGraph({
         zoomOnScroll={!openActionMenuNodeId && !closingActionMenuNodeId}
         zoomOnPinch={!openActionMenuNodeId && !closingActionMenuNodeId}
         zoomOnDoubleClick={!openActionMenuNodeId && !closingActionMenuNodeId}
-        deleteKeyCode={
-          openActionMenuNodeId || closingActionMenuNodeId ? null : ['Backspace', 'Delete']
-        }
         onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) => {
           const movedWithKeyboard = keyboardMovePendingRef.current;
           keyboardMovePendingRef.current = false;
@@ -775,6 +789,7 @@ export function RoadmapGraph({
             canAutoLayout={canEdit && flow.nodes.length >= 2}
             onAutoLayout={proposeAutoLayout}
             topRightActions={topRightActions}
+            bottomRightActions={bottomRightActions}
             nodes={flow.nodes}
           />
         ) : null}

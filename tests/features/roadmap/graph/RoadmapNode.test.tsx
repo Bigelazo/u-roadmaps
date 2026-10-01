@@ -629,7 +629,7 @@ test('shows teacher blocks like student blocks without disabling editing', () =>
   const card = screen.getByTestId('roadmap-card');
   expect(screen.queryByText('Bloqueado por docencia')).toBeNull();
   expect(screen.getByRole('img', { name: 'Bloqueado por docencia' })).toBeTruthy();
-  expect(card.style.backgroundColor).toBe('var(--cloud)');
+  expect(card.style.backgroundColor).toBe('color-mix(in srgb, var(--graphite) 20%, var(--card))');
   expect(card.className).toContain('cursor-pointer');
   expect(card.getAttribute('aria-disabled')).toBeNull();
 });
@@ -716,10 +716,10 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
     expect(card.style.width).toBe(`${size.width}px`);
     expect(card.style.height).toBe(`${size.height}px`);
   }
-  expect(cards[1].style.height).not.toBe(cards[0].style.height);
+  expect(cards[1].style.height).toBe(cards[0].style.height);
 });
 
-test('wraps long card titles without truncating them', () => {
+test('clamps long card titles to two lines while preserving the full title as a tooltip', () => {
   const title = 'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse';
   const props = {
     id: 'long-title',
@@ -754,9 +754,9 @@ test('wraps long card titles without truncating them', () => {
   const content = screen.getByTestId('roadmap-node-content');
   expect(content.className).toContain('h-full');
   expect(content.className).toContain('items-center');
-  expect(content.className).toContain('justify-center');
+  expect(content.className).toContain('justify-start');
   expect(heading.getAttribute('title')).toBe(title);
-  expect(heading.className).not.toContain('line-clamp-2');
+  expect(heading.className).toContain('line-clamp-2');
   expect(heading.className).toContain('wrap-break-word');
   expect(heading.className).toContain('text-left');
 });

@@ -9,17 +9,18 @@ const roadmapNodeSeparation = roadmapGridSize;
 
 /**
  * Tamaño mínimo de una tarjeta, expresado en celdas completas del roadmap.
- * El área útil para el título empieza después del icono y los espacios laterales.
+ * El mínimo conserva espacio para el icono, el título corto y el padding.
  */
 export const roadmapNodeMinimumSize = {
-  width: roadmapGridSize * 8,
+  width: roadmapGridSize * 6,
   height: roadmapGridSize * 4,
 } as const;
 
 const roadmapNodeMaximumWidth = roadmapGridSize * 12;
+const roadmapNodeMaximumHeight = roadmapGridSize * 4;
 const roadmapNodeDimensionStep = roadmapGridSize * 2;
-const titleHorizontalChrome = 78;
-const estimatedTitleCharacterWidth = 8.3;
+const titleHorizontalChrome = 66;
+const estimatedTitleCharacterWidth = 8.6;
 
 function roundUpToRoadmapNodeStep(value: number) {
   return Math.ceil(value / roadmapNodeDimensionStep) * roadmapNodeDimensionStep;
@@ -27,10 +28,8 @@ function roundUpToRoadmapNodeStep(value: number) {
 
 /**
  * Calcula un rectángulo que se adapta al título sin abandonar la cuadrícula.
- * Los títulos cortos no desperdician espacio; al llegar al ancho máximo,
- * Las dos primeras líneas comparten la altura mínima. Cada par posterior suma
- * dos celdas, conservando los conectores centrados en intersecciones de la
- * cuadrícula sin dejar márgenes verticales desproporcionados.
+ * Las tarjetas mantienen una altura máxima fija; el texto que no cabe en dos
+ * líneas se recorta visualmente en la tarjeta.
  */
 export function roadmapNodeSizeForTitle(title: string) {
   const characterCount = Math.max(Array.from(title.trim()).length, 1);
@@ -43,16 +42,7 @@ export function roadmapNodeSizeForTitle(title: string) {
       ),
     ),
   );
-  const charactersPerLine = Math.max(
-    1,
-    Math.floor((width - titleHorizontalChrome) / estimatedTitleCharacterWidth),
-  );
-  const titleLines = Math.ceil(characterCount / charactersPerLine);
-  const height =
-    roadmapNodeMinimumSize.height +
-    Math.ceil(Math.max(titleLines - 2, 0) / 2) * roadmapNodeDimensionStep;
-
-  return { width, height };
+  return { width, height: roadmapNodeMaximumHeight };
 }
 
 /** Ajusta una posición a la intersección más cercana de la cuadrícula del roadmap. */

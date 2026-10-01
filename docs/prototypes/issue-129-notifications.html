@@ -396,10 +396,14 @@
         gap: 24px;
         height: 210px;
       }
-      .node {
+      .node-slot {
         position: relative;
         z-index: 1;
         width: min(30%, 260px);
+      }
+      .node {
+        position: relative;
+        width: 100%;
         min-height: 138px;
         padding: 20px;
         border: 2px solid #296ef9;
@@ -409,10 +413,10 @@
         color: var(--ink);
         text-align: center;
       }
-      .node:nth-child(2) {
+      .node-slot:nth-child(2) .node {
         border-color: #a87512;
       }
-      .node:nth-child(3) {
+      .node-slot:nth-child(3) .node {
         border-color: #933d8a;
       }
       .node:hover {
@@ -449,12 +453,13 @@
       }
       .node-change {
         position: absolute;
-        top: -15px;
-        left: -12px;
+        top: -22px;
+        left: -18px;
+        z-index: 2;
         display: grid;
         place-items: center;
-        min-width: 30px;
-        height: 30px;
+        min-width: 44px;
+        height: 44px;
         padding: 0 5px;
         border: 2px solid var(--white);
         border-radius: 20px;
@@ -727,8 +732,11 @@
           height: auto;
           gap: 35px;
         }
-        .node {
+        .node-slot {
           width: min(100%, 280px);
+        }
+        .node {
+          width: 100%;
           min-height: 120px;
         }
         .inbox {
@@ -866,29 +874,35 @@
         <div class="canvas" aria-label="Vista de ejemplo del Roadmap">
           <div class="path" aria-hidden="true"></div>
           <div class="nodes">
-            <button class="node" type="button" data-node="limits">
-              <span class="node-change" aria-hidden="true" hidden></span
-              ><span class="node-type">Contenido</span><span class="node-title">Límites</span
-              ><span class="node-status" aria-hidden="true">○</span>
-            </button>
-            <button class="node" type="button" data-node="derivatives">
-              <span class="node-change" aria-hidden="true" hidden></span
-              ><span class="node-type">Evaluación</span><span class="node-title">Derivadas</span
-              ><span class="node-status" aria-hidden="true">○</span>
-            </button>
-            <button class="node" type="button" data-node="integrals">
-              <span class="node-change" aria-hidden="true" hidden></span
-              ><span class="node-type">Material extra</span
-              ><span class="node-title">Integrales</span
-              ><span class="node-status" aria-hidden="true">○</span>
-            </button>
+            <div class="node-slot">
+              <button class="node-change" type="button" data-change-node="limits" hidden></button>
+              <button class="node" type="button" data-node="limits">
+                <span class="node-type">Contenido</span><span class="node-title">Límites</span
+                ><span class="node-status" aria-hidden="true">○</span>
+              </button>
+            </div>
+            <div class="node-slot">
+              <button class="node-change" type="button" data-change-node="derivatives" hidden></button>
+              <button class="node" type="button" data-node="derivatives">
+                <span class="node-type">Evaluación</span><span class="node-title">Derivadas</span
+                ><span class="node-status" aria-hidden="true">○</span>
+              </button>
+            </div>
+            <div class="node-slot">
+              <button class="node-change" type="button" data-change-node="integrals" hidden></button>
+              <button class="node" type="button" data-node="integrals">
+                <span class="node-type">Material extra</span
+                ><span class="node-title">Integrales</span
+                ><span class="node-status" aria-hidden="true">○</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="node-panel" id="node-panel" hidden aria-live="polite">
           <h2 id="selected-node-title"></h2>
           <p>
-            Información del Nodo seleccionada desde un Cambio del Roadmap. El indicador de cambios
-            se mantiene separado del Estado del nodo.
+            Información vigente del Nodo. Al abrirlo se reconocen sus cambios pendientes; el
+            indicador de cambios se mantiene separado del Estado del nodo.
           </p>
         </div>
       </section>
@@ -938,8 +952,7 @@
         </dl>
       </div>
       <div class="detail-actions">
-        <button class="secondary" type="button" id="acknowledge">Marcar como revisado</button
-        ><button class="primary" type="button" id="go-target"></button>
+        <button class="primary" type="button" id="go-target"></button>
       </div>
     </dialog>
     <div class="toast" id="toast" role="status" hidden></div>
@@ -1030,7 +1043,6 @@
         notices: [],
         filter: null,
         active: null,
-        returnToInbox: false,
         trigger: null,
       };
       const longDate = new Intl.DateTimeFormat('es-CL', {
@@ -1073,6 +1085,24 @@
           ).focus();
         window.scrollTo({ top: 0, behavior: 'auto' });
       }
+      function recognize(predicate) {
+        const pending = unread().filter(predicate);
+        for (const item of pending) item.read = true;
+        if (pending.length) {
+          render();
+          announce(
+            `${pending.length} ${pending.length === 1 ? 'cambio revisado' : 'cambios revisados'}.`,
+          );
+        }
+      }
+      function enterRoadmap() {
+        showView('roadmap');
+        recognize((item) => item.target === 'roadmap');
+      }
+      function openNode(nodeId) {
+        showView('roadmap', nodeId);
+        recognize((item) => item.target === 'node' && item.node === nodeId);
+      }
       function render() {
         const count = unread().length;
         byId('bell-count').hidden = count === 0;
@@ -1094,9 +1124,13 @@
           : '';
         for (const node of document.querySelectorAll('[data-node]')) {
           const nodeCount = unread().filter((item) => item.node === node.dataset.node).length;
-          const marker = node.querySelector('.node-change');
+          const marker = node.parentElement.querySelector('.node-change');
           marker.hidden = nodeCount === 0;
           marker.textContent = nodeCount;
+          marker.setAttribute(
+            'aria-label',
+            `Abrir notificaciones de ${node.querySelector('.node-title').textContent}, ${nodeCount} ${nodeCount === 1 ? 'cambio pendiente' : 'cambios pendientes'}`,
+          );
           node.setAttribute(
             'aria-label',
             `${node.querySelector('.node-title').textContent}, ${nodeCount ? `${nodeCount} ${nodeCount === 1 ? 'cambio por revisar' : 'cambios por revisar'}` : 'sin cambios pendientes'}, Estado del nodo: Pendiente`,
@@ -1150,7 +1184,7 @@
             content.append(span);
           }
           button.append(dot, content);
-          button.addEventListener('click', () => openDetail(item.id, true));
+          button.addEventListener('click', () => openNotice(item.id));
           list.append(button);
         }
       }
@@ -1159,70 +1193,51 @@
         state.trigger = trigger;
         renderInbox();
         byId('inbox').showModal();
+        for (const item of relevant()) item.seen = true;
         byId('close-inbox').focus();
       }
-      function openDetail(id, fromInbox = false) {
+      function openDetail(id) {
         const item = state.notices.find((notice) => notice.id === id);
         if (!item) return;
         state.active = id;
-        state.returnToInbox = fromInbox;
-        if (fromInbox) byId('inbox').close();
         byId('detail-title').textContent = item.title;
         byId('detail-description').textContent = item.detail;
         byId('detail-limitation').textContent = item.limitation || '';
         byId('detail-author').textContent = item.author;
         byId('detail-time-label').textContent = item.digest ? 'Último cambio' : 'Cambio realizado';
         byId('detail-time').textContent = dateText(item.at);
-        byId('acknowledge').disabled = Boolean(item.read);
-        byId('acknowledge').textContent = item.read ? 'Ya revisado' : 'Marcar como revisado';
-        byId('go-target').textContent =
-          item.target === 'node'
-            ? 'Ver nodo'
-            : item.target === 'roadmap'
-              ? 'Ver roadmap'
-              : 'Ir al Resumen académico';
+        byId('go-target').textContent = item.target === 'node' ? 'Abrir nodo' : 'Continuar en Roadmap';
         byId('detail').showModal();
         byId('detail-title').focus();
       }
-      function closeDetail(reopen = true) {
+      function closeDetail(moveFocus = true) {
         byId('detail').close();
-        if (reopen && state.returnToInbox) {
-          state.returnToInbox = false;
-          openInbox(state.filter, state.trigger);
-        } else {
-          state.returnToInbox = false;
-          state.trigger?.focus?.();
-        }
-      }
-      function acknowledge() {
-        const item = state.notices.find((notice) => notice.id === state.active);
-        if (!item || item.read) return;
-        item.read = true;
-        render();
-        announce(`${item.title}. Marcado como revisado.`);
-        closeDetail();
+        if (moveFocus) byId('roadmap-title').focus();
       }
       function goTarget() {
         const item = state.notices.find((notice) => notice.id === state.active);
         if (!item) return;
-        item.read = true;
-        render();
         closeDetail(false);
         if (item.target === 'node') {
-          showView('roadmap', item.node);
+          openNode(item.node);
           toast('Se abrió el Nodo del cambio.');
-        } else if (item.target === 'roadmap') {
-          showView('roadmap');
-          toast(
-            item.fallback === 'missing-node'
-              ? 'El Nodo ya no está disponible; se abrió el Roadmap.'
-              : 'Se abrió el Roadmap.',
-          );
         } else {
-          showView('overview');
-          toast('Ya no tienes acceso a ese Roadmap. Se abrió el Resumen académico.');
+          byId('roadmap-title').focus();
         }
-        announce(`${item.title}. Marcado como revisado.`);
+      }
+      function openNotice(id) {
+        const item = state.notices.find((notice) => notice.id === id);
+        if (!item) return;
+        state.trigger = null;
+        byId('inbox').close();
+        if (item.target === 'overview') {
+          showView('overview');
+          recognize((notice) => notice.id === item.id);
+          toast('Ya no tienes acceso a ese Roadmap. Se abrió el Resumen académico.');
+          return;
+        }
+        enterRoadmap();
+        openDetail(id);
       }
       function setScenario(name) {
         state.scenario = name;
@@ -1246,18 +1261,17 @@
       byId('bell').addEventListener('click', () => openInbox());
       byId('course-changes').addEventListener('click', () => openInbox('roadmap'));
       byId('roadmap-changes').addEventListener('click', () => openInbox('roadmap'));
-      byId('open-roadmap').addEventListener('click', () => showView('roadmap'));
+      byId('open-roadmap').addEventListener('click', enterRoadmap);
       byId('back-overview').addEventListener('click', () => showView('overview'));
       byId('brand').addEventListener('click', (event) => {
         event.preventDefault();
         showView('overview');
       });
       document.querySelectorAll('[data-node]').forEach((node) =>
-        node.addEventListener('click', () => {
-          const changes = unread().filter((item) => item.node === node.dataset.node);
-          if (changes.length) openInbox(node.dataset.node, node);
-          else showView('roadmap', node.dataset.node);
-        }),
+        node.addEventListener('click', () => openNode(node.dataset.node)),
+      );
+      document.querySelectorAll('[data-change-node]').forEach((marker) =>
+        marker.addEventListener('click', () => openInbox(marker.dataset.changeNode, marker)),
       );
       byId('close-inbox').addEventListener('click', () => byId('inbox').close());
       byId('inbox').addEventListener('close', () => {
@@ -1268,7 +1282,6 @@
         event.preventDefault();
         closeDetail();
       });
-      byId('acknowledge').addEventListener('click', acknowledge);
       byId('go-target').addEventListener('click', goTarget);
       setScenario('few');
     </script>

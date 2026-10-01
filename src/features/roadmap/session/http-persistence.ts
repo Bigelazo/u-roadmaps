@@ -160,7 +160,7 @@ async function mutate(
 
 export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistence = {
   async load(input) {
-    const body = await request(input, '', {}, 'No se pudo cargar el roadmap.');
+    const body = await request(input, '', { cache: 'no-store' }, 'No se pudo cargar el roadmap.');
     const validProjection =
       input.experience.kind === 'teaching' ? isTeachingRoadmap(body) : isStudentRoadmap(body);
     if (!validProjection) throw new Error('No se pudo cargar el roadmap.');

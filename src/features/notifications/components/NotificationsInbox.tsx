@@ -386,6 +386,8 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
           return false;
         }
         for (const record of page.data.notifications) {
+          const createdAt = Date.parse(record.createdAt);
+          if (Number.isNaN(createdAt) || createdAt > snapshot.createdLte) continue;
           const data = record.data ?? {};
           const isNodeNotice = data.targetKind === 'node' && typeof data.nodeId === 'string';
           const eligible = input.nodeId

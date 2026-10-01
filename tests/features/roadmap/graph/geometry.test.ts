@@ -147,12 +147,12 @@ it('sizes cards from their title while keeping every side on the grid', () => {
     'Un título deliberadamente muy largo que necesita varias líneas para leerse completo',
   );
 
-  expect(shortTitle).toEqual({ width: 160, height: 80 });
+  expect(shortTitle).toEqual({ width: 120, height: 80 });
   expect(mediumTitle.width).toBeGreaterThan(shortTitle.width);
   expect(twoLineTitle).toEqual({ width: 240, height: 80 });
-  expect(fourLineTitle).toEqual({ width: 240, height: 120 });
+  expect(fourLineTitle).toEqual({ width: 240, height: 80 });
   expect(longTitle.width).toBeGreaterThanOrEqual(mediumTitle.width);
-  expect(longTitle.height).toBeGreaterThan(shortTitle.height);
+  expect(longTitle.height).toBe(shortTitle.height);
   for (const size of [shortTitle, mediumTitle, longTitle]) {
     expect(size.width % roadmapGridSize).toBe(0);
     expect(size.height % roadmapGridSize).toBe(0);

@@ -37,6 +37,7 @@ import type {
   RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
 import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
+import { subscribeToRoadmapChanges } from '@/features/roadmap/session/change-signal';
 
 const persistenceContext = createContext<RoadmapCanvasSessionPersistence>(
   httpRoadmapCanvasSessionPersistence,
@@ -185,14 +186,47 @@ function useInjectedSession(
   const refresh = useCallback(async () => {
     const requestVersion = ++requestVersionRef.current;
     const requestKey = roadmapCanvasSessionKey(stableInput);
-    const loadedRoadmap = await persistence.load(stableInput);
-    if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
-      return false;
+    try {
+      const loadedRoadmap = await persistence.load(stableInput);
+      if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
+        return false;
+      }
+      setRoadmap(loadedRoadmap);
+      setRoadmapKey(requestKey);
+      return true;
+    } catch (cause) {
+      if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
+        return false;
+      }
+      throw cause;
     }
-    setRoadmap(loadedRoadmap);
-    setRoadmapKey(requestKey);
-    return true;
   }, [persistence, stableInput]);
+
+  useEffect(() => {
+    if (experienceKind !== 'student' || experienceTerm !== 'current') return;
+    return subscribeToRoadmapChanges((changedOffering) => {
+      if (
+        changedOffering.courseCode !== courseCode ||
+        changedOffering.year !== year ||
+        changedOffering.semester !== semester
+      ) {
+        return;
+      }
+      void refresh().then(
+        (loaded) => {
+          if (loaded) {
+            setError(null);
+            setErrorKey(null);
+          }
+        },
+        (cause: unknown) => {
+          if (activeKeyRef.current !== key) return;
+          setError(messageFor(cause, 'No se pudo actualizar el roadmap. Recarga la página.'));
+          setErrorKey(key);
+        },
+      );
+    });
+  }, [courseCode, experienceKind, experienceTerm, key, refresh, semester, year]);
 
   useEffect(() => {
     activeKeyRef.current = key;

@@ -17,8 +17,12 @@ multi_agent = true
 network_proxy = true
 
 [permissions.u-roadmaps]
-description = "Edit this workspace and reach the local services required by U-Roadmaps tests."
+description = "Edit this workspace, fetch npm packages, and reach the local services required by U-Roadmaps tests."
 extends = ":workspace"
+
+[permissions.u-roadmaps.filesystem]
+# pnpm downloads the version pinned in package.json to this macOS store.
+"~/Library/pnpm/package-manager-store" = "write"
 
 [permissions.u-roadmaps.network]
 enabled = true
@@ -27,3 +31,4 @@ allow_local_binding = true
 [permissions.u-roadmaps.network.domains]
 "localhost" = "allow"
 "127.0.0.1" = "allow"
+"registry.npmjs.org" = "allow"
