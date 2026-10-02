@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import workflows from '../../../docs/specs/novu-notifications/workflows.json';
-import digestExamples from '../../../docs/specs/novu-notifications/digest-examples.json';
+import workflows from './fixtures/workflows.json';
+import digestExamples from './fixtures/digest-examples.json';
 import { buildNotificationDigestKey } from '@/features/notifications/infrastructure/digest-key';
 import { projectDigestNotification } from '@/features/notifications/digest-projection';
 
