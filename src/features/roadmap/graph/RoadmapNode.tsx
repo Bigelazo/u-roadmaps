@@ -183,26 +183,15 @@ function HiddenBadge() {
   );
 }
 
-function NodeActionMenu({
-  nodeId,
-  hidden,
-  teacherBlocked,
-  isOpen,
-  isClosing,
-  onToggle,
-  onAction,
-}: NodeActionCallbacks & {
-  nodeId: string;
-  hidden: boolean;
-  teacherBlocked: boolean;
-  isOpen: boolean;
-  isClosing: boolean;
-  onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
-}) {
-  const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
+function nodeMenuActions(
+  nodeId: string,
+  hidden: boolean,
+  teacherBlocked: boolean,
+  onAction: NodeActionCallbacks['onAction'],
+) {
   const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';
   const visibilityLabel = hidden ? 'Mostrar para estudiantes' : 'Ocultar para estudiantes';
-  const actions = [
+  return [
     ...(!hidden
       ? [
           {
@@ -245,6 +234,26 @@ function NodeActionMenu({
       angle: 90,
     },
   ];
+}
+
+function NodeActionMenu({
+  nodeId,
+  hidden,
+  teacherBlocked,
+  isOpen,
+  isClosing,
+  onToggle,
+  onAction,
+}: NodeActionCallbacks & {
+  nodeId: string;
+  hidden: boolean;
+  teacherBlocked: boolean;
+  isOpen: boolean;
+  isClosing: boolean;
+  onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
+}) {
+  const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
+  const actions = nodeMenuActions(nodeId, hidden, teacherBlocked, onAction);
 
   return (
     <div className="absolute right-[-10px] bottom-[-10px] z-10 hidden lg:block">
@@ -417,6 +426,39 @@ function NodeResourceSummary({
   );
 }
 
+function NodeActionBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | 'data'>) {
+  const hidden = data.isHidden;
+  const teacherBlocked = data.status === 'editing' && data.isTeacherBlocked;
+  return (
+    <>
+      {data.canManageActions ? (
+        <NodeActionMenu
+          nodeId={id}
+          hidden={hidden}
+          teacherBlocked={teacherBlocked}
+          isOpen={Boolean(data.isActionMenuOpen)}
+          isClosing={Boolean(data.isActionMenuClosing)}
+          onToggle={data.onToggleActionMenu}
+          onAction={data.onAction}
+        />
+      ) : hidden ? (
+        <HiddenBadge />
+      ) : teacherBlocked ? (
+        <TeacherBlockBadge />
+      ) : (
+        <StudentStatusBadge status={data.status} />
+      )}
+    </>
+  );
+}
+
+function NodeNotificationBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | 'data'>) {
+  if (!data.notificationsEnabled || !data.roadmapId || data.isHidden || data.status === 'locked')
+    return null;
+  if (data.status === 'editing' && data.isTeacherBlocked) return null;
+  return <NodeUnreadBadge enabled roadmapId={data.roadmapId} nodeId={id} />;
+}
+
 export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) {
   const size = roadmapNodeSizeForTitle(data.title);
   const locked = data.status === 'locked';
@@ -467,23 +509,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
         </p>
       </div>
       <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
-      {data.canManageActions ? (
-        <NodeActionMenu
-          nodeId={id}
-          hidden={hidden}
-          teacherBlocked={teacherBlocked}
-          isOpen={Boolean(data.isActionMenuOpen)}
-          isClosing={Boolean(data.isActionMenuClosing)}
-          onToggle={data.onToggleActionMenu}
-          onAction={data.onAction}
-        />
-      ) : hidden ? (
-        <HiddenBadge />
-      ) : teacherBlocked ? (
-        <TeacherBlockBadge />
-      ) : (
-        <StudentStatusBadge status={data.status} />
-      )}
+      <NodeActionBadge id={id} data={data} />
       {!hidden
         ? (
             [
@@ -511,9 +537,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
             />
           ))
         : null}
-      {data.notificationsEnabled && data.roadmapId && !hidden && !locked && !teacherBlocked ? (
-        <NodeUnreadBadge enabled roadmapId={data.roadmapId} nodeId={id} />
-      ) : null}
+      <NodeNotificationBadge id={id} data={data} />
     </div>
   );
 }

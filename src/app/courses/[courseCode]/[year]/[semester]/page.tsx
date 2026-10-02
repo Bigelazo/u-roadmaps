@@ -1,10 +1,57 @@
-import { parseCourseOfferingIdentifier, RoadmapCanvasSession } from '@/features/roadmap';
+import {
+  parseCourseOfferingIdentifier,
+  RoadmapCanvasSession,
+  type CourseOfferingIdentifier,
+} from '@/features/roadmap';
 import { readRoadmapForParticipant, synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapAvailabilityDialog } from '@/features/notifications';
 import { getInboxIdentity, prepareOwnNoticeOpening } from '@/features/notifications/server';
+
+function redirectUnavailableNotice(
+  noticeId: string | null,
+  participation: unknown,
+  roadmap: unknown,
+) {
+  if (noticeId && !participation) {
+    redirect(
+      `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'course-unavailable' })}`,
+    );
+  }
+  if (noticeId && !roadmap) {
+    redirect(
+      `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'roadmap-unavailable' })}`,
+    );
+  }
+}
+
+async function resolveNoticeTargetNode(
+  userId: string,
+  identifier: CourseOfferingIdentifier,
+  requestedNodeId: string | undefined,
+  role: string | undefined,
+  noticeId: string | null,
+) {
+  if (!noticeId || !requestedNodeId) return requestedNodeId;
+  const projection = await readRoadmapForParticipant({ userId, identifier }).match(
+    (value) => value,
+    () => null,
+  );
+  const target = projection?.nodes.find(({ id }) => id === requestedNodeId);
+  let canOpen = false;
+  if (target && role === 'TEACHER') {
+    canOpen =
+      'isVisible' in target &&
+      target.isVisible &&
+      'isTeacherBlocked' in target &&
+      !target.isTeacherBlocked;
+  } else if (target && role === 'STUDENT' && 'access' in target) {
+    canOpen = target.access?.status === 'ACCESSIBLE';
+  }
+  return canOpen ? requestedNodeId : undefined;
+}
 
 export default async function CoursePage(
   props: PageProps<'/courses/[courseCode]/[year]/[semester]'>,
@@ -47,38 +94,15 @@ export default async function CoursePage(
   // viaje a U-Campus y el cargo se actualiza en la siguiente operación.
   const participation =
     courseOffering.participants[0] ?? (await synchronizeParticipation(user, identifier));
-  if (noticeId && !participation) {
-    redirect(
-      `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'course-unavailable' })}`,
-    );
-  }
-  if (noticeId && !courseOffering.roadmap) {
-    redirect(
-      `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'roadmap-unavailable' })}`,
-    );
-  }
+  redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
   const requestedNodeId = singleSearchParam(searchParams.targetNode) ?? undefined;
-  let targetNodeId = requestedNodeId;
-  if (noticeId && requestedNodeId && participation) {
-    const projection = await readRoadmapForParticipant({ userId: user.id, identifier }).match(
-      (value) => value,
-      () => null,
-    );
-    const target = projection?.nodes.find(({ id }) => id === requestedNodeId);
-    let canOpen = false;
-    if (target && participation.role === 'TEACHER') {
-      canOpen =
-        'isVisible' in target &&
-        target.isVisible &&
-        'isTeacherBlocked' in target &&
-        !target.isTeacherBlocked;
-    } else if (target && 'access' in target) {
-      canOpen = target.access?.status === 'ACCESSIBLE';
-    } else if (target && 'isVisible' in target) {
-      canOpen = target.isVisible;
-    }
-    if (!canOpen) targetNodeId = undefined;
-  }
+  const targetNodeId = await resolveNoticeTargetNode(
+    user.id,
+    identifier,
+    requestedNodeId,
+    participation?.role,
+    noticeId,
+  );
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(
     // This async Server Component evaluates the calendar for the current request.

@@ -107,9 +107,9 @@ function projectNodeInformationPreview(
   };
 }
 
-export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function NodeEditor(
-  { session, command, perform, onIntent },
-  ref,
+function useNodeEditorController(
+  { session, command, perform, onIntent }: NodeEditorProps,
+  ref: React.ForwardedRef<NodeEditorHandle>,
 ) {
   const { node, nodeTypes, isVisibilityPending } = session;
   const [state, dispatch] = useReducer(nodeEditorReducer, node, createNodeEditorState);
@@ -442,31 +442,97 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
       ? roadmapConfirmationActionIds.deleteResource
       : undefined;
 
+  return {
+    state,
+    transition,
+    cancelResourceDeletion,
+    handleResourceDeletionAction,
+    contextValue,
+    confirmGuard,
+    cancelGuard,
+    resourceDeletionPendingActionId,
+  };
+}
+
+export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(
+  function NodeEditor(props, ref) {
+    const {
+      state,
+      transition,
+      cancelResourceDeletion,
+      handleResourceDeletionAction,
+      contextValue,
+      confirmGuard,
+      cancelGuard,
+      resourceDeletionPendingActionId,
+    } = useNodeEditorController(props, ref);
+
+    return (
+      <>
+        <NodeEditorConflictNotice
+          state={state}
+          onResolve={() => transition({ type: 'resolve-remote-conflict' })}
+        />
+        {contextValue ? (
+          <NodeEditorProvider value={contextValue}>
+            <NodeDetailsEditor />
+          </NodeEditorProvider>
+        ) : null}
+        <NodeEditorConfirmations
+          state={state}
+          cancelGuard={cancelGuard}
+          confirmGuard={confirmGuard}
+          resourceDeletionPendingActionId={resourceDeletionPendingActionId}
+          cancelResourceDeletion={cancelResourceDeletion}
+          handleResourceDeletionAction={handleResourceDeletionAction}
+        />
+      </>
+    );
+  },
+);
+
+function NodeEditorConflictNotice({
+  state,
+  onResolve,
+}: {
+  state: ReturnType<typeof createNodeEditorState>;
+  onResolve: () => void;
+}) {
+  return state.remoteConflict ? (
+    <Alert role="status">
+      <AlertDescription>
+        {state.remoteDeleted
+          ? 'Este Nodo fue eliminado. Conservamos tu borrador local; no se puede guardar.'
+          : 'El Nodo cambió mientras editabas. Conservamos tu borrador local. Revisa la versión actual antes de guardar.'}
+        {!state.remoteDeleted ? (
+          <Button type="button" variant="outline" onClick={onResolve}>
+            Conservar mi borrador sobre la versión actual
+          </Button>
+        ) : null}
+      </AlertDescription>
+    </Alert>
+  ) : null;
+}
+
+function NodeEditorConfirmations({
+  state,
+  cancelGuard,
+  confirmGuard,
+  resourceDeletionPendingActionId,
+  cancelResourceDeletion,
+  handleResourceDeletionAction,
+}: Pick<
+  ReturnType<typeof useNodeEditorController>,
+  | 'state'
+  | 'cancelGuard'
+  | 'confirmGuard'
+  | 'resourceDeletionPendingActionId'
+  | 'cancelResourceDeletion'
+  | 'handleResourceDeletionAction'
+>) {
   return (
     <>
-      {state.remoteConflict ? (
-        <Alert role="status">
-          <AlertDescription>
-            {state.remoteDeleted
-              ? 'Este Nodo fue eliminado. Conservamos tu borrador local; no se puede guardar.'
-              : 'El Nodo cambió mientras editabas. Conservamos tu borrador local. Revisa la versión actual antes de guardar.'}
-            {!state.remoteDeleted ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => transition({ type: 'resolve-remote-conflict' })}
-              >
-                Conservar mi borrador sobre la versión actual
-              </Button>
-            ) : null}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {contextValue ? (
-        <NodeEditorProvider value={contextValue}>
-          <NodeDetailsEditor />
-        </NodeEditorProvider>
-      ) : null}
+      {' '}
       <ConfirmationDialog
         confirmation={
           state.pendingGuard ? editorDraftDiscardConfirmation(state.pendingGuard) : null
@@ -486,4 +552,4 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(function
       />
     </>
   );
-});
+}

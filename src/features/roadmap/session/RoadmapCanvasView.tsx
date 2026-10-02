@@ -125,7 +125,7 @@ const NodeEditor = dynamic(
 
 type Props = { input: RoadmapCanvasSessionInput };
 
-export function RoadmapCanvasView({ input }: Props) {
+function useRoadmapCanvasController({ input }: Props) {
   const { identifier, title } = input.courseOffering;
   const { courseCode, year, semester } = identifier;
   const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
@@ -686,6 +686,93 @@ export function RoadmapCanvasView({ input }: Props) {
       : { kind: 'teaching', roadmap: displayedRoadmap as RoadmapDto, editing: graphEditing };
   }, [displayedRoadmap, graphEditing, isStudentExperience]);
 
+  return {
+    title,
+    courseCode,
+    year,
+    semester,
+    dispatchCanvas,
+    focusReturnRequest,
+    syncedSelectionNotice,
+    setSyncedSelectionNotice,
+    acknowledgementError,
+    setAcknowledgementError,
+    acknowledgementInputRef,
+    retry,
+    canvasFocusRef,
+    selectedNodeId,
+    isEditorOpen,
+    isStudentDetailOpen,
+    teacherPreviewNode,
+    isTeacherPreviewCompleted,
+    resourceComposerCommand,
+    editorPanel,
+    studentPanel,
+    nodeEditorRef,
+    guardEditorDraft,
+    roadmap,
+    error,
+    retryRefresh,
+    accessLost,
+    addNode,
+    dependencyWorkflow,
+    teacherBlockWorkflow,
+    nodeVisibilityWorkflow,
+    nodeDeletionWorkflow,
+    addNodeType,
+    updateNodeType,
+    deleteNodeType,
+    completeNode,
+    canvasPreviewWorkflow,
+    feedback,
+    exclusiveConfirmation,
+    automaticLayout,
+    setAutomaticLayout,
+    confirmedAutomaticLayout,
+    nodeTypeDeletion,
+    setNodeTypeDeletion,
+    requestExclusiveConfirmation,
+    performEditorEffect,
+    canvasMode,
+    isHistoricalRoadmap,
+    isCanvasPreview,
+    isStudentExperience,
+    canEditRoadmap,
+    canPreviewCanvas,
+    canEnterCanvasPreview,
+    canResetCanvasPreview,
+    closeSelectedNode,
+    closeTeacherPreview,
+    displayedRoadmap,
+    confirmAutomaticLayout,
+    requestNodeTypeDeletion,
+    confirmNodeTypeDeletion,
+    handleNodeEditorIntent,
+    graphProjection,
+  };
+}
+
+export function RoadmapCanvasView({ input }: Props) {
+  const model = useRoadmapCanvasController({ input });
+  const {
+    dispatchCanvas,
+    syncedSelectionNotice,
+    setSyncedSelectionNotice,
+    acknowledgementError,
+    setAcknowledgementError,
+    acknowledgementInputRef,
+    retry,
+    canvasFocusRef,
+    selectedNodeId,
+    roadmap,
+    error,
+    retryRefresh,
+    accessLost,
+    addNode,
+    displayedRoadmap,
+    graphProjection,
+  } = model;
+
   if (accessLost) {
     return <LostRoadmapAccess />;
   }
@@ -738,17 +825,7 @@ export function RoadmapCanvasView({ input }: Props) {
       dispatchCanvas({ type: 'selectCreatedNode', nodeId }),
     );
   };
-  const isEditorPanelOpen = canvasMode.isEditing && isEditorOpen;
-  const isStudentPanelOpen = Boolean(
-    teacherPreviewNode ||
-    (isStudentExperience &&
-      isStudentDetailOpen &&
-      selectedNode &&
-      !isStudentBlockedNode(selectedNode)),
-  );
-  const isSidePanelOpen = isEditorPanelOpen || isStudentPanelOpen;
-  const activePanelWidth =
-    teacherPreviewNode || isEditorPanelOpen ? editorPanel.width : studentPanel.width;
+  const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
     <SidebarProvider
       className="min-h-0 lg:h-full"
@@ -789,141 +866,14 @@ export function RoadmapCanvasView({ input }: Props) {
           aria-label="Lienzo del roadmap"
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
-          <RoadmapGraph
-            projection={graphProjection}
-            notificationsEnabled={Boolean(input.notificationsEnabled)}
-            onSelectNode={(nodeId) => {
-              const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
-              if (isStudentExperience && isStudentBlockedNode(node)) return;
-              const select = () => {
-                setSyncedSelectionNotice(null);
-                dispatchCanvas({
-                  type: 'selectNode',
-                  nodeId,
-                  panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
-                });
-              };
-              if (
-                canEditRoadmap &&
-                !isCanvasPreview &&
-                selectedNodeId &&
-                selectedNodeId !== nodeId
-              ) {
-                void guardEditorDraft({ kind: 'replace-node', nodeId }).then((proceed) => {
-                  if (proceed) select();
-                });
-                return;
-              }
-              select();
-            }}
-            selectedNodeId={selectedNodeId}
-            focusReturnRequest={focusReturnRequest}
-            onClearSelectedNode={closeSelectedNode}
-            onViewportChange={canvasPreviewWorkflow.onViewportChange}
-            viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
-            confirmedAutomaticLayout={confirmedAutomaticLayout}
-            topRightActions={
-              !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
-                ? () => (
-                    <>
-                      {canEnterCanvasPreview ? (
-                        <Button
-                          ref={canvasPreviewWorkflow.entryButtonRef}
-                          aria-label="Vista estudiante"
-                          title="Vista estudiante"
-                          type="button"
-                          variant="outline"
-                          onClick={canvasPreviewWorkflow.requestEntry}
-                        >
-                          <Eye data-icon="inline-start" />
-                          Vista estudiante
-                        </Button>
-                      ) : null}
-                      {canEditRoadmap && selectedNode ? (
-                        <Button
-                          aria-label={
-                            isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'
-                          }
-                          title={
-                            isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'
-                          }
-                          type="button"
-                          size="icon"
-                          variant="outline"
-                          onClick={() => dispatchCanvas({ type: 'toggleEditor' })}
-                        >
-                          {isEditorOpen ? <PanelRightClose /> : <PanelRightOpen />}
-                        </Button>
-                      ) : null}
-                    </>
-                  )
-                : undefined
-            }
-            bottomRightActions={
-              !isCanvasPreview && canEditRoadmap
-                ? (findOpenPosition) => (
-                    <NodeCreator
-                      nodeTypes={roadmap.nodeTypes}
-                      onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
-                      onCreateNodeType={addNodeType}
-                      onUpdateNodeType={updateNodeType}
-                      onRequestDeleteNodeType={requestNodeTypeDeletion}
-                    />
-                  )
-                : undefined
-            }
-            overlaySlots={{
-              topLeft: (
-                <header>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {isCanvasPreview ? (
-                      <Badge
-                        className="border-orange-300 text-secondary-foreground"
-                        style={{
-                          backgroundColor: 'color-mix(in srgb, var(--background) 78%, #f97316)',
-                        }}
-                      >
-                        Modo previsualización
-                      </Badge>
-                    ) : canvasMode.isEditing ? (
-                      <Badge variant="secondary">Modo edición</Badge>
-                    ) : null}
-                  </div>
-                  {!isCanvasPreview ? (
-                    <div className="mt-2">
-                      <NotificationCountButton
-                        enabled={Boolean(input.notificationsEnabled)}
-                        filter={{ roadmapId: roadmap.roadmap.id }}
-                        label="este Roadmap"
-                      />
-                    </div>
-                  ) : null}
-                  <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
-                    {title}
-                  </h1>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                    <span>{courseCode}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>
-                      {semester === 1 ? 'Otoño' : 'Primavera'} {year}
-                    </span>
-                  </p>
-                </header>
-              ),
-              topCenter: isCanvasPreview ? (
-                <CanvasPreviewToolbar
-                  canReset={canResetCanvasPreview}
-                  isHistorical={isHistoricalRoadmap}
-                  onRequestReset={() =>
-                    requestExclusiveConfirmation(
-                      'canvas-preview',
-                      canvasPreviewWorkflow.requestReset,
-                    )
-                  }
-                  onExit={canvasPreviewWorkflow.exit}
-                />
-              ) : null,
-            }}
+          <RoadmapCanvasGraph
+            model={model}
+            input={input}
+            selectedNode={selectedNode}
+            addNodeAtOpenPosition={addNodeAtOpenPosition}
+            roadmap={roadmap}
+            displayedRoadmap={displayedRoadmap}
+            graphProjection={graphProjection}
           />
           <RoadmapCanvasFeedback />
           {error ? (
@@ -951,99 +901,213 @@ export function RoadmapCanvasView({ input }: Props) {
             </Alert>
           ) : null}
         </div>
-        {canEditRoadmap && (
-          <NodeEditorPanel
-            isOpen={canvasMode.isEditing && isEditorOpen}
-            panelWidth={editorPanel.width}
-            onPanelWidthChange={editorPanel.setWidth}
-          >
-            <NodeEditor
-              ref={nodeEditorRef}
-              session={{
-                node: selectedNode as RoadmapNode | undefined,
-                nodeTypes: roadmap.nodeTypes,
-                isVisibilityPending: nodeVisibilityWorkflow.isPending,
-              }}
-              command={resourceComposerCommand ?? undefined}
-              perform={performEditorEffect}
-              onIntent={handleNodeEditorIntent}
-            />
-          </NodeEditorPanel>
-        )}
-        {(isStudentExperience || teacherPreviewNode) && (
-          <StudentNodeDetail
-            node={
-              teacherPreviewNode ??
-              (isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined)
-            }
-            status={
-              teacherPreviewNode
-                ? isTeacherPreviewCompleted
-                  ? 'completed'
-                  : 'available'
-                : isStudentDetailOpen && selectedNode
-                  ? studentNodeStatus(selectedNode)
-                  : null
-            }
-            onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
-            onComplete={(node) => {
-              if (canvasPreviewWorkflow.completeNode(node.id)) return;
-              if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
-              else {
-                void completeNode(node.id).then((succeeded) => {
-                  if (succeeded) feedback?.showSuccess('Nodo completado.');
-                });
-              }
-            }}
-            isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
-            nodeTypes={roadmap.nodeTypes}
-            panelWidth={teacherPreviewNode ? editorPanel.width : studentPanel.width}
-            onPanelWidthChange={teacherPreviewNode ? editorPanel.setWidth : studentPanel.setWidth}
-          />
-        )}
+        <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
       </section>
-      <ConfirmationDialog
-        {...(exclusiveConfirmation === 'automatic-layout'
-          ? {
-              confirmation: automaticLayout ? roadmapAutoLayoutConfirmation : null,
-              pendingActionId: automaticLayout?.isPending
-                ? roadmapConfirmationActionIds.autoLayout
-                : undefined,
-              onCancel: () => setAutomaticLayout(null),
-              onAction: (actionId: string) => void confirmAutomaticLayout(actionId),
-            }
-          : exclusiveConfirmation === 'node-type-deletion'
-            ? {
-                confirmation: nodeTypeDeletion
-                  ? nodeTypeDeletionConfirmation(nodeTypeDeletion.nodeType)
-                  : null,
-                pendingActionId: nodeTypeDeletion?.isPending
-                  ? roadmapConfirmationActionIds.deleteNodeType
-                  : undefined,
-                onCancel: () => {
-                  if (!nodeTypeDeletion?.isPending) setNodeTypeDeletion(null);
-                },
-                onAction: (actionId: string) => void confirmNodeTypeDeletion(actionId),
-              }
-            : exclusiveConfirmation === 'node-deletion'
-              ? nodeDeletionWorkflow.confirmationDialog
-              : exclusiveConfirmation === 'canvas-preview'
-                ? canvasPreviewWorkflow.confirmationDialog
-                : exclusiveConfirmation === 'dependency-deletion'
-                  ? dependencyWorkflow.deletionDialog
-                  : exclusiveConfirmation === 'node-visibility'
-                    ? nodeVisibilityWorkflow.confirmationDialog
-                    : exclusiveConfirmation === 'dependency-creation'
-                      ? dependencyWorkflow.creationDialog
-                      : exclusiveConfirmation === 'teacher-block'
-                        ? teacherBlockWorkflow.confirmationDialog
-                        : {
-                            confirmation: null,
-                            onCancel: () => undefined,
-                            onAction: () => undefined,
-                          })}
-      />
+      <RoadmapCanvasConfirmation model={model} />
     </SidebarProvider>
+  );
+}
+
+function canvasPanelLayout(
+  model: ReturnType<typeof useRoadmapCanvasController>,
+  selectedNode: RoadmapNode | StudentRoadmapNode | undefined,
+) {
+  const {
+    canvasMode,
+    isEditorOpen,
+    teacherPreviewNode,
+    isStudentExperience,
+    isStudentDetailOpen,
+    editorPanel,
+    studentPanel,
+  } = model;
+  const isEditorPanelOpen = canvasMode.isEditing && isEditorOpen;
+  const isStudentPanelOpen = Boolean(
+    teacherPreviewNode ||
+    (isStudentExperience &&
+      isStudentDetailOpen &&
+      selectedNode &&
+      !isStudentBlockedNode(selectedNode)),
+  );
+  const isSidePanelOpen = isEditorPanelOpen || isStudentPanelOpen;
+  const activePanelWidth =
+    teacherPreviewNode || isEditorPanelOpen ? editorPanel.width : studentPanel.width;
+  return { isSidePanelOpen, activePanelWidth };
+}
+
+function RoadmapCanvasConfirmation({
+  model,
+}: {
+  model: ReturnType<typeof useRoadmapCanvasController>;
+}) {
+  const {
+    exclusiveConfirmation,
+    automaticLayout,
+    setAutomaticLayout,
+    confirmAutomaticLayout,
+    nodeTypeDeletion,
+    setNodeTypeDeletion,
+    confirmNodeTypeDeletion,
+    nodeDeletionWorkflow,
+    canvasPreviewWorkflow,
+    dependencyWorkflow,
+    nodeVisibilityWorkflow,
+    teacherBlockWorkflow,
+  } = model;
+  switch (exclusiveConfirmation) {
+    case 'automatic-layout':
+      return (
+        <ConfirmationDialog
+          confirmation={automaticLayout ? roadmapAutoLayoutConfirmation : null}
+          pendingActionId={
+            automaticLayout?.isPending ? roadmapConfirmationActionIds.autoLayout : undefined
+          }
+          onCancel={() => setAutomaticLayout(null)}
+          onAction={(actionId) => void confirmAutomaticLayout(actionId)}
+        />
+      );
+    case 'node-type-deletion':
+      return (
+        <ConfirmationDialog
+          confirmation={
+            nodeTypeDeletion ? nodeTypeDeletionConfirmation(nodeTypeDeletion.nodeType) : null
+          }
+          pendingActionId={
+            nodeTypeDeletion?.isPending ? roadmapConfirmationActionIds.deleteNodeType : undefined
+          }
+          onCancel={() => {
+            if (!nodeTypeDeletion?.isPending) setNodeTypeDeletion(null);
+          }}
+          onAction={(actionId) => void confirmNodeTypeDeletion(actionId)}
+        />
+      );
+    case 'node-deletion':
+      return <ConfirmationDialog {...nodeDeletionWorkflow.confirmationDialog} />;
+    case 'canvas-preview':
+      return <ConfirmationDialog {...canvasPreviewWorkflow.confirmationDialog} />;
+    case 'dependency-deletion':
+      return <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />;
+    case 'node-visibility':
+      return <ConfirmationDialog {...nodeVisibilityWorkflow.confirmationDialog} />;
+    case 'dependency-creation':
+      return <ConfirmationDialog {...dependencyWorkflow.creationDialog} />;
+    case 'teacher-block':
+      return <ConfirmationDialog {...teacherBlockWorkflow.confirmationDialog} />;
+    default:
+      return (
+        <ConfirmationDialog
+          confirmation={null}
+          onCancel={() => undefined}
+          onAction={() => undefined}
+        />
+      );
+  }
+}
+
+function RoadmapCanvasPanels({
+  model,
+  selectedNode,
+  roadmap,
+}: {
+  model: ReturnType<typeof useRoadmapCanvasController>;
+  selectedNode: RoadmapNode | StudentRoadmapNode | undefined;
+  roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
+}) {
+  const {
+    canEditRoadmap,
+    canvasMode,
+    isEditorOpen,
+    editorPanel,
+    nodeEditorRef,
+    nodeVisibilityWorkflow,
+    resourceComposerCommand,
+    performEditorEffect,
+    handleNodeEditorIntent,
+  } = model;
+  return (
+    <>
+      {canEditRoadmap && (
+        <NodeEditorPanel
+          isOpen={canvasMode.isEditing && isEditorOpen}
+          panelWidth={editorPanel.width}
+          onPanelWidthChange={editorPanel.setWidth}
+        >
+          <NodeEditor
+            ref={nodeEditorRef}
+            session={{
+              node: selectedNode as RoadmapNode | undefined,
+              nodeTypes: roadmap.nodeTypes,
+              isVisibilityPending: nodeVisibilityWorkflow.isPending,
+            }}
+            command={resourceComposerCommand ?? undefined}
+            perform={performEditorEffect}
+            onIntent={handleNodeEditorIntent}
+          />
+        </NodeEditorPanel>
+      )}
+      <RoadmapStudentPanel model={model} selectedNode={selectedNode} roadmap={roadmap} />
+    </>
+  );
+}
+
+function RoadmapStudentPanel({
+  model,
+  selectedNode,
+  roadmap,
+}: {
+  model: ReturnType<typeof useRoadmapCanvasController>;
+  selectedNode: RoadmapNode | StudentRoadmapNode | undefined;
+  roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
+}) {
+  const {
+    isStudentExperience,
+    teacherPreviewNode,
+    isStudentDetailOpen,
+    isTeacherPreviewCompleted,
+    closeTeacherPreview,
+    closeSelectedNode,
+    canvasPreviewWorkflow,
+    dispatchCanvas,
+    completeNode,
+    feedback,
+    isHistoricalRoadmap,
+    editorPanel,
+    studentPanel,
+  } = model;
+  return (
+    <>
+      {(isStudentExperience || teacherPreviewNode) && (
+        <StudentNodeDetail
+          node={
+            teacherPreviewNode ??
+            (isStudentDetailOpen ? (selectedNode as StudentRoadmapNode | undefined) : undefined)
+          }
+          status={
+            teacherPreviewNode
+              ? isTeacherPreviewCompleted
+                ? 'completed'
+                : 'available'
+              : isStudentDetailOpen && selectedNode
+                ? studentNodeStatus(selectedNode)
+                : null
+          }
+          onClose={teacherPreviewNode ? closeTeacherPreview : closeSelectedNode}
+          onComplete={(node) => {
+            if (canvasPreviewWorkflow.completeNode(node.id)) return;
+            if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
+            else {
+              void completeNode(node.id).then((succeeded) => {
+                if (succeeded) feedback?.showSuccess('Nodo completado.');
+              });
+            }
+          }}
+          isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
+          nodeTypes={roadmap.nodeTypes}
+          panelWidth={teacherPreviewNode ? editorPanel.width : studentPanel.width}
+          onPanelWidthChange={teacherPreviewNode ? editorPanel.setWidth : studentPanel.setWidth}
+        />
+      )}
+    </>
   );
 }
 
@@ -1057,5 +1121,209 @@ function LostRoadmapAccess() {
         Tu Participación ya no tiene acceso a este Roadmap. Volviendo al Resumen académico.
       </AlertDescription>
     </Alert>
+  );
+}
+
+function RoadmapCanvasGraph({
+  model,
+  input,
+  selectedNode,
+  addNodeAtOpenPosition,
+  roadmap,
+  displayedRoadmap,
+  graphProjection,
+}: {
+  model: ReturnType<typeof useRoadmapCanvasController>;
+  input: Props['input'];
+  selectedNode: RoadmapDto['nodes'][number] | StudentRoadmapDto['nodes'][number] | undefined;
+  addNodeAtOpenPosition: (
+    node: Parameters<ReturnType<typeof useRoadmapCanvasController>['addNode']>[0],
+    findOpenPosition: (title: string) => { x: number; y: number } | null,
+  ) => Promise<boolean>;
+  roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
+  displayedRoadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['displayedRoadmap']>;
+  graphProjection: RoadmapGraphProjection;
+}) {
+  const {
+    title,
+    courseCode,
+    year,
+    semester,
+    dispatchCanvas,
+    focusReturnRequest,
+    setSyncedSelectionNotice,
+    selectedNodeId,
+    isEditorOpen,
+    guardEditorDraft,
+    addNodeType,
+    updateNodeType,
+    canvasPreviewWorkflow,
+    confirmedAutomaticLayout,
+    requestExclusiveConfirmation,
+    canvasMode,
+    isHistoricalRoadmap,
+    isCanvasPreview,
+    isStudentExperience,
+    canEditRoadmap,
+    canPreviewCanvas,
+    canEnterCanvasPreview,
+    canResetCanvasPreview,
+    closeSelectedNode,
+    requestNodeTypeDeletion,
+  } = model;
+  return (
+    <RoadmapGraph
+      projection={graphProjection}
+      notificationsEnabled={Boolean(input.notificationsEnabled)}
+      onSelectNode={(nodeId) => {
+        const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
+        if (isStudentExperience && isStudentBlockedNode(node)) return;
+        const select = () => {
+          setSyncedSelectionNotice(null);
+          dispatchCanvas({
+            type: 'selectNode',
+            nodeId,
+            panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
+          });
+        };
+        if (canEditRoadmap && !isCanvasPreview && selectedNodeId && selectedNodeId !== nodeId) {
+          void guardEditorDraft({ kind: 'replace-node', nodeId }).then((proceed) => {
+            if (proceed) select();
+          });
+          return;
+        }
+        select();
+      }}
+      selectedNodeId={selectedNodeId}
+      focusReturnRequest={focusReturnRequest}
+      onClearSelectedNode={closeSelectedNode}
+      onViewportChange={canvasPreviewWorkflow.onViewportChange}
+      viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
+      confirmedAutomaticLayout={confirmedAutomaticLayout}
+      topRightActions={
+        !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
+          ? () => (
+              <>
+                {canEnterCanvasPreview ? (
+                  <Button
+                    ref={canvasPreviewWorkflow.entryButtonRef}
+                    aria-label="Vista estudiante"
+                    title="Vista estudiante"
+                    type="button"
+                    variant="outline"
+                    onClick={canvasPreviewWorkflow.requestEntry}
+                  >
+                    <Eye data-icon="inline-start" />
+                    Vista estudiante
+                  </Button>
+                ) : null}
+                {canEditRoadmap && selectedNode ? (
+                  <Button
+                    aria-label={
+                      isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'
+                    }
+                    title={isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'}
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => dispatchCanvas({ type: 'toggleEditor' })}
+                  >
+                    {isEditorOpen ? <PanelRightClose /> : <PanelRightOpen />}
+                  </Button>
+                ) : null}
+              </>
+            )
+          : undefined
+      }
+      bottomRightActions={
+        !isCanvasPreview && canEditRoadmap
+          ? (findOpenPosition) => (
+              <NodeCreator
+                nodeTypes={roadmap.nodeTypes}
+                onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
+                onCreateNodeType={addNodeType}
+                onUpdateNodeType={updateNodeType}
+                onRequestDeleteNodeType={requestNodeTypeDeletion}
+              />
+            )
+          : undefined
+      }
+      overlaySlots={{
+        topLeft: (
+          <RoadmapCanvasHeader
+            title={title}
+            courseCode={courseCode}
+            year={year}
+            semester={semester}
+            isCanvasPreview={isCanvasPreview}
+            isEditing={canvasMode.isEditing}
+            notificationsEnabled={Boolean(input.notificationsEnabled)}
+            roadmapId={roadmap.roadmap.id}
+          />
+        ),
+        topCenter: isCanvasPreview ? (
+          <CanvasPreviewToolbar
+            canReset={canResetCanvasPreview}
+            isHistorical={isHistoricalRoadmap}
+            onRequestReset={() =>
+              requestExclusiveConfirmation('canvas-preview', canvasPreviewWorkflow.requestReset)
+            }
+            onExit={canvasPreviewWorkflow.exit}
+          />
+        ) : null,
+      }}
+    />
+  );
+}
+
+function RoadmapCanvasHeader({
+  title,
+  courseCode,
+  year,
+  semester,
+  isCanvasPreview,
+  isEditing,
+  notificationsEnabled,
+  roadmapId,
+}: Pick<
+  ReturnType<typeof useRoadmapCanvasController>,
+  'title' | 'courseCode' | 'year' | 'semester' | 'isCanvasPreview'
+> & { isEditing: boolean; notificationsEnabled: boolean; roadmapId: string }) {
+  return (
+    <header>
+      <div className="flex flex-wrap items-center gap-2">
+        {isCanvasPreview ? (
+          <Badge
+            className="border-orange-300 text-secondary-foreground"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--background) 78%, #f97316)',
+            }}
+          >
+            Modo previsualización
+          </Badge>
+        ) : isEditing ? (
+          <Badge variant="secondary">Modo edición</Badge>
+        ) : null}
+      </div>
+      {!isCanvasPreview ? (
+        <div className="mt-2">
+          <NotificationCountButton
+            enabled={notificationsEnabled}
+            filter={{ roadmapId: roadmapId }}
+            label="este Roadmap"
+          />
+        </div>
+      ) : null}
+      <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
+        {title}
+      </h1>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+        <span>{courseCode}</span>
+        <span aria-hidden="true">·</span>
+        <span>
+          {semester === 1 ? 'Otoño' : 'Primavera'} {year}
+        </span>
+      </p>
+    </header>
   );
 }

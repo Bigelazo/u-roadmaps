@@ -20,24 +20,44 @@ function sessionValue(
   return session.kind === 'closed' ? { title: '', url: '', type: 'LINK' } : session.value;
 }
 
-export function ResourceComposer({ mode, editingResource, onModeChange, onClose }: Props) {
-  const { resourceSession, changeResource, selectResourceFile, saveResource, pendingEditorEffect } =
-    useNodeEditorContext();
-  const isEditingResource = resourceSession.kind === 'editing-existing';
-  const resourceValue = sessionValue(resourceSession);
-  const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
+function canSaveResource(
+  mode: Props['mode'],
+  isEditingResource: boolean,
+  resourceValue: ResourceInput,
+  selectedFile: File | null,
+  editingResource: Resource | null,
+) {
   const hasChanges =
     !editingResource ||
     resourceValue.title !== editingResource.title ||
     resourceValue.url !== editingResource.url ||
     resourceValue.type !== editingResource.type;
   const hasRequiredLinkFields = Boolean(resourceValue.title.trim() && resourceValue.url.trim());
-  const canSave =
-    mode === 'file' && !isEditingResource
-      ? Boolean(selectedFile)
-      : hasChanges &&
-        Boolean(resourceValue.title.trim()) &&
-        (mode !== 'link' || hasRequiredLinkFields);
+  return mode === 'file' && !isEditingResource
+    ? Boolean(selectedFile)
+    : hasChanges &&
+      Boolean(resourceValue.title.trim()) &&
+      (mode !== 'link' || hasRequiredLinkFields);
+}
+
+function resourceSubmitLabel(mode: Props['mode'], isEditingResource: boolean) {
+  if (isEditingResource) return mode === 'link' ? 'Guardar enlace' : 'Guardar recurso';
+  return mode === 'file' ? 'Subir archivo' : 'Agregar enlace';
+}
+
+export function ResourceComposer({ mode, editingResource, onModeChange, onClose }: Props) {
+  const { resourceSession, changeResource, selectResourceFile, saveResource, pendingEditorEffect } =
+    useNodeEditorContext();
+  const isEditingResource = resourceSession.kind === 'editing-existing';
+  const resourceValue = sessionValue(resourceSession);
+  const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
+  const canSave = canSaveResource(
+    mode,
+    isEditingResource,
+    resourceValue,
+    selectedFile,
+    editingResource,
+  );
   const isPending = Boolean(pendingEditorEffect);
 
   return (
@@ -149,13 +169,7 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={!canSave || isPending}>
           <Save data-icon="inline-start" />
-          {isEditingResource
-            ? mode === 'link'
-              ? 'Guardar enlace'
-              : 'Guardar recurso'
-            : mode === 'file'
-              ? 'Subir archivo'
-              : 'Agregar enlace'}
+          {resourceSubmitLabel(mode, isEditingResource)}
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onClose}>
           Cancelar

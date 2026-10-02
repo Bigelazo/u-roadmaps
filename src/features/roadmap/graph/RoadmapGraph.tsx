@@ -388,7 +388,9 @@ export type RoadmapGraphProps = {
   selectedNodeId?: string | null;
   focusReturnRequest?: string | null;
   topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
-  bottomRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
+  bottomRightActions?: (
+    findOpenPosition: (title: string) => RoadmapNodePosition | null,
+  ) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
@@ -429,7 +431,7 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   );
 }
 
-export function RoadmapGraph({
+function useRoadmapGraphController({
   projection,
   notificationsEnabled,
   onSelectNode,
@@ -457,7 +459,10 @@ export function RoadmapGraph({
   const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
   const appliedAutomaticLayoutTokenRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!confirmedAutomaticLayout || appliedAutomaticLayoutTokenRef.current === confirmedAutomaticLayout.token)
+    if (
+      !confirmedAutomaticLayout ||
+      appliedAutomaticLayoutTokenRef.current === confirmedAutomaticLayout.token
+    )
       return;
     appliedAutomaticLayoutTokenRef.current = confirmedAutomaticLayout.token;
     setLayoutDirection(confirmedAutomaticLayout.direction);
@@ -549,7 +554,13 @@ export function RoadmapGraph({
     [canEdit, closingActionMenuNodeId, openActionMenuNodeId, requestNodeAction, toggleActionMenu],
   );
   const [flow, setFlow] = useState(() =>
-    mapProjectionToFlow(stableProjection, deleteDependency, selectedNodeId, actionMenu, notificationsEnabled),
+    mapProjectionToFlow(
+      stableProjection,
+      deleteDependency,
+      selectedNodeId,
+      actionMenu,
+      notificationsEnabled,
+    ),
   );
 
   useEffect(() => {
@@ -642,6 +653,54 @@ export function RoadmapGraph({
     node?.focus();
   }, [focusReturnRequest, projectionRoadmap]);
 
+  return {
+    canEdit,
+    layoutDirection,
+    openActionMenuNodeId,
+    closingActionMenuNodeId,
+    selectedNodeIdRef,
+    keyboardMovePendingRef,
+    deleteDependencies,
+    closeActionMenu,
+    flow,
+    setFlow,
+    applyNodePositions,
+    connectNodes,
+    proposeAutoLayout,
+    containerRef,
+    onClearSelectedNode,
+    onSelectNode,
+    onViewportChange,
+    overlaySlots,
+    viewportRestoration,
+    topRightActions,
+    bottomRightActions,
+  };
+}
+
+export function RoadmapGraph(props: RoadmapGraphProps) {
+  const model = useRoadmapGraphController(props);
+  const {
+    canEdit,
+    openActionMenuNodeId,
+    closingActionMenuNodeId,
+    selectedNodeIdRef,
+    keyboardMovePendingRef,
+    deleteDependencies,
+    closeActionMenu,
+    flow,
+    setFlow,
+    applyNodePositions,
+    connectNodes,
+    containerRef,
+    onClearSelectedNode,
+    onSelectNode,
+    onViewportChange,
+  } = model;
+
+  const isNavigationEnabled = !openActionMenuNodeId && !closingActionMenuNodeId;
+  const canInteract = canEdit && isNavigationEnabled;
+
   return (
     <div
       ref={containerRef}
@@ -673,19 +732,19 @@ export function RoadmapGraph({
         edges={flow.edges}
         nodeTypes={roadmapNodeTypes}
         edgeTypes={roadmapEdgeTypes}
-        nodesDraggable={canEdit && !openActionMenuNodeId && !closingActionMenuNodeId}
-        nodesConnectable={canEdit && !openActionMenuNodeId && !closingActionMenuNodeId}
+        nodesDraggable={canInteract}
+        nodesConnectable={canInteract}
         snapToGrid
         snapGrid={[roadmapGridSize, roadmapGridSize]}
         connectionMode={ConnectionMode.Loose}
         nodesFocusable
         nodeDragThreshold={5}
         nodeClickDistance={6}
-        elementsSelectable={!openActionMenuNodeId && !closingActionMenuNodeId}
-        panOnDrag={!openActionMenuNodeId && !closingActionMenuNodeId}
-        zoomOnScroll={!openActionMenuNodeId && !closingActionMenuNodeId}
-        zoomOnPinch={!openActionMenuNodeId && !closingActionMenuNodeId}
-        zoomOnDoubleClick={!openActionMenuNodeId && !closingActionMenuNodeId}
+        elementsSelectable={isNavigationEnabled}
+        panOnDrag={isNavigationEnabled}
+        zoomOnScroll={isNavigationEnabled}
+        zoomOnPinch={isNavigationEnabled}
+        zoomOnDoubleClick={isNavigationEnabled}
         onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) => {
           const movedWithKeyboard = keyboardMovePendingRef.current;
           keyboardMovePendingRef.current = false;
@@ -752,19 +811,15 @@ export function RoadmapGraph({
             : undefined
         }
         onNodeDragStop={
-          canEdit && !openActionMenuNodeId && !closingActionMenuNodeId
+          canInteract
             ? (_event, node) => {
                 applyNodePositions('pointer', snappedNodePositions(immutableNodePositions([node])));
               }
             : undefined
         }
-        onConnect={
-          canEdit && !openActionMenuNodeId && !closingActionMenuNodeId ? connectNodes : undefined
-        }
+        onConnect={canInteract ? connectNodes : undefined}
         onEdgesDelete={
-          canEdit && !openActionMenuNodeId && !closingActionMenuNodeId
-            ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
-            : undefined
+          canInteract ? (edges) => deleteDependencies(edges.map((edge) => edge.id)) : undefined
         }
         onMoveEnd={(event, viewport) => {
           if (!event) return;
@@ -774,33 +829,54 @@ export function RoadmapGraph({
         fitViewOptions={roadmapFitViewOptions}
         proOptions={{ hideAttribution: true }}
       >
-        <RoadmapGraphOverlays slots={overlaySlots} />
-        <RoadmapViewportControls />
-        <RoadmapViewportRestorer restoration={viewportRestoration} />
-        <ActionMenuViewportAdjustment
-          nodeId={canEdit ? openActionMenuNodeId : null}
-          containerRef={containerRef}
-        />
-        {canEdit || topRightActions ? (
-          <RoadmapGraphToolbar
-            containerRef={containerRef}
-            layoutDirection={layoutDirection}
-            showAutoLayout={canEdit}
-            canAutoLayout={canEdit && flow.nodes.length >= 2}
-            onAutoLayout={proposeAutoLayout}
-            topRightActions={topRightActions}
-            bottomRightActions={bottomRightActions}
-            nodes={flow.nodes}
-          />
-        ) : null}
-        <Background
-          aria-label="Cuadrícula del lienzo"
-          variant={BackgroundVariant.Lines}
-          color="var(--fog)"
-          gap={roadmapGridSize}
-          size={1}
-        />
+        <RoadmapGraphContents model={model} />
       </ReactFlow>
     </div>
+  );
+}
+
+function RoadmapGraphContents({ model }: { model: ReturnType<typeof useRoadmapGraphController> }) {
+  const {
+    overlaySlots,
+    viewportRestoration,
+    canEdit,
+    openActionMenuNodeId,
+    containerRef,
+    topRightActions,
+    layoutDirection,
+    flow,
+    proposeAutoLayout,
+    bottomRightActions,
+  } = model;
+  return (
+    <>
+      {' '}
+      <RoadmapGraphOverlays slots={overlaySlots} />
+      <RoadmapViewportControls />
+      <RoadmapViewportRestorer restoration={viewportRestoration} />
+      <ActionMenuViewportAdjustment
+        nodeId={canEdit ? openActionMenuNodeId : null}
+        containerRef={containerRef}
+      />
+      {canEdit || topRightActions ? (
+        <RoadmapGraphToolbar
+          containerRef={containerRef}
+          layoutDirection={layoutDirection}
+          showAutoLayout={canEdit}
+          canAutoLayout={canEdit && flow.nodes.length >= 2}
+          onAutoLayout={proposeAutoLayout}
+          topRightActions={topRightActions}
+          bottomRightActions={bottomRightActions}
+          nodes={flow.nodes}
+        />
+      ) : null}
+      <Background
+        aria-label="Cuadrícula del lienzo"
+        variant={BackgroundVariant.Lines}
+        color="var(--fog)"
+        gap={roadmapGridSize}
+        size={1}
+      />
+    </>
   );
 }

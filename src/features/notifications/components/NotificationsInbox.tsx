@@ -197,6 +197,67 @@ function NotificationRow({
   );
 }
 
+function InboxNotificationList({
+  notifications,
+  isLoading,
+  isFetching,
+  hasMore,
+  error,
+  fetchMore,
+  refetch,
+  onSelect,
+}: Pick<
+  ReturnType<typeof useNotifications>,
+  'notifications' | 'isLoading' | 'isFetching' | 'hasMore' | 'error' | 'fetchMore' | 'refetch'
+> & { onSelect: (notification: NotificationRecord) => void }) {
+  if (isLoading && !notifications) {
+    return (
+      <p className="p-6 text-center text-sm text-muted-foreground" role="status">
+        Cargando avisos…
+      </p>
+    );
+  }
+  if (error) {
+    return (
+      <div className="grid justify-items-center gap-3 p-6 text-center">
+        <p className="text-sm text-muted-foreground" role="alert">
+          No se pudieron cargar los avisos.
+        </p>
+        <Button onClick={() => void refetch()} type="button" variant="outline">
+          Reintentar
+        </Button>
+      </div>
+    );
+  }
+  if (!notifications?.length) {
+    return (
+      <p className="p-6 text-center text-sm text-muted-foreground">No tienes avisos todavía.</p>
+    );
+  }
+  return (
+    <>
+      <ul aria-label="Lista de avisos">
+        {notifications.map((notification) => (
+          <NotificationRow key={notification.id} notification={notification} onSelect={onSelect} />
+        ))}
+      </ul>
+      {hasMore ? (
+        <div className="p-3">
+          <Button
+            className="w-full"
+            disabled={isFetching}
+            onClick={() => void fetchMore()}
+            type="button"
+            variant="outline"
+          >
+            {isFetching ? 'Cargando…' : 'Cargar más avisos'}
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function InboxBell() {
   const { open, setOpen } = useContext(InboxOpenContext);
   const router = useRouter();
@@ -299,49 +360,16 @@ function InboxBell() {
               </div>
             </div>
             <div className="max-h-[calc(min(32rem,100dvh-6rem)-4rem)] overflow-y-auto max-lg:h-[calc(100dvh-4rem)] max-lg:max-h-none">
-              {isLoading && !notifications ? (
-                <p className="p-6 text-center text-sm text-muted-foreground" role="status">
-                  Cargando avisos…
-                </p>
-              ) : error ? (
-                <div className="grid justify-items-center gap-3 p-6 text-center">
-                  <p className="text-sm text-muted-foreground" role="alert">
-                    No se pudieron cargar los avisos.
-                  </p>
-                  <Button onClick={() => void refetch()} type="button" variant="outline">
-                    Reintentar
-                  </Button>
-                </div>
-              ) : notifications?.length ? (
-                <>
-                  <ul aria-label="Lista de avisos">
-                    {notifications.map((notification) => (
-                      <NotificationRow
-                        key={notification.id}
-                        notification={notification}
-                        onSelect={selectNotification}
-                      />
-                    ))}
-                  </ul>
-                  {hasMore ? (
-                    <div className="p-3">
-                      <Button
-                        className="w-full"
-                        disabled={isFetching}
-                        onClick={() => void fetchMore()}
-                        type="button"
-                        variant="outline"
-                      >
-                        {isFetching ? 'Cargando…' : 'Cargar más avisos'}
-                      </Button>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <p className="p-6 text-center text-sm text-muted-foreground">
-                  No tienes avisos todavía.
-                </p>
-              )}
+              <InboxNotificationList
+                notifications={notifications}
+                isLoading={isLoading}
+                isFetching={isFetching}
+                hasMore={hasMore}
+                error={error}
+                fetchMore={fetchMore}
+                refetch={refetch}
+                onSelect={selectNotification}
+              />
             </div>
           </PopoverPrimitive.Popup>
         </PopoverPrimitive.Positioner>

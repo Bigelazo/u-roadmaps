@@ -30,9 +30,10 @@ function numberValue(value: unknown) {
   return typeof value === 'number' ? value : null;
 }
 
-export function RoadmapAvailabilityDialog({ noticeId, courseCode, year, semester }: Props) {
-  const router = useRouter();
-  const { notification } = useSelectedNotification();
+function availabilityNotice(
+  notification: ReturnType<typeof useSelectedNotification>['notification'],
+  { noticeId, courseCode, year, semester }: Props,
+) {
   const data = notification?.id === noticeId ? (notification.data ?? {}) : null;
   const noticeMatchesCourse = Boolean(
     data && data.courseCode === courseCode && data.year === year && data.semester === semester,
@@ -53,6 +54,15 @@ export function RoadmapAvailabilityDialog({ noticeId, courseCode, year, semester
       : 'Fecha no disponible';
   const actorName = noticeMatchesCourse ? stringValue(data?.actorName) : '';
   const open = Boolean(noticeId && notification?.id === noticeId && noticeMatchesCourse);
+
+  return { subject, body, isSummary, summaryCount, effectiveDate, actorName, open };
+}
+
+export function RoadmapAvailabilityDialog(props: Props) {
+  const router = useRouter();
+  const { notification } = useSelectedNotification();
+  const { subject, body, isSummary, summaryCount, effectiveDate, actorName, open } =
+    availabilityNotice(notification, props);
 
   function close() {
     router.replace(window.location.pathname, { scroll: false });
