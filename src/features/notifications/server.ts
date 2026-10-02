@@ -39,8 +39,8 @@ export type InboxIdentity = Readonly<{
 
 export function notificationsEnabled() {
   return (
-    process.env.NOVU_NOTIFICATIONS_ENABLED === 'true' &&
-    (process.env.NODE_ENV !== 'production' || process.env.NOVU_PRODUCTION_APPROVED === 'true')
+    Boolean(process.env.NOVU_SECRET_KEY?.trim()) &&
+    Boolean(process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER?.trim())
   );
 }
 
@@ -180,11 +180,12 @@ export async function deliverNodeChange(input: {
 }) {
   const ownNodeChange =
     input.changeKind === 'node-updated' ||
-    (input.changeKind === 'node-available' &&
-      (!input.recipientIds || input.availabilitySource === 'publication'));
+    input.changeKind === 'node-available' ||
+    input.changeKind === 'node-retired' ||
+    input.changeKind === 'node-deleted' ||
+    input.changeKind === 'node-blocked';
   if (!ownNodeChange && !notificationsEnabled()) return;
-  const workflowId = process.env.NOVU_WORKFLOW_NODE_CHANGE ?? '';
-  if (!ownNodeChange && !workflowId) return;
+  const workflowId = 'roadmap-node-changed';
 
   const node = await prisma.roadmapNode.findUnique({
     where: { id: input.nodeId },
@@ -296,8 +297,8 @@ export async function deliverRoadmapPathChange(input: {
   recipientIds: readonly string[];
 }) {
   if (!notificationsEnabled()) return;
-  const workflowId = process.env.NOVU_WORKFLOW_PATH_CHANGE;
-  if (!workflowId || input.recipientIds.length === 0) return;
+  const workflowId = 'roadmap-path-changed';
+  if (input.recipientIds.length === 0) return;
 
   const [offering, actor] = await Promise.all([
     prisma.courseOffering.findUnique({
@@ -359,8 +360,8 @@ export async function deliverRoadmapClassificationChange(input: {
 }) {
   try {
     if (!notificationsEnabled()) return;
-    const workflowId = process.env.NOVU_WORKFLOW_CLASSIFICATION_CHANGE;
-    if (!workflowId || input.recipientIds.length === 0) return;
+    const workflowId = 'roadmap-classification-changed';
+    if (input.recipientIds.length === 0) return;
 
     const [offering, actor] = await Promise.all([
       prisma.courseOffering.findUnique({

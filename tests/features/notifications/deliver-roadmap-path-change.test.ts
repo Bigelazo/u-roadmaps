@@ -18,8 +18,8 @@ vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
 import { deliverRoadmapPathChange } from '@/features/notifications/server';
 
 beforeEach(() => {
-  process.env.NOVU_NOTIFICATIONS_ENABLED = 'true';
-  process.env.NOVU_WORKFLOW_PATH_CHANGE = 'roadmap-path-changed';
+  vi.stubEnv('NOVU_SECRET_KEY', 'test-secret');
+  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', 'test-application');
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
     courseCode: 'CC3002',
@@ -40,8 +40,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
-  delete process.env.NOVU_NOTIFICATIONS_ENABLED;
-  delete process.env.NOVU_WORKFLOW_PATH_CHANGE;
+  vi.unstubAllEnvs();
 });
 
 test('delivers only active explicit recipients for the matching Roadmap', async () => {

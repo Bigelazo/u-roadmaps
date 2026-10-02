@@ -20,8 +20,8 @@ vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
 import { deliverNodeChange } from '@/features/notifications/server';
 
 beforeEach(() => {
-  process.env.NOVU_NOTIFICATIONS_ENABLED = 'true';
-  process.env.NOVU_WORKFLOW_NODE_CHANGE = 'roadmap-node-changed';
+  vi.stubEnv('NOVU_SECRET_KEY', 'test-secret');
+  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', 'test-application');
   prisma.roadmapNode.findUnique.mockResolvedValue(null);
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
@@ -44,8 +44,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
-  delete process.env.NOVU_NOTIFICATIONS_ENABLED;
-  delete process.env.NOVU_WORKFLOW_NODE_CHANGE;
+  vi.unstubAllEnvs();
 });
 
 test('retained deletion context routes to the Roadmap and rechecks active recipients', async () => {
@@ -76,6 +75,7 @@ test('retained deletion context routes to the Roadmap and rechecks active recipi
   );
   expect(trigger).toHaveBeenCalledWith(
     expect.objectContaining({
+      workflowId: 'roadmap-node-changed',
       recipients: ['student-id'],
       payload: expect.objectContaining({
         targetKind: 'roadmap',

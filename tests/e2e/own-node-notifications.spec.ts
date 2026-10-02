@@ -55,13 +55,13 @@ test('visible Node changes reach the own Inbox and opening recognizes only its c
 
 // Setup/cleanup only; behavior is asserted through authenticated HTTP and the browser.
 function fixtureSql(sql: string) {
-  const connection =
-    process.env.E2E_DATABASE_URL ?? parse(readFileSync('.env.development')).E2E_DATABASE_URL;
+  const connection = process.env.E2E_DATABASE_URL ?? parse(readFileSync('.env')).E2E_DATABASE_URL;
   if (!connection || new URL(connection).pathname !== '/roadmap_e2e_db')
     throw new Error('Expected the E2E database.');
   const url = new URL(connection);
-  execFileSync('psql', ['-v', 'ON_ERROR_STOP=1', '-c', sql], {
+  execFileSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
     stdio: 'pipe',
+    timeout: 15_000,
     env: {
       ...process.env,
       PGDATABASE: 'roadmap_e2e_db',
@@ -490,6 +490,15 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
         })
       ).status(),
     ).toBe(200);
+    // Access transitions emit their own notices. Measure content changes from
+    // the state after prerequisites and completion have been applied.
+    const beforeContent = new Map(
+      await Promise.all(
+        [without, observer, withProgress, fixture.nicolas].map(
+          async (userId) => [userId, await count(userId, nodeId)] as const,
+        ),
+      ),
+    );
     for (const data of [
       { description: 'Nuevo detalle' },
       { title: 'Nuevo título' },
@@ -499,13 +508,13 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
         (await request.patch(roadmapPath(`/nodes/${nodeId}`), { headers: author, data })).status(),
       ).toBe(200);
     }
-    expect(await count(without, nodeId)).toBe(1);
-    expect(await count(observer, nodeId)).toBe(1);
-    expect(await count(withProgress, nodeId)).toBe(4);
-    expect(await count(fixture.nicolas, nodeId)).toBe(4);
+    expect(await count(without, nodeId)).toBe(beforeContent.get(without));
+    expect(await count(observer, nodeId)).toBe(beforeContent.get(observer));
+    expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress) + 3);
+    expect(await count(fixture.nicolas, nodeId)).toBe(beforeContent.get(fixture.nicolas) + 3);
     for (const data of [{ title: 'Nuevo título' }, { positionX: 99, positionY: 99 }])
       await request.patch(roadmapPath(`/nodes/${nodeId}`), { headers: author, data });
-    expect(await count(withProgress, nodeId)).toBe(4);
+    expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress) + 3);
     const opening = { roadmapId: roadmap.roadmap.id, nodeId, operationId: crypto.randomUUID() };
     expect((await request.post('/api/notifications/openings', { data: opening })).status()).toBe(
       401,
@@ -540,12 +549,14 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
         await request.post(roadmapPath(`/nodes/${nodeId}/teacher-block`), { headers: author })
       ).status(),
     ).toBe(200);
+    const teacherCountAfterBlock = await count(fixture.nicolas, nodeId);
+    const studentCountAfterBlock = await count(withProgress, nodeId);
     await request.patch(roadmapPath(`/nodes/${nodeId}`), {
       headers: author,
       data: { description: 'Bloqueado por docencia' },
     });
-    expect(await count(fixture.nicolas, nodeId)).toBe(4);
-    expect(await count(withProgress, nodeId)).toBe(4);
+    expect(await count(fixture.nicolas, nodeId)).toBe(teacherCountAfterBlock);
+    expect(await count(withProgress, nodeId)).toBe(studentCountAfterBlock);
   } finally {
     if (dependencyId)
       await request.delete(roadmapPath(`/dependencies/${dependencyId}`), { headers: author });

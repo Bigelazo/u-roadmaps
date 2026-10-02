@@ -10,8 +10,7 @@ function client() {
   const secretKey = process.env.NOVU_SECRET_KEY;
   if (!secretKey) throw new Error('Novu is not configured.');
   if (!novuClient) {
-    const serverURL = process.env.NOVU_SERVER_URL;
-    novuClient = new Novu({ secretKey, ...(serverURL ? { serverURL } : {}) });
+    novuClient = new Novu({ secretKey });
   }
   return novuClient;
 }

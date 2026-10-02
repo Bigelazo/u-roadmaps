@@ -57,7 +57,7 @@ async function storeNodeScopedNotice(notice: NodeChangeNotice | ResourceChangeNo
     {
       ...notice,
       ...message,
-      targetKind: 'node',
+      targetKind: 'targetKind' in notice ? (notice.targetKind ?? 'node') : 'node',
       occurredAt: notice.occurredAt.toISOString(),
       eventCount: 1,
       digestKey: notice.eventId,

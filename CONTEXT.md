@@ -56,8 +56,16 @@ _Avoid_: Course offering, edit history
 A teaching-staff modification that meaningfully changes a participant's Roadmap content or access. It retains enough context to explain what changed even when the affected element no longer exists.
 _Avoid_: Canvas movement, visual-only edit, notification
 
+**Roadmap notice (Aviso del roadmap)**:
+A message addressed to a User about Roadmap availability or relevant Roadmap changes, retaining the context needed to explain them even when the affected element no longer exists. It is distinct from the change itself and may represent an individual change or a Change summary.
+_Avoid_: Roadmap change, audit entry
+
+**Pending roadmap notice (Aviso pendiente del roadmap)**:
+A Roadmap notice that its recipient has not yet recognized by entering the corresponding Roadmap or opening the corresponding accessible Node. Merely seeing its Inbox row or opening its notice dialog does not recognize it.
+_Avoid_: Unseen notice, pending Roadmap change
+
 **Change summary (Resumen de cambios)**:
-A participant-facing notice that briefly represents one or more pending Roadmap changes from the same Roadmap. It may present repeated changes as an aggregate rather than enumerate every individual modification.
+A Roadmap notice that briefly represents repeated Roadmap changes from the same Roadmap, affected Node when applicable, and change class. It is recognized as one notice regardless of the number of changes represented and need not enumerate every individual modification.
 _Avoid_: Roadmap change, audit log
 
 **User (Usuario)**:
