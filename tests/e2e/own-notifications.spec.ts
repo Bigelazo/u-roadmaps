@@ -146,11 +146,12 @@ test('Roadmap creation persists one own notice for each eligible Participation a
 // Fixture cleanup only: assertions and all Roadmap mutations use authenticated APIs.
 function fixtureSql(sql: string) {
   const connection =
-    process.env.E2E_DATABASE_URL ?? parse(readFileSync('.env.development')).E2E_DATABASE_URL;
+    process.env.E2E_DATABASE_URL ?? parse(readFileSync('.env')).E2E_DATABASE_URL;
   if (!connection || new URL(connection).pathname !== '/roadmap_e2e_db')
     throw new Error('Expected the local E2E database.');
-  execFileSync('psql', ['-v', 'ON_ERROR_STOP=1', '-c', sql], {
+  execFileSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
     stdio: 'pipe',
+    timeout: 15_000,
     env: {
       ...process.env,
       PGDATABASE: 'roadmap_e2e_db',

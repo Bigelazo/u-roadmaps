@@ -4,7 +4,11 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const maxUploadBytes = 25 * 1024 * 1024;
-const storageDirectory = join(process.cwd(), 'uploads');
+// Uploaded files are runtime data, not build dependencies.
+const storageDirectory = join(
+  /* turbopackIgnore: true */ process.cwd(),
+  process.env.UPLOADS_DIRECTORY || 'uploads',
+);
 
 function storagePath(fileKey: string) {
   return join(storageDirectory, fileKey);

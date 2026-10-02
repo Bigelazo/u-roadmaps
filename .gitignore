@@ -8,7 +8,6 @@ test-results/
 .env
 .env.*
 !.env.example
-!.env.development.example
 !.env.e2e.example
 .DS_Store
 tsconfig.tsbuildinfo
@@ -16,5 +15,6 @@ src/generated/prisma/
 .playwright-mcp/
 .pnpm-store/
 uploads/
+uploads-e2e/
 next-env.d.ts
 graphify-out/

@@ -16,7 +16,11 @@ import {
 } from '../fixtures/catalog';
 import { developmentFixtureFileContents } from './assets';
 
-const fixtureUploadsDirectory = join(process.cwd(), 'uploads');
+// Uploaded files are runtime data, not build dependencies.
+const fixtureUploadsDirectory = join(
+  /* turbopackIgnore: true */ process.cwd(),
+  process.env.UPLOADS_DIRECTORY || 'uploads',
+);
 
 async function replaceFixtureUploadedFiles(files: readonly { fileKey: string; bytes: Buffer }[]) {
   await mkdir(fixtureUploadsDirectory, { recursive: true });

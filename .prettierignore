@@ -1,5 +1,6 @@
 .agents/
 .next/
+.next-e2e/
 DESIGN.md
 Dockerfile
 coverage/
