@@ -12,6 +12,7 @@ import type {
 } from './contracts';
 import {
   storeRoadmapAvailability,
+  storeRoadmapPathChange,
   storeNodeChange,
   storeResourceChange,
   findOwnNotice,
@@ -23,7 +24,6 @@ import {
 import { ApplicationError } from '@/shared/errors/server';
 export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
 import { emitNodeScopedChange } from './application/emit-node-scoped-change';
-import { emitRoadmapPathChange } from './application/emit-roadmap-path-change';
 import { emitRoadmapClassificationChange } from './application/emit-roadmap-classification-change';
 import { novuTransport } from './infrastructure/novu-transport';
 import { createSubscriberHash } from './infrastructure/subscriber-hash';
@@ -169,6 +169,7 @@ export async function deliverNodeChange(input: {
   year: number;
   semester: number;
   nodeId: string;
+  eventId?: string;
   changeKind: NodeChangeNotice['changeKind'];
   changedFields: NodeChangeNotice['changedFields'];
   nodeTitle?: string;
@@ -245,7 +246,7 @@ export async function deliverNodeChange(input: {
   if (!recipients.length) return;
 
   const notice: NodeChangeNotice = {
-    eventId: randomUUID(),
+    eventId: input.eventId ?? randomUUID(),
     roadmapId,
     courseOfferingId: offeringInfo.id,
     courseCode: offeringInfo.courseCode,
@@ -288,6 +289,8 @@ export async function deliverNodeChange(input: {
 }
 
 export async function deliverRoadmapPathChange(input: {
+  eventId: string;
+  dependencyId: string;
   userId: string;
   identifier: { courseCode: string; year: number; semester: number };
   roadmapId: string;
@@ -296,8 +299,6 @@ export async function deliverRoadmapPathChange(input: {
   prerequisiteNodeTitle: string;
   recipientIds: readonly string[];
 }) {
-  if (!notificationsEnabled()) return;
-  const workflowId = 'roadmap-path-changed';
   if (input.recipientIds.length === 0) return;
 
   const [offering, actor] = await Promise.all([
@@ -321,7 +322,8 @@ export async function deliverRoadmapPathChange(input: {
   if (!recipients.length) return;
 
   const notice: RoadmapPathChangeNotice = {
-    eventId: randomUUID(),
+    eventId: input.eventId,
+    dependencyId: input.dependencyId,
     roadmapId: input.roadmapId,
     courseOfferingId: offering.id,
     courseCode: offering.courseCode,
@@ -336,18 +338,9 @@ export async function deliverRoadmapPathChange(input: {
     recipients,
   };
 
-  await emitRoadmapPathChange(
-    notice,
-    novuTransport,
-    async (userIds) => {
-      const active = await prisma.participation.findMany({
-        where: { courseOfferingId: offering.id, userId: { in: [...userIds] }, isActive: true },
-        select: { userId: true },
-      });
-      return active.map(({ userId }) => userId);
-    },
-    workflowId,
-  ).catch(() => undefined);
+  await storeRoadmapPathChange(notice).catch(() => {
+    console.warn('Roadmap path notice delivery failed', { eventId: notice.eventId });
+  });
 }
 
 export async function deliverRoadmapClassificationChange(input: {

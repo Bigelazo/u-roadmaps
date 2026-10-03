@@ -2,6 +2,7 @@ import type { RoadmapAvailabilityRecipient } from './roadmap-availability';
 
 export type RoadmapPathChangeNotice = Readonly<{
   eventId: string;
+  dependencyId: string;
   roadmapId: string;
   courseOfferingId: string;
   courseCode: string;

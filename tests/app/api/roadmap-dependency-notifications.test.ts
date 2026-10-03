@@ -15,10 +15,12 @@ beforeEach(() => {
 });
 
 test('maps confirmed Dependency and access descriptors to their respective notices', async () => {
-  deliverRoadmapPathChange.mockRejectedValueOnce(new Error('Novu unavailable'));
+  deliverRoadmapPathChange.mockRejectedValueOnce(new Error('own Inbox unavailable'));
   const identifier = { courseCode: 'CC3002', year: 2026, semester: 2 };
   const notifications = {
     path: {
+      eventId: 'dependency-id:dependency-added',
+      dependencyId: 'dependency-id',
       roadmapId: 'roadmap-id',
       changeKind: 'dependency-added' as const,
       dependentNodeTitle: 'Evaluación 1',
@@ -27,6 +29,7 @@ test('maps confirmed Dependency and access descriptors to their respective notic
     },
     nodes: [
       {
+        eventId: 'dependency-id:dependency-added:blocked-node-id:node-blocked',
         nodeId: 'blocked-node-id',
         roadmapId: 'roadmap-id',
         changeKind: 'node-blocked' as const,

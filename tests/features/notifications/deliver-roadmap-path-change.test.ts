@@ -4,6 +4,7 @@ const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
   prisma: {
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
+    roadmapNotice: { createMany: vi.fn() },
     user: { findUnique: vi.fn() },
   },
   ensureSubscribers: vi.fn(),
@@ -18,8 +19,8 @@ vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
 import { deliverRoadmapPathChange } from '@/features/notifications/server';
 
 beforeEach(() => {
-  vi.stubEnv('NOVU_SECRET_KEY', 'test-secret');
-  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', 'test-application');
+  vi.stubEnv('NOVU_SECRET_KEY', '');
+  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
     courseCode: 'CC3002',
@@ -34,8 +35,7 @@ beforeEach(() => {
     ])
     .mockResolvedValueOnce([{ userId: 'student-id' }, { userId: 'observer-id' }]);
   prisma.user.findUnique.mockResolvedValue({ name: 'Docente autora' });
-  ensureSubscribers.mockResolvedValue(undefined);
-  trigger.mockResolvedValue({});
+  prisma.roadmapNotice.createMany.mockResolvedValue({ count: 2 });
 });
 
 afterEach(() => {
@@ -43,8 +43,10 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test('delivers only active explicit recipients for the matching Roadmap', async () => {
+test('stores the route notice for active explicit recipients without requiring Novu', async () => {
   await deliverRoadmapPathChange({
+    eventId: 'dependency-id:dependency-added',
+    dependencyId: 'dependency-id',
     userId: 'teacher-id',
     identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
     roadmapId: 'roadmap-id',
@@ -68,29 +70,45 @@ test('delivers only active explicit recipients for the matching Roadmap', async 
       },
     }),
   );
-  expect(ensureSubscribers).toHaveBeenCalledWith(
+  expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
+    2,
     expect.objectContaining({
-      recipients: [
-        { userId: 'student-id', name: 'Estudiante A' },
-        { userId: 'observer-id', name: 'Observadora B' },
-      ],
+      where: {
+        courseOfferingId: 'offering-id',
+        isActive: true,
+        userId: { in: ['student-id', 'observer-id'], not: 'teacher-id' },
+      },
     }),
   );
-  expect(trigger).toHaveBeenCalledWith(
-    expect.objectContaining({
-      workflowId: 'roadmap-path-changed',
-      roadmapId: 'roadmap-id',
-      recipients: ['student-id', 'observer-id'],
-      payload: expect.objectContaining({
-        targetKind: 'roadmap',
-        changeKind: 'dependency-added',
-        noticeBody: expect.stringContaining('«Evaluación 1» ahora requiere «Leyes de Newton»'),
+  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
+    data: [
+      expect.objectContaining({
+        eventId: 'dependency-id:dependency-added',
+        recipientId: 'student-id',
+        roadmapId: 'roadmap-id',
+        courseOfferingId: 'offering-id',
+        subject: 'Ruta actualizada',
+        body: 'Docente autora actualizó la ruta de CC3002: «Evaluación 1» ahora requiere «Leyes de Newton».',
+        data: expect.objectContaining({
+          targetKind: 'roadmap',
+          changeKind: 'dependency-added',
+          dependencyId: 'dependency-id',
+          dependentNodeTitle: 'Evaluación 1',
+          prerequisiteNodeTitle: 'Leyes de Newton',
+        }),
       }),
-    }),
-  );
+      expect.objectContaining({
+        eventId: 'dependency-id:dependency-added',
+        recipientId: 'observer-id',
+      }),
+    ],
+    skipDuplicates: true,
+  });
+  expect(ensureSubscribers).not.toHaveBeenCalled();
+  expect(trigger).not.toHaveBeenCalled();
 });
 
-test('does not deliver against a different current Course offering Roadmap', async () => {
+test('does not store a notice against a different current Course offering Roadmap', async () => {
   prisma.courseOffering.findUnique.mockResolvedValueOnce({
     id: 'offering-id',
     courseCode: 'CC3002',
@@ -100,6 +118,8 @@ test('does not deliver against a different current Course offering Roadmap', asy
   });
 
   await deliverRoadmapPathChange({
+    eventId: 'dependency-id:dependency-removed',
+    dependencyId: 'dependency-id',
     userId: 'teacher-id',
     identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
     roadmapId: 'roadmap-id',
@@ -110,5 +130,5 @@ test('does not deliver against a different current Course offering Roadmap', asy
   });
 
   expect(prisma.participation.findMany).not.toHaveBeenCalled();
-  expect(trigger).not.toHaveBeenCalled();
+  expect(prisma.roadmapNotice.createMany).not.toHaveBeenCalled();
 });

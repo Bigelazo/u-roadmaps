@@ -71,6 +71,7 @@ test('adding a visible Dependency sends the route notice and only real access tr
       before,
       after,
       actorId: 'author',
+      dependencyId: 'dependency-id',
       roadmapId: 'roadmap',
       changeKind: 'dependency-added',
       sourceNode: { title: 'Leyes de Newton', isVisible: true },
@@ -78,6 +79,8 @@ test('adding a visible Dependency sends the route notice and only real access tr
     }),
   ).toEqual({
     path: {
+      eventId: 'dependency-id:dependency-added',
+      dependencyId: 'dependency-id',
       roadmapId: 'roadmap',
       changeKind: 'dependency-added',
       dependentNodeTitle: 'Evaluación 1',
@@ -86,6 +89,7 @@ test('adding a visible Dependency sends the route notice and only real access tr
     },
     nodes: [
       {
+        eventId: 'dependency-id:dependency-added:target:node-blocked',
         nodeId: 'target',
         roadmapId: 'roadmap',
         changeKind: 'node-blocked',
@@ -95,6 +99,7 @@ test('adding a visible Dependency sends the route notice and only real access tr
         recipientIds: ['pending-student'],
       },
       {
+        eventId: 'dependency-id:dependency-added:next:node-blocked',
         nodeId: 'next',
         roadmapId: 'roadmap',
         changeKind: 'node-blocked',
@@ -125,6 +130,7 @@ test('removing one prerequisite does not announce access while another prerequis
     before,
     after,
     actorId: 'author',
+    dependencyId: 'dependency-id',
     roadmapId: 'roadmap',
     changeKind: 'dependency-removed',
     sourceNode: { title: 'Leyes de Newton', isVisible: true },
@@ -151,6 +157,7 @@ test('hidden endpoint changes do not create a route notice', () => {
     before: snapshot,
     after: snapshot,
     actorId: 'author',
+    dependencyId: 'dependency-id',
     roadmapId: 'roadmap',
     changeKind: 'dependency-added',
     sourceNode: { title: 'Leyes de Newton', isVisible: false },

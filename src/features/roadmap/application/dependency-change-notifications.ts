@@ -5,6 +5,8 @@ import {
 } from './node-change-notifications';
 
 export type DependencyPathNotificationDescriptor = Readonly<{
+  eventId: string;
+  dependencyId: string;
   roadmapId: string;
   changeKind: 'dependency-added' | 'dependency-removed';
   dependentNodeTitle: string;
@@ -23,6 +25,7 @@ export function dependencyChangeNotifications({
   before,
   after,
   actorId,
+  dependencyId,
   roadmapId,
   changeKind,
   sourceNode,
@@ -31,6 +34,7 @@ export function dependencyChangeNotifications({
   before: AccessSnapshot;
   after: AccessSnapshot;
   actorId: string;
+  dependencyId: string;
   roadmapId: string;
   changeKind: DependencyPathNotificationDescriptor['changeKind'];
   sourceNode: DependencyEndpoint;
@@ -42,6 +46,8 @@ export function dependencyChangeNotifications({
   const path =
     sourceNode.isVisible && targetNode.isVisible && recipientIds.length > 0
       ? {
+          eventId: `${dependencyId}:${changeKind}`,
+          dependencyId,
           roadmapId,
           changeKind,
           dependentNodeTitle: targetNode.title,
@@ -50,8 +56,15 @@ export function dependencyChangeNotifications({
         }
       : undefined;
 
+  const nodes = accessTransitionNotifications({ before, after, actorId, roadmapId }).map(
+    (notification) => ({
+      ...notification,
+      eventId: `${dependencyId}:${changeKind}:${notification.nodeId}:${notification.changeKind}`,
+    }),
+  );
+
   return {
     ...(path ? { path } : {}),
-    nodes: accessTransitionNotifications({ before, after, actorId, roadmapId }),
+    nodes,
   };
 }

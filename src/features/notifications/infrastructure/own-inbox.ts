@@ -4,9 +4,11 @@ import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
 import { projectDigestNotification } from '../digest-projection';
 import { nodeMessage, resourceMessage } from '../application/emit-node-scoped-change';
+import { roadmapPathChangeMessage } from '../application/emit-roadmap-path-change';
 import type {
   NodeChangeNotice,
   RoadmapAvailabilityNotice,
+  RoadmapPathChangeNotice,
   ResourceChangeNotice,
 } from '../contracts';
 
@@ -38,6 +40,47 @@ export async function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice
       courseOfferingId: notice.courseOfferingId,
       occurredAt: notice.occurredAt,
       ...projection,
+    })),
+    skipDuplicates: true,
+  });
+}
+
+export async function storeRoadmapPathChange(notice: RoadmapPathChangeNotice) {
+  const participants = await prisma.participation.findMany({
+    where: {
+      courseOfferingId: notice.courseOfferingId,
+      isActive: true,
+      userId: { in: notice.recipients.map(({ userId }) => userId), not: notice.actorId },
+    },
+    select: { userId: true },
+  });
+  const { noticeTitle, noticeBody } = roadmapPathChangeMessage(notice);
+  const projection = projectDigestNotification(
+    {
+      ...notice,
+      targetKind: 'roadmap',
+      occurredAt: notice.occurredAt.toISOString(),
+      eventCount: 1,
+      digestKey: notice.eventId,
+      noticeTitle,
+      noticeBody,
+    },
+    [],
+  );
+  await prisma.roadmapNotice.createMany({
+    data: participants.map(({ userId }) => ({
+      eventId: notice.eventId,
+      recipientId: userId,
+      roadmapId: notice.roadmapId,
+      courseOfferingId: notice.courseOfferingId,
+      occurredAt: notice.occurredAt,
+      ...projection,
+      data: {
+        ...projection.data,
+        dependencyId: notice.dependencyId,
+        dependentNodeTitle: notice.dependentNodeTitle,
+        prerequisiteNodeTitle: notice.prerequisiteNodeTitle,
+      },
     })),
     skipDuplicates: true,
   });

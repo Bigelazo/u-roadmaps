@@ -8,6 +8,7 @@ import { emitRoadmapPathChange } from '@/features/notifications/application/emit
 
 const notice: RoadmapPathChangeNotice = {
   eventId: 'path-event-1',
+  dependencyId: 'dependency-1',
   roadmapId: 'roadmap-1',
   courseOfferingId: 'offering-1',
   courseCode: 'CC3002',

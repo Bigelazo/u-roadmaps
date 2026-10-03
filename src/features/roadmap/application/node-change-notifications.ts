@@ -1,6 +1,7 @@
 import { studentNodeAccessById } from '@/features/roadmap/domain/access';
 
 export type NodeNotificationDescriptor = Readonly<{
+  eventId?: string;
   nodeId: string;
   roadmapId: string;
   changeKind: 'node-available' | 'node-retired' | 'node-deleted' | 'node-blocked';
