@@ -18,7 +18,8 @@ function fixtureSql(sql: string) {
   if (!connection || new URL(connection).pathname !== '/roadmap_e2e_db')
     throw new Error('Expected the E2E database.');
   const url = new URL(connection);
-  execFileSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
+  return execFileSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
+    encoding: 'utf8',
     stdio: 'pipe',
     timeout: 15_000,
     env: {
@@ -302,6 +303,72 @@ test('access notices retain context and follow each Participation access transit
     for (const nodeId of [...nodeIds].reverse())
       await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
     cleanupNotices(nodeIds);
+  }
+});
+
+test('a PostgreSQL access-notice failure leaves the Node visibility change committed', async ({
+  request,
+}) => {
+  const author = { cookie: await sessionCookie(fixture.daniela) };
+  const student = { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) };
+  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  const created = await request.post(roadmapPath('/nodes'), {
+    headers: author,
+    data: {
+      title: `Fallo de aviso ${crypto.randomUUID()}`,
+      nodeTypeId: roadmap.nodeTypes[0].id,
+      positionX: 5600,
+      positionY: 0,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const nodeId = (await created.json()).node.id as string;
+  const suffix = nodeId.replaceAll('-', '');
+  const triggerName = `e2e_fail_access_notice_${suffix}`;
+  const functionName = `e2e_fail_access_notice_${suffix}`;
+  const attemptsSequence = `e2e_access_notice_attempts_${suffix}`;
+
+  try {
+    cleanupNotices([nodeId]);
+    fixtureSql(`CREATE SEQUENCE "${attemptsSequence}" START WITH 1;
+      CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW."data"->>'nodeId' = '${nodeId}' THEN
+          PERFORM nextval('${attemptsSequence}');
+          RAISE EXCEPTION 'E2E access notice failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER "${triggerName}" BEFORE INSERT ON "RoadmapNotice"
+      FOR EACH ROW EXECUTE FUNCTION "${functionName}"();`);
+
+    const hidden = await request.patch(roadmapPath(`/nodes/${nodeId}`), {
+      headers: author,
+      data: { isVisible: false },
+    });
+    expect(hidden.status()).toBe(200);
+    expect((await hidden.json()).node).toMatchObject({ id: nodeId, isVisible: false });
+
+    const persistedNodes = await request.get(roadmapPath('/nodes'), { headers: author });
+    expect(persistedNodes.status()).toBe(200);
+    expect(
+      (await persistedNodes.json()).nodes.find(({ id }: { id: string }) => id === nodeId),
+    ).toMatchObject({ id: nodeId, isVisible: false });
+    expect(fixtureSql(`SELECT is_called::text FROM "${attemptsSequence}";`)).toContain('true');
+
+    const notices = await request.get(
+      `/api/notifications?roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}`,
+      { headers: student },
+    );
+    expect(notices.status()).toBe(200);
+    expect((await notices.json()).notifications).toHaveLength(0);
+  } finally {
+    fixtureSql(
+      `DROP TRIGGER IF EXISTS "${triggerName}" ON "RoadmapNotice"; DROP FUNCTION IF EXISTS "${functionName}"(); DROP SEQUENCE IF EXISTS "${attemptsSequence}";`,
+    );
+    await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
+    cleanupNotices([nodeId]);
   }
 });
 
