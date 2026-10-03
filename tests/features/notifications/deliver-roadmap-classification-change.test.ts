@@ -5,6 +5,7 @@ const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
+    roadmapNotice: { createMany: vi.fn() },
   },
   ensureSubscribers: vi.fn(),
   trigger: vi.fn(),
@@ -18,8 +19,8 @@ vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
 import { deliverRoadmapClassificationChange } from '@/features/notifications/server';
 
 beforeEach(() => {
-  vi.stubEnv('NOVU_SECRET_KEY', 'test-secret');
-  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', 'test-application');
+  vi.stubEnv('NOVU_SECRET_KEY', '');
+  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
     courseCode: 'CC3002',
@@ -31,6 +32,7 @@ beforeEach(() => {
     .mockResolvedValueOnce([{ user: { id: 'student-id', name: 'Estudiante A' } }])
     .mockResolvedValueOnce([{ userId: 'student-id' }]);
   prisma.user.findUnique.mockResolvedValue({ name: 'Docente autora' });
+  prisma.roadmapNotice.createMany.mockResolvedValue({ count: 1 });
   ensureSubscribers.mockResolvedValue(undefined);
   trigger.mockResolvedValue({});
 });
@@ -40,7 +42,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test('delivers the type rename to active recipients except the author on the matching Roadmap', async () => {
+test('stores without Novu the type rename to active recipients except the author on the matching Roadmap', async () => {
   await deliverRoadmapClassificationChange({
     userId: 'teacher-id',
     identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
@@ -60,23 +62,25 @@ test('delivers the type rename to active recipients except the author on the mat
       },
     }),
   );
-  expect(ensureSubscribers).toHaveBeenCalledWith(
-    expect.objectContaining({
-      recipients: [{ userId: 'student-id', name: 'Estudiante A' }],
-    }),
-  );
-  expect(trigger).toHaveBeenCalledWith(
-    expect.objectContaining({
-      workflowId: 'roadmap-classification-changed',
-      recipients: ['student-id'],
-      payload: expect.objectContaining({
-        targetKind: 'roadmap',
-        changeKind: 'classification-updated',
-        noticeTitle: 'Tipo «Lectura» → «Lecturas guiadas»',
-        noticeBody: expect.stringContaining('actualizó la clasificación'),
+  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
+    data: [
+      expect.objectContaining({
+        recipientId: 'student-id',
+        roadmapId: 'roadmap-id',
+        subject: 'Tipo «Lectura» → «Lecturas guiadas»',
+        body: 'Docente autora actualizó la clasificación del Roadmap de CC3002.',
+        data: expect.objectContaining({
+          targetKind: 'roadmap',
+          changeKind: 'classification-updated',
+          previousTypeName: 'Lectura',
+          nextTypeName: 'Lecturas guiadas',
+        }),
       }),
-    }),
-  );
+    ],
+    skipDuplicates: true,
+  });
+  expect(ensureSubscribers).not.toHaveBeenCalled();
+  expect(trigger).not.toHaveBeenCalled();
 });
 
 test('does not send a descriptor for another Roadmap', async () => {

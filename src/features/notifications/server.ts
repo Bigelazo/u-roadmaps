@@ -12,6 +12,7 @@ import type {
 } from './contracts';
 import {
   storeRoadmapAvailability,
+  storeRoadmapClassificationChange,
   storeRoadmapPathChange,
   storeNodeChange,
   storeResourceChange,
@@ -24,7 +25,6 @@ import {
 import { ApplicationError } from '@/shared/errors/server';
 export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
 import { emitNodeScopedChange } from './application/emit-node-scoped-change';
-import { emitRoadmapClassificationChange } from './application/emit-roadmap-classification-change';
 import { novuTransport } from './infrastructure/novu-transport';
 import { createSubscriberHash } from './infrastructure/subscriber-hash';
 
@@ -352,8 +352,6 @@ export async function deliverRoadmapClassificationChange(input: {
   recipientIds: readonly string[];
 }) {
   try {
-    if (!notificationsEnabled()) return;
-    const workflowId = 'roadmap-classification-changed';
     if (input.recipientIds.length === 0) return;
 
     const [offering, actor] = await Promise.all([
@@ -391,24 +389,9 @@ export async function deliverRoadmapClassificationChange(input: {
       recipients,
     };
 
-    await emitRoadmapClassificationChange(
-      notice,
-      novuTransport,
-      async (userIds) => {
-        const active = await prisma.participation.findMany({
-          where: {
-            courseOfferingId: offering.id,
-            userId: { in: [...userIds] },
-            isActive: true,
-          },
-          select: { userId: true },
-        });
-        return active.map(({ userId }) => userId);
-      },
-      workflowId,
-    );
+    await storeRoadmapClassificationChange(notice);
   } catch {
-    // Notification delivery is best-effort and cannot change a committed type rename.
+    console.warn('Roadmap classification notice delivery failed', { roadmapId: input.roadmapId });
   }
 }
 

@@ -490,8 +490,21 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
         })
       ).status(),
     ).toBe(200);
-    // Access transitions emit their own notices. Measure content changes from
-    // the state after prerequisites and completion have been applied.
+    // Dependency notices are delivered after the mutation response. Wait for
+    // the access transition before measuring subsequent content changes.
+    for (const userId of [without, observer, withProgress]) {
+      await expect
+        .poll(async () => {
+          const response = await request.get(`/api/notifications?nodeId=${nodeId}`, {
+            headers: { cookie: await sessionCookie(userId) },
+          });
+          expect(response.status()).toBe(200);
+          return (
+            (await response.json()).notifications as { data: Record<string, unknown> }[]
+          ).filter(({ data }) => data.changeKind === 'node-blocked').length;
+        })
+        .toBe(1);
+    }
     const beforeContent = new Map(
       await Promise.all(
         [without, observer, withProgress, fixture.nicolas].map(

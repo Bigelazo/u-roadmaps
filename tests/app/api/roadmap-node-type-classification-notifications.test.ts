@@ -133,7 +133,9 @@ test('creating and deleting an unused type do not deliver classification notices
 });
 
 test('a delivery failure does not change the successful type update response', async () => {
-  deliverRoadmapClassificationChange.mockRejectedValueOnce(new Error('Novu unavailable'));
+  deliverRoadmapClassificationChange.mockRejectedValueOnce(
+    new Error('Notice persistence unavailable'),
+  );
 
   const response = await PATCH(
     new Request('http://localhost/node-types/type-id', {

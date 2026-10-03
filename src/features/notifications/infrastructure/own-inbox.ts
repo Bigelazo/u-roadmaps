@@ -4,9 +4,11 @@ import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
 import { projectDigestNotification } from '../digest-projection';
 import { nodeMessage, resourceMessage } from '../application/emit-node-scoped-change';
+import { roadmapClassificationChangeMessage } from '../application/emit-roadmap-classification-change';
 import { roadmapPathChangeMessage } from '../application/emit-roadmap-path-change';
 import type {
   NodeChangeNotice,
+  RoadmapClassificationChangeNotice,
   RoadmapAvailabilityNotice,
   RoadmapPathChangeNotice,
   ResourceChangeNotice,
@@ -80,6 +82,45 @@ export async function storeRoadmapPathChange(notice: RoadmapPathChangeNotice) {
         dependencyId: notice.dependencyId,
         dependentNodeTitle: notice.dependentNodeTitle,
         prerequisiteNodeTitle: notice.prerequisiteNodeTitle,
+      },
+    })),
+    skipDuplicates: true,
+  });
+}
+
+export async function storeRoadmapClassificationChange(notice: RoadmapClassificationChangeNotice) {
+  const participants = await prisma.participation.findMany({
+    where: {
+      courseOfferingId: notice.courseOfferingId,
+      isActive: true,
+      userId: { in: notice.recipients.map(({ userId }) => userId), not: notice.actorId },
+    },
+    select: { userId: true },
+  });
+  const projection = projectDigestNotification(
+    {
+      ...notice,
+      ...roadmapClassificationChangeMessage(notice),
+      targetKind: 'roadmap',
+      changeKind: 'classification-updated',
+      occurredAt: notice.occurredAt.toISOString(),
+      eventCount: 1,
+      digestKey: notice.eventId,
+    },
+    [],
+  );
+  await prisma.roadmapNotice.createMany({
+    data: participants.map(({ userId }) => ({
+      eventId: notice.eventId,
+      recipientId: userId,
+      roadmapId: notice.roadmapId,
+      courseOfferingId: notice.courseOfferingId,
+      occurredAt: notice.occurredAt,
+      ...projection,
+      data: {
+        ...projection.data,
+        previousTypeName: notice.previousTypeName,
+        nextTypeName: notice.nextTypeName,
       },
     })),
     skipDuplicates: true,
