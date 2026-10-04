@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Prisma, prisma } from '@/shared/server/db';
 import {
   findCycle,
@@ -145,26 +146,33 @@ async function withSerializableTransaction<T>(
   operation: (transaction: Prisma.TransactionClient) => Promise<T>,
   concurrentModification: () => ApplicationError,
 ) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  const maxAttempts = 5;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       return await prisma.$transaction(operation, {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
     } catch (error) {
-      if (
-        attempt < 2 &&
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
-      ) {
-        continue;
-      }
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
-        throw concurrentModification();
-      }
-      throw error;
+      if (!isTransactionWriteConflict(error)) throw error;
+      if (attempt === maxAttempts - 1) throw concurrentModification();
+      // Separate attempts so unrelated concurrent Roadmaps can finish their writes.
+      await delay(50 * 2 ** attempt + Math.random() * 50);
     }
   }
   throw new Error('Serializable transaction retry limit reached.');
+}
+
+function isTransactionWriteConflict(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) return error.code === 'P2034';
+  // The pg adapter can expose serialization failures directly when COMMIT fails.
+  return (
+    error instanceof Error &&
+    error.name === 'DriverAdapterError' &&
+    typeof error.cause === 'object' &&
+    error.cause !== null &&
+    'kind' in error.cause &&
+    error.cause.kind === 'TransactionWriteConflict'
+  );
 }
 
 async function ensureTypeNameAvailable(

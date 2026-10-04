@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test, type E2EPrimaryCourseOffering } from './fixtures';
 import { authenticateAs } from './helpers';
+import { literal, sql } from './database';
 
 async function panNodeIntoView(page: Page, nodeId: string) {
   const pane = page.locator('.react-flow__pane');
@@ -162,16 +163,11 @@ test('two open sessions refetch the authoritative Roadmap through real SSE', asy
     await expect(student.getByRole('heading', { name: 'Nodo sincronizado' })).toBeHidden();
     await expect(student.getByRole('status')).toContainText('ya no está disponible');
     await expect(student.getByLabel('Lienzo del roadmap')).toBeFocused();
-    await student.route(
-      `**${course.apiPath()}`,
-      (route) =>
-        route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Participación inactiva' } }),
-        }),
-      { times: 1 },
-    );
+    await sql(`
+      UPDATE "Participation" SET "isActive" = false
+      WHERE "courseOfferingId" = ${literal(course.id)}
+        AND "userId" = ${literal(course.users.studentWithoutProgress.id)};
+    `);
     await student.evaluate(() => window.dispatchEvent(new Event('online')));
     await expect(student).toHaveURL(/academic-overview\?accessLost=1/);
     await expect(

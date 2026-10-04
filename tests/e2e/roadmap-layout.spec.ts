@@ -1,5 +1,6 @@
-import { expect, test, type Locator } from '@playwright/test';
-import { authenticateAs, fixture, roadmapPath } from './helpers';
+import type { Locator } from '@playwright/test';
+import { expect, test } from './fixtures';
+import { authenticateAs } from './helpers';
 
 async function expectViewportFitsPage(page: import('@playwright/test').Page) {
   const documentMetrics = await page.evaluate(() => {
@@ -44,29 +45,31 @@ async function expectBottomRightOverlay(canvas: Locator, overlay: Locator) {
 
 test('roadmap fits the viewport for teachers and students without residual vertical scrolling', async ({
   page,
+  course,
 }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
-  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
   await expectViewportFitsPage(page);
 
   await page.context().clearCookies();
-  await authenticateAs(page.context(), fixture.cc1002StudentWithProgress);
-  await page.goto('/courses/CC1002/2026/2');
-  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
+  await authenticateAs(page.context(), course.users.studentWithProgress.id);
+  await page.goto(course.pagePath());
+  await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
   await expectViewportFitsPage(page);
 });
 
 test('uploading a resource preserves the roadmap viewport and sends multipart data', async ({
   page,
+  course,
 }) => {
   await page.setViewportSize({ width: 1870, height: 939 });
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
-  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
 
-  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await page.getByRole('button', { name: 'Recurso', exact: true }).click();
   await page.getByLabel('Archivo', { exact: true }).setInputFiles({
     name: 'guia-viewport.pdf',
@@ -78,23 +81,24 @@ test('uploading a resource preserves the roadmap viewport and sends multipart da
     page.waitForResponse(
       (response) =>
         response.request().method() === 'POST' &&
-        response.url().includes(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/resources`)),
+        response.url().includes(course.apiPath(`/nodes/${course.nodes.first}/resources`)),
     ),
     page.getByRole('button', { name: 'Subir archivo' }).click(),
   ]).then(([response]) => response);
 
   expect(uploadResponse.status()).toBe(201);
-  const body = await uploadResponse.json();
-  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
   await expectViewportFitsPage(page);
-  await page.request.delete(roadmapPath(`/resources/${body.resource.id}`));
 });
 
-test('groups editing controls without visual overlap on narrow viewports', async ({ page }) => {
+test('groups editing controls without visual overlap on narrow viewports', async ({
+  page,
+  course,
+}) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
-  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await page.getByRole('button', { name: 'Ocultar panel de edición' }).click();
   await expect(page.getByRole('button', { name: 'Mostrar panel de edición' })).toBeVisible();
 
@@ -119,16 +123,16 @@ test('groups editing controls without visual overlap on narrow viewports', async
   expect(overlaps(boxes[1], boxes[2])).toBe(false);
 });
 
-test('keeps roadmap metadata and preview controls inside the canvas', async ({ page }) => {
+test('keeps roadmap metadata and preview controls inside the canvas', async ({ page, course }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
 
   const canvas = page.getByLabel('Lienzo del roadmap');
-  const metadata = page.getByRole('heading', { name: 'Introducción a la Programación' });
+  const metadata = page.getByRole('heading', { name: course.courseName });
   await expect(metadata).toBeVisible();
 
-  const firstNode = page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`);
+  const firstNode = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
   await firstNode.click();
   await expect(page.locator('#roadmap-editor-panel')).toBeVisible();
 
@@ -152,7 +156,7 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
     previewCanvasBox.x + previewCanvasBox.width / 2,
     0,
   );
-  const previewNode = page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`);
+  const previewNode = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
   await previewNode.click();
   await expect(page.locator('#student-node-detail-panel')).toBeVisible();
   await page.getByRole('button', { name: 'Ir al editor' }).click();
@@ -177,28 +181,22 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeFocused();
 });
 
-test('keeps feedback visible beside an open editor', async ({
-  page,
-}) => {
+test('keeps feedback visible beside an open editor', async ({ page, course }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
   const canvas = page.getByLabel('Lienzo del roadmap');
-  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect(page.locator('#roadmap-editor-panel')).toBeVisible();
 
-  // Exercise the real mutation UI while keeping the shared fixture unchanged.
-  await page.route(`**${roadmapPath(`/nodes/${fixture.cc1002.firstNode}`)}`, async (route) => {
-    await route.fulfill({ status: 200, json: {} });
-  });
   await page.getByLabel('Título', { exact: true }).fill('Variables revisadas');
   await page.getByRole('button', { name: 'Guardar cambios' }).click();
   const success = page.getByRole('status', { name: 'Cambios guardados exitosamente.' });
   await expect(success).toBeVisible();
   await expectBottomRightOverlay(canvas, success);
 
-  await page.route(`**${roadmapPath(`/nodes/${fixture.cc1002.firstNode}`)}`, async (route) => {
+  await page.route(`**${course.apiPath(`/nodes/${course.nodes.first}`)}`, async (route) => {
     await route.fulfill({ status: 409, json: { error: 'No se pudo guardar el nodo.' } });
   });
   await page.getByLabel('Título', { exact: true }).fill('Variables con error');
@@ -214,12 +212,15 @@ test('keeps feedback visible beside an open editor', async ({
   await expect(error).toHaveCount(0);
 });
 
-test('keeps the radial node actions above their canvas focus treatment', async ({ page }) => {
+test('keeps the radial node actions above their canvas focus treatment', async ({
+  page,
+  course,
+}) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
 
-  const node = page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`);
+  const node = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
   await node.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
 
   await page.getByRole('button', { name: 'Ocultar para estudiantes' }).click();
@@ -228,12 +229,12 @@ test('keeps the radial node actions above their canvas focus treatment', async (
   await page.getByRole('button', { name: 'Cancelar' }).click();
 });
 
-test('keeps radial node actions evenly sized and separated', async ({ page }) => {
+test('keeps radial node actions evenly sized and separated', async ({ page, course }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
 
-  const node = page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`);
+  const node = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
   const trigger = node.locator('button[aria-expanded]');
   await trigger.click();
   await page.waitForTimeout(450);

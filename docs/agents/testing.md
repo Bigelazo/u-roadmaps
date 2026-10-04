@@ -7,7 +7,8 @@ Usa Chromium y Firefox, un worker provisional y ningún reintento automático.
 La migración a datos propios por test del
 [ADR-0013](../adr/0013-enable-parallel-e2e-tests.md) está en curso: `own-notifications.spec.ts`, `roadmaps.spec.ts`,
 `own-classification-notifications.spec.ts`, `own-dependency-notifications.spec.ts`
-y `own-notification-operation.spec.ts` están migrados; los demás specs
+y `own-notification-operation.spec.ts`, junto con los seis specs de Roadmap
+documentados en la validación de #166, están migrados; los demás specs
 todavía comparten el catálogo sembrado y requieren el worker único.
 
 Validación de `roadmaps.spec.ts` del **2026-10-04**, con Chromium y Firefox:
@@ -308,3 +309,66 @@ mencionaba archivos de empaquetado ausentes y se corrigió.
 
 Al terminar no quedaron Ramos `E2E-*`, Usuarios del dominio reservado, triggers
 ni secuencias de fallos; las cuatro consultas de limpieza devolvieron cero.
+
+
+## Validación de #166 del 2026-10-04
+
+Los specs de layout, Visibilidad y Dependencias, acceso estudiantil a Nodos y
+Recursos, Previsualización del canvas y simulación usan ahora `course`, `apiAs`
+y, para Cursos adicionales, `createCourse`. El spec de actualización por SSE
+ya usaba datos propios y se incluyó en toda la validación. Las Completaciones,
+simulaciones y archivos subidos se eliminan con el Curso mediante el teardown
+compartido. Las aserciones de producto se conservaron.
+
+La invocación conjunta con `--workers=3 --fully-parallel --repeat-each=5`, en
+Chromium y Firefox, terminó con **170 aprobados, cero fallos y cero omisiones**,
+en **3.3m**, con salida 0:
+
+| Spec | Casos | Ejecuciones repetidas aprobadas |
+| --- | ---: | ---: |
+| `roadmap-layout.spec.ts` | 7 | 70 |
+| `roadmap-visibility-dependencies.spec.ts` | 4 | 40 |
+| `student-node-access.spec.ts` | 2 | 20 |
+| `roadmap-canvas-preview.spec.ts` | 1 | 10 |
+| `roadmap-simulation.spec.ts` | 1 | 10 |
+| `roadmap-realtime-prototype.spec.ts` | 2 | 20 |
+
+Cada uno de los **17 casos** también pasó en una invocación individual con
+`--grep`, en ambos navegadores: **34 ejecuciones aprobadas**, todas con salida 0.
+El filtro usa el título escapado y `$` al final; Playwright antepone proyecto y
+archivo al título completo, por lo que `^` delante del título corto no coincide.
+Después de la corrida paralela y de cada invocación individual, las consultas
+acotadas devolvieron cero Ramos `E2E-*`, Usuarios del dominio reservado,
+Completaciones, simulaciones, Recursos de archivo propios y triggers de fallo;
+el directorio de uploads no contenía archivos sin referencia en la base.
+
+El ensayo paralelo inicial expuso conflictos reales de serialización entre
+Cursos independientes: el adaptador pg podía propagar `TransactionWriteConflict`
+directamente al confirmar la transacción, mientras el editor solo reconocía
+`P2034`. La regresión de Dependencias concurrentes falló en sus tres primeras
+ejecuciones antes del arreglo. Ahora el editor reconoce ambas formas y limita
+la operación a cinco intentos con espera exponencial y jitter; la regresión
+pasó antes de la validación completa y está incluida en sus 170 ejecuciones.
+El escenario realtime revoca su Participación real en PostgreSQL, evitando que
+una respuesta 403 simulada de una sola petición dependa del orden de señales SSE.
+
+Se ejecutó `code-review` **una sola vez**, desde `7193ad0e`, y se aplicaron sus
+dos sugerencias: Standards pidió extraer la preparación repetida de Nodos por
+HTTP a `tests/e2e/create-node.ts`; Spec pidió demostrar la limpieza de una
+simulación persistida, porque los escenarios ordinarios reinician el progreso.
+Los probes temporales crearon y verificaron una simulación antes del fallo.
+
+Un fallo deliberado de aserción produjo **2 fallidos esperados y 2 aprobados**
+concurrentes, salida 1, y dejó todos los conteos de limpieza en cero. Terminar
+con SIGKILL únicamente el worker del probe dejó **1 Ramo, 7 Usuarios, 31
+Completaciones, 1 simulación y 1 archivo subido**. La siguiente invocación normal
+pasó **2 casos**, salida 0, y el `globalSetup` eliminó esos residuos sin limpieza
+manual. Los probes se retiraron antes de ejecutar la suite completa.
+
+Finalmente, `pnpm test` terminó con salida 0: tipos aprobados, **58 archivos y
+305 pruebas unitarias aprobadas**, y **138 E2E aprobadas, cero fallos y cero
+omisiones**, en **19.1m** para E2E. Se mantuvo la configuración provisional
+de un worker. La auditoría posterior volvió a devolver cero en todos los
+conteos. ESLint no encontró errores y conserva una advertencia previa por la
+espera fija de una animación en layout; Prettier y `git diff --check` pasaron.
+`graphify update .` actualizó el grafo AST.
