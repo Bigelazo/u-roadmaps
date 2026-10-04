@@ -52,13 +52,16 @@ export function NotificationCountButton({
 
 function NotificationCount({ filter, label }: { filter: NotificationDataFilter; label: string }) {
   const openInbox = useOpenNotificationInbox();
+  const own = useContext(OwnInboxContext);
   const { counts, refetch, error } = useCounts({ filters: [{ read: false, data: filter }] });
   useEffect(
     () =>
-      subscribeToRoadmapRecovery(() => {
-        void refetch().catch(() => undefined);
-      }),
-    [refetch],
+      own
+        ? undefined
+        : subscribeToRoadmapRecovery(() => {
+            void refetch().catch(() => undefined);
+          }),
+    [own, refetch],
   );
   const count = counts?.[0]?.count ?? 0;
   if (count === 0 && !error) return null;
@@ -216,18 +219,17 @@ function InboxNotificationList({
       </p>
     );
   }
-  if (error) {
-    return (
-      <div className="grid justify-items-center gap-3 p-6 text-center">
-        <p className="text-sm text-muted-foreground" role="alert">
-          No se pudieron cargar los avisos.
-        </p>
-        <Button onClick={() => void refetch()} type="button" variant="outline">
-          Reintentar
-        </Button>
-      </div>
-    );
-  }
+  const refreshError = error ? (
+    <div className="grid justify-items-center gap-3 p-6 text-center">
+      <p className="text-sm text-muted-foreground" role="alert">
+        No se pudieron cargar los avisos.
+      </p>
+      <Button onClick={() => void refetch()} type="button" variant="outline">
+        Reintentar
+      </Button>
+    </div>
+  ) : null;
+  if (error && !notifications?.length) return refreshError;
   if (!notifications?.length) {
     return (
       <p className="p-6 text-center text-sm text-muted-foreground">No tienes avisos todavía.</p>
@@ -235,6 +237,7 @@ function InboxNotificationList({
   }
   return (
     <>
+      {refreshError}
       <ul aria-label="Lista de avisos">
         {notifications.map((notification) => (
           <NotificationRow key={notification.id} notification={notification} onSelect={onSelect} />
@@ -258,6 +261,7 @@ function InboxNotificationList({
 }
 
 function InboxBell() {
+  const own = useContext(OwnInboxContext);
   const { open, setOpen } = useContext(InboxOpenContext);
   const router = useRouter();
   const { select, filter, openInbox, resetFilter } = useSelectedNotification();
@@ -273,11 +277,13 @@ function InboxBell() {
     useNotifications({ limit: 10, data: filter });
   useEffect(
     () =>
-      subscribeToRoadmapRecovery(() => {
-        void refetch().catch(() => undefined);
-        void refetchCounts().catch(() => undefined);
-      }),
-    [refetch, refetchCounts],
+      own
+        ? undefined
+        : subscribeToRoadmapRecovery(() => {
+            void refetch().catch(() => undefined);
+            void refetchCounts().catch(() => undefined);
+          }),
+    [own, refetch, refetchCounts],
   );
   useEffect(() => {
     if (!open) return;

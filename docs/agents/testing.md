@@ -193,31 +193,33 @@ ellas. Se comprobó el cierre del puerto E2E y que la base de desarrollo conserv
 la misma huella. Son antecedentes de repetibilidad, no una validación nueva de
 notificaciones con la configuración posterior.
 
-Con los límites actuales, la comprobación vigente es **80 passed en 1,5 minutos**
-sin notificaciones. El build incluyó comprobación de tipos; ESLint y Prettier de
-la configuración también pasaron. Al informar resultados, indicar selección,
-navegadores, aprobados, fallidos, omitidos, duración y código de salida.
+La validación de la rama de **#159**, basada en **8b184e9**, del **2026-10-04**
+ejecutó `pnpm test:e2e` completo en Chromium y Firefox: **124 aprobados, 0 fallidos
+y 2 omitidos** (las integraciones Cloud optativas), en **2,4 minutos**, con salida
+0. Incluye SSE propio real, cambios de acceso, borradores, sincronización entre
+pestañas y reconexión. El servidor cerró el puerto E2E al terminar. Tipos, ESLint
+y Prettier de los archivos modificados también pasaron. Esta evidencia sustituye
+la selección anterior de 80 casos sin notificaciones; no valida el comando
+agregado `pnpm test` por los fallos unitarios documentados a continuación.
 
 ## Suite unitaria y comando agregado
 
-`pnpm test:unit` ejecuta toda la suite Vitest sin un archivo de setup.
-[vitest.config.mts](../../vitest.config.mts) habilita `globals: true` para que
-React Testing Library registre automáticamente la limpieza del DOM entre casos.
-Los tests mantienen sus imports explícitos de Vitest.
+`pnpm test:unit` ejecuta Vitest con `globals: true`, que permite a React Testing
+Library registrar la limpieza automática del DOM. Ya no referencia el archivo
+eliminado `vitest.setup.ts`. Los tests mantienen sus imports explícitos de Vitest;
+los escenarios que necesitan un viewport deben declarar y restaurar su
+`matchMedia` localmente, y los contratos HTTP sin consultas deben aislar Prisma.
 
-Las suites que necesitan `matchMedia` declaran su viewport localmente con
-`vi.stubGlobal`, mantienen `innerWidth` coherente con las consultas y restauran
-los globals después de cada caso. Los mocks representan pantallas fijas; un test
-de cambios de viewport deberá simular también los eventos correspondientes.
-Las pruebas de adaptadores HTTP aíslan Prisma: no necesitan `DATABASE_URL` ni
-una conexión PostgreSQL. No cargar `.env` para resolver dependencias de tests
-unitarios que deberían estar aisladas.
+La validación de la rama de **#159**, basada en **8b184e9**, del **2026-10-04**
+ejecutó toda la suite: **56 archivos aprobados y 7 fallidos; 269 pruebas aprobadas
+y 38 fallidas**, en **58,41 s**, con salida 1. Los fallos ajenos al SSE corresponden
+principalmente a `matchMedia` ausente en cuatro suites de UI, inicialización de
+Prisma en un contrato HTTP y una expectativa antigua de entrega Novu. El test de
+arquitectura agotó su plazo durante esa corrida; una reproducción focalizada
+posterior pasó sin cambiarlo. SSE propio, sesión del canvas y arquitectura sumaron
+**27 pruebas aprobadas** en **16,13 s**, con salida 0.
 
-Validación del **2026-10-04**: `pnpm test:unit` terminó con **62 archivos y 309
-pruebas aprobadas**, sin fallos ni omisiones, en **21,24 s**, con código de salida
-0. `pnpm typecheck`, ESLint y Prettier de los archivos modificados también pasaron.
-La ejecución muestra una advertencia experimental de Node sobre `localStorage`;
-no impide completar la suite.
-
-`pnpm test` ejecuta tipos, unitarios y E2E en secuencia. La comprobación unitaria
-no valida por sí sola ese comando agregado ni sustituye la ejecución E2E.
+`pnpm test` ejecuta tipos, unitarios y E2E en secuencia. Con los fallos existentes
+de unitarios, **no se considera validado** el comando agregado. Usar
+`pnpm test:e2e` para la comprobación E2E y `pnpm typecheck` para comprobar tipos;
+una selección unitaria aprobada no sustituye la suite completa.

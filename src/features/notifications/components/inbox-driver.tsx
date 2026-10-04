@@ -16,9 +16,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { subscribeToRoadmapRecovery } from '@/shared/client/roadmap-events';
 import type { InboxIdentity } from '../server';
-import { record, refreshEvent, request, type InboxRecord } from './inbox-api';
-import { LegacyInboxContext, OwnInboxContext } from './inbox-context';
+import { OwnInboxRealtime, OWN_INBOX_REFRESH_EVENT } from './own-realtime';
 
 type Filter = Record<string, string | number>;
 type ListInput = {
@@ -39,6 +39,26 @@ function query(input: ListInput) {
   if (input.read === false) params.set('read', 'false');
   return params.toString();
 }
+const refreshEvent = OWN_INBOX_REFRESH_EVENT;
+function record(value: Omit<InboxRecord, 'seen' | 'read'>): InboxRecord {
+  const mark = async (action: string) => {
+    try {
+      await request(`/${value.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (action === 'read') window.dispatchEvent(new Event(refreshEvent));
+      return {};
+    } catch (error) {
+      return { error };
+    }
+  };
+  return { ...value, seen: () => mark('seen'), read: () => mark('read') };
+}
+export async function getOwnInboxRecord(id: string) {
+  return record(await request<Omit<InboxRecord, 'seen' | 'read'>>(`/${encodeURIComponent(id)}`));
+}
 async function list(input: ListInput): Promise<Page> {
   const page = await request<{
     notifications: Omit<InboxRecord, 'seen' | 'read'>[];
@@ -49,11 +69,28 @@ async function list(input: ListInput): Promise<Page> {
 
 function useInboxRefresh(refetch: () => Promise<unknown>, generation: { current: number }) {
   useEffect(() => {
-    void refetch();
-    window.addEventListener(refreshEvent, refetch);
+    const requestGeneration = generation;
+    let active = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let delay = 1000;
+    const refresh = async () => {
+      clearTimeout(retry);
+      const result = await refetch();
+      if (!active) return;
+      if (result === false) {
+        retry = setTimeout(() => void refresh(), delay);
+        delay = Math.min(delay * 2, 30_000);
+      } else {
+        delay = 1000;
+      }
+    };
+    void refresh();
+    window.addEventListener(refreshEvent, refresh);
     return () => {
-      ++generation.current;
-      window.removeEventListener(refreshEvent, refetch);
+      active = false;
+      clearTimeout(retry);
+      ++requestGeneration.current;
+      window.removeEventListener(refreshEvent, refresh);
     };
   }, [refetch, generation]);
 }
@@ -74,7 +111,10 @@ function useOwnNotifications(input: ListInput) {
         setError(undefined);
       }
     } catch (failure) {
-      if (current === generation.current) setError(failure);
+      if (current === generation.current) {
+        setError(failure);
+        return false;
+      }
     } finally {
       if (current === generation.current) setFetching(false);
     }
@@ -128,7 +168,10 @@ function useOwnCounts(input: { filters: { read?: boolean; data?: Filter }[] }) {
         setError(undefined);
       }
     } catch (failure) {
-      if (current === generation.current) setError(failure);
+      if (current === generation.current) {
+        setError(failure);
+        return false;
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
@@ -170,6 +213,13 @@ function useCombinedNotifications(input: ListInput) {
   const legacy = useLegacyNotifications(input);
   const ownRefetch = own.refetch;
   const legacyRefetch = legacy.refetch;
+  useEffect(
+    () =>
+      subscribeToRoadmapRecovery(() => {
+        void legacyRefetch().catch(() => undefined);
+      }),
+    [legacyRefetch],
+  );
   return {
     ...own,
     notifications:
@@ -196,6 +246,13 @@ function useCombinedCounts(input: { filters: { read?: boolean; data?: Filter }[]
   const legacy = useLegacyCounts(input);
   const ownRefetch = own.refetch;
   const legacyRefetch = legacy.refetch;
+  useEffect(
+    () =>
+      subscribeToRoadmapRecovery(() => {
+        void legacyRefetch().catch(() => undefined);
+      }),
+    [legacyRefetch],
+  );
   return {
     ...own,
     counts: own.counts?.map((value, index) => ({
@@ -265,7 +322,10 @@ export function InboxDriverProvider({
   const content = (
     <LegacyInboxContext.Provider value={legacyEnabled}>
       <OwnInboxContext.Provider value={Boolean(identity.own)}>
-        <Driver.Provider value={driver}>{children}</Driver.Provider>
+        <Driver.Provider value={driver}>
+          {identity.own ? <OwnInboxRealtime userId={identity.subscriber} /> : null}
+          {children}
+        </Driver.Provider>
       </OwnInboxContext.Provider>
     </LegacyInboxContext.Provider>
   );

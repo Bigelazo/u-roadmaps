@@ -218,16 +218,25 @@ function useInjectedSession(
 
   useEffect(() => {
     if (experienceTerm !== 'current') return;
+    let active = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = 1000;
     const recover = () => {
+      clearTimeout(retry);
       void refresh().then(
         (loaded) => {
-          if (loaded) {
+          if (loaded && active) {
+            retryDelay = 1000;
             setError(null);
             setErrorKey(null);
           }
         },
         (cause: unknown) => {
-          if (activeKeyRef.current !== key) return;
+          if (!active || activeKeyRef.current !== key) return;
+          if (!(cause instanceof RoadmapAccessLostError)) {
+            retry = setTimeout(recover, retryDelay);
+            retryDelay = Math.min(retryDelay * 2, 30_000);
+          }
           setError(messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'));
           setErrorKey(key);
         },
@@ -244,6 +253,8 @@ function useInjectedSession(
     });
     const stopRecovery = subscribeToRoadmapRecovery(recover);
     return () => {
+      active = false;
+      clearTimeout(retry);
       stopChanges();
       stopRecovery();
     };

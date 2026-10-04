@@ -9,12 +9,11 @@ import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
-function mockViewport(width: number) {
-  vi.stubGlobal('innerWidth', width);
-  vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
-    matches:
-      (query === '(max-width: 767px)' && width < 768) ||
-      (query === '(min-width: 1024px)' && width >= 1024),
+// The public canvas seam renders a mobile sidebar in these scenarios.
+beforeEach(() => {
+  vi.stubGlobal('innerWidth', 640);
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(max-width: 767px)',
     media: query,
     onchange: null,
     addEventListener: vi.fn(),
@@ -23,9 +22,7 @@ function mockViewport(width: number) {
     removeListener: vi.fn(),
     dispatchEvent: () => false,
   }));
-}
-
-beforeEach(() => mockViewport(640));
+});
 afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('next/dynamic', () => ({
