@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { parse } from 'dotenv';
 import { developmentFixtureIds } from '@/development';
 import { expect, test } from '@playwright/test';
+import { createExistingNode } from './existing-node';
 import { authenticateAs, fixture, roadmapPath, sessionCookie } from './helpers';
 
 type StoredNotice = Readonly<{
@@ -42,160 +43,103 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-test('access notices retain context and follow each Participation access transition', async ({
+test('access notices and summaries retain context through blocking, unlocking, hiding and deletion', async ({
   request,
   page,
 }) => {
+  test.setTimeout(90_000);
   const author = { cookie: await sessionCookie(fixture.daniela) };
-  const studentWithoutProgress = fixture.cc1002StudentWithoutProgress;
-  const studentWithProgress = fixture.cc1002StudentWithProgress;
-  const inactiveStudent = fixture.cc1002WithdrawnStudent;
+  const student = fixture.cc1002StudentWithProgress;
+  const withoutProgress = fixture.cc1002StudentWithoutProgress;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   const nodeIds: string[] = [];
-  let dependencyId: string | undefined;
-
-  const createNode = async (title: string) => {
-    const response = await request.post(roadmapPath('/nodes'), {
-      headers: author,
-      data: {
-        title,
-        description: `Detalle privado ${crypto.randomUUID()}`,
-        nodeTypeId: roadmap.nodeTypes[0].id,
-        positionX: 600 + nodeIds.length * 400,
-        positionY: 0,
-      },
+  // Existing visible Nodes are fixtures, so access changes start fresh windows.
+  const existingNode = async (title: string) => {
+    const id = await createExistingNode({
+      roadmapId: roadmap.roadmap.id,
+      nodeTypeId: roadmap.nodeTypes[0].id,
+      title,
+      description: 'Detalle privado',
+      positionX: 600,
     });
-    expect(response.status()).toBe(201);
-    const id = (await response.json()).node.id as string;
     nodeIds.push(id);
     return id;
   };
-
   const noticesFor = async (userId: string, nodeId: string) => {
-    const response = await request.get(
-      `/api/notifications?roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}&limit=100`,
-      { headers: { cookie: await sessionCookie(userId) } },
-    );
+    const response = await request.get(`/api/notifications?nodeId=${nodeId}&limit=100`, {
+      headers: { cookie: await sessionCookie(userId) },
+    });
     expect(response.status()).toBe(200);
     return (await response.json()).notifications as StoredNotice[];
   };
-
-  const accessNotice = async (userId: string, nodeId: string, changeKind: string) =>
-    (await noticesFor(userId, nodeId)).find((notice) => notice.data.changeKind === changeKind);
-
-  const teacherBlockPreview = async (nodeId: string, operation: 'UNBLOCK' | 'BRANCH_UNLOCK') => {
-    const response = await request.get(
-      roadmapPath(`/nodes/${nodeId}/teacher-block?operation=${operation}`),
-      { headers: author },
-    );
-    expect(response.status()).toBe(200);
-    return (await response.json()).version as string;
-  };
-
-  const selectNotice = async (userId: string, title: string, body: string) => {
-    await authenticateAs(page.context(), userId);
+  const selectNotice = async (nodeId: string, title: string) => {
+    await authenticateAs(page.context(), student);
     await page.goto('/academic-overview');
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     await page
       .getByRole('list', { name: 'Lista de avisos' })
-      .getByRole('button', {
-        name: new RegExp(`^${escapeRegExp(title)}\\s+${body}`),
-      })
+      .getByRole('button', { name: new RegExp(`^Resumen de cambios.*${escapeRegExp(title)}`) })
       .first()
       .click();
+    await expect(
+      page.getByRole('dialog', { name: `Resumen de cambios · Nodo «${title}»`, exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Autor del último cambio', { exact: true })).toBeVisible();
+    await expect(page.getByText('Último cambio', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toHaveCount(0);
+    await expect(page).not.toHaveURL(/targetNode=/);
+    await expect
+      .poll(async () => (await noticesFor(student, nodeId)).filter(({ read }) => !read).length)
+      .toBe(0);
   };
-
   try {
     const rootTitle = `Acceso inicial ${crypto.randomUUID()}`;
     const dependentTitle = `Acceso dependiente ${crypto.randomUUID()}`;
-    const rootId = await createNode(rootTitle);
-    const dependentId = await createNode(dependentTitle);
-
-    const dependency = await request.post(roadmapPath('/dependencies'), {
-      headers: author,
-      data: { sourceNodeId: rootId, targetNodeId: dependentId },
-    });
-    expect(dependency.status()).toBe(201);
-    dependencyId = (await dependency.json()).dependency.id as string;
-    expect(
-      (
-        await request.post(roadmapPath(`/nodes/${rootId}/completion`), {
-          headers: { cookie: await sessionCookie(studentWithProgress) },
-        })
-      ).status(),
-    ).toBe(200);
-    cleanupNotices([rootId, dependentId]);
-
+    const rootId = await existingNode(rootTitle);
+    const dependentId = await existingNode(dependentTitle);
+    fixtureSql(
+      `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES ('${crypto.randomUUID()}', '${rootId}', '${dependentId}'); INSERT INTO "Completion" ("id", "userId", "roadmapNodeId") VALUES ('${crypto.randomUUID()}', '${student}', '${rootId}');`,
+    );
     expect(
       (
         await request.post(roadmapPath(`/nodes/${rootId}/teacher-block`), { headers: author })
       ).status(),
     ).toBe(200);
-
-    const blockedRoot = await accessNotice(studentWithoutProgress, rootId, 'node-blocked');
-    expect(blockedRoot).toMatchObject({
+    expect((await noticesFor(withoutProgress, rootId))[0]).toMatchObject({
       subject: rootTitle,
-      data: { targetKind: 'roadmap', nodeId: rootId, nodeTitle: rootTitle },
+      data: { changeKind: 'node-blocked', targetKind: 'roadmap', nodeTitle: rootTitle },
     });
-    expect(await accessNotice(studentWithoutProgress, dependentId, 'node-blocked')).toBeUndefined();
-    expect(await accessNotice(studentWithProgress, dependentId, 'node-blocked')).toMatchObject({
-      data: { targetKind: 'roadmap', nodeTitle: dependentTitle },
+    expect(await noticesFor(withoutProgress, dependentId)).toHaveLength(0);
+    expect((await noticesFor(student, dependentId))[0]).toMatchObject({
+      data: { changeKind: 'node-blocked', targetKind: 'roadmap' },
     });
-    expect(await noticesFor(fixture.daniela, rootId)).toHaveLength(0);
-    expect(await noticesFor(inactiveStudent, rootId)).toHaveLength(0);
-    expect(JSON.stringify(blockedRoot)).not.toContain('Detalle privado');
-
-    const directUnlockVersion = await teacherBlockPreview(rootId, 'UNBLOCK');
+    const version = async (operation: string) =>
+      (
+        await (
+          await request.get(roadmapPath(`/nodes/${rootId}/teacher-block?operation=${operation}`), {
+            headers: author,
+          })
+        ).json()
+      ).version;
     expect(
       (
         await request.delete(roadmapPath(`/nodes/${rootId}/teacher-block`), {
-          headers: { ...author, 'x-teacher-block-preview': directUnlockVersion },
+          headers: { ...author, 'x-teacher-block-preview': await version('UNBLOCK') },
         })
       ).status(),
     ).toBe(200);
-    expect(await accessNotice(studentWithoutProgress, rootId, 'node-available')).toMatchObject({
-      data: { targetKind: 'node', nodeTitle: rootTitle },
-    });
-    expect(
-      await accessNotice(studentWithoutProgress, dependentId, 'node-available'),
-    ).toBeUndefined();
-
-    const branchUnlockVersion = await teacherBlockPreview(rootId, 'BRANCH_UNLOCK');
     expect(
       (
         await request.patch(roadmapPath(`/nodes/${rootId}/teacher-block`), {
-          headers: { ...author, 'x-teacher-block-preview': branchUnlockVersion },
+          headers: { ...author, 'x-teacher-block-preview': await version('BRANCH_UNLOCK') },
         })
       ).status(),
     ).toBe(200);
-    const dependentAvailable = await accessNotice(
-      studentWithProgress,
-      dependentId,
-      'node-available',
-    );
-    expect(dependentAvailable).toMatchObject({
-      subject: dependentTitle,
-      data: { targetKind: 'node', nodeTitle: dependentTitle },
-    });
-    expect(
-      await accessNotice(studentWithoutProgress, dependentId, 'node-available'),
-    ).toBeUndefined();
-
     expect(
       (
         await request.post(roadmapPath(`/nodes/${dependentId}/teacher-block`), { headers: author })
       ).status(),
     ).toBe(200);
-    await selectNotice(studentWithProgress, dependentTitle, 'Nodo disponible:');
-    await expect(page.getByRole('dialog', { name: dependentTitle, exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toHaveCount(0);
-    await expect
-      .poll(async () =>
-        (await noticesFor(studentWithProgress, dependentId)).filter(({ read }) => !read),
-      )
-      .toHaveLength(0);
-
-    // Hiding a visible Node keeps its old title and recognizes it from the Roadmap.
     expect(
       (
         await request.patch(roadmapPath(`/nodes/${rootId}`), {
@@ -204,51 +148,13 @@ test('access notices retain context and follow each Participation access transit
         })
       ).status(),
     ).toBe(200);
-    const retired = await accessNotice(studentWithoutProgress, rootId, 'node-retired');
-    expect(retired).toMatchObject({
-      subject: rootTitle,
-      data: { targetKind: 'roadmap', nodeId: rootId, nodeTitle: rootTitle },
-    });
-    await selectNotice(studentWithoutProgress, rootTitle, 'Nodo retirado:');
-    await expect(page.getByRole('dialog', { name: rootTitle, exact: true })).toBeVisible();
-    await expect(page).not.toHaveURL(/targetNode=/);
-    await expect
-      .poll(async () =>
-        (await noticesFor(studentWithoutProgress, rootId)).filter(({ read }) => !read),
-      )
-      .toHaveLength(0);
 
-    // A visible but blocked Node remains notifiable when deletion cascades over its related data.
-    const sourceId = await createNode(`Origen ${crypto.randomUUID()}`);
     const removedTitle = `Eliminación bloqueada ${crypto.randomUUID()}`;
-    const removedId = await createNode(removedTitle);
-    expect(
-      (
-        await request.post(roadmapPath(`/nodes/${sourceId}/completion`), {
-          headers: { cookie: await sessionCookie(studentWithProgress) },
-        })
-      ).status(),
-    ).toBe(200);
-    expect(
-      (
-        await request.post(roadmapPath(`/nodes/${removedId}/completion`), {
-          headers: { cookie: await sessionCookie(studentWithProgress) },
-        })
-      ).status(),
-    ).toBe(200);
-    const removalDependency = await request.post(roadmapPath('/dependencies'), {
-      headers: author,
-      data: { sourceNodeId: sourceId, targetNodeId: removedId },
-    });
-    expect(removalDependency.status()).toBe(201);
-    const removalDependencyId = (await removalDependency.json()).dependency.id as string;
-    fixtureSql(
-      `DELETE FROM "RoadmapNotice" WHERE "data"->>'nodeId' = '${removedId}' AND "data"->>'changeKind' IN ('node-available', 'node-blocked');`,
-    );
+    const removedId = await existingNode(removedTitle);
     const resource = await request.post(roadmapPath(`/nodes/${removedId}/resources`), {
       headers: author,
       data: {
-        title: `Material previo ${crypto.randomUUID()}`,
+        title: 'Material previo',
         url: 'https://example.test/access-notice-resource',
         type: 'LINK',
       },
@@ -259,48 +165,39 @@ test('access notices retain context and follow each Participation access transit
         await request.post(roadmapPath(`/nodes/${removedId}/teacher-block`), { headers: author })
       ).status(),
     ).toBe(200);
-    const beforeDelete = await noticesFor(studentWithProgress, removedId);
-    expect(beforeDelete.map(({ data }) => data.changeKind)).toEqual([
-      'node-blocked',
-      'resource-added',
-    ]);
-
     expect(
       (await request.delete(roadmapPath(`/nodes/${removedId}`), { headers: author })).status(),
     ).toBe(204);
-    nodeIds.splice(nodeIds.indexOf(removedId), 1);
-    const deletionNotices = await noticesFor(studentWithProgress, removedId);
+
+    await expect
+      .poll(async () => (await noticesFor(student, removedId))[0]?.data.changeKind, {
+        timeout: 70_000,
+        intervals: [1000],
+      })
+      .toBe('node-deleted');
+    const retired = (await noticesFor(student, rootId))[0];
+    expect(retired).toMatchObject({
+      subject: `Resumen de cambios · Nodo «${rootTitle}»`,
+      data: { changeKind: 'node-retired', targetKind: 'roadmap', nodeTitle: rootTitle },
+    });
+    expect(JSON.stringify(retired)).not.toContain('Detalle privado');
+    const deletionNotices = await noticesFor(student, removedId);
     expect(deletionNotices.map(({ data }) => data.changeKind)).toEqual([
       'node-deleted',
       'node-blocked',
       'resource-added',
     ]);
     expect(deletionNotices[0]).toMatchObject({
-      subject: removedTitle,
-      data: { targetKind: 'roadmap', nodeId: removedId, nodeTitle: removedTitle },
+      subject: `Resumen de cambios · Nodo «${removedTitle}»`,
+      data: { eventCount: 1, targetKind: 'roadmap', nodeTitle: removedTitle },
     });
-    expect(deletionNotices.some(({ data }) => data.changeKind === 'resource-removed')).toBe(false);
-    expect(
-      (await noticesFor(studentWithoutProgress, removedId)).some(
-        ({ data }) => data.changeKind === 'node-deleted',
-      ),
-    ).toBe(true);
-    expect(await noticesFor(inactiveStudent, removedId)).toHaveLength(0);
+    expect((await noticesFor(withoutProgress, removedId))[0].data.changeKind).toBe('node-deleted');
+    expect(await noticesFor(fixture.cc1002WithdrawnStudent, removedId)).toHaveLength(0);
     expect(await noticesFor(fixture.daniela, removedId)).toHaveLength(0);
-
-    await selectNotice(studentWithoutProgress, removedTitle, 'Nodo eliminado:');
-    await expect(page.getByRole('dialog', { name: removedTitle, exact: true })).toBeVisible();
-    await expect(page).not.toHaveURL(/targetNode=/);
-    await expect
-      .poll(async () =>
-        (await noticesFor(studentWithoutProgress, removedId)).filter(({ read }) => !read),
-      )
-      .toHaveLength(0);
-    await request.delete(roadmapPath(`/dependencies/${removalDependencyId}`), { headers: author });
+    await selectNotice(rootId, rootTitle);
+    await selectNotice(removedId, removedTitle);
   } finally {
-    if (dependencyId)
-      await request.delete(roadmapPath(`/dependencies/${dependencyId}`), { headers: author });
-    for (const nodeId of [...nodeIds].reverse())
+    for (const nodeId of nodeIds.reverse())
       await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
     cleanupNotices(nodeIds);
   }
@@ -312,17 +209,12 @@ test('a PostgreSQL access-notice failure leaves the Node visibility change commi
   const author = { cookie: await sessionCookie(fixture.daniela) };
   const student = { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) };
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
-  const created = await request.post(roadmapPath('/nodes'), {
-    headers: author,
-    data: {
-      title: `Fallo de aviso ${crypto.randomUUID()}`,
-      nodeTypeId: roadmap.nodeTypes[0].id,
-      positionX: 5600,
-      positionY: 0,
-    },
+  const nodeId = await createExistingNode({
+    roadmapId: roadmap.roadmap.id,
+    nodeTypeId: roadmap.nodeTypes[0].id,
+    title: 'Fallo de aviso',
+    positionX: 5600,
   });
-  expect(created.status()).toBe(201);
-  const nodeId = (await created.json()).node.id as string;
   const suffix = nodeId.replaceAll('-', '');
   const triggerName = `e2e_fail_access_notice_${suffix}`;
   const functionName = `e2e_fail_access_notice_${suffix}`;

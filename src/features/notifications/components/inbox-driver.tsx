@@ -19,6 +19,8 @@ import {
 import { subscribeToRoadmapRecovery } from '@/shared/client/roadmap-events';
 import type { InboxIdentity } from '../server';
 import { OwnInboxRealtime, OWN_INBOX_REFRESH_EVENT } from './own-realtime';
+import { request, type InboxRecord } from './inbox-api';
+import { LegacyInboxContext, OwnInboxContext } from './inbox-context';
 
 type Filter = Record<string, string | number>;
 type ListInput = {
@@ -101,11 +103,20 @@ function useOwnNotifications(input: ListInput) {
   const [error, setError] = useState<unknown>();
   const [isFetching, setFetching] = useState(false);
   const generation = useRef(0);
+  const pagination = useRef({ queryKey: key, pages: 1 });
   const refetch = useCallback(async () => {
+    if (pagination.current.queryKey !== key) pagination.current = { queryKey: key, pages: 1 };
     const current = ++generation.current;
     setFetching(true);
     try {
-      const result = await list(input);
+      let result = await list(input);
+      // Seen/read signals and summary arrivals must refresh the expanded feed,
+      // including an expansion requested while this refresh was in flight.
+      for (let loaded = 1; loaded < pagination.current.pages && result.hasMore; loaded++) {
+        if (current !== generation.current) return;
+        const next = await list({ ...input, after: result.notifications.at(-1)?.id });
+        result = { ...next, notifications: [...result.notifications, ...next.notifications] };
+      }
       if (current === generation.current) {
         setPage({ ...result, queryKey: key });
         setError(undefined);
@@ -125,6 +136,7 @@ function useOwnNotifications(input: ListInput) {
   const fetchMore = async () => {
     const current = generation.current;
     setFetching(true);
+    pagination.current.pages++;
     try {
       const result = await list({ ...input, after: page?.notifications.at(-1)?.id });
       if (current === generation.current) {

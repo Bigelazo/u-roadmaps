@@ -223,3 +223,22 @@ posterior pasó sin cambiarlo. SSE propio, sesión del canvas y arquitectura sum
 de unitarios, **no se considera validado** el comando agregado. Usar
 `pnpm test:e2e` para la comprobación E2E y `pnpm typecheck` para comprobar tipos;
 una selección unitaria aprobada no sustituye la suite completa.
+
+## Validación de #160 del 2026-10-04
+
+La reimplementación de Resúmenes de cambios, basada en `3ceb351`, pasó
+`pnpm typecheck`, ESLint y Prettier de los archivos modificados. Se ejecutó
+`code-review` una sola vez y se resolvió su sugerencia de extraer la preparación
+repetida de Nodos existentes al helper SQL `tests/e2e/existing-node.ts`.
+
+La suite unitaria completa terminó con **64 archivos y 330 pruebas aprobadas**,
+sin fallos ni omisiones, en **26,78 segundos** y con salida 0. Esta evidencia
+sustituye los fallos unitarios de la validación anterior de #159 para este estado
+del código.
+
+La suite E2E completa terminó con **126 aprobados, cero fallos y dos omitidos**,
+correspondientes a las integraciones Cloud optativas, en **12,6 minutos** y con
+salida 0. Incluye Chromium y Firefox, la ventana de producción de 60 segundos,
+primer aviso inmutable, resumen separado, reconocimiento indivisible, llegada
+posterior a una apertura, SSE entre pestañas y paginación conservada. Las suites
+se ejecutaron por separado; no se ejecutó el comando agregado `pnpm test`.

@@ -127,6 +127,7 @@ model User {
   institutionalEmail String          @unique @db.VarChar(320)
   rut                String?         @unique @db.VarChar(20)
   notices            RoadmapNotice[]
+  noticeEffects      NoticeDeliveryEffect[]
   participations     Participation[]
   completions        Completion[]
 }
@@ -221,4 +222,14 @@ model NoticeAcknowledgement {
   noticeIds String[] @db.Uuid @default([])
 
   @@id([recipientId, operationId])
+}
+
+// Idempotency receipts include repeats that have no individual Inbox row.
+// Pending windows deliberately live in the application process, not this table.
+model NoticeDeliveryEffect {
+  eventId     String
+  recipientId String @db.Uuid
+  recipient   User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, recipientId])
 }

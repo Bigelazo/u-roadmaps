@@ -5,6 +5,7 @@ test('real SSE refreshes authorized Node detail, pending notices, other tabs and
   browser,
   course,
 }, testInfo) => {
+  test.setTimeout(100_000);
   const baseURL = testInfo.project.use.baseURL as string;
   const teacher = await browser.newContext({ baseURL });
   const student = await browser.newContext({ baseURL });
@@ -43,18 +44,25 @@ test('real SSE refreshes authorized Node detail, pending notices, other tabs and
       .getByRole('button', { name: /^Avisos(,|$)/ })
       .getAttribute('aria-label');
     const title = `Live SSE ${crypto.randomUUID()}`;
-    const seenInOtherTab = page.waitForResponse(async (response) => {
-      if (new URL(response.url()).pathname !== '/api/notifications' || !response.ok()) return false;
-      const feed = await response.json();
-      return feed.notifications.some(
-        (notice: { subject: string; seen: boolean }) => notice.subject === title && notice.seen,
-      );
-    });
+    const seenInOtherTab = page.waitForResponse(
+      async (response) => {
+        if (new URL(response.url()).pathname !== '/api/notifications' || !response.ok())
+          return false;
+        const feed = await response.json();
+        return feed.notifications.some(
+          (notice: { subject: string; seen: boolean }) =>
+            notice.subject === `Resumen de cambios · Nodo «${title}»` && notice.seen,
+        );
+      },
+      { timeout: 70_000 },
+    );
     await teacherPage.getByLabel('Título', { exact: true }).fill(title);
     await teacherPage.getByLabel('Descripción').fill('Delivered through real SSE');
     await teacherPage.getByRole('button', { name: 'Guardar cambios' }).click();
     await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeVisible();
-    await expect(other.getByRole('button', { name: new RegExp(title) })).toBeVisible();
+    await expect(
+      other.getByRole('button', { name: new RegExp(`Resumen de cambios.*${title}`) }),
+    ).toBeVisible({ timeout: 70_000 });
     expect(await count()).toBe(1);
     // Visibility in the other Inbox tab propagates seen state without recognition.
     expect((await seenInOtherTab).status()).toBe(200);

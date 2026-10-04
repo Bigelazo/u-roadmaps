@@ -6,7 +6,10 @@ import type {
 } from '../contracts';
 import { sendNotice } from './send-notice';
 
-export function nodeMessage(notice: NodeChangeNotice) {
+export function nodeMessage(
+  notice: NodeChangeNotice,
+  options: { unlimitedStrings?: boolean } = {},
+) {
   const label =
     notice.changeKind === 'node-available'
       ? 'Nodo disponible'
@@ -22,7 +25,11 @@ export function nodeMessage(notice: NodeChangeNotice) {
       ? ` Tipo anterior: ${notice.nodeTypeName}.`
       : '';
   const body = `${label}: ${notice.actorName} informó este cambio en el Roadmap de ${notice.courseCode}.${type}`;
-  return { noticeTitle: notice.nodeTitle.slice(0, 256), noticeBody: body.slice(0, 256), label };
+  return {
+    noticeTitle: options.unlimitedStrings ? notice.nodeTitle : notice.nodeTitle.slice(0, 256),
+    noticeBody: options.unlimitedStrings ? body : body.slice(0, 256),
+    label,
+  };
 }
 
 export function resourceMessage(notice: ResourceChangeNotice) {

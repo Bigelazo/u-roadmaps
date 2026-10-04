@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import {
   NotificationsProvider,
   NotificationsInbox,
@@ -255,4 +256,56 @@ test('going offline closes the tab stream and returning online opens a real repl
   expect(first.closed).toBe(true);
   act(() => window.dispatchEvent(new Event('online')));
   expect(BrowserStream.instances).toHaveLength(2);
+});
+
+function PagedInboxProjection() {
+  const { notifications, fetchMore, isFetching } = useNotifications({ limit: 10 });
+  return (
+    <>
+      <ul>
+        {notifications?.map((notice) => (
+          <li key={notice.id}>{notice.subject}</li>
+        ))}
+      </ul>
+      <button disabled={isFetching} onClick={() => void fetchMore()}>
+        Load next page
+      </button>
+    </>
+  );
+}
+
+test('an SSE refresh preserves expanded Inbox pages and updates their saved notices', async () => {
+  vi.stubGlobal('EventSource', BrowserStream);
+  let refreshed = false;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      const params = new URL(url, 'http://localhost').searchParams;
+      const start = params.get('after') === 'notice-10' ? 10 : 0;
+      return Response.json({
+        notifications: Array.from({ length: 10 }, (_, offset) => ({
+          id: `notice-${start + offset + 1}`,
+          subject:
+            refreshed && start + offset === 0
+              ? 'Updated first notice'
+              : `Notice ${start + offset + 1}`,
+          createdAt: '2026-10-03',
+        })),
+        hasMore: start === 0,
+      });
+    }),
+  );
+  render(
+    <NotificationsProvider identity={identity('student')}>
+      <PagedInboxProjection />
+    </NotificationsProvider>,
+  );
+  await screen.findByText('Notice 10');
+  await userEvent.click(screen.getByRole('button', { name: 'Load next page' }));
+  await screen.findByText('Notice 20');
+  refreshed = true;
+  act(() => BrowserStream.instances[0].receive('inbox', { userId: 'student' }));
+  await screen.findByText('Updated first notice');
+  expect(screen.getAllByRole('listitem')).toHaveLength(20);
+  expect(screen.getByText('Notice 20')).toBeTruthy();
 });

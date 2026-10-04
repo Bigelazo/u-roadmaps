@@ -214,10 +214,13 @@ test('Resource notices persist context and share their Node destination and ackn
     });
     expect(nodeChange.status()).toBe(200);
 
-    await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 4);
+    // The Node content edit is a buffered repeat; the three Resource notices remain immediate.
+    await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 3);
     await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
     const noticesBeforeOpening = await getNotices(student, nodeId);
-    expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('node-updated');
+    expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).not.toContain(
+      'node-updated',
+    );
     expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain(
       'resource-added',
     );
@@ -335,16 +338,12 @@ test('Node opening captures every page, preserves later arrivals and other Nodes
   try {
     const nodeId = await create(`Nodo de avisos ${crypto.randomUUID()}`);
     const otherId = await create(`Otro ${crypto.randomUUID()}`);
-    for (let index = 0; index < 11; index++) {
-      expect(
-        (
-          await request.patch(roadmapPath(`/nodes/${nodeId}`), {
-            headers: author,
-            data: { description: `Cambio ${index}` },
-          })
-        ).status(),
-      ).toBe(200);
-    }
+    // Historical notices from separate windows exercise pagination independently
+    // of the live 60-second grouping contract.
+    for (let index = 0; index < 11; index++)
+      fixtureSql(
+        `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${fixture.cc1002StudentWithoutProgress}', '${roadmap.roadmap.id}', '${developmentFixtureIds.offerings.cc1002}', 'Cambio anterior ${index}', 'Aviso histórico', '{"nodeId":"${nodeId}","targetKind":"node","changeKind":"node-updated"}', NOW());`,
+      );
     // Future notice classes use the same Node recognition contract.
     for (const [changeKind, subject] of [
       ['resource-added', 'Recurso'],
@@ -390,10 +389,14 @@ test('Node opening captures every page, preserves later arrivals and other Nodes
     ).json();
     expect(old.notifications).toHaveLength(14);
     // Delivery happens after the opening snapshot, while acknowledgement is failing.
-    await request.patch(roadmapPath(`/nodes/${nodeId}`), {
-      headers: author,
-      data: { description: 'Llegada posterior' },
-    });
+    expect(
+      (
+        await request.post(roadmapPath(`/nodes/${nodeId}/resources`), {
+          headers: author,
+          data: { title: 'Llegada posterior', url: 'https://example.test/later', type: 'LINK' },
+        })
+      ).status(),
+    ).toBe(201);
     fail = false;
     await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
     await expect.poll(() => count()).toBe(1);
@@ -419,6 +422,7 @@ test('Node opening captures every page, preserves later arrivals and other Nodes
 test('content notices follow individual prerequisites, teacher policy, inactive exclusion and publication', async ({
   request,
 }) => {
+  test.setTimeout(90_000);
   const author = { cookie: await sessionCookie(fixture.daniela) };
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   const ids: string[] = [];
@@ -490,21 +494,6 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
         })
       ).status(),
     ).toBe(200);
-    // Dependency notices are delivered after the mutation response. Wait for
-    // the access transition before measuring subsequent content changes.
-    for (const userId of [without, observer, withProgress]) {
-      await expect
-        .poll(async () => {
-          const response = await request.get(`/api/notifications?nodeId=${nodeId}`, {
-            headers: { cookie: await sessionCookie(userId) },
-          });
-          expect(response.status()).toBe(200);
-          return (
-            (await response.json()).notifications as { data: Record<string, unknown> }[]
-          ).filter(({ data }) => data.changeKind === 'node-blocked').length;
-        })
-        .toBe(1);
-    }
     const beforeContent = new Map(
       await Promise.all(
         [without, observer, withProgress, fixture.nicolas].map(
@@ -523,11 +512,23 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
     }
     expect(await count(without, nodeId)).toBe(beforeContent.get(without));
     expect(await count(observer, nodeId)).toBe(beforeContent.get(observer));
-    expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress) + 3);
-    expect(await count(fixture.nicolas, nodeId)).toBe(beforeContent.get(fixture.nicolas) + 3);
+    expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress));
+    expect(await count(fixture.nicolas, nodeId)).toBe(beforeContent.get(fixture.nicolas));
     for (const data of [{ title: 'Nuevo título' }, { positionX: 99, positionY: 99 }])
       await request.patch(roadmapPath(`/nodes/${nodeId}`), { headers: author, data });
-    expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress) + 3);
+    expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress));
+    // Only eligible content repeats appear in the delayed summary.
+    const latestKind = async (userId: string) => {
+      const response = await request.get(`/api/notifications?nodeId=${nodeId}`, {
+        headers: { cookie: await sessionCookie(userId) },
+      });
+      expect(response.status()).toBe(200);
+      return (await response.json()).notifications[0]?.data.changeKind;
+    };
+    await expect.poll(() => latestKind(withProgress), { timeout: 70_000 }).toBe('node-updated');
+    expect(await latestKind(fixture.nicolas)).toBe('node-updated');
+    expect(await latestKind(without)).toBe('node-blocked');
+    expect(await latestKind(observer)).toBe('node-blocked');
     const opening = { roadmapId: roadmap.roadmap.id, nodeId, operationId: crypto.randomUUID() };
     expect((await request.post('/api/notifications/openings', { data: opening })).status()).toBe(
       401,

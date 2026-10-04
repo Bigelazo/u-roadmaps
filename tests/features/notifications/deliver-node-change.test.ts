@@ -4,6 +4,8 @@ const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
   prisma: {
     roadmapNode: { findUnique: vi.fn() },
     roadmapNotice: { createMany: vi.fn() },
+    noticeDeliveryEffect: { createMany: vi.fn() },
+    $transaction: vi.fn(),
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
@@ -20,6 +22,10 @@ vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
 import { deliverNodeChange } from '@/features/notifications/server';
 
 beforeEach(() => {
+  vi.useFakeTimers();
+  delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
+  prisma.$transaction.mockImplementation((operation) => operation(prisma));
+  prisma.noticeDeliveryEffect.createMany.mockResolvedValue({ count: 1 });
   vi.stubEnv('NOVU_SECRET_KEY', 'test-secret');
   vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', 'test-application');
   prisma.roadmapNode.findUnique.mockResolvedValue(null);
@@ -43,8 +49,47 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
   vi.clearAllMocks();
   vi.unstubAllEnvs();
+});
+
+test('own Node summaries retain a long valid author and previous Node type through the production message builder', async () => {
+  const actorName = 'A'.repeat(200);
+  const nodeTypeName = 'Evaluación '.repeat(10);
+  prisma.participation.findMany
+    .mockReset()
+    .mockResolvedValue([
+      { userId: 'student-id', user: { id: 'student-id', name: 'Estudiante A' } },
+    ]);
+  prisma.user.findUnique.mockResolvedValue({ name: actorName });
+  const input = {
+    userId: 'author-id',
+    courseCode: 'CC3002',
+    year: 2026,
+    semester: 2,
+    nodeId: 'deleted-node-id',
+    roadmapId: 'roadmap-id',
+    nodeTitle: 'Evaluación final',
+    changeKind: 'node-deleted' as const,
+    changedFields: [],
+    nodeTypeName,
+    targetKind: 'roadmap' as const,
+    recipientIds: ['student-id'],
+  };
+  await deliverNodeChange({ ...input, eventId: 'first' });
+  await deliverNodeChange({ ...input, eventId: 'repeat' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(prisma.roadmapNotice.createMany).toHaveBeenLastCalledWith({
+    skipDuplicates: true,
+    data: [
+      expect.objectContaining({
+        body: `Se agruparon 1 cambio. Último cambio: Nodo eliminado: ${actorName} informó este cambio en el Roadmap de CC3002. Tipo anterior: ${nodeTypeName}.`,
+        data: expect.objectContaining({ eventCount: 1, actorName, nodeTypeName }),
+      }),
+    ],
+  });
 });
 
 test.each([true, false])(

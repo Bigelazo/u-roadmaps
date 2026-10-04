@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { parse } from 'dotenv';
 import { expect, test } from '@playwright/test';
+import { createExistingNode } from './existing-node';
 import { fixture, roadmapPath, sessionCookie, authenticateAs } from './helpers';
 
 type StoredNotice = Readonly<{
@@ -50,6 +51,7 @@ test('Dependency notices preserve route and access changes with separate recogni
   request,
   page,
 }) => {
+  test.setTimeout(90_000);
   const author = { cookie: await sessionCookie(fixture.daniela) };
   const studentWithoutPrerequisite = fixture.cc1002StudentWithoutProgress;
   const studentWithPrerequisites = fixture.cc1002StudentWithProgress;
@@ -58,19 +60,17 @@ test('Dependency notices preserve route and access changes with separate recogni
   const roadmapId = roadmap.roadmap.id as string;
   const nodeIds: string[] = [];
   const dependencyIds: string[] = [];
+  const paginationEventPrefix = `e2e-route-pagination-${crypto.randomUUID()}`;
 
   const createNode = async (title: string) => {
-    const response = await request.post(roadmapPath('/nodes'), {
-      headers: author,
-      data: {
-        title,
-        nodeTypeId: roadmap.nodeTypes[0].id,
-        positionX: 800 + nodeIds.length * 320,
-        positionY: 0,
-      },
+    // Existing Nodes start with no delivery window; this journey tests the
+    // Dependency's access transition rather than Node creation.
+    const id = await createExistingNode({
+      roadmapId: roadmap.roadmap.id,
+      nodeTypeId: roadmap.nodeTypes[0].id,
+      title,
+      positionX: 800 + nodeIds.length * 320,
     });
-    expect(response.status()).toBe(201);
-    const id = (await response.json()).node.id as string;
     nodeIds.push(id);
     return id;
   };
@@ -110,12 +110,17 @@ test('Dependency notices preserve route and access changes with separate recogni
     await authenticateAs(page.context(), userId);
     await page.goto('/academic-overview');
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
-    await page
-      .getByRole('list', { name: 'Lista de avisos' })
-      .getByRole('button', {
-        name: new RegExp(`^${escapeRegExp(notice.subject)}\\s+${escapeRegExp(notice.body)}`),
-      })
-      .click();
+    const noticeButton = page.getByRole('list', { name: 'Lista de avisos' }).getByRole('button', {
+      name: new RegExp(`^${escapeRegExp(notice.subject)}\\s+${escapeRegExp(notice.body)}`),
+    });
+    const rows = page.getByRole('list', { name: 'Lista de avisos' }).getByRole('listitem');
+    await expect(rows.first()).toBeVisible();
+    while ((await noticeButton.count()) === 0) {
+      const previousCount = await rows.count();
+      await page.getByRole('button', { name: 'Cargar más avisos' }).click();
+      await expect.poll(() => rows.count()).toBeGreaterThan(previousCount);
+    }
+    await noticeButton.click();
   };
 
   try {
@@ -230,10 +235,12 @@ test('Dependency notices preserve route and access changes with separate recogni
       .toHaveLength(2);
     for (const nodeId of [dependentId, transitiveId])
       await expect
-        .poll(async () =>
-          (await nodeNoticesFor(studentWithoutPrerequisite, nodeId)).filter(
-            ({ data }) => data.changeKind === 'node-available',
-          ),
+        .poll(
+          async () =>
+            (await nodeNoticesFor(studentWithoutPrerequisite, nodeId)).filter(
+              ({ data }) => data.changeKind === 'node-available',
+            ),
+          { timeout: 70_000, intervals: [1000] },
         )
         .toHaveLength(1);
 
@@ -241,6 +248,12 @@ test('Dependency notices preserve route and access changes with separate recogni
       await routeNoticesFor(studentWithoutPrerequisite, dependencyId)
     ).find(({ data }) => data.changeKind === 'dependency-removed');
     expect(removedRouteNotice).toBeDefined();
+    // Newly delivered summaries can move an older route notice to another page.
+    // Make pagination deterministic instead of depending on earlier test timing.
+    for (let index = 0; index < 12; index++)
+      fixtureSql(
+        `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${paginationEventPrefix}-${index}', '${studentWithoutPrerequisite}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"CC1002","year":2026,"semester":2,"targetKind":"roadmap"}', NOW());`,
+      );
     await selectRouteNotice(studentWithoutPrerequisite, removedRouteNotice!);
     await expect(page).toHaveURL(/\/courses\/CC1002\/2026\/2\?notice=/);
     await expect(page.getByRole('dialog', { name: 'Ruta actualizada' })).toContainText(
@@ -280,6 +293,7 @@ test('Dependency notices preserve route and access changes with separate recogni
       )?.read,
     ).toBe(false);
   } finally {
+    fixtureSql(`DELETE FROM "RoadmapNotice" WHERE "eventId" LIKE '${paginationEventPrefix}-%';`);
     for (const dependencyId of [...dependencyIds].reverse())
       await request.delete(roadmapPath(`/dependencies/${dependencyId}`), { headers: author });
     for (const nodeId of [...nodeIds].reverse())
@@ -388,17 +402,14 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
   const dependentTitle = `Fallo de aviso de ruta ${crypto.randomUUID()}`;
 
   const createNode = async (title: string) => {
-    const response = await request.post(roadmapPath('/nodes'), {
-      headers: author,
-      data: {
-        title,
-        nodeTypeId: roadmap.nodeTypes[0].id,
-        positionX: 4000 + nodeIds.length * 320,
-        positionY: 0,
-      },
+    // Existing Nodes start with no delivery window; this journey tests the
+    // Dependency's access transition rather than Node creation.
+    const id = await createExistingNode({
+      roadmapId: roadmap.roadmap.id,
+      nodeTypeId: roadmap.nodeTypes[0].id,
+      title,
+      positionX: 800 + nodeIds.length * 320,
     });
-    expect(response.status()).toBe(201);
-    const id = (await response.json()).node.id as string;
     nodeIds.push(id);
     return id;
   };

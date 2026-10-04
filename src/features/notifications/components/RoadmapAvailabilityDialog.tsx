@@ -28,7 +28,7 @@ const availabilityDateFormatter = new Intl.DateTimeFormat('es-CL', {
 });
 
 function stringValue(value: unknown) {
-  return typeof value === 'string' && value.length <= 256 ? value : '';
+  return typeof value === 'string' ? value : '';
 }
 
 function numberValue(value: unknown) {

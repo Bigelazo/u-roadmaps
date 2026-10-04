@@ -14,7 +14,12 @@ export type DigestNotificationProjection = Readonly<{
 
 const MAX_STRING_LENGTH = 256;
 
-export function projectDigestNotification(payload: Payload, events: readonly unknown[]) {
+export function projectDigestNotification(
+  payload: Payload,
+  events: readonly unknown[],
+  options: { unlimitedStrings?: boolean } = {},
+) {
+  const boundedString = (value: string) => (options.unlimitedStrings ? value : limitString(value));
   const digestEvents = events.map(readDigestEvent);
   const sourceEvents = digestEvents.length ? digestEvents : [{ payload }];
   const latest = latestEffectiveEvent(sourceEvents);
@@ -181,7 +186,7 @@ function requiredPositiveInteger(value: unknown, field: string) {
   return value;
 }
 
-function boundedString(value: string) {
+function limitString(value: string) {
   return Array.from(value).slice(0, MAX_STRING_LENGTH).join('');
 }
 

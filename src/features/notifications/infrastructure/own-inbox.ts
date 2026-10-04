@@ -6,6 +6,7 @@ import { projectDigestNotification } from '../digest-projection';
 import { nodeMessage, resourceMessage } from '../application/emit-node-scoped-change';
 import { roadmapClassificationChangeMessage } from '../application/emit-roadmap-classification-change';
 import { roadmapPathChangeMessage } from '../application/emit-roadmap-path-change';
+import { deliverGroupedNotice } from './grouped-delivery';
 import type {
   NodeChangeNotice,
   RoadmapClassificationChangeNotice,
@@ -136,18 +137,50 @@ async function storeNodeScopedNotice(notice: NodeChangeNotice | ResourceChangeNo
     },
     select: { userId: true },
   });
-  const message = 'resourceTitle' in notice ? resourceMessage(notice) : nodeMessage(notice);
-  const projection = projectDigestNotification(
-    {
-      ...notice,
-      ...message,
-      targetKind: 'targetKind' in notice ? (notice.targetKind ?? 'node') : 'node',
-      occurredAt: notice.occurredAt.toISOString(),
-      eventCount: 1,
-      digestKey: notice.eventId,
-    },
-    [],
-  );
+  const message =
+    'resourceTitle' in notice
+      ? resourceMessage(notice)
+      : nodeMessage(notice, { unlimitedStrings: true });
+  const payload = {
+    eventId: notice.eventId,
+    actorId: notice.actorId,
+    actorName: notice.actorName,
+    roadmapId: notice.roadmapId,
+    courseCode: notice.courseCode,
+    year: notice.year,
+    semester: notice.semester,
+    courseName: notice.courseName,
+    nodeId: notice.nodeId,
+    nodeTitle: notice.nodeTitle,
+    changeKind: notice.changeKind,
+    ...('resourceTitle' in notice
+      ? { resourceTitle: notice.resourceTitle }
+      : {
+          changedFields: [...notice.changedFields],
+          ...(notice.nodeTypeName ? { nodeTypeName: notice.nodeTypeName } : {}),
+        }),
+    ...message,
+    targetKind: 'targetKind' in notice ? (notice.targetKind ?? 'node') : 'node',
+    occurredAt: notice.occurredAt.toISOString(),
+    eventCount: 1,
+    digestKey: notice.eventId,
+  };
+  if (!('resourceTitle' in notice)) {
+    await Promise.all(
+      participants.map(({ userId }) =>
+        deliverGroupedNotice({
+          eventId: notice.eventId,
+          recipientId: userId,
+          roadmapId: notice.roadmapId,
+          courseOfferingId: notice.courseOfferingId,
+          noticeClass: 'roadmap-node-changed',
+          payload,
+        }),
+      ),
+    );
+    return;
+  }
+  const projection = projectDigestNotification(payload, []);
   await prisma.roadmapNotice.createMany({
     data: participants.map(({ userId }) => ({
       eventId: notice.eventId,

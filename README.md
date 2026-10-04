@@ -68,10 +68,11 @@ Cada curso se identifica por el código del ramo, el año y el semestre, y tiene
 - Avisos propios guardados en PostgreSQL para la disponibilidad de un roadmap, la creación/publicación y edición de nodos accesibles, y los cambios de recursos.
 - Selección de destinatarios según participación activa y acceso al contenido, excluyendo al autor del cambio.
 - Reconocimiento contextual de avisos al entrar al roadmap o abrir el nodo correspondiente. Ver una fila o abrir el diálogo del aviso no basta para reconocerlo; las llegadas posteriores a una apertura permanecen pendientes.
-- Integración todavía presente con Novu para cambios de acceso, retiro o eliminación de nodos, dependencias y clasificación por tipos. Su activación requiere credenciales y workflows configurados.
-- Reconciliación del roadmap abierto ante señales de Novu y recuperación al volver a la pestaña o recuperar la conexión, con tratamiento de borradores locales y pérdida de acceso.
+- Primer aviso de Nodo inmediato y resumen separado de sus repeticiones al cerrar una ventana fija de 60 segundos, con cantidad y contexto del último cambio.
+- Entrega en vivo mediante SSE para los avisos propios y la proyección del roadmap; recuperación al volver a la pestaña o recuperar la conexión, con tratamiento de borradores locales y pérdida de acceso.
+- Integración transitoria y prototipos de Novu todavía presentes; su activación requiere credenciales y workflows configurados.
 
-La sustitución de Novu por notificaciones propias está en curso. La entrega en vivo mediante SSE y la agrupación propia de cambios repetidos aún están pendientes; los avisos locales no tienen un canal de recepción en vivo implementado.
+La sustitución de Novu por notificaciones propias está en curso. La agrupación está conectada al recorrido de Nodo; su capacidad admite las cinco clases del catálogo para su integración posterior. Las ventanas requieren un proceso de aplicación persistente y no recuperan repeticiones tras caídas. Véanse [resúmenes propios](docs/notifications-summaries.md) y [SSE](docs/notifications-sse.md).
 
 ## Tecnologías
 
@@ -165,7 +166,7 @@ La plantilla está en [.env.example](.env.example). Next.js carga los archivos d
 | `NOVU_SECRET_KEY`                         | Clave privada del servidor para la integración restante con Novu.                                                                             |
 | `NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER` | Identificador del mismo entorno Novu. Ambas credenciales no vacías habilitan la integración restante; los avisos propios funcionan sin ellas. |
 | `U_ROADMAPS_DEV_DATA`                     | Activa el selector de perfiles cuando `NODE_ENV=development`.                                                                                 |
-| `U_ROADMAPS_E2E_DATA`                     | Habilita los datos ficticios para E2E cuando se configura en el servidor.                                                                |
+| `U_ROADMAPS_E2E_DATA`                     | Habilita los datos ficticios para E2E cuando se configura en el servidor.                                                                     |
 
 El driver de la bandeja también admite `NEXT_PUBLIC_NOVU_API_URL` y `NEXT_PUBLIC_NOVU_SOCKET_URL`. El transporte servidor de Novu conserva sus endpoints predeterminados; estas variables no cambian por sí solas la región de toda la integración.
 
@@ -183,7 +184,7 @@ El driver de la bandeja también admite `NEXT_PUBLIC_NOVU_API_URL` y `NEXT_PUBLI
 | `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                   |
 | `pnpm test`                                | Ejecuta tipos, Vitest y E2E en secuencia; requiere configurar el entorno de pruebas.                 |
 | `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                  |
-| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                         |
+| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                     |
 | `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                     |
 | `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                |
 | `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                             |
@@ -289,7 +290,7 @@ El proyecto está en desarrollo. Esta lista de funcionalidades describe el códi
 - **Evolución del roadmap pendiente:** todavía no existe el flujo para copiar una versión anterior con nuevas identidades, archivos independientes y referencia a su origen.
 - **Gestión académica incompleta:** las secciones coordinadas, el cargo institucional persistido, la importación y reconciliación del listado completo de participantes y el seguimiento docente de estudiantes aún no están implementados. Los datos ficticios de estos escenarios no prueban su disponibilidad en la aplicación.
 - **Permisos institucionales en desarrollo:** con respuesta de U-Campus, la creación se reserva al profesor de cátedra y la edición se asigna a cátedra, coordinación y auxiliares. La asignación de permisos de edición a ayudantes prevista por el dominio sigue pendiente. Cuando falta la respuesta institucional, algunas operaciones utilizan la participación docente local activa.
-- **Notificaciones en transición:** disponibilidad, contenido accesible y recursos usan persistencia propia; otros cambios conservan Novu. SSE y los resúmenes propios de cambios repetidos están pendientes. La entrega es de mejor esfuerzo y no incorpora recuperación durable de avisos perdidos tras guardar un cambio.
+- **Notificaciones en transición:** los avisos propios usan PostgreSQL y SSE. Los cambios de Nodo agrupan repeticiones en resúmenes; conectar las demás clases al agrupador sigue pendiente. Las ventanas se mantienen en un proceso de aplicación persistente, sin coordinación entre réplicas ni recuperación tras caídas. La entrega es de mejor esfuerzo y no incorpora recuperación durable de avisos perdidos tras guardar un cambio.
 - **Almacenamiento local:** los archivos requieren conservar `uploads/`. El código actual no incorpora un servicio de almacenamiento de objetos compartido entre instancias.
 
 El alcance del ciclo de vida pendiente está descrito en [ADR-0007](docs/adr/0007-complete-role-aware-roadmap-lifecycle.md); la sustitución de Novu, en [ADR-0012](docs/adr/0012-own-in-app-notification-delivery.md).
