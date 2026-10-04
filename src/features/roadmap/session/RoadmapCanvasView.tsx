@@ -131,6 +131,7 @@ function useRoadmapCanvasController({ input }: Props) {
   const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
   const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
   const [syncedSelectionNotice, setSyncedSelectionNotice] = useState<string | null>(null);
+  const [dismissedInvalidTargetId, setDismissedInvalidTargetId] = useState<string | null>(null);
   const [acknowledgementError, setAcknowledgementError] = useState(false);
   const acknowledgementInputRef = useRef<{
     roadmapId: string;
@@ -228,8 +229,9 @@ function useRoadmapCanvasController({ input }: Props) {
     },
   });
   const feedback = useRoadmapCanvasFeedback();
-  const [exclusiveConfirmation, setExclusiveConfirmation] =
-    useState<ExclusiveConfirmationSource | null>(null);
+  const [exclusiveConfirmationRequest, setExclusiveConfirmationRequest] = useState<{
+    source: ExclusiveConfirmationSource;
+  } | null>(null);
   const exclusiveConfirmationRef = useRef<ExclusiveConfirmationSource | null>(null);
   const exclusiveBusySeenRef = useRef(false);
   const [automaticLayout, setAutomaticLayout] = useState<AutomaticLayoutRequest | null>(null);
@@ -247,15 +249,12 @@ function useRoadmapCanvasController({ input }: Props) {
       if (exclusiveConfirmationRef.current) return false;
       exclusiveConfirmationRef.current = source;
       exclusiveBusySeenRef.current = false;
-      setExclusiveConfirmation(source);
+      setExclusiveConfirmationRequest({ source });
       request();
       return true;
     },
     [],
   );
-  useEffect(() => {
-    exclusiveConfirmationRef.current = exclusiveConfirmation;
-  }, [exclusiveConfirmation]);
   useEffect(() => {
     feedback?.reportError(roadmap ? error : null, dismissError);
   }, [dismissError, error, feedback, roadmap]);
@@ -327,33 +326,29 @@ function useRoadmapCanvasController({ input }: Props) {
     ],
   );
 
+  const exclusiveConfirmationSource = exclusiveConfirmationRequest?.source;
+  const exclusiveSourceIsBusy = exclusiveConfirmationSource
+    ? {
+        'automatic-layout': automaticLayout !== null,
+        'canvas-preview': canvasPreviewWorkflow.isResetPending,
+        'dependency-creation': dependencyWorkflow.isBusy,
+        'dependency-deletion': dependencyWorkflow.isBusy,
+        'node-deletion': nodeDeletionWorkflow.isBusy,
+        'node-type-deletion': nodeTypeDeletion !== null,
+        'node-visibility': nodeVisibilityWorkflow.isBusy,
+        'teacher-block': teacherBlockWorkflow.isBusy,
+      }[exclusiveConfirmationSource]
+    : false;
+  const exclusiveConfirmation =
+    exclusiveBusySeenRef.current && !exclusiveSourceIsBusy ? null : exclusiveConfirmationSource;
   useEffect(() => {
-    if (!exclusiveConfirmation) return;
-    const sourceIsBusy = {
-      'automatic-layout': automaticLayout !== null,
-      'canvas-preview': canvasPreviewWorkflow.isResetPending,
-      'dependency-creation': dependencyWorkflow.isBusy,
-      'dependency-deletion': dependencyWorkflow.isBusy,
-      'node-deletion': nodeDeletionWorkflow.isBusy,
-      'node-type-deletion': nodeTypeDeletion !== null,
-      'node-visibility': nodeVisibilityWorkflow.isBusy,
-      'teacher-block': teacherBlockWorkflow.isBusy,
-    }[exclusiveConfirmation];
-    if (sourceIsBusy) {
+    if (!exclusiveConfirmationSource) return;
+    if (exclusiveSourceIsBusy) {
       exclusiveBusySeenRef.current = true;
       return;
     }
-    if (exclusiveBusySeenRef.current) setExclusiveConfirmation(null);
-  }, [
-    automaticLayout,
-    canvasPreviewWorkflow.isResetPending,
-    dependencyWorkflow.isBusy,
-    exclusiveConfirmation,
-    nodeDeletionWorkflow.isBusy,
-    nodeTypeDeletion,
-    nodeVisibilityWorkflow.isBusy,
-    teacherBlockWorkflow.isBusy,
-  ]);
+    if (exclusiveBusySeenRef.current) exclusiveConfirmationRef.current = null;
+  }, [exclusiveConfirmationSource, exclusiveSourceIsBusy]);
 
   const canvasMode = deriveCanvasMode({
     experience: input.experience,
@@ -433,6 +428,18 @@ function useRoadmapCanvasController({ input }: Props) {
       }),
     );
   }, [roadmap]);
+  const invalidTargetId =
+    roadmap && input.targetNodeId && !accessibleNodeIds.has(input.targetNodeId)
+      ? input.targetNodeId
+      : null;
+  const selectionNotice =
+    invalidTargetId && invalidTargetId !== dismissedInvalidTargetId
+      ? 'Este Nodo ya no está disponible. Puedes revisar el Roadmap actualizado.'
+      : syncedSelectionNotice;
+  const dismissSelectionNotice = useCallback(() => {
+    setDismissedInvalidTargetId(invalidTargetId);
+    setSyncedSelectionNotice(null);
+  }, [invalidTargetId]);
   useEffect(() => {
     if (!input.notificationsEnabled || !roadmap || isCanvasPreview) return;
     const roadmapId = roadmap.roadmap.id;
@@ -454,12 +461,7 @@ function useRoadmapCanvasController({ input }: Props) {
     const nodeId = input.targetNodeId;
     if (!nodeId || !roadmap || deepLinkHandledRef.current === nodeId) return;
     deepLinkHandledRef.current = nodeId;
-    if (!accessibleNodeIds.has(nodeId)) {
-      setSyncedSelectionNotice(
-        'Este Nodo ya no está disponible. Puedes revisar el Roadmap actualizado.',
-      );
-      return;
-    }
+    if (!accessibleNodeIds.has(nodeId)) return;
     dispatchCanvas({
       type: 'selectNode',
       nodeId,
@@ -693,8 +695,8 @@ function useRoadmapCanvasController({ input }: Props) {
     semester,
     dispatchCanvas,
     focusReturnRequest,
-    syncedSelectionNotice,
-    setSyncedSelectionNotice,
+    syncedSelectionNotice: selectionNotice,
+    dismissSelectionNotice,
     acknowledgementError,
     setAcknowledgementError,
     acknowledgementInputRef,
@@ -757,7 +759,7 @@ export function RoadmapCanvasView({ input }: Props) {
   const {
     dispatchCanvas,
     syncedSelectionNotice,
-    setSyncedSelectionNotice,
+    dismissSelectionNotice,
     acknowledgementError,
     setAcknowledgementError,
     acknowledgementInputRef,
@@ -852,7 +854,9 @@ export function RoadmapCanvasView({ input }: Props) {
               onClick={() => {
                 const operation = acknowledgementInputRef.current;
                 if (!operation) return;
-                void retry(operation).then((success) => setAcknowledgementError(!success));
+                void retry(operation)
+                  .then((success) => setAcknowledgementError(!success))
+                  .catch(() => setAcknowledgementError(true));
               }}
               type="button"
             >
@@ -890,7 +894,7 @@ export function RoadmapCanvasView({ input }: Props) {
               <AlertAction>
                 <Button
                   aria-label="Cerrar aviso de actualización"
-                  onClick={() => setSyncedSelectionNotice(null)}
+                  onClick={dismissSelectionNotice}
                   size="icon-sm"
                   type="button"
                   variant="ghost"
@@ -1151,7 +1155,7 @@ function RoadmapCanvasGraph({
     semester,
     dispatchCanvas,
     focusReturnRequest,
-    setSyncedSelectionNotice,
+    dismissSelectionNotice,
     selectedNodeId,
     isEditorOpen,
     guardEditorDraft,
@@ -1179,7 +1183,7 @@ function RoadmapCanvasGraph({
         const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
         if (isStudentExperience && isStudentBlockedNode(node)) return;
         const select = () => {
-          setSyncedSelectionNotice(null);
+          dismissSelectionNotice();
           dispatchCanvas({
             type: 'selectNode',
             nodeId,

@@ -1,8 +1,27 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import type { NodeType, RoadmapNode, StudentBlockedRoadmapNode } from '@/features/roadmap/types';
+
+function mockViewport(width: number) {
+  vi.stubGlobal('innerWidth', width);
+  vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
+    matches:
+      (query === '(max-width: 767px)' && width < 768) ||
+      (query === '(min-width: 1024px)' && width >= 1024),
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: () => false,
+  }));
+}
+
+beforeEach(() => mockViewport(640));
+afterEach(() => vi.unstubAllGlobals());
 
 const node: RoadmapNode = {
   id: 'node-1',
@@ -137,16 +156,7 @@ test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(
 );
 
 test('does not render a desktop detail sidebar when no node is selected', () => {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as typeof window.matchMedia;
+  mockViewport(1280);
 
   render(
     <StudentNodeDetail node={undefined} status={null} onClose={vi.fn()} onComplete={vi.fn()} />,
@@ -156,16 +166,7 @@ test('does not render a desktop detail sidebar when no node is selected', () => 
 });
 
 test('uses the student profile width and exposes a desktop resize control', () => {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as typeof window.matchMedia;
+  mockViewport(1280);
   const onPanelWidthChange = vi.fn();
 
   render(
@@ -186,16 +187,7 @@ test('uses the student profile width and exposes a desktop resize control', () =
 });
 
 test('uses the selected-node header and keeps completion next to the close action', () => {
-  window.matchMedia = ((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-    addListener: () => undefined,
-    removeListener: () => undefined,
-    dispatchEvent: () => false,
-  })) as typeof window.matchMedia;
+  mockViewport(1280);
 
   render(
     <StudentNodeDetail

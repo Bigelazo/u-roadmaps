@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -114,12 +115,15 @@ function useNodeEditorController(
   const { node, nodeTypes, isVisibilityPending } = session;
   const [state, dispatch] = useReducer(nodeEditorReducer, node, createNodeEditorState);
   const stateRef = useRef(state);
-  stateRef.current = state;
   const mountedRef = useRef(true);
   const guardResolverRef = useRef<((proceed: boolean) => void) | null>(null);
   const effectIdRef = useRef(0);
   const handledCommandIdRef = useRef<string | null>(null);
   const previewButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useLayoutEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const settleGuard = useCallback((proceed: boolean) => {
     const resolve = guardResolverRef.current;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type {
   RoadmapViewport,
   RoadmapViewportRestoration,
@@ -63,7 +63,10 @@ export function useCanvasPreviewWorkflow({
   const viewportRestorationTokenRef = useRef(0);
   const isEntryPendingRef = useRef(false);
   const entryButtonRef = useRef<HTMLButtonElement | null>(null);
-  currentViewRef.current = currentView;
+
+  useLayoutEffect(() => {
+    currentViewRef.current = currentView;
+  }, [currentView]);
 
   const transitionSession = useCallback((next: CanvasPreviewSessionState) => {
     sessionRef.current = next;

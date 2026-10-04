@@ -13,22 +13,24 @@ export async function deliverRoadmapNodeNotifications({
   notifications: readonly NodeNotificationDescriptor[];
   publishedNodeId?: string;
 }) {
-  for (const notification of notifications) {
-    await deliverNodeChange({
-      userId: actorId,
-      ...identifier,
-      nodeId: notification.nodeId,
-      roadmapId: notification.roadmapId,
-      ...(notification.eventId ? { eventId: notification.eventId } : {}),
-      changeKind: notification.changeKind,
-      changedFields: [],
-      nodeTitle: notification.nodeTitle,
-      nodeTypeName: notification.nodeTypeName,
-      recipientIds: notification.recipientIds,
-      targetKind: notification.targetKind,
-      ...(notification.nodeId === publishedNodeId && notification.changeKind === 'node-available'
-        ? { availabilitySource: 'publication' as const }
-        : {}),
-    }).catch(() => undefined);
-  }
+  await Promise.all(
+    notifications.map((notification) =>
+      deliverNodeChange({
+        userId: actorId,
+        ...identifier,
+        nodeId: notification.nodeId,
+        roadmapId: notification.roadmapId,
+        ...(notification.eventId ? { eventId: notification.eventId } : {}),
+        changeKind: notification.changeKind,
+        changedFields: [],
+        nodeTitle: notification.nodeTitle,
+        nodeTypeName: notification.nodeTypeName,
+        recipientIds: notification.recipientIds,
+        targetKind: notification.targetKind,
+        ...(notification.nodeId === publishedNodeId && notification.changeKind === 'node-available'
+          ? { availabilitySource: 'publication' as const }
+          : {}),
+      }).catch(() => undefined),
+    ),
+  );
 }

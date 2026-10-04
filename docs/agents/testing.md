@@ -200,12 +200,24 @@ navegadores, aprobados, fallidos, omitidos, duración y código de salida.
 
 ## Suite unitaria y comando agregado
 
-`pnpm test:unit` ejecuta Vitest. Actualmente
-[vitest.config.mts](../../vitest.config.mts) referencia `vitest.setup.ts`, que fue
-eliminado: la ejecución estándar falla antes de cargar los tests. Este bloqueo
-está pendiente y es independiente de la recuperación E2E.
+`pnpm test:unit` ejecuta toda la suite Vitest sin un archivo de setup.
+[vitest.config.mts](../../vitest.config.mts) habilita `globals: true` para que
+React Testing Library registre automáticamente la limpieza del DOM entre casos.
+Los tests mantienen sus imports explícitos de Vitest.
 
-`pnpm test` ejecuta tipos, unitarios y E2E en secuencia; por ese bloqueo **no se
-considera validado**. Usar `pnpm test:e2e` para la comprobación E2E y
-`pnpm typecheck` para comprobar tipos. Una ejecución puntual de tests unitarios
-sin setup no demuestra que la suite unitaria completa funcione.
+Las suites que necesitan `matchMedia` declaran su viewport localmente con
+`vi.stubGlobal`, mantienen `innerWidth` coherente con las consultas y restauran
+los globals después de cada caso. Los mocks representan pantallas fijas; un test
+de cambios de viewport deberá simular también los eventos correspondientes.
+Las pruebas de adaptadores HTTP aíslan Prisma: no necesitan `DATABASE_URL` ni
+una conexión PostgreSQL. No cargar `.env` para resolver dependencias de tests
+unitarios que deberían estar aisladas.
+
+Validación del **2026-10-04**: `pnpm test:unit` terminó con **62 archivos y 309
+pruebas aprobadas**, sin fallos ni omisiones, en **21,24 s**, con código de salida
+0. `pnpm typecheck`, ESLint y Prettier de los archivos modificados también pasaron.
+La ejecución muestra una advertencia experimental de Node sobre `localStorage`;
+no impide completar la suite.
+
+`pnpm test` ejecuta tipos, unitarios y E2E en secuencia. La comprobación unitaria
+no valida por sí sola ese comando agregado ni sustituye la ejecución E2E.

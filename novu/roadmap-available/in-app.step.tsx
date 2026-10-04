@@ -1,3 +1,5 @@
 import { createNotificationInAppStep } from '../shared/in-app-step';
 
-export default createNotificationInAppStep();
+const inAppStep = createNotificationInAppStep();
+
+export default inAppStep;

@@ -171,10 +171,10 @@ function useInjectedSession(
   const [accessLost, setAccessLost] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const activeKeyRef = useRef(roadmapCanvasSessionKey(input));
+  const key = roadmapCanvasSessionKey(input);
+  const activeKeyRef = useRef(key);
   const requestVersionRef = useRef(0);
   const simulationVersionRef = useRef(0);
-  const key = roadmapCanvasSessionKey(input);
   const courseCode = input.courseOffering.identifier.courseCode;
   const year = input.courseOffering.identifier.year;
   const semester = input.courseOffering.identifier.semester;

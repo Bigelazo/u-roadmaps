@@ -1,18 +1,14 @@
 'use client';
 
+import { InboxDriverProvider, useCounts, useNotifications, useInboxClient } from './inbox-driver';
 import {
-  InboxDriverProvider,
-  OwnInboxContext,
-  LegacyInboxContext,
   acknowledgeOwnInbox,
   prepareOwnInboxNodeOpening,
   getOwnInboxRecord,
-  useCounts,
-  useNotifications,
-  useInboxClient,
   type InboxRecord,
   type NoticeAcknowledgementOperation,
-} from './inbox-driver';
+} from './inbox-api';
+import { OwnInboxContext, LegacyInboxContext } from './inbox-context';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Bell, X } from 'lucide-react';
 import {
@@ -35,6 +31,11 @@ import {
 
 type NotificationRecord = InboxRecord;
 type NotificationDataFilter = Record<string, string | number>;
+const notificationDateFormatter = new Intl.DateTimeFormat('es-CL', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'America/Santiago',
+});
 
 export function NotificationCountButton({
   filter,
@@ -131,9 +132,7 @@ function numberField(data: Record<string, unknown>, field: string) {
 function notificationDate(notification: NotificationRecord) {
   const occurredAt = stringField(notification.data ?? {}, 'occurredAt');
   if (!occurredAt || Number.isNaN(new Date(occurredAt).getTime())) return 'Fecha no disponible';
-  return new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(occurredAt),
-  );
+  return notificationDateFormatter.format(new Date(occurredAt));
 }
 
 function NotificationRow({
@@ -445,18 +444,19 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
       input: AcknowledgeInput,
       snapshot: { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean },
     ) => {
-      const remaining: NotificationRecord[] = [];
-      for (const record of snapshot.records) {
-        try {
-          const result = await record.read();
-          if (result.error) remaining.push(record);
-        } catch {
-          remaining.push(record);
-        }
-      }
-      snapshot.records = remaining;
+      const succeeded = await Promise.all(
+        snapshot.records.map(async (record) => {
+          try {
+            const result = await record.read();
+            return !result.error;
+          } catch {
+            return false;
+          }
+        }),
+      );
+      snapshot.records = snapshot.records.filter((_, index) => !succeeded[index]);
       pending.current.set(keyFor(input), snapshot);
-      return remaining.length === 0;
+      return snapshot.records.length === 0;
     },
     [],
   );

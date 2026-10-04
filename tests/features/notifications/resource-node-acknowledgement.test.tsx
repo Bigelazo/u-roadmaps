@@ -111,6 +111,47 @@ test('opening a Node acknowledges its Resource, Node, and Digest notices but lea
   );
 });
 
+test('reads notices concurrently and retries only failed reads', async () => {
+  const first = notice('first-node-notice', {
+    roadmapId: 'roadmap-id',
+    targetKind: 'node',
+    nodeId: 'node-id',
+  });
+  const second = notice('second-node-notice', {
+    roadmapId: 'roadmap-id',
+    targetKind: 'node',
+    nodeId: 'node-id',
+  });
+  let releaseFirst: ((result: { error: null }) => void) | undefined;
+  first.read.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        releaseFirst = resolve;
+      }),
+  );
+  second.read.mockRejectedValueOnce(new Error('Read failed'));
+  novu.notifications.list.mockResolvedValue({
+    data: { notifications: [first, second], hasMore: false },
+  });
+  const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
+
+  const acknowledgement = result.current.acknowledge({
+    roadmapId: 'roadmap-id',
+    nodeId: 'node-id',
+  });
+  await vi.waitFor(() => expect(second.read).toHaveBeenCalledOnce());
+  await act(async () => {
+    releaseFirst?.({ error: null });
+    expect(await acknowledgement).toBe(false);
+  });
+
+  await act(async () => {
+    expect(await result.current.retry({ roadmapId: 'roadmap-id', nodeId: 'node-id' })).toBe(true);
+  });
+  expect(first.read).toHaveBeenCalledOnce();
+  expect(second.read).toHaveBeenCalledTimes(2);
+});
+
 test('entering a Roadmap recognizes general notices and blocked Nodes while accessible Nodes stay pending', async () => {
   const pathNotice = notice('path-notice', {
     roadmapId: 'roadmap-id',

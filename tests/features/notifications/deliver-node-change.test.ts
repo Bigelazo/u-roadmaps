@@ -47,46 +47,70 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test('retained deletion context routes to the Roadmap and rechecks active recipients', async () => {
-  await deliverNodeChange({
-    userId: 'author-id',
-    courseCode: 'CC3002',
-    year: 2026,
-    semester: 2,
-    nodeId: 'deleted-node-id',
-    roadmapId: 'roadmap-id',
-    changeKind: 'node-deleted',
-    changedFields: [],
-    nodeTitle: 'Evaluación final',
-    nodeTypeName: 'Evaluación',
-    targetKind: 'roadmap',
-    recipientIds: ['student-id'],
-  });
+test.each([true, false])(
+  'retains deletion context in the own Inbox with Novu configured: %s',
+  async (configured) => {
+    if (!configured) {
+      vi.stubEnv('NOVU_SECRET_KEY', '');
+      vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
+    }
+    await deliverNodeChange({
+      userId: 'author-id',
+      courseCode: 'CC3002',
+      year: 2026,
+      semester: 2,
+      nodeId: 'deleted-node-id',
+      roadmapId: 'roadmap-id',
+      changeKind: 'node-deleted',
+      changedFields: [],
+      nodeTitle: 'Evaluación final',
+      nodeTypeName: 'Evaluación',
+      targetKind: 'roadmap',
+      recipientIds: ['student-id'],
+    });
 
-  expect(prisma.courseOffering.findUnique).toHaveBeenCalled();
-  expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
-    1,
-    expect.objectContaining({
-      where: expect.objectContaining({
-        isActive: true,
-        userId: { in: ['student-id'], not: 'author-id' },
+    expect(prisma.courseOffering.findUnique).toHaveBeenCalled();
+    expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isActive: true,
+          userId: { in: ['student-id'], not: 'author-id' },
+        }),
       }),
-    }),
-  );
-  expect(trigger).toHaveBeenCalledWith(
-    expect.objectContaining({
-      workflowId: 'roadmap-node-changed',
-      recipients: ['student-id'],
-      payload: expect.objectContaining({
-        targetKind: 'roadmap',
-        nodeId: 'deleted-node-id',
-        nodeTitle: 'Evaluación final',
-        nodeTypeName: 'Evaluación',
-        changeKind: 'node-deleted',
+    );
+    expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isActive: true,
+          userId: { in: ['student-id'], not: 'author-id' },
+        }),
+        select: { userId: true },
       }),
-    }),
-  );
-});
+    );
+    expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
+      skipDuplicates: true,
+      data: [
+        expect.objectContaining({
+          recipientId: 'student-id',
+          roadmapId: 'roadmap-id',
+          subject: 'Evaluación final',
+          body: 'Nodo eliminado: Docente autora informó este cambio en el Roadmap de CC3002. Tipo anterior: Evaluación.',
+          occurredAt: expect.any(Date),
+          data: expect.objectContaining({
+            targetKind: 'roadmap',
+            nodeId: 'deleted-node-id',
+            nodeTitle: 'Evaluación final',
+            changeKind: 'node-deleted',
+          }),
+        }),
+      ],
+    });
+    expect(ensureSubscribers).not.toHaveBeenCalled();
+    expect(trigger).not.toHaveBeenCalled();
+  },
+);
 
 test('accessible Node notices persist without external notification configuration', async () => {
   vi.stubEnv('NOVU_SECRET_KEY', '');

@@ -146,7 +146,7 @@ function ConfirmationDetails({ sections }: { sections: ConfirmationSection[] }) 
 
         return (
           <section
-            key={`${section.title}-${index}`}
+            key={section.title}
             aria-labelledby={headingId}
             className="grid gap-2.5"
           >
