@@ -1,26 +1,24 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
+const { prisma } = vi.hoisted(() => ({
   prisma: {
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
     roadmapNotice: { createMany: vi.fn() },
+    noticeDeliveryEffect: { createMany: vi.fn() },
+    $transaction: vi.fn(),
     user: { findUnique: vi.fn() },
   },
-  ensureSubscribers: vi.fn(),
-  trigger: vi.fn(),
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
-vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
-  novuTransport: { ensureSubscribers, trigger },
-}));
-
 import { deliverRoadmapPathChange } from '@/features/notifications/server';
 
 beforeEach(() => {
-  vi.stubEnv('NOVU_SECRET_KEY', '');
-  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
+  vi.useFakeTimers();
+  delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
+  prisma.$transaction.mockImplementation((operation) => operation(prisma));
+  prisma.noticeDeliveryEffect.createMany.mockResolvedValue({ count: 1 });
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
     courseCode: 'CC3002',
@@ -39,11 +37,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
   vi.clearAllMocks();
   vi.unstubAllEnvs();
 });
 
-test('stores the route notice for active explicit recipients without requiring Novu', async () => {
+test('stores the route notice for active explicit recipients through the own Inbox', async () => {
   await deliverRoadmapPathChange({
     eventId: 'dependency-id:dependency-added',
     dependencyId: 'dependency-id',
@@ -97,15 +97,9 @@ test('stores the route notice for active explicit recipients without requiring N
           prerequisiteNodeTitle: 'Leyes de Newton',
         }),
       }),
-      expect.objectContaining({
-        eventId: 'dependency-id:dependency-added',
-        recipientId: 'observer-id',
-      }),
     ],
     skipDuplicates: true,
   });
-  expect(ensureSubscribers).not.toHaveBeenCalled();
-  expect(trigger).not.toHaveBeenCalled();
 });
 
 test('does not store a notice against a different current Course offering Roadmap', async () => {

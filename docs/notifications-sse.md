@@ -21,10 +21,11 @@ Canvas preview retains its independent simulation and never recognizes real
 notices. Existing canvas reconciliation preserves selection, drafts and version
 checks, and removes protected content on authoritative access loss.
 
-## Node and Docker deployment
+## Node deployment
 
 Deploy the database migration before starting the new application version.
-All Node workers/containers must use the same `DATABASE_URL`. Each process shares
+The supported deployment runs one persistent Node process. It uses the same
+`DATABASE_URL` for Prisma and live signals, and shares
 one dedicated PostgreSQL LISTEN connection across its connected tabs, in addition
 to the existing Prisma pool. Use a direct PostgreSQL connection or a pooler with
 session pooling: transaction pooling does not preserve LISTEN subscriptions.

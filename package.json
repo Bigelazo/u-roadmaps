@@ -26,8 +26,6 @@
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@dagrejs/dagre": "^3.1.1",
-    "@novu/api": "3.19.1",
-    "@novu/nextjs": "3.19.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@xyflow/react": "12.11.3",
@@ -48,7 +46,6 @@
     "@eslint/compat": "^2.1.0",
     "@eslint/css": "^1.4.0",
     "@eslint/js": "^9.39.5",
-    "@novu/framework": "2.14.0",
     "@playwright/mcp": "^0.0.79",
     "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4.3.3",

@@ -26,8 +26,8 @@ const processDelivery = globalThis as typeof globalThis & {
 
 function grouper() {
   processDelivery.ownNoticeGrouper ??= createNoticeGrouper({
-    accept: (effect, immediate) =>
-      prisma.$transaction(async (transaction) => {
+    accept: async (effect, immediate) => {
+      const accepted = await prisma.$transaction(async (transaction) => {
         const accepted = await transaction.noticeDeliveryEffect.createMany({
           data: [{ eventId: effect.eventId, recipientId: effect.recipientId }],
           skipDuplicates: true,
@@ -35,23 +35,34 @@ function grouper() {
         if (!accepted.count) return false;
         if (immediate) {
           await transaction.roadmapNotice.createMany({
-            data: [
-              noticeRow(
-                effect,
-                projectDigestNotification(effect.payload, [], { unlimitedStrings: true }),
-              ),
-            ],
+            data: [noticeRow(effect, projectDigestNotification(effect.payload, []))],
             skipDuplicates: true,
           });
         }
         return true;
-      }),
+      });
+      if (accepted && immediate)
+        console.info('Roadmap notice saved', { noticeClass: effect.noticeClass });
+      return accepted;
+    },
     publish: async (effect, projection) => {
+      // Membership may have been revoked during the delivery window.
+      const active = await prisma.participation.findFirst({
+        where: {
+          courseOfferingId: effect.courseOfferingId,
+          userId: effect.recipientId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (!active) return;
       // The same table/transactional INSERT trigger signals first notices and summaries.
-      await prisma.roadmapNotice.createMany({
+      const stored = await prisma.roadmapNotice.createMany({
         data: [noticeRow(effect, projection)],
         skipDuplicates: true,
       });
+      if (stored.count)
+        console.info('Roadmap notice saved', { noticeClass: effect.noticeClass, summary: true });
     },
     failed: () => console.warn('Roadmap change summary delivery failed'),
   });

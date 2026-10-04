@@ -2,10 +2,13 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
-import { projectDigestNotification } from '../digest-projection';
-import { nodeMessage, resourceMessage } from '../application/emit-node-scoped-change';
-import { roadmapClassificationChangeMessage } from '../application/emit-roadmap-classification-change';
-import { roadmapPathChangeMessage } from '../application/emit-roadmap-path-change';
+import {
+  nodeMessage,
+  resourceMessage,
+  roadmapClassificationChangeMessage,
+  roadmapPathChangeMessage,
+} from '../application/messages';
+import type { NoticeClass } from '../application/group-notices';
 import { deliverGroupedNotice } from './grouped-delivery';
 import type {
   NodeChangeNotice,
@@ -15,196 +18,82 @@ import type {
   ResourceChangeNotice,
 } from '../contracts';
 
-export async function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
-  const participants = await prisma.participation.findMany({
-    where: {
-      courseOfferingId: notice.courseOfferingId,
-      isActive: true,
-      userId: { in: notice.recipients.map(({ userId }) => userId), not: notice.actorId },
-    },
-    select: { userId: true },
-  });
-  const projection = projectDigestNotification(
-    {
-      ...notice,
-      targetKind: 'roadmap',
-      changeKind: 'roadmap-available',
-      occurredAt: notice.occurredAt.toISOString(),
-      eventCount: 1,
-      digestKey: notice.eventId,
-    },
-    [],
-  );
-  await prisma.roadmapNotice.createMany({
-    data: participants.map(({ userId }) => ({
-      eventId: notice.eventId,
-      recipientId: userId,
-      roadmapId: notice.roadmapId,
-      courseOfferingId: notice.courseOfferingId,
-      occurredAt: notice.occurredAt,
-      ...projection,
-    })),
-    skipDuplicates: true,
-  });
-}
+type Notice =
+  | RoadmapAvailabilityNotice
+  | NodeChangeNotice
+  | ResourceChangeNotice
+  | RoadmapPathChangeNotice
+  | RoadmapClassificationChangeNotice;
 
-export async function storeRoadmapPathChange(notice: RoadmapPathChangeNotice) {
+async function storeNotice(
+  notice: Notice,
+  noticeClass: NoticeClass,
+  context: Record<string, unknown>,
+) {
+  const { recipients, ...descriptor } = notice;
   const participants = await prisma.participation.findMany({
     where: {
       courseOfferingId: notice.courseOfferingId,
       isActive: true,
-      userId: { in: notice.recipients.map(({ userId }) => userId), not: notice.actorId },
+      userId: { in: recipients.map(({ userId }) => userId), not: notice.actorId },
     },
     select: { userId: true },
   });
-  const { noticeTitle, noticeBody } = roadmapPathChangeMessage(notice);
-  const projection = projectDigestNotification(
-    {
-      ...notice,
-      targetKind: 'roadmap',
-      occurredAt: notice.occurredAt.toISOString(),
-      eventCount: 1,
-      digestKey: notice.eventId,
-      noticeTitle,
-      noticeBody,
-    },
-    [],
-  );
-  await prisma.roadmapNotice.createMany({
-    data: participants.map(({ userId }) => ({
-      eventId: notice.eventId,
-      recipientId: userId,
-      roadmapId: notice.roadmapId,
-      courseOfferingId: notice.courseOfferingId,
-      occurredAt: notice.occurredAt,
-      ...projection,
-      data: {
-        ...projection.data,
-        dependencyId: notice.dependencyId,
-        dependentNodeTitle: notice.dependentNodeTitle,
-        prerequisiteNodeTitle: notice.prerequisiteNodeTitle,
-      },
-    })),
-    skipDuplicates: true,
-  });
-}
-
-export async function storeRoadmapClassificationChange(notice: RoadmapClassificationChangeNotice) {
-  const participants = await prisma.participation.findMany({
-    where: {
-      courseOfferingId: notice.courseOfferingId,
-      isActive: true,
-      userId: { in: notice.recipients.map(({ userId }) => userId), not: notice.actorId },
-    },
-    select: { userId: true },
-  });
-  const projection = projectDigestNotification(
-    {
-      ...notice,
-      ...roadmapClassificationChangeMessage(notice),
-      targetKind: 'roadmap',
-      changeKind: 'classification-updated',
-      occurredAt: notice.occurredAt.toISOString(),
-      eventCount: 1,
-      digestKey: notice.eventId,
-    },
-    [],
-  );
-  await prisma.roadmapNotice.createMany({
-    data: participants.map(({ userId }) => ({
-      eventId: notice.eventId,
-      recipientId: userId,
-      roadmapId: notice.roadmapId,
-      courseOfferingId: notice.courseOfferingId,
-      occurredAt: notice.occurredAt,
-      ...projection,
-      data: {
-        ...projection.data,
-        previousTypeName: notice.previousTypeName,
-        nextTypeName: notice.nextTypeName,
-      },
-    })),
-    skipDuplicates: true,
-  });
-}
-
-async function storeNodeScopedNotice(notice: NodeChangeNotice | ResourceChangeNotice) {
-  const participants = await prisma.participation.findMany({
-    where: {
-      courseOfferingId: notice.courseOfferingId,
-      isActive: true,
-      userId: { in: notice.recipients.map(({ userId }) => userId), not: notice.actorId },
-    },
-    select: { userId: true },
-  });
-  const message =
-    'resourceTitle' in notice
-      ? resourceMessage(notice)
-      : nodeMessage(notice, { unlimitedStrings: true });
   const payload = {
-    eventId: notice.eventId,
-    actorId: notice.actorId,
-    actorName: notice.actorName,
-    roadmapId: notice.roadmapId,
-    courseCode: notice.courseCode,
-    year: notice.year,
-    semester: notice.semester,
-    courseName: notice.courseName,
-    nodeId: notice.nodeId,
-    nodeTitle: notice.nodeTitle,
-    changeKind: notice.changeKind,
-    ...('resourceTitle' in notice
-      ? { resourceTitle: notice.resourceTitle }
-      : {
-          changedFields: [...notice.changedFields],
-          ...(notice.nodeTypeName ? { nodeTypeName: notice.nodeTypeName } : {}),
-        }),
-    ...message,
-    targetKind: 'targetKind' in notice ? (notice.targetKind ?? 'node') : 'node',
+    ...descriptor,
+    ...context,
     occurredAt: notice.occurredAt.toISOString(),
     eventCount: 1,
     digestKey: notice.eventId,
   };
-  if (!('resourceTitle' in notice)) {
-    await Promise.all(
-      participants.map(({ userId }) =>
-        deliverGroupedNotice({
-          eventId: notice.eventId,
-          recipientId: userId,
-          roadmapId: notice.roadmapId,
-          courseOfferingId: notice.courseOfferingId,
-          noticeClass: 'roadmap-node-changed',
-          payload,
-        }),
-      ),
-    );
-    return;
-  }
-  const projection = projectDigestNotification(payload, []);
-  await prisma.roadmapNotice.createMany({
-    data: participants.map(({ userId }) => ({
-      eventId: notice.eventId,
-      recipientId: userId,
-      roadmapId: notice.roadmapId,
-      courseOfferingId: notice.courseOfferingId,
-      occurredAt: notice.occurredAt,
-      ...projection,
-      data: {
-        ...projection.data,
-        nodeTitle: notice.nodeTitle,
-        ...('resourceTitle' in notice ? { resourceTitle: notice.resourceTitle } : {}),
-      },
-    })),
-    skipDuplicates: true,
+  await Promise.all(
+    participants.map(({ userId }) =>
+      deliverGroupedNotice({
+        eventId: notice.eventId,
+        recipientId: userId,
+        roadmapId: notice.roadmapId,
+        courseOfferingId: notice.courseOfferingId,
+        noticeClass,
+        payload,
+      }),
+    ),
+  );
+}
+
+export function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
+  return storeNotice(notice, 'roadmap-available', {
+    targetKind: 'roadmap',
+    changeKind: 'roadmap-available',
+  });
+}
+
+export function storeRoadmapPathChange(notice: RoadmapPathChangeNotice) {
+  return storeNotice(notice, 'roadmap-path-changed', {
+    ...roadmapPathChangeMessage(notice),
+    targetKind: 'roadmap',
+  });
+}
+
+export function storeRoadmapClassificationChange(notice: RoadmapClassificationChangeNotice) {
+  return storeNotice(notice, 'roadmap-classification-changed', {
+    ...roadmapClassificationChangeMessage(notice),
+    targetKind: 'roadmap',
+    changeKind: 'classification-updated',
   });
 }
 
 export function storeNodeChange(notice: NodeChangeNotice) {
-  return storeNodeScopedNotice(notice);
+  return storeNotice(notice, 'roadmap-node-changed', {
+    ...nodeMessage(notice),
+    targetKind: notice.targetKind ?? 'node',
+  });
 }
 
 export function storeResourceChange(notice: ResourceChangeNotice) {
-  return storeNodeScopedNotice(notice);
+  return storeNotice(notice, 'roadmap-resource-changed', {
+    ...resourceMessage(notice),
+    targetKind: 'node',
+  });
 }
 
 export type NoticeNodeAccess = (

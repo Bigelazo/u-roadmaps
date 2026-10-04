@@ -1,33 +1,27 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
+const { prisma } = vi.hoisted(() => ({
   prisma: {
     roadmapNode: { findUnique: vi.fn() },
     roadmapNotice: { createMany: vi.fn() },
     noticeDeliveryEffect: { createMany: vi.fn() },
     $transaction: vi.fn(),
     courseOffering: { findUnique: vi.fn() },
-    participation: { findMany: vi.fn() },
+    participation: { findMany: vi.fn(), findFirst: vi.fn() },
     user: { findUnique: vi.fn() },
   },
-  ensureSubscribers: vi.fn(),
-  trigger: vi.fn(),
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
-vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
-  novuTransport: { ensureSubscribers, trigger },
-}));
-
 import { deliverNodeChange } from '@/features/notifications/server';
 
 beforeEach(() => {
   vi.useFakeTimers();
   delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
+  prisma.participation.findFirst.mockResolvedValue({ id: 'participation-id' });
+  prisma.roadmapNotice.createMany.mockResolvedValue({ count: 1 });
   prisma.$transaction.mockImplementation((operation) => operation(prisma));
   prisma.noticeDeliveryEffect.createMany.mockResolvedValue({ count: 1 });
-  vi.stubEnv('NOVU_SECRET_KEY', 'test-secret');
-  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', 'test-application');
   prisma.roadmapNode.findUnique.mockResolvedValue(null);
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
@@ -44,8 +38,6 @@ beforeEach(() => {
         .map((userId) => ({ userId })),
     );
   prisma.user.findUnique.mockResolvedValue({ name: 'Docente autora' });
-  ensureSubscribers.mockResolvedValue(undefined);
-  trigger.mockResolvedValue({});
 });
 
 afterEach(() => {
@@ -92,74 +84,63 @@ test('own Node summaries retain a long valid author and previous Node type throu
   });
 });
 
-test.each([true, false])(
-  'retains deletion context in the own Inbox with Novu configured: %s',
-  async (configured) => {
-    if (!configured) {
-      vi.stubEnv('NOVU_SECRET_KEY', '');
-      vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
-    }
-    await deliverNodeChange({
-      userId: 'author-id',
-      courseCode: 'CC3002',
-      year: 2026,
-      semester: 2,
-      nodeId: 'deleted-node-id',
-      roadmapId: 'roadmap-id',
-      changeKind: 'node-deleted',
-      changedFields: [],
-      nodeTitle: 'Evaluación final',
-      nodeTypeName: 'Evaluación',
-      targetKind: 'roadmap',
-      recipientIds: ['student-id'],
-    });
+test('retains deletion context in the own Inbox', async () => {
+  await deliverNodeChange({
+    userId: 'author-id',
+    courseCode: 'CC3002',
+    year: 2026,
+    semester: 2,
+    nodeId: 'deleted-node-id',
+    roadmapId: 'roadmap-id',
+    changeKind: 'node-deleted',
+    changedFields: [],
+    nodeTitle: 'Evaluación final',
+    nodeTypeName: 'Evaluación',
+    targetKind: 'roadmap',
+    recipientIds: ['student-id'],
+  });
 
-    expect(prisma.courseOffering.findUnique).toHaveBeenCalled();
-    expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
-      1,
+  expect(prisma.courseOffering.findUnique).toHaveBeenCalled();
+  expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({
+      where: expect.objectContaining({
+        isActive: true,
+        userId: { in: ['student-id'], not: 'author-id' },
+      }),
+    }),
+  );
+  expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      where: expect.objectContaining({
+        isActive: true,
+        userId: { in: ['student-id'], not: 'author-id' },
+      }),
+      select: { userId: true },
+    }),
+  );
+  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
+    skipDuplicates: true,
+    data: [
       expect.objectContaining({
-        where: expect.objectContaining({
-          isActive: true,
-          userId: { in: ['student-id'], not: 'author-id' },
+        recipientId: 'student-id',
+        roadmapId: 'roadmap-id',
+        subject: 'Evaluación final',
+        body: 'Nodo eliminado: Docente autora informó este cambio en el Roadmap de CC3002. Tipo anterior: Evaluación.',
+        occurredAt: expect.any(Date),
+        data: expect.objectContaining({
+          targetKind: 'roadmap',
+          nodeId: 'deleted-node-id',
+          nodeTitle: 'Evaluación final',
+          changeKind: 'node-deleted',
         }),
       }),
-    );
-    expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: expect.objectContaining({
-          isActive: true,
-          userId: { in: ['student-id'], not: 'author-id' },
-        }),
-        select: { userId: true },
-      }),
-    );
-    expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
-      skipDuplicates: true,
-      data: [
-        expect.objectContaining({
-          recipientId: 'student-id',
-          roadmapId: 'roadmap-id',
-          subject: 'Evaluación final',
-          body: 'Nodo eliminado: Docente autora informó este cambio en el Roadmap de CC3002. Tipo anterior: Evaluación.',
-          occurredAt: expect.any(Date),
-          data: expect.objectContaining({
-            targetKind: 'roadmap',
-            nodeId: 'deleted-node-id',
-            nodeTitle: 'Evaluación final',
-            changeKind: 'node-deleted',
-          }),
-        }),
-      ],
-    });
-    expect(ensureSubscribers).not.toHaveBeenCalled();
-    expect(trigger).not.toHaveBeenCalled();
-  },
-);
+    ],
+  });
+});
 
 test('accessible Node notices persist without external notification configuration', async () => {
-  vi.stubEnv('NOVU_SECRET_KEY', '');
-  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
   await deliverNodeChange({
     userId: 'author-id',
     courseCode: 'CC3002',
@@ -190,5 +171,4 @@ test('accessible Node notices persist without external notification configuratio
       }),
     ],
   });
-  expect(trigger).not.toHaveBeenCalled();
 });

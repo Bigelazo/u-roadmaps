@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
+const { prisma } = vi.hoisted(() => ({
   prisma: {
     roadmapNode: { findUnique: vi.fn(), findMany: vi.fn() },
     participation: { findMany: vi.fn() },
@@ -8,16 +8,12 @@ const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
     completion: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
     roadmapNotice: { createMany: vi.fn() },
+    noticeDeliveryEffect: { createMany: vi.fn() },
+    $transaction: vi.fn(),
   },
-  ensureSubscribers: vi.fn(),
-  trigger: vi.fn(),
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
-vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
-  novuTransport: { ensureSubscribers, trigger },
-}));
-
 import { deliverResourceChange } from '@/features/notifications/server';
 
 const input = {
@@ -29,8 +25,10 @@ const input = {
 };
 
 beforeEach(() => {
-  vi.stubEnv('NOVU_SECRET_KEY', '');
-  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
+  vi.useFakeTimers();
+  delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
+  prisma.$transaction.mockImplementation((operation) => operation(prisma));
+  prisma.noticeDeliveryEffect.createMany.mockResolvedValue({ count: 1 });
   prisma.roadmapNode.findUnique.mockResolvedValue({
     id: input.nodeId,
     title: 'Unidad 1',
@@ -59,16 +57,16 @@ beforeEach(() => {
   prisma.dependency.findMany.mockResolvedValue([]);
   prisma.completion.findMany.mockResolvedValue([]);
   prisma.user.findUnique.mockResolvedValue({ name: 'Docente autora' });
-  ensureSubscribers.mockResolvedValue(undefined);
-  trigger.mockResolvedValue({});
 });
 
 afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
   vi.clearAllMocks();
   vi.unstubAllEnvs();
 });
 
-test('stores an own Resource notice for eligible recipients without Novu configuration', async () => {
+test('stores an own Resource notice for eligible recipients through the own Inbox', async () => {
   await deliverResourceChange(input);
 
   expect(prisma.participation.findMany).toHaveBeenCalledWith(
@@ -80,9 +78,7 @@ test('stores an own Resource notice for eligible recipients without Novu configu
       }),
     }),
   );
-  expect(ensureSubscribers).not.toHaveBeenCalled();
-  expect(trigger).not.toHaveBeenCalled();
-  const records = prisma.roadmapNotice.createMany.mock.calls[0]?.[0].data;
+  const records = prisma.roadmapNotice.createMany.mock.calls.flatMap(([input]) => input.data);
   expect(records).toHaveLength(2);
   expect(records.map(({ recipientId }: { recipientId: string }) => recipientId).sort()).toEqual([
     'student-id',

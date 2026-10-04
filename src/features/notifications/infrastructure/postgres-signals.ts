@@ -25,7 +25,10 @@ async function connect(): Promise<SignalConnection> {
     subscribers.clear();
     void client.end().catch(() => undefined);
   };
-  client.on('error', stop);
+  client.on('error', () => {
+    console.warn('Roadmap live signal connection failed');
+    stop();
+  });
   client.on('end', stop);
   client.on('notification', ({ payload }) => {
     try {
@@ -33,6 +36,7 @@ async function connect(): Promise<SignalConnection> {
       if (!change || typeof change !== 'object') return;
       for (const subscriber of subscribers) subscriber.receive(change as Change);
     } catch {
+      console.warn('Roadmap live signal payload failed');
       stop();
     }
   });
@@ -40,6 +44,7 @@ async function connect(): Promise<SignalConnection> {
     await client.connect();
     await client.query('LISTEN u_roadmaps_changes');
   } catch (error) {
+    console.warn('Roadmap live signal subscription failed');
     stop();
     throw error;
   }

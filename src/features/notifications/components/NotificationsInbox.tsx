@@ -1,6 +1,6 @@
 'use client';
 
-import { InboxDriverProvider, useCounts, useNotifications, useInboxClient } from './inbox-driver';
+import { InboxDriverProvider, useCounts, useNotifications } from './inbox-driver';
 import {
   acknowledgeOwnInbox,
   prepareOwnInboxNodeOpening,
@@ -8,7 +8,6 @@ import {
   type InboxRecord,
   type NoticeAcknowledgementOperation,
 } from './inbox-api';
-import { OwnInboxContext, LegacyInboxContext } from './inbox-context';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Bell, X } from 'lucide-react';
 import {
@@ -23,12 +22,6 @@ import {
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import type { InboxIdentity } from '../server';
-import {
-  ROADMAP_CHANGE_RECEIVED_EVENT,
-  requestRoadmapRecovery,
-  subscribeToRoadmapRecovery,
-} from '@/shared/client/roadmap-events';
-
 type NotificationRecord = InboxRecord;
 type NotificationDataFilter = Record<string, string | number>;
 const notificationDateFormatter = new Intl.DateTimeFormat('es-CL', {
@@ -52,17 +45,7 @@ export function NotificationCountButton({
 
 function NotificationCount({ filter, label }: { filter: NotificationDataFilter; label: string }) {
   const openInbox = useOpenNotificationInbox();
-  const own = useContext(OwnInboxContext);
-  const { counts, refetch, error } = useCounts({ filters: [{ read: false, data: filter }] });
-  useEffect(
-    () =>
-      own
-        ? undefined
-        : subscribeToRoadmapRecovery(() => {
-            void refetch().catch(() => undefined);
-          }),
-    [own, refetch],
-  );
+  const { counts, error } = useCounts({ filters: [{ read: false, data: filter }] });
   const count = counts?.[0]?.count ?? 0;
   if (count === 0 && !error) return null;
   return (
@@ -261,7 +244,6 @@ function InboxNotificationList({
 }
 
 function InboxBell() {
-  const own = useContext(OwnInboxContext);
   const { open, setOpen } = useContext(InboxOpenContext);
   const router = useRouter();
   const { select, filter, openInbox, resetFilter } = useSelectedNotification();
@@ -275,16 +257,6 @@ function InboxBell() {
   });
   const { notifications, isLoading, isFetching, hasMore, error, fetchMore, refetch } =
     useNotifications({ limit: 10, data: filter });
-  useEffect(
-    () =>
-      own
-        ? undefined
-        : subscribeToRoadmapRecovery(() => {
-            void refetch().catch(() => undefined);
-            void refetchCounts().catch(() => undefined);
-          }),
-    [own, refetch, refetchCounts],
-  );
   useEffect(() => {
     if (!open) return;
     void refetch();
@@ -391,11 +363,10 @@ export function NotificationsProvider({
   children: ReactNode;
 }) {
   return (
-    <div className="contents" key={identity?.subscriber ?? 'anonymous'}>
+    <div className="contents" key={identity?.userId ?? 'anonymous'}>
       {identity ? (
         <InboxDriverProvider identity={identity}>
           <SelectedNotificationProvider>
-            <NotificationRealtimeBridge />
             <NotificationAcknowledgementProvider>{children}</NotificationAcknowledgementProvider>
           </SelectedNotificationProvider>
         </InboxDriverProvider>
@@ -407,136 +378,36 @@ export function NotificationsProvider({
 }
 
 function NotificationAcknowledgementProvider({ children }: { children: ReactNode }) {
-  const inbox = useInboxClient();
-  const own = useContext(OwnInboxContext);
-  const legacyEnabled = useContext(LegacyInboxContext);
   const ownOperations = useRef(
     new Map<string, (NoticeAcknowledgementOperation & { nodeId?: string }) | null>(),
   );
-  const acknowledgeOwn = useCallback(
-    async (input: AcknowledgeInput, retry: boolean) => {
-      if (!own) return true;
-      const key = `${input.roadmapId}:${input.nodeId ?? 'roadmap'}`;
-      const operation = retry
-        ? ownOperations.current.get(key)
-        : input.nodeId
-          ? { roadmapId: input.roadmapId, nodeId: input.nodeId, operationId: crypto.randomUUID() }
-          : input.openingId
-            ? { roadmapId: input.roadmapId, operationId: input.openingId }
-            : null;
-      ownOperations.current.set(key, operation ?? null);
-      if (!operation) return false;
-      try {
-        if (operation.nodeId)
-          await prepareOwnInboxNodeOpening({ ...operation, nodeId: operation.nodeId, retry });
-        await acknowledgeOwnInbox(operation);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    [own],
-  );
-  const pending = useRef(
-    new Map<
-      string,
-      { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean }
-    >(),
-  );
-  const keyFor = (input: AcknowledgeInput) => `${input.roadmapId}:${input.nodeId ?? 'roadmap'}`;
-
-  const readNotifications = useCallback(
-    async (
-      input: AcknowledgeInput,
-      snapshot: { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean },
-    ) => {
-      const succeeded = await Promise.all(
-        snapshot.records.map(async (record) => {
-          try {
-            const result = await record.read();
-            return !result.error;
-          } catch {
-            return false;
-          }
-        }),
-      );
-      snapshot.records = snapshot.records.filter((_, index) => !succeeded[index]);
-      pending.current.set(keyFor(input), snapshot);
-      return snapshot.records.length === 0;
-    },
-    [],
-  );
-
-  const collectSnapshot = useCallback(
-    async (
-      input: AcknowledgeInput,
-      snapshot: { records: NotificationRecord[]; createdLte: number; listingIncomplete: boolean },
-    ) => {
-      if (own && !legacyEnabled) {
-        snapshot.listingIncomplete = false;
-        return true;
-      }
-      const knownIds = new Set(snapshot.records.map(({ id }) => id));
-      let after: string | undefined;
-      do {
-        const page = await inbox.list({
-          data: { roadmapId: input.roadmapId },
-          read: false,
-          limit: 100,
-          createdLte: snapshot.createdLte,
-          ...(after ? { after } : {}),
-          useCache: false,
-        });
-        if (page.error || !page.data) {
-          snapshot.listingIncomplete = true;
-          return false;
-        }
-        for (const record of page.data.notifications) {
-          const createdAt = Date.parse(record.createdAt);
-          if (Number.isNaN(createdAt) || createdAt > snapshot.createdLte) continue;
-          const data = record.data ?? {};
-          const isNodeNotice = data.targetKind === 'node' && typeof data.nodeId === 'string';
-          const eligible = input.nodeId
-            ? isNodeNotice && data.nodeId === input.nodeId
-            : !isNodeNotice || !input.accessibleNodeIds?.has(data.nodeId as string);
-          if (eligible && !knownIds.has(record.id)) {
-            snapshot.records.push(record);
-            knownIds.add(record.id);
-          }
-        }
-        const last = page.data.notifications.at(-1);
-        after = page.data.hasMore ? last?.id : undefined;
-        if (page.data.hasMore && !after) {
-          snapshot.listingIncomplete = true;
-          return false;
-        }
-      } while (after);
-      snapshot.listingIncomplete = false;
+  const acknowledgeOwn = useCallback(async (input: AcknowledgeInput, retry: boolean) => {
+    const key = `${input.roadmapId}:${input.nodeId ?? 'roadmap'}`;
+    const operation = retry
+      ? ownOperations.current.get(key)
+      : input.nodeId
+        ? { roadmapId: input.roadmapId, nodeId: input.nodeId, operationId: crypto.randomUUID() }
+        : input.openingId
+          ? { roadmapId: input.roadmapId, operationId: input.openingId }
+          : null;
+    ownOperations.current.set(key, operation ?? null);
+    if (!operation) return false;
+    try {
+      if (operation.nodeId)
+        await prepareOwnInboxNodeOpening({ ...operation, nodeId: operation.nodeId, retry });
+      await acknowledgeOwnInbox(operation);
       return true;
-    },
-    [inbox, own, legacyEnabled],
-  );
-
+    } catch {
+      return false;
+    }
+  }, []);
   const acknowledge = useCallback(
-    async (input: AcknowledgeInput) => {
-      const snapshot = { records: [], createdLte: Date.now(), listingIncomplete: true };
-      pending.current.set(keyFor(input), snapshot);
-      const ownResult = await acknowledgeOwn(input, false);
-      if (!(await collectSnapshot(input, snapshot))) return false;
-      return (await readNotifications(input, snapshot)) && ownResult;
-    },
-    [collectSnapshot, readNotifications, acknowledgeOwn],
+    (input: AcknowledgeInput) => acknowledgeOwn(input, false),
+    [acknowledgeOwn],
   );
-
   const retry = useCallback(
-    async (input: AcknowledgeInput) => {
-      const snapshot = pending.current.get(keyFor(input));
-      const ownResult = await acknowledgeOwn(input, true);
-      if (!snapshot) return ownResult;
-      if (snapshot.listingIncomplete && !(await collectSnapshot(input, snapshot))) return false;
-      return (await readNotifications(input, snapshot)) && ownResult;
-    },
-    [collectSnapshot, readNotifications, acknowledgeOwn],
+    (input: AcknowledgeInput) => acknowledgeOwn(input, true),
+    [acknowledgeOwn],
   );
 
   return (
@@ -549,9 +420,7 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
 function SelectedNotificationProvider({ children }: { children: ReactNode }) {
   const [notification, select] = useState<NotificationRecord | null>(null);
   const [filter, setFilter] = useState<NotificationDataFilter | undefined>();
-  const own = useContext(OwnInboxContext);
   useEffect(() => {
-    if (!own) return;
     const id = new URLSearchParams(window.location.search).get('notice');
     if (!id) return;
     let active = true;
@@ -563,7 +432,7 @@ function SelectedNotificationProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [own]);
+  }, []);
   const [inboxOpen, setInboxOpen] = useState(false);
   const openInbox = useCallback((nextFilter?: NotificationDataFilter) => {
     setFilter(nextFilter);
@@ -582,48 +451,5 @@ function SelectedNotificationProvider({ children }: { children: ReactNode }) {
 }
 
 export function NotificationsInbox({ identity }: { identity: InboxIdentity }) {
-  return <InboxBell key={identity.subscriber} />;
-}
-
-const roadmapChangeKinds = new Set([
-  'roadmap-available',
-  'node-available',
-  'node-updated',
-  'node-retired',
-  'node-deleted',
-  'node-blocked',
-  'resource-added',
-  'resource-updated',
-  'resource-removed',
-  'dependency-added',
-  'dependency-removed',
-  'classification-updated',
-]);
-
-function NotificationRealtimeBridge() {
-  const inbox = useInboxClient();
-  useEffect(() => {
-    const stopReceived = inbox.subscribeReceived((data) => {
-      if (!data || !roadmapChangeKinds.has(data.changeKind as string)) return;
-      if (
-        typeof data.courseCode !== 'string' ||
-        !data.courseCode.trim() ||
-        data.courseCode.trim().length > 20
-      )
-        return;
-      if (!Number.isSafeInteger(data.year) || (data.year as number) < 1) return;
-      if (data.semester !== 1 && data.semester !== 2) return;
-      window.dispatchEvent(
-        new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
-          detail: { courseCode: data.courseCode.trim(), year: data.year, semester: data.semester },
-        }),
-      );
-    });
-    const stopConnected = inbox.subscribeConnected(requestRoadmapRecovery);
-    return () => {
-      stopReceived();
-      stopConnected();
-    };
-  }, [inbox]);
-  return null;
+  return <InboxBell key={identity.userId} />;
 }

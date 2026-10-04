@@ -1,7 +1,5 @@
 import { expect, test } from 'vitest';
-import workflows from './fixtures/workflows.json';
 import digestExamples from './fixtures/digest-examples.json';
-import { buildNotificationDigestKey } from '@/features/notifications/infrastructure/digest-key';
 import { projectDigestNotification } from '@/features/notifications/digest-projection';
 
 const firstChange = {
@@ -20,17 +18,6 @@ const firstChange = {
   noticeBody: 'Nodo actualizado: Ana Pérez actualizó Unidad 1.',
   digestKey: 'roadmap:roadmap-a:node:node-a',
 };
-
-test('groups by Roadmap and Node while keeping other Courses and Nodes separate', () => {
-  expect(buildNotificationDigestKey('roadmap-a', 'node-a')).toBe('roadmap:roadmap-a:node:node-a');
-  expect(buildNotificationDigestKey('roadmap-a', 'node-b')).not.toBe(
-    buildNotificationDigestKey('roadmap-a', 'node-a'),
-  );
-  expect(buildNotificationDigestKey('roadmap-b', 'node-a')).not.toBe(
-    buildNotificationDigestKey('roadmap-a', 'node-a'),
-  );
-  expect(buildNotificationDigestKey('roadmap-a')).toBe('roadmap:roadmap-a:general');
-});
 
 test('keeps a first delivery immediate and projects exactly the supported scalar data', () => {
   const result = projectDigestNotification(firstChange, []);
@@ -183,55 +170,24 @@ test('includes the latest classification transition in a Roadmap summary', () =>
   );
 });
 
-test('bounds every projected string to 256 characters', () => {
+test('preserves full own notice messages and contextual strings', () => {
   const result = projectDigestNotification(
     {
       ...firstChange,
-      roadmapId: 'r'.repeat(300),
-      courseCode: 'C'.repeat(300),
-      nodeId: 'n'.repeat(300),
       nodeTitle: 'T'.repeat(300),
-      changeKind: 'k'.repeat(300),
       actorName: 'A'.repeat(300),
       noticeTitle: 'S'.repeat(300),
       noticeBody: 'B'.repeat(300),
     },
     [],
   );
-
-  expect(Object.values(result.data).filter((value) => typeof value === 'string')).toHaveLength(7);
-  for (const value of Object.values(result.data).filter((value) => typeof value === 'string')) {
-    expect(Array.from(value).length).toBeLessThanOrEqual(256);
-  }
-  expect(Array.from(result.subject).length).toBeLessThanOrEqual(256);
-  expect(Array.from(result.body).length).toBeLessThanOrEqual(256);
-});
-
-test('all five workflows share native repeat grouping and a bounded In-App projection', () => {
-  expect(workflows.workflows).toHaveLength(5);
-
-  for (const workflow of workflows.workflows) {
-    expect(workflow.digest).toMatchObject({
-      mode: 'regular-when-events-repeat',
-      windowSeconds: 60,
-      aggregationField: 'payload.digestKey',
-    });
-    expect(workflow.steps).toEqual([
-      { id: 'digest', type: 'digest' },
-      {
-        id: 'in-app',
-        type: 'in-app-code',
-        handler: `novu/${workflow.identifier}/in-app.step.tsx`,
-      },
-    ]);
-    expect(workflow.inApp.data).toHaveLength(
-      workflow.class === 'node-change' || workflow.class === 'resource-change' ? 10 : 9,
-    );
-  }
+  expect(result.subject).toBe('S'.repeat(300));
+  expect(result.body).toBe('B'.repeat(300));
+  expect(result.data.actorName).toBe('A'.repeat(300));
 });
 
 for (const example of digestExamples.cases) {
-  test(`reproduces the documented ${example.workflowId} summary projection`, () => {
+  test(`reproduces the documented ${example.noticeClass} summary projection`, () => {
     expect(projectDigestNotification(example.payload, example.digestEvents)).toEqual(
       example.expectedProjection,
     );

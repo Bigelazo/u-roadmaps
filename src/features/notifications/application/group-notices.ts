@@ -52,7 +52,7 @@ export function createNoticeGrouper(delivery: Delivery) {
     const payload = { ...group.latest.payload, eventCount: group.count, digestKey: key };
     await delivery.publish(
       { ...group.latest, eventId: `summary:${group.first.eventId}` },
-      projectDigestNotification(payload, [{ payload }], { unlimitedStrings: true }),
+      projectDigestNotification(payload, [{ payload }]),
     );
   }
 

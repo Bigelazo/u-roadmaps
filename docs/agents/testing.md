@@ -5,8 +5,9 @@
 La configuración E2E está en [playwright.config.ts](../../playwright.config.ts).
 Usa Chromium y Firefox, un worker provisional y ningún reintento automático.
 La migración a datos propios por test del
-[ADR-0013](../adr/0013-enable-parallel-e2e-tests.md) está en curso: solo
-`own-notifications.spec.ts` y `roadmaps.spec.ts` están migrados; los demás specs
+[ADR-0013](../adr/0013-enable-parallel-e2e-tests.md) está en curso: `own-notifications.spec.ts`, `roadmaps.spec.ts`,
+`own-classification-notifications.spec.ts`, `own-dependency-notifications.spec.ts`
+y `own-notification-operation.spec.ts` están migrados; los demás specs
 todavía comparten el catálogo sembrado y requieren el worker único.
 
 Validación de `roadmaps.spec.ts` del **2026-10-04**, con Chromium y Firefox:
@@ -71,7 +72,9 @@ Los specs migrados importan `test` y `expect` desde
   Usuarios de `course` como participantes.
 - `rejectNoticeInserts({ roadmapId })` o `({ courseOfferingId })`: un fallo real
   de PostgreSQL solo para los Avisos de ese Roadmap, o del Roadmap que el test
-  creará en ese Curso.
+  creará en ese Curso. Puede filtrar `noticeClass` y devuelve `wasAttempted()`;
+  sus triggers, funciones y secuencias se eliminan por el mismo ciclo de fixtures.
+- `createUser()`: un Usuario propio sin Participaciones, para comprobar aislamiento.
 - `apiAs(usuario)`: un cliente de API autenticado como ese Usuario, que se cierra
   al terminar el test.
 
@@ -100,7 +103,8 @@ Suite completa:
 pnpm test:e2e
 ```
 
-Revisión sin notificaciones, correspondiente al último alcance validado:
+Antecedente del 2026-10-02, conservado solo como historial (no es la
+verificación vigente y referencia un archivo Cloud retirado):
 
 ```sh
 pnpm test:e2e --grep-invert 'own-.*notifications|roadmap-(novu-websocket|realtime-prototype)'
@@ -118,9 +122,10 @@ La suite se detiene tras tres fallos. Para recoger todos los fallos en una
 auditoría explícita, usar `pnpm test:e2e --max-failures=0`. Los casos que no llegaron
 a ejecutarse no cuentan como pruebas aprobadas.
 
-El test real de WebSocket de Novu es optativo: requiere `RUN_NOVU_REALTIME=1` y
-credenciales de un entorno de prueba. Sin esa activación se omite una vez por
-navegador. Esto es independiente del filtro temporal de notificaciones anterior.
+El ensayo Cloud y su activación fueron retirados en #161. La suite vigente
+comprueba SSE propio y resúmenes contra Node y PostgreSQL sin credenciales
+externas ni omisiones por falta de Novu. Las omisiones Cloud de las evidencias
+anteriores se conservan como antecedentes, no como configuración actual.
 
 ## Límites y evidencias de fallo
 
@@ -134,8 +139,12 @@ navegador. Esto es independiente del filtro temporal de notificaciones anterior.
 | Conexión de `psql`                               | 5 s                                                                |
 | Consulta / espera de lock de `psql`              | 10 s / 5 s                                                         |
 | Proceso auxiliar `psql` en helpers               | 15 s                                                               |
-| Suite completa                                   | 15 min                                                             |
+| Suite completa                                   | 25 min                                                             |
 | Cierre del servidor con SIGTERM                  | 5 s antes del cierre forzado                                       |
+
+La suite dispone de 25 minutos porque los casos de agrupación ejecutan la ventana
+real de 60 segundos, secuencialmente y en ambos navegadores. Los límites por caso
+y por infraestructura no se ampliaron.
 
 El lanzamiento del navegador ocurre en un fixture de worker y tiene su propio
 plazo: el timeout normal del test no lo sustituye. Los límites SQL indicados
@@ -242,3 +251,60 @@ salida 0. Incluye Chromium y Firefox, la ventana de producción de 60 segundos,
 primer aviso inmutable, resumen separado, reconocimiento indivisible, llegada
 posterior a una apertura, SSE entre pestañas y paginación conservada. Las suites
 se ejecutaron por separado; no se ejecutó el comando agregado `pnpm test`.
+
+## Revisión única de #161
+
+Se ejecutó `code-review` una sola vez, sobre los cambios desde `ad02f3c`, y se
+aplicaron todas sus sugerencias antes de la validación final.
+
+### Standards
+
+- Los specs migrados de clasificación y Dependencias duplicaban el runner SQL.
+  Ahora usan el helper compartido `tests/e2e/database.ts`, con validación de base
+  local y límites de conexión, consulta y proceso.
+- Sus fallos de PostgreSQL tenían triggers privados ligados al texto del aviso.
+  Ahora usan `rejectNoticeInserts` ligado al Roadmap, filtro opcional por clase y
+  evidencia de inserción intentada. Triggers, funciones y secuencias participan
+  en el teardown y la limpieza de huérfanos del ADR-0013.
+
+### Spec
+
+- Faltaba comprobar el aislamiento del transporte SSE real para un Usuario ajeno
+  al Curso. El nuevo recorrido abre dos `EventSource` nativos autenticados,
+  espera `ready`, realiza una edición docente real y comprueba señales Inbox y
+  Roadmap del destinatario, sin señales para el Usuario ajeno durante una
+  observación acotada. No se inyectan eventos ni se simula el transporte.
+
+Hallazgos resueltos: dos de Standards (helper y ciclo de vida de fixtures) y uno
+de Spec (aislamiento SSE real).
+
+## Validación final de #161 del 2026-10-04
+
+`pnpm test` completo terminó con salida 0: tipos aprobados, **57 archivos y 302
+pruebas unitarias aprobadas** en **22,09 segundos**, y **136 E2E aprobadas, cero
+fallos y cero omisiones**, en **19,2 minutos**. La suite E2E ejecutó Chromium y
+Firefox secuencialmente contra el PostgreSQL local existente y un servidor Node
+de producción. Esta evidencia valida el comando agregado y sustituye las
+omisiones Cloud de los antecedentes para el estado vigente.
+
+Incluye primera entrega, ventana real de 60 segundos, primer aviso inmutable,
+resúmenes separados de Recursos, clasificación y Dependencias, SSE entre
+sesiones y pestañas, actualización del Roadmap y contadores, reconocimiento
+indivisible, aislamiento de un Usuario ajeno al Curso, acceso revocado, audiencia,
+paginación, reconexión, escritorio/móvil, teclado, foco, carga/error y reintento.
+Los fallos reales de PostgreSQL conservaron los cambios docentes confirmados.
+
+`pnpm install --frozen-lockfile` pasó después de retirar los SDK; el build y
+arranque de producción forman parte de la preparación E2E. La comprobación
+`NEXT_DIST_DIR=.next-e2e pnpm check:notification-bundle` inspeccionó **569 artefactos
+de navegador y servidor**, además de manifiesto y lockfile, sin SDK ni
+configuración de Novu. ESLint de los archivos modificados terminó sin errores y
+con tres advertencias de condicionales de tests; Prettier y `git diff --check`
+pasaron. `graphify update .` actualizó el grafo AST sin llamadas externas.
+
+El despliegue documentado usa Node y el servicio PostgreSQL existente. No se
+validó Docker ni se añadieron archivos de contenedores; el README anterior
+mencionaba archivos de empaquetado ausentes y se corrigió.
+
+Al terminar no quedaron Ramos `E2E-*`, Usuarios del dominio reservado, triggers
+ni secuencias de fallos; las cuatro consultas de limpieza devolvieron cero.
