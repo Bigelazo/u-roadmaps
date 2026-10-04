@@ -1,6 +1,6 @@
 type CourseOfferingIdentifier = { courseCode: string; year: number; semester: number };
 
-/** Client-side seam for a Novu `notifications.notification_received` adapter. */
+/** Authorized Roadmap invalidations received through the application SSE connection. */
 export const ROADMAP_CHANGE_RECEIVED_EVENT = 'u-roadmaps:roadmap-change-received';
 
 export function subscribeToRoadmapChanges(

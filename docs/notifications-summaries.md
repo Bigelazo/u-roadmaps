@@ -1,9 +1,8 @@
 # Resúmenes de cambios propios
 
-La entrega de cambios de Nodo pasa por `deliverGroupedNotice`. La capacidad
-acepta las cinco clases del catálogo (`NoticeClass`); Recursos, disponibilidad,
-ruta y clasificación conservan sus entregas actuales hasta conectar cada una al
-agrupador. No requiere Novu ni un Inbox abierto.
+Las cinco clases del catálogo pasan por `deliverGroupedNotice`: disponibilidad,
+Nodos (contenido y acceso), Recursos, Dependencias y clasificación. Todas usan
+PostgreSQL y la misma publicación SSE, sin servicios externos ni un Inbox abierto.
 
 Cada grupo corresponde a Usuario, Roadmap, Nodo cuando existe y clase. El autor
 y el tipo concreto de cambio no dividen el grupo. El primer aviso se guarda
@@ -20,8 +19,8 @@ anteriores a esos registros de idempotencia.
 
 Las ventanas y sus temporizadores viven en el proceso Node de la aplicación y se
 comparten entre los módulos de rutas de Next. Requieren un proceso de aplicación
-persistente. No coordinan ventanas entre réplicas ni recuperan repeticiones tras
-una caída; este corte no añade un servicio ni recuperación durable. Un fallo al
+persistente. La operación vigente admite un único proceso Node: no coordina ventanas entre
+réplicas ni recupera repeticiones tras una caída. No añade recuperación durable. Un fallo al
 guardar un resumen se informa sin afectar la edición del Roadmap.
 
 El resumen conserva cantidad de repeticiones y contexto del último cambio según

@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 
 test('maps each Roadmap access descriptor to a safe notification delivery', async () => {
-  deliverNodeChange.mockRejectedValueOnce(new Error('Novu unavailable'));
+  deliverNodeChange.mockRejectedValueOnce(new Error('Notification persistence unavailable'));
   const notifications = [
     {
       nodeId: 'blocked-node-id',

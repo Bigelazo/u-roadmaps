@@ -81,6 +81,7 @@ test('Resource notices persist context and share their Node destination and ackn
   request,
   page,
 }) => {
+  test.setTimeout(95_000);
   const author = { cookie: await sessionCookie(fixture.daniela) };
   const student = fixture.cc1002StudentWithoutProgress;
   const studentHeaders = { cookie: await sessionCookie(student) };
@@ -214,34 +215,34 @@ test('Resource notices persist context and share their Node destination and ackn
     });
     expect(nodeChange.status()).toBe(200);
 
-    // The Node content edit is a buffered repeat; the three Resource notices remain immediate.
-    await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 3);
+    // Node and Resource repeats close independently through the same production window.
+    await expect
+      .poll(() => count(nodeId), { timeout: 70_000, intervals: [1000] })
+      .toBe(initialNodeCount + 3);
     await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
     const noticesBeforeOpening = await getNotices(student, nodeId);
-    expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).not.toContain(
-      'node-updated',
-    );
+    expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('node-updated');
     expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain(
       'resource-added',
     );
 
     const studentResourceNotices = await resourceNotices(student, nodeId);
-    expect(studentResourceNotices).toHaveLength(3);
+    expect(studentResourceNotices).toHaveLength(2);
     expect(studentResourceNotices.map((notice) => notice.data.changeKind).sort()).toEqual([
       'resource-added',
       'resource-removed',
-      'resource-updated',
     ]);
     const deletionNotice = studentResourceNotices.find(
       (notice) => notice.data.changeKind === 'resource-removed',
     );
     expect(deletionNotice).toMatchObject({
-      subject: `Cambio de recurso: ${updatedTitle}`,
+      subject: expect.stringContaining('Resumen de cambios'),
       read: false,
       data: {
         nodeId,
         nodeTitle: expect.any(String),
         resourceTitle: updatedTitle,
+        eventCount: 2,
         actorName: 'Daniela Rojas Mella',
         occurredAt: expect.any(String),
       },
@@ -252,7 +253,7 @@ test('Resource notices persist context and share their Node destination and ackn
 
     expect(await resourceNotices(fixture.daniela, nodeId)).toHaveLength(0);
     expect(await resourceNotices(inactive, nodeId)).toHaveLength(0);
-    expect(await resourceNotices(teacher, nodeId)).toHaveLength(3);
+    expect(await resourceNotices(teacher, nodeId)).toHaveLength(2);
 
     await authenticateAs(page.context(), student);
     await page.goto('/academic-overview');
@@ -263,7 +264,7 @@ test('Resource notices persist context and share their Node destination and ackn
       .click();
     await expect(page).toHaveURL(new RegExp(`targetNode=${nodeId}`));
     await expect(
-      page.getByRole('dialog', { name: `Cambio de recurso: ${updatedTitle}` }),
+      page.getByRole('dialog', { name: deletionNotice!.subject, exact: true }),
     ).toBeVisible();
     await expect.poll(() => count(nodeId)).toBe(0);
     expect(await count(otherNodeId)).toBe(initialOtherNodeCount + 1);

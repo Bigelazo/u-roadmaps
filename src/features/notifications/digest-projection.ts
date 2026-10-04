@@ -12,14 +12,7 @@ export type DigestNotificationProjection = Readonly<{
   data: Readonly<Record<string, string | number>>;
 }>;
 
-const MAX_STRING_LENGTH = 256;
-
-export function projectDigestNotification(
-  payload: Payload,
-  events: readonly unknown[],
-  options: { unlimitedStrings?: boolean } = {},
-) {
-  const boundedString = (value: string) => (options.unlimitedStrings ? value : limitString(value));
+export function projectDigestNotification(payload: Payload, events: readonly unknown[]) {
   const digestEvents = events.map(readDigestEvent);
   const sourceEvents = digestEvents.length ? digestEvents : [{ payload }];
   const latest = latestEffectiveEvent(sourceEvents);
@@ -38,32 +31,30 @@ export function projectDigestNotification(
     throw new Error('Notification targetKind must be roadmap or node.');
   }
   const changeKind = requiredString(latest.payload.changeKind, 'changeKind');
-  const actorName = boundedString(requiredString(latest.payload.actorName, 'actorName'));
+  const actorName = requiredString(latest.payload.actorName, 'actorName');
   const occurredAt = effectiveTimestamp(latest.payload.occurredAt);
   const nodeId = optionalString(latest.payload.nodeId);
   const nodeTitle = optionalString(latest.payload.nodeTitle);
   const noticeBody = optionalString(latest.payload.noticeBody) ?? defaultBody(latest.payload);
   const scope = nodeId ? `Nodo${nodeTitle ? ` «${nodeTitle}»` : ''}` : `Roadmap de ${courseCode}`;
   const subject = summary
-    ? boundedString(`${CHANGE_SUMMARY_SUBJECT_PREFIX} ${scope}`)
-    : boundedString(optionalString(latest.payload.noticeTitle) ?? defaultSubject(latest.payload));
+    ? `${CHANGE_SUMMARY_SUBJECT_PREFIX} ${scope}`
+    : (optionalString(latest.payload.noticeTitle) ?? defaultSubject(latest.payload));
   const body = summary
-    ? boundedString(
-        `Se agruparon ${eventCount} ${eventCount === 1 ? 'cambio' : 'cambios'}. Último cambio: ${summaryDetail(latest.payload, noticeBody)}`,
-      )
-    : boundedString(noticeBody);
+    ? `Se agruparon ${eventCount} ${eventCount === 1 ? 'cambio' : 'cambios'}. Último cambio: ${summaryDetail(latest.payload, noticeBody)}`
+    : noticeBody;
 
   return {
     subject,
     body,
     data: {
-      roadmapId: boundedString(roadmapId),
-      courseCode: boundedString(courseCode),
+      roadmapId: roadmapId,
+      courseCode: courseCode,
       year: requiredNumber(latest.payload.year, 'year'),
       semester: requiredNumber(latest.payload.semester, 'semester'),
       targetKind,
-      ...(nodeId ? { nodeId: boundedString(nodeId) } : {}),
-      changeKind: boundedString(changeKind),
+      ...(nodeId ? { nodeId: nodeId } : {}),
+      changeKind: changeKind,
       occurredAt,
       eventCount,
       actorName,
@@ -184,10 +175,6 @@ function requiredPositiveInteger(value: unknown, field: string) {
     throw new Error(`Notification ${field} must be a positive integer.`);
   }
   return value;
-}
-
-function limitString(value: string) {
-  return Array.from(value).slice(0, MAX_STRING_LENGTH).join('');
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

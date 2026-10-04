@@ -1,9 +1,7 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { parse } from 'dotenv';
-import { expect, test } from '@playwright/test';
+import { literal, sql } from './database';
+import { expect, test } from './fixtures';
 import { createExistingNode } from './existing-node';
-import { fixture, roadmapPath, sessionCookie, authenticateAs } from './helpers';
+import { sessionCookie, authenticateAs } from './helpers';
 
 type StoredNotice = Readonly<{
   id: string;
@@ -13,34 +11,14 @@ type StoredNotice = Readonly<{
   data: Record<string, unknown>;
 }>;
 
-function fixtureSql(sql: string) {
-  const connection = process.env.E2E_DATABASE_URL ?? parse(readFileSync('.env')).E2E_DATABASE_URL;
-  if (!connection || new URL(connection).pathname !== '/roadmap_e2e_db')
-    throw new Error('Expected the E2E database.');
-  const url = new URL(connection);
-  return execFileSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
-    encoding: 'utf8',
-    stdio: 'pipe',
-    timeout: 15_000,
-    env: {
-      ...process.env,
-      PGDATABASE: 'roadmap_e2e_db',
-      PGHOST: url.hostname,
-      PGPORT: url.port || '5432',
-      PGUSER: decodeURIComponent(url.username),
-      PGPASSWORD: decodeURIComponent(url.password),
-    },
-  });
-}
-
-function cleanupNodeNotices(nodeIds: readonly string[]) {
+async function cleanupNodeNotices(nodeIds: readonly string[]) {
   for (const id of nodeIds)
-    fixtureSql(`DELETE FROM "RoadmapNotice" WHERE "data"->>'nodeId' = '${id}';`);
+    await sql(`DELETE FROM "RoadmapNotice" WHERE "data"->>'nodeId' = '${id}';`);
 }
 
-function cleanupDependencyNotices(dependencyIds: readonly string[]) {
+async function cleanupDependencyNotices(dependencyIds: readonly string[]) {
   for (const id of dependencyIds)
-    fixtureSql(`DELETE FROM "RoadmapNotice" WHERE "data"->>'dependencyId' = '${id}';`);
+    await sql(`DELETE FROM "RoadmapNotice" WHERE "data"->>'dependencyId' = '${id}';`);
 }
 
 function escapeRegExp(value: string) {
@@ -49,13 +27,15 @@ function escapeRegExp(value: string) {
 
 test('Dependency notices preserve route and access changes with separate recognition', async ({
   request,
+  course,
   page,
 }) => {
   test.setTimeout(90_000);
-  const author = { cookie: await sessionCookie(fixture.daniela) };
-  const studentWithoutPrerequisite = fixture.cc1002StudentWithoutProgress;
-  const studentWithPrerequisites = fixture.cc1002StudentWithProgress;
-  const inactiveStudent = fixture.cc1002WithdrawnStudent;
+  const roadmapPath = course.apiPath;
+  const author = { cookie: await sessionCookie(course.users.teacher.id) };
+  const studentWithoutPrerequisite = course.users.studentWithoutProgress.id;
+  const studentWithPrerequisites = course.users.studentWithProgress.id;
+  const inactiveStudent = course.users.withdrawnStudent.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   const roadmapId = roadmap.roadmap.id as string;
   const nodeIds: string[] = [];
@@ -130,7 +110,7 @@ test('Dependency notices preserve route and access changes with separate recogni
     const prerequisiteId = await createNode(prerequisiteTitle);
     const dependentId = await createNode(dependentTitle);
     const transitiveId = await createNode(transitiveTitle);
-    cleanupNodeNotices(nodeIds);
+    await cleanupNodeNotices(nodeIds);
 
     for (const nodeId of [dependentId]) {
       const completed = await request.post(roadmapPath(`/nodes/${nodeId}/completion`), {
@@ -146,12 +126,12 @@ test('Dependency notices preserve route and access changes with separate recogni
     }
 
     // Establish a transitive branch while every student's access is unchanged.
-    const branchDependencyId = await createDependency(dependentId, transitiveId);
-    await expect
-      .poll(async () => routeNoticesFor(studentWithoutPrerequisite, branchDependencyId))
-      .toHaveLength(1);
-    cleanupDependencyNotices([branchDependencyId]);
-    cleanupNodeNotices(nodeIds);
+    const branchDependencyId = crypto.randomUUID();
+    await sql(
+      `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES ('${branchDependencyId}', '${dependentId}', '${transitiveId}');`,
+    );
+    dependencyIds.push(branchDependencyId);
+    await cleanupNodeNotices(nodeIds);
 
     const dependencyId = await createDependency(prerequisiteId, dependentId);
     const duplicate = await request.post(roadmapPath('/dependencies'), {
@@ -181,7 +161,7 @@ test('Dependency notices preserve route and access changes with separate recogni
     await expect
       .poll(async () => routeNoticesFor(studentWithPrerequisites, dependencyId))
       .toHaveLength(1);
-    expect(await routeNoticesFor(fixture.daniela, dependencyId)).toHaveLength(0);
+    expect(await routeNoticesFor(course.users.teacher.id, dependencyId)).toHaveLength(0);
     expect(await routeNoticesFor(inactiveStudent, dependencyId)).toHaveLength(0);
 
     const blockedForStudent = async (userId: string) =>
@@ -205,7 +185,7 @@ test('Dependency notices preserve route and access changes with separate recogni
 
     const addedRouteNotice = (await routeNoticesFor(studentWithoutPrerequisite, dependencyId))[0];
     await selectRouteNotice(studentWithoutPrerequisite, addedRouteNotice);
-    await expect(page).toHaveURL(/\/courses\/CC1002\/2026\/2\?notice=/);
+    await expect(page).toHaveURL(new RegExp(`${course.pagePath()}\\?notice=`));
     await expect(page).not.toHaveURL(/targetNode=/);
     const addedDialog = page.getByRole('dialog', { name: 'Ruta actualizada' });
     await expect(addedDialog).toBeVisible();
@@ -231,7 +211,10 @@ test('Dependency notices preserve route and access changes with separate recogni
     });
     expect(removal.status()).toBe(204);
     await expect
-      .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
+      .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId), {
+        timeout: 70_000,
+        intervals: [1000],
+      })
       .toHaveLength(2);
     for (const nodeId of [dependentId, transitiveId])
       await expect
@@ -251,14 +234,14 @@ test('Dependency notices preserve route and access changes with separate recogni
     // Newly delivered summaries can move an older route notice to another page.
     // Make pagination deterministic instead of depending on earlier test timing.
     for (let index = 0; index < 12; index++)
-      fixtureSql(
-        `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${paginationEventPrefix}-${index}', '${studentWithoutPrerequisite}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"CC1002","year":2026,"semester":2,"targetKind":"roadmap"}', NOW());`,
+      await sql(
+        `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${paginationEventPrefix}-${index}', '${studentWithoutPrerequisite}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"${course.courseCode}","year":2026,"semester":2,"targetKind":"roadmap"}', NOW());`,
       );
     await selectRouteNotice(studentWithoutPrerequisite, removedRouteNotice!);
-    await expect(page).toHaveURL(/\/courses\/CC1002\/2026\/2\?notice=/);
-    await expect(page.getByRole('dialog', { name: 'Ruta actualizada' })).toContainText(
-      `«${dependentTitle}» ya no requiere «${prerequisiteTitle}»`,
-    );
+    await expect(page).toHaveURL(new RegExp(`${course.pagePath()}\\?notice=`));
+    await expect(
+      page.getByRole('dialog', { name: new RegExp(`Resumen de cambios.*${course.courseCode}`) }),
+    ).toContainText(`«${dependentTitle}» ya no requiere «${prerequisiteTitle}»`);
     await expect
       .poll(
         async () =>
@@ -293,21 +276,23 @@ test('Dependency notices preserve route and access changes with separate recogni
       )?.read,
     ).toBe(false);
   } finally {
-    fixtureSql(`DELETE FROM "RoadmapNotice" WHERE "eventId" LIKE '${paginationEventPrefix}-%';`);
+    await sql(`DELETE FROM "RoadmapNotice" WHERE "eventId" LIKE '${paginationEventPrefix}-%';`);
     for (const dependencyId of [...dependencyIds].reverse())
       await request.delete(roadmapPath(`/dependencies/${dependencyId}`), { headers: author });
     for (const nodeId of [...nodeIds].reverse())
       await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
-    cleanupNodeNotices(nodeIds);
-    cleanupDependencyNotices(dependencyIds);
+    await cleanupNodeNotices(nodeIds);
+    await cleanupDependencyNotices(dependencyIds);
   }
 });
 
 test('cascade Dependency removals from Node visibility and deletion do not create route notices', async ({
   request,
+  course,
 }) => {
-  const author = { cookie: await sessionCookie(fixture.daniela) };
-  const student = fixture.cc1002StudentWithoutProgress;
+  const roadmapPath = course.apiPath;
+  const author = { cookie: await sessionCookie(course.users.teacher.id) };
+  const student = course.users.studentWithoutProgress.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   const nodeIds: string[] = [];
   const dependencyIds: string[] = [];
@@ -327,25 +312,13 @@ test('cascade Dependency removals from Node visibility and deletion do not creat
     return id;
   };
   const createDependency = async (sourceNodeId: string, targetNodeId: string) => {
-    const response = await request.post(roadmapPath('/dependencies'), {
-      headers: author,
-      data: { sourceNodeId, targetNodeId },
-    });
-    expect(response.status()).toBe(201);
-    const id = (await response.json()).dependency.id as string;
+    // Prepare an existing edge without opening a delivery window: this case
+    // tests cascade removal, while explicit edits are covered above.
+    const id = crypto.randomUUID();
+    await sql(
+      `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES (${literal(id)}, ${literal(sourceNodeId)}, ${literal(targetNodeId)});`,
+    );
     dependencyIds.push(id);
-    await expect
-      .poll(async () => {
-        const result = await request.get(
-          `/api/notifications?roadmapId=${roadmap.roadmap.id}&limit=100`,
-          { headers: { cookie: await sessionCookie(student) } },
-        );
-        return ((await result.json()).notifications as StoredNotice[]).filter(
-          ({ data }) => data.dependencyId === id,
-        );
-      })
-      .toHaveLength(1);
-    cleanupDependencyNotices([id]);
     return id;
   };
   const routeNotices = async (dependencyId: string) => {
@@ -382,23 +355,23 @@ test('cascade Dependency removals from Node visibility and deletion do not creat
       await request.delete(roadmapPath(`/dependencies/${dependencyId}`), { headers: author });
     for (const nodeId of [...nodeIds].reverse())
       await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
-    cleanupNodeNotices(nodeIds);
-    cleanupDependencyNotices(dependencyIds);
+    await cleanupNodeNotices(nodeIds);
+    await cleanupDependencyNotices(dependencyIds);
   }
 });
 
 test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutation', async ({
   request,
+  course,
+  rejectNoticeInserts,
 }) => {
-  const author = { cookie: await sessionCookie(fixture.daniela) };
-  const student = fixture.cc1002StudentWithoutProgress;
+  test.setTimeout(95_000);
+  const roadmapPath = course.apiPath;
+  const author = { cookie: await sessionCookie(course.users.teacher.id) };
+  const student = course.users.studentWithoutProgress.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   const nodeIds: string[] = [];
   let dependencyId: string | undefined;
-  const suffix = crypto.randomUUID().replaceAll('-', '');
-  const triggerName = `e2e_fail_path_notice_${suffix}`;
-  const functionName = `e2e_fail_path_notice_fn_${suffix}`;
-  const attemptsSequence = `e2e_path_notice_attempts_${suffix}`;
   const dependentTitle = `Fallo de aviso de ruta ${crypto.randomUUID()}`;
 
   const createNode = async (title: string) => {
@@ -426,20 +399,11 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
   try {
     const prerequisiteId = await createNode(`Fallo de prerrequisito ${crypto.randomUUID()}`);
     const dependentId = await createNode(dependentTitle);
-    cleanupNodeNotices(nodeIds);
-    fixtureSql(`CREATE SEQUENCE "${attemptsSequence}" START WITH 1;
-      CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN
-        IF NEW."data"->>'changeKind' = 'dependency-added'
-          AND NEW."data"->>'dependentNodeTitle' = '${dependentTitle}' THEN
-          PERFORM nextval('${attemptsSequence}');
-          RAISE EXCEPTION 'E2E route notice failure';
-        END IF;
-        RETURN NEW;
-      END;
-      $$;
-      CREATE TRIGGER "${triggerName}" BEFORE INSERT ON "RoadmapNotice"
-      FOR EACH ROW EXECUTE FUNCTION "${functionName}"();`);
+    await cleanupNodeNotices(nodeIds);
+    const failure = await rejectNoticeInserts({
+      roadmapId: course.roadmapId,
+      noticeClass: 'roadmap-path-changed',
+    });
 
     const response = await request.post(roadmapPath('/dependencies'), {
       headers: author,
@@ -453,7 +417,7 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
     expect((await persisted.json()).dependencies).toContainEqual(
       expect.objectContaining({ sourceNodeId: prerequisiteId, targetNodeId: dependentId }),
     );
-    expect(fixtureSql(`SELECT is_called::text FROM "${attemptsSequence}";`)).toContain('true');
+    expect(await failure.wasAttempted()).toBe(true);
     expect((await noticesFor()).some(({ data }) => data.dependencyId === dependencyId)).toBe(false);
     await expect
       .poll(async () =>
@@ -461,14 +425,11 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
       )
       .toBe(true);
   } finally {
-    fixtureSql(
-      `DROP TRIGGER IF EXISTS "${triggerName}" ON "RoadmapNotice"; DROP FUNCTION IF EXISTS "${functionName}"(); DROP SEQUENCE IF EXISTS "${attemptsSequence}";`,
-    );
     if (dependencyId)
       await request.delete(roadmapPath(`/dependencies/${dependencyId}`), { headers: author });
     for (const nodeId of [...nodeIds].reverse())
       await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
-    cleanupNodeNotices(nodeIds);
-    if (dependencyId) cleanupDependencyNotices([dependencyId]);
+    await cleanupNodeNotices(nodeIds);
+    if (dependencyId) await cleanupDependencyNotices([dependencyId]);
   }
 });

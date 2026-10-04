@@ -1,26 +1,24 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-const { prisma, ensureSubscribers, trigger } = vi.hoisted(() => ({
+const { prisma } = vi.hoisted(() => ({
   prisma: {
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
     roadmapNotice: { createMany: vi.fn() },
+    noticeDeliveryEffect: { createMany: vi.fn() },
+    $transaction: vi.fn(),
   },
-  ensureSubscribers: vi.fn(),
-  trigger: vi.fn(),
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
-vi.mock('@/features/notifications/infrastructure/novu-transport', () => ({
-  novuTransport: { ensureSubscribers, trigger },
-}));
-
 import { deliverRoadmapClassificationChange } from '@/features/notifications/server';
 
 beforeEach(() => {
-  vi.stubEnv('NOVU_SECRET_KEY', '');
-  vi.stubEnv('NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER', '');
+  vi.useFakeTimers();
+  delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
+  prisma.$transaction.mockImplementation((operation) => operation(prisma));
+  prisma.noticeDeliveryEffect.createMany.mockResolvedValue({ count: 1 });
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
     courseCode: 'CC3002',
@@ -33,16 +31,16 @@ beforeEach(() => {
     .mockResolvedValueOnce([{ userId: 'student-id' }]);
   prisma.user.findUnique.mockResolvedValue({ name: 'Docente autora' });
   prisma.roadmapNotice.createMany.mockResolvedValue({ count: 1 });
-  ensureSubscribers.mockResolvedValue(undefined);
-  trigger.mockResolvedValue({});
 });
 
 afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
   vi.clearAllMocks();
   vi.unstubAllEnvs();
 });
 
-test('stores without Novu the type rename to active recipients except the author on the matching Roadmap', async () => {
+test('stores the type rename to active recipients except the author on the matching Roadmap', async () => {
   await deliverRoadmapClassificationChange({
     userId: 'teacher-id',
     identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
@@ -79,8 +77,6 @@ test('stores without Novu the type rename to active recipients except the author
     ],
     skipDuplicates: true,
   });
-  expect(ensureSubscribers).not.toHaveBeenCalled();
-  expect(trigger).not.toHaveBeenCalled();
 });
 
 test('does not send a descriptor for another Roadmap', async () => {
@@ -102,5 +98,4 @@ test('does not send a descriptor for another Roadmap', async () => {
   });
 
   expect(prisma.participation.findMany).not.toHaveBeenCalled();
-  expect(trigger).not.toHaveBeenCalled();
 });

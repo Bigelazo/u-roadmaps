@@ -125,7 +125,7 @@ test.each(examples.cases)(
   'reuses the documented $workflowId summary with multiple authors and latest effective context',
   async (example) => {
     const delivery = inbox();
-    const noticeClass = example.workflowId as NoticeClass;
+    const noticeClass = example.noticeClass as NoticeClass;
     await delivery.deliver(
       effect('first', { noticeClass, payload: example.digestEvents[0].payload }),
     );

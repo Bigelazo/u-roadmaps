@@ -37,10 +37,7 @@ function InboxProjection() {
   );
 }
 const identity = (subscriber: string) => ({
-  own: true,
-  subscriber,
-  subscriberHash: '',
-  applicationIdentifier: '',
+  userId: subscriber,
 });
 afterEach(() => {
   vi.unstubAllGlobals();

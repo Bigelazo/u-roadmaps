@@ -24,41 +24,10 @@ import {
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
 export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
-import { emitNodeScopedChange } from './application/emit-node-scoped-change';
-import { novuTransport } from './infrastructure/novu-transport';
-import { createSubscriberHash } from './infrastructure/subscriber-hash';
-
-export type InboxIdentity = Readonly<{
-  subscriber: string;
-  own?: boolean;
-  apiUrl?: string;
-  socketUrl?: string;
-  subscriberHash: string;
-  applicationIdentifier: string;
-}>;
-
-export function notificationsEnabled() {
-  return (
-    Boolean(process.env.NOVU_SECRET_KEY?.trim()) &&
-    Boolean(process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER?.trim())
-  );
-}
+export type InboxIdentity = Readonly<{ userId: string }>;
 
 export function getInboxIdentity(userId: string): InboxIdentity {
-  const applicationIdentifier = process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER ?? '';
-  const secretKey = process.env.NOVU_SECRET_KEY ?? '';
-  return {
-    own: true,
-    ...(process.env.NEXT_PUBLIC_NOVU_API_URL
-      ? { apiUrl: process.env.NEXT_PUBLIC_NOVU_API_URL }
-      : {}),
-    ...(process.env.NEXT_PUBLIC_NOVU_SOCKET_URL
-      ? { socketUrl: process.env.NEXT_PUBLIC_NOVU_SOCKET_URL }
-      : {}),
-    subscriber: userId,
-    subscriberHash: notificationsEnabled() ? createSubscriberHash(userId, secretKey) : '',
-    applicationIdentifier: notificationsEnabled() ? applicationIdentifier : '',
-  };
+  return { userId };
 }
 
 export async function getOwnNotice(userId: string, id: string) {
@@ -179,15 +148,6 @@ export async function deliverNodeChange(input: {
   targetKind?: 'node' | 'roadmap';
   availabilitySource?: 'publication';
 }) {
-  const ownNodeChange =
-    input.changeKind === 'node-updated' ||
-    input.changeKind === 'node-available' ||
-    input.changeKind === 'node-retired' ||
-    input.changeKind === 'node-deleted' ||
-    input.changeKind === 'node-blocked';
-  if (!ownNodeChange && !notificationsEnabled()) return;
-  const workflowId = 'roadmap-node-changed';
-
   const node = await prisma.roadmapNode.findUnique({
     where: { id: input.nodeId },
     include: {
@@ -267,25 +227,9 @@ export async function deliverNodeChange(input: {
     recipients,
   };
 
-  if (ownNodeChange) {
-    await storeNodeChange(notice).catch(() => {
-      console.warn('Node notice delivery failed', { eventId: notice.eventId });
-    });
-    return;
-  }
-
-  await emitNodeScopedChange(
-    notice,
-    novuTransport,
-    async (userIds) => {
-      const active = await prisma.participation.findMany({
-        where: { courseOfferingId: offeringInfo.id, userId: { in: [...userIds] }, isActive: true },
-        select: { userId: true },
-      });
-      return active.map(({ userId }) => userId);
-    },
-    workflowId,
-  ).catch(() => undefined);
+  await storeNodeChange(notice).catch(() => {
+    console.warn('Node notice delivery failed', { eventId: notice.eventId });
+  });
 }
 
 export async function deliverRoadmapPathChange(input: {
@@ -442,7 +386,7 @@ export async function deliverResourceChange(input: {
     };
     await storeResourceChange(notice);
   } catch {
-    // Notification delivery is best-effort and cannot change a committed resource mutation.
+    console.warn('Resource notice delivery failed', { nodeId: input.nodeId });
   }
 }
 

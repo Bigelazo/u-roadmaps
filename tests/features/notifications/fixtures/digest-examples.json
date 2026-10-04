@@ -1,9 +1,7 @@
 {
   "schemaVersion": 1,
-  "subscriberId": "subscriber-a",
   "cases": [
     {
-      "workflowId": "roadmap-available",
       "payload": {
         "roadmapId": "roadmap-a",
         "courseCode": "CC1001",
@@ -64,10 +62,10 @@
           "eventCount": 2,
           "actorName": "Luis Soto"
         }
-      }
+      },
+      "noticeClass": "roadmap-available"
     },
     {
-      "workflowId": "roadmap-node-changed",
       "payload": {
         "roadmapId": "roadmap-a",
         "courseCode": "CC1001",
@@ -141,10 +139,10 @@
           "eventCount": 2,
           "actorName": "Luis Soto"
         }
-      }
+      },
+      "noticeClass": "roadmap-node-changed"
     },
     {
-      "workflowId": "roadmap-path-changed",
       "payload": {
         "roadmapId": "roadmap-a",
         "courseCode": "CC1001",
@@ -211,10 +209,10 @@
           "eventCount": 2,
           "actorName": "Luis Soto"
         }
-      }
+      },
+      "noticeClass": "roadmap-path-changed"
     },
     {
-      "workflowId": "roadmap-resource-changed",
       "payload": {
         "roadmapId": "roadmap-a",
         "courseCode": "CC1001",
@@ -291,10 +289,10 @@
           "eventCount": 2,
           "actorName": "Luis Soto"
         }
-      }
+      },
+      "noticeClass": "roadmap-resource-changed"
     },
     {
-      "workflowId": "roadmap-classification-changed",
       "payload": {
         "roadmapId": "roadmap-a",
         "courseCode": "CC1001",
@@ -361,7 +359,8 @@
           "eventCount": 2,
           "actorName": "Luis Soto"
         }
-      }
+      },
+      "noticeClass": "roadmap-classification-changed"
     }
   ],
   "note": "Each digestEvents list includes later repeats only. The first event was delivered immediately and is excluded."

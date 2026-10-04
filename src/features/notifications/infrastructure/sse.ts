@@ -47,7 +47,10 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
             });
             if (participation || change.userId === userId) send('roadmap', { ...change, userId });
           }
-        })().catch(stop);
+        })().catch(() => {
+          console.warn('Roadmap live signal projection failed');
+          stop();
+        });
       },
     });
     if (signal.aborted || stopped) {

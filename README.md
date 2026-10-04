@@ -65,39 +65,38 @@ Cada curso se identifica por el código del ramo, el año y el semestre, y tiene
 ### Avisos y actualización de información
 
 - Campana y bandeja de avisos dentro de la aplicación, con paginación, filtros por curso y nodo, contadores de pendientes y navegación al elemento relacionado.
-- Avisos propios guardados en PostgreSQL para la disponibilidad de un roadmap, la creación/publicación y edición de nodos accesibles, y los cambios de recursos.
+- Avisos propios guardados en PostgreSQL para la disponibilidad de un roadmap, los Nodos, Recursos, cambios de acceso, Dependencias y clasificación.
 - Selección de destinatarios según participación activa y acceso al contenido, excluyendo al autor del cambio.
 - Reconocimiento contextual de avisos al entrar al roadmap o abrir el nodo correspondiente. Ver una fila o abrir el diálogo del aviso no basta para reconocerlo; las llegadas posteriores a una apertura permanecen pendientes.
-- Primer aviso de Nodo inmediato y resumen separado de sus repeticiones al cerrar una ventana fija de 60 segundos, con cantidad y contexto del último cambio.
+- Primer aviso inmediato por clase y resumen separado de sus repeticiones al cerrar una ventana fija de 60 segundos, con cantidad y contexto del último cambio.
 - Entrega en vivo mediante SSE para los avisos propios y la proyección del roadmap; recuperación al volver a la pestaña o recuperar la conexión, con tratamiento de borradores locales y pérdida de acceso.
-- Integración transitoria y prototipos de Novu todavía presentes; su activación requiere credenciales y workflows configurados.
 
-La sustitución de Novu por notificaciones propias está en curso. La agrupación está conectada al recorrido de Nodo; su capacidad admite las cinco clases del catálogo para su integración posterior. Las ventanas requieren un proceso de aplicación persistente y no recuperan repeticiones tras caídas. Véanse [resúmenes propios](docs/notifications-summaries.md) y [SSE](docs/notifications-sse.md).
+Los avisos funcionan exclusivamente con la aplicación y PostgreSQL, sin SDK ni credenciales de Novu. Las cinco clases usan el mismo contrato de agrupación. La operación admitida es un único proceso Node persistente; las ventanas no recuperan repeticiones tras caídas. Véanse [resúmenes propios](docs/notifications-summaries.md) y [SSE](docs/notifications-sse.md).
 
 ## Tecnologías
 
 Las versiones siguientes corresponden a las dependencias declaradas en [package.json](package.json).
 
-| Área               | Tecnología                                                           |
-| ------------------ | -------------------------------------------------------------------- |
-| Aplicación y API   | Next.js 16.3.2, App Router y Route Handlers                          |
-| Interfaz           | React 19.2.8, TypeScript 6, Tailwind CSS 4, shadcn/ui y Base UI      |
-| Canvas             | React Flow (`@xyflow/react` 12.11.3) y Dagre                         |
-| Persistencia       | PostgreSQL y Prisma 7 con adaptador `pg`                             |
-| Sesión e identidad | NextAuth 4, JOSE y VTI                                               |
-| Datos académicos   | U-Campus/MUFASA y lectura del calendario oficial en PDF              |
-| Notificaciones     | Persistencia propia en PostgreSQL e integración transitoria con Novu |
-| Pruebas            | Vitest, Testing Library y Playwright                                 |
-| Herramientas       | pnpm, ESLint, Prettier y Docker Compose                              |
+| Área               | Tecnología                                                      |
+| ------------------ | --------------------------------------------------------------- |
+| Aplicación y API   | Next.js 16.3.2, App Router y Route Handlers                     |
+| Interfaz           | React 19.2.8, TypeScript 6, Tailwind CSS 4, shadcn/ui y Base UI |
+| Canvas             | React Flow (`@xyflow/react` 12.11.3) y Dagre                    |
+| Persistencia       | PostgreSQL y Prisma 7 con adaptador `pg`                        |
+| Sesión e identidad | NextAuth 4, JOSE y VTI                                          |
+| Datos académicos   | U-Campus/MUFASA y lectura del calendario oficial en PDF         |
+| Notificaciones     | PostgreSQL, agrupación propia y SSE autenticado                 |
+| Pruebas            | Vitest, Testing Library y Playwright                            |
+| Herramientas       | pnpm, ESLint y Prettier                                         |
 
 ## Instalación y desarrollo local
 
 ### Requisitos
 
-- Node.js 24, utilizado también por el Dockerfile.
-- pnpm 11.22.0, versión declarada en `packageManager`.
-- PostgreSQL activo y accesible localmente. Docker Compose utiliza PostgreSQL 15.
-- Git. Docker y Docker Compose son necesarios si se utiliza el despliegue en contenedores.
+- Node.js 24.
+- pnpm.
+- PostgreSQL activo y accesible localmente.
+- Git.
 
 ### 1. Obtener el proyecto e instalar dependencias
 
@@ -153,44 +152,42 @@ pnpm exec dotenv -e .env -- pnpm prisma:seed
 
 La plantilla está en [.env.example](.env.example). Next.js carga los archivos de entorno desde la raíz. Prisma usa `DATABASE_URL` del entorno; los scripts de migración cargan `.env` explícitamente.
 
-| Variable                                  | Uso                                                                                                                                           |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                            | Conexión PostgreSQL de la aplicación y Prisma. Obligatoria.                                                                                   |
-| `E2E_DATABASE_URL`                        | Conexión a la base separada de pruebas E2E.                                                                                                   |
-| `NEXTAUTH_URL`                            | Origen de la aplicación; por ejemplo, `http://localhost:3000`.                                                                                |
-| `NEXTAUTH_SECRET`                         | Secreto de la sesión local. Necesario para iniciar sesión, incluidos los perfiles de desarrollo.                                              |
-| `NEXT_PUBLIC_VTI_LOGIN_URL`               | URL válida del servicio institucional de acceso. Necesaria para el flujo real de U-Pasaporte.                                                 |
-| `VTI_JWT_SECRET`                          | Secreto acordado con VTI para validar sus tokens.                                                                                             |
-| `MUFASA_TOKEN`                            | Token del puente U-Campus para consultar cursos y cargos institucionales.                                                                     |
-| `MUFASA_BASE_URL`                         | URL base del puente; la plantilla incluye el endpoint institucional usado por el proyecto.                                                    |
-| `NOVU_SECRET_KEY`                         | Clave privada del servidor para la integración restante con Novu.                                                                             |
-| `NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER` | Identificador del mismo entorno Novu. Ambas credenciales no vacías habilitan la integración restante; los avisos propios funcionan sin ellas. |
-| `U_ROADMAPS_DEV_DATA`                     | Activa el selector de perfiles cuando `NODE_ENV=development`.                                                                                 |
-| `U_ROADMAPS_E2E_DATA`                     | Habilita los datos ficticios para E2E cuando se configura en el servidor.                                                                     |
+| Variable                    | Uso                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`              | Conexión PostgreSQL de la aplicación y Prisma. Obligatoria.                                      |
+| `E2E_DATABASE_URL`          | Conexión a la base separada de pruebas E2E.                                                      |
+| `NEXTAUTH_URL`              | Origen de la aplicación; por ejemplo, `http://localhost:3000`.                                   |
+| `NEXTAUTH_SECRET`           | Secreto de la sesión local. Necesario para iniciar sesión, incluidos los perfiles de desarrollo. |
+| `NEXT_PUBLIC_VTI_LOGIN_URL` | URL válida del servicio institucional de acceso. Necesaria para el flujo real de U-Pasaporte.    |
+| `VTI_JWT_SECRET`            | Secreto acordado con VTI para validar sus tokens.                                                |
+| `MUFASA_TOKEN`              | Token del puente U-Campus para consultar cursos y cargos institucionales.                        |
+| `MUFASA_BASE_URL`           | URL base del puente; la plantilla incluye el endpoint institucional usado por el proyecto.       |
+| `U_ROADMAPS_DEV_DATA`       | Activa el selector de perfiles cuando `NODE_ENV=development`.                                    |
+| `U_ROADMAPS_E2E_DATA`       | Habilita los datos ficticios para E2E cuando se configura en el servidor.                        |
 
-El driver de la bandeja también admite `NEXT_PUBLIC_NOVU_API_URL` y `NEXT_PUBLIC_NOVU_SOCKET_URL`. El transporte servidor de Novu conserva sus endpoints predeterminados; estas variables no cambian por sí solas la región de toda la integración.
+Los avisos no tienen configuración externa. Véase [operación y verificación](docs/notifications-operations.md).
 
 ## Comandos disponibles
 
-| Comando                                    | Descripción                                                                                          |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                 | Inicia Next.js en desarrollo.                                                                        |
-| `pnpm build`                               | Genera el build de producción.                                                                       |
-| `pnpm start`                               | Sirve un build de producción existente.                                                              |
-| `pnpm lint` / `pnpm lint:fix`              | Revisa el código con ESLint / aplica correcciones automáticas.                                       |
-| `pnpm format:check` / `pnpm format`        | Comprueba el formato / formatea el repositorio con Prettier.                                         |
-| `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                 |
-| `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.            |
-| `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                   |
-| `pnpm test`                                | Ejecuta tipos, Vitest y E2E en secuencia; requiere configurar el entorno de pruebas.                 |
-| `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                  |
-| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                     |
-| `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                     |
-| `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                |
-| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                             |
-| `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                  |
-| `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno. |
-| `pnpm check:notification-bundle`           | Inspecciona el build para detectar filtraciones de secretos de Novu en artefactos del navegador.     |
+| Comando                                    | Descripción                                                                                                    |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                 | Inicia Next.js en desarrollo.                                                                                  |
+| `pnpm build`                               | Genera el build de producción.                                                                                 |
+| `pnpm start`                               | Sirve un build de producción existente.                                                                        |
+| `pnpm lint` / `pnpm lint:fix`              | Revisa el código con ESLint / aplica correcciones automáticas.                                                 |
+| `pnpm format:check` / `pnpm format`        | Comprueba el formato / formatea el repositorio con Prettier.                                                   |
+| `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                           |
+| `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.                      |
+| `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                             |
+| `pnpm test`                                | Ejecuta tipos, Vitest y E2E en secuencia; requiere configurar el entorno de pruebas.                           |
+| `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                            |
+| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                               |
+| `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                               |
+| `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                          |
+| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                                       |
+| `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                            |
+| `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.           |
+| `pnpm check:notification-bundle`           | Verifica que los artefactos de navegador y servidor y las dependencias carecen de SDK/configuración retirados. |
 
 La sincronización del calendario puede consultar el PDF sin escribir en la base:
 
@@ -224,7 +221,7 @@ pnpm test:e2e
 
 Playwright prepara los fixtures y ejecuta un build de producción en `localhost:3200`, contra `roadmap_e2e_db`, con `.next-e2e` y `uploads-e2e` separados del desarrollo. Chromium y Firefox usan un worker provisional; la paralelización se abordará en el [ADR-0013](docs/adr/0013-enable-parallel-e2e-tests.md). Cada invocación administra su servidor y finaliza sin abrir el reporte HTML. Ver [instrucciones y resultados](docs/agents/testing.md).
 
-El ensayo real de WebSocket de Novu es opcional y está separado de la ejecución habitual. Sus requisitos y evidencias se describen en [operación de Novu](docs/specs/novu-notifications/operations.md).
+La suite ordinaria verifica SSE propio y resúmenes con su ventana real de 60 segundos, sin activación Cloud ni señales inyectadas como sustituto del transporte.
 
 ## Despliegue
 
@@ -241,18 +238,7 @@ pnpm start
 
 Los tipos predefinidos necesitan el seed además de las migraciones. Configura VTI y MUFASA para el uso institucional y utiliza los secretos del entorno de despliegue. Las variables `NEXT_PUBLIC_*` utilizadas en código del navegador quedan fijadas durante el build; reconstruye al cambiarlas.
 
-### Docker Compose
-
-[docker-compose.yml](docker-compose.yml) define PostgreSQL, un servicio de migraciones y el servidor Next.js. Crea un `.env` con `POSTGRES_PASSWORD`, `NEXTAUTH_SECRET`, `VTI_JWT_SECRET` y `NEXT_PUBLIC_VTI_LOGIN_URL`; `POSTGRES_USER`, `POSTGRES_DB` y `NEXTAUTH_URL` tienen valores por defecto.
-
-```bash
-docker compose up --build -d
-docker compose run --rm migrate pnpm prisma:seed
-```
-
-El servidor se publica en el puerto `3000`; PostgreSQL, en `5432`. Los datos y archivos se conservan en los volúmenes `roadmap-pgdata-v2` y `roadmap-uploads-v1`. Si PostgreSQL local ya ocupa `5432`, ajusta el puerto publicado de Compose.
-
-La configuración actual de Compose pasa las variables de base y autenticación al servidor. Para habilitar MUFASA o la integración restante con Novu en contenedores, agrega sus variables al servicio `web` y contempla las variables públicas durante la construcción de la imagen. La configuración incluida no las propaga automáticamente.
+Los avisos requieren un único proceso Node persistente, con conexión directa a PostgreSQL para LISTEN y streaming sin buffering del proxy. El repositorio no incluye un despliegue Docker. Véase [operación de avisos](docs/notifications-operations.md).
 
 ## Arquitectura y estructura
 
@@ -273,7 +259,6 @@ src/
 prisma/                       Esquema, migraciones y seed
 scripts/                      Reinicio de fixtures y operaciones auxiliares
 tests/                        Pruebas unitarias, de integración y E2E
-novu/                         Code Steps de los workflows de Novu
 docs/                         ADR, especificaciones, investigación y prototipos
 uploads/                      Archivos subidos; no se versiona
 ```
@@ -290,18 +275,18 @@ El proyecto está en desarrollo. Esta lista de funcionalidades describe el códi
 - **Evolución del roadmap pendiente:** todavía no existe el flujo para copiar una versión anterior con nuevas identidades, archivos independientes y referencia a su origen.
 - **Gestión académica incompleta:** las secciones coordinadas, el cargo institucional persistido, la importación y reconciliación del listado completo de participantes y el seguimiento docente de estudiantes aún no están implementados. Los datos ficticios de estos escenarios no prueban su disponibilidad en la aplicación.
 - **Permisos institucionales en desarrollo:** con respuesta de U-Campus, la creación se reserva al profesor de cátedra y la edición se asigna a cátedra, coordinación y auxiliares. La asignación de permisos de edición a ayudantes prevista por el dominio sigue pendiente. Cuando falta la respuesta institucional, algunas operaciones utilizan la participación docente local activa.
-- **Notificaciones en transición:** los avisos propios usan PostgreSQL y SSE. Los cambios de Nodo agrupan repeticiones en resúmenes; conectar las demás clases al agrupador sigue pendiente. Las ventanas se mantienen en un proceso de aplicación persistente, sin coordinación entre réplicas ni recuperación tras caídas. La entrega es de mejor esfuerzo y no incorpora recuperación durable de avisos perdidos tras guardar un cambio.
+- **Operación de notificaciones:** los avisos de las cinco clases usan PostgreSQL, agrupación y SSE propios. Se admite un único proceso Node persistente, sin coordinación de ventanas entre réplicas ni recuperación tras caídas. La entrega es de mejor esfuerzo y no incorpora recuperación durable de avisos perdidos tras guardar un cambio.
 - **Almacenamiento local:** los archivos requieren conservar `uploads/`. El código actual no incorpora un servicio de almacenamiento de objetos compartido entre instancias.
 
-El alcance del ciclo de vida pendiente está descrito en [ADR-0007](docs/adr/0007-complete-role-aware-roadmap-lifecycle.md); la sustitución de Novu, en [ADR-0012](docs/adr/0012-own-in-app-notification-delivery.md).
+El contrato de notificaciones propias está en [#152](https://github.com/Bigelazo/u-roadmaps/issues/152); la integración retirada se conserva como antecedente en [#139](https://github.com/Bigelazo/u-roadmaps/issues/139) y en el historial Git.
 
 ## Documentación
 
 - [Modelo de dominio y vocabulario](CONTEXT.md).
 - [Decisiones de arquitectura](docs/adr/).
 - [Criterios visuales](DESIGN.md).
-- [Especificación de notificaciones propias](docs/specs/own-notifications/README.md).
-- [Especificación de la integración con Novu](docs/specs/novu-notifications/README.md).
+- [Operación de notificaciones propias](docs/notifications-operations.md).
+- [Antecedente de la integración retirada](https://github.com/Bigelazo/u-roadmaps/issues/139).
 - [Instrucciones de pruebas E2E](docs/agents/testing.md).
 - [Convenciones del gestor de issues](docs/agents/issue-tracker.md).
 

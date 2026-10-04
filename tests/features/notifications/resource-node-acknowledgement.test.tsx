@@ -1,238 +1,42 @@
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-
-const { novu } = vi.hoisted(() => ({
-  novu: { on: vi.fn(() => () => undefined), notifications: { list: vi.fn() } },
-}));
-
-vi.mock('@novu/nextjs/hooks', () => ({
-  NovuProvider: ({ children }: { children: React.ReactNode }) => children,
-  useCounts: () => ({ counts: [] }),
-  useNotifications: () => ({ notifications: [] }),
-  useNovu: () => novu,
-}));
-
+import { afterEach, expect, test, vi } from 'vitest';
 import {
   NotificationsProvider,
   useNotificationAcknowledgement,
 } from '@/features/notifications/components/NotificationsInbox';
 
-const snapshotTime = Date.parse('2026-09-30T12:00:00.000Z');
-const presentAtOpen = '2026-09-30T11:59:00.000Z';
-
-beforeEach(() => {
-  vi.spyOn(Date, 'now').mockReturnValue(snapshotTime);
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.clearAllMocks();
-});
-
-function notice(id: string, data: Record<string, unknown>, createdAt = presentAtOpen) {
-  return {
-    id,
-    createdAt,
-    subject: 'Resumen de cambios · Nodo «Unidad 1»',
-    body: 'Se agruparon 2 cambios. Último cambio: Nodo actualizado.',
-    data,
-    read: vi.fn(async () => ({ error: null })),
-  };
-}
-
 function wrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <NotificationsProvider
-      identity={{
-        subscriber: 'user-id',
-        subscriberHash: 'hash',
-        applicationIdentifier: 'application',
-      }}
-    >
-      {children}
-    </NotificationsProvider>
-  );
+  return <NotificationsProvider identity={{ userId: 'user-id' }}>{children}</NotificationsProvider>;
 }
+afterEach(() => vi.unstubAllGlobals());
 
-test('opening a Node acknowledges its Resource, Node, and Digest notices but leaves another Node pending', async () => {
-  const pathNotice = notice('path-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'roadmap',
-    changeKind: 'dependency-added',
-  });
-  const resourceNotice = notice('resource-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'node-id',
-    changeKind: 'resource-added',
-  });
-  const nodeNotice = notice('node-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'node-id',
-    changeKind: 'node-updated',
-  });
-  const digestNotice = notice('node-summary', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'node-id',
-    changeKind: 'node-updated',
-    eventCount: 3,
-  });
-  const otherNodeNotice = notice('other-node-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'other-node-id',
-    changeKind: 'node-updated',
-  });
-  novu.notifications.list.mockResolvedValue({
-    data: {
-      notifications: [pathNotice, resourceNotice, nodeNotice, digestNotice, otherNodeNotice],
-      hasMore: false,
-    },
-  });
-  const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-
-  await act(async () => {
-    await result.current.acknowledge({ roadmapId: 'roadmap-id', nodeId: 'node-id' });
-  });
-
-  expect(resourceNotice.read).toHaveBeenCalledOnce();
-  expect(nodeNotice.read).toHaveBeenCalledOnce();
-  expect(digestNotice.read).toHaveBeenCalledOnce();
-  expect(pathNotice.read).not.toHaveBeenCalled();
-  expect(otherNodeNotice.read).not.toHaveBeenCalled();
-  expect(novu.notifications.list).toHaveBeenCalledWith(
-    expect.objectContaining({
-      data: { roadmapId: 'roadmap-id' },
-      read: false,
-      createdLte: snapshotTime,
+test('a failed Node recognition retries the same opening operation without absorbing later arrivals', async () => {
+  const operations: { path: string; input: Record<string, unknown> }[] = [];
+  let fail = true;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (path: string, init: RequestInit) => {
+      operations.push({ path, input: JSON.parse(String(init.body)) });
+      if (path.endsWith('/acknowledge') && fail) {
+        fail = false;
+        return Response.json({}, { status: 503 });
+      }
+      return Response.json({});
     }),
   );
-});
-
-test('reads notices concurrently and retries only failed reads', async () => {
-  const first = notice('first-node-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'node-id',
-  });
-  const second = notice('second-node-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'node-id',
-  });
-  let releaseFirst: ((result: { error: null }) => void) | undefined;
-  first.read.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        releaseFirst = resolve;
-      }),
-  );
-  second.read.mockRejectedValueOnce(new Error('Read failed'));
-  novu.notifications.list.mockResolvedValue({
-    data: { notifications: [first, second], hasMore: false },
-  });
   const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-
-  const acknowledgement = result.current.acknowledge({
-    roadmapId: 'roadmap-id',
-    nodeId: 'node-id',
-  });
-  await vi.waitFor(() => expect(second.read).toHaveBeenCalledOnce());
-  await act(async () => {
-    releaseFirst?.({ error: null });
-    expect(await acknowledgement).toBe(false);
-  });
-
-  await act(async () => {
-    expect(await result.current.retry({ roadmapId: 'roadmap-id', nodeId: 'node-id' })).toBe(true);
-  });
-  expect(first.read).toHaveBeenCalledOnce();
-  expect(second.read).toHaveBeenCalledTimes(2);
-});
-
-test('entering a Roadmap recognizes general notices and blocked Nodes while accessible Nodes stay pending', async () => {
-  const pathNotice = notice('path-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'roadmap',
-    changeKind: 'dependency-removed',
-  });
-  const blockedNodeNotice = notice('blocked-node-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'blocked-node-id',
-    changeKind: 'node-blocked',
-  });
-  const classificationNotice = notice('classification-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'roadmap',
-    changeKind: 'classification-updated',
-  });
-  const accessibleNodeNotice = notice('accessible-node-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'accessible-node-id',
-    changeKind: 'dependency-added',
-  });
-  novu.notifications.list.mockResolvedValue({
-    data: {
-      notifications: [pathNotice, classificationNotice, blockedNodeNotice, accessibleNodeNotice],
-      hasMore: false,
-    },
-  });
-  const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-
-  await act(async () => {
-    await result.current.acknowledge({
-      roadmapId: 'roadmap-id',
-      accessibleNodeIds: new Set(['accessible-node-id']),
-    });
-  });
-
-  expect(pathNotice.read).toHaveBeenCalledOnce();
-  expect(classificationNotice.read).toHaveBeenCalledOnce();
-  expect(blockedNodeNotice.read).toHaveBeenCalledOnce();
-  expect(accessibleNodeNotice.read).not.toHaveBeenCalled();
-});
-
-test('a Digest summary delivered after opening a Node stays pending during the paginated read', async () => {
-  const noticeAlreadyPresent = notice('existing-node-notice', {
-    roadmapId: 'roadmap-id',
-    targetKind: 'node',
-    nodeId: 'node-id',
-    changeKind: 'node-updated',
-    eventCount: 1,
-  });
-  const lateSummary = notice(
-    'late-summary',
-    {
-      roadmapId: 'roadmap-id',
-      targetKind: 'node',
-      nodeId: 'node-id',
-      changeKind: 'node-updated',
-      eventCount: 2,
-    },
-    '2026-09-30T12:00:01.000Z',
-  );
-  novu.notifications.list
-    .mockResolvedValueOnce({
-      data: { notifications: [noticeAlreadyPresent], hasMore: true },
-    })
-    .mockResolvedValueOnce({ data: { notifications: [lateSummary], hasMore: false } });
-  const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-
-  await act(async () => {
-    await result.current.acknowledge({ roadmapId: 'roadmap-id', nodeId: 'node-id' });
-  });
-
-  expect(noticeAlreadyPresent.read).toHaveBeenCalledOnce();
-  expect(lateSummary.read).not.toHaveBeenCalled();
-  expect(novu.notifications.list).toHaveBeenNthCalledWith(
-    2,
-    expect.objectContaining({
-      after: 'existing-node-notice',
-      createdLte: snapshotTime,
-    }),
-  );
+  const input = { roadmapId: 'roadmap-id', nodeId: 'node-id' };
+  await act(async () => expect(await result.current.acknowledge(input)).toBe(false));
+  await act(async () => expect(await result.current.retry(input)).toBe(true));
+  expect(operations.map(({ path }) => path)).toEqual([
+    '/api/notifications/openings',
+    '/api/notifications/acknowledge',
+    '/api/notifications/openings',
+    '/api/notifications/acknowledge',
+  ]);
+  const operationId = operations[0].input.operationId;
+  expect(operationId).toEqual(expect.any(String));
+  expect(operations[0].input).toEqual({ ...input, operationId, retry: false });
+  expect(operations[2].input).toEqual({ ...input, operationId, retry: true });
+  expect(operations[1].input).toEqual(operations[3].input);
 });

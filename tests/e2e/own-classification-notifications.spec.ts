@@ -1,6 +1,7 @@
-import { execFileSync } from 'node:child_process';
-import { expect, test, type APIRequestContext } from '@playwright/test';
-import { fixture, roadmapPath, sessionCookie, authenticateAs } from './helpers';
+import { sql } from './database';
+import type { APIRequestContext } from '@playwright/test';
+import { expect, test } from './fixtures';
+import { sessionCookie, authenticateAs } from './helpers';
 
 type Notice = {
   id: string;
@@ -10,46 +11,28 @@ type Notice = {
   data: Record<string, unknown>;
 };
 
-function fixtureSql(sql: string) {
-  const url = new URL(process.env.E2E_DATABASE_URL!);
-  if (
-    !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
-    url.pathname !== '/roadmap_e2e_db'
-  )
-    throw new Error('Expected the local E2E database.');
-  return execFileSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
-    encoding: 'utf8',
-    timeout: 15_000,
-    env: {
-      ...process.env,
-      PGDATABASE: 'roadmap_e2e_db',
-      PGHOST: url.hostname,
-      PGPORT: url.port || '5432',
-      PGUSER: decodeURIComponent(url.username),
-      PGPASSWORD: decodeURIComponent(url.password),
-    },
-  });
-}
-
 async function deleteTestContent(
   request: APIRequestContext,
   headers: { cookie: string },
   nodeIds: readonly string[],
-  typeId?: string,
+  typeId: string | undefined,
+  roadmapPath: (suffix?: string) => string,
 ) {
   for (const id of nodeIds) await request.delete(roadmapPath(`/nodes/${id}`), { headers });
   if (typeId) await request.delete(roadmapPath(`/node-types/${typeId}`), { headers });
   for (const id of nodeIds)
-    fixtureSql(`DELETE FROM "RoadmapNotice" WHERE "data"->>'nodeId' = '${id}';`);
+    await sql(`DELETE FROM "RoadmapNotice" WHERE "data"->>'nodeId' = '${id}';`);
 }
 
 test('used Type renames deliver one general notice across Sections and recognize separately from Nodes', async ({
   request,
+  course,
   page,
 }) => {
-  const author = { cookie: await sessionCookie(fixture.daniela) };
-  const student = fixture.cc1002StudentWithoutProgress;
-  const otherSection = fixture.cc1002StudentComplete;
+  const roadmapPath = course.apiPath;
+  const author = { cookie: await sessionCookie(course.users.teacher.id) };
+  const student = course.users.studentWithoutProgress.id;
+  const otherSection = course.users.studentComplete.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   const suffix = crypto.randomUUID();
   const outsider = crypto.randomUUID();
@@ -77,7 +60,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     expect(response.status()).toBe(200);
     return response;
   };
-  fixtureSql(
+  await sql(
     `INSERT INTO "User" ("id", "name", "institutionalEmail") VALUES ('${outsider}', 'Usuario ajeno', '${outsider}@u-roadmaps.test');`,
   );
   try {
@@ -118,14 +101,20 @@ test('used Type renames deliver one general notice across Sections and recognize
     expect(forbidden.status()).toBe(403);
     await patch({ name: after });
     await expect.poll(() => classification()).toHaveLength(1);
-    for (const userId of [otherSection, fixture.nicolas, fixture.camila])
+    for (const userId of [
+      otherSection,
+      course.users.teachingAssistant.id,
+      course.users.multiCourseStudent.id,
+    ])
       expect(await classification(userId)).toHaveLength(1);
-    for (const userId of [fixture.daniela, fixture.cc1002WithdrawnStudent, outsider])
+    for (const userId of [course.users.teacher.id, course.users.withdrawnStudent.id, outsider])
       expect(await classification(userId)).toHaveLength(0);
     const notice = (await classification())[0];
     expect(notice).toMatchObject({
       subject: `Tipo «${before}» → «${after}»`,
-      body: expect.stringContaining('actualizó la clasificación del Roadmap de CC1002'),
+      body: expect.stringContaining(
+        `actualizó la clasificación del Roadmap de ${course.courseCode}`,
+      ),
       read: false,
       data: {
         targetKind: 'roadmap',
@@ -143,7 +132,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     await page.goto('/academic-overview');
     await expect(page.getByRole('button', { name: /^Avisos, .* sin leer$/ })).toBeVisible();
     await expect(
-      page.getByLabel(/avisos sin leer para el curso Introducción a la Programación/),
+      page.getByLabel(new RegExp(`avisos sin leer para el curso ${course.courseName}`)),
     ).toBeVisible();
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     await page
@@ -151,7 +140,7 @@ test('used Type renames deliver one general notice across Sections and recognize
       .getByRole('button')
       .filter({ hasText: notice.subject })
       .click();
-    await expect(page).toHaveURL(/\/courses\/CC1002\/2026\/2\?notice=/);
+    await expect(page).toHaveURL(new RegExp(`${course.pagePath()}\\?notice=`));
     await expect(page).not.toHaveURL(/targetNode=/);
     await expect(page.getByRole('dialog', { name: notice.subject })).toBeVisible();
     await expect.poll(async () => (await classification())[0].read).toBe(true);
@@ -193,9 +182,9 @@ test('used Type renames deliver one general notice across Sections and recognize
       (await notices()).filter((n) => n.data.nextTypeName === `Oculto ${suffix}`),
     ).toHaveLength(0);
   } finally {
-    await deleteTestContent(request, author, nodeIds, typeId);
-    fixtureSql(`DELETE FROM "User" WHERE "id" = '${outsider}';`);
-    fixtureSql(
+    await deleteTestContent(request, author, nodeIds, typeId, roadmapPath);
+    await sql(`DELETE FROM "User" WHERE "id" = '${outsider}';`);
+    await sql(
       `DELETE FROM "RoadmapNotice" WHERE "data"->>'nextTypeName' LIKE '%${suffix}' OR "data"->>'nodeId' IN (${nodeIds.map((id) => `'${id}'`).join(',') || 'NULL'});`,
     );
   }
@@ -203,13 +192,13 @@ test('used Type renames deliver one general notice across Sections and recognize
 
 test('a PostgreSQL classification-notice failure preserves the confirmed Type rename', async ({
   request,
+  course,
+  rejectNoticeInserts,
 }) => {
-  const author = { cookie: await sessionCookie(fixture.daniela) };
+  const roadmapPath = course.apiPath;
+  const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const suffix = crypto.randomUUID().replaceAll('-', '');
   const nextName = `Renombre ${suffix}`;
-  const triggerName = `e2e_fail_classification_${suffix}`;
-  const functionName = `e2e_fail_classification_fn_${suffix}`;
-  const sequence = `e2e_classification_attempts_${suffix}`;
   let typeId: string | undefined;
   let nodeId: string | undefined;
   try {
@@ -225,19 +214,10 @@ test('a PostgreSQL classification-notice failure preserves the confirmed Type re
     });
     expect(node.status()).toBe(201);
     nodeId = (await node.json()).node.id;
-    fixtureSql(`CREATE SEQUENCE "${sequence}" START WITH 1;
-      CREATE FUNCTION "${functionName}"() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN
-        IF NEW."data"->>'changeKind' = 'classification-updated'
-          AND NEW."data"->>'nextTypeName' = '${nextName}' THEN
-          PERFORM nextval('${sequence}');
-          RAISE EXCEPTION 'E2E classification notice failure';
-        END IF;
-        RETURN NEW;
-      END;
-      $$;
-      CREATE TRIGGER "${triggerName}" BEFORE INSERT ON "RoadmapNotice"
-      FOR EACH ROW EXECUTE FUNCTION "${functionName}"();`);
+    const failure = await rejectNoticeInserts({
+      roadmapId: course.roadmapId,
+      noticeClass: 'roadmap-classification-changed',
+    });
     const renamed = await request.patch(roadmapPath(`/node-types/${typeId}`), {
       headers: author,
       data: { name: nextName },
@@ -248,17 +228,14 @@ test('a PostgreSQL classification-notice failure preserves the confirmed Type re
     expect((await persisted.json()).nodeTypes).toContainEqual(
       expect.objectContaining({ id: typeId, name: nextName }),
     );
-    expect(fixtureSql(`SELECT is_called::text FROM "${sequence}";`)).toContain('true');
+    expect(await failure.wasAttempted()).toBe(true);
     const inbox = await request.get('/api/notifications?limit=100', {
-      headers: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
+      headers: { cookie: await sessionCookie(course.users.studentWithoutProgress.id) },
     });
     expect(
       (await inbox.json()).notifications.some((n: Notice) => n.data.nextTypeName === nextName),
     ).toBe(false);
   } finally {
-    fixtureSql(
-      `DROP TRIGGER IF EXISTS "${triggerName}" ON "RoadmapNotice"; DROP FUNCTION IF EXISTS "${functionName}"(); DROP SEQUENCE IF EXISTS "${sequence}";`,
-    );
-    await deleteTestContent(request, author, nodeId ? [nodeId] : [], typeId);
+    await deleteTestContent(request, author, nodeId ? [nodeId] : [], typeId, roadmapPath);
   }
 });

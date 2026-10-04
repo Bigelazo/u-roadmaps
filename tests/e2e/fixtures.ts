@@ -7,7 +7,8 @@ import {
   fixtureParticipations,
   fixtureRoadmaps,
 } from '@/development/fixtures/catalog';
-import { insert, literal, sql } from './database';
+import { insert, literal, queryJson, sql } from './database';
+import type { NoticeClass } from '@/features/notifications/application/group-notices';
 import { fixture, fixtureRoadmapPath, sessionCookie } from './helpers';
 import {
   courseCodePrefix,
@@ -172,13 +173,14 @@ export const test = base.extend<{
   ownedTestData: OwnedTestData;
   course: E2EPrimaryCourseOffering;
   createCourse: (options?: CourseOfferingOptions) => Promise<E2ECourseOffering>;
+  createUser: () => Promise<E2EUser>;
   /**
    * Makes PostgreSQL reject inserts of notices for one Roadmap, or for the
    * Roadmap of a Course offering when the test has yet to create it.
    */
   rejectNoticeInserts: (
-    target: { roadmapId: string } | { courseOfferingId: string },
-  ) => Promise<void>;
+    target: ({ roadmapId: string } | { courseOfferingId: string }) & { noticeClass?: NoticeClass },
+  ) => Promise<{ wasAttempted: () => Promise<boolean> }>;
   /** An API client authenticated as a User; disposed when the test ends. */
   apiAs: (user: E2EUser) => Promise<APIRequestContext>;
 }>({
@@ -243,19 +245,37 @@ export const test = base.extend<{
   rejectNoticeInserts: async ({ ownedTestData }, provide, testInfo) => {
     await provide(async (target) => {
       const name = `${noticeRejectionPrefix}${nextSerial(testInfo.workerIndex).token}`;
-      const condition =
+      const scope =
         'roadmapId' in target
           ? `NEW."roadmapId" = ${literal(target.roadmapId)}`
           : `NEW."courseOfferingId" = ${literal(target.courseOfferingId)}`;
+      const condition = `${scope}${target.noticeClass ? ` AND NEW."data"->>'noticeClass' = ${literal(target.noticeClass)}` : ''}`;
+      const sequence = `${name}_attempts`;
       ownedTestData.noticeRejections.push(name);
       await sql(`
+        CREATE SEQUENCE ${sequence};
         CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
-          IF ${condition} THEN RAISE EXCEPTION 'E2E notification failure'; END IF;
+          IF ${condition} THEN
+            PERFORM nextval('${sequence}');
+            RAISE EXCEPTION 'E2E notification failure';
+          END IF;
           RETURN NEW;
         END; $$;
         CREATE TRIGGER ${name} BEFORE INSERT ON "RoadmapNotice"
           FOR EACH ROW EXECUTE FUNCTION ${name}();
       `);
+      return {
+        wasAttempted: () => queryJson<boolean>(`SELECT to_json(is_called) FROM ${sequence};`),
+      };
+    });
+  },
+
+  createUser: async ({ ownedTestData }, provide, testInfo) => {
+    await provide(async () => {
+      const user = newUser('studentWithoutProgress', testInfo.workerIndex);
+      ownedTestData.userIds.push(user.id);
+      await sql(insert('User', [user]));
+      return user;
     });
   },
 

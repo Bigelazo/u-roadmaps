@@ -42,6 +42,7 @@ function dropNoticeRejections(scope: TestDataScope) {
       LOOP
         EXECUTE format('DROP TRIGGER %I ON "RoadmapNotice"', name);
         EXECUTE format('DROP FUNCTION IF EXISTS %I()', name);
+        EXECUTE format('DROP SEQUENCE IF EXISTS %I', name || '_attempts');
       END LOOP;
     END $$;
   `);

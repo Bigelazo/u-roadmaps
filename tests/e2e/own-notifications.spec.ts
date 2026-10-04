@@ -225,6 +225,45 @@ test('Inbox query errors remain visible and can be retried', async ({ page, cour
   await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
 });
 
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test(`Inbox loading, retry and focus work by keyboard at ${viewport.width}px`, async ({
+    page,
+    course,
+  }) => {
+    await page.setViewportSize(viewport);
+    await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
+    let release: () => void = () => undefined;
+    const loading = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/api/notifications?*', async (route) => {
+      await loading;
+      await route.fulfill({ status: 503, body: '{}' });
+    });
+    await page.goto('/academic-overview');
+    const bell = page.getByRole('button', { name: 'Avisos', exact: true });
+    await bell.focus();
+    await bell.press('Enter');
+    await expect(page.getByRole('status').filter({ hasText: 'Cargando avisos…' })).toBeVisible();
+    release();
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'No se pudieron cargar los avisos.' }),
+    ).toBeVisible();
+    await expect(page.getByText('No tienes avisos todavía.')).toHaveCount(0);
+    await page.unroute('**/api/notifications?*');
+    const retry = page.getByRole('button', { name: 'Reintentar', exact: true });
+    await retry.focus();
+    await retry.press('Enter');
+    await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(bell).toBeFocused();
+    await expect(page.getByRole('link', { name: 'U-Roadmaps', exact: true })).toBeVisible();
+  });
+}
+
 test('a PostgreSQL notification failure preserves the committed Roadmap and creation response', async ({
   request,
   course,

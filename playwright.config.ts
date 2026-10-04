@@ -21,11 +21,6 @@ Object.assign(process.env, {
   PGCONNECT_TIMEOUT: '5',
   PGOPTIONS: '-c statement_timeout=10000 -c lock_timeout=5000',
 });
-if (process.env.RUN_NOVU_REALTIME !== '1') {
-  process.env.NOVU_SECRET_KEY = '';
-  process.env.NEXT_PUBLIC_NOVU_APPLICATION_IDENTIFIER = '';
-}
-
 export default defineConfig({
   testDir: './tests/e2e',
   // Removes test-owned data left by interrupted runs (ADR-0013).
@@ -37,7 +32,8 @@ export default defineConfig({
   retries: 0,
   // Stop repeated infrastructure failures; use --max-failures=0 for a full audit.
   maxFailures: 3,
-  globalTimeout: 15 * 60_000,
+  // Sequential Chromium/Firefox acceptance cases use real 60-second windows.
+  globalTimeout: 25 * 60_000,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: baseURL,
