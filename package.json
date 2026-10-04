@@ -39,6 +39,7 @@
     "next": "16.3.2",
     "next-auth": "^4.24.15",
     "pdf-parse": "^2.4.5",
+    "pg": "8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1"
@@ -54,6 +55,7 @@
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.4",
     "@types/node": "^26.2.0",
+    "@types/pg": "8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@typescript-eslint/parser": "^8.67.0",

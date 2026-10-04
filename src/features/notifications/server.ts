@@ -495,3 +495,5 @@ export function prepareOwnNodeOpening(userId: string, input: Record<string, unkn
 export function prepareOwnNoticeOpening(userId: string, roadmapId: string) {
   return prepareNoticeOpening(userId, roadmapId, accessibleNodes);
 }
+
+export { openNotificationStream } from './infrastructure/sse';

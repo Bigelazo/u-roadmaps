@@ -191,12 +191,22 @@ navegadores, aprobados, fallidos, omitidos, duración y código de salida.
 
 ## Suite unitaria y comando agregado
 
-`pnpm test:unit` ejecuta Vitest. Actualmente
-[vitest.config.mts](../../vitest.config.mts) referencia `vitest.setup.ts`, que fue
-eliminado: la ejecución estándar falla antes de cargar los tests. Este bloqueo
-está pendiente y es independiente de la recuperación E2E.
+`pnpm test:unit` ejecuta Vitest con `globals: true`, que permite a React Testing
+Library registrar la limpieza automática del DOM. Ya no referencia el archivo
+eliminado `vitest.setup.ts`. Los tests mantienen sus imports explícitos de Vitest;
+los escenarios que necesitan un viewport deben declarar y restaurar su
+`matchMedia` localmente, y los contratos HTTP sin consultas deben aislar Prisma.
 
-`pnpm test` ejecuta tipos, unitarios y E2E en secuencia; por ese bloqueo **no se
-considera validado**. Usar `pnpm test:e2e` para la comprobación E2E y
-`pnpm typecheck` para comprobar tipos. Una ejecución puntual de tests unitarios
-sin setup no demuestra que la suite unitaria completa funcione.
+La validación de la rama de **#159**, basada en **8b184e9**, del **2026-10-04**
+ejecutó toda la suite: **56 archivos aprobados y 7 fallidos; 269 pruebas aprobadas
+y 38 fallidas**, en **58,41 s**, con salida 1. Los fallos ajenos al SSE corresponden
+principalmente a `matchMedia` ausente en cuatro suites de UI, inicialización de
+Prisma en un contrato HTTP y una expectativa antigua de entrega Novu. El test de
+arquitectura agotó su plazo durante esa corrida; una reproducción focalizada
+posterior pasó sin cambiarlo. SSE propio, sesión del canvas y arquitectura sumaron
+**27 pruebas aprobadas** en **16,13 s**, con salida 0.
+
+`pnpm test` ejecuta tipos, unitarios y E2E en secuencia. Con los fallos existentes
+de unitarios, **no se considera validado** el comando agregado. Usar
+`pnpm test:e2e` para la comprobación E2E y `pnpm typecheck` para comprobar tipos;
+una selección unitaria aprobada no sustituye la suite completa.

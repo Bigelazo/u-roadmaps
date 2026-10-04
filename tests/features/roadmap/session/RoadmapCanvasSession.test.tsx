@@ -1,13 +1,29 @@
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change-signal';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+
+// The public canvas seam renders a mobile sidebar in these scenarios.
+beforeEach(() => {
+  vi.stubGlobal('innerWidth', 640);
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: query === '(max-width: 767px)',
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: () => false,
+  }));
+});
+afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('next/dynamic', () => ({
   default: () =>
