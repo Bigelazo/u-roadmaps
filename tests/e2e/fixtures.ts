@@ -1,0 +1,251 @@
+import { randomUUID } from 'node:crypto';
+import { test as base } from '@playwright/test';
+import {
+  copyFixtureRoadmap,
+  developmentFixtureIds,
+  fixtureCompletions,
+  fixtureParticipations,
+  fixtureRoadmaps,
+} from '@/development/fixtures/catalog';
+import { insert, literal, sql } from './database';
+import { fixture, fixtureRoadmapPath } from './helpers';
+import {
+  courseCodePrefix,
+  noticeRejectionPrefix,
+  removeTestData,
+  userEmailDomain,
+} from './test-data';
+
+export { expect } from '@playwright/test';
+
+type ParticipationRole = 'TEACHER' | 'STUDENT';
+
+export type E2EUser = {
+  id: string;
+  name: string;
+  institutionalEmail: string;
+  /** RUT body without verifier, as stored on the User. */
+  rut: string;
+};
+
+// The `course` and `createCourse` fixture names follow the spec's "Curso": they
+// create Course offerings, each under its own Course (Ramo).
+export type E2ECourseOffering = {
+  id: string;
+  courseCode: string;
+  year: number;
+  semester: number;
+  roadmapId: string | null;
+  apiPath(suffix?: string): string;
+  pagePath(): string;
+};
+
+/** The test's own copy of the CC1002 Course offering, its Roadmap and Users. */
+export type E2EPrimaryCourseOffering = E2ECourseOffering & {
+  roadmapId: string;
+  nodes: { first: string; second: string; hidden: string };
+  users: Record<CourseUserKey, E2EUser>;
+};
+
+export type CourseOfferingOptions = {
+  /** Copy the CC1002 Roadmap template. Defaults to true. */
+  roadmap?: boolean;
+  year?: number;
+  semester?: number;
+  participants?: readonly { user: E2EUser; role: ParticipationRole; isActive?: boolean }[];
+};
+
+// Each User takes its Participation and progress from a CC1002 catalog User.
+const templateUsers = {
+  teacher: { catalogId: developmentFixtureIds.daniela, label: 'Docente' },
+  teachingAssistant: { catalogId: developmentFixtureIds.nicolas, label: 'Ayudante' },
+  studentWithoutProgress: {
+    catalogId: fixture.cc1002StudentWithoutProgress,
+    label: 'Estudiante sin progreso',
+  },
+  studentWithProgress: {
+    catalogId: fixture.cc1002StudentWithProgress,
+    label: 'Estudiante con progreso',
+  },
+  studentComplete: { catalogId: fixture.cc1002StudentComplete, label: 'Estudiante completo' },
+  withdrawnStudent: { catalogId: fixture.cc1002WithdrawnStudent, label: 'Estudiante retirado' },
+  // Also enrolled in MA1001 and FI1001 in the catalog; tests add other Courses explicitly.
+  multiCourseStudent: {
+    catalogId: fixture.cc1002MultiCourseStudent,
+    label: 'Estudiante multicurso',
+  },
+} as const;
+type CourseUserKey = keyof typeof templateUsers;
+
+const template = fixtureRoadmaps.find(({ id }) => id === developmentFixtureIds.roadmaps.cc1002)!;
+const templateNodeIds = new Set(template.nodes.map(({ id }) => id));
+const academicTerm = { year: 2026, semester: 2 };
+
+function templateParticipation(catalogUserId: string) {
+  const participation = fixtureParticipations.find(
+    ({ userId, courseOfferingId }) =>
+      userId === catalogUserId && courseOfferingId === developmentFixtureIds.offerings.cc1002,
+  );
+  if (!participation) throw new Error(`Catalog User ${catalogUserId} is not in CC1002.`);
+  return participation;
+}
+
+// Unique within an invocation (worker indexes are never reused); globalSetup
+// removes earlier invocations' data, so codes and RUTs cannot collide.
+let serial = 0;
+function nextSerial(workerIndex: number) {
+  serial += 1;
+  if (workerIndex > 999 || serial > 9999) throw new Error('E2E serial space exhausted.');
+  const worker = String(workerIndex).padStart(3, '0');
+  const number = String(serial).padStart(4, '0');
+  // RUT bodies 3xxxxxxx stay outside the catalog's 1000000x and 20000xxx ranges.
+  return { token: `w${worker}n${number}`, rut: `3${worker}${number}` };
+}
+
+function newUser(key: CourseUserKey, workerIndex: number): E2EUser {
+  const { token, rut } = nextSerial(workerIndex);
+  return {
+    id: randomUUID(),
+    name: `${templateUsers[key].label} ${token}`,
+    institutionalEmail: `${key.toLowerCase()}.${token}@${userEmailDomain}`,
+    rut,
+  };
+}
+
+/** SQL for a Course (Ramo), its Course offering and optionally a copy of the CC1002 Roadmap. */
+function courseOfferingScript(options: CourseOfferingOptions, workerIndex: number) {
+  const { token } = nextSerial(workerIndex);
+  const courseCode = `${courseCodePrefix}${token.toUpperCase()}`;
+  const { year = academicTerm.year, semester = academicTerm.semester } = options;
+  const offeringId = randomUUID();
+  const roadmap = options.roadmap === false ? null : copyFixtureRoadmap(template, randomUUID);
+  let script =
+    insert('Course', [
+      { code: courseCode, name: `Ramo E2E ${token}`, department: 'Departamento E2E' },
+    ]) +
+    insert('CourseOffering', [{ id: offeringId, courseCode, year, semester }]) +
+    insert(
+      'Participation',
+      (options.participants ?? []).map(({ user, role, isActive = true }) => ({
+        id: randomUUID(),
+        userId: user.id,
+        courseOfferingId: offeringId,
+        role,
+        isActive,
+      })),
+    );
+  if (roadmap) {
+    const updatedAt = new Date();
+    script +=
+      insert('Roadmap', [{ id: roadmap.roadmapId, courseOfferingId: offeringId }]) +
+      insert('NodeType', [roadmap.customNodeType]) +
+      insert('RoadmapNode', roadmap.nodes) +
+      insert('Dependency', roadmap.dependencies) +
+      insert(
+        'Resource',
+        roadmap.resources.map((resource) => ({ ...resource, updatedAt })),
+      );
+  }
+  const offering: E2ECourseOffering = {
+    id: offeringId,
+    courseCode,
+    year,
+    semester,
+    roadmapId: roadmap?.roadmapId ?? null,
+    apiPath: (suffix) => fixtureRoadmapPath({ courseCode, year, semester }, suffix),
+    pagePath: () => `/courses/${courseCode}/${year}/${semester}`,
+  };
+  return { offering, script, roadmap };
+}
+
+type OwnedTestData = { courseCodes: string[]; userIds: string[]; noticeRejections: string[] };
+
+export const test = base.extend<{
+  ownedTestData: OwnedTestData;
+  course: E2EPrimaryCourseOffering;
+  createCourse: (options?: CourseOfferingOptions) => Promise<E2ECourseOffering>;
+  /**
+   * Makes PostgreSQL reject inserts of notices for one Roadmap, or for the
+   * Roadmap of a Course offering when the test has yet to create it.
+   */
+  rejectNoticeInserts: (
+    target: { roadmapId: string } | { courseOfferingId: string },
+  ) => Promise<void>;
+}>({
+  // Everything a test creates; removed even when the test fails.
+  ownedTestData: async ({}, provide) => {
+    const owned: OwnedTestData = { courseCodes: [], userIds: [], noticeRejections: [] };
+    await provide(owned);
+    await removeTestData(owned);
+  },
+
+  course: async ({ ownedTestData }, provide, testInfo) => {
+    const keys = Object.keys(templateUsers) as CourseUserKey[];
+    const users = Object.fromEntries(
+      keys.map((key) => [key, newUser(key, testInfo.workerIndex)]),
+    ) as Record<CourseUserKey, E2EUser>;
+    const participants = keys.map((key) => {
+      const { role, isActive } = templateParticipation(templateUsers[key].catalogId);
+      return { user: users[key], role, isActive };
+    });
+    const { offering, script, roadmap } = courseOfferingScript(
+      { participants },
+      testInfo.workerIndex,
+    );
+    const completions = keys.flatMap((key) =>
+      fixtureCompletions
+        .filter(
+          ({ userId, roadmapNodeId }) =>
+            userId === templateUsers[key].catalogId && templateNodeIds.has(roadmapNodeId),
+        )
+        .map(({ roadmapNodeId, completedAt }) => ({
+          id: randomUUID(),
+          userId: users[key].id,
+          roadmapNodeId: roadmap!.nodeIdFor(roadmapNodeId),
+          completedAt,
+        })),
+    );
+    ownedTestData.userIds.push(...Object.values(users).map(({ id }) => id));
+    ownedTestData.courseCodes.push(offering.courseCode);
+    await sql(insert('User', Object.values(users)) + script + insert('Completion', completions));
+    const hidden = template.nodes.find(({ isVisible }) => !isVisible)!;
+    await provide({
+      ...offering,
+      roadmapId: roadmap!.roadmapId,
+      nodes: {
+        first: roadmap!.nodeIdFor(template.nodes[0].id),
+        second: roadmap!.nodeIdFor(template.nodes[1].id),
+        hidden: roadmap!.nodeIdFor(hidden.id),
+      },
+      users,
+    });
+  },
+
+  createCourse: async ({ ownedTestData }, provide, testInfo) => {
+    await provide(async (options = {}) => {
+      const { offering, script } = courseOfferingScript(options, testInfo.workerIndex);
+      ownedTestData.courseCodes.push(offering.courseCode);
+      await sql(script);
+      return offering;
+    });
+  },
+
+  rejectNoticeInserts: async ({ ownedTestData }, provide, testInfo) => {
+    await provide(async (target) => {
+      const name = `${noticeRejectionPrefix}${nextSerial(testInfo.workerIndex).token}`;
+      const condition =
+        'roadmapId' in target
+          ? `NEW."roadmapId" = ${literal(target.roadmapId)}`
+          : `NEW."courseOfferingId" = ${literal(target.courseOfferingId)}`;
+      ownedTestData.noticeRejections.push(name);
+      await sql(`
+        CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+          IF ${condition} THEN RAISE EXCEPTION 'E2E notification failure'; END IF;
+          RETURN NEW;
+        END; $$;
+        CREATE TRIGGER ${name} BEFORE INSERT ON "RoadmapNotice"
+          FOR EACH ROW EXECUTE FUNCTION ${name}();
+      `);
+    });
+  },
+});

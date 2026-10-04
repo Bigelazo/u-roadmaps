@@ -10,6 +10,7 @@ import {
   fixtureRoadmaps,
   fixtureSimulatedCompletions,
   fixtureUsers,
+  normalizedNodeTypeName,
   predefinedNodeTypes,
   reservedFixtureOfferingIds,
   reservedFixtureUserIds,
@@ -36,7 +37,7 @@ function upsertPredefinedNodeTypes() {
         where: { id: nodeType.id },
         update: {
           name: nodeType.name,
-          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+          normalizedName: normalizedNodeTypeName(nodeType.name),
           icon: nodeType.icon,
           color: nodeType.color,
           isPredefined: true,
@@ -44,7 +45,7 @@ function upsertPredefinedNodeTypes() {
         },
         create: {
           ...nodeType,
-          normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+          normalizedName: normalizedNodeTypeName(nodeType.name),
           isPredefined: true,
         },
       }),
@@ -80,7 +81,7 @@ export async function resetDevelopmentData() {
           where: { id: nodeType.id },
           update: {
             name: nodeType.name,
-            normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+            normalizedName: normalizedNodeTypeName(nodeType.name),
             icon: nodeType.icon,
             color: nodeType.color,
             isPredefined: true,
@@ -88,7 +89,7 @@ export async function resetDevelopmentData() {
           },
           create: {
             ...nodeType,
-            normalizedName: nodeType.name.toLocaleLowerCase('es-CL'),
+            normalizedName: normalizedNodeTypeName(nodeType.name),
             isPredefined: true,
           },
         }),
@@ -119,7 +120,7 @@ export async function resetDevelopmentData() {
       data: fixtureRoadmaps.map(({ id: roadmapId, customNodeType }) => ({
         ...customNodeType,
         roadmapId,
-        normalizedName: customNodeType.name.toLocaleLowerCase('es-CL'),
+        normalizedName: normalizedNodeTypeName(customNodeType.name),
       })),
     });
     await transaction.roadmapNode.createMany({

@@ -1009,6 +1009,57 @@ function materializeRoadmap(blueprint: RoadmapBlueprint, roadmapIndex: number) {
 }
 
 export const fixtureRoadmaps = roadmapBlueprints.map(materializeRoadmap);
+type FixtureRoadmap = (typeof fixtureRoadmaps)[number];
+
+export const normalizedNodeTypeName = (name: string) => name.toLocaleLowerCase('es-CL');
+
+/**
+ * A fixture Roadmap with fresh identities for another Course offering. File
+ * Resources are excluded: their uploads are shared with the original.
+ */
+export function copyFixtureRoadmap(roadmap: FixtureRoadmap, newId: () => string) {
+  const roadmapId = newId();
+  const nodeIds = new Map(roadmap.nodes.map(({ id }) => [id, newId()]));
+  const nodeIdFor = (templateNodeId: string) => {
+    const id = nodeIds.get(templateNodeId);
+    if (!id) throw new Error(`Node ${templateNodeId} is not part of the fixture Roadmap.`);
+    return id;
+  };
+  const customNodeType = {
+    ...roadmap.customNodeType,
+    id: newId(),
+    normalizedName: normalizedNodeTypeName(roadmap.customNodeType.name),
+    isPredefined: false,
+    roadmapId,
+  };
+  return {
+    roadmapId,
+    nodeIdFor,
+    customNodeType,
+    nodes: roadmap.nodes.map((node) => ({
+      ...node,
+      id: nodeIdFor(node.id),
+      roadmapId,
+      nodeTypeId:
+        node.nodeTypeId === roadmap.customNodeType.id ? customNodeType.id : node.nodeTypeId,
+    })),
+    dependencies: roadmap.dependencies.map((dependency) => ({
+      ...dependency,
+      id: newId(),
+      sourceNodeId: nodeIdFor(dependency.sourceNodeId),
+      targetNodeId: nodeIdFor(dependency.targetNodeId),
+    })),
+    resources: roadmap.resources
+      .filter(({ type }) => type !== 'FILE')
+      .map(({ title, type, url, roadmapNodeId }) => ({
+        id: newId(),
+        roadmapNodeId: nodeIdFor(roadmapNodeId),
+        title,
+        type,
+        url,
+      })),
+  };
+}
 export const fixtureResources = fixtureRoadmaps.flatMap((roadmap) => roadmap.resources);
 export const fixtureFileAssets = fixtureResources.flatMap((resource) =>
   resource.fileKey && resource.fileContentType && resource.fileFormat

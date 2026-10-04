@@ -1,17 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import { config } from 'dotenv';
+import { e2eDatabaseUrl } from './tests/e2e/database';
 
 config({ path: '.env', quiet: true });
 const baseURL = 'http://localhost:3200';
-const connection = process.env.E2E_DATABASE_URL;
-if (!connection) throw new Error('Set E2E_DATABASE_URL in .env.');
-const database = new URL(connection);
-if (
-  !['localhost', '127.0.0.1', '[::1]'].includes(database.hostname) ||
-  database.pathname !== '/roadmap_e2e_db'
-) {
-  throw new Error('E2E requires the local roadmap_e2e_db database.');
-}
+const connection = e2eDatabaseUrl();
 
 // One environment for the runner, preparation, build and application server.
 Object.assign(process.env, {
@@ -35,6 +28,8 @@ if (process.env.RUN_NOVU_REALTIME !== '1') {
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Removes test-owned data left by interrupted runs (ADR-0013).
+  globalSetup: './tests/e2e/global-setup.ts',
   // Temporary shared-fixture baseline; parallel migration is tracked in ADR-0013.
   fullyParallel: false,
   workers: 1,

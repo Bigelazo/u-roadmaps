@@ -4,8 +4,10 @@
 
 La configuración E2E está en [playwright.config.ts](../../playwright.config.ts).
 Usa Chromium y Firefox, un worker provisional y ningún reintento automático.
-Los tests todavía comparten fixtures; la paralelización se abordará por separado
-según el [ADR-0013](../adr/0013-enable-parallel-e2e-tests.md).
+La migración a datos propios por test del
+[ADR-0013](../adr/0013-enable-parallel-e2e-tests.md) está en curso: solo
+`own-notifications.spec.ts` está migrado; los demás specs todavía comparten el
+catálogo sembrado y requieren el worker único.
 
 La última validación, del **2026-10-02**, ejecutó los **80 casos ajenos a
 notificaciones**: todos pasaron en **1,5 minutos**, con código de salida 0.
@@ -31,8 +33,11 @@ procesos hijos. Su `webServer` ejecuta, en orden:
 3. `next build`.
 4. `next start -p 3200`.
 
-No hay scripts adicionales de orquestación. El build usa el modo de producción
-de Next.js con datos y secretos de prueba.
+Antes de arrancar los workers, el `globalSetup` de Playwright
+([tests/e2e/global-setup.ts](../../tests/e2e/global-setup.ts)) elimina los datos
+propios de tests que haya dejado una ejecución interrumpida. No hay scripts
+adicionales de orquestación. El build usa el modo de producción de Next.js con
+datos y secretos de prueba.
 
 | Recurso          | Desarrollo              | E2E                     |
 | ---------------- | ----------------------- | ----------------------- |
@@ -44,6 +49,33 @@ de Next.js con datos y secretos de prueba.
 Los helpers SQL y el servidor apuntan a la misma base E2E. La ejecución habitual
 usa fixtures académicos y tokens de autenticación locales; no necesita VTI,
 U-Campus ni Novu Cloud disponibles.
+
+## Datos propios por test
+
+Los specs migrados importan `test` y `expect` desde
+[tests/e2e/fixtures.ts](../../tests/e2e/fixtures.ts) en lugar de
+`@playwright/test`:
+
+- `course`: un Curso propio con la forma del Roadmap CC1002 del catálogo (Nodos,
+  Tipos de nodo, Dependencias, Recursos de enlace y progreso de estudiantes),
+  sus Usuarios por rol (`course.users.teacher`, `studentWithProgress`,
+  `multiCourseStudent`, etc.), `course.nodes`, `apiPath()` y `pagePath()`.
+- `createCourse(opciones)`: Cursos adicionales sin Roadmap, de otro Período
+  académico o con Usuarios de `course` como participantes.
+- `rejectNoticeInserts({ roadmapId })` o `({ courseOfferingId })`: un fallo real
+  de PostgreSQL solo para los Avisos de ese Roadmap, o del Roadmap que el test
+  creará en ese Curso.
+
+Todo se elimina al terminar el test, también si falla, incluidos los archivos
+subidos a sus Roadmaps. Los Ramos usan el prefijo `E2E-` y los Usuarios el
+dominio `@e2e.u-roadmaps.test`; el `globalSetup` usa esas marcas para limpiar
+huérfanos y nunca toca el catálogo sembrado.
+
+Las consultas SQL usan el único helper `psql` de
+[tests/e2e/database.ts](../../tests/e2e/database.ts), con la misma validación de
+base local. El cliente Prisma generado no carga dentro de Playwright (issue #164),
+por lo que se aplicó el plan B del ADR. Los specs de avisos aún no migrados
+conservan sus propias copias de `psql`.
 
 Playwright administra el servidor y lo cierra al terminar. No reutiliza uno
 existente (`reuseExistingServer: false`). Puede coexistir con desarrollo, pero

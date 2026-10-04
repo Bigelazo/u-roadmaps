@@ -1,22 +1,17 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { parse } from 'dotenv';
-import { developmentFixtureIds } from '@/development';
-import { expect, test } from '@playwright/test';
-import { authenticateAs, fixture, sessionCookie } from './helpers';
-
-// Both browser projects share PostgreSQL; earlier mutation tests now deliver Node notices.
-// Each Inbox scenario owns a clean notice fixture, independent of project ordering.
-test.beforeEach(() => {
-  fixtureSql('DELETE FROM "NoticeAcknowledgement"; DELETE FROM "RoadmapNotice";');
-});
+import { randomUUID } from 'node:crypto';
+import type { APIRequestContext } from '@playwright/test';
+import { insert, sql } from './database';
+import { expect, test } from './fixtures';
+import { authenticateAs, sessionCookie } from './helpers';
 
 test('own Inbox requires authentication and isolates notice identities', async ({
   request,
   page,
+  course,
 }) => {
+  const user = course.users.studentWithoutProgress.id;
   expect((await request.get('/api/notifications')).status()).toBe(401);
-  const headers = { cookie: await sessionCookie(fixture.camila) };
+  const headers = { cookie: await sessionCookie(user) };
   const response = await request.get('/api/notifications', { headers });
   expect(response.status()).toBe(200);
   expect(await response.json()).toMatchObject({ notifications: [], hasMore: false });
@@ -25,7 +20,7 @@ test('own Inbox requires authentication and isolates notice identities', async (
       await request.get('/api/notifications/00000000-0000-4000-8000-000000000001', { headers })
     ).status(),
   ).toBe(404);
-  await authenticateAs(page.context(), fixture.camila);
+  await authenticateAs(page.context(), user);
   await page.goto('/academic-overview');
   await page.getByRole('button', { name: 'Avisos', exact: true }).click();
   await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
@@ -34,235 +29,190 @@ test('own Inbox requires authentication and isolates notice identities', async (
 test('Roadmap creation persists one own notice for each eligible Participation and browser opening recognizes it', async ({
   request,
   page,
+  course,
+  createCourse,
 }) => {
-  cleanupAvailabilityFixture();
-  const outsider = '90000153-0000-4000-8000-000000000001';
-  fixtureSql(
-    `INSERT INTO "User" ("id", "name", "institutionalEmail") VALUES ('${outsider}', 'Usuario ajeno', 'issue153-outsider@u-roadmaps.test') ON CONFLICT DO NOTHING;`,
-  );
-  try {
-    const author = { cookie: await sessionCookie(fixture.daniela) };
-    const path = '/api/FI1001/2026/2/roadmap';
-    const created = await request.post(path, { headers: author, data: {} });
-    expect(created.status()).toBe(201);
-    const roadmapId = (await created.json()).roadmap.id;
-    expect((await request.post(path, { headers: author, data: {} })).status()).toBe(409);
-    const ids = [
-      fixture.daniela,
-      fixture.nicolas,
-      fixture.camila,
-      outsider,
-      ...Array.from(
-        { length: 50 },
-        (_, index) => `20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
-      ),
-    ];
-    for (const id of ids) {
-      const response = await request.get(`/api/notifications?roadmapId=${roadmapId}`, {
-        headers: { cookie: await sessionCookie(id) },
-      });
-      expect(response.status()).toBe(200);
-      const notices = (await response.json()).notifications;
-      const eligible = ![
-        fixture.daniela,
-        fixture.camila,
-        fixture.fi1001CurrentWithdrawnStudent,
-        outsider,
-      ].includes(id);
-      expect(notices, `audience for ${id}`).toHaveLength(eligible ? 1 : 0);
-    }
-    fixtureSql(
-      `INSERT INTO "Participation" ("id", "userId", "courseOfferingId", "role", "isActive") VALUES ('90000153-0000-4000-8000-000000000002', '${outsider}', '${developmentFixtureIds.offerings.fi1001Current}', 'STUDENT', true);`,
-    );
-    const newcomerHeaders = { cookie: await sessionCookie(outsider) };
-    expect(
-      (await (await request.get('/api/notifications', { headers: newcomerHeaders })).json())
-        .notifications,
-    ).toHaveLength(0);
-    const recipient = { cookie: await sessionCookie(fixture.nicolas) };
-    const first = (
-      await (
-        await request.get(`/api/notifications?roadmapId=${roadmapId}`, { headers: recipient })
-      ).json()
-    ).notifications[0];
-    expect(first).toMatchObject({
-      subject: 'Roadmap disponible: FI1001',
-      read: false,
-      seen: false,
-    });
-    expect(
-      (await request.get(`/api/notifications/${first.id}`, { headers: author })).status(),
-    ).toBe(404);
-    expect(
-      (
-        await request.patch(`/api/notifications/${first.id}`, {
-          headers: author,
-          data: { action: 'read', recipientId: fixture.nicolas },
-        })
-      ).status(),
-    ).toBe(404);
-    await authenticateAs(page.context(), fixture.nicolas);
-    await page.goto('/courses/CC1002/2026/2');
-    await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
-    const row = page.getByRole('button', { name: /Roadmap disponible: FI1001/ });
-    await expect(row).toBeVisible();
-    await expect
-      .poll(
-        async () =>
-          (
-            await (
-              await request.get(`/api/notifications/${first.id}`, { headers: recipient })
-            ).json()
-          ).seen,
-      )
-      .toBe(true);
-    expect(
-      (await (await request.get(`/api/notifications/${first.id}`, { headers: recipient })).json())
-        .read,
-    ).toBe(false);
-    await row.click();
-    await expect(page).toHaveURL(new RegExp(`/courses/FI1001/2026/2\\?notice=${first.id}`));
-    await expect(page.getByRole('dialog', { name: 'Roadmap disponible: FI1001' })).toBeVisible();
-    await expect
-      .poll(
-        async () =>
-          (
-            await (
-              await request.get(`/api/notifications/${first.id}`, { headers: recipient })
-            ).json()
-          ).read,
-      )
-      .toBe(true);
-    await page.reload();
-    await expect(page.getByRole('dialog', { name: 'Roadmap disponible: FI1001' })).toBeVisible();
-    const persisted = await request.get(`/api/notifications/${first.id}`, { headers: recipient });
-    expect(await persisted.json()).toMatchObject({ id: first.id, read: true, seen: true });
-  } finally {
-    cleanupAvailabilityFixture();
-    fixtureSql(`DELETE FROM "User" WHERE "id" = '${outsider}';`);
-  }
-});
-
-// Fixture cleanup only: assertions and all Roadmap mutations use authenticated APIs.
-function fixtureSql(sql: string) {
-  const connection =
-    process.env.E2E_DATABASE_URL ?? parse(readFileSync('.env')).E2E_DATABASE_URL;
-  if (!connection || new URL(connection).pathname !== '/roadmap_e2e_db')
-    throw new Error('Expected the local E2E database.');
-  execFileSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
-    stdio: 'pipe',
-    timeout: 15_000,
-    env: {
-      ...process.env,
-      PGDATABASE: 'roadmap_e2e_db',
-      PGHOST: new URL(connection).hostname,
-      PGPORT: new URL(connection).port || '5432',
-      PGUSER: decodeURIComponent(new URL(connection).username),
-      PGPASSWORD: decodeURIComponent(new URL(connection).password),
-    },
+  const { teacher, teachingAssistant, multiCourseStudent, studentWithoutProgress } = course.users;
+  const { withdrawnStudent, studentComplete: outsider } = course.users;
+  const offering = await createCourse({
+    roadmap: false,
+    participants: [
+      { user: teacher, role: 'TEACHER' },
+      { user: teachingAssistant, role: 'TEACHER' },
+      { user: multiCourseStudent, role: 'STUDENT' },
+      { user: studentWithoutProgress, role: 'STUDENT' },
+      { user: withdrawnStudent, role: 'STUDENT', isActive: false },
+    ],
   });
-}
-function cleanupAvailabilityFixture() {
-  const offeringId = developmentFixtureIds.offerings.fi1001Current;
-  fixtureSql(`DELETE FROM "NoticeAcknowledgement" WHERE "roadmapId" IN (SELECT "id" FROM "Roadmap" WHERE "courseOfferingId" = '${offeringId}');
-    DELETE FROM "RoadmapNotice" WHERE "courseOfferingId" = '${offeringId}';
-    DELETE FROM "Roadmap" WHERE "courseOfferingId" = '${offeringId}';`);
-}
+  const author = { cookie: await sessionCookie(teacher.id) };
+  const path = offering.apiPath();
+  const created = await request.post(path, { headers: author, data: {} });
+  expect(created.status()).toBe(201);
+  const roadmapId = (await created.json()).roadmap.id;
+  expect((await request.post(path, { headers: author, data: {} })).status()).toBe(409);
+  for (const { id } of Object.values(course.users)) {
+    const response = await request.get(`/api/notifications?roadmapId=${roadmapId}`, {
+      headers: { cookie: await sessionCookie(id) },
+    });
+    expect(response.status()).toBe(200);
+    const notices = (await response.json()).notifications;
+    const eligible = [teachingAssistant.id, multiCourseStudent.id, studentWithoutProgress.id];
+    expect(notices, `audience for ${id}`).toHaveLength(eligible.includes(id) ? 1 : 0);
+  }
+  await sql(
+    insert('Participation', [
+      {
+        id: randomUUID(),
+        userId: outsider.id,
+        courseOfferingId: offering.id,
+        role: 'STUDENT',
+        isActive: true,
+      },
+    ]),
+  );
+  const newcomerHeaders = { cookie: await sessionCookie(outsider.id) };
+  expect(
+    (await getJson(request, '/api/notifications', newcomerHeaders)).notifications,
+  ).toHaveLength(0);
+  const recipient = { cookie: await sessionCookie(multiCourseStudent.id) };
+  const first = (await getJson(request, `/api/notifications?roadmapId=${roadmapId}`, recipient))
+    .notifications[0];
+  const subject = `Roadmap disponible: ${offering.courseCode}`;
+  expect(first).toMatchObject({ subject, read: false, seen: false });
+  expect((await request.get(`/api/notifications/${first.id}`, { headers: author })).status()).toBe(
+    404,
+  );
+  expect(
+    (
+      await request.patch(`/api/notifications/${first.id}`, {
+        headers: author,
+        data: { action: 'read', recipientId: multiCourseStudent.id },
+      })
+    ).status(),
+  ).toBe(404);
+  await authenticateAs(page.context(), multiCourseStudent.id);
+  await page.goto(course.pagePath());
+  await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
+  const row = page.getByRole('button', { name: new RegExp(subject) });
+  await expect(row).toBeVisible();
+  await expect
+    .poll(async () => (await getJson(request, `/api/notifications/${first.id}`, recipient)).seen)
+    .toBe(true);
+  expect((await getJson(request, `/api/notifications/${first.id}`, recipient)).read).toBe(false);
+  await row.click();
+  await expect(page).toHaveURL(new RegExp(`${offering.pagePath()}\\?notice=${first.id}`));
+  await expect(page.getByRole('dialog', { name: subject })).toBeVisible();
+  await expect
+    .poll(async () => (await getJson(request, `/api/notifications/${first.id}`, recipient)).read)
+    .toBe(true);
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: subject })).toBeVisible();
+  const persisted = await request.get(`/api/notifications/${first.id}`, { headers: recipient });
+  expect(await persisted.json()).toMatchObject({ id: first.id, read: true, seen: true });
+});
 
 test('pagination, visible rows, retry and opening cutoff preserve late arrivals', async ({
   request,
   page,
+  course,
+  createCourse,
 }) => {
-  const roadmapId = developmentFixtureIds.roadmaps.cc1002;
-  const headers = { cookie: await sessionCookie(fixture.nicolas) };
-  const seed = (id: string, availableAt: string) =>
-    fixtureSql(`INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt", "availableAt") VALUES
-    ('${id}', 'e2e-153-${id}', '${fixture.nicolas}', '${roadmapId}', '${developmentFixtureIds.offerings.cc1002}', 'Roadmap disponible: CC1002', 'Aviso de prueba', '{"roadmapId":"${roadmapId}","courseCode":"CC1002","year":2026,"semester":2,"targetKind":"roadmap","changeKind":"roadmap-available","occurredAt":"2026-10-01T12:00:00.000Z","eventCount":1,"actorName":"Daniela"}', NOW(), ${availableAt});`);
-  const cleanup = () =>
-    fixtureSql(
-      `DELETE FROM "RoadmapNotice" WHERE "eventId" LIKE 'e2e-153-%'; DELETE FROM "NoticeAcknowledgement" WHERE "recipientId" = '${fixture.nicolas}' AND "roadmapId" = '${roadmapId}';`,
+  const { roadmapId, courseCode } = course;
+  const recipient = course.users.multiCourseStudent;
+  const otherCourse = await createCourse({
+    participants: [{ user: recipient, role: 'STUDENT' }],
+  });
+  const headers = { cookie: await sessionCookie(recipient.id) };
+  const subject = `Roadmap disponible: ${courseCode}`;
+  const seed = (id: string, availableAt: Date) =>
+    sql(
+      insert('RoadmapNotice', [
+        {
+          id,
+          eventId: `e2e-inbox-${id}`,
+          recipientId: recipient.id,
+          roadmapId,
+          courseOfferingId: course.id,
+          subject,
+          body: 'Aviso de prueba',
+          data: JSON.stringify({
+            roadmapId,
+            courseCode,
+            year: course.year,
+            semester: course.semester,
+            targetKind: 'roadmap',
+            changeKind: 'roadmap-available',
+            occurredAt: '2026-10-01T12:00:00.000Z',
+            eventCount: 1,
+            actorName: 'Daniela',
+          }),
+          occurredAt: new Date(),
+          availableAt,
+        },
+      ]),
     );
-  cleanup();
-  try {
-    const ids = Array.from({ length: 12 }, () => crypto.randomUUID())
-      .sort()
-      .reverse();
-    for (const id of ids) seed(id, "'2026-01-01T00:00:00Z'");
-    const first = await (
-      await request.get(`/api/notifications?roadmapId=${roadmapId}&limit=10`, { headers })
-    ).json();
-    expect(first.notifications.map((notice: { id: string }) => notice.id)).toEqual(
-      ids.slice(0, 10),
-    );
-    expect(first.hasMore).toBe(true);
-    const second = await (
-      await request.get(`/api/notifications?roadmapId=${roadmapId}&limit=10&after=${ids[9]}`, {
-        headers,
-      })
-    ).json();
-    expect(second.notifications.map((notice: { id: string }) => notice.id)).toEqual(ids.slice(10));
-    expect(second.hasMore).toBe(false);
-    await authenticateAs(page.context(), fixture.nicolas);
-    await page.addInitScript(() => {
-      const realNow = Date.now.bind(Date);
-      Date.now = () => realNow() + 86_400_000;
-    });
-    await page.goto('/courses/MA1001/2026/2');
-    await page.getByRole('button', { name: 'Avisos, 12 sin leer', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Cargar más avisos' })).toBeVisible();
-    expect(
-      (await (await request.get(`/api/notifications/${ids[11]}`, { headers })).json()).seen,
-    ).toBe(false);
-    let failRecognition = true;
-    await page.route('**/api/notifications/acknowledge', async (route) => {
-      if (failRecognition) {
-        await route.abort();
-        return;
-      }
-      await route.continue();
-    });
-    await page
-      .getByRole('button', { name: /Roadmap disponible: CC1002/ })
-      .first()
-      .click();
-    await expect(page.getByRole('dialog', { name: 'Roadmap disponible: CC1002' })).toBeVisible();
-    await page.getByRole('button', { name: 'Entendido' }).click();
-    await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toBeVisible();
-    expect(
-      (
-        await (
-          await request.get(`/api/notifications/counts?roadmapId=${roadmapId}`, { headers })
-        ).json()
-      ).count,
-    ).toBe(12);
-    const lateId = crypto.randomUUID();
-    seed(lateId, "NOW() - INTERVAL '5 minutes'");
+  const ids = Array.from({ length: 12 }, () => randomUUID())
+    .sort()
+    .reverse();
+  for (const id of ids) await seed(id, new Date('2026-01-01T00:00:00Z'));
+  const first = await getJson(
+    request,
+    `/api/notifications?roadmapId=${roadmapId}&limit=10`,
+    headers,
+  );
+  expect(first.notifications.map((notice: { id: string }) => notice.id)).toEqual(ids.slice(0, 10));
+  expect(first.hasMore).toBe(true);
+  const second = await getJson(
+    request,
+    `/api/notifications?roadmapId=${roadmapId}&limit=10&after=${ids[9]}`,
+    headers,
+  );
+  expect(second.notifications.map((notice: { id: string }) => notice.id)).toEqual(ids.slice(10));
+  expect(second.hasMore).toBe(false);
+  await authenticateAs(page.context(), recipient.id);
+  await page.addInitScript(() => {
+    const realNow = Date.now.bind(Date);
+    Date.now = () => realNow() + 86_400_000;
+  });
+  await page.goto(otherCourse.pagePath());
+  await page.getByRole('button', { name: 'Avisos, 12 sin leer', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Cargar más avisos' })).toBeVisible();
+  expect((await getJson(request, `/api/notifications/${ids[11]}`, headers)).seen).toBe(false);
+  let failRecognition = true;
+  await page.route('**/api/notifications/acknowledge', async (route) => {
+    if (failRecognition) {
+      await route.abort();
+      return;
+    }
+    await route.continue();
+  });
+  await page
+    .getByRole('button', { name: new RegExp(subject) })
+    .first()
+    .click();
+  await expect(page.getByRole('dialog', { name: subject })).toBeVisible();
+  await page.getByRole('button', { name: 'Entendido' }).click();
+  await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toBeVisible();
+  expect(
+    (await getJson(request, `/api/notifications/counts?roadmapId=${roadmapId}`, headers)).count,
+  ).toBe(12);
+  const lateId = randomUUID();
+  await seed(lateId, new Date(Date.now() - 5 * 60_000));
 
-    failRecognition = false;
-    await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
-    await expect
-      .poll(
-        async () =>
-          (
-            await (
-              await request.get(`/api/notifications/counts?roadmapId=${roadmapId}`, { headers })
-            ).json()
-          ).count,
-      )
-      .toBe(1);
-    expect(
-      (await (await request.get(`/api/notifications/${ids[11]}`, { headers })).json()).read,
-    ).toBe(true);
-    expect(
-      (await (await request.get(`/api/notifications/${lateId}`, { headers })).json()).read,
-    ).toBe(false);
-  } finally {
-    cleanup();
-  }
+  failRecognition = false;
+  await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await getJson(request, `/api/notifications/counts?roadmapId=${roadmapId}`, headers)).count,
+    )
+    .toBe(1);
+  expect((await getJson(request, `/api/notifications/${ids[11]}`, headers)).read).toBe(true);
+  expect((await getJson(request, `/api/notifications/${lateId}`, headers)).read).toBe(false);
 });
 
-test('Inbox query errors remain visible and can be retried', async ({ page }) => {
-  await authenticateAs(page.context(), fixture.camila);
+test('Inbox query errors remain visible and can be retried', async ({ page, course }) => {
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.route('**/api/notifications?*', (route) => route.fulfill({ status: 503, body: '{}' }));
   await page.goto('/academic-overview');
   await page.getByRole('button', { name: 'Avisos', exact: true }).click();
@@ -277,24 +227,28 @@ test('Inbox query errors remain visible and can be retried', async ({ page }) =>
 
 test('a PostgreSQL notification failure preserves the committed Roadmap and creation response', async ({
   request,
+  course,
+  createCourse,
+  rejectNoticeInserts,
 }) => {
-  cleanupAvailabilityFixture();
-  fixtureSql(`CREATE OR REPLACE FUNCTION e2e_reject_153_notice() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'E2E notification failure'; END; $$;
-    CREATE TRIGGER e2e_reject_153_notice BEFORE INSERT ON "RoadmapNotice" FOR EACH ROW EXECUTE FUNCTION e2e_reject_153_notice();`);
-  try {
-    const headers = { cookie: await sessionCookie(fixture.daniela) };
-    const created = await request.post('/api/FI1001/2026/2/roadmap', { headers, data: {} });
-    expect(created.status()).toBe(201);
-    expect((await request.get('/api/FI1001/2026/2/roadmap', { headers })).status()).toBe(200);
-    const recipient = { cookie: await sessionCookie(fixture.nicolas) };
-    expect(
-      (await (await request.get('/api/notifications', { headers: recipient })).json())
-        .notifications,
-    ).toHaveLength(0);
-  } finally {
-    fixtureSql(
-      'DROP TRIGGER IF EXISTS e2e_reject_153_notice ON "RoadmapNotice"; DROP FUNCTION IF EXISTS e2e_reject_153_notice();',
-    );
-    cleanupAvailabilityFixture();
-  }
+  const { teacher, multiCourseStudent } = course.users;
+  const offering = await createCourse({
+    roadmap: false,
+    participants: [
+      { user: teacher, role: 'TEACHER' },
+      { user: multiCourseStudent, role: 'STUDENT' },
+    ],
+  });
+  // The Roadmap does not exist yet, so the failure is scoped to its Course offering.
+  await rejectNoticeInserts({ courseOfferingId: offering.id });
+  const headers = { cookie: await sessionCookie(teacher.id) };
+  const created = await request.post(offering.apiPath(), { headers, data: {} });
+  expect(created.status()).toBe(201);
+  expect((await request.get(offering.apiPath(), { headers })).status()).toBe(200);
+  const recipient = { cookie: await sessionCookie(multiCourseStudent.id) };
+  expect((await getJson(request, '/api/notifications', recipient)).notifications).toHaveLength(0);
 });
+
+async function getJson(request: APIRequestContext, path: string, headers: { cookie: string }) {
+  return (await request.get(path, { headers })).json();
+}
