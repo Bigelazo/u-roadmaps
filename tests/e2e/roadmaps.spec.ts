@@ -1,19 +1,10 @@
-import {
-  expect,
-  request as apiRequest,
-  test,
-  type APIRequestContext,
-  type Page,
-} from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { SignJWT } from 'jose';
-import { authenticateAs, fixture, fixtureRoadmapPath, roadmapPath, sessionCookie } from './helpers';
+import { expect, test, type E2EUser } from './fixtures';
+import { authenticateAs } from './helpers';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
-}
-
-async function deleteIfPresent(api: APIRequestContext, path: string | undefined) {
-  if (path) await api.delete(path);
 }
 
 async function panRoadmapNodeIntoView(page: Page, nodeId: string) {
@@ -55,947 +46,854 @@ async function createNodeFromCanvas(page: Page, title: string) {
 
 test('teacher creates and edits a custom node type with visual pickers', async ({
   page,
-}, testInfo) => {
+  course,
+  apiAs,
+}) => {
   const typeName = uniqueName('Tipo visual E2E');
-  const api = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
-  });
-  let typeId: string | undefined;
+  const api = await apiAs(course.users.teacher);
 
-  try {
-    await authenticateAs(page.context(), fixture.daniela);
-    await page.goto('/courses/CC1002/2026/2');
-    await page.getByRole('button', { name: 'Crear en el mapa' }).click();
-    await page.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Tipos de nodo' });
-    const create = dialog.getByRole('button', { name: 'Crear tipo' });
-    await expect(create).toBeDisabled();
-    await dialog.getByLabel('Nombre').fill(typeName);
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.getByRole('button', { name: 'Crear en el mapa' }).click();
+  await page.getByRole('menuitem', { name: 'Gestionar tipos de nodo' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Tipos de nodo' });
+  const create = dialog.getByRole('button', { name: 'Crear tipo' });
+  await expect(create).toBeDisabled();
+  await dialog.getByLabel('Nombre').fill(typeName);
 
-    await dialog.getByRole('button', { name: 'Icono: sin selección' }).click();
-    await page
-      .getByRole('dialog', { name: 'Elegir Icono' })
-      .getByRole('button', { name: 'Química' })
-      .click();
-    await dialog.getByRole('button', { name: 'Color: sin selección' }).click();
-    await page
-      .getByRole('dialog', { name: 'Elegir color' })
-      .getByRole('button', { name: 'Verde hoja' })
-      .click();
-    await expect(create).toBeEnabled();
-    await create.click();
-    await expect(dialog.getByText(typeName)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Icono: sin selección' }).click();
+  await page
+    .getByRole('dialog', { name: 'Elegir Icono' })
+    .getByRole('button', { name: 'Química' })
+    .click();
+  await dialog.getByRole('button', { name: 'Color: sin selección' }).click();
+  await page
+    .getByRole('dialog', { name: 'Elegir color' })
+    .getByRole('button', { name: 'Verde hoja' })
+    .click();
+  await expect(create).toBeEnabled();
+  await create.click();
+  await expect(dialog.getByText(typeName)).toBeVisible();
 
-    await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();
-    await expect(dialog.getByRole('button', { name: 'Icono: Química' })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Color: Verde hoja' })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Icono: Química' }).click();
-    await page
-      .getByRole('dialog', { name: 'Elegir Icono' })
-      .getByRole('button', { name: 'Cálculo' })
-      .click();
-    await dialog.getByRole('button', { name: 'Color: Verde hoja' }).click();
-    await page
-      .getByRole('dialog', { name: 'Elegir color' })
-      .getByRole('button', { name: 'Violeta' })
-      .click();
-    const updateResponse = await Promise.all([
-      page.waitForResponse(
-        (response) =>
-          response.request().method() === 'PATCH' && response.url().includes('/node-types/'),
-      ),
-      dialog.getByRole('button', { name: 'Guardar tipo' }).click(),
-    ]).then(([response]) => response);
-    expect(updateResponse.status()).toBe(200);
+  await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();
+  await expect(dialog.getByRole('button', { name: 'Icono: Química' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Color: Verde hoja' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Icono: Química' }).click();
+  await page
+    .getByRole('dialog', { name: 'Elegir Icono' })
+    .getByRole('button', { name: 'Cálculo' })
+    .click();
+  await dialog.getByRole('button', { name: 'Color: Verde hoja' }).click();
+  await page
+    .getByRole('dialog', { name: 'Elegir color' })
+    .getByRole('button', { name: 'Violeta' })
+    .click();
+  const updateResponse = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PATCH' && response.url().includes('/node-types/'),
+    ),
+    dialog.getByRole('button', { name: 'Guardar tipo' }).click(),
+  ]).then(([response]) => response);
+  expect(updateResponse.status()).toBe(200);
 
-    const roadmap = await api.get(roadmapPath());
-    const nodeType = (await roadmap.json()).nodeTypes.find(
-      (type: { name: string }) => type.name === typeName,
-    );
-    expect(nodeType).toMatchObject({ icon: 'Calculator', color: '#7540B8' });
-    typeId = nodeType?.id;
-  } finally {
-    await deleteIfPresent(api, typeId && roadmapPath(`/node-types/${typeId}`));
-    await api.dispose();
-  }
+  const roadmap = await api.get(course.apiPath());
+  const nodeType = (await roadmap.json()).nodeTypes.find(
+    (type: { name: string }) => type.name === typeName,
+  );
+  expect(nodeType).toMatchObject({ icon: 'Calculator', color: '#7540B8' });
 });
 
-test('fixture participants receive their authorized roadmap representation', async ({
+test('course participants receive their authorized roadmap representation', async ({
   request,
-}, testInfo) => {
-  const anonymous = await request.get(roadmapPath());
+  course,
+  apiAs,
+}) => {
+  const anonymous = await request.get(course.apiPath());
   expect(anonymous.status()).toBe(401);
 
-  const teacher = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
-  });
-  const teacherRoadmap = await teacher.get(roadmapPath());
+  const teacher = await apiAs(course.users.teacher);
+  const teacherRoadmap = await teacher.get(course.apiPath());
   expect(teacherRoadmap.status()).toBe(200);
   expect(await teacherRoadmap.json()).toEqual(
     expect.objectContaining({
-      course: expect.objectContaining({ code: 'CC1002', name: 'Introducción a la Programación' }),
+      course: expect.objectContaining({ code: course.courseCode, name: course.courseName }),
       nodes: expect.arrayContaining([
         expect.objectContaining({ title: 'Proyecto de datos con archivos' }),
       ]),
     }),
   );
-  await teacher.dispose();
 
-  const student = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
-  });
-  const studentRoadmap = await student.get(roadmapPath());
+  const student = await apiAs(course.users.studentWithoutProgress);
+  const studentRoadmap = await student.get(course.apiPath());
   expect(studentRoadmap.status()).toBe(200);
   const studentDto = await studentRoadmap.json();
   expect(studentDto.nodes).not.toEqual(
-    expect.arrayContaining([expect.objectContaining({ id: fixture.cc1002.hiddenNode })]),
+    expect.arrayContaining([expect.objectContaining({ id: course.nodes.hidden })]),
   );
-  const mutation = await student.patch(roadmapPath(`/nodes/${fixture.cc1002.firstNode}`), {
+  const mutation = await student.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
     data: { title: 'No autorizado' },
   });
   expect(mutation.status()).toBe(403);
-  await student.dispose();
 
-  const inactive = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002WithdrawnStudent) },
-  });
-  expect((await inactive.get(roadmapPath())).status()).toBe(403);
-  await inactive.dispose();
+  const inactive = await apiAs(course.users.withdrawnStudent);
+  expect((await inactive.get(course.apiPath())).status()).toBe(403);
 });
 
 test('roadmap creation rejects conflicts and preserves authorization and cross-roadmap boundaries', async ({
   request,
-}, testInfo) => {
-  const teacher = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  course,
+  createCourse,
+  apiAs,
+}) => {
+  const { teachingAssistant, studentWithoutProgress } = course.users;
+  // The teaching assistant studies this Course offering, which has no Roadmap yet.
+  const withoutRoadmap = await createCourse({
+    roadmap: false,
+    participants: [
+      { user: teachingAssistant, role: 'STUDENT' },
+      { user: studentWithoutProgress, role: 'STUDENT' },
+    ],
   });
-  const conflict = await teacher.post(roadmapPath(), {
-    data: { course: { name: 'Introducción a la Programación', department: 'DCC' } },
+  const otherRoadmap = await createCourse({
+    participants: [{ user: studentWithoutProgress, role: 'STUDENT' }],
+  });
+
+  const teacher = await apiAs(course.users.teacher);
+  const conflict = await teacher.post(course.apiPath(), {
+    data: { course: { name: course.courseName, department: 'Departamento E2E' } },
   });
   expect(conflict.status()).toBe(409);
   expect((await conflict.json()).error.code).toBe('ROADMAP_CONFLICT');
-  await teacher.dispose();
 
-  const teachingAssistant = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.nicolas) },
-  });
-  expect((await teachingAssistant.post(fixtureRoadmapPath(fixture.fi1001Current))).status()).toBe(
-    403,
-  );
-  await teachingAssistant.dispose();
+  const assistant = await apiAs(teachingAssistant);
+  expect((await assistant.post(withoutRoadmap.apiPath())).status()).toBe(403);
 
-  const student = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
-  });
-  expect((await student.get(fixtureRoadmapPath(fixture.fi1001Current))).status()).toBe(404);
-  expect((await student.post(roadmapPath())).status()).toBe(403);
+  const student = await apiAs(studentWithoutProgress);
+  expect((await student.get(withoutRoadmap.apiPath())).status()).toBe(404);
+  expect((await student.post(course.apiPath())).status()).toBe(403);
   const foreignResource = await student.get(
-    fixtureRoadmapPath(fixture.ma1001, `/nodes/${fixture.cc1002.firstNode}/resources`),
+    otherRoadmap.apiPath(`/nodes/${course.nodes.first}/resources`),
   );
   expect(foreignResource.status()).toBe(404);
   expect((await foreignResource.json()).error.code).toBe('NODE_NOT_FOUND');
-  await student.dispose();
-  expect((await request.get(roadmapPath())).status()).toBe(401);
+  expect((await request.get(course.apiPath())).status()).toBe(401);
 });
 
-test('teacher API manages a node type, resources, and dependencies through their lifecycle', async ({}, testInfo) => {
-  const api = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
-  });
+test('teacher API manages a node type, resources, and dependencies through their lifecycle', async ({
+  course,
+  apiAs,
+}) => {
+  const api = await apiAs(course.users.teacher);
   const typeName = uniqueName('Laboratorio E2E');
-  let typeId: string | undefined;
-  let duplicateTypeId: string | undefined;
-  let sourceId: string | undefined;
-  let targetId: string | undefined;
-  let resourceId: string | undefined;
-  let dependencyId: string | undefined;
-  try {
-    const nodeTypesBefore = await api.get(roadmapPath('/node-types'));
-    expect(nodeTypesBefore.status()).toBe(200);
-    const initialNodeTypeIds = (await nodeTypesBefore.json()).nodeTypes.map(
+  const nodeTypesBefore = await api.get(course.apiPath('/node-types'));
+  expect(nodeTypesBefore.status()).toBe(200);
+  const initialNodeTypeIds = (await nodeTypesBefore.json()).nodeTypes.map(
+    (nodeType: { id: string }) => nodeType.id,
+  );
+  const missingIcon = await api.post(course.apiPath('/node-types'), {
+    data: { name: uniqueName('Sin ícono'), color: '#024AD8' },
+  });
+  expect(missingIcon.status()).toBe(400);
+  expect((await missingIcon.json()).error.code).toBe('INVALID_REQUEST');
+  const invalidIcon = await api.post(course.apiPath('/node-types'), {
+    data: { name: uniqueName('Ícono inválido'), icon: 'NotAnIcon', color: '#024AD8' },
+  });
+  expect(invalidIcon.status()).toBe(400);
+  expect((await invalidIcon.json()).error.code).toBe('INVALID_REQUEST');
+  const invalidColor = await api.post(course.apiPath('/node-types'), {
+    data: { name: uniqueName('Color inválido'), icon: 'Shapes', color: '#ABCDEF' },
+  });
+  expect(invalidColor.status()).toBe(400);
+  expect((await invalidColor.json()).error.code).toBe('INVALID_REQUEST');
+  const nodeTypesAfterInvalidCreation = await api.get(course.apiPath('/node-types'));
+  expect(
+    (await nodeTypesAfterInvalidCreation.json()).nodeTypes.map(
       (nodeType: { id: string }) => nodeType.id,
-    );
-    const missingIcon = await api.post(roadmapPath('/node-types'), {
-      data: { name: uniqueName('Sin ícono'), color: '#024AD8' },
-    });
-    expect(missingIcon.status()).toBe(400);
-    expect((await missingIcon.json()).error.code).toBe('INVALID_REQUEST');
-    const invalidIcon = await api.post(roadmapPath('/node-types'), {
-      data: { name: uniqueName('Ícono inválido'), icon: 'NotAnIcon', color: '#024AD8' },
-    });
-    expect(invalidIcon.status()).toBe(400);
-    expect((await invalidIcon.json()).error.code).toBe('INVALID_REQUEST');
-    const invalidColor = await api.post(roadmapPath('/node-types'), {
-      data: { name: uniqueName('Color inválido'), icon: 'Shapes', color: '#ABCDEF' },
-    });
-    expect(invalidColor.status()).toBe(400);
-    expect((await invalidColor.json()).error.code).toBe('INVALID_REQUEST');
-    const nodeTypesAfterInvalidCreation = await api.get(roadmapPath('/node-types'));
-    expect(
-      (await nodeTypesAfterInvalidCreation.json()).nodeTypes.map(
-        (nodeType: { id: string }) => nodeType.id,
-      ),
-    ).toEqual(initialNodeTypeIds);
+    ),
+  ).toEqual(initialNodeTypeIds);
 
-    const createdType = await api.post(roadmapPath('/node-types'), {
-      data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
-    });
-    expect(createdType.status()).toBe(201);
-    const createdNodeType = (await createdType.json()).nodeType;
-    expect(createdNodeType).toMatchObject({ name: typeName, icon: 'Shapes', color: '#024AD8' });
-    typeId = createdNodeType.id;
-    const repeatedAppearance = await api.post(roadmapPath('/node-types'), {
-      data: { name: uniqueName('Laboratorio paralelo'), icon: 'Shapes', color: '#024AD8' },
-    });
-    expect(repeatedAppearance.status()).toBe(201);
-    duplicateTypeId = (await repeatedAppearance.json()).nodeType.id;
-    expect(
-      (
-        await api.post(roadmapPath('/node-types'), {
-          data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
-        })
-      ).status(),
-    ).toBe(409);
-    const updatedType = await api.patch(roadmapPath(`/node-types/${typeId}`), {
-      data: { icon: 'Calculator' },
-    });
-    expect(updatedType.status()).toBe(200);
-    expect((await updatedType.json()).nodeType).toMatchObject({
-      name: typeName,
-      icon: 'Calculator',
-      color: '#024AD8',
-    });
-    const invalidIconPatch = await api.patch(roadmapPath(`/node-types/${typeId}`), {
-      data: { icon: 'NotAnIcon' },
-    });
-    expect(invalidIconPatch.status()).toBe(400);
-    expect((await invalidIconPatch.json()).error.code).toBe('INVALID_REQUEST');
-    const invalidPatch = await api.patch(roadmapPath(`/node-types/${typeId}`), {
-      data: { color: null },
-    });
-    expect(invalidPatch.status()).toBe(400);
-    expect((await invalidPatch.json()).error.code).toBe('INVALID_REQUEST');
-    const nodeTypesAfterInvalidPatch = await api.get(roadmapPath('/node-types'));
-    expect(
-      (await nodeTypesAfterInvalidPatch.json()).nodeTypes.find(
-        (nodeType: { id: string }) => nodeType.id === typeId,
-      ),
-    ).toMatchObject({ name: typeName, icon: 'Calculator', color: '#024AD8' });
-    expect(
-      (
-        await api.patch(roadmapPath('/node-types/00000000-0000-4000-8000-000000000001'), {
-          data: { name: 'No modificable' },
-        })
-      ).status(),
-    ).toBe(409);
+  const createdType = await api.post(course.apiPath('/node-types'), {
+    data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
+  });
+  expect(createdType.status()).toBe(201);
+  const createdNodeType = (await createdType.json()).nodeType;
+  expect(createdNodeType).toMatchObject({ name: typeName, icon: 'Shapes', color: '#024AD8' });
+  const typeId = createdNodeType.id;
+  const repeatedAppearance = await api.post(course.apiPath('/node-types'), {
+    data: { name: uniqueName('Laboratorio paralelo'), icon: 'Shapes', color: '#024AD8' },
+  });
+  expect(repeatedAppearance.status()).toBe(201);
+  expect(
+    (
+      await api.post(course.apiPath('/node-types'), {
+        data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
+      })
+    ).status(),
+  ).toBe(409);
+  const updatedType = await api.patch(course.apiPath(`/node-types/${typeId}`), {
+    data: { icon: 'Calculator' },
+  });
+  expect(updatedType.status()).toBe(200);
+  expect((await updatedType.json()).nodeType).toMatchObject({
+    name: typeName,
+    icon: 'Calculator',
+    color: '#024AD8',
+  });
+  const invalidIconPatch = await api.patch(course.apiPath(`/node-types/${typeId}`), {
+    data: { icon: 'NotAnIcon' },
+  });
+  expect(invalidIconPatch.status()).toBe(400);
+  expect((await invalidIconPatch.json()).error.code).toBe('INVALID_REQUEST');
+  const invalidPatch = await api.patch(course.apiPath(`/node-types/${typeId}`), {
+    data: { color: null },
+  });
+  expect(invalidPatch.status()).toBe(400);
+  expect((await invalidPatch.json()).error.code).toBe('INVALID_REQUEST');
+  const nodeTypesAfterInvalidPatch = await api.get(course.apiPath('/node-types'));
+  expect(
+    (await nodeTypesAfterInvalidPatch.json()).nodeTypes.find(
+      (nodeType: { id: string }) => nodeType.id === typeId,
+    ),
+  ).toMatchObject({ name: typeName, icon: 'Calculator', color: '#024AD8' });
+  expect(
+    (
+      await api.patch(course.apiPath('/node-types/00000000-0000-4000-8000-000000000001'), {
+        data: { name: 'No modificable' },
+      })
+    ).status(),
+  ).toBe(409);
 
-    const sourceResponse = await api.post(roadmapPath('/nodes'), {
-      data: { title: uniqueName('Origen E2E'), nodeTypeId: typeId, positionX: 0, positionY: 0 },
-    });
-    const targetResponse = await api.post(roadmapPath('/nodes'), {
-      data: { title: uniqueName('Destino E2E'), nodeTypeId: typeId, positionX: 120, positionY: 0 },
-    });
-    expect(sourceResponse.status()).toBe(201);
-    expect(targetResponse.status()).toBe(201);
-    sourceId = (await sourceResponse.json()).node.id;
-    targetId = (await targetResponse.json()).node.id;
-    expect((await api.delete(roadmapPath(`/node-types/${typeId}`))).status()).toBe(409);
+  const sourceResponse = await api.post(course.apiPath('/nodes'), {
+    data: { title: uniqueName('Origen E2E'), nodeTypeId: typeId, positionX: 0, positionY: 0 },
+  });
+  const targetResponse = await api.post(course.apiPath('/nodes'), {
+    data: { title: uniqueName('Destino E2E'), nodeTypeId: typeId, positionX: 120, positionY: 0 },
+  });
+  expect(sourceResponse.status()).toBe(201);
+  expect(targetResponse.status()).toBe(201);
+  const sourceId = (await sourceResponse.json()).node.id;
+  const targetId = (await targetResponse.json()).node.id;
+  expect((await api.delete(course.apiPath(`/node-types/${typeId}`))).status()).toBe(409);
 
-    const resource = await api.post(roadmapPath(`/nodes/${sourceId}/resources`), {
-      data: { title: 'Guía E2E', url: 'https://example.test/e2e-guide', type: 'LINK' },
-    });
-    expect(resource.status()).toBe(201);
-    resourceId = (await resource.json()).resource.id;
-    expect(
-      (
-        await api.patch(roadmapPath(`/resources/${resourceId}`), {
-          data: { title: 'Video E2E', type: 'VIDEO' },
-        })
-      ).status(),
-    ).toBe(200);
-    expect(
-      (
-        await api.post(roadmapPath(`/nodes/${sourceId}/resources`), {
-          data: { title: 'Unsafe', url: 'javascript:alert(1)', type: 'LINK' },
-        })
-      ).status(),
-    ).toBe(400);
+  const resource = await api.post(course.apiPath(`/nodes/${sourceId}/resources`), {
+    data: { title: 'Guía E2E', url: 'https://example.test/e2e-guide', type: 'LINK' },
+  });
+  expect(resource.status()).toBe(201);
+  const resourceId = (await resource.json()).resource.id;
+  expect(
+    (
+      await api.patch(course.apiPath(`/resources/${resourceId}`), {
+        data: { title: 'Video E2E', type: 'VIDEO' },
+      })
+    ).status(),
+  ).toBe(200);
+  expect(
+    (
+      await api.post(course.apiPath(`/nodes/${sourceId}/resources`), {
+        data: { title: 'Unsafe', url: 'javascript:alert(1)', type: 'LINK' },
+      })
+    ).status(),
+  ).toBe(400);
 
-    const dependency = await api.post(roadmapPath('/dependencies'), {
-      data: {
-        sourceNodeId: sourceId,
-        targetNodeId: targetId,
-        sourceHandle: 'bottom',
-        targetHandle: 'top',
-      },
-    });
-    expect(dependency.status()).toBe(201);
-    dependencyId = (await dependency.json()).dependency.id;
-    expect(
-      (
-        await api.post(roadmapPath('/dependencies'), {
-          data: { sourceNodeId: targetId, targetNodeId: sourceId },
-        })
-      ).status(),
-    ).toBe(409);
-    expect((await api.delete(roadmapPath(`/dependencies/${dependencyId}`))).status()).toBe(204);
-    dependencyId = undefined;
-    expect((await api.delete(roadmapPath(`/resources/${resourceId}`))).status()).toBe(204);
-    resourceId = undefined;
-  } finally {
-    await deleteIfPresent(api, dependencyId && roadmapPath(`/dependencies/${dependencyId}`));
-    await deleteIfPresent(api, resourceId && roadmapPath(`/resources/${resourceId}`));
-    await deleteIfPresent(api, sourceId && roadmapPath(`/nodes/${sourceId}`));
-    await deleteIfPresent(api, targetId && roadmapPath(`/nodes/${targetId}`));
-    await deleteIfPresent(api, typeId && roadmapPath(`/node-types/${typeId}`));
-    await deleteIfPresent(api, duplicateTypeId && roadmapPath(`/node-types/${duplicateTypeId}`));
-    await api.dispose();
-  }
+  const dependency = await api.post(course.apiPath('/dependencies'), {
+    data: {
+      sourceNodeId: sourceId,
+      targetNodeId: targetId,
+      sourceHandle: 'bottom',
+      targetHandle: 'top',
+    },
+  });
+  expect(dependency.status()).toBe(201);
+  const dependencyId = (await dependency.json()).dependency.id;
+  expect(
+    (
+      await api.post(course.apiPath('/dependencies'), {
+        data: { sourceNodeId: targetId, targetNodeId: sourceId },
+      })
+    ).status(),
+  ).toBe(409);
+  expect((await api.delete(course.apiPath(`/dependencies/${dependencyId}`))).status()).toBe(204);
+  expect((await api.delete(course.apiPath(`/resources/${resourceId}`))).status()).toBe(204);
 });
 
 test('teacher deletes a Canvas node after reviewing its authoritative impact', async ({
   page,
-}, testInfo) => {
+  course,
+  apiAs,
+}) => {
   const sourceTitle = uniqueName('Nodo Canvas para eliminar');
   const targetTitle = uniqueName('Nodo Canvas relacionado');
   const resourceTitle = uniqueName('Recurso Canvas relacionado');
-  const api = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  const api = await apiAs(course.users.teacher);
+
+  const sourceResponse = await api.post(course.apiPath('/nodes'), {
+    data: {
+      title: sourceTitle,
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 0,
+      positionY: 0,
+    },
   });
-  let sourceId: string | undefined;
-  let targetId: string | undefined;
+  const targetResponse = await api.post(course.apiPath('/nodes'), {
+    data: {
+      title: targetTitle,
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 240,
+      positionY: 0,
+    },
+  });
+  expect(sourceResponse.status()).toBe(201);
+  expect(targetResponse.status()).toBe(201);
+  const sourceNodeId: string = (await sourceResponse.json()).node.id;
+  const targetNodeId: string = (await targetResponse.json()).node.id;
 
-  try {
-    const sourceResponse = await api.post(roadmapPath('/nodes'), {
-      data: {
-        title: sourceTitle,
-        nodeTypeId: '00000000-0000-4000-8000-000000000001',
-        positionX: 0,
-        positionY: 0,
-      },
-    });
-    const targetResponse = await api.post(roadmapPath('/nodes'), {
-      data: {
-        title: targetTitle,
-        nodeTypeId: '00000000-0000-4000-8000-000000000001',
-        positionX: 240,
-        positionY: 0,
-      },
-    });
-    expect(sourceResponse.status()).toBe(201);
-    expect(targetResponse.status()).toBe(201);
-    const sourceNodeId: string = (await sourceResponse.json()).node.id;
-    const targetNodeId: string = (await targetResponse.json()).node.id;
-    sourceId = sourceNodeId;
-    targetId = targetNodeId;
+  const resourceResponse = await api.post(course.apiPath(`/nodes/${sourceNodeId}/resources`), {
+    data: {
+      title: resourceTitle,
+      url: 'https://example.test/canvas-deletion-resource',
+      type: 'LINK',
+    },
+  });
+  expect(resourceResponse.status()).toBe(201);
 
-    const resourceResponse = await api.post(roadmapPath(`/nodes/${sourceNodeId}/resources`), {
-      data: {
-        title: resourceTitle,
-        url: 'https://example.test/canvas-deletion-resource',
-        type: 'LINK',
-      },
-    });
-    expect(resourceResponse.status()).toBe(201);
+  const dependencyResponse = await api.post(course.apiPath('/dependencies'), {
+    data: {
+      sourceNodeId,
+      targetNodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left',
+    },
+  });
+  expect(dependencyResponse.status()).toBe(201);
 
-    const dependencyResponse = await api.post(roadmapPath('/dependencies'), {
-      data: {
-        sourceNodeId,
-        targetNodeId,
-        sourceHandle: 'right',
-        targetHandle: 'left',
-      },
-    });
-    expect(dependencyResponse.status()).toBe(201);
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await panRoadmapNodeIntoView(page, sourceNodeId);
 
-    await authenticateAs(page.context(), fixture.daniela);
-    await page.goto('/courses/CC1002/2026/2');
-    await panRoadmapNodeIntoView(page, sourceNodeId);
+  const sourceNode = page.locator(`.react-flow__node[data-id="${sourceNodeId}"]`);
+  await sourceNode.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
+  const requestDelete = sourceNode.getByRole('button', { name: 'Eliminar nodo' });
+  await expect(requestDelete).toBeVisible();
 
-    const sourceNode = page.locator(`.react-flow__node[data-id="${sourceNodeId}"]`);
-    await sourceNode.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
-    const requestDelete = sourceNode.getByRole('button', { name: 'Eliminar nodo' });
-    await expect(requestDelete).toBeVisible();
+  const deletionPreviewPath = `/nodes/${sourceNodeId}?operation=DELETE`;
+  const initialPreviewPromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
+  );
+  await requestDelete.click();
+  const initialPreview = await initialPreviewPromise;
+  expect(initialPreview.status()).toBe(200);
 
-    const deletionPreviewPath = `/nodes/${sourceNodeId}?operation=DELETE`;
-    const initialPreviewPromise = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
-    );
-    await requestDelete.click();
-    const initialPreview = await initialPreviewPromise;
-    expect(initialPreview.status()).toBe(200);
+  const dialog = page.getByRole('alertdialog', { name: 'Eliminar Nodo' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('list', { name: 'Nodo que se eliminará' })).toContainText(
+    sourceTitle,
+  );
+  const dependencyList = dialog.getByRole('list', { name: 'Dependencias relacionadas' });
+  await expect(dependencyList).toContainText(sourceTitle);
+  await expect(dependencyList).toContainText(targetTitle);
+  await expect(dialog.getByRole('list', { name: 'Recursos que se eliminarán' })).toContainText(
+    resourceTitle,
+  );
 
-    const dialog = page.getByRole('alertdialog', { name: 'Eliminar Nodo' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('list', { name: 'Nodo que se eliminará' })).toContainText(
-      sourceTitle,
-    );
-    const dependencyList = dialog.getByRole('list', { name: 'Dependencias relacionadas' });
-    await expect(dependencyList).toContainText(sourceTitle);
-    await expect(dependencyList).toContainText(targetTitle);
-    await expect(dialog.getByRole('list', { name: 'Recursos que se eliminarán' })).toContainText(
-      resourceTitle,
-    );
+  const latestPreviewPromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
+  );
+  const deletionRequestPromise = page.waitForRequest(
+    (request) => request.method() === 'DELETE' && request.url().includes(`/nodes/${sourceNodeId}`),
+  );
+  const deletionResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' && response.url().includes(`/nodes/${sourceNodeId}`),
+  );
+  await dialog.getByRole('button', { name: 'Eliminar Nodo' }).click();
+  const [latestPreview, deletionRequest, deletionResponse] = await Promise.all([
+    latestPreviewPromise,
+    deletionRequestPromise,
+    deletionResponsePromise,
+  ]);
+  expect(latestPreview.status()).toBe(200);
+  expect(deletionResponse.status()).toBe(204);
+  expect(deletionRequest.headers()['x-node-delete-preview']).toBe(
+    (await latestPreview.json()).version,
+  );
 
-    const latestPreviewPromise = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'GET' && response.url().includes(deletionPreviewPath),
-    );
-    const deletionRequestPromise = page.waitForRequest(
-      (request) =>
-        request.method() === 'DELETE' && request.url().includes(`/nodes/${sourceNodeId}`),
-    );
-    const deletionResponsePromise = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'DELETE' &&
-        response.url().includes(`/nodes/${sourceNodeId}`),
-    );
-    await dialog.getByRole('button', { name: 'Eliminar Nodo' }).click();
-    const [latestPreview, deletionRequest, deletionResponse] = await Promise.all([
-      latestPreviewPromise,
-      deletionRequestPromise,
-      deletionResponsePromise,
-    ]);
-    expect(latestPreview.status()).toBe(200);
-    expect(deletionResponse.status()).toBe(204);
-    expect(deletionRequest.headers()['x-node-delete-preview']).toBe(
-      (await latestPreview.json()).version,
-    );
-
-    await expect(dialog).toHaveCount(0);
-    await expect(sourceNode).toHaveCount(0);
-    const roadmap = await api.get(roadmapPath());
-    expect((await roadmap.json()).nodes).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: sourceId })]),
-    );
-  } finally {
-    await deleteIfPresent(api, sourceId && roadmapPath(`/nodes/${sourceId}`));
-    await deleteIfPresent(api, targetId && roadmapPath(`/nodes/${targetId}`));
-    await api.dispose();
-  }
+  await expect(dialog).toHaveCount(0);
+  await expect(sourceNode).toHaveCount(0);
+  const roadmap = await api.get(course.apiPath());
+  expect((await roadmap.json()).nodes).not.toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: sourceNodeId })]),
+  );
 });
 
-test('teacher uploads a file resource through the protected multipart endpoint', async ({}, testInfo) => {
-  const api = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+test('teacher uploads a file resource through the protected multipart endpoint', async ({
+  course,
+  apiAs,
+}) => {
+  const api = await apiAs(course.users.teacher);
+  const response = await api.post(course.apiPath(`/nodes/${course.nodes.first}/resources`), {
+    multipart: {
+      file: {
+        name: 'guia-e2e.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.from('%PDF-1.4 E2E guide'),
+      },
+    },
   });
-  let resourceId: string | undefined;
 
-  try {
-    const response = await api.post(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/resources`), {
-      multipart: {
-        file: {
-          name: 'guia-e2e.pdf',
-          mimeType: 'application/pdf',
-          buffer: Buffer.from('%PDF-1.4 E2E guide'),
+  expect(response.status()).toBe(201);
+  const body = await response.json();
+  expect(body.resource).toMatchObject({
+    title: 'guia-e2e.pdf',
+    type: 'FILE',
+    url: expect.stringContaining(`/resources/${body.resource.id}/file`),
+  });
+});
+
+test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, apiAs }) => {
+  const teacher = await apiAs(course.users.teacher);
+  const student = await apiAs(course.users.studentWithoutProgress);
+
+  const roadmap = await teacher.get(course.apiPath());
+  expect(roadmap.status()).toBe(200);
+  const contentTypeId = (await roadmap.json()).nodeTypes.find(
+    (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
+  ).id;
+  const nodeNames = ['Raíz', 'Izquierdo', 'Derecho', 'Unión', 'Hoja', 'Externo'];
+  const nodes = await Promise.all(
+    nodeNames.map(async (name, index) => {
+      const response = await teacher.post(course.apiPath('/nodes'), {
+        data: {
+          title: uniqueName(`Bloqueo ${name}`),
+          nodeTypeId: contentTypeId,
+          positionX: index * 100,
+          positionY: 0,
         },
-      },
-    });
-
-    expect(response.status()).toBe(201);
-    const body = await response.json();
-    resourceId = body.resource.id;
-    expect(body.resource).toMatchObject({
-      title: 'guia-e2e.pdf',
-      type: 'FILE',
-      url: expect.stringContaining(`/resources/${resourceId}/file`),
-    });
-  } finally {
-    await deleteIfPresent(api, resourceId && roadmapPath(`/resources/${resourceId}`));
-    await api.dispose();
-  }
-});
-
-test('teacher blocks and unlocks a roadmap branch atomically', async ({}, testInfo) => {
-  const teacher = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
-  });
-  const student = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
-  });
-  const createdNodeIds: string[] = [];
-  const dependencyIds: string[] = [];
-
-  try {
-    const roadmap = await teacher.get(roadmapPath());
-    expect(roadmap.status()).toBe(200);
-    const contentTypeId = (await roadmap.json()).nodeTypes.find(
-      (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
-    ).id;
-    const nodeNames = ['Raíz', 'Izquierdo', 'Derecho', 'Unión', 'Hoja', 'Externo'];
-    const nodes = await Promise.all(
-      nodeNames.map(async (name, index) => {
-        const response = await teacher.post(roadmapPath('/nodes'), {
-          data: {
-            title: uniqueName(`Bloqueo ${name}`),
-            nodeTypeId: contentTypeId,
-            positionX: index * 100,
-            positionY: 0,
-          },
-        });
-        expect(response.status()).toBe(201);
-        const node = (await response.json()).node as { id: string; title: string };
-        createdNodeIds.push(node.id);
-        return node;
-      }),
-    );
-    const [root, left, right, join, leaf, external] = nodes;
-    const dependencies = [
-      [root, left],
-      [root, right],
-      [left, join],
-      [right, join],
-      [join, leaf],
-      [external, join],
-    ] as const;
-    for (const [source, target] of dependencies) {
-      const response = await teacher.post(roadmapPath('/dependencies'), {
-        data: { sourceNodeId: source.id, targetNodeId: target.id },
       });
       expect(response.status()).toBe(201);
-      dependencyIds.push((await response.json()).dependency.id);
-    }
-
-    const teacherBlockPath = (nodeId: string) => roadmapPath(`/nodes/${nodeId}/teacher-block`);
-    expect((await student.post(teacherBlockPath(root.id))).status()).toBe(403);
-    const preview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`);
-    expect(preview.status()).toBe(200);
-    expect((await preview.json()).nodes).toEqual(
-      expect.arrayContaining(
-        [root, left, right, join, leaf].map(({ id, title }) =>
-          expect.objectContaining({ id, title }),
-        ),
-      ),
-    );
-
-    const beforeBlock = await teacher.get(roadmapPath());
-    expect(
-      (await beforeBlock.json()).nodes.find((node: { id: string }) => node.id === root.id)
-        .isTeacherBlocked,
-    ).toBe(false);
-
-    const resource = await teacher.post(roadmapPath(`/nodes/${root.id}/resources`), {
-      data: { title: 'Recurso que se conserva', url: 'https://example.test/kept', type: 'LINK' },
+      return (await response.json()).node as { id: string; title: string };
+    }),
+  );
+  const [root, left, right, join, leaf, external] = nodes;
+  const dependencies = [
+    [root, left],
+    [root, right],
+    [left, join],
+    [right, join],
+    [join, leaf],
+    [external, join],
+  ] as const;
+  for (const [source, target] of dependencies) {
+    const response = await teacher.post(course.apiPath('/dependencies'), {
+      data: { sourceNodeId: source.id, targetNodeId: target.id },
     });
-    expect(resource.status()).toBe(201);
-    expect((await student.post(roadmapPath(`/nodes/${root.id}/completion`))).status()).toBe(200);
-
-    const block = await teacher.post(teacherBlockPath(root.id));
-    expect(block.status()).toBe(200);
-    expect((await block.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
-      expect.arrayContaining([root.id, left.id, right.id, join.id, leaf.id]),
-    );
-    const teacherRoadmap = await teacher.get(roadmapPath());
-    expect(
-      (await teacherRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
-    ).toMatchObject({ isTeacherBlocked: true, resources: [{ title: 'Recurso que se conserva' }] });
-
-    const individualPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=UNBLOCK`);
-    expect(individualPreview.status()).toBe(200);
-    const individual = await individualPreview.json();
-    expect(individual).toMatchObject({
-      mode: 'SINGLE',
-      nodes: [
-        expect.objectContaining({
-          id: root.id,
-          title: root.title,
-          relation: 'SELECTED_NODE',
-          nodeType: expect.objectContaining({
-            icon: expect.any(String),
-            color: expect.any(String),
-          }),
-        }),
-      ],
-    });
-    const upstreamPreview = await teacher.get(`${teacherBlockPath(left.id)}?operation=UNBLOCK`);
-    expect(upstreamPreview.status()).toBe(200);
-    const upstream = await upstreamPreview.json();
-    expect(upstream).toMatchObject({
-      mode: 'UPSTREAM',
-      nodes: expect.arrayContaining([
-        expect.objectContaining({ id: root.id, relation: 'PREREQUISITE' }),
-        expect.objectContaining({ id: left.id, relation: 'SELECTED_NODE' }),
-      ]),
-    });
-    expect(
-      (
-        await teacher.delete(teacherBlockPath(root.id), {
-          headers: { 'x-teacher-block-preview': individual.version },
-        })
-      ).status(),
-    ).toBe(200);
-    const staleUnlock = await teacher.delete(teacherBlockPath(left.id), {
-      headers: { 'x-teacher-block-preview': upstream.version },
-    });
-    expect(staleUnlock.status()).toBe(409);
-    expect((await staleUnlock.json()).error.code).toBe('TEACHER_BLOCK_PREVIEW_STALE');
-    const afterStaleUnlock = await teacher.get(roadmapPath());
-    expect(
-      (await afterStaleUnlock.json()).nodes.find((node: { id: string }) => node.id === left.id)
-        .isTeacherBlocked,
-    ).toBe(true);
-    expect((await teacher.post(teacherBlockPath(root.id))).status()).toBe(200);
-    const refreshedUpstreamPreview = await teacher.get(
-      `${teacherBlockPath(left.id)}?operation=UNBLOCK`,
-    );
-    expect(refreshedUpstreamPreview.status()).toBe(200);
-    const refreshedUpstream = await refreshedUpstreamPreview.json();
-    expect(
-      (
-        await teacher.delete(teacherBlockPath(left.id), {
-          headers: { 'x-teacher-block-preview': refreshedUpstream.version },
-        })
-      ).status(),
-    ).toBe(200);
-    const studentRoadmap = await student.get(roadmapPath());
-    expect(
-      (await studentRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
-    ).toMatchObject({ isCompleted: true });
-
-    expect((await teacher.post(teacherBlockPath(external.id))).status()).toBe(200);
-    const branchPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BRANCH_UNLOCK`);
-    expect(branchPreview.status()).toBe(200);
-    const branch = await branchPreview.json();
-    expect(branch).toMatchObject({
-      mode: 'BRANCH',
-      nodes: expect.arrayContaining([
-        expect.objectContaining({ id: right.id, relation: 'DEPENDENT' }),
-      ]),
-    });
-    const beforeBranchUnlock = await teacher.get(roadmapPath());
-    const beforeBranchUnlockByNodeId = new Map(
-      (await beforeBranchUnlock.json()).nodes.map(
-        (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
-      ),
-    );
-    expect(beforeBranchUnlockByNodeId.get(left.id)).toBe(false);
-    expect(beforeBranchUnlockByNodeId.get(right.id)).toBe(true);
-    const branchUnlock = await teacher.patch(teacherBlockPath(root.id), {
-      headers: { 'x-teacher-block-preview': branch.version },
-    });
-    expect(branchUnlock.status()).toBe(200);
-    expect((await branchUnlock.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
-      expect.arrayContaining([right.id]),
-    );
-    const afterBranchUnlock = await teacher.get(roadmapPath());
-    const teacherBlockByNodeId = new Map(
-      (await afterBranchUnlock.json()).nodes.map(
-        (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
-      ),
-    );
-    expect(teacherBlockByNodeId.get(root.id)).toBe(false);
-    expect(teacherBlockByNodeId.get(left.id)).toBe(false);
-    expect(teacherBlockByNodeId.get(right.id)).toBe(false);
-    expect(teacherBlockByNodeId.get(join.id)).toBe(true);
-    expect(teacherBlockByNodeId.get(leaf.id)).toBe(true);
-    expect(teacherBlockByNodeId.get(external.id)).toBe(true);
-
-    const hiddenBlock = await teacher.post(teacherBlockPath(fixture.cc1002.hiddenNode));
-    expect(hiddenBlock.status()).toBe(409);
-    expect((await hiddenBlock.json()).error.code).toBe('HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN');
-
-    const concurrentBlocks = await Promise.all([
-      teacher.post(teacherBlockPath(root.id)),
-      teacher.post(teacherBlockPath(root.id)),
-    ]);
-    expect(concurrentBlocks.map((response) => response.status())).toEqual([200, 200]);
-    const afterConcurrentBlocks = await teacher.get(roadmapPath());
-    const concurrentBlockByNodeId = new Map(
-      (await afterConcurrentBlocks.json()).nodes.map(
-        (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
-      ),
-    );
-    expect(
-      [root, left, right, join, leaf].every((node) => concurrentBlockByNodeId.get(node.id)),
-    ).toBe(true);
-  } finally {
-    for (const dependencyId of dependencyIds)
-      await deleteIfPresent(teacher, roadmapPath(`/dependencies/${dependencyId}`));
-    for (const nodeId of createdNodeIds)
-      await deleteIfPresent(teacher, roadmapPath(`/nodes/${nodeId}`));
-    await Promise.all([teacher.dispose(), student.dispose()]);
+    expect(response.status()).toBe(201);
   }
+
+  const teacherBlockPath = (nodeId: string) => course.apiPath(`/nodes/${nodeId}/teacher-block`);
+  expect((await student.post(teacherBlockPath(root.id))).status()).toBe(403);
+  const preview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`);
+  expect(preview.status()).toBe(200);
+  expect((await preview.json()).nodes).toEqual(
+    expect.arrayContaining(
+      [root, left, right, join, leaf].map(({ id, title }) =>
+        expect.objectContaining({ id, title }),
+      ),
+    ),
+  );
+
+  const beforeBlock = await teacher.get(course.apiPath());
+  expect(
+    (await beforeBlock.json()).nodes.find((node: { id: string }) => node.id === root.id)
+      .isTeacherBlocked,
+  ).toBe(false);
+
+  const resource = await teacher.post(course.apiPath(`/nodes/${root.id}/resources`), {
+    data: { title: 'Recurso que se conserva', url: 'https://example.test/kept', type: 'LINK' },
+  });
+  expect(resource.status()).toBe(201);
+  expect((await student.post(course.apiPath(`/nodes/${root.id}/completion`))).status()).toBe(200);
+
+  const block = await teacher.post(teacherBlockPath(root.id));
+  expect(block.status()).toBe(200);
+  expect((await block.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
+    expect.arrayContaining([root.id, left.id, right.id, join.id, leaf.id]),
+  );
+  const teacherRoadmap = await teacher.get(course.apiPath());
+  expect(
+    (await teacherRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
+  ).toMatchObject({ isTeacherBlocked: true, resources: [{ title: 'Recurso que se conserva' }] });
+
+  const individualPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=UNBLOCK`);
+  expect(individualPreview.status()).toBe(200);
+  const individual = await individualPreview.json();
+  expect(individual).toMatchObject({
+    mode: 'SINGLE',
+    nodes: [
+      expect.objectContaining({
+        id: root.id,
+        title: root.title,
+        relation: 'SELECTED_NODE',
+        nodeType: expect.objectContaining({
+          icon: expect.any(String),
+          color: expect.any(String),
+        }),
+      }),
+    ],
+  });
+  const upstreamPreview = await teacher.get(`${teacherBlockPath(left.id)}?operation=UNBLOCK`);
+  expect(upstreamPreview.status()).toBe(200);
+  const upstream = await upstreamPreview.json();
+  expect(upstream).toMatchObject({
+    mode: 'UPSTREAM',
+    nodes: expect.arrayContaining([
+      expect.objectContaining({ id: root.id, relation: 'PREREQUISITE' }),
+      expect.objectContaining({ id: left.id, relation: 'SELECTED_NODE' }),
+    ]),
+  });
+  expect(
+    (
+      await teacher.delete(teacherBlockPath(root.id), {
+        headers: { 'x-teacher-block-preview': individual.version },
+      })
+    ).status(),
+  ).toBe(200);
+  const staleUnlock = await teacher.delete(teacherBlockPath(left.id), {
+    headers: { 'x-teacher-block-preview': upstream.version },
+  });
+  expect(staleUnlock.status()).toBe(409);
+  expect((await staleUnlock.json()).error.code).toBe('TEACHER_BLOCK_PREVIEW_STALE');
+  const afterStaleUnlock = await teacher.get(course.apiPath());
+  expect(
+    (await afterStaleUnlock.json()).nodes.find((node: { id: string }) => node.id === left.id)
+      .isTeacherBlocked,
+  ).toBe(true);
+  expect((await teacher.post(teacherBlockPath(root.id))).status()).toBe(200);
+  const refreshedUpstreamPreview = await teacher.get(
+    `${teacherBlockPath(left.id)}?operation=UNBLOCK`,
+  );
+  expect(refreshedUpstreamPreview.status()).toBe(200);
+  const refreshedUpstream = await refreshedUpstreamPreview.json();
+  expect(
+    (
+      await teacher.delete(teacherBlockPath(left.id), {
+        headers: { 'x-teacher-block-preview': refreshedUpstream.version },
+      })
+    ).status(),
+  ).toBe(200);
+  const studentRoadmap = await student.get(course.apiPath());
+  expect(
+    (await studentRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
+  ).toMatchObject({ isCompleted: true });
+
+  expect((await teacher.post(teacherBlockPath(external.id))).status()).toBe(200);
+  const branchPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BRANCH_UNLOCK`);
+  expect(branchPreview.status()).toBe(200);
+  const branch = await branchPreview.json();
+  expect(branch).toMatchObject({
+    mode: 'BRANCH',
+    nodes: expect.arrayContaining([
+      expect.objectContaining({ id: right.id, relation: 'DEPENDENT' }),
+    ]),
+  });
+  const beforeBranchUnlock = await teacher.get(course.apiPath());
+  const beforeBranchUnlockByNodeId = new Map(
+    (await beforeBranchUnlock.json()).nodes.map(
+      (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
+    ),
+  );
+  expect(beforeBranchUnlockByNodeId.get(left.id)).toBe(false);
+  expect(beforeBranchUnlockByNodeId.get(right.id)).toBe(true);
+  const branchUnlock = await teacher.patch(teacherBlockPath(root.id), {
+    headers: { 'x-teacher-block-preview': branch.version },
+  });
+  expect(branchUnlock.status()).toBe(200);
+  expect((await branchUnlock.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
+    expect.arrayContaining([right.id]),
+  );
+  const afterBranchUnlock = await teacher.get(course.apiPath());
+  const teacherBlockByNodeId = new Map(
+    (await afterBranchUnlock.json()).nodes.map(
+      (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
+    ),
+  );
+  expect(teacherBlockByNodeId.get(root.id)).toBe(false);
+  expect(teacherBlockByNodeId.get(left.id)).toBe(false);
+  expect(teacherBlockByNodeId.get(right.id)).toBe(false);
+  expect(teacherBlockByNodeId.get(join.id)).toBe(true);
+  expect(teacherBlockByNodeId.get(leaf.id)).toBe(true);
+  expect(teacherBlockByNodeId.get(external.id)).toBe(true);
+
+  const hiddenBlock = await teacher.post(teacherBlockPath(course.nodes.hidden));
+  expect(hiddenBlock.status()).toBe(409);
+  expect((await hiddenBlock.json()).error.code).toBe('HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN');
+
+  const concurrentBlocks = await Promise.all([
+    teacher.post(teacherBlockPath(root.id)),
+    teacher.post(teacherBlockPath(root.id)),
+  ]);
+  expect(concurrentBlocks.map((response) => response.status())).toEqual([200, 200]);
+  const afterConcurrentBlocks = await teacher.get(course.apiPath());
+  const concurrentBlockByNodeId = new Map(
+    (await afterConcurrentBlocks.json()).nodes.map(
+      (node: { id: string; isTeacherBlocked: boolean }) => [node.id, node.isTeacherBlocked],
+    ),
+  );
+  expect(
+    [root, left, right, join, leaf].every((node) => concurrentBlockByNodeId.get(node.id)),
+  ).toBe(true);
 });
 
 test('keeps the two-scope unlock confirmation usable on a narrow viewport', async ({
   page,
-}, testInfo) => {
-  const teacher = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  course,
+  apiAs,
+}) => {
+  const teacher = await apiAs(course.users.teacher);
+
+  const roadmapResponse = await teacher.get(course.apiPath());
+  expect(roadmapResponse.status()).toBe(200);
+  const roadmap = await roadmapResponse.json();
+  const contentTypeId = roadmap.nodeTypes.find(
+    (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
+  ).id;
+
+  const sourceResponse = await teacher.post(course.apiPath('/nodes'), {
+    data: {
+      title: uniqueName('Desbloqueo estrecho origen'),
+      nodeTypeId: contentTypeId,
+      positionX: 1200,
+      positionY: 720,
+    },
   });
-  const createdNodeIds: string[] = [];
-  let dependencyId: string | undefined;
+  const targetResponse = await teacher.post(course.apiPath('/nodes'), {
+    data: {
+      title: uniqueName('Desbloqueo estrecho destino'),
+      nodeTypeId: contentTypeId,
+      positionX: 1440,
+      positionY: 720,
+    },
+  });
+  expect(sourceResponse.status()).toBe(201);
+  expect(targetResponse.status()).toBe(201);
+  const source = (await sourceResponse.json()).node as { id: string };
+  const target = (await targetResponse.json()).node as { id: string };
 
-  try {
-    const roadmapResponse = await teacher.get(roadmapPath());
-    expect(roadmapResponse.status()).toBe(200);
-    const roadmap = await roadmapResponse.json();
-    const contentTypeId = roadmap.nodeTypes.find(
-      (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
-    ).id;
+  const dependencyResponse = await teacher.post(course.apiPath('/dependencies'), {
+    data: { sourceNodeId: source.id, targetNodeId: target.id },
+  });
+  expect(dependencyResponse.status()).toBe(201);
 
-    const sourceResponse = await teacher.post(roadmapPath('/nodes'), {
-      data: {
-        title: uniqueName('Desbloqueo estrecho origen'),
-        nodeTypeId: contentTypeId,
-        positionX: 1200,
-        positionY: 720,
-      },
-    });
-    const targetResponse = await teacher.post(roadmapPath('/nodes'), {
-      data: {
-        title: uniqueName('Desbloqueo estrecho destino'),
-        nodeTypeId: contentTypeId,
-        positionX: 1440,
-        positionY: 720,
-      },
-    });
-    expect(sourceResponse.status()).toBe(201);
-    expect(targetResponse.status()).toBe(201);
-    const source = (await sourceResponse.json()).node as { id: string };
-    const target = (await targetResponse.json()).node as { id: string };
-    createdNodeIds.push(source.id, target.id);
+  const blockResponse = await teacher.post(course.apiPath(`/nodes/${source.id}/teacher-block`));
+  expect(blockResponse.status()).toBe(200);
 
-    const dependencyResponse = await teacher.post(roadmapPath('/dependencies'), {
-      data: { sourceNodeId: source.id, targetNodeId: target.id },
-    });
-    expect(dependencyResponse.status()).toBe(201);
-    dependencyId = (await dependencyResponse.json()).dependency.id;
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(course.pagePath());
+  await panRoadmapNodeIntoView(page, source.id);
+  await page.locator(`.react-flow__node[data-id="${source.id}"]`).click();
 
-    const blockResponse = await teacher.post(roadmapPath(`/nodes/${source.id}/teacher-block`));
-    expect(blockResponse.status()).toBe(200);
+  const editor = page.locator('#roadmap-editor-panel');
+  await expect(editor).toBeVisible();
+  await editor.locator('summary').click();
+  await editor.getByRole('button', { name: 'Desbloquear', exact: true }).click();
 
-    await authenticateAs(page.context(), fixture.daniela);
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto('/courses/CC1002/2026/2');
-    await panRoadmapNodeIntoView(page, source.id);
-    await page.locator(`.react-flow__node[data-id="${source.id}"]`).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Confirmar desbloqueo' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('region', { name: 'Solo este Nodo' })).toBeVisible();
+  await expect(dialog.getByRole('region', { name: 'Este Nodo y su rama' })).toBeVisible();
 
-    const editor = page.locator('#roadmap-editor-panel');
-    await expect(editor).toBeVisible();
-    await editor.locator('summary').click();
-    await editor.getByRole('button', { name: 'Desbloquear', exact: true }).click();
-
-    const dialog = page.getByRole('alertdialog', { name: 'Confirmar desbloqueo' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('region', { name: 'Solo este Nodo' })).toBeVisible();
-    await expect(dialog.getByRole('region', { name: 'Este Nodo y su rama' })).toBeVisible();
-
-    const controls = [
-      dialog.getByRole('button', { name: 'Cancelar' }),
-      dialog.getByRole('button', { name: 'Desbloquear este Nodo' }),
-      dialog.getByRole('button', { name: 'Desbloquear la rama' }),
-    ];
-    for (const control of controls) {
-      await expect(control).toBeVisible();
-      const box = await control.boundingBox();
-      if (!box) throw new Error('No se pudo medir una acción de confirmación.');
-      expect(box.x).toBeGreaterThanOrEqual(0);
-      expect(box.y).toBeGreaterThanOrEqual(0);
-      expect(box.x + box.width).toBeLessThanOrEqual(375);
-      expect(box.y + box.height).toBeLessThanOrEqual(812);
-    }
-
-    await controls[0].click();
-    await expect(dialog).toHaveCount(0);
-  } finally {
-    await deleteIfPresent(teacher, dependencyId && roadmapPath(`/dependencies/${dependencyId}`));
-    for (const nodeId of createdNodeIds)
-      await deleteIfPresent(teacher, roadmapPath(`/nodes/${nodeId}`));
-    await teacher.dispose();
+  const controls = [
+    dialog.getByRole('button', { name: 'Cancelar' }),
+    dialog.getByRole('button', { name: 'Desbloquear este Nodo' }),
+    dialog.getByRole('button', { name: 'Desbloquear la rama' }),
+  ];
+  for (const control of controls) {
+    await expect(control).toBeVisible();
+    const box = await control.boundingBox();
+    if (!box) throw new Error('No se pudo medir una acción de confirmación.');
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+    expect(box.y + box.height).toBeLessThanOrEqual(812);
   }
+
+  await controls[0].click();
+  await expect(dialog).toHaveCount(0);
 });
 
-test('hidden dependencies are rejected and completion requires an active student participation', async ({}, testInfo) => {
-  const teacher = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+test('hidden dependencies are rejected and completion requires an active student participation', async ({
+  course,
+  apiAs,
+}) => {
+  const teacher = await apiAs(course.users.teacher);
+  const student = await apiAs(course.users.studentWithoutProgress);
+  const inactive = await apiAs(course.users.withdrawnStudent);
+  const hidden = await teacher.post(course.apiPath('/nodes'), {
+    data: {
+      title: uniqueName('Prerequisito oculto E2E'),
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 0,
+      positionY: 0,
+      isVisible: false,
+    },
   });
-  const student = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002StudentWithoutProgress) },
+  const target = await teacher.post(course.apiPath('/nodes'), {
+    data: {
+      title: uniqueName('Objetivo visible E2E'),
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 120,
+      positionY: 0,
+    },
   });
-  const inactive = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.cc1002WithdrawnStudent) },
+  expect(hidden.status()).toBe(201);
+  expect(target.status()).toBe(201);
+  const hiddenId = (await hidden.json()).node.id;
+  const targetId = (await target.json()).node.id;
+  const prerequisite = await teacher.post(course.apiPath('/nodes'), {
+    data: {
+      title: uniqueName('Prerequisito visible E2E'),
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 60,
+      positionY: 0,
+    },
   });
-  let hiddenId: string | undefined;
-  let prerequisiteId: string | undefined;
-  let targetId: string | undefined;
-  let dependencyId: string | undefined;
-  try {
-    const hidden = await teacher.post(roadmapPath('/nodes'), {
-      data: {
-        title: uniqueName('Prerequisito oculto E2E'),
-        nodeTypeId: '00000000-0000-4000-8000-000000000001',
-        positionX: 0,
-        positionY: 0,
-        isVisible: false,
-      },
-    });
-    const target = await teacher.post(roadmapPath('/nodes'), {
-      data: {
-        title: uniqueName('Objetivo visible E2E'),
-        nodeTypeId: '00000000-0000-4000-8000-000000000001',
-        positionX: 120,
-        positionY: 0,
-      },
-    });
-    expect(hidden.status()).toBe(201);
-    expect(target.status()).toBe(201);
-    hiddenId = (await hidden.json()).node.id;
-    targetId = (await target.json()).node.id;
-    const prerequisite = await teacher.post(roadmapPath('/nodes'), {
-      data: {
-        title: uniqueName('Prerequisito visible E2E'),
-        nodeTypeId: '00000000-0000-4000-8000-000000000001',
-        positionX: 60,
-        positionY: 0,
-      },
-    });
-    expect(prerequisite.status()).toBe(201);
-    prerequisiteId = (await prerequisite.json()).node.id;
-    const hiddenDependency = await teacher.post(roadmapPath('/dependencies'), {
-      data: { sourceNodeId: hiddenId, targetNodeId: targetId },
-    });
-    expect(hiddenDependency.status()).toBe(403);
-    expect((await hiddenDependency.json()).error.code).toBe('HIDDEN_NODE_DEPENDENCY_FORBIDDEN');
-    const visibleDependency = await teacher.post(roadmapPath('/dependencies'), {
-      data: { sourceNodeId: prerequisiteId, targetNodeId: targetId },
-    });
-    expect(visibleDependency.status()).toBe(201);
-    dependencyId = (await visibleDependency.json()).dependency.id;
-    expect((await student.post(roadmapPath(`/nodes/${hiddenId}/completion`))).status()).toBe(404);
-    const blockedTarget = await student.post(roadmapPath(`/nodes/${targetId}/completion`));
-    expect(blockedTarget.status()).toBe(403);
-    expect((await blockedTarget.json()).error.code).toBe('PREREQUISITE_BLOCK');
-    expect((await student.post(roadmapPath(`/nodes/${prerequisiteId}/completion`))).status()).toBe(
-      200,
-    );
-    expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
-    expect((await student.post(roadmapPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
-    expect(
-      (await teacher.post(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/completion`))).status(),
-    ).toBe(403);
-    expect(
-      (await inactive.post(roadmapPath(`/nodes/${fixture.cc1002.firstNode}/completion`))).status(),
-    ).toBe(403);
-  } finally {
-    await deleteIfPresent(teacher, dependencyId && roadmapPath(`/dependencies/${dependencyId}`));
-    await deleteIfPresent(teacher, targetId && roadmapPath(`/nodes/${targetId}`));
-    await deleteIfPresent(teacher, prerequisiteId && roadmapPath(`/nodes/${prerequisiteId}`));
-    await deleteIfPresent(teacher, hiddenId && roadmapPath(`/nodes/${hiddenId}`));
-    await Promise.all([teacher.dispose(), student.dispose(), inactive.dispose()]);
-  }
+  expect(prerequisite.status()).toBe(201);
+  const prerequisiteId = (await prerequisite.json()).node.id;
+  const hiddenDependency = await teacher.post(course.apiPath('/dependencies'), {
+    data: { sourceNodeId: hiddenId, targetNodeId: targetId },
+  });
+  expect(hiddenDependency.status()).toBe(403);
+  expect((await hiddenDependency.json()).error.code).toBe('HIDDEN_NODE_DEPENDENCY_FORBIDDEN');
+  const visibleDependency = await teacher.post(course.apiPath('/dependencies'), {
+    data: { sourceNodeId: prerequisiteId, targetNodeId: targetId },
+  });
+  expect(visibleDependency.status()).toBe(201);
+  expect((await student.post(course.apiPath(`/nodes/${hiddenId}/completion`))).status()).toBe(404);
+  const blockedTarget = await student.post(course.apiPath(`/nodes/${targetId}/completion`));
+  expect(blockedTarget.status()).toBe(403);
+  expect((await blockedTarget.json()).error.code).toBe('PREREQUISITE_BLOCK');
+  expect((await student.post(course.apiPath(`/nodes/${prerequisiteId}/completion`))).status()).toBe(
+    200,
+  );
+  expect((await student.post(course.apiPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
+  expect((await student.post(course.apiPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
+  expect(
+    (await teacher.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status(),
+  ).toBe(403);
+  expect(
+    (await inactive.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status(),
+  ).toBe(403);
 });
 
-test('teacher and student workflows render against the shared fixture', async ({
+test('teacher and student workflows render on a test-owned course offering', async ({
   page,
-}, testInfo) => {
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
-  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
-  const nodeTitle = uniqueName('Nodo creado desde E2E');
-  const api = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  course,
+  createCourse,
+  apiAs,
+}) => {
+  const { teacher, studentWithoutProgress: student } = course.users;
+  // Like the catalog's students: another current Course offering, plus one Course
+  // with a previous-term offering and a current offering without Roadmap.
+  await createCourse({ participants: [{ user: student, role: 'STUDENT' }] });
+  const previousTerm = await createCourse({
+    semester: 1,
+    participants: [{ user: student, role: 'STUDENT' }],
   });
-  let nodeId: string | undefined;
-  try {
-    await page.getByRole('button', { name: 'Crear en el mapa' }).click();
-    await expect(page.getByRole('menuitem', { name: 'Crear nodo' })).toBeVisible();
-    await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
-    const createNodeDialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
-    await expect(createNodeDialog).toBeVisible();
-    await createNodeDialog.getByLabel('Título').fill(nodeTitle);
-    await createNodeDialog.getByRole('button', { name: 'Agregar nodo' }).click();
-    await expect(page.locator('p', { hasText: nodeTitle })).toBeVisible();
-    const roadmap = await api.get(roadmapPath());
-    nodeId = (await roadmap.json()).nodes.find(
-      (node: { title: string }) => node.title === nodeTitle,
-    )?.id;
-    expect(nodeId).toBeTruthy();
+  await createCourse({
+    sameCourseAs: previousTerm,
+    roadmap: false,
+    participants: [{ user: student, role: 'STUDENT' }],
+  });
 
-    await page.context().clearCookies();
-    await authenticateAs(page.context(), fixture.cc1002StudentWithoutProgress);
-    const unresolvedStudentEdgeErrors: string[] = [];
-    page.on('console', (message) => {
-      if (message.text().includes("Couldn't create edge for source handle id")) {
-        unresolvedStudentEdgeErrors.push(message.text());
-      }
-    });
-    await page.goto('/academic-overview');
-    await expect(page.getByRole('heading', { name: 'Resumen académico' })).toBeVisible();
-    await expect(page.getByRole('listitem')).toHaveCount(3);
-    await expect(page.getByRole('heading', { name: 'Primavera 2026' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Semestres anteriores/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Otoño 2026/ })).toHaveCount(0);
-    await page.getByRole('button', { name: /Semestres anteriores/ }).click();
-    await expect(page.getByRole('button', { name: /Otoño 2026/ })).toBeVisible();
-    await expect(page.getByRole('listitem')).toHaveCount(3);
-    await page.getByRole('button', { name: /Otoño 2026/ }).click();
-    await expect(page.getByRole('listitem')).toHaveCount(4);
-    await expect(page.getByText('Tu período actual')).toHaveCount(0);
-    const physicsRow = page
-      .getByRole('listitem')
-      .filter({ hasText: 'FI1001' })
-      .filter({ hasText: 'Sin roadmap' });
-    await expect(physicsRow).toContainText('Sin roadmap');
-    await expect(physicsRow.getByRole('link')).toHaveCount(0);
-    await page.setViewportSize({ width: 375, height: 812 });
-    await expect(page.getByRole('link', { name: 'Abrir roadmap' }).first()).toBeVisible();
-    expect(
-      await page.locator('main').evaluate((main) => main.scrollWidth <= main.clientWidth),
-    ).toBe(true);
-    await page.getByRole('link', { name: 'Abrir roadmap' }).first().click();
-    await panRoadmapNodeIntoView(page, fixture.cc1002.firstNode);
-    await expect(
-      page
-        .locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`)
-        .getByRole('img', { name: 'Pendiente' }),
-    ).toBeVisible();
-    await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
-    await expect(
-      page.getByRole('link', { name: 'Programa y herramientas del curso' }),
-    ).toHaveAttribute('href', 'https://ucampus.uchile.cl/');
-    await expect(page.getByRole('button', { name: 'Completar' })).toBeEnabled();
-    expect(unresolvedStudentEdgeErrors).toEqual([]);
-  } finally {
-    await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
-    await api.dispose();
-  }
+  await authenticateAs(page.context(), teacher.id);
+  await page.goto(course.pagePath());
+  await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
+  const nodeTitle = uniqueName('Nodo creado desde E2E');
+  const api = await apiAs(teacher);
+  await page.getByRole('button', { name: 'Crear en el mapa' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Crear nodo' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
+  const createNodeDialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  await expect(createNodeDialog).toBeVisible();
+  await createNodeDialog.getByLabel('Título').fill(nodeTitle);
+  await createNodeDialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await expect(page.locator('p', { hasText: nodeTitle })).toBeVisible();
+  const roadmap = await api.get(course.apiPath());
+  const nodeId = (await roadmap.json()).nodes.find(
+    (node: { title: string }) => node.title === nodeTitle,
+  )?.id;
+  expect(nodeId).toBeTruthy();
+
+  await page.context().clearCookies();
+  await authenticateAs(page.context(), student.id);
+  const unresolvedStudentEdgeErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.text().includes("Couldn't create edge for source handle id")) {
+      unresolvedStudentEdgeErrors.push(message.text());
+    }
+  });
+  await page.goto('/academic-overview');
+  await expect(page.getByRole('heading', { name: 'Resumen académico' })).toBeVisible();
+  await expect(page.getByRole('listitem')).toHaveCount(3);
+  await expect(page.getByRole('heading', { name: 'Primavera 2026' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Semestres anteriores/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Otoño 2026/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /Semestres anteriores/ }).click();
+  await expect(page.getByRole('button', { name: /Otoño 2026/ })).toBeVisible();
+  await expect(page.getByRole('listitem')).toHaveCount(3);
+  await page.getByRole('button', { name: /Otoño 2026/ }).click();
+  await expect(page.getByRole('listitem')).toHaveCount(4);
+  await expect(page.getByText('Tu período actual')).toHaveCount(0);
+  const withoutRoadmapRow = page
+    .getByRole('listitem')
+    .filter({ hasText: previousTerm.courseCode })
+    .filter({ hasText: 'Sin roadmap' });
+  await expect(withoutRoadmapRow).toContainText('Sin roadmap');
+  await expect(withoutRoadmapRow.getByRole('link')).toHaveCount(0);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole('link', { name: 'Abrir roadmap' }).first()).toBeVisible();
+  expect(await page.locator('main').evaluate((main) => main.scrollWidth <= main.clientWidth)).toBe(
+    true,
+  );
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: course.courseCode })
+    .getByRole('link', { name: 'Abrir roadmap' })
+    .click();
+  await panRoadmapNodeIntoView(page, course.nodes.first);
+  await expect(
+    page
+      .locator(`.react-flow__node[data-id="${course.nodes.first}"]`)
+      .getByRole('img', { name: 'Pendiente' }),
+  ).toBeVisible();
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+  await expect(
+    page.getByRole('link', { name: 'Programa y herramientas del curso' }),
+  ).toHaveAttribute('href', 'https://ucampus.uchile.cl/');
+  await expect(page.getByRole('button', { name: 'Completar' })).toBeEnabled();
+  expect(unresolvedStudentEdgeErrors).toEqual([]);
 });
 
 test('guards Node replacement and deselection without losing the editor session', async ({
   page,
+  course,
 }) => {
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
 
-  await panRoadmapNodeIntoView(page, fixture.cc1002.firstNode);
-  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await panRoadmapNodeIntoView(page, course.nodes.first);
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect(page.locator('#roadmap-editor-panel')).toBeVisible();
 
   const firstDraftTitle = uniqueName('Borrador de reemplazo');
   await page.getByLabel('Título', { exact: true }).fill(firstDraftTitle);
 
-  const secondNode = page.locator(`.react-flow__node[data-id="${fixture.cc1002.secondNode}"]`);
-  await panRoadmapNodeIntoView(page, fixture.cc1002.secondNode);
+  const secondNode = page.locator(`.react-flow__node[data-id="${course.nodes.second}"]`);
+  await panRoadmapNodeIntoView(page, course.nodes.second);
   const secondNodeTitle = (await secondNode.locator('p').textContent())?.trim();
   expect(secondNodeTitle).toBeTruthy();
   await secondNode.click();
@@ -1033,189 +931,168 @@ test('guards Node replacement and deselection without losing the editor session'
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
 });
 
-test('teacher can save consecutive changes to the same Node', async ({ page }, testInfo) => {
+test('teacher can save consecutive changes to the same Node', async ({ page, course, apiAs }) => {
   const initialTitle = uniqueName('Nodo de guardados consecutivos');
   const firstTitle = uniqueName('Primera modificación');
   const firstDescription = 'Descripción guardada inicialmente';
   const secondTitle = uniqueName('Segunda modificación');
   const secondDescription = 'Descripción guardada después';
   const controlTypeName = uniqueName('Control');
-  const api = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
+  const api = await apiAs(course.users.teacher);
+
+  const createdType = await api.post(course.apiPath('/node-types'), {
+    data: { name: controlTypeName, icon: 'Shapes', color: '#024AD8' },
   });
-  let nodeId: string | undefined;
-  let controlTypeId: string | undefined;
+  expect(createdType.status()).toBe(201);
+  const createdControlTypeId: string = (await createdType.json()).nodeType.id;
 
-  try {
-    const createdType = await api.post(roadmapPath('/node-types'), {
-      data: { name: controlTypeName, icon: 'Shapes', color: '#024AD8' },
-    });
-    expect(createdType.status()).toBe(201);
-    const createdControlTypeId: string = (await createdType.json()).nodeType.id;
-    controlTypeId = createdControlTypeId;
+  const created = await api.post(course.apiPath('/nodes'), {
+    data: {
+      title: initialTitle,
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 0,
+      positionY: 0,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const createdNodeId: string = (await created.json()).node.id;
 
-    const created = await api.post(roadmapPath('/nodes'), {
-      data: {
-        title: initialTitle,
-        nodeTypeId: '00000000-0000-4000-8000-000000000001',
-        positionX: 0,
-        positionY: 0,
-      },
-    });
-    expect(created.status()).toBe(201);
-    const createdNodeId: string = (await created.json()).node.id;
-    nodeId = createdNodeId;
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await panRoadmapNodeIntoView(page, createdNodeId);
+  await page.locator(`.react-flow__node[data-id="${createdNodeId}"]`).click();
 
-    await authenticateAs(page.context(), fixture.daniela);
-    await page.goto('/courses/CC1002/2026/2');
-    await panRoadmapNodeIntoView(page, createdNodeId);
-    await page.locator(`.react-flow__node[data-id="${createdNodeId}"]`).click();
+  const title = page.getByLabel('Título', { exact: true });
+  const description = page.getByLabel(/Descripción/);
+  const type = page.getByRole('combobox', { name: 'Tipo' });
+  const save = page.getByRole('button', { name: 'Guardar cambios' });
+  await title.fill(firstTitle);
+  await description.fill(firstDescription);
+  await type.click();
+  await page.getByRole('option', { name: 'Evaluación' }).click();
+  await expect(save).toBeEnabled();
+  const firstSave = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && response.url().includes(`/nodes/${createdNodeId}`),
+  );
+  await save.click();
+  expect((await firstSave).status()).toBe(200);
+  await expect(save).toBeDisabled();
 
-    const title = page.getByLabel('Título', { exact: true });
-    const description = page.getByLabel(/Descripción/);
-    const type = page.getByRole('combobox', { name: 'Tipo' });
-    const save = page.getByRole('button', { name: 'Guardar cambios' });
-    await title.fill(firstTitle);
-    await description.fill(firstDescription);
-    await type.click();
-    await page.getByRole('option', { name: 'Evaluación' }).click();
-    await expect(save).toBeEnabled();
-    const firstSave = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'PATCH' &&
-        response.url().includes(`/nodes/${createdNodeId}`),
-    );
-    await save.click();
-    expect((await firstSave).status()).toBe(200);
-    await expect(save).toBeDisabled();
+  await title.fill(secondTitle);
+  await description.fill(secondDescription);
+  await type.click();
+  await page.getByRole('option', { name: controlTypeName }).click();
+  await expect(save).toBeEnabled();
+  const secondSave = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' && response.url().includes(`/nodes/${createdNodeId}`),
+  );
+  await save.click();
+  expect((await secondSave).status()).toBe(200);
+  await expect(save).toBeDisabled();
 
-    await title.fill(secondTitle);
-    await description.fill(secondDescription);
-    await type.click();
-    await page.getByRole('option', { name: controlTypeName }).click();
-    await expect(save).toBeEnabled();
-    const secondSave = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'PATCH' &&
-        response.url().includes(`/nodes/${createdNodeId}`),
-    );
-    await save.click();
-    expect((await secondSave).status()).toBe(200);
-    await expect(save).toBeDisabled();
-
-    const roadmap = await api.get(roadmapPath());
-    expect((await roadmap.json()).nodes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: createdNodeId,
-          title: secondTitle,
-          description: secondDescription,
-          nodeTypeId: createdControlTypeId,
-        }),
-      ]),
-    );
-  } finally {
-    await deleteIfPresent(api, nodeId && roadmapPath(`/nodes/${nodeId}`));
-    await deleteIfPresent(api, controlTypeId && roadmapPath(`/node-types/${controlTypeId}`));
-    await api.dispose();
-  }
+  const roadmap = await api.get(course.apiPath());
+  expect((await roadmap.json()).nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: createdNodeId,
+        title: secondTitle,
+        description: secondDescription,
+        nodeTypeId: createdControlTypeId,
+      }),
+    ]),
+  );
 });
 
 test('creating consecutive nodes keeps them visible, separated, selected, and persisted', async ({
   page,
-}, testInfo) => {
-  await authenticateAs(page.context(), fixture.daniela);
-  await page.goto('/courses/CC1002/2026/2');
-  const api = await apiRequest.newContext({
-    baseURL: testInfo.project.use.baseURL as string,
-    extraHTTPHeaders: { cookie: await sessionCookie(fixture.daniela) },
-  });
+  course,
+  apiAs,
+}) => {
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  const api = await apiAs(course.users.teacher);
   const titles = [
     uniqueName('Primer nodo consecutivo'),
     uniqueName('Segundo nodo consecutivo'),
     uniqueName('Tercer nodo consecutivo'),
   ];
-  let nodeIds: string[] = [];
 
-  try {
-    for (const title of titles) {
-      await createNodeFromCanvas(page, title);
-      await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeInViewport();
-    }
+  for (const title of titles) {
+    await createNodeFromCanvas(page, title);
+    await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeInViewport();
+  }
 
-    const roadmap = await api.get(roadmapPath());
-    const nodes = (await roadmap.json()).nodes.filter((node: { title: string }) =>
-      titles.includes(node.title),
-    );
-    nodeIds = nodes.map((node: { id: string }) => node.id);
-    expect(nodeIds).toHaveLength(3);
-    expect(
-      new Set(
-        nodes.map(
-          (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
-        ),
-      ).size,
-    ).toBe(3);
-    const nodeBoxes = await Promise.all(
-      nodeIds.map((nodeId) => page.locator(`.react-flow__node[data-id="${nodeId}"]`).boundingBox()),
-    );
-    for (let index = 0; index < nodeBoxes.length; index += 1) {
-      const current = nodeBoxes[index];
-      if (!current) throw new Error('No se pudo medir un nodo creado.');
-      for (const other of nodeBoxes.slice(index + 1)) {
-        if (!other) throw new Error('No se pudo medir un nodo creado.');
-        expect(
-          current.x + current.width <= other.x ||
-            other.x + other.width <= current.x ||
-            current.y + current.height <= other.y ||
-            other.y + other.height <= current.y,
-        ).toBe(true);
-      }
-    }
-
-    const lastNode = nodes.find((node: { title: string }) => node.title === titles[2]);
-    expect(lastNode).toBeTruthy();
-    const lastCard = page.locator(
-      `.react-flow__node[data-id="${lastNode.id}"] [data-slot="roadmap-card"]`,
-    );
-    await expect(lastCard).toHaveClass(/ring-2/);
-
-    await page.reload();
-    for (const nodeId of nodeIds) {
-      await expect(page.locator(`.react-flow__node[data-id="${nodeId}"]`)).toBeInViewport();
-    }
-    const reloaded = await api.get(roadmapPath());
-    const reloadedNodes = (await reloaded.json()).nodes.filter((node: { id: string }) =>
-      nodeIds.includes(node.id),
-    );
-    expect(
-      reloadedNodes.map(
-        (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
-      ),
-    ).toEqual(
+  const roadmap = await api.get(course.apiPath());
+  const nodes = (await roadmap.json()).nodes.filter((node: { title: string }) =>
+    titles.includes(node.title),
+  );
+  const nodeIds: string[] = nodes.map((node: { id: string }) => node.id);
+  expect(nodeIds).toHaveLength(3);
+  expect(
+    new Set(
       nodes.map(
         (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
       ),
-    );
-  } finally {
-    for (const nodeId of nodeIds) await deleteIfPresent(api, roadmapPath(`/nodes/${nodeId}`));
-    await api.dispose();
+    ).size,
+  ).toBe(3);
+  const nodeBoxes = await Promise.all(
+    nodeIds.map((nodeId) => page.locator(`.react-flow__node[data-id="${nodeId}"]`).boundingBox()),
+  );
+  for (let index = 0; index < nodeBoxes.length; index += 1) {
+    const current = nodeBoxes[index];
+    if (!current) throw new Error('No se pudo medir un nodo creado.');
+    for (const other of nodeBoxes.slice(index + 1)) {
+      if (!other) throw new Error('No se pudo medir un nodo creado.');
+      expect(
+        current.x + current.width <= other.x ||
+          other.x + other.width <= current.x ||
+          current.y + current.height <= other.y ||
+          other.y + other.height <= current.y,
+      ).toBe(true);
+    }
   }
+
+  const lastNode = nodes.find((node: { title: string }) => node.title === titles[2]);
+  expect(lastNode).toBeTruthy();
+  const lastCard = page.locator(
+    `.react-flow__node[data-id="${lastNode.id}"] [data-slot="roadmap-card"]`,
+  );
+  await expect(lastCard).toHaveClass(/ring-2/);
+
+  await page.reload();
+  for (const nodeId of nodeIds) {
+    await expect(page.locator(`.react-flow__node[data-id="${nodeId}"]`)).toBeInViewport();
+  }
+  const reloaded = await api.get(course.apiPath());
+  const reloadedNodes = (await reloaded.json()).nodes.filter((node: { id: string }) =>
+    nodeIds.includes(node.id),
+  );
+  expect(
+    reloadedNodes.map(
+      (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
+    ),
+  ).toEqual(
+    nodes.map(
+      (node: { positionX: number; positionY: number }) => `${node.positionX}:${node.positionY}`,
+    ),
+  );
 });
 
 test('keeps the teaching panel width across reloads without changing the student profile', async ({
   page,
+  course,
 }) => {
-  await authenticateAs(page.context(), fixture.daniela);
+  await authenticateAs(page.context(), course.users.teacher.id);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/courses/CC1002/2026/2');
+  await page.goto(course.pagePath());
   await page.evaluate(() => {
     window.localStorage.removeItem('u-roadmaps:roadmap-editor-panel-width');
     window.localStorage.removeItem('u-roadmaps:student-node-detail-width');
   });
   await page.reload();
-  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
 
   const panel = page.locator('#roadmap-editor-panel');
   const canvas = page.getByLabel('Lienzo del roadmap');
@@ -1246,18 +1123,16 @@ test('keeps the teaching panel width across reloads without changing the student
   ).toBeNull();
 
   await page.reload();
-  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect.poll(async () => (await panel.boundingBox())?.width).toBe(resizedWidth);
   await expect(page.locator('.react-flow__node').first()).toBeInViewport();
 });
 
-test('uses the teaching width for node information preview', async ({
-  page,
-}) => {
-  await authenticateAs(page.context(), fixture.daniela);
+test('uses the teaching width for node information preview', async ({ page, course }) => {
+  await authenticateAs(page.context(), course.users.teacher.id);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/courses/CC1002/2026/2');
-  await page.locator(`.react-flow__node[data-id="${fixture.cc1002.firstNode}"]`).click();
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
 
   const editorPanel = page.locator('#roadmap-editor-panel');
   await expect(editorPanel).toBeVisible();
@@ -1284,13 +1159,30 @@ test('uses the teaching width for node information preview', async ({
   await expect(previewButton).toBeFocused();
 });
 
-test('withdrawn participations remain local to their course offering', async ({ page }) => {
-  await authenticateAs(page.context(), fixture.camila);
+test('withdrawn participations remain local to their course offering', async ({
+  page,
+  course,
+  createCourse,
+}) => {
+  // Like the catalog's Camila: teaches `course`, studies another current Course
+  // offering and withdrew from the current offering of a Course studied last term.
+  const user = course.users.teachingAssistant;
+  const studied = await createCourse({ participants: [{ user, role: 'STUDENT' }] });
+  const previousTerm = await createCourse({
+    semester: 1,
+    participants: [{ user, role: 'STUDENT' }],
+  });
+  await createCourse({
+    sameCourseAs: previousTerm,
+    roadmap: false,
+    participants: [{ user, role: 'STUDENT', isActive: false }],
+  });
+  await authenticateAs(page.context(), user.id);
   await page.goto('/academic-overview');
 
   await expect(page.getByRole('listitem')).toHaveCount(2);
-  await expect(page.getByRole('listitem').filter({ hasText: 'CC1002' })).toHaveCount(1);
-  await expect(page.getByRole('listitem').filter({ hasText: 'MA1001' })).toHaveCount(1);
+  await expect(page.getByRole('listitem').filter({ hasText: course.courseCode })).toHaveCount(1);
+  await expect(page.getByRole('listitem').filter({ hasText: studied.courseCode })).toHaveCount(1);
   await expect(page.getByText('Sin roadmap')).toHaveCount(0);
 });
 
@@ -1304,14 +1196,19 @@ async function vtiToken(
     .sign(new TextEncoder().encode(secret));
 }
 
+/** Claims VTI sends for a User: a zero-padded RUT, email and name. The verifier
+ *  digit is a placeholder; the application does not check it. */
+function vtiClaims({ rut, institutionalEmail, name }: E2EUser) {
+  return { identification: `0000${rut}-5`, email: institutionalEmail, name };
+}
+
 test('VTI callback rejects missing state, invalid tokens, and incomplete claims', async ({
   request,
+  course,
 }) => {
-  const validToken = await vtiToken({
-    identification: `0000${Date.now()}-5`,
-    email: `${crypto.randomUUID()}@example.test`,
-    name: 'Persona VTI inválida',
-  });
+  const claims = vtiClaims(course.users.studentWithoutProgress);
+  const { identification, email, name } = claims;
+  const validToken = await vtiToken(claims);
   const missingState = await request.get(`/api/plogin?jwt=${encodeURIComponent(validToken)}`, {
     maxRedirects: 0,
   });
@@ -1320,29 +1217,11 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
 
   for (const token of [
     'not-a-jwt',
-    await vtiToken(
-      {
-        identification: `0000${Date.now()}-5`,
-        email: `${crypto.randomUUID()}@example.test`,
-        name: 'Firma inválida',
-      },
-      'wrong-secret',
-    ),
-    await vtiToken(
-      {
-        identification: `0000${Date.now()}-5`,
-        email: `${crypto.randomUUID()}@example.test`,
-        name: 'Algoritmo inválido',
-      },
-      process.env.VTI_JWT_SECRET ?? 'e2e-vti-secret',
-      'HS384',
-    ),
-    await vtiToken({ email: `${crypto.randomUUID()}@example.test`, name: 'Sin identificación' }),
-    await vtiToken({ identification: `0000${Date.now()}-5`, name: 'Sin correo' }),
-    await vtiToken({
-      identification: `0000${Date.now()}-5`,
-      email: `${crypto.randomUUID()}@example.test`,
-    }),
+    await vtiToken(claims, 'wrong-secret'),
+    await vtiToken(claims, process.env.VTI_JWT_SECRET ?? 'e2e-vti-secret', 'HS384'),
+    await vtiToken({ email, name }),
+    await vtiToken({ identification, name }),
+    await vtiToken({ identification, email }),
   ]) {
     const start = await request.post('/api/plogin/start', { maxRedirects: 0 });
     const stateCookie = start.headers()['set-cookie'].split(';', 1)[0];
@@ -1378,8 +1257,11 @@ test('landing access starts VTI and dismisses authentication failures without re
   expect(protectedRoute.headers().location).toContain('/api/plogin/start');
 });
 
-test('logout requires confirmation and removes the application session', async ({ page }) => {
-  await authenticateAs(page.context(), fixture.cc1002StudentWithoutProgress);
+test('logout requires confirmation and removes the application session', async ({
+  page,
+  course,
+}) => {
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
 
   await page.getByRole('button', { name: 'Cerrar sesión' }).click();
@@ -1402,6 +1284,7 @@ test('logout requires confirmation and removes the application session', async (
 
 test('1440px visual references cover the public shell states in each browser', async ({
   page,
+  course,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   expect(page.viewportSize()).toEqual({ width: 1440, height: 960 });
@@ -1421,7 +1304,7 @@ test('1440px visual references cover the public shell states in each browser', a
     contentType: 'image/png',
   });
 
-  await authenticateAs(page.context(), fixture.cc1002StudentWithoutProgress);
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
   await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
   await testInfo.attach('authenticated-navigation', {
@@ -1432,7 +1315,9 @@ test('1440px visual references cover the public shell states in each browser', a
 
 test('VTI callback issues a session after validating its one-time state', async ({
   request,
+  course,
 }, testInfo) => {
+  const student = course.users.studentWithoutProgress;
   const start = await request.post('/api/plogin/start', { maxRedirects: 0 });
   expect(start.status()).toBe(303);
   const state = new URL(start.headers().location).searchParams.get('state');
@@ -1444,7 +1329,7 @@ test('VTI callback issues a session after validating its one-time state', async 
   expect(startCookie).toContain('Max-Age=600');
   expect(startCookie).toContain('Path=/');
   const stateCookie = startCookie.split(';', 1)[0];
-  const token = await vtiToken(fixture.cc1002StudentWithoutProgressVtiClaims);
+  const token = await vtiToken(vtiClaims(student));
   const callback = await request.get(`/api/plogin?jwt=${encodeURIComponent(token)}`, {
     maxRedirects: 0,
     headers: { cookie: stateCookie },
@@ -1464,7 +1349,7 @@ test('VTI callback issues a session after validating its one-time state', async 
   });
   expect(await session.json()).toEqual(
     expect.objectContaining({
-      user: expect.objectContaining({ id: fixture.cc1002StudentWithoutProgress }),
+      user: expect.objectContaining({ id: student.id }),
     }),
   );
 });

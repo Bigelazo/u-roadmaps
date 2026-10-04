@@ -14,11 +14,6 @@ export const fixture = {
   cc1002WithdrawnStudent: '20000000-0000-4000-8000-000000000050',
   cc1002MultiCourseStudent: '20000000-0000-4000-8000-000000000002',
   fi1001CurrentWithdrawnStudent: '20000000-0000-4000-8000-000000000047',
-  cc1002StudentWithoutProgressVtiClaims: {
-    identification: '000020000001-5',
-    email: 'antonia.valdes.pino@u-roadmaps.test',
-    name: 'Antonia Valdés Pino',
-  },
   cc1002: {
     courseCode: 'CC1002',
     year: 2026,

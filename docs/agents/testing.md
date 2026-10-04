@@ -6,8 +6,14 @@ La configuración E2E está en [playwright.config.ts](../../playwright.config.ts
 Usa Chromium y Firefox, un worker provisional y ningún reintento automático.
 La migración a datos propios por test del
 [ADR-0013](../adr/0013-enable-parallel-e2e-tests.md) está en curso: solo
-`own-notifications.spec.ts` está migrado; los demás specs todavía comparten el
-catálogo sembrado y requieren el worker único.
+`own-notifications.spec.ts` y `roadmaps.spec.ts` están migrados; los demás specs
+todavía comparten el catálogo sembrado y requieren el worker único.
+
+Validación de `roadmaps.spec.ts` del **2026-10-04**, con Chromium y Firefox:
+`--workers=3 --fully-parallel --repeat-each=5` terminó con **210 aprobados**, sin
+fallos ni omisiones, en **5,2 minutos** y código de salida 0; cada uno de sus 21
+casos también pasó por separado con `--grep`. Después no quedaron Ramos `E2E-*`,
+Usuarios del dominio reservado, triggers de fallo ni archivos subidos huérfanos.
 
 La última validación, del **2026-10-02**, ejecutó los **80 casos ajenos a
 notificaciones**: todos pasaron en **1,5 minutos**, con código de salida 0.
@@ -61,10 +67,13 @@ Los specs migrados importan `test` y `expect` desde
   sus Usuarios por rol (`course.users.teacher`, `studentWithProgress`,
   `multiCourseStudent`, etc.), `course.nodes`, `apiPath()` y `pagePath()`.
 - `createCourse(opciones)`: Cursos adicionales sin Roadmap, de otro Período
-  académico o con Usuarios de `course` como participantes.
+  académico, del mismo Ramo que otro Curso del test (`sameCourseAs`) o con
+  Usuarios de `course` como participantes.
 - `rejectNoticeInserts({ roadmapId })` o `({ courseOfferingId })`: un fallo real
   de PostgreSQL solo para los Avisos de ese Roadmap, o del Roadmap que el test
   creará en ese Curso.
+- `apiAs(usuario)`: un cliente de API autenticado como ese Usuario, que se cierra
+  al terminar el test.
 
 Todo se elimina al terminar el test, también si falla, incluidos los archivos
 subidos a sus Roadmaps. Los Ramos usan el prefijo `E2E-` y los Usuarios el
