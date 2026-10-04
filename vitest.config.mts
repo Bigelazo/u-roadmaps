@@ -12,6 +12,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Let React Testing Library register its automatic cleanup hooks.
+    globals: true,
     include: ['tests/**/*.test.{ts,tsx}'],
     globals: true,
   },

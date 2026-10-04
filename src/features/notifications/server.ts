@@ -103,11 +103,11 @@ async function eligibleNodeRecipients({
   actorId: string;
 }) {
   if (!node.isVisible) return [];
-  const participants = await prisma.participation.findMany({
-    where: { courseOfferingId, isActive: true, userId: { not: actorId } },
-    include: { user: { select: { id: true, name: true } } },
-  });
-  const [visibleNodes, dependencies] = await Promise.all([
+  const [participants, visibleNodes, dependencies] = await Promise.all([
+    prisma.participation.findMany({
+      where: { courseOfferingId, isActive: true, userId: { not: actorId } },
+      include: { user: { select: { id: true, name: true } } },
+    }),
     prisma.roadmapNode.findMany({
       where: { roadmapId: node.roadmapId, isVisible: true },
       select: { id: true, isTeacherBlocked: true },

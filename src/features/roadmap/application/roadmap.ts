@@ -305,13 +305,15 @@ async function createRoadmapUnsafe(
         (await transaction.courseOffering.create({
           data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
         }));
-      const roadmap = await transaction.roadmap.create({
-        data: { courseOfferingId: materializedCourseOffering.id },
-      });
-      const recipients = await transaction.participation.findMany({
-        where: { courseOfferingId: materializedCourseOffering.id, isActive: true },
-        select: { userId: true, user: { select: { name: true } } },
-      });
+      const [roadmap, recipients] = await Promise.all([
+        transaction.roadmap.create({
+          data: { courseOfferingId: materializedCourseOffering.id },
+        }),
+        transaction.participation.findMany({
+          where: { courseOfferingId: materializedCourseOffering.id, isActive: true },
+          select: { userId: true, user: { select: { name: true } } },
+        }),
+      ]);
       return {
         roadmap,
         courseOfferingId: materializedCourseOffering.id,

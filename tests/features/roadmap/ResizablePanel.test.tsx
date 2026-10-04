@@ -1,9 +1,28 @@
 import { type CSSProperties } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, expect, test } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { panelWidthLimits, usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { Sidebar, SidebarProvider, SidebarRail } from '@/shared/ui/sidebar';
+
+function mockViewport(width: number) {
+  vi.stubGlobal('innerWidth', width);
+  vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
+    matches:
+      (query === '(max-width: 767px)' && width < 768) ||
+      (query === '(min-width: 1024px)' && width >= 1024),
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: () => false,
+  }));
+}
+
+beforeEach(() => mockViewport(1280));
+afterEach(() => vi.unstubAllGlobals());
 
 function ResizablePanelFixture({ storageKey }: { storageKey: string }) {
   const { width, setWidth } = usePersistentPanelWidth({

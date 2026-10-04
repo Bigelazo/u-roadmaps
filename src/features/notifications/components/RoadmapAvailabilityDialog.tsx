@@ -22,6 +22,11 @@ type Props = Readonly<{
   courseName: string;
 }>;
 
+const availabilityDateFormatter = new Intl.DateTimeFormat('es-CL', {
+  dateStyle: 'long',
+  timeStyle: 'short',
+});
+
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.length <= 256 ? value : '';
 }
@@ -50,7 +55,7 @@ function availabilityNotice(
   const date = occurredAt ? new Date(occurredAt) : null;
   const effectiveDate =
     date && !Number.isNaN(date.getTime())
-      ? new Intl.DateTimeFormat('es-CL', { dateStyle: 'long', timeStyle: 'short' }).format(date)
+      ? availabilityDateFormatter.format(date)
       : 'Fecha no disponible';
   const actorName = noticeMatchesCourse ? stringValue(data?.actorName) : '';
   const open = Boolean(noticeId && notification?.id === noticeId && noticeMatchesCourse);

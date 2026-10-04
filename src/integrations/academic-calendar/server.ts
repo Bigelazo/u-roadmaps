@@ -62,7 +62,7 @@ export function selectTermCalendarPdf(
 ) {
   const name = termName[term.semester];
   const headingPattern = new RegExp(
-    `<h[1-6][^>]*>[^<]*calendario[^<]*semestre[^<]*${escapeRegExp(name)}[^<]*${term.year}[^<]*</h[1-6]>`,
+    `<h[1-6][^>]*>[^<]*calendario[^<]*semestre[^<]*${escapeRegExp(name)}[^<]*${escapeRegExp(String(term.year))}[^<]*</h[1-6]>`,
     'i',
   );
   const heading = headingPattern.exec(pageHtml);

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { test as base } from '@playwright/test';
+import { test as base, type APIRequestContext } from '@playwright/test';
 import {
   copyFixtureRoadmap,
   developmentFixtureIds,
@@ -8,7 +8,7 @@ import {
   fixtureRoadmaps,
 } from '@/development/fixtures/catalog';
 import { insert, literal, sql } from './database';
-import { fixture, fixtureRoadmapPath } from './helpers';
+import { fixture, fixtureRoadmapPath, sessionCookie } from './helpers';
 import {
   courseCodePrefix,
   noticeRejectionPrefix,
@@ -33,6 +33,7 @@ export type E2EUser = {
 export type E2ECourseOffering = {
   id: string;
   courseCode: string;
+  courseName: string;
   year: number;
   semester: number;
   roadmapId: string | null;
@@ -52,6 +53,8 @@ export type CourseOfferingOptions = {
   roadmap?: boolean;
   year?: number;
   semester?: number;
+  /** Another offering of the test's Course (Ramo), instead of a new Course. */
+  sameCourseAs?: E2ECourseOffering;
   participants?: readonly { user: E2EUser; role: ParticipationRole; isActive?: boolean }[];
 };
 
@@ -115,14 +118,18 @@ function newUser(key: CourseUserKey, workerIndex: number): E2EUser {
 /** SQL for a Course (Ramo), its Course offering and optionally a copy of the CC1002 Roadmap. */
 function courseOfferingScript(options: CourseOfferingOptions, workerIndex: number) {
   const { token } = nextSerial(workerIndex);
-  const courseCode = `${courseCodePrefix}${token.toUpperCase()}`;
+  const courseCode =
+    options.sameCourseAs?.courseCode ?? `${courseCodePrefix}${token.toUpperCase()}`;
+  const courseName = options.sameCourseAs?.courseName ?? `Ramo E2E ${token}`;
   const { year = academicTerm.year, semester = academicTerm.semester } = options;
   const offeringId = randomUUID();
   const roadmap = options.roadmap === false ? null : copyFixtureRoadmap(template, randomUUID);
   let script =
-    insert('Course', [
-      { code: courseCode, name: `Ramo E2E ${token}`, department: 'Departamento E2E' },
-    ]) +
+    (options.sameCourseAs
+      ? ''
+      : insert('Course', [
+          { code: courseCode, name: courseName, department: 'Departamento E2E' },
+        ])) +
     insert('CourseOffering', [{ id: offeringId, courseCode, year, semester }]) +
     insert(
       'Participation',
@@ -149,6 +156,7 @@ function courseOfferingScript(options: CourseOfferingOptions, workerIndex: numbe
   const offering: E2ECourseOffering = {
     id: offeringId,
     courseCode,
+    courseName,
     year,
     semester,
     roadmapId: roadmap?.roadmapId ?? null,
@@ -171,6 +179,8 @@ export const test = base.extend<{
   rejectNoticeInserts: (
     target: { roadmapId: string } | { courseOfferingId: string },
   ) => Promise<void>;
+  /** An API client authenticated as a User; disposed when the test ends. */
+  apiAs: (user: E2EUser) => Promise<APIRequestContext>;
 }>({
   // Everything a test creates; removed even when the test fails.
   ownedTestData: async ({}, provide) => {
@@ -247,5 +257,18 @@ export const test = base.extend<{
           FOR EACH ROW EXECUTE FUNCTION ${name}();
       `);
     });
+  },
+
+  apiAs: async ({ playwright, baseURL }, provide) => {
+    const clients: APIRequestContext[] = [];
+    await provide(async (user) => {
+      const client = await playwright.request.newContext({
+        baseURL,
+        extraHTTPHeaders: { cookie: await sessionCookie(user.id) },
+      });
+      clients.push(client);
+      return client;
+    });
+    await Promise.all(clients.map((client) => client.dispose()));
   },
 });

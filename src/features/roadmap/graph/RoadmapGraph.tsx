@@ -456,19 +456,29 @@ function useRoadmapGraphController({
     }
     return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
   }, [editing, projectionKind, projectionRoadmap]);
-  const [layoutDirection, setLayoutDirection] = useState<RoadmapLayoutDirection>('TB');
-  const appliedAutomaticLayoutTokenRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (
-      !confirmedAutomaticLayout ||
-      appliedAutomaticLayoutTokenRef.current === confirmedAutomaticLayout.token
-    )
-      return;
-    appliedAutomaticLayoutTokenRef.current = confirmedAutomaticLayout.token;
-    setLayoutDirection(confirmedAutomaticLayout.direction);
-  }, [confirmedAutomaticLayout]);
-  const [openActionMenuNodeId, setOpenActionMenuNodeId] = useState<string | null>(null);
-  const [closingActionMenuNodeId, setClosingActionMenuNodeId] = useState<string | null>(null);
+  const layoutDirection = confirmedAutomaticLayout?.direction ?? 'TB';
+  const [openActionMenu, setOpenActionMenu] = useState<{
+    editing: RoadmapGraphEditing;
+    selectedNodeId: string | null | undefined;
+    nodeId: string;
+  } | null>(null);
+  const [closingActionMenu, setClosingActionMenu] = useState<{
+    editing: RoadmapGraphEditing;
+    selectedNodeId: string | null | undefined;
+    nodeId: string;
+  } | null>(null);
+  const openActionMenuNodeId =
+    editing &&
+    openActionMenu?.editing === editing &&
+    openActionMenu.selectedNodeId === selectedNodeId
+      ? openActionMenu.nodeId
+      : null;
+  const closingActionMenuNodeId =
+    editing &&
+    closingActionMenu?.editing === editing &&
+    closingActionMenu.selectedNodeId === selectedNodeId
+      ? closingActionMenu.nodeId
+      : null;
   const actionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const actionMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onEditingIntent = editing?.onEditingIntent;
@@ -505,37 +515,35 @@ function useRoadmapGraphController({
     (dependencyId: string) => deleteDependencies([dependencyId]),
     [deleteDependencies],
   );
-  const beginClosingActionMenu = useCallback((nodeId: string) => {
-    if (actionMenuCloseTimerRef.current) clearTimeout(actionMenuCloseTimerRef.current);
-    setClosingActionMenuNodeId(nodeId);
-    actionMenuCloseTimerRef.current = setTimeout(() => setClosingActionMenuNodeId(null), 400);
-  }, []);
+  const beginClosingActionMenu = useCallback(
+    (nodeId: string) => {
+      if (!editing) return;
+      if (actionMenuCloseTimerRef.current) clearTimeout(actionMenuCloseTimerRef.current);
+      setClosingActionMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
+      actionMenuCloseTimerRef.current = setTimeout(() => setClosingActionMenu(null), 400);
+    },
+    [editing],
+  );
   const closeActionMenu = useCallback(
     (restoreFocus = true) => {
       if (openActionMenuNodeId) beginClosingActionMenu(openActionMenuNodeId);
-      setOpenActionMenuNodeId(null);
+      setOpenActionMenu(null);
       if (restoreFocus) requestAnimationFrame(() => actionMenuTriggerRef.current?.focus());
     },
     [beginClosingActionMenu, openActionMenuNodeId],
   );
-  const closeActionMenus = useCallback(() => {
-    setOpenActionMenuNodeId(null);
-    setClosingActionMenuNodeId(null);
-  }, []);
-  useEffect(() => {
-    if (!canEdit) closeActionMenus();
-  }, [canEdit, closeActionMenus]);
   const toggleActionMenu = useCallback(
     (nodeId: string, trigger: HTMLButtonElement) => {
+      if (!editing) return;
       actionMenuTriggerRef.current = trigger;
       if (openActionMenuNodeId === nodeId) {
         closeActionMenu();
         return;
       }
       if (openActionMenuNodeId) beginClosingActionMenu(openActionMenuNodeId);
-      setOpenActionMenuNodeId(nodeId);
+      setOpenActionMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
     },
-    [beginClosingActionMenu, closeActionMenu, openActionMenuNodeId],
+    [beginClosingActionMenu, closeActionMenu, editing, openActionMenuNodeId],
   );
   const requestNodeAction = useCallback(
     (intent: NodeActionIntent) => {
@@ -596,13 +604,6 @@ function useRoadmapGraphController({
     },
     [emitEditingIntent],
   );
-
-  const previousSelectedNodeIdRef = useRef(selectedNodeId);
-  useEffect(() => {
-    if (previousSelectedNodeIdRef.current !== selectedNodeId && openActionMenuNodeId)
-      closeActionMenu(false);
-    previousSelectedNodeIdRef.current = selectedNodeId;
-  }, [closeActionMenu, openActionMenuNodeId, selectedNodeId]);
 
   useEffect(() => {
     setFlow((current) => ({

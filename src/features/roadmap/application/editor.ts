@@ -390,11 +390,13 @@ async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDe
           'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
         );
       }
-      const resources = await transaction.resource.findMany({
-        where: { roadmapNodeId: requireUuid(id, 'nodeId'), fileKey: { not: null } },
-        select: { fileKey: true },
-      });
-      const roadmap = await requireEditorRoadmap(transaction, editor);
+      const [resources, roadmap] = await Promise.all([
+        transaction.resource.findMany({
+          where: { roadmapNodeId: requireUuid(id, 'nodeId'), fileKey: { not: null } },
+          select: { fileKey: true },
+        }),
+        requireEditorRoadmap(transaction, editor),
+      ]);
       const before = await captureAccessSnapshot(transaction, roadmap.id);
       await transaction.roadmapNode.delete({ where: { id: requireUuid(id, 'nodeId') } });
       const after = await captureAccessSnapshot(transaction, roadmap.id);
@@ -610,16 +612,7 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
   return withSerializableTransaction(
     async (transaction) => {
       const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
-      const before = await captureAccessSnapshot(transaction, prepared.roadmapId);
-      const [dependency, nodes] = await Promise.all([
-        transaction.dependency.create({
-          data: {
-            sourceNodeId: prepared.sourceNodeId,
-            targetNodeId: prepared.targetNodeId,
-            sourceHandle: prepared.sourceHandle,
-            targetHandle: prepared.targetHandle,
-          },
-        }),
+      const [nodes, { before, dependency }] = await Promise.all([
         teacherBlockedDependentNodes(transaction, {
           ...prepared,
           dependencies: [
@@ -627,6 +620,20 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
             { sourceNodeId: prepared.sourceNodeId, targetNodeId: prepared.targetNodeId },
           ],
         }),
+        (async () => {
+          const before = await captureAccessSnapshot(transaction, prepared.roadmapId);
+          return {
+            before,
+            dependency: await transaction.dependency.create({
+              data: {
+                sourceNodeId: prepared.sourceNodeId,
+                targetNodeId: prepared.targetNodeId,
+                sourceHandle: prepared.sourceHandle,
+                targetHandle: prepared.targetHandle,
+              },
+            }),
+          };
+        })(),
       ]);
       if (nodes.length > 0) {
         await transaction.roadmapNode.updateMany({

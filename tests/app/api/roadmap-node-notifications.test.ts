@@ -73,3 +73,42 @@ test('maps each Roadmap access descriptor to a safe notification delivery', asyn
     targetKind: 'node',
   });
 });
+
+test('starts independent Node deliveries before either one finishes', async () => {
+  let releaseFirst: (() => void) | undefined;
+  deliverNodeChange.mockImplementationOnce(
+    () =>
+      new Promise<undefined>((resolve) => {
+        releaseFirst = () => resolve(undefined);
+      }),
+  );
+
+  const delivery = deliverRoadmapNodeNotifications({
+    actorId: 'teacher-id',
+    identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
+    notifications: [
+      {
+        nodeId: 'first-node-id',
+        roadmapId: 'roadmap-id',
+        changeKind: 'node-blocked',
+        nodeTitle: 'First',
+        nodeTypeName: 'Contenido',
+        targetKind: 'roadmap',
+        recipientIds: ['student-id'],
+      },
+      {
+        nodeId: 'second-node-id',
+        roadmapId: 'roadmap-id',
+        changeKind: 'node-available',
+        nodeTitle: 'Second',
+        nodeTypeName: 'Contenido',
+        targetKind: 'node',
+        recipientIds: ['student-id'],
+      },
+    ],
+  });
+
+  expect(deliverNodeChange).toHaveBeenCalledTimes(2);
+  releaseFirst?.();
+  await expect(delivery).resolves.toBeUndefined();
+});

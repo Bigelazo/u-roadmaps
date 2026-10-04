@@ -20,15 +20,6 @@ import { subscribeToRoadmapRecovery } from '@/shared/client/roadmap-events';
 import type { InboxIdentity } from '../server';
 import { OwnInboxRealtime, OWN_INBOX_REFRESH_EVENT } from './own-realtime';
 
-export type InboxRecord = {
-  id: string;
-  subject?: string | null;
-  body?: string | null;
-  data?: Record<string, unknown>;
-  createdAt: string;
-  seen: () => Promise<{ error?: unknown }>;
-  read: () => Promise<{ error?: unknown }>;
-};
 type Filter = Record<string, string | number>;
 type ListInput = {
   limit?: number;
@@ -40,11 +31,6 @@ type ListInput = {
 };
 type Page = { notifications: InboxRecord[]; hasMore: boolean };
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/notifications${path}`, { cache: 'no-store', ...init });
-  if (!response.ok) throw new Error('No se pudieron consultar los avisos.');
-  return response.json();
-}
 function query(input: ListInput) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(input.data ?? {})) params.set(key, String(value));
@@ -324,8 +310,6 @@ export function useInboxClient() {
   const driver = useContext(Driver);
   return driver.useClient();
 }
-export const OwnInboxContext = createContext(false);
-export const LegacyInboxContext = createContext(false);
 export function InboxDriverProvider({
   identity,
   children,
@@ -358,24 +342,4 @@ export function InboxDriverProvider({
   ) : (
     content
   );
-}
-export type NoticeAcknowledgementOperation = { roadmapId: string; operationId: string };
-
-export async function acknowledgeOwnInbox(input: NoticeAcknowledgementOperation) {
-  await request('/acknowledge', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  window.dispatchEvent(new Event(refreshEvent));
-}
-
-export async function prepareOwnInboxNodeOpening(
-  input: NoticeAcknowledgementOperation & { nodeId: string; retry: boolean },
-) {
-  await request('/openings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
 }

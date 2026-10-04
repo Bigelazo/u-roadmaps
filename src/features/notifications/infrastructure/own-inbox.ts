@@ -331,11 +331,13 @@ export async function prepareOwnNoticeOpening(
   accessibleNodes: NoticeNodeAccess,
 ) {
   return prisma.$transaction(async (transaction) => {
-    const accessible = await accessibleNodes(transaction, userId, roadmapId);
-    const notices = await transaction.roadmapNotice.findMany({
-      where: { recipientId: userId, roadmapId, acknowledgedAt: null },
-      select: { id: true, data: true },
-    });
+    const [accessible, notices] = await Promise.all([
+      accessibleNodes(transaction, userId, roadmapId),
+      transaction.roadmapNotice.findMany({
+        where: { recipientId: userId, roadmapId, acknowledgedAt: null },
+        select: { id: true, data: true },
+      }),
+    ]);
     const generalNotices = notices.filter(({ data }) => {
       const context = data as Record<string, unknown>;
       return (
