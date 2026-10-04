@@ -61,9 +61,12 @@ async function connect(): Promise<SignalConnection> {
 }
 
 /** One PostgreSQL LISTEN connection per Node process, shared by its SSE tabs. */
-export function subscribeToPostgresSignals(subscriber: Subscriber) {
-  processSignals.roadmapSignalConnection ??= connect();
-  return processSignals.roadmapSignalConnection.then((connection) =>
-    connection.subscribe(subscriber),
-  );
+export async function subscribeToPostgresSignals(subscriber: Subscriber) {
+  const connection = await (processSignals.roadmapSignalConnection ??= connect());
+  try {
+    return connection.subscribe(subscriber);
+  } catch {
+    // The last tab of that listener left while this one was waiting for it.
+    return (await (processSignals.roadmapSignalConnection ??= connect())).subscribe(subscriber);
+  }
 }

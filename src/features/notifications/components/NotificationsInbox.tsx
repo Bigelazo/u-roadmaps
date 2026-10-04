@@ -27,7 +27,6 @@ type NotificationDataFilter = Record<string, string | number>;
 const notificationDateFormatter = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'medium',
   timeStyle: 'short',
-  timeZone: 'America/Santiago',
 });
 
 export function NotificationCountButton({
@@ -130,13 +129,18 @@ function NotificationRow({
 }) {
   const [seenError, setSeenError] = useState(false);
   const rowRef = useRef<HTMLLIElement>(null);
+  // Refreshes recreate records; the row's identity, not the object, decides when it is shown.
+  const latest = useRef(notification);
+  useEffect(() => {
+    latest.current = notification;
+  }, [notification]);
 
   const markSeen = useCallback(() => {
-    void notification.seen().then(
+    void latest.current.seen().then(
       ({ error }) => setSeenError(Boolean(error)),
       () => setSeenError(true),
     );
-  }, [notification]);
+  }, []);
 
   useEffect(() => {
     const row = rowRef.current;
@@ -148,7 +152,7 @@ function NotificationRow({
     });
     observer.observe(row);
     return () => observer.disconnect();
-  }, [markSeen]);
+  }, [markSeen, notification.id]);
 
   return (
     <li ref={rowRef}>

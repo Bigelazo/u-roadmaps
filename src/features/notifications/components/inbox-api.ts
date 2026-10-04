@@ -1,3 +1,5 @@
+import { OWN_INBOX_REFRESH_EVENT as refreshEvent } from './own-realtime';
+
 export type InboxRecord = {
   id: string;
   subject?: string | null;
@@ -7,8 +9,6 @@ export type InboxRecord = {
   seen: () => Promise<{ error?: unknown }>;
   read: () => Promise<{ error?: unknown }>;
 };
-
-export const refreshEvent = 'own-inbox-updated';
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/notifications${path}`, { cache: 'no-store', ...init });

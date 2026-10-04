@@ -8,6 +8,8 @@ import {
 } from '@/shared/client/roadmap-events';
 
 export const OWN_INBOX_REFRESH_EVENT = 'own-inbox-updated';
+// Showing several rows marks each one seen; one refresh reconciles the whole burst.
+const INBOX_SIGNAL_COALESCE_MS = 100;
 
 /** Mounted once by the application provider, never by Inbox/count consumers. */
 export function OwnInboxRealtime({ userId }: { userId: string }) {
@@ -16,9 +18,15 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
     let active = true;
     let source: EventSource;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    let pendingRefresh: ReturnType<typeof setTimeout> | undefined;
     let retryDelay = 1000;
     const refresh = () => {
+      clearTimeout(pendingRefresh);
+      pendingRefresh = undefined;
       if (active) window.dispatchEvent(new Event(OWN_INBOX_REFRESH_EVENT));
+    };
+    const scheduleRefresh = () => {
+      pendingRefresh ??= setTimeout(refresh, INBOX_SIGNAL_COALESCE_MS);
     };
     const receive = (event: MessageEvent<string>, kind: 'ready' | 'inbox' | 'roadmap') => {
       if (!active) return;
@@ -35,7 +43,7 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
         retryDelay = 1000;
         requestRoadmapRecovery();
       } else if (kind === 'inbox') {
-        refresh();
+        scheduleRefresh();
       } else if (
         typeof value.courseCode === 'string' &&
         value.courseCode.trim().length > 0 &&
@@ -87,6 +95,7 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
       active = false;
       stopRecovery();
       clearTimeout(retry);
+      clearTimeout(pendingRefresh);
       window.removeEventListener('offline', disconnect);
       window.removeEventListener('online', connect);
       source?.close();

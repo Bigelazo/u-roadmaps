@@ -146,7 +146,6 @@ export async function deliverNodeChange(input: {
   roadmapId?: string;
   recipientIds?: readonly string[];
   targetKind?: 'node' | 'roadmap';
-  availabilitySource?: 'publication';
 }) {
   const node = await prisma.roadmapNode.findUnique({
     where: { id: input.nodeId },

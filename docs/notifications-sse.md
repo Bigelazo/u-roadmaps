@@ -15,7 +15,11 @@ subsequent authorized HTTP request can remove protected content.
 
 The payload contains only User/Course offering identifiers, never pedagogical
 content. Every projection/feed/count reload goes through existing authenticated
-HTTP endpoints. Signals and reloads do not recognize notices. Opening an
+HTTP endpoints. A tab coalesces Inbox signals arriving within 100 ms into one
+reload, so marking several shown rows as seen does not reload once per row. Each
+stream remembers the Course offerings already confirmed for its User, so Roadmap
+signals only query the Participation once per stream and Course offering.
+Signals and reloads do not recognize notices. Opening an
 accessible Node or entering the Roadmap retains the existing recognition rules;
 Canvas preview retains its independent simulation and never recognizes real
 notices. Existing canvas reconciliation preserves selection, drafts and version

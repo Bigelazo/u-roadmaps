@@ -149,7 +149,6 @@ test('accessible Node notices persist without external notification configuratio
     nodeId: 'visible-node-id',
     roadmapId: 'roadmap-id',
     changeKind: 'node-available',
-    availabilitySource: 'publication',
     changedFields: [],
     nodeTitle: 'Evaluación final',
     recipientIds: ['student-id'],

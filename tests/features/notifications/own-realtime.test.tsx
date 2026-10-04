@@ -306,3 +306,54 @@ test('an SSE refresh preserves expanded Inbox pages and updates their saved noti
   expect(screen.getAllByRole('listitem')).toHaveLength(20);
   expect(screen.getByText('Notice 20')).toBeTruthy();
 });
+
+test('a burst of Inbox signals refreshes once and a shown row is marked seen only once', async () => {
+  vi.stubGlobal('EventSource', BrowserStream);
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe() {
+        this.callback(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        );
+      }
+      disconnect() {}
+    },
+  );
+  const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
+    Response.json(
+      url.includes('/counts')
+        ? { count: 1 }
+        : url.endsWith('/notice')
+          ? { id: 'notice', subject: 'Saved Node change', createdAt: '2026-10-03' }
+          : {
+              notifications: [
+                { id: 'notice', subject: 'Saved Node change', createdAt: '2026-10-03' },
+              ],
+              hasMore: false,
+            },
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  render(
+    <NotificationsProvider identity={identity('student')}>
+      <NotificationsInbox identity={identity('student')} />
+    </NotificationsProvider>,
+  );
+  fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 1 sin leer' }));
+  await screen.findByRole('button', { name: /Saved Node change/ });
+  const seenMarks = () => fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH').length;
+  const feedRequests = () => fetch.mock.calls.filter(([url]) => url.includes('?limit=')).length;
+  await waitFor(() => expect(seenMarks()).toBe(1));
+  const before = feedRequests();
+  act(() => {
+    for (let signal = 0; signal < 5; signal++)
+      BrowserStream.instances[0].receive('inbox', { userId: 'student' });
+  });
+  await waitFor(() => expect(feedRequests()).toBe(before + 1));
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  expect(feedRequests()).toBe(before + 1);
+  expect(seenMarks()).toBe(1);
+});

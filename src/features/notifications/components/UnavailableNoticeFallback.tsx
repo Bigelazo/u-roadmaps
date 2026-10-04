@@ -16,8 +16,9 @@ export function UnavailableNoticeFallback({
   useEffect(() => {
     if (notification?.id !== noticeId || acknowledged.current) return;
     acknowledged.current = true;
-    void notification.read().catch(() => {
-      acknowledged.current = false;
+    // read() reports failures in its result instead of rejecting.
+    void notification.read().then(({ error }) => {
+      if (error) acknowledged.current = false;
     });
   }, [noticeId, notification]);
 

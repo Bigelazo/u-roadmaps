@@ -10,6 +10,7 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
   let lifetime: ReturnType<typeof setTimeout> | undefined;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const encoder = new TextEncoder();
+  const memberships = new Set<string>();
   const stop = () => {
     if (stopped) return;
     stopped = true;
@@ -41,11 +42,17 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
             send('inbox', { userId });
           } else if (change.kind === 'roadmap' && (!change.userId || change.userId === userId)) {
             // Inactive memberships still receive invalidation so HTTP can revoke access.
-            const participation = await prisma.participation.findFirst({
-              where: { userId, courseOfferingId: String(change.courseOfferingId) },
-              select: { id: true },
-            });
-            if (participation || change.userId === userId) send('roadmap', { ...change, userId });
+            const courseOfferingId = String(change.courseOfferingId);
+            if (change.userId !== userId && !memberships.has(courseOfferingId)) {
+              const participation = await prisma.participation.findFirst({
+                where: { userId, courseOfferingId },
+                select: { id: true },
+              });
+              if (!participation) return;
+              // Every connected tab would otherwise query on each Roadmap write.
+              memberships.add(courseOfferingId);
+            }
+            send('roadmap', { ...change, userId });
           }
         })().catch(() => {
           console.warn('Roadmap live signal projection failed');
