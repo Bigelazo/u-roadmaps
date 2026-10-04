@@ -25,6 +25,8 @@ type Notice =
   | RoadmapPathChangeNotice
   | RoadmapClassificationChangeNotice;
 
+const DELIVERY_CONCURRENCY = 5;
+
 async function storeNotice(
   notice: Notice,
   noticeClass: NoticeClass,
@@ -46,18 +48,26 @@ async function storeNotice(
     eventCount: 1,
     digestKey: notice.eventId,
   };
-  await Promise.all(
-    participants.map(({ userId }) =>
-      deliverGroupedNotice({
-        eventId: notice.eventId,
-        recipientId: userId,
-        roadmapId: notice.roadmapId,
-        courseOfferingId: notice.courseOfferingId,
-        noticeClass,
-        payload,
-      }),
-    ),
-  );
+  // Each recipient opens an interactive transaction. Bounding them keeps large Courses
+  // from exhausting the Prisma pool; every recipient is attempted before reporting failure.
+  let failure: { error: unknown } | undefined;
+  for (let offset = 0; offset < participants.length; offset += DELIVERY_CONCURRENCY) {
+    const results = await Promise.allSettled(
+      participants.slice(offset, offset + DELIVERY_CONCURRENCY).map(({ userId }) =>
+        deliverGroupedNotice({
+          eventId: notice.eventId,
+          recipientId: userId,
+          roadmapId: notice.roadmapId,
+          courseOfferingId: notice.courseOfferingId,
+          noticeClass,
+          payload,
+        }),
+      ),
+    );
+    for (const result of results)
+      if (result.status === 'rejected') failure ??= { error: result.reason };
+  }
+  if (failure) throw failure.error;
 }
 
 export function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
