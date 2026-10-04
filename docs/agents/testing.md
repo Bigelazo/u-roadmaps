@@ -184,10 +184,14 @@ ellas. Se comprobó el cierre del puerto E2E y que la base de desarrollo conserv
 la misma huella. Son antecedentes de repetibilidad, no una validación nueva de
 notificaciones con la configuración posterior.
 
-Con los límites actuales, la comprobación vigente es **80 passed en 1,5 minutos**
-sin notificaciones. El build incluyó comprobación de tipos; ESLint y Prettier de
-la configuración también pasaron. Al informar resultados, indicar selección,
-navegadores, aprobados, fallidos, omitidos, duración y código de salida.
+La validación de la rama de **#159**, basada en **8b184e9**, del **2026-10-04**
+ejecutó `pnpm test:e2e` completo en Chromium y Firefox: **124 aprobados, 0 fallidos
+y 2 omitidos** (las integraciones Cloud optativas), en **2,4 minutos**, con salida
+0. Incluye SSE propio real, cambios de acceso, borradores, sincronización entre
+pestañas y reconexión. El servidor cerró el puerto E2E al terminar. Tipos, ESLint
+y Prettier de los archivos modificados también pasaron. Esta evidencia sustituye
+la selección anterior de 80 casos sin notificaciones; no valida el comando
+agregado `pnpm test` por los fallos unitarios documentados a continuación.
 
 ## Suite unitaria y comando agregado
 

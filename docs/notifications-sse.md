@@ -65,3 +65,7 @@ complementary coverage for reconciliation and stale responses.
 The focused Chromium and Firefox run on 2026-10-04 included both files above:
 **8 passed, 0 failed, 0 skipped**, in **30.5 seconds**, exit code 0. Unit validation
 and existing full-suite limitations are recorded in `docs/agents/testing.md`.
+
+The full Chromium and Firefox E2E suite then passed: **124 passed, 0 failed,
+2 optional Cloud tests skipped**, in **2.4 minutes**, exit code 0. The E2E server
+released its port after completion.
