@@ -8,7 +8,8 @@ La migración a datos propios por test del
 [ADR-0013](../adr/0013-enable-parallel-e2e-tests.md) está en curso: `own-notifications.spec.ts`, `roadmaps.spec.ts`,
 `own-classification-notifications.spec.ts`, `own-dependency-notifications.spec.ts`
 y `own-notification-operation.spec.ts`, junto con los seis specs de Roadmap
-documentados en la validación de #166, están migrados; los demás specs
+documentados en la validación de #166 y los cuatro specs de Avisos por cambio
+de #167, están migrados; los demás specs
 todavía comparten el catálogo sembrado y requieren el worker único.
 
 Validación de `roadmaps.spec.ts` del **2026-10-04**, con Chromium y Firefox:
@@ -87,8 +88,8 @@ huérfanos y nunca toca el catálogo sembrado.
 Las consultas SQL usan el único helper `psql` de
 [tests/e2e/database.ts](../../tests/e2e/database.ts), con la misma validación de
 base local. El cliente Prisma generado no carga dentro de Playwright (issue #164),
-por lo que se aplicó el plan B del ADR. Los specs de avisos aún no migrados
-conservan sus propias copias de `psql`.
+por lo que se aplicó el plan B del ADR. Todos los specs acceden a SQL mediante
+el helper compartido; no quedan copias locales de `psql`.
 
 Playwright administra el servidor y lo cierra al terminar. No reutiliza uno
 existente (`reuseExistingServer: false`). Puede coexistir con desarrollo, pero

@@ -68,6 +68,10 @@ _Avoid_: Unseen notice, pending Roadmap change
 A Roadmap notice that briefly represents repeated Roadmap changes from the same Roadmap, affected Node when applicable, and change class. It is recognized as one notice regardless of the number of changes represented and need not enumerate every individual modification.
 _Avoid_: Roadmap change, audit log
 
+**Notice target (Objeto del aviso)**:
+The single element and aspect a Roadmap notice is about, such as a Node's title, a Node's description, a Node's type, or a Node's access. Changes to different targets of the same Node are never merged; deleting a Node absorbs every pending notice about that Node.
+_Avoid_: Node, notice destination, change class
+
 **User (Usuario)**:
 A person identified institutionally by a unique, normalized RUT who can participate in multiple course offerings. Their institutional email is unique but may be updated; conflicting identifiers must not be merged silently.
 _Avoid_: Student, teacher
