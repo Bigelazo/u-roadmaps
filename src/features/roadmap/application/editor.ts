@@ -884,22 +884,22 @@ function calendarDayDate(day: CalendarDay) {
   return new Date(`${day}T00:00:00.000Z`);
 }
 
-async function releaseDueScheduledUnlocks(
-  transaction: Prisma.TransactionClient,
+async function dueScheduledUnlocks(
+  client: Prisma.TransactionClient,
   roadmapId: string,
-  today = chileCalendarDay(),
+  today: CalendarDay,
 ) {
   const [nodes, dependencies] = await Promise.all([
-    transaction.roadmapNode.findMany({
+    client.roadmapNode.findMany({
       where: { roadmapId },
       select: { id: true, isVisible: true, isTeacherBlocked: true, teacherUnlockOn: true },
     }),
-    transaction.dependency.findMany({
+    client.dependency.findMany({
       where: { sourceNode: { roadmapId } },
       select: { sourceNodeId: true, targetNodeId: true },
     }),
   ]);
-  const releasedNodeIds = dueScheduledUnlockNodeIds({
+  return dueScheduledUnlockNodeIds({
     nodes: nodes.map((node) => ({
       ...node,
       teacherUnlockOn: node.teacherUnlockOn ? calendarDayOf(node.teacherUnlockOn) : null,
@@ -907,6 +907,14 @@ async function releaseDueScheduledUnlocks(
     dependencies,
     today,
   });
+}
+
+async function releaseDueScheduledUnlocks(
+  transaction: Prisma.TransactionClient,
+  roadmapId: string,
+  today = chileCalendarDay(),
+) {
+  const releasedNodeIds = await dueScheduledUnlocks(transaction, roadmapId, today);
   if (releasedNodeIds.size > 0) {
     await transaction.roadmapNode.updateMany({
       where: { id: { in: [...releasedNodeIds] } },
@@ -974,6 +982,9 @@ async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) 
     });
     // A frozen Roadmap is read-only, so its pending schedules never fire.
     if (academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now()) continue;
+    // A node waiting for blocked prerequisites stays due on every pass; checking outside a
+    // transaction keeps those passes from contending with teaching edits on its Roadmap.
+    if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
     const result = await withSerializableTransaction(
       async (transaction) => {
         const before = await captureAccessSnapshot(transaction, roadmap.id);
