@@ -75,8 +75,10 @@ export default defineConfig([
     // Every manually maintained program file belongs to exactly one architecture
     // zone. Generated Prisma is described so imports can be checked, but is not
     // linted as handwritten source. Schema, migrations, root configuration and
-    // E2E browser infrastructure are deliberate tooling exclusions.
+    // E2E browser infrastructure are deliberate tooling exclusions, as is the
+    // Next.js startup hook, which only wires app adapters into the server process.
     files: architecturalFiles,
+    ignores: ['src/instrumentation.ts'],
     plugins: { boundaries },
     settings: {
       'boundaries/include': [

@@ -275,6 +275,20 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
     );
   },
 
+  async scheduleTeacherUnlock(input, nodeId, unlockOn) {
+    await mutate(
+      input,
+      `/nodes/${nodeId}/teacher-block/schedule`,
+      unlockOn
+        ? {
+            method: 'PUT',
+            body: JSON.stringify({ unlockOn }),
+          }
+        : { method: 'DELETE' },
+      'No se pudo programar el desbloqueo.',
+    );
+  },
+
   async deleteDependency(input, dependencyId) {
     await mutate(
       input,

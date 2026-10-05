@@ -240,6 +240,8 @@ Los tipos predefinidos necesitan el seed además de las migraciones. Configura V
 
 Los avisos requieren un único proceso Node persistente, con conexión directa a PostgreSQL para LISTEN y streaming sin buffering del proxy. El repositorio no incluye un despliegue Docker. Véase [operación de avisos](docs/notifications-operations.md).
 
+Ese mismo proceso libera los desbloqueos programados: revisa cada cinco minutos los nodos cuya fecha ya llegó (00:00, hora de Chile) y avisa a sus estudiantes. `SCHEDULED_UNLOCK_INTERVAL_MS` ajusta ese intervalo.
+
 ## Arquitectura y estructura
 
 El código se organiza por funcionalidades. Las páginas y rutas HTTP componen los módulos mediante sus entradas públicas; dentro de cada funcionalidad se separan reglas de dominio, operaciones de aplicación, infraestructura y componentes.

@@ -44,6 +44,8 @@ type RoadmapNodeDetails = RoadmapNodeSummary & {
 export type VisibleRoadmapNode = RoadmapNodeDetails & {
   isVisible: true;
   isTeacherBlocked: boolean;
+  /** Chilean calendar day (`YYYY-MM-DD`) on which its Teacher block is scheduled to end. */
+  teacherUnlockOn?: string;
 };
 
 export type HiddenRoadmapNode = RoadmapNodeDetails & {

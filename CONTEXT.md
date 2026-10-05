@@ -128,6 +128,10 @@ _Avoid_: Node visibility, prerequisite block
 A teaching-staff action that removes Teacher blocks according to the selected Node's current prerequisites. When any direct or transitive prerequisite has a Teacher block, it atomically unlocks the selected Node and every blocked transitive prerequisite without changing dependents; otherwise, teaching staff choose between unlocking only the selected Node and performing a Branch unlock.
 _Avoid_: Prerequisite block removal, Dependency unlock
 
+**Scheduled unlock (Desbloqueo programado)**:
+A Chilean calendar day chosen by teaching staff on which a visible node's Teacher block is removed automatically at 00:00 America/Santiago, as a Node unlock of only that node. When that day arrives while any transitive prerequisite keeps a Teacher block, the node waits and is released once those blocks are removed; prerequisites released in the same pass count as removed. Removing the Teacher block by any other means or hiding the node discards the schedule; a frozen Roadmap never releases it. Its release produces the same Roadmap notices as a manual unlock, attributed to teaching staff.
+_Avoid_: Timed visibility, automatic branch unlock
+
 **Branch unlock (Desbloqueo de rama)**:
 A teaching-staff action that atomically removes teacher blocks from a selected node and its eligible transitive dependents, regardless of when or why each block was imposed. A node remains blocked only when a blocked prerequisite outside the selected branch still prevents its release; block provenance is not retained.
 _Avoid_: Automatic unblock, reset roadmap

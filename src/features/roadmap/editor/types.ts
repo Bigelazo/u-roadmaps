@@ -66,6 +66,7 @@ export type NodeEditorIntent =
     }
   | { kind: 'change-visibility'; nodeId: string; isVisible: boolean }
   | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
+  | { kind: 'schedule-teacher-unlock'; nodeId: string; unlockOn: string | null }
   | { kind: 'delete-node'; nodeId: string };
 
 export type NodeEditorSession = {

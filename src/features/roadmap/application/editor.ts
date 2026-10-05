@@ -25,6 +25,13 @@ import type {
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import { transitiveDependentNodeIds } from '@/features/roadmap/domain/access';
 import {
+  chileCalendarDay,
+  dueScheduledUnlockNodeIds,
+  InvalidScheduledUnlockDay,
+  requireScheduledUnlockDay,
+  type CalendarDay,
+} from '@/features/roadmap/domain/scheduled-unlock';
+import {
   requireEditorRoadmap,
   requireNode,
   type EditorInput,
@@ -40,6 +47,9 @@ import {
 } from '@/features/roadmap/application/node-change-notifications';
 
 type JsonObject = Record<string, unknown>;
+
+/** Nil UUID: no participant matches it, so every affected participant is notified. */
+export const SCHEDULED_UNLOCK_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
 type WithInput = EditorInput & { input: JsonObject };
 type WithId = EditorInput & { id: string };
 type WithTeacherBlockOperation = WithId & {
@@ -47,6 +57,7 @@ type WithTeacherBlockOperation = WithId & {
   previewVersion?: string;
 };
 type WithDeletePreview = WithId & { previewVersion?: string };
+type WithTeacherUnlockSchedule = WithId & { unlockOn: unknown };
 
 type StructuralDependency = {
   id: string;
@@ -259,6 +270,7 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
         positionY?: number;
         isVisible?: boolean;
         isTeacherBlocked?: boolean;
+        teacherUnlockOn?: null;
       } = {};
       if ('title' in input) data.title = requireString(input.title, 'title', 240);
       if ('description' in input)
@@ -286,7 +298,10 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
             orderBy: { id: 'asc' },
           })
         : [];
-      if (hiddenAfterUpdate) data.isTeacherBlocked = false;
+      if (hiddenAfterUpdate) {
+        data.isTeacherBlocked = false;
+        data.teacherUnlockOn = null;
+      }
       if (removedDependencies.length > 0) {
         await transaction.dependency.deleteMany({
           where: {
@@ -833,9 +848,14 @@ async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
       if (preview.nodes.length > 0) {
         await transaction.roadmapNode.updateMany({
           where: { id: { in: preview.nodes.map((node) => node.id) } },
-          data: { isTeacherBlocked: input.operation === 'BLOCK' },
+          data:
+            input.operation === 'BLOCK'
+              ? { isTeacherBlocked: true }
+              : { isTeacherBlocked: false, teacherUnlockOn: null },
         });
       }
+      // Unlocking a prerequisite can release dependents whose scheduled day already arrived.
+      if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(transaction, roadmap.id);
       const after = await captureAccessSnapshot(transaction, roadmap.id);
       return {
         ...preview,
@@ -854,6 +874,131 @@ async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
         'La operación entra en conflicto con otra modificación.',
       ),
   );
+}
+
+function calendarDayOf(date: Date): CalendarDay {
+  return date.toISOString().slice(0, 10);
+}
+
+function calendarDayDate(day: CalendarDay) {
+  return new Date(`${day}T00:00:00.000Z`);
+}
+
+async function releaseDueScheduledUnlocks(
+  transaction: Prisma.TransactionClient,
+  roadmapId: string,
+  today = chileCalendarDay(),
+) {
+  const [nodes, dependencies] = await Promise.all([
+    transaction.roadmapNode.findMany({
+      where: { roadmapId },
+      select: { id: true, isVisible: true, isTeacherBlocked: true, teacherUnlockOn: true },
+    }),
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId } },
+      select: { sourceNodeId: true, targetNodeId: true },
+    }),
+  ]);
+  const releasedNodeIds = dueScheduledUnlockNodeIds({
+    nodes: nodes.map((node) => ({
+      ...node,
+      teacherUnlockOn: node.teacherUnlockOn ? calendarDayOf(node.teacherUnlockOn) : null,
+    })),
+    dependencies,
+    today,
+  });
+  if (releasedNodeIds.size > 0) {
+    await transaction.roadmapNode.updateMany({
+      where: { id: { in: [...releasedNodeIds] } },
+      data: { isTeacherBlocked: false, teacherUnlockOn: null },
+    });
+  }
+  return releasedNodeIds;
+}
+
+async function scheduleTeacherUnlockUnsafe({ id, unlockOn, ...editor }: WithTeacherUnlockSchedule) {
+  return withSerializableTransaction(
+    async (transaction) => {
+      const roadmap = await requireEditorRoadmap(transaction, editor);
+      const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
+      let day: CalendarDay | null = null;
+      if (unlockOn !== null) {
+        try {
+          day = requireScheduledUnlockDay(unlockOn, chileCalendarDay());
+        } catch (error) {
+          if (!(error instanceof InvalidScheduledUnlockDay)) throw error;
+          throw new ApplicationError(400, 'INVALID_TEACHER_UNLOCK_DATE', error.message);
+        }
+        if (!node.isVisible || !node.isTeacherBlocked) {
+          throw new ApplicationError(
+            409,
+            'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK',
+            'Solo se puede programar el desbloqueo de un nodo visible con bloqueo docente.',
+          );
+        }
+      }
+      await transaction.roadmapNode.update({
+        where: { id: node.id },
+        data: { teacherUnlockOn: day ? calendarDayDate(day) : null },
+      });
+      return { teacherUnlockOn: day };
+    },
+    () =>
+      new ApplicationError(
+        409,
+        'CONFLICT',
+        'La operación entra en conflicto con otra modificación.',
+      ),
+  );
+}
+
+/** Releases every due scheduled unlock; run by the daily scheduled job. */
+async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) {
+  const roadmaps = await prisma.roadmap.findMany({
+    where: {
+      roadmapNodes: {
+        some: { isTeacherBlocked: true, teacherUnlockOn: { lte: calendarDayDate(today) } },
+      },
+    },
+    select: {
+      id: true,
+      courseOffering: { select: { courseCode: true, year: true, semester: true } },
+    },
+  });
+  const released = [];
+  for (const roadmap of roadmaps) {
+    const { year, semester } = roadmap.courseOffering;
+    const academicTerm = await prisma.academicTerm.findUnique({
+      where: { year_semester: { year, semester } },
+      select: { roadmapFreezeDate: true },
+    });
+    // A frozen Roadmap is read-only, so its pending schedules never fire.
+    if (academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now()) continue;
+    const result = await withSerializableTransaction(
+      async (transaction) => {
+        const before = await captureAccessSnapshot(transaction, roadmap.id);
+        const releasedNodeIds = await releaseDueScheduledUnlocks(transaction, roadmap.id, today);
+        const after = await captureAccessSnapshot(transaction, roadmap.id);
+        return {
+          releasedNodeIds: [...releasedNodeIds],
+          notifications: accessTransitionNotifications({
+            before,
+            after,
+            actorId: SCHEDULED_UNLOCK_ACTOR_ID,
+            roadmapId: roadmap.id,
+          }),
+        };
+      },
+      () =>
+        new ApplicationError(
+          409,
+          'CONFLICT',
+          'El desbloqueo programado entra en conflicto con otra modificación.',
+        ),
+    );
+    released.push({ identifier: roadmap.courseOffering, ...result });
+  }
+  return released;
 }
 
 export function createRoadmapNode(input: WithInput) {
@@ -906,4 +1051,12 @@ export function previewTeacherBlock(input: WithTeacherBlockOperation) {
 
 export function changeTeacherBlock(input: WithTeacherBlockOperation) {
   return applicationResult(() => changeTeacherBlockUnsafe(input));
+}
+
+export function scheduleTeacherUnlock(input: WithTeacherUnlockSchedule) {
+  return applicationResult(() => scheduleTeacherUnlockUnsafe(input));
+}
+
+export function releaseScheduledTeacherUnlocks(today?: CalendarDay) {
+  return applicationResult(() => releaseScheduledTeacherUnlocksUnsafe(today));
 }

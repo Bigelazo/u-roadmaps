@@ -86,6 +86,7 @@ type RoadmapCanvasIntent =
     >)
   | { kind: 'change-visibility'; nodeId: string; isVisible: boolean }
   | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
+  | { kind: 'schedule-teacher-unlock'; nodeId: string; unlockOn: string | null }
   | { kind: 'delete-node'; nodeId: string; draftWasDiscarded?: boolean }
   | Extract<RoadmapGraphEditingIntent, { kind: 'node-positions' | 'request-automatic-layout' }>
   | {
@@ -103,6 +104,7 @@ function canvasIntentFromNodeEditor(intent: NodeEditorIntent): RoadmapCanvasInte
       return intent;
     case 'change-visibility':
     case 'change-teacher-block':
+    case 'schedule-teacher-unlock':
       return intent;
     case 'delete-node':
       return { ...intent, draftWasDiscarded: true };
@@ -205,6 +207,7 @@ function useRoadmapCanvasController({ input }: Props) {
     addNode,
     updateNode,
     moveNode,
+    scheduleTeacherUnlock,
     dependencyWorkflow,
     teacherBlockWorkflow,
     nodeVisibilityWorkflow,
@@ -630,6 +633,14 @@ function useRoadmapCanvasController({ input }: Props) {
         case 'change-teacher-block':
           requestTeacherBlockChange(intent.nodeId, intent.operation);
           return;
+        case 'schedule-teacher-unlock':
+          void scheduleTeacherUnlock(intent.nodeId, intent.unlockOn).then((succeeded) => {
+            if (succeeded)
+              feedback?.showSuccess(
+                intent.unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
+              );
+          });
+          return;
         case 'delete-node':
           requestNodeDeletion(intent.nodeId, { draftWasDiscarded: intent.draftWasDiscarded });
           return;
@@ -654,7 +665,9 @@ function useRoadmapCanvasController({ input }: Props) {
     },
     [
       closeSelectedNodeNow,
+      feedback,
       moveNode,
+      scheduleTeacherUnlock,
       openResourceComposer,
       requestDependencyCreation,
       requestDependencyDeletion,

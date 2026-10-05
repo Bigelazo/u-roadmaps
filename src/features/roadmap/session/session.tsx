@@ -93,6 +93,7 @@ type InjectedSessionResult = {
     operation: TeacherBlockOperation,
     previewVersion?: string,
   ) => Promise<boolean>;
+  scheduleTeacherUnlock: (nodeId: string, unlockOn: string | null) => Promise<boolean>;
   deleteDependency: (dependencyId: string) => Promise<boolean>;
   toggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
   previewNodeVisibility: (
@@ -475,6 +476,19 @@ function useInjectedSession(
     [mutate, persistence, stableInput],
   );
 
+  const scheduleTeacherUnlock = useCallback(
+    async (nodeId: string, unlockOn: string | null) => {
+      if (!persistence?.scheduleTeacherUnlock) return missingOperation('programar desbloqueo');
+      return (
+        await mutate(
+          () => persistence.scheduleTeacherUnlock!(stableInput, nodeId, unlockOn),
+          'No se pudo programar el desbloqueo.',
+        )
+      ).success;
+    },
+    [mutate, persistence, stableInput],
+  );
+
   const deleteDependency = useCallback(
     async (dependencyId: string) => {
       if (!persistence?.deleteDependency) return missingOperation('eliminar dependencia');
@@ -679,6 +693,7 @@ function useInjectedSession(
     previewRoadmapDependency,
     previewTeacherBlock,
     changeTeacherBlock,
+    scheduleTeacherUnlock,
     deleteDependency,
     toggleVisibility,
     previewNodeVisibility,

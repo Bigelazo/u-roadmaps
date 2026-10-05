@@ -1,5 +1,5 @@
 import { createRef, type ComponentProps } from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { NodeEditor } from '@/features/roadmap/editor/NodeEditor';
@@ -103,6 +103,59 @@ test('renders the selected Node as one cohesive editing surface', () => {
   expect(screen.getByTestId('node-type-icon')).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Estado del hito' })).toBeTruthy();
   expect(screen.getByRole('heading', { name: /Recursos/ })).toBeTruthy();
+});
+
+test('places support material before the milestone status', () => {
+  renderEditor();
+
+  const resources = screen.getByRole('heading', { name: /Recursos/ });
+  const status = screen.getByRole('heading', { name: 'Estado del hito' });
+  expect(resources.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test('schedules and removes the unlock day of a teacher-blocked Node', async () => {
+  const user = userEvent.setup();
+  const { onIntent, unmount } = renderEditor();
+
+  const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
+  expect(schedule.disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText('Desbloqueo programado'), {
+    target: { value: '2099-03-14' },
+  });
+  await user.click(schedule);
+  expect(onIntent).toHaveBeenCalledWith({
+    kind: 'schedule-teacher-unlock',
+    nodeId: node.id,
+    unlockOn: '2099-03-14',
+  });
+  unmount();
+
+  const view = renderEditor({
+    session: {
+      node: { ...node, isTeacherBlocked: true, teacherUnlockOn: '2099-03-14' },
+      nodeTypes,
+      isVisibilityPending: false,
+    },
+  });
+  expect(screen.getByText(/Se desbloqueará el sábado, 14 de marzo de 2099/)).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Quitar fecha' }));
+  expect(view.onIntent).toHaveBeenCalledWith({
+    kind: 'schedule-teacher-unlock',
+    nodeId: node.id,
+    unlockOn: null,
+  });
+});
+
+test('offers no unlock schedule while a Node has no teacher block', () => {
+  renderEditor({
+    session: {
+      node: { ...node, isTeacherBlocked: false },
+      nodeTypes,
+      isVisibilityPending: false,
+    },
+  });
+
+  expect(screen.queryByLabelText('Desbloqueo programado')).toBeNull();
 });
 
 test('saves Node information through one perform effect and preserves rejected input', async () => {

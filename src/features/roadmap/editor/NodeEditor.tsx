@@ -322,6 +322,14 @@ function useNodeEditorController(
     },
     [onIntent],
   );
+  const scheduleTeacherUnlock = useCallback(
+    (unlockOn: string | null) => {
+      const currentNode = stateRef.current.canonicalNode;
+      if (currentNode)
+        onIntent({ kind: 'schedule-teacher-unlock', nodeId: currentNode.id, unlockOn });
+    },
+    [onIntent],
+  );
   const closeNode = useCallback(() => {
     const currentNode = stateRef.current.canonicalNode;
     if (!currentNode) return;
@@ -396,6 +404,7 @@ function useNodeEditorController(
       cancelResourceDeletion,
       toggleVisibility,
       requestTeacherBlock,
+      scheduleTeacherUnlock,
       requestNodeDeletion,
       closeNode,
       previewNodeInformation,
@@ -415,6 +424,7 @@ function useNodeEditorController(
     requestResourceDeletion,
     cancelResourceDeletion,
     requestTeacherBlock,
+    scheduleTeacherUnlock,
     saveNode,
     saveResource,
     selectResourceFile,

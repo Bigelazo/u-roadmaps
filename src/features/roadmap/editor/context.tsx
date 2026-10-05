@@ -35,6 +35,7 @@ type NodeEditorContextValue = {
   cancelResourceDeletion: () => void;
   toggleVisibility: () => void;
   requestTeacherBlock: (operation: TeacherBlockOperation) => void;
+  scheduleTeacherUnlock: (unlockOn: string | null) => void;
   requestNodeDeletion: () => void;
   closeNode: () => void;
   previewNodeInformation: () => void;

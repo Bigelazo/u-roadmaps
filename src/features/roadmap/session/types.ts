@@ -61,6 +61,11 @@ export type RoadmapCanvasSessionPersistence = {
     operation: TeacherBlockOperation,
     previewVersion?: string,
   ): Promise<void>;
+  scheduleTeacherUnlock?(
+    input: RoadmapCanvasSessionInput,
+    nodeId: string,
+    unlockOn: string | null,
+  ): Promise<void>;
   deleteDependency?(input: RoadmapCanvasSessionInput, dependencyId: string): Promise<void>;
   toggleVisibility?(
     input: RoadmapCanvasSessionInput,

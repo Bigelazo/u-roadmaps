@@ -12,6 +12,9 @@ export {
   previewNodeVisibility,
   previewRoadmapDependency,
   previewTeacherBlock,
+  releaseScheduledTeacherUnlocks,
+  scheduleTeacherUnlock,
+  SCHEDULED_UNLOCK_ACTOR_ID,
   updateRoadmapNode,
   updateRoadmapNodeType,
 } from '@/features/roadmap/application/editor';

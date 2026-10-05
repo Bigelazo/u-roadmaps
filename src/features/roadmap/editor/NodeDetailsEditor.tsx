@@ -1,4 +1,15 @@
-import { Eye, EyeOff, LockKeyhole, LockKeyholeOpen, Save, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
+import {
+  CalendarClock,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  LockKeyholeOpen,
+  Save,
+  Trash2,
+  X,
+} from 'lucide-react';
+import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { Button } from '@/shared/ui/button';
 import {
   Field,
@@ -113,6 +124,78 @@ function NodeForm() {
   );
 }
 
+function nextCalendarDay(day: string) {
+  const date = new Date(`${day}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatCalendarDay(day: string) {
+  return new Intl.DateTimeFormat('es-CL', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${day}T12:00:00.000Z`));
+}
+
+function NodeUnlockSchedule({ scheduledDay }: { scheduledDay: string | null }) {
+  const { scheduleTeacherUnlock } = useNodeEditorContext();
+  const [draftDay, setDraftDay] = useState(scheduledDay ?? '');
+  const minimumDay = nextCalendarDay(chileCalendarDay());
+  const canSchedule = draftDay >= minimumDay && draftDay !== scheduledDay;
+
+  return (
+    <form
+      className="flex flex-col gap-2 border-t border-border pt-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (canSchedule) scheduleTeacherUnlock(draftDay);
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <CalendarClock
+          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <div>
+          <FieldLabel htmlFor="node-unlock-date">Desbloqueo programado</FieldLabel>
+          <FieldDescription>
+            {scheduledDay
+              ? `Se desbloqueará el ${formatCalendarDay(scheduledDay)}, a las 00:00 (hora de Chile).`
+              : 'Elige un día para desbloquear este hito sin intervención docente.'}{' '}
+            Si ese día un prerrequisito sigue bloqueado, esperará a que lo desbloquees.
+          </FieldDescription>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Input
+          id="node-unlock-date"
+          type="date"
+          className="w-auto min-w-0 flex-1"
+          min={minimumDay}
+          value={draftDay}
+          onChange={(event) => setDraftDay(event.target.value)}
+        />
+        <Button type="submit" variant="outline" size="sm" disabled={!canSchedule}>
+          {scheduledDay ? 'Cambiar fecha' : 'Programar'}
+        </Button>
+        {scheduledDay && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => scheduleTeacherUnlock(null)}
+          >
+            Quitar fecha
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function NodeStatus() {
   const { node, isVisibilityPending, toggleVisibility, requestTeacherBlock } =
     useNodeEditorContext();
@@ -198,6 +281,12 @@ function NodeStatus() {
                   Bloquear rama
                 </Button>
               ))}
+            {node.isVisible && node.isTeacherBlocked && (
+              <NodeUnlockSchedule
+                key={`${node.id}:${node.teacherUnlockOn ?? ''}`}
+                scheduledDay={node.teacherUnlockOn ?? null}
+              />
+            )}
           </div>
         </FieldGroup>
       </div>
@@ -232,9 +321,9 @@ export function NodeDetailsEditor() {
       <NodeHeader />
       <div className="px-6">
         <NodeForm />
+        <NodeResources />
         <NodeStatus />
         <NodeDangerZone />
-        <NodeResources />
       </div>
     </div>
   );

@@ -80,6 +80,7 @@ model RoadmapNode {
   positionY            Float
   isVisible            Boolean      @default(true)
   isTeacherBlocked     Boolean      @default(false)
+  teacherUnlockOn      DateTime?    @db.Date
   roadmap              Roadmap      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   nodeType             NodeType     @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
   outgoingDependencies Dependency[] @relation("OutgoingDependencies")
@@ -90,6 +91,7 @@ model RoadmapNode {
 
   @@index([roadmapId])
   @@index([nodeTypeId])
+  @@index([teacherUnlockOn])
   @@unique([id, roadmapId])
 }
 

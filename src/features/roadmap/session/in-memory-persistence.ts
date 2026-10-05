@@ -321,11 +321,28 @@ export function createInMemoryRoadmapSessionPersistence(
             ? ({
                 ...node,
                 isTeacherBlocked: operation === 'BLOCK',
+                ...(operation === 'BLOCK' ? {} : { teacherUnlockOn: undefined }),
               } as AnyRoadmapDto['nodes'][number])
             : node,
         ),
       } as AnyRoadmapDto;
       simulation = null;
+    },
+
+    async scheduleTeacherUnlock(
+      _input: RoadmapCanvasSessionInput,
+      nodeId: string,
+      unlockOn: string | null,
+    ) {
+      mutateNode(nodeId, (node) => {
+        if (!('isTeacherBlocked' in node)) return node;
+        if (unlockOn && !node.isTeacherBlocked)
+          throw new Error('Solo se puede programar el desbloqueo de un nodo con bloqueo docente.');
+        return {
+          ...node,
+          teacherUnlockOn: unlockOn ?? undefined,
+        } as AnyRoadmapDto['nodes'][number];
+      });
     },
 
     async deleteDependency(_input: RoadmapCanvasSessionInput, dependencyIdToDelete: string) {
