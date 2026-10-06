@@ -461,10 +461,10 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
       (await request.patch(roadmapPath(`/nodes/${nodeId}`), { headers: author, data })).status(),
     ).toBe(200);
   }
-  // Titles are visible even when prerequisites block the Node. Description
-  // and type notices still follow their existing accessible-content audience.
-  await expect.poll(() => count(without, nodeId)).toBe(beforeContent.get(without)! + 1);
-  await expect.poll(() => count(observer, nodeId)).toBe(beforeContent.get(observer)! + 1);
+  // Title and type are visible even when prerequisites block the Node;
+  // description follows the accessible-content audience.
+  await expect.poll(() => count(without, nodeId)).toBe(beforeContent.get(without)! + 2);
+  await expect.poll(() => count(observer, nodeId)).toBe(beforeContent.get(observer)! + 2);
   await expect
     .poll(() => count(withProgress, nodeId))
     .toBeGreaterThan(beforeContent.get(withProgress)!);

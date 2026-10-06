@@ -1,4 +1,5 @@
 import 'server-only';
+import { recognitionSnapshot, acknowledgeCapturedNotice } from './recognition-snapshot';
 import { Prisma } from '@/shared/server/db';
 import { storedTitlePayload, type TitleNoticeEffect } from '../application/title-effect';
 import { reconcileTitleNotice } from '../application/reconcile-title';
@@ -113,24 +114,18 @@ export async function recognizeTitleSnapshots(
   if (!Array.isArray(snapshots)) throw new Error('Invalid title opening snapshots.');
   let acknowledged = 0;
   for (const value of snapshots) {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.id !== 'string')
-      throw new Error('Invalid title opening snapshot.');
-    const payload = storedTitlePayload(value.payload);
+    const snapshot = recognitionSnapshot(value);
+    const payload = storedTitlePayload(snapshot.payload);
     const known = await transaction.nodeTitleKnowledge.updateMany({
       where: { recipientId, nodeId: payload.nodeId },
       data: { knownTitle: payload.currentTitle },
     });
     if (!known.count) continue; // The Node may have been deleted since opening.
-    const captured = await transaction.roadmapNotice.findFirst({
-      where: { id: value.id, recipientId, roadmapId, acknowledgedAt: null },
-    });
-    if (captured && storedTitlePayload(captured.data).currentTitle === payload.currentTitle) {
-      await transaction.roadmapNotice.update({
-        where: { id: captured.id },
-        data: { acknowledgedAt: new Date() },
-      });
-      acknowledged += 1;
-    }
+    acknowledged += await acknowledgeCapturedNotice(
+      transaction,
+      { id: snapshot.id, recipientId, roadmapId },
+      (data) => storedTitlePayload(data).currentTitle === payload.currentTitle,
+    );
     if (typeof payload.courseOfferingId !== 'string')
       throw new Error('Invalid title Course offering.');
     await reconcileStoredTitle(transaction, {

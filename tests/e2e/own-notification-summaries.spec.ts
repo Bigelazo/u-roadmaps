@@ -45,15 +45,20 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
           })
         ).status(),
       ).toBe(200);
-    await expect.poll(notices).toHaveLength(3);
+    await expect.poll(notices).toHaveLength(2);
     const repeated = await notices();
-    expect(repeated).toHaveLength(3);
-    expect(repeated[2]).toEqual(first);
-    expect(repeated.slice(0, 2)).toEqual(
+    expect(repeated).toHaveLength(2);
+    expect(repeated[1]).toEqual(first);
+    expect(repeated.slice(0, 1)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           read: false,
-          data: expect.objectContaining({ eventCount: 1, changedFields: ['description'] }),
+          data: expect.objectContaining({
+            eventCount: 1,
+            changedFields: ['description'],
+            noticeTarget: 'node-description',
+            currentValue: '"Último detalle"',
+          }),
         }),
       ]),
     );

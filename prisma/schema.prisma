@@ -72,21 +72,22 @@ model NodeType {
 }
 
 model RoadmapNode {
-  id                   String                @id @default(uuid()) @db.Uuid
-  roadmapId            String                @db.Uuid
-  nodeTypeId           String                @db.Uuid
-  title                String                @db.VarChar(240)
+  id                   String                 @id @default(uuid()) @db.Uuid
+  roadmapId            String                 @db.Uuid
+  nodeTypeId           String                 @db.Uuid
+  title                String                 @db.VarChar(240)
   description          String?
   positionX            Float
   positionY            Float
-  isVisible            Boolean               @default(true)
-  isTeacherBlocked     Boolean               @default(false)
-  teacherUnlockOn      DateTime?             @db.Date
-  roadmap              Roadmap               @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  nodeType             NodeType              @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
-  outgoingDependencies Dependency[]          @relation("OutgoingDependencies")
-  incomingDependencies Dependency[]          @relation("IncomingDependencies")
+  isVisible            Boolean                @default(true)
+  isTeacherBlocked     Boolean                @default(false)
+  teacherUnlockOn      DateTime?              @db.Date
+  roadmap              Roadmap                @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  nodeType             NodeType               @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
+  outgoingDependencies Dependency[]           @relation("OutgoingDependencies")
+  incomingDependencies Dependency[]           @relation("IncomingDependencies")
   resources            Resource[]
+  contentKnowledge     NodeContentKnowledge[]
   titleKnowledge       NodeTitleKnowledge[]
   completions          Completion[]
   simulatedCompletions SimulatedCompletion[]
@@ -133,6 +134,7 @@ model User {
   notices            RoadmapNotice[]
   noticeEffects      NoticeDeliveryEffect[]
   roadmapVisits      RoadmapVisit[]
+  contentKnowledge   NodeContentKnowledge[]
   titleKnowledge     NodeTitleKnowledge[]
   participations     Participation[]
   completions        Completion[]
@@ -230,14 +232,15 @@ model RoadmapVisit {
 }
 
 model NoticeAcknowledgement {
-  recipientId    String    @db.Uuid
-  operationId    String    @db.Uuid
-  roadmapId      String    @db.Uuid
-  openedAt       DateTime  @db.Timestamptz(3)
-  noticeIds      String[]  @default([]) @db.Uuid
-  titleSnapshots Json      @default("[]")
-  summary        Json      @default("null")
-  recognizedAt   DateTime? @db.Timestamptz(3)
+  recipientId      String    @db.Uuid
+  operationId      String    @db.Uuid
+  roadmapId        String    @db.Uuid
+  openedAt         DateTime  @db.Timestamptz(3)
+  noticeIds        String[]  @default([]) @db.Uuid
+  contentSnapshots Json      @default("[]")
+  titleSnapshots   Json      @default("[]")
+  summary          Json      @default("null")
+  recognizedAt     DateTime? @db.Timestamptz(3)
 
   @@id([recipientId, operationId])
   @@index([recipientId, openedAt])
@@ -262,4 +265,18 @@ model NodeTitleKnowledge {
   node        RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@id([recipientId, nodeId])
+}
+
+// Description text and type identity have independent recipient baselines.
+model NodeContentKnowledge {
+  recipientId     String      @db.Uuid
+  nodeId          String      @db.Uuid
+  target          String
+  knownValue      String
+  knownTypeName   String?
+  currentTypeName String?
+  recipient       User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  node            RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@id([recipientId, nodeId, target])
 }

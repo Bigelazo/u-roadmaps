@@ -83,7 +83,7 @@ test('first entry clears pending notices silently and opening a Node or Inbox re
       mutations.push(request.url());
   });
   await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Nodo actualizado/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Se actualizó la descripción/ })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toBeVisible();
@@ -122,6 +122,11 @@ test('entry from Academic overview groups changes under current Node titles and 
   await page.goto(course.pagePath());
   expect((await entered).status()).toBe(200);
   await page.goto('/academic-overview');
+  const roadmap = await (await author.get(course.apiPath())).json();
+  const originalNode = roadmap.nodes.find((node: { id: string }) => node.id === course.nodes.first);
+  const originalTypeName = roadmap.nodeTypes.find(
+    (type: { id: string }) => type.id === originalNode.nodeTypeId,
+  ).name;
   const type = await author.post(course.apiPath('/node-types'), {
     data: { name: 'Lectura inicial', icon: 'BookOpen', color: '#024AD8' },
   });
@@ -176,7 +181,9 @@ test('entry from Academic overview groups changes under current Node titles and 
     dialog
       .locator('section')
       .last()
-      .getByText('Se actualizó el tipo del Nodo «Título vigente».', { exact: true }),
+      .getByText(`«Título vigente» pasó de tipo «${originalTypeName}» a tipo «Lectura inicial».`, {
+        exact: true,
+      }),
   ).toBeVisible();
   await expect(
     dialog

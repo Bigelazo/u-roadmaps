@@ -1,21 +1,23 @@
+import { reconcileNodeContentNotice } from './reconcile-node-content';
+
 export type TitleReconciliation =
   | { action: 'create' | 'update'; knownTitle: string; currentTitle: string }
   | { action: 'withdraw' }
   | { action: 'no-op' };
 
-/** Compares one title target with the recipient's last recognized value. */
-export function reconcileTitleNotice({
-  knownTitle,
-  pendingTitle,
-  pendingKnownTitle,
-  currentTitle,
-}: {
+export function reconcileTitleNotice(input: {
   knownTitle: string;
   pendingTitle: string | null;
   pendingKnownTitle: string | null;
   currentTitle: string;
 }): TitleReconciliation {
-  if (currentTitle === knownTitle) return { action: pendingTitle === null ? 'no-op' : 'withdraw' };
-  if (currentTitle === pendingTitle && knownTitle === pendingKnownTitle) return { action: 'no-op' };
-  return { action: pendingTitle === null ? 'create' : 'update', knownTitle, currentTitle };
+  const result = reconcileNodeContentNotice({
+    knownValue: input.knownTitle,
+    pendingValue: input.pendingTitle,
+    pendingKnownValue: input.pendingKnownTitle,
+    currentValue: input.currentTitle,
+  });
+  return result.action === 'create' || result.action === 'update'
+    ? { action: result.action, knownTitle: result.knownValue, currentTitle: result.currentValue }
+    : { action: result.action };
 }

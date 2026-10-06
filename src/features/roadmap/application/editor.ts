@@ -6,6 +6,7 @@ import { Prisma, prisma } from '@/shared/server/db';
 import {
   findCycle,
   nodeDto,
+  nodeDescription,
   normalizeName,
   optionalString,
   requireBoolean,
@@ -228,7 +229,7 @@ async function createRoadmapNodeUnsafe({ input, ...editor }: WithInput) {
   return prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const title = requireString(input.title, 'title', 240);
-    const description = optionalString(input.description, 'description');
+    const description = nodeDescription(input.description);
     const nodeTypeId = requireUuid(input.nodeTypeId, 'nodeTypeId');
     const positionX = requireFiniteNumber(input.positionX, 'positionX');
     const positionY = requireFiniteNumber(input.positionY, 'positionY');
@@ -273,8 +274,7 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
         teacherUnlockOn?: null;
       } = {};
       if ('title' in input) data.title = requireString(input.title, 'title', 240);
-      if ('description' in input)
-        data.description = optionalString(input.description, 'description') ?? null;
+      if ('description' in input) data.description = nodeDescription(input.description) ?? null;
       if ('nodeTypeId' in input) {
         data.nodeTypeId = requireUuid(input.nodeTypeId, 'nodeTypeId');
         await requireType(transaction, data.nodeTypeId, roadmap.id);
@@ -309,11 +309,41 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
           },
         });
       }
+      if (
+        node.isVisible &&
+        data.isVisible !== false &&
+        data.description !== undefined &&
+        data.description !== node.description
+      ) {
+        // Capture only descriptions these recipients can see, atomically with
+        // the edit; a blocked recipient has no baseline for this content yet.
+        const access = beforeVisibility ?? (await captureAccessSnapshot(transaction, roadmap.id));
+        const recipients = access.participants.filter(({ userId }) =>
+          access.accessibleByUser.get(userId)?.has(node.id),
+        );
+        if (recipients.length)
+          await transaction.nodeContentKnowledge.createMany({
+            data: recipients.map(({ userId }) => ({
+              recipientId: userId,
+              nodeId: node.id,
+              target: 'description',
+              knownValue: JSON.stringify(node.description),
+            })),
+            skipDuplicates: true,
+          });
+      }
       const updated = await transaction.roadmapNode.update({
         where: { id: node.id },
         data,
         include: { resources: { orderBy: { title: 'asc' } } },
       });
+      const [previousType, currentType] =
+        data.nodeTypeId && data.nodeTypeId !== node.nodeTypeId
+          ? await Promise.all([
+              requireType(transaction, node.nodeTypeId, roadmap.id),
+              requireType(transaction, data.nodeTypeId, roadmap.id),
+            ])
+          : [null, null];
       const changedFields = [
         data.title !== undefined && data.title !== node.title ? 'title' : null,
         data.description !== undefined && data.description !== node.description
@@ -343,6 +373,16 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
                 kind: 'node-updated' as const,
                 changedFields,
                 ...(changedFields.includes('title') ? { previousTitle: node.title } : {}),
+                ...(changedFields.includes('description')
+                  ? { previousDescription: node.description }
+                  : {}),
+                ...(previousType && currentType
+                  ? {
+                      previousTypeId: previousType.id,
+                      previousTypeName: previousType.name,
+                      currentTypeName: currentType.name,
+                    }
+                  : {}),
               },
             }
           : {}),

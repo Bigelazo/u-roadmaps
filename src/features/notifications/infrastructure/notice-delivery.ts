@@ -3,6 +3,8 @@ import { prisma, type Prisma } from '@/shared/server/db';
 import type { NoticeEffect } from '../application/notice-effect';
 import { projectDigestNotification } from '../digest-projection';
 import { reconcileStoredTitle } from './title-notice';
+import { reconcileStoredNodeContent } from './node-content-notice';
+import { nodeContentEffect } from '../application/node-content-effect';
 import { titleEffect } from '../application/title-effect';
 
 function noticeRow(effect: NoticeEffect, projection: ReturnType<typeof projectDigestNotification>) {
@@ -29,6 +31,11 @@ export async function deliverNotice(effect: NoticeEffect) {
       skipDuplicates: true,
     });
     if (!accepted.count) return false;
+    const content = nodeContentEffect(effect);
+    if (content) {
+      await reconcileStoredNodeContent(transaction, content);
+      return true;
+    }
     const title = titleEffect(effect);
     if (title) {
       await reconcileStoredTitle(transaction, title);

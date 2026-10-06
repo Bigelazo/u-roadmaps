@@ -179,7 +179,13 @@ test('reassigning a Node to another type stays a Node update', async () => {
     (error) => Promise.reject(error),
   );
 
-  expect(result.notification).toEqual({ kind: 'node-updated', changedFields: ['nodeType'] });
+  expect(result.notification).toEqual({
+    kind: 'node-updated',
+    changedFields: ['nodeType'],
+    previousTypeId: typeId,
+    previousTypeName: 'Lectura',
+    currentTypeName: 'Lectura',
+  });
   expect(result).not.toHaveProperty('notifications');
   expect(transaction.roadmapNode.count).not.toHaveBeenCalled();
 });

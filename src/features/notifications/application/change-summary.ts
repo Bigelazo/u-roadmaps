@@ -39,7 +39,11 @@ export function changeSummary(
         if (fields.includes('description') && nodeId && accessible.has(nodeId))
           items.push('Se actualizó la descripción.');
         if (fields.includes('nodeType'))
-          general.push(`Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`);
+          general.push(
+            data.noticeTarget === 'node-type'
+              ? `«${node?.title ?? data.nodeTitle}» pasó de tipo «${data.knownTypeName}» a tipo «${data.currentTypeName}».`
+              : `Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`,
+          );
         break;
       case 'node-available':
         items.push('Nodo disponible.');

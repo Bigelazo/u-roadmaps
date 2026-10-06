@@ -83,6 +83,10 @@ export async function PATCH(
         changeKind: result.notification.kind,
         changedFields: result.notification.changedFields,
         previousTitle: result.notification.previousTitle,
+        previousDescription: result.notification.previousDescription,
+        previousTypeId: result.notification.previousTypeId,
+        previousTypeName: result.notification.previousTypeName,
+        currentTypeName: result.notification.currentTypeName,
         nodeTitle: result.node.title,
       }).catch(() => undefined);
     }

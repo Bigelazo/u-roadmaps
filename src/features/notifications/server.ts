@@ -135,6 +135,10 @@ export async function deliverNodeChange(
     changedFields: NodeChangeNotice['changedFields'];
     nodeTitle?: string;
     previousTitle?: string;
+    previousDescription?: string | null;
+    previousTypeId?: string;
+    previousTypeName?: string;
+    currentTypeName?: string;
     nodeTypeName?: string;
     roadmapId?: string;
     recipientIds?: readonly string[];
@@ -197,8 +201,10 @@ export async function deliverNodeChange(
           actorId: input.userId,
         })
       : [];
-  const titleRecipients =
-    node?.isVisible && input.changedFields.includes('title') && input.previousTitle !== undefined
+  const visibleRecipients =
+    node?.isVisible &&
+    ((input.changedFields.includes('title') && input.previousTitle !== undefined) ||
+      (input.changedFields.includes('nodeType') && input.previousTypeId !== undefined))
       ? await prisma.participation
           .findMany({
             where: {
@@ -210,7 +216,7 @@ export async function deliverNodeChange(
           })
           .then((rows) => rows.map(({ user }) => ({ userId: user.id, name: user.name })))
       : [];
-  if (!recipients.length && !titleRecipients.length) return;
+  if (!recipients.length && !visibleRecipients.length) return;
 
   const notice: NodeChangeNotice = {
     eventId: input.eventId ?? randomUUID(),
@@ -234,23 +240,46 @@ export async function deliverNodeChange(
     recipients,
   };
 
-  if (titleRecipients.length) {
+  const handledFields = new Set<string>();
+  for (const field of notice.changedFields) {
+    if (notice.changeKind !== 'node-updated') break;
+    const audience = field === 'description' ? recipients : visibleRecipients;
+    const previousValue =
+      field === 'description'
+        ? input.previousDescription === undefined
+          ? undefined
+          : JSON.stringify(input.previousDescription)
+        : field === 'nodeType'
+          ? input.previousTypeId
+          : input.previousTitle;
+    if (previousValue === undefined) continue;
+    handledFields.add(field);
+    if (!audience.length) continue;
     await storeNodeChange(
       {
         ...notice,
-        eventId: `${notice.eventId}:title`,
-        changedFields: ['title'],
-        previousTitle: input.previousTitle,
-        recipients: titleRecipients,
+        eventId: `${notice.eventId}:${field}`,
+        changedFields: [field],
+        ...(field === 'title'
+          ? { previousTitle: previousValue }
+          : {
+              contentTarget: field,
+              previousValue,
+              ...(field === 'nodeType'
+                ? {
+                    previousTypeName: input.previousTypeName,
+                    currentTypeName: input.currentTypeName,
+                  }
+                : {}),
+            }),
+        recipients: audience,
       },
       scheduleDelivery,
     ).catch(() => {
-      console.warn('Node title notice delivery failed', { eventId: notice.eventId });
+      console.warn('Node content notice delivery failed', { eventId: notice.eventId });
     });
   }
-  const changedFields = titleRecipients.length
-    ? notice.changedFields.filter((field) => field !== 'title')
-    : notice.changedFields;
+  const changedFields = notice.changedFields.filter((field) => !handledFields.has(field));
   if (recipients.length && (notice.changeKind !== 'node-updated' || changedFields.length)) {
     await storeNodeChange({ ...notice, changedFields }, scheduleDelivery).catch(() => {
       console.warn('Node notice delivery failed', { eventId: notice.eventId });
