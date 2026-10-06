@@ -1,3 +1,4 @@
+import { enterRoadmap } from './enter-roadmap';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
@@ -8,9 +9,7 @@ test('entry recognizes Node notices and shows changes once without targeting a N
 }) => {
   const author = await apiAs(course.users.teacher);
   const recipient = await apiAs(course.users.studentWithoutProgress);
-  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-  await page.goto(course.pagePath());
-  await expect(page.locator('.react-flow')).toBeVisible();
+  await enterRoadmap(page, course.pagePath(), course.users.studentWithoutProgress.id);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.goto('/academic-overview');
   expect(
@@ -174,9 +173,110 @@ test('entry from Academic overview groups changes under current Node titles and 
   ]);
   await expect(dialog.getByText('Se actualizó la descripción.', { exact: true })).toBeVisible();
   await expect(
+    dialog
+      .locator('section')
+      .last()
+      .getByText('Se actualizó el tipo del Nodo «Título vigente».', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog
+      .locator('section')
+      .first()
+      .getByText(/Se actualizó el tipo/),
+  ).toHaveCount(0);
+  await expect(
     dialog.getByText('El tipo «Lectura inicial» ahora se llama «Lectura final».', { exact: true }),
   ).toBeVisible();
   await expect(dialog.locator('time, a')).toHaveCount(0);
   await expect(dialog.getByText(course.users.teacher.name)).toHaveCount(0);
   await expect.poll(pending).toHaveLength(0);
+  // Refreshing with the summary still open creates an entry with no pending changes.
+  const refreshed = page.waitForResponse((response) =>
+    response.url().endsWith('/api/notifications/acknowledge'),
+  );
+  await page.reload();
+  expect((await refreshed).status()).toBe(200);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('retry recovers an entry whose initial preparation failed without creating a different operation', async ({
+  page,
+  course,
+  apiAs,
+}) => {
+  await enterRoadmap(page, course.pagePath(), course.users.studentWithoutProgress.id);
+  const author = await apiAs(course.users.teacher);
+  const recipient = await apiAs(course.users.studentWithoutProgress);
+  await page.goto('/academic-overview');
+  expect(
+    (
+      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+        data: { description: 'Cambio que requiere reintento' },
+      })
+    ).status(),
+  ).toBe(200);
+  const pending = async () =>
+    (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
+      .notifications;
+  await expect.poll(pending).toHaveLength(1);
+  const operations: string[] = [];
+  await page.route('**/api/notifications/openings', async (route) => {
+    operations.push(route.request().postDataJSON().operationId);
+    if (operations.length === 1) await route.abort();
+    else await route.continue();
+  });
+  await page.goto(course.pagePath());
+  await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toBeVisible();
+  expect(await pending()).toHaveLength(1);
+  await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
+  await expect(
+    page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
+  ).toBeVisible();
+  await expect.poll(pending).toHaveLength(0);
+  expect(new Set(operations).size).toBe(1);
+  expect(operations).toHaveLength(2);
+});
+
+test('a delayed acknowledgement from a previous entry never shows its summary on Academic overview', async ({
+  page,
+  course,
+  apiAs,
+}) => {
+  await enterRoadmap(page, course.pagePath(), course.users.studentWithoutProgress.id);
+  const author = await apiAs(course.users.teacher);
+  const recipient = await apiAs(course.users.studentWithoutProgress);
+  await page.goto('/academic-overview');
+  expect(
+    (
+      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+        data: { description: 'Cambio de la entrada anterior' },
+      })
+    ).status(),
+  ).toBe(200);
+  const pending = async () =>
+    (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
+      .notifications;
+  await expect.poll(pending).toHaveLength(1);
+  let release: () => void = () => undefined;
+  const delayed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let responded = false;
+  await page.route('**/api/notifications/acknowledge', async (route) => {
+    const response = await route.fetch();
+    await delayed;
+    await route.fulfill({ response });
+    responded = true;
+  });
+  await page.getByRole('link', { name: `Abrir roadmap de ${course.courseName}` }).click();
+  await expect.poll(pending).toHaveLength(0);
+  await page.getByRole('link', { name: 'U-Roadmaps', exact: true }).click();
+  await expect(page).toHaveURL(/academic-overview/);
+  release();
+  await expect.poll(() => responded).toBe(true);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.unroute('**/api/notifications/acknowledge');
+  await page.getByRole('link', { name: `Abrir roadmap de ${course.courseName}` }).click();
+  await expect(page.locator('.react-flow')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });

@@ -290,7 +290,20 @@ test('student roadmap shows effective block reasons and restores a completed nod
   );
   expect(unblock.status()).toBe(200);
 
+  await expect
+    .poll(async () => {
+      const response = await student.get(`/api/notifications?nodeId=${completedTarget.id}`);
+      return (await response.json()).notifications.some(
+        (notice: { data: { changeKind: string } }) => notice.data.changeKind === 'node-available',
+      );
+    })
+    .toBe(true);
   await page.reload();
+  const summary = page.getByRole('dialog', {
+    name: `Cambios en el Roadmap de ${course.courseCode}`,
+  });
+  await expect(summary).toBeVisible();
+  await summary.getByRole('button', { name: 'Entendido' }).click();
   await expect(teacherBlockedCard).toBeVisible();
   await expect(teacherBlockedCard.getByRole('img', { name: 'Completado' })).toBeVisible();
   await teacherBlockedCard.click();

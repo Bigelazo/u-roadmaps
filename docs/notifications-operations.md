@@ -71,21 +71,27 @@ valor posterior como pendiente; `recognizedAt` impide repetir ese avance en un
 reintento. Nunca se reconoce por accidente una actualización posterior del mismo
 Aviso.
 
-
 Entrar al Roadmap reconoce todos sus avisos pendientes, incluidos los de Nodos,
 y los retira del Inbox y de los contadores. El servidor captura el conjunto y
 el contenido del Resumen de cambios cuando el canvas prepara la entrada por
-HTTP al montarse; luego confirma el reconocimiento con la misma operación. Prefetch y render sin montar no reconocen ni crean una visita.
+HTTP al montarse; luego confirma el reconocimiento con la misma operación.
+Prefetch y render sin montar no reconocen ni crean una visita.
 `RoadmapVisit` conserva la primera entrada por Usuario y Roadmap independientemente
 de la poda de aperturas: esa primera entrada nunca muestra un dialog.
 En las posteriores, el resumen agrupa por título actual del Nodo y deja Ruta y
-clasificación al final, sin autores, fechas ni navegación. Cerrar con Entendido
+clasificación al final (incluidas las reasignaciones de Tipo de nodo), sin
+autores, fechas ni navegación. Cerrar con Entendido
 no hace consultas ni modifica el reconocimiento. Los avisos sobre contenido
 no accesible se reconocen sin exponerlo en el resumen.
 
 Abrir la campana o un Nodo no cambia estado. Se retiraron `seenAt`, la acción
 `seen`, el marcado por fila visible y el PATCH de avisos individuales. El clic
 solo navega al Roadmap; el antiguo dialog por `?notice=` ya no existe.
+
+El resumen pertenece a la entrada activa: salir del Roadmap o refrescar descarta
+su estado visible y cualquier respuesta tardía. Si falla la preparación inicial,
+el reintento conserva el mismo ID de operación y puede preparar el conjunto;
+si ya se confirmó su preparación, conserva el conjunto sin reemplazarlo.
 
 El reset de datos de desarrollo y el de E2E son
 herramientas de pruebas, nunca pasos de operación en producción.

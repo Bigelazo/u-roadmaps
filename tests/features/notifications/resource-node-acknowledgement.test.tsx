@@ -2,11 +2,16 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import {
   NotificationsProvider,
+  RoadmapEntryNotifications,
   useNotificationAcknowledgement,
 } from '@/features/notifications/components/NotificationsInbox';
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <NotificationsProvider identity={{ userId: 'user-id' }}>{children}</NotificationsProvider>;
+  return (
+    <NotificationsProvider identity={{ userId: 'user-id' }}>
+      <RoadmapEntryNotifications>{children}</RoadmapEntryNotifications>
+    </NotificationsProvider>
+  );
 }
 afterEach(() => vi.unstubAllGlobals());
 
@@ -25,7 +30,7 @@ test('a failed Roadmap recognition retries the same opening operation without ab
     }),
   );
   const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-  const input = { roadmapId: 'roadmap-id', openingId: 'opening-id' };
+  const input = { roadmapId: 'roadmap-id', entryKey: 'opening-id' };
   await act(async () => expect(await result.current.acknowledge(input)).toBe(false));
   await act(async () => expect(await result.current.retry(input)).toBe(true));
   expect(operations.map(({ path }) => path)).toEqual([
@@ -55,7 +60,7 @@ test('a pruned Roadmap opening keeps retries failed and never recognizes a repla
     }),
   );
   const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-  const input = { roadmapId: 'roadmap-id', openingId: 'opening-id' };
+  const input = { roadmapId: 'roadmap-id', entryKey: 'opening-id' };
   await act(async () => expect(await result.current.acknowledge(input)).toBe(false));
   await act(async () => expect(await result.current.retry(input)).toBe(false));
   await act(async () => expect(await result.current.retry(input)).toBe(false));

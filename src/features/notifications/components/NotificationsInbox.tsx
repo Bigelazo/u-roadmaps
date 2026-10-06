@@ -80,7 +80,7 @@ const InboxOpenContext = createContext<{ open: boolean; setOpen: (open: boolean)
 });
 type AcknowledgeInput = {
   roadmapId: string;
-  openingId?: string | null;
+  entryKey?: string | null;
 };
 const NotificationAcknowledgementContext = createContext<{
   acknowledge: (input: AcknowledgeInput) => Promise<boolean>;
@@ -312,9 +312,7 @@ export function NotificationsProvider({
     <div className="contents" key={identity?.userId ?? 'anonymous'}>
       {identity ? (
         <InboxDriverProvider identity={identity}>
-          <NotificationInboxProvider>
-            <NotificationAcknowledgementProvider>{children}</NotificationAcknowledgementProvider>
-          </NotificationInboxProvider>
+          <NotificationInboxProvider>{children}</NotificationInboxProvider>
         </InboxDriverProvider>
       ) : (
         <NotificationInboxProvider>{children}</NotificationInboxProvider>
@@ -323,21 +321,34 @@ export function NotificationsProvider({
   );
 }
 
-function NotificationAcknowledgementProvider({ children }: { children: ReactNode }) {
+export function RoadmapEntryNotifications({ children }: { children: ReactNode }) {
   const [summary, setSummary] = useState<ChangeSummary | null>(null);
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const preparedOperations = useRef(new Set<string>());
   const shownOperations = useRef(new Set<string>());
   const ownOperations = useRef(new Map<string, NoticeAcknowledgementOperation | null>());
   const acknowledgeOwn = useCallback(async (input: AcknowledgeInput, retry: boolean) => {
     const operation = retry
       ? ownOperations.current.get(input.roadmapId)
-      : input.openingId
+      : input.entryKey
         ? { roadmapId: input.roadmapId, operationId: crypto.randomUUID() }
         : null;
     ownOperations.current.set(input.roadmapId, operation ?? null);
     if (!operation) return false;
     try {
-      await prepareOwnInboxOpening({ ...operation, retry });
+      await prepareOwnInboxOpening({
+        ...operation,
+        retry: preparedOperations.current.has(operation.operationId),
+      });
+      preparedOperations.current.add(operation.operationId);
       const result = await acknowledgeOwnInbox(operation);
+      if (!active.current) return true;
       if (result.summary?.groups.length && !shownOperations.current.has(operation.operationId)) {
         shownOperations.current.add(operation.operationId);
         setSummary(result.summary);

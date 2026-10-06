@@ -4,6 +4,7 @@ import { synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
+import { RoadmapEntryNotifications } from '@/features/notifications';
 import { getInboxIdentity } from '@/features/notifications/server';
 
 function redirectUnavailableNotice(
@@ -73,22 +74,24 @@ export default async function CoursePage(
   );
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
-  const notificationOpeningId = courseOffering.roadmap ? randomUUID() : null;
+  const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
 
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
-      <RoadmapCanvasSession
-        notificationsEnabled={Boolean(inboxIdentity)}
-        notificationOpeningId={notificationOpeningId}
-        targetNodeId={
-          noticeId ? undefined : (singleSearchParam(searchParams.targetNode) ?? undefined)
-        }
-        courseOffering={{ identifier, title: courseName }}
-        experience={{
-          kind: isTeaching ? 'teaching' : 'student',
-          term: isHistorical ? 'historical' : 'current',
-        }}
-      />
+      <RoadmapEntryNotifications key={roadmapEntryKey}>
+        <RoadmapCanvasSession
+          notificationsEnabled={Boolean(inboxIdentity)}
+          roadmapEntryKey={roadmapEntryKey}
+          targetNodeId={
+            noticeId ? undefined : (singleSearchParam(searchParams.targetNode) ?? undefined)
+          }
+          courseOffering={{ identifier, title: courseName }}
+          experience={{
+            kind: isTeaching ? 'teaching' : 'student',
+            term: isHistorical ? 'historical' : 'current',
+          }}
+        />
+      </RoadmapEntryNotifications>
     </main>
   );
 }

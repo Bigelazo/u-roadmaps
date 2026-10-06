@@ -501,7 +501,7 @@ describe('RoadmapCanvasSession', () => {
     };
     const view = (opening: string) => (
       <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
-        <RoadmapCanvasSession {...input} notificationOpeningId={opening} />
+        <RoadmapCanvasSession {...input} roadmapEntryKey={opening} />
       </RoadmapCanvasSessionPersistenceProvider>
     );
     const { rerender } = render(view('first-entry'));

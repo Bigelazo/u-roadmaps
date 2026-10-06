@@ -38,7 +38,8 @@ export function changeSummary(
         else if (fields.includes('title')) items.push('Se actualizó el título.');
         if (fields.includes('description') && nodeId && accessible.has(nodeId))
           items.push('Se actualizó la descripción.');
-        if (fields.includes('nodeType')) items.push('Se actualizó el tipo de nodo.');
+        if (fields.includes('nodeType'))
+          general.push(`Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`);
         break;
       case 'node-available':
         items.push('Nodo disponible.');

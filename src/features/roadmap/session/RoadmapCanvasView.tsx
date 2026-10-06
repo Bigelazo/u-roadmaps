@@ -139,7 +139,7 @@ function useRoadmapCanvasController({ input }: Props) {
   const [acknowledgementError, setAcknowledgementError] = useState(false);
   const acknowledgementInputRef = useRef<{
     roadmapId: string;
-    openingId?: string | null;
+    entryKey?: string | null;
   } | null>(null);
   const acknowledgedRoadmapRef = useRef<string | null>(null);
   const { acknowledge, retry } = useNotificationAcknowledgement();
@@ -447,14 +447,14 @@ function useRoadmapCanvasController({ input }: Props) {
     const roadmapId = roadmap.roadmap.id;
     if (acknowledgedRoadmapRef.current === roadmapId) return;
     acknowledgedRoadmapRef.current = roadmapId;
-    const operation = { roadmapId, openingId: input.notificationOpeningId };
+    const operation = { roadmapId, entryKey: input.roadmapEntryKey };
     acknowledgementInputRef.current = operation;
     void acknowledge(operation).then((success) => setAcknowledgementError(!success));
   }, [
     acknowledge,
     accessibleNodeIds,
     input.notificationsEnabled,
-    input.notificationOpeningId,
+    input.roadmapEntryKey,
     isCanvasPreview,
     roadmap,
   ]);

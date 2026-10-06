@@ -3,6 +3,7 @@
 export {
   NotificationsInbox,
   NotificationsProvider,
+  RoadmapEntryNotifications,
   NotificationCountButton,
   useOpenNotificationInbox,
   useNotificationAcknowledgement,
