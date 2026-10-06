@@ -28,12 +28,13 @@ model CourseOffering {
 }
 
 model Roadmap {
-  id                   String                  @id @default(uuid()) @db.Uuid
-  courseOfferingId     String                  @unique @db.Uuid
-  courseOffering       CourseOffering          @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  id                   String                @id @default(uuid()) @db.Uuid
+  courseOfferingId     String                @unique @db.Uuid
+  courseOffering       CourseOffering        @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   nodeTypes            NodeType[]
   roadmapNodes         RoadmapNode[]
   simulatedCompletions SimulatedCompletion[]
+  visits               RoadmapVisit[]
 
   @@unique([id, courseOfferingId])
 }
@@ -71,29 +72,29 @@ model NodeType {
 }
 
 model RoadmapNode {
-  id                   String       @id @default(uuid()) @db.Uuid
-  roadmapId            String       @db.Uuid
-  nodeTypeId           String       @db.Uuid
-  title                String       @db.VarChar(240)
+  id                   String                @id @default(uuid()) @db.Uuid
+  roadmapId            String                @db.Uuid
+  nodeTypeId           String                @db.Uuid
+  title                String                @db.VarChar(240)
   description          String?
   positionX            Float
   positionY            Float
-  isVisible            Boolean      @default(true)
-  isTeacherBlocked     Boolean      @default(false)
-  teacherUnlockOn      DateTime?    @db.Date
-  roadmap              Roadmap      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  nodeType             NodeType     @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
-  outgoingDependencies Dependency[] @relation("OutgoingDependencies")
-  incomingDependencies Dependency[] @relation("IncomingDependencies")
+  isVisible            Boolean               @default(true)
+  isTeacherBlocked     Boolean               @default(false)
+  teacherUnlockOn      DateTime?             @db.Date
+  roadmap              Roadmap               @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  nodeType             NodeType              @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
+  outgoingDependencies Dependency[]          @relation("OutgoingDependencies")
+  incomingDependencies Dependency[]          @relation("IncomingDependencies")
   resources            Resource[]
   titleKnowledge       NodeTitleKnowledge[]
   completions          Completion[]
   simulatedCompletions SimulatedCompletion[]
 
+  @@unique([id, roadmapId])
   @@index([roadmapId])
   @@index([nodeTypeId])
   @@index([teacherUnlockOn])
-  @@unique([id, roadmapId])
 }
 
 model Dependency {
@@ -110,27 +111,28 @@ model Dependency {
 }
 
 model Resource {
-  id              String      @id @default(uuid()) @db.Uuid
-  roadmapNodeId   String      @db.Uuid
-  title           String      @db.VarChar(240)
+  id              String       @id @default(uuid()) @db.Uuid
+  roadmapNodeId   String       @db.Uuid
+  title           String       @db.VarChar(240)
   url             String
   type            ResourceType
-  fileKey         String?     @unique @db.Uuid
-  fileContentType String?     @db.VarChar(255)
-  roadmapNode     RoadmapNode @relation(fields: [roadmapNodeId], references: [id], onDelete: Cascade)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  fileKey         String?      @unique @db.Uuid
+  fileContentType String?      @db.VarChar(255)
+  roadmapNode     RoadmapNode  @relation(fields: [roadmapNodeId], references: [id], onDelete: Cascade)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([roadmapNodeId])
 }
 
 model User {
-  id                 String          @id @default(uuid()) @db.Uuid
-  name               String          @db.VarChar(200)
-  institutionalEmail String          @unique @db.VarChar(320)
-  rut                String?         @unique @db.VarChar(20)
+  id                 String                 @id @default(uuid()) @db.Uuid
+  name               String                 @db.VarChar(200)
+  institutionalEmail String                 @unique @db.VarChar(320)
+  rut                String?                @unique @db.VarChar(20)
   notices            RoadmapNotice[]
   noticeEffects      NoticeDeliveryEffect[]
+  roadmapVisits      RoadmapVisit[]
   titleKnowledge     NodeTitleKnowledge[]
   participations     Participation[]
   completions        Completion[]
@@ -144,18 +146,18 @@ model VtiLoginTransaction {
 }
 
 model Participation {
-  id                   String                  @id @default(uuid()) @db.Uuid
-  userId               String                  @db.Uuid
-  courseOfferingId     String                  @db.Uuid
+  id                   String                @id @default(uuid()) @db.Uuid
+  userId               String                @db.Uuid
+  courseOfferingId     String                @db.Uuid
   role                 ParticipationRole
-  isActive             Boolean                 @default(true)
-  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseOffering       CourseOffering          @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  isActive             Boolean               @default(true)
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseOffering       CourseOffering        @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   simulatedCompletions SimulatedCompletion[]
 
   @@unique([userId, courseOfferingId])
-  @@index([courseOfferingId, role])
   @@unique([id, courseOfferingId])
+  @@index([courseOfferingId, role])
 }
 
 model Completion {
@@ -199,34 +201,43 @@ enum ParticipationRole {
 
 // Notices retain context even if the Roadmap or Participation later disappears.
 model RoadmapNotice {
-  id              String   @id @default(uuid()) @db.Uuid
-  eventId         String
-  targetKey       String?
-  recipientId     String   @db.Uuid
-  recipient       User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  roadmapId       String   @db.Uuid
-  courseOfferingId String  @db.Uuid
-  subject         String
-  body            String
-  data            Json
-  occurredAt      DateTime @db.Timestamptz(3)
-  availableAt     DateTime @default(now()) @db.Timestamptz(3)
-  seenAt          DateTime? @db.Timestamptz(3)
-  acknowledgedAt  DateTime? @db.Timestamptz(3)
+  id               String    @id @default(uuid()) @db.Uuid
+  eventId          String
+  targetKey        String?
+  recipientId      String    @db.Uuid
+  recipient        User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmapId        String    @db.Uuid
+  courseOfferingId String    @db.Uuid
+  subject          String
+  body             String
+  data             Json
+  occurredAt       DateTime  @db.Timestamptz(3)
+  availableAt      DateTime  @default(now()) @db.Timestamptz(3)
+  acknowledgedAt   DateTime? @db.Timestamptz(3)
 
   @@unique([eventId, recipientId])
   @@index([recipientId, availableAt, id])
   @@index([recipientId, roadmapId, acknowledgedAt])
 }
 
+model RoadmapVisit {
+  recipientId String  @db.Uuid
+  roadmapId   String  @db.Uuid
+  recipient   User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmap     Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  @@id([recipientId, roadmapId])
+}
+
 model NoticeAcknowledgement {
-  recipientId String @db.Uuid
-  operationId String @db.Uuid
-  roadmapId String @db.Uuid
-  openedAt DateTime @db.Timestamptz(3)
-  noticeIds String[] @db.Uuid @default([])
-  titleSnapshots Json @default("[]")
-  recognizedAt DateTime? @db.Timestamptz(3)
+  recipientId    String    @db.Uuid
+  operationId    String    @db.Uuid
+  roadmapId      String    @db.Uuid
+  openedAt       DateTime  @db.Timestamptz(3)
+  noticeIds      String[]  @default([]) @db.Uuid
+  titleSnapshots Json      @default("[]")
+  summary        Json      @default("null")
+  recognizedAt   DateTime? @db.Timestamptz(3)
 
   @@id([recipientId, operationId])
   @@index([recipientId, openedAt])
@@ -237,18 +248,18 @@ model NoticeAcknowledgement {
 model NoticeDeliveryEffect {
   eventId     String
   recipientId String @db.Uuid
-  recipient   User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  recipient   User   @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@id([eventId, recipientId])
 }
 
 // One durable last-known title per recipient and Node, independent of Inbox rows.
 model NodeTitleKnowledge {
-  recipientId String @db.Uuid
-  nodeId String @db.Uuid
-  knownTitle String @db.VarChar(240)
-  recipient User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  node RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  recipientId String      @db.Uuid
+  nodeId      String      @db.Uuid
+  knownTitle  String      @db.VarChar(240)
+  recipient   User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  node        RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@id([recipientId, nodeId])
 }

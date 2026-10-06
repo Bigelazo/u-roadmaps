@@ -3,11 +3,12 @@
 import { InboxDriverProvider, useCounts, useNotifications } from './inbox-driver';
 import {
   acknowledgeOwnInbox,
-  prepareOwnInboxNodeOpening,
-  getOwnInboxRecord,
+  prepareOwnInboxOpening,
   type InboxRecord,
   type NoticeAcknowledgementOperation,
 } from './inbox-api';
+import { ChangeSummaryDialog } from './ChangeSummaryDialog';
+import type { ChangeSummary } from '../contracts/change-summary';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Bell, X } from 'lucide-react';
 import {
@@ -64,15 +65,11 @@ function NotificationCount({ filter, label }: { filter: NotificationDataFilter; 
   );
 }
 
-const SelectedNotificationContext = createContext<{
-  notification: NotificationRecord | null;
-  select: (notification: NotificationRecord | null) => void;
+const NotificationInboxContext = createContext<{
   filter: NotificationDataFilter | undefined;
   openInbox: (filter?: NotificationDataFilter) => void;
   resetFilter: () => void;
 }>({
-  notification: null,
-  select: () => undefined,
   filter: undefined,
   openInbox: () => undefined,
   resetFilter: () => undefined,
@@ -84,8 +81,6 @@ const InboxOpenContext = createContext<{ open: boolean; setOpen: (open: boolean)
 type AcknowledgeInput = {
   roadmapId: string;
   openingId?: string | null;
-  nodeId?: string;
-  accessibleNodeIds?: ReadonlySet<string>;
 };
 const NotificationAcknowledgementContext = createContext<{
   acknowledge: (input: AcknowledgeInput) => Promise<boolean>;
@@ -96,12 +91,8 @@ export function useNotificationAcknowledgement() {
   return useContext(NotificationAcknowledgementContext);
 }
 
-export function useSelectedNotification() {
-  return useContext(SelectedNotificationContext);
-}
-
 export function useOpenNotificationInbox() {
-  return useContext(SelectedNotificationContext).openInbox;
+  return useContext(NotificationInboxContext).openInbox;
 }
 
 function stringField(data: Record<string, unknown>, field: string) {
@@ -127,35 +118,8 @@ function NotificationRow({
   notification: NotificationRecord;
   onSelect: (notification: NotificationRecord) => void;
 }) {
-  const [seenError, setSeenError] = useState(false);
-  const rowRef = useRef<HTMLLIElement>(null);
-  // Refreshes recreate records; the row's identity, not the object, decides when it is shown.
-  const latest = useRef(notification);
-  useEffect(() => {
-    latest.current = notification;
-  }, [notification]);
-
-  const markSeen = useCallback(() => {
-    void latest.current.seen().then(
-      ({ error }) => setSeenError(Boolean(error)),
-      () => setSeenError(true),
-    );
-  }, []);
-
-  useEffect(() => {
-    const row = rowRef.current;
-    if (!row) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) return;
-      markSeen();
-      observer.disconnect();
-    });
-    observer.observe(row);
-    return () => observer.disconnect();
-  }, [markSeen, notification.id]);
-
   return (
-    <li ref={rowRef}>
+    <li>
       <div className="border-b">
         <button
           className="flex min-h-16 w-full flex-col items-start gap-1 px-4 py-3 text-left transition-colors outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
@@ -166,21 +130,6 @@ function NotificationRow({
           <span className="text-sm text-muted-foreground">{notification.body}</span>
           <time className="text-xs text-muted-foreground">{notificationDate(notification)}</time>
         </button>
-        {seenError ? (
-          <div
-            className="flex items-center justify-between px-4 pb-2 text-xs text-destructive"
-            role="status"
-          >
-            <span>No se pudo marcar como visto.</span>
-            <button
-              className="min-h-11 px-2 font-semibold underline"
-              onClick={markSeen}
-              type="button"
-            >
-              Reintentar
-            </button>
-          </div>
-        ) : null}
       </div>
     </li>
   );
@@ -250,7 +199,7 @@ function InboxNotificationList({
 function InboxBell() {
   const { open, setOpen } = useContext(InboxOpenContext);
   const router = useRouter();
-  const { select, filter, openInbox, resetFilter } = useSelectedNotification();
+  const { filter, openInbox, resetFilter } = useContext(NotificationInboxContext);
   const {
     counts,
     isLoading: countsLoading,
@@ -275,15 +224,8 @@ function InboxBell() {
     const semester = numberField(data, 'semester');
     if (!courseCode || year === null || semester === null) return;
 
-    const params = new URLSearchParams({
-      notice: notification.id,
-    });
-    const nodeId = stringField(data, 'nodeId');
-    if (data.targetKind === 'node' && nodeId) params.set('targetNode', nodeId);
-    select(notification);
-    router.push(
-      `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}?${params.toString()}`,
-    );
+    router.push(`/courses/${encodeURIComponent(courseCode)}/${year}/${semester}`);
+    router.refresh();
     setOpen(false);
   }
 
@@ -370,36 +312,36 @@ export function NotificationsProvider({
     <div className="contents" key={identity?.userId ?? 'anonymous'}>
       {identity ? (
         <InboxDriverProvider identity={identity}>
-          <SelectedNotificationProvider>
+          <NotificationInboxProvider>
             <NotificationAcknowledgementProvider>{children}</NotificationAcknowledgementProvider>
-          </SelectedNotificationProvider>
+          </NotificationInboxProvider>
         </InboxDriverProvider>
       ) : (
-        <SelectedNotificationProvider>{children}</SelectedNotificationProvider>
+        <NotificationInboxProvider>{children}</NotificationInboxProvider>
       )}
     </div>
   );
 }
 
 function NotificationAcknowledgementProvider({ children }: { children: ReactNode }) {
-  const ownOperations = useRef(
-    new Map<string, (NoticeAcknowledgementOperation & { nodeId?: string }) | null>(),
-  );
+  const [summary, setSummary] = useState<ChangeSummary | null>(null);
+  const shownOperations = useRef(new Set<string>());
+  const ownOperations = useRef(new Map<string, NoticeAcknowledgementOperation | null>());
   const acknowledgeOwn = useCallback(async (input: AcknowledgeInput, retry: boolean) => {
-    const key = `${input.roadmapId}:${input.nodeId ?? 'roadmap'}`;
     const operation = retry
-      ? ownOperations.current.get(key)
-      : input.nodeId
-        ? { roadmapId: input.roadmapId, nodeId: input.nodeId, operationId: crypto.randomUUID() }
-        : input.openingId
-          ? { roadmapId: input.roadmapId, operationId: input.openingId }
-          : null;
-    ownOperations.current.set(key, operation ?? null);
+      ? ownOperations.current.get(input.roadmapId)
+      : input.openingId
+        ? { roadmapId: input.roadmapId, operationId: crypto.randomUUID() }
+        : null;
+    ownOperations.current.set(input.roadmapId, operation ?? null);
     if (!operation) return false;
     try {
-      if (operation.nodeId)
-        await prepareOwnInboxNodeOpening({ ...operation, nodeId: operation.nodeId, retry });
-      await acknowledgeOwnInbox(operation);
+      await prepareOwnInboxOpening({ ...operation, retry });
+      const result = await acknowledgeOwnInbox(operation);
+      if (result.summary?.groups.length && !shownOperations.current.has(operation.operationId)) {
+        shownOperations.current.add(operation.operationId);
+        setSummary(result.summary);
+      }
       return true;
     } catch {
       return false;
@@ -417,26 +359,13 @@ function NotificationAcknowledgementProvider({ children }: { children: ReactNode
   return (
     <NotificationAcknowledgementContext.Provider value={{ acknowledge, retry }}>
       {children}
+      <ChangeSummaryDialog summary={summary} close={() => setSummary(null)} />
     </NotificationAcknowledgementContext.Provider>
   );
 }
 
-function SelectedNotificationProvider({ children }: { children: ReactNode }) {
-  const [notification, select] = useState<NotificationRecord | null>(null);
+function NotificationInboxProvider({ children }: { children: ReactNode }) {
   const [filter, setFilter] = useState<NotificationDataFilter | undefined>();
-  useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('notice');
-    if (!id) return;
-    let active = true;
-    void getOwnInboxRecord(id)
-      .then((record) => {
-        if (active) select(record);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, []);
   const [inboxOpen, setInboxOpen] = useState(false);
   const openInbox = useCallback((nextFilter?: NotificationDataFilter) => {
     setFilter(nextFilter);
@@ -444,13 +373,11 @@ function SelectedNotificationProvider({ children }: { children: ReactNode }) {
   }, []);
   const resetFilter = useCallback(() => setFilter(undefined), []);
   return (
-    <SelectedNotificationContext.Provider
-      value={{ notification, select, filter, openInbox, resetFilter }}
-    >
+    <NotificationInboxContext.Provider value={{ filter, openInbox, resetFilter }}>
       <InboxOpenContext.Provider value={{ open: inboxOpen, setOpen: setInboxOpen }}>
         {children}
       </InboxOpenContext.Provider>
-    </SelectedNotificationContext.Provider>
+    </NotificationInboxContext.Provider>
   );
 }
 

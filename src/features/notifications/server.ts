@@ -21,11 +21,10 @@ import {
   noticeRecord,
   noticeFilter,
   countOwnNoticesByNode,
+  uuid,
   prepareOwnNoticeOpening as prepareNoticeOpening,
-  prepareOwnNodeOpening as prepareNodeOpening,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
-import { lockRecipientRoadmap } from './infrastructure/title-notice';
 export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
 export type { NoticeDeliveryScheduler } from './infrastructure/own-inbox';
 export type InboxIdentity = Readonly<{ userId: string }>;
@@ -36,22 +35,6 @@ export function getInboxIdentity(userId: string): InboxIdentity {
 
 export async function getOwnNotice(userId: string, id: string) {
   return noticeRecord(await findOwnNotice(userId, id));
-}
-
-export async function markOwnNotice(userId: string, id: string, input: Record<string, unknown>) {
-  if (input.action !== 'seen' && input.action !== 'read') {
-    throw new ApplicationError(400, 'INVALID_REQUEST', 'Acción de aviso inválida.');
-  }
-  const notice = await findOwnNotice(userId, id);
-  const field = input.action === 'seen' ? 'seenAt' : 'acknowledgedAt';
-  await prisma.$transaction(async (transaction) => {
-    await lockRecipientRoadmap(transaction, userId, notice.roadmapId);
-    await transaction.roadmapNotice.updateMany({
-      where: { id: notice.id, recipientId: userId, [field]: null },
-      data: { [field]: new Date() },
-    });
-  });
-  return getOwnNotice(userId, id);
 }
 
 export async function countOwnNotices(userId: string, params: URLSearchParams) {
@@ -476,9 +459,24 @@ async function accessibleNodes(
   );
 }
 
-export function prepareOwnNodeOpening(userId: string, input: Record<string, unknown>) {
-  return prepareNodeOpening(userId, input, accessibleNodes);
+export function prepareOwnRoadmapOpening(userId: string, input: Record<string, unknown>) {
+  if (input.nodeId !== undefined)
+    throw new ApplicationError(
+      400,
+      'INVALID_REQUEST',
+      'La apertura de un Nodo no reconoce avisos.',
+    );
+  const roadmapId = uuid(input.roadmapId);
+  const operationId = uuid(input.operationId);
+  return prepareNoticeOpening(
+    userId,
+    roadmapId,
+    accessibleNodes,
+    operationId,
+    input.retry === true,
+  ).then((operationId) => ({ roadmapId, operationId }));
 }
+
 export function prepareOwnNoticeOpening(userId: string, roadmapId: string) {
   return prepareNoticeOpening(userId, roadmapId, accessibleNodes);
 }

@@ -8,7 +8,7 @@ import {
 } from '@/shared/client/roadmap-events';
 
 export const OWN_INBOX_REFRESH_EVENT = 'own-inbox-updated';
-// Showing several rows marks each one seen; one refresh reconciles the whole burst.
+// Coalesce bursts of delivery and recognition signals into one refresh.
 const INBOX_SIGNAL_COALESCE_MS = 100;
 
 /** Mounted once by the application provider, never by Inbox/count consumers. */

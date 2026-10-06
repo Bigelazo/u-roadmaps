@@ -6,19 +6,10 @@ import { insert, literal, literalList, queryJson, sql } from './database';
 const openings = [
   {
     context: 'Roadmap',
-    // Server render creates the snapshot without running client recognition.
-    open: (student: APIRequestContext, course: E2EPrimaryCourseOffering) =>
-      student.get(course.pagePath()),
-  },
-  {
-    context: 'Node',
+    // Preparing a Roadmap entry captures notices without recognizing them.
     open: (student: APIRequestContext, course: E2EPrimaryCourseOffering) =>
       student.post('/api/notifications/openings', {
-        data: {
-          roadmapId: course.roadmapId,
-          nodeId: course.nodes.first,
-          operationId: randomUUID(),
-        },
+        data: { roadmapId: course.roadmapId, operationId: randomUUID() },
       }),
   },
 ];
@@ -96,7 +87,6 @@ for (const { context, open } of openings) {
         await student.post('/api/notifications/openings', {
           data: {
             roadmapId: course.roadmapId,
-            nodeId: course.nodes.first,
             operationId: expired,
             retry: true,
           },

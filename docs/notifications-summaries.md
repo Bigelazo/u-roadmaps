@@ -3,9 +3,9 @@
 El agrupador de ventanas de 60 segundos se retiró en #168. Cada efecto aceptado
 se guarda inmediatamente como un Aviso del roadmap independiente, también si
 repite el mismo Nodo o aspecto. No se publica un aviso de resumen separado.
-La agrupación por Objeto del aviso y el Resumen de cambios acordados en
-[ADR-0014](adr/0014-target-based-notice-grouping.md) siguen pendientes de
-implementación; esta entrega inmediata es el comportamiento transitorio.
+El Resumen de cambios de [ADR-0014](adr/0014-target-based-notice-grouping.md)
+se implementó en #178. #177 agrupa títulos por Objeto del aviso; las otras
+clases conservan la entrega inmediata transitoria.
 
 Las cinco clases del catálogo (disponibilidad, Nodos, Recursos, Dependencias y
 clasificación) usan `deliverNotice`, PostgreSQL y la misma publicación SSE,
@@ -17,12 +17,15 @@ pendientes en memoria; los avisos confirmados sobreviven al reinicio de Node.
 Los errores de entrega no revierten la edición docente. No hay outbox ni
 recuperación durable de efectos que no llegaron a guardarse.
 
-Cada aviso conserva el contexto y el autor de su cambio. La apertura de Nodo
-captura solo los avisos publicados en ese instante: un cambio posterior sigue
-pendiente incluso al reintentar el reconocimiento de aquella apertura. Los
-refrescos SSE del Inbox mantienen las páginas expandidas y todos los avisos
-anteriores. El reconocimiento y el estado visto mantienen sus contratos
-vigentes hasta implementar ADR-0014.
+Cada aviso conserva el contexto de su cambio. Entrar al Roadmap reconoce
+el conjunto capturado y lo retira del Inbox. Las entradas posteriores a la
+primera muestran un único dialog con cambios agrupados por Nodo bajo el título
+actual, ordenados por el cambio más reciente y con Ruta y clasificación al final.
+No hay autores, fechas, enlaces ni más botones que Entendido. Cerrar no reconoce
+nada más. Sin cambios pendientes y en la primera entrada no se muestra dialog.
+El clic en un aviso solo navega al Roadmap; abrir el Inbox o un Nodo no reconoce.
+Los refrescos SSE conservan las páginas expandidas. Un cambio posterior al conjunto
+capturado sigue pendiente incluso tras reintentar esa operación.
 
 El spec `own-notification-summaries.spec.ts` conserva el recorrido sin Inbox
 abierto, la inmutabilidad de los avisos anteriores, la llegada posterior a una

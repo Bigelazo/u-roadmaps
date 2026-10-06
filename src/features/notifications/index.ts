@@ -1,7 +1,2 @@
-export {
-  NotificationsInbox,
-  NotificationsProvider,
-  NotificationCountButton,
-  RoadmapAvailabilityDialog,
-} from './client';
+export { NotificationsInbox, NotificationsProvider, NotificationCountButton } from './client';
 export { UnavailableNoticeFallback } from './components/UnavailableNoticeFallback';

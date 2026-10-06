@@ -11,7 +11,7 @@ import {
 } from 'react';
 import type { InboxIdentity } from '../server';
 import { OwnInboxRealtime, OWN_INBOX_REFRESH_EVENT } from './own-realtime';
-import { request, record, type InboxRecord } from './inbox-api';
+import { request, type InboxRecord } from './inbox-api';
 
 type NoticeCounts = { count: number; byNode?: Record<string, number> };
 type Filter = Record<string, string | number>;
@@ -34,10 +34,10 @@ function query(input: ListInput) {
 const refreshEvent = OWN_INBOX_REFRESH_EVENT;
 async function list(input: ListInput): Promise<Page> {
   const page = await request<{
-    notifications: Omit<InboxRecord, 'seen' | 'read'>[];
+    notifications: InboxRecord[];
     hasMore: boolean;
   }>(`?${query(input)}`);
-  return { ...page, notifications: page.notifications.map(record) };
+  return page;
 }
 
 function useInboxRefresh(refetch: () => Promise<unknown>, generation: { current: number }) {
@@ -81,7 +81,7 @@ export function useNotifications(input: ListInput) {
     setFetching(true);
     try {
       let result = await list(input);
-      // Seen/read signals and summary arrivals must refresh the expanded feed,
+      // Recognition signals and notice arrivals must refresh the expanded feed,
       // including an expansion requested while this refresh was in flight.
       for (let loaded = 1; loaded < pagination.current.pages && result.hasMore; loaded++) {
         if (current !== generation.current) return;

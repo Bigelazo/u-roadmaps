@@ -159,8 +159,8 @@ test('Resource notices stream to two tabs while student content stays stable unt
       other.getByRole('button', { name: 'Avisos, 3 sin leer', exact: true }),
     ).toBeVisible();
     const [latest, , retained] = await notices();
-    // Displaying the Inbox can mark the first notice seen between these reads.
-    expect(retained).toEqual({ ...first, seen: expect.any(Boolean) });
+    // Opening the Inbox leaves pending notices unchanged.
+    expect(retained).toEqual(first);
     expect(latest).toMatchObject({
       read: false,
       data: {
@@ -171,16 +171,15 @@ test('Resource notices stream to two tabs while student content stays stable unt
     });
     // The already-open Node did not recognize these subsequent arrivals.
     await other.getByRole('button', { name: /Cambio de recurso: Última guía/ }).click();
-    await expect(other.getByRole('dialog', { name: latest.subject, exact: true })).toBeVisible();
     await expect(
-      other.getByRole('link', { name: 'Última guía', includeHidden: true }),
+      other.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
     ).toBeVisible();
+    await other.getByRole('button', { name: 'Entendido' }).click();
+    await other.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+    await expect(other.getByRole('link', { name: 'Última guía' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Última guía' })).toBeHidden();
     await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toBeVisible();
-    await expect
-      .poll(async () => (await notices()).every((notice: { read: boolean }) => notice.read))
-      .toBe(true);
-    expect(await notices()).toHaveLength(3);
+    await expect.poll(notices).toHaveLength(0);
   } finally {
     await student.close();
     await teacher.close();

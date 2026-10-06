@@ -1,3 +1,4 @@
+import { enterRoadmap } from './enter-roadmap';
 import { insert, literal, sql } from './database';
 import { expect, test } from './fixtures';
 import { createExistingNode } from './existing-node';
@@ -15,7 +16,7 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-test('Dependency notices preserve route and access changes with separate recognition', async ({
+test('Dependency notices preserve route and access changes with Roadmap entry recognition', async ({
   request,
   course,
   page,
@@ -23,6 +24,8 @@ test('Dependency notices preserve route and access changes with separate recogni
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const studentWithoutPrerequisite = course.users.studentWithoutProgress.id;
+  await enterRoadmap(page, course.pagePath(), studentWithoutPrerequisite);
+  await page.goto('/academic-overview');
   const studentWithPrerequisites = course.users.studentWithProgress.id;
   const inactiveStudent = course.users.withdrawnStudent.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
@@ -163,25 +166,16 @@ test('Dependency notices preserve route and access changes with separate recogni
 
   const addedRouteNotice = (await routeNoticesFor(studentWithoutPrerequisite, dependencyId))[0];
   await selectRouteNotice(studentWithoutPrerequisite, addedRouteNotice);
-  await expect(page).toHaveURL(new RegExp(`${course.pagePath()}\\?notice=`));
+  await expect(page).toHaveURL(course.pagePath());
   await expect(page).not.toHaveURL(/targetNode=/);
-  const addedDialog = page.getByRole('dialog', { name: 'Ruta actualizada' });
+  const addedDialog = page.getByRole('dialog', {
+    name: `Cambios en el Roadmap de ${course.courseCode}`,
+  });
   await expect(addedDialog).toBeVisible();
   await expect(addedDialog).toContainText(
     `«${dependentTitle}» ahora requiere «${prerequisiteTitle}»`,
   );
-  await expect
-    .poll(async () => (await routeNoticesFor(studentWithoutPrerequisite, dependencyId))[0]?.read)
-    .toBe(true);
-  for (const nodeId of [dependentId, transitiveId])
-    await expect
-      .poll(
-        async () =>
-          (await nodeNoticesFor(studentWithoutPrerequisite, nodeId)).find(
-            ({ data }) => data.changeKind === 'node-blocked',
-          )?.read,
-      )
-      .toBe(true);
+  await expect.poll(() => noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
 
   const removal = await request.delete(roadmapPath(`/dependencies/${dependencyId}`), {
@@ -190,7 +184,7 @@ test('Dependency notices preserve route and access changes with separate recogni
   expect(removal.status()).toBe(204);
   await expect
     .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
-    .toHaveLength(2);
+    .toHaveLength(1);
   for (const nodeId of [dependentId, transitiveId])
     await expect
       .poll(async () =>
@@ -210,47 +204,20 @@ test('Dependency notices preserve route and access changes with separate recogni
   // generate seen signals that refresh and disable the pagination button mid-click.
   for (let index = 0; index < 12; index++)
     await sql(
-      `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt", "seenAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${studentWithoutPrerequisite}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"${course.courseCode}","year":2026,"semester":2,"targetKind":"roadmap"}', NOW(), NOW());`,
+      `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${studentWithoutPrerequisite}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"${course.courseCode}","year":2026,"semester":2,"targetKind":"roadmap"}', NOW());`,
     );
   await selectRouteNotice(studentWithoutPrerequisite, removedRouteNotice!);
-  await expect(page).toHaveURL(new RegExp(`${course.pagePath()}\\?notice=`));
+  await expect(page).toHaveURL(course.pagePath());
   await expect(
     // Repeats are now stored immediately (no grouping window, see ADR-0014).
-    page.getByRole('dialog', { name: 'Ruta actualizada' }),
+    page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
   ).toContainText(`«${dependentTitle}» ya no requiere «${prerequisiteTitle}»`);
-  await expect
-    .poll(
-      async () =>
-        (await routeNoticesFor(studentWithoutPrerequisite, dependencyId)).find(
-          ({ data }) => data.changeKind === 'dependency-removed',
-        )?.read,
-    )
-    .toBe(true);
-  for (const nodeId of [dependentId, transitiveId])
-    expect(
-      (await nodeNoticesFor(studentWithoutPrerequisite, nodeId)).find(
-        ({ data }) => data.changeKind === 'node-available',
-      )?.read,
-    ).toBe(false);
-
+  await expect.poll(() => noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
   const dependentNode = page.locator(`.react-flow__node[data-id="${dependentId}"]`);
-  await expect(dependentNode).toBeVisible();
   await dependentNode.click();
   await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toBeVisible();
-  await expect
-    .poll(
-      async () =>
-        (await nodeNoticesFor(studentWithoutPrerequisite, dependentId)).find(
-          ({ data }) => data.changeKind === 'node-available',
-        )?.read,
-    )
-    .toBe(true);
-  expect(
-    (await nodeNoticesFor(studentWithoutPrerequisite, transitiveId)).find(
-      ({ data }) => data.changeKind === 'node-available',
-    )?.read,
-  ).toBe(false);
+  expect(await noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
 });
 
 test('cascade Dependency removals from Node visibility and deletion do not create route notices', async ({

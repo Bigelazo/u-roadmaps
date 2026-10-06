@@ -10,13 +10,14 @@ const { transaction, prisma } = vi.hoisted(() => {
       deleteMany: vi.fn(),
     },
     roadmapNotice: { findMany: vi.fn(), updateMany: vi.fn() },
+    roadmapNode: { findMany: vi.fn() },
+    roadmap: { findUniqueOrThrow: vi.fn() },
   };
   return { transaction, prisma: { ...transaction, $transaction: vi.fn() } };
 });
 vi.mock('@/shared/server/db', () => ({ prisma }));
 import {
   acknowledgeOwnNotices,
-  prepareOwnNodeOpening,
   prepareOwnNoticeOpening,
 } from '@/features/notifications/infrastructure/own-inbox';
 
@@ -34,6 +35,10 @@ beforeEach(() => {
   transaction.noticeAcknowledgement.create.mockImplementation(async ({ data }) => data);
   transaction.noticeAcknowledgement.upsert.mockImplementation(async ({ create }) => create);
   transaction.noticeAcknowledgement.deleteMany.mockResolvedValue({ count: 1 });
+  transaction.roadmapNode.findMany.mockResolvedValue([]);
+  transaction.roadmap.findUniqueOrThrow.mockResolvedValue({
+    courseOffering: { courseCode: 'CC1002' },
+  });
   transaction.roadmapNotice.findMany.mockResolvedValue([{ id: 'notice-before', data: {} }]);
 });
 
@@ -55,55 +60,6 @@ test('creating a Roadmap opening prunes only that recipient before the 24-hour c
     }),
   });
   expect(transaction.roadmapNotice.updateMany).not.toHaveBeenCalled();
-});
-
-test('creating a Node opening prunes only that recipient before the 24-hour cutoff', async () => {
-  await prepareOwnNodeOpening(recipientId, { roadmapId, nodeId, operationId }, accessibleNodes);
-  expect(transaction.noticeAcknowledgement.deleteMany).toHaveBeenCalledWith({
-    where: { recipientId, openedAt: { lt: new Date('2026-10-05T12:00:00.000Z') } },
-  });
-  expect(transaction.noticeAcknowledgement.upsert).toHaveBeenCalledWith(
-    expect.objectContaining({
-      create: expect.objectContaining({
-        openedAt: new Date('2026-10-06T12:00:00.000Z'),
-        noticeIds: ['notice-before'],
-      }),
-    }),
-  );
-  expect(transaction.roadmapNotice.updateMany).not.toHaveBeenCalled();
-});
-
-test('retrying a retained Node opening preserves its captured identities without pruning', async () => {
-  transaction.noticeAcknowledgement.findUnique.mockResolvedValue({
-    roadmapId,
-    operationId,
-    noticeIds: ['notice-before'],
-    openedAt: new Date('2026-10-05T12:00:00.000Z'),
-  });
-  transaction.roadmapNotice.findMany.mockResolvedValue([{ id: 'notice-later', data: {} }]);
-  await expect(
-    prepareOwnNodeOpening(
-      recipientId,
-      { roadmapId, nodeId, operationId, retry: true },
-      accessibleNodes,
-    ),
-  ).resolves.toEqual({ roadmapId, operationId });
-  expect(transaction.noticeAcknowledgement.upsert).not.toHaveBeenCalled();
-  expect(transaction.noticeAcknowledgement.deleteMany).not.toHaveBeenCalled();
-  expect(transaction.roadmapNotice.findMany).not.toHaveBeenCalled();
-});
-
-test('retrying a pruned Node opening cannot create a replacement snapshot', async () => {
-  await expect(
-    prepareOwnNodeOpening(
-      recipientId,
-      { roadmapId, nodeId, operationId, retry: true },
-      accessibleNodes,
-    ),
-  ).rejects.toMatchObject({ status: 404 });
-  expect(transaction.noticeAcknowledgement.upsert).not.toHaveBeenCalled();
-  expect(transaction.noticeAcknowledgement.deleteMany).not.toHaveBeenCalled();
-  expect(transaction.roadmapNotice.findMany).not.toHaveBeenCalled();
 });
 
 test('recognizing a pruned opening fails without recognizing any notices', async () => {

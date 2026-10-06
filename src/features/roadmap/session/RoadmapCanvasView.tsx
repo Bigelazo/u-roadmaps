@@ -140,11 +140,8 @@ function useRoadmapCanvasController({ input }: Props) {
   const acknowledgementInputRef = useRef<{
     roadmapId: string;
     openingId?: string | null;
-    nodeId?: string;
-    accessibleNodeIds?: ReadonlySet<string>;
   } | null>(null);
   const acknowledgedRoadmapRef = useRef<string | null>(null);
-  const openedNodeRef = useRef<string | null>(null);
   const { acknowledge, retry } = useNotificationAcknowledgement();
   const canvasFocusRef = useRef<HTMLDivElement>(null);
   const {
@@ -450,7 +447,7 @@ function useRoadmapCanvasController({ input }: Props) {
     const roadmapId = roadmap.roadmap.id;
     if (acknowledgedRoadmapRef.current === roadmapId) return;
     acknowledgedRoadmapRef.current = roadmapId;
-    const operation = { roadmapId, accessibleNodeIds, openingId: input.notificationOpeningId };
+    const operation = { roadmapId, openingId: input.notificationOpeningId };
     acknowledgementInputRef.current = operation;
     void acknowledge(operation).then((success) => setAcknowledgementError(!success));
   }, [
@@ -473,31 +470,6 @@ function useRoadmapCanvasController({ input }: Props) {
       panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
     });
   }, [accessibleNodeIds, canEditRoadmap, input.targetNodeId, isStudentExperience, roadmap]);
-  useEffect(() => {
-    if (!input.notificationsEnabled || !roadmap || isCanvasPreview) return;
-    const isNodeOpen = isStudentExperience ? isStudentDetailOpen : isEditorOpen;
-    if (!isNodeOpen || !selectedNodeId) {
-      openedNodeRef.current = null;
-      return;
-    }
-    const node = roadmap.nodes.find((candidate) => candidate.id === selectedNodeId);
-    const openKey = `${roadmap.roadmap.id}:${selectedNodeId}`;
-    if (!node || !accessibleNodeIds.has(node.id) || openedNodeRef.current === openKey) return;
-    openedNodeRef.current = openKey;
-    const operation = { roadmapId: roadmap.roadmap.id, nodeId: node.id };
-    acknowledgementInputRef.current = operation;
-    void acknowledge(operation).then((success) => setAcknowledgementError(!success));
-  }, [
-    acknowledge,
-    accessibleNodeIds,
-    input.notificationsEnabled,
-    isCanvasPreview,
-    isEditorOpen,
-    isStudentDetailOpen,
-    isStudentExperience,
-    roadmap,
-    selectedNodeId,
-  ]);
   useEffect(() => {
     if (!selectedNodeId || !displayedRoadmap) return;
     const selected = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);

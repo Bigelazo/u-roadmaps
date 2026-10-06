@@ -315,21 +315,8 @@ test('an SSE refresh preserves expanded Inbox pages and updates their saved noti
   expect(screen.getByText('Notice 20')).toBeTruthy();
 });
 
-test('a burst of Inbox signals refreshes once and a shown row is marked seen only once', async () => {
+test('a burst of Inbox signals refreshes once without marking shown rows', async () => {
   vi.stubGlobal('EventSource', BrowserStream);
-  vi.stubGlobal(
-    'IntersectionObserver',
-    class {
-      constructor(private readonly callback: IntersectionObserverCallback) {}
-      observe() {
-        this.callback(
-          [{ isIntersecting: true } as IntersectionObserverEntry],
-          this as unknown as IntersectionObserver,
-        );
-      }
-      disconnect() {}
-    },
-  );
   const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
     Response.json(
       url.includes('/counts')
@@ -352,9 +339,10 @@ test('a burst of Inbox signals refreshes once and a shown row is marked seen onl
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 1 sin leer' }));
   await screen.findByRole('button', { name: /Saved Node change/ });
-  const seenMarks = () => fetch.mock.calls.filter(([, init]) => init?.method === 'PATCH').length;
+  const mutations = () =>
+    fetch.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET').length;
   const feedRequests = () => fetch.mock.calls.filter(([url]) => url.includes('?limit=')).length;
-  await waitFor(() => expect(seenMarks()).toBe(1));
+  await waitFor(() => expect(mutations()).toBe(0));
   const before = feedRequests();
   act(() => {
     for (let signal = 0; signal < 5; signal++)
@@ -363,5 +351,5 @@ test('a burst of Inbox signals refreshes once and a shown row is marked seen onl
   await waitFor(() => expect(feedRequests()).toBe(before + 1));
   await new Promise((resolve) => setTimeout(resolve, 200));
   expect(feedRequests()).toBe(before + 1);
-  expect(seenMarks()).toBe(1);
+  expect(mutations()).toBe(0);
 });

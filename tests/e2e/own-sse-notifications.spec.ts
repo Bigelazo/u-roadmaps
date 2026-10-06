@@ -45,13 +45,6 @@ test('real SSE keeps student content stable while notices and counters update, i
       .getAttribute('aria-label');
     const title = `Live SSE ${crypto.randomUUID()}`;
     // The edit is stored immediately (no grouping window or summary, see ADR-0014).
-    const seenInOtherTab = page.waitForResponse(async (response) => {
-      if (new URL(response.url()).pathname !== '/api/notifications' || !response.ok()) return false;
-      const feed = await response.json();
-      return feed.notifications.some(
-        (notice: { subject: string; seen: boolean }) => notice.subject === title && notice.seen,
-      );
-    });
     await teacherPage.getByLabel('Título', { exact: true }).fill(title);
     await teacherPage.getByLabel('Descripción').fill('Delivered through real SSE');
     await teacherPage.getByRole('button', { name: 'Guardar cambios' }).click();
@@ -61,12 +54,9 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeHidden();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => count()).toBe(2);
-    // Visibility in the other Inbox tab propagates seen state without recognition.
-    expect((await seenInOtherTab).status()).toBe(200);
     // HTTP recognition in one tab must update the already open Inbox in another.
     const operation = {
       roadmapId: (await (await student.request.get(course.apiPath())).json()).roadmap.id,
-      nodeId,
       operationId: crypto.randomUUID(),
     };
     expect(
@@ -107,8 +97,9 @@ test('real SSE keeps student content stable while notices and counters update, i
       .getByRole('button', { name: new RegExp(title) })
       .first()
       .click();
-    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: 'Entendido' }).click();
+    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await page.goto(`${course.pagePath()}?targetNode=${nodeId}`);
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     expect(
@@ -121,6 +112,7 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect.poll(count).toBe(1);
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await page.reload();
+    await page.getByRole('button', { name: 'Entendido' }).click();
     await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeVisible();
 
     // Revocation still makes an authorized HTTP request and clears protected content.

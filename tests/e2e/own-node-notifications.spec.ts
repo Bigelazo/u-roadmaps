@@ -1,8 +1,9 @@
+import { enterRoadmap } from './enter-roadmap';
 import { expect, test } from './fixtures';
 import { sql } from './database';
 import { authenticateAs, sessionCookie } from './helpers';
 
-test('visible Node changes reach the own Inbox and opening recognizes only its captured notices', async ({
+test('visible Node changes reach the Inbox and Roadmap entry recognizes them', async ({
   request,
   course,
   page,
@@ -11,6 +12,8 @@ test('visible Node changes reach the own Inbox and opening recognizes only its c
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const recipient = { cookie: await sessionCookie(course.users.studentWithoutProgress.id) };
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  await enterRoadmap(page, course.pagePath(), course.users.studentWithoutProgress.id);
+  await page.goto('/academic-overview');
   const nodeTypeId = roadmap.nodeTypes[0].id;
   const title = `Aviso propio ${crypto.randomUUID()}`;
   const created = await request.post(roadmapPath('/nodes'), {
@@ -40,8 +43,10 @@ test('visible Node changes reach the own Inbox and opening recognizes only its c
   await page.goto('/academic-overview');
   await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
   await page.getByRole('button', { name: new RegExp(title) }).click();
-  await expect(page).toHaveURL(new RegExp(`targetNode=${nodeId}`));
-  await expect(page.getByRole('dialog', { name: title, exact: true })).toBeVisible();
+  await expect(page).toHaveURL(course.pagePath());
+  await expect(
+    page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
+  ).toBeVisible();
   await expect
     .poll(
       async () =>
@@ -54,7 +59,7 @@ test('visible Node changes reach the own Inbox and opening recognizes only its c
     .toBe(0);
 });
 
-test('Resource notices persist context and share their Node destination and acknowledgement', async ({
+test('Resource notices persist context and share Roadmap entry recognition', async ({
   request,
   course,
   page,
@@ -66,6 +71,8 @@ test('Resource notices persist context and share their Node destination and ackn
   const teacher = course.users.teachingAssistant.id;
   const inactive = course.users.withdrawnStudent.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  await enterRoadmap(page, course.pagePath(), student);
+  await page.goto('/academic-overview');
   const resourceTitle = `E2E material ${crypto.randomUUID()}.pdf`;
   const updatedTitle = `E2E material revisado ${crypto.randomUUID()}.pdf`;
   const secondResourceTitle = `E2E material de otra Unidad ${crypto.randomUUID()}`;
@@ -233,12 +240,12 @@ test('Resource notices persist context and share their Node destination and ackn
     .getByRole('button', { name: new RegExp(updatedTitle) })
     .first()
     .click();
-  await expect(page).toHaveURL(new RegExp(`targetNode=${nodeId}`));
+  await expect(page).toHaveURL(course.pagePath());
   await expect(
-    page.getByRole('dialog', { name: deletionNotice!.subject, exact: true }),
+    page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
   ).toBeVisible();
   await expect.poll(() => count(nodeId)).toBe(0);
-  await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
+  await expect.poll(() => count(otherNodeId)).toBe(0);
 
   const lateResource = await request.post(resourcePath, {
     headers: author,
@@ -252,7 +259,7 @@ test('Resource notices persist context and share their Node destination and ackn
   await expect.poll(() => count(nodeId)).toBe(1);
 
   const otherNodeResourceNotices = await resourceNotices(student, otherNodeId);
-  expect(otherNodeResourceNotices).toHaveLength(1);
+  expect(otherNodeResourceNotices).toHaveLength(0);
   const cascadeKindsBefore = (await resourceNotices(student, nodeId)).map(
     (notice) => notice.data.changeKind,
   );
@@ -260,18 +267,17 @@ test('Resource notices persist context and share their Node destination and ackn
   expect(cascade.status()).toBe(204);
   const cascadeNotices = await resourceNotices(student, nodeId);
   expect(cascadeNotices.map((notice) => notice.data.changeKind)).toEqual(cascadeKindsBefore);
-  expect(cascadeNotices.some((notice) => notice.data.changeKind === 'resource-removed')).toBe(true);
+  expect(cascadeNotices.some((notice) => notice.data.changeKind === 'resource-added')).toBe(true);
 
   const otherNodeDelete = await request.delete(roadmapPath(`/nodes/${otherNodeId}`), {
     headers: author,
   });
   expect(otherNodeDelete.status()).toBe(204);
   const afterOtherCascade = await resourceNotices(student, otherNodeId);
-  expect(afterOtherCascade).toHaveLength(1);
-  expect(afterOtherCascade[0]?.data.changeKind).toBe('resource-added');
+  expect(afterOtherCascade).toHaveLength(0);
 });
 
-test('Node opening captures every page, preserves later arrivals and other Nodes through retry and refresh', async ({
+test('Roadmap entry captures every page and Node while preserving later arrivals through retry', async ({
   request,
   course,
   page,
@@ -325,24 +331,14 @@ test('Node opening captures every page, preserves later arrivals and other Nodes
     ).count;
   await expect.poll(() => count()).toBe(14);
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-  await page.goto(course.pagePath());
-  await expect.poll(() => count()).toBe(14);
-  const graphNode = page.locator(`.react-flow__node[data-id="${nodeId}"]`);
-  await graphNode.getByRole('button', { name: '14 avisos sin leer para este Nodo' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Cargar más avisos' })).toBeVisible();
-  await expect.poll(() => count()).toBe(14);
-  await expect.poll(() => count(otherId)).toBe(1);
-  await page.keyboard.press('Escape');
   let fail = true;
   const operations: string[] = [];
   await page.route('**/api/notifications/acknowledge', async (route) => {
-    const input = route.request().postDataJSON();
-    operations.push(input.operationId);
+    operations.push(route.request().postDataJSON().operationId);
     if (fail) await route.abort();
     else await route.continue();
   });
-  await graphNode.click({ timeout: 5000 });
+  await page.goto(course.pagePath());
   await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toBeVisible();
   const old = await (
     await request.get(`/api/notifications?${filter}&limit=100`, { headers: recipient })
@@ -361,17 +357,16 @@ test('Node opening captures every page, preserves later arrivals and other Nodes
   await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
   await expect.poll(() => count()).toBe(1);
   expect(new Set(operations).size).toBe(1);
-  await expect.poll(() => count(otherId)).toBe(1);
+  await expect.poll(() => count(otherId)).toBe(0);
   const retained = await (
     await request.get(`/api/notifications?${filter}&limit=100`, { headers: recipient })
   ).json();
-  expect(retained.notifications.filter((notice: { read: boolean }) => notice.read)).toHaveLength(
-    14,
-  );
+  expect(retained.notifications).toHaveLength(1);
   await page.reload();
-  await expect.poll(() => count()).toBe(1);
-  await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
   await expect.poll(() => count()).toBe(0);
+  await page.getByRole('button', { name: 'Entendido' }).click();
+  await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+  expect(await count()).toBe(0);
 });
 
 test('content notices follow individual prerequisites, teacher policy, inactive exclusion and publication', async ({
@@ -491,9 +486,9 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   expect(await latestKind(course.users.teachingAssistant.id)).toBe('node-updated');
   expect(await latestKind(without)).toBe('node-updated');
   expect(await latestKind(observer)).toBe('node-updated');
-  const opening = { roadmapId: roadmap.roadmap.id, nodeId, operationId: crypto.randomUUID() };
+  const opening = { roadmapId: roadmap.roadmap.id, operationId: crypto.randomUUID() };
   expect((await request.post('/api/notifications/openings', { data: opening })).status()).toBe(401);
-  for (const userId of [without, observer, outsider, course.users.withdrawnStudent.id])
+  for (const userId of [outsider, course.users.withdrawnStudent.id])
     expect(
       (
         await request.post('/api/notifications/openings', {
@@ -537,7 +532,7 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   await expect.poll(() => count(withProgress, nodeId)).toBe(studentCountAfterBlock);
 });
 
-test('Canvas preview does not recognize notices and opening the teaching Node does', async ({
+test('Canvas preview and opening the teaching Node leave later notices pending', async ({
   request,
   course,
   page,
@@ -565,6 +560,16 @@ test('Canvas preview does not recognize notices and opening the teaching Node do
     ).count;
   await authenticateAs(page.context(), course.users.teachingAssistant.id);
   await page.goto(course.pagePath());
+  await expect.poll(() => count()).toBe(0);
+  expect(
+    (
+      await request.patch(roadmapPath(`/nodes/${nodeId}`), {
+        headers: author,
+        data: { description: 'Cambio posterior a la entrada' },
+      })
+    ).status(),
+  ).toBe(200);
+  await expect.poll(() => count()).toBe(1);
   await Promise.all([
     page.waitForResponse(
       (response) => response.url().endsWith('/simulation') && response.request().method() === 'GET',
@@ -577,5 +582,5 @@ test('Canvas preview does not recognize notices and opening the teaching Node do
   await expect.poll(() => count()).toBe(1);
   await page.getByRole('button', { name: 'Ir al editor' }).click();
   await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
-  await expect.poll(() => count()).toBe(0);
+  await expect.poll(() => count()).toBe(1);
 });

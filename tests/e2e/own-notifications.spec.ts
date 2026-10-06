@@ -91,7 +91,7 @@ test('Roadmap creation persists one own notice for each eligible Participation a
   const first = (await getJson(request, `/api/notifications?roadmapId=${roadmapId}`, recipient))
     .notifications[0];
   const subject = `Roadmap disponible: ${offering.courseCode}`;
-  expect(first).toMatchObject({ subject, read: false, seen: false });
+  expect(first).toMatchObject({ subject, read: false });
   expect((await request.get(`/api/notifications/${first.id}`, { headers: author })).status()).toBe(
     404,
   );
@@ -102,26 +102,26 @@ test('Roadmap creation persists one own notice for each eligible Participation a
         data: { action: 'read', recipientId: multiCourseStudent.id },
       })
     ).status(),
-  ).toBe(404);
+  ).toBe(405);
   await authenticateAs(page.context(), multiCourseStudent.id);
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
   const row = page.getByRole('button', { name: new RegExp(subject) });
   await expect(row).toBeVisible();
-  await expect
-    .poll(async () => (await getJson(request, `/api/notifications/${first.id}`, recipient)).seen)
-    .toBe(true);
+  expect(await getJson(request, `/api/notifications/${first.id}`, recipient)).not.toHaveProperty(
+    'seen',
+  );
   expect((await getJson(request, `/api/notifications/${first.id}`, recipient)).read).toBe(false);
   await row.click();
-  await expect(page).toHaveURL(new RegExp(`${offering.pagePath()}\\?notice=${first.id}`));
-  await expect(page.getByRole('dialog', { name: subject })).toBeVisible();
+  await expect(page).toHaveURL(offering.pagePath());
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect
     .poll(async () => (await getJson(request, `/api/notifications/${first.id}`, recipient)).read)
     .toBe(true);
   await page.reload();
-  await expect(page.getByRole('dialog', { name: subject })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const persisted = await request.get(`/api/notifications/${first.id}`, { headers: recipient });
-  expect(await persisted.json()).toMatchObject({ id: first.id, read: true, seen: true });
+  expect(await persisted.json()).toMatchObject({ id: first.id, read: true });
 });
 
 test('pagination, visible rows, retry and opening cutoff preserve late arrivals', async ({
@@ -190,7 +190,9 @@ test('pagination, visible rows, retry and opening cutoff preserve late arrivals'
   await page.goto(otherCourse.pagePath());
   await page.getByRole('button', { name: 'Avisos, 12 sin leer', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Cargar más avisos' })).toBeVisible();
-  expect((await getJson(request, `/api/notifications/${ids[11]}`, headers)).seen).toBe(false);
+  expect(await getJson(request, `/api/notifications/${ids[11]}`, headers)).not.toHaveProperty(
+    'seen',
+  );
   let failRecognition = true;
   await page.route('**/api/notifications/acknowledge', async (route) => {
     if (failRecognition) {
@@ -203,8 +205,7 @@ test('pagination, visible rows, retry and opening cutoff preserve late arrivals'
     .getByRole('button', { name: new RegExp(subject) })
     .first()
     .click();
-  await expect(page.getByRole('dialog', { name: subject })).toBeVisible();
-  await page.getByRole('button', { name: 'Entendido' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toBeVisible();
   expect(
     (await getJson(request, `/api/notifications/counts?roadmapId=${roadmapId}`, headers)).count,

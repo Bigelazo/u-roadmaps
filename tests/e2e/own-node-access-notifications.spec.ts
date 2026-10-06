@@ -1,3 +1,4 @@
+import { enterRoadmap } from './enter-roadmap';
 import { expect, test } from './fixtures';
 import { sql } from './database';
 import { createExistingNode } from './existing-node';
@@ -23,6 +24,8 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const student = course.users.studentWithProgress.id;
+  await enterRoadmap(page, course.pagePath(), student);
+  await page.goto('/academic-overview');
   const withoutProgress = course.users.studentWithoutProgress.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   // Existing visible Nodes avoid creation notices during these access changes.
@@ -53,7 +56,9 @@ test('access notices retain context through blocking, unlocking, hiding and dele
       .first()
       .click();
     // Repeats are stored immediately without a summary (no grouping window, see ADR-0014).
-    await expect(page.getByRole('dialog', { name: title, exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
+    ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toHaveCount(0);
     await expect(page).not.toHaveURL(/targetNode=/);
     await expect
@@ -168,8 +173,8 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     .toBe('node-deleted');
   expect(await noticesFor(course.users.withdrawnStudent.id, removedId)).toHaveLength(0);
   expect(await noticesFor(course.users.teacher.id, removedId)).toHaveLength(0);
-  await selectNotice(rootId, rootTitle);
   await selectNotice(removedId, removedTitle);
+  expect(await noticesFor(student, rootId)).toHaveLength(0);
 });
 
 test('a PostgreSQL access-notice failure leaves the Node visibility change committed', async ({
@@ -211,7 +216,7 @@ test('a PostgreSQL access-notice failure leaves the Node visibility change commi
   expect((await notices.json()).notifications).toHaveLength(0);
 });
 
-test('lost Course access retains saved notices and acknowledges only the selected one', async ({
+test('lost Course access prevents recognition of retained notices', async ({
   request,
   course,
   page,
@@ -267,18 +272,7 @@ test('lost Course access retains saved notices and acknowledges only the selecte
   });
 
   await authenticateAs(page.context(), userId);
-  await page.goto('/academic-overview');
-  await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
-  await page
-    .getByRole('list', { name: 'Lista de avisos' })
-    .getByRole('button', { name: new RegExp(escapeRegExp(firstTitle)) })
-    .click();
-  await expect(page).toHaveURL(/\/academic-overview\?.*noticeFallback=course-unavailable/);
-  await expect(
-    page.getByRole('status').filter({ hasText: 'No se puede abrir este Roadmap' }),
-  ).toContainText('Tu Participación ya no tiene acceso a este Curso.');
-  await expect
-    .poll(async () => (await allNotices()).find(({ subject }) => subject === firstTitle)?.read)
-    .toBe(true);
-  expect((await allNotices()).find(({ subject }) => subject === secondTitle)?.read).toBe(false);
+  await page.goto(course.pagePath());
+  await expect(page).toHaveURL(/academic-overview/);
+  expect(await allNotices()).toEqual(retained);
 });

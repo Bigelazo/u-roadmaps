@@ -1,3 +1,4 @@
+import { enterRoadmap } from './enter-roadmap';
 import { expect, test } from './fixtures';
 import { sessionCookie, authenticateAs } from './helpers';
 
@@ -9,7 +10,7 @@ type Notice = {
   data: Record<string, unknown>;
 };
 
-test('used Type renames deliver one general notice across Sections and recognize separately from Nodes', async ({
+test('used Type renames deliver one general notice across Sections and recognize together with Nodes', async ({
   request,
   course,
   createUser,
@@ -18,6 +19,8 @@ test('used Type renames deliver one general notice across Sections and recognize
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const student = course.users.studentWithoutProgress.id;
+  await enterRoadmap(page, course.pagePath(), student);
+  await page.goto('/academic-overview');
   const otherSection = course.users.studentComplete.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
   const suffix = crypto.randomUUID();
@@ -119,22 +122,23 @@ test('used Type renames deliver one general notice across Sections and recognize
     .getByRole('button')
     .filter({ hasText: notice.subject })
     .click();
-  await expect(page).toHaveURL(new RegExp(`${course.pagePath()}\\?notice=`));
+  await expect(page).toHaveURL(course.pagePath());
   await expect(page).not.toHaveURL(/targetNode=/);
-  await expect(page.getByRole('dialog', { name: notice.subject })).toBeVisible();
-  await expect.poll(async () => (await classification())[0].read).toBe(true);
+  await expect(
+    page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
+  ).toBeVisible();
+  await expect.poll(() => classification()).toHaveLength(0);
   const pendingNodes = (await notices()).filter(
     (n) => nodeIds.includes(String(n.data.nodeId)) && n.data.targetKind === 'node',
   );
-  expect(pendingNodes.length).toBeGreaterThan(0);
-  expect(pendingNodes.every((n) => !n.read)).toBe(true);
+  expect(pendingNodes).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
   const reassigned = await request.patch(roadmapPath(`/nodes/${nodeIds[0]}`), {
     headers: author,
     data: { nodeTypeId: roadmap.nodeTypes[0].id },
   });
   expect(reassigned.status()).toBe(200);
-  await expect.poll(() => classification()).toHaveLength(1);
+  await expect.poll(() => classification()).toHaveLength(0);
   // Reassigning the Node type is stored immediately (no grouping window, see ADR-0014).
   await expect
     .poll(async () =>
@@ -147,7 +151,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     (await notices()).some(
       (n) => n.data.nodeId === nodeIds[0] && n.data.changeKind === 'node-available',
     ),
-  ).toBe(true);
+  ).toBe(false);
   for (const id of nodeIds.slice(0, 2)) {
     expect(
       (

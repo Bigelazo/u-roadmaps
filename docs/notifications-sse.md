@@ -1,8 +1,7 @@
 # Own Inbox and role-scoped Roadmap live updates
 
-> Se reemplazará según [ADR-0014](adr/0014-target-based-notice-grouping.md)
-> (aceptado el 2026-10-05). Mientras no se implemente, este documento describe el
-> comportamiento vigente.
+> Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md)
+> (aceptado el 2026-10-05). #178 activa el reconocimiento en la entrada al Roadmap.
 
 `GET /api/notifications/stream` authenticates the current application User and
 streams invalidations through SSE. The application provider opens one EventSource
@@ -10,7 +9,7 @@ per tab, shared by the Inbox, counters and Roadmap canvas session. Switching Use
 or removing the authenticated provider closes it and discards the old state.
 
 The migration `20261003000000_own_notification_sse` installs transactional
-PostgreSQL triggers. Notice insertion and seen/acknowledged changes invalidate
+PostgreSQL triggers. Notice insertion, update, withdrawal and recognition invalidate
 only the recipient's Inbox. Changes to Nodes, Dependencies, Resources, Node types,
 Roadmaps, Participations and Completions invalidate the relevant authorized
 projection. Participation and Completion signals are scoped to their User.
@@ -20,11 +19,11 @@ subsequent authorized HTTP request can remove protected content.
 The payload contains User/Course offering identifiers and an optional access-loss
 flag, never pedagogical content. Every projection/feed/count reload goes through existing authenticated
 HTTP endpoints. A tab coalesces Inbox signals arriving within 100 ms into one
-reload, so marking several shown rows as seen does not reload once per row. Each
+reload, including bursts of delivery and recognition. Each
 stream remembers the Course offerings already confirmed for its User, so Roadmap
 signals only query the Participation once per stream and Course offering.
-Signals and reloads do not recognize notices. Opening an
-accessible Node or entering the Roadmap retains the existing recognition rules;
+Signals and reloads do not recognize notices. Entering the Roadmap recognizes
+all captured pending notices; opening a Node or the Inbox has no state effect.
 Canvas preview retains its independent simulation and never recognizes real
 notices. Only current teaching sessions reload the open Roadmap after content signals.
 Student and observer sessions retain their loaded canvas until they enter the
@@ -32,8 +31,8 @@ Roadmap again, including refresh and clicking a notice for the same Roadmap.
 Inbox and counters remain live for every role; arrivals do not open a dialog
 mid-session. Each server-prepared entry has a fresh opening identifier, which
 starts a new canvas session even when client navigation keeps the same route.
-Dismissing a notice dialog only cleans up the URL through the native History API;
-it retains the current session and its recognition cutoff.
+The Change summary appears once after recognition, except on first entry or
+without pending changes. Dismissing it has no state or navigation effect.
 Teaching canvas reconciliation preserves selection, drafts and version checks
 ([ADR-0015](adr/0015-teacher-edit-concurrency-relies-on-realtime.md)); Canvas
 preview keeps its existing independent simulation behavior.

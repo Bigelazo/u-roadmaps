@@ -57,7 +57,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
         }),
       ]),
     );
-    const opening = { roadmapId: roadmap.roadmap.id, nodeId, operationId: crypto.randomUUID() };
+    const opening = { roadmapId: roadmap.roadmap.id, operationId: crypto.randomUUID() };
     expect(
       (
         await request.post('/api/notifications/openings', { headers: recipient, data: opening })
@@ -80,9 +80,8 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
         })
       ).status(),
     ).toBe(200);
-    await expect.poll(notices).toHaveLength(4);
-    const [latest, ...retained] = await notices();
-    expect(retained).toEqual(repeated.map((notice: object) => ({ ...notice, read: true })));
+    await expect.poll(notices).toHaveLength(1);
+    const [latest] = await notices();
     expect(latest).toMatchObject({
       subject: laterTitle,
       read: false,
@@ -109,11 +108,15 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     await page.goto('/academic-overview');
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     await page.getByRole('button', { name: new RegExp(laterTitle) }).click();
-    await expect(page).toHaveURL(new RegExp(`targetNode=${nodeId}`));
-    await expect(page.getByRole('dialog', { name: latest.subject, exact: true })).toBeVisible();
+    await expect(page).toHaveURL(course.pagePath());
+    await expect(
+      page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Entendido' }).click();
+    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
     await expect(page.getByText('Último detalle', { exact: true })).toBeVisible();
     await expect.poll(count).toBe(0);
-    expect((await notices()).filter((notice: { read: boolean }) => notice.read)).toHaveLength(4);
+    expect(await notices()).toHaveLength(0);
   } finally {
     await request.delete(course.apiPath(`/nodes/${nodeId}`), { headers: author });
   }

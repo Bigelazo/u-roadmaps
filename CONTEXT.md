@@ -5,7 +5,9 @@ This context describes the learning paths of university course offerings and the
 The notice definitions below describe the accepted target in ADR-0014. Its
 implementation is incremental: #177 groups Node title changes durably by Notice
 target and withdraws returns to the known title. Other classes still store each
-accepted change immediately; Node opening recognition and seen state remain. See
+accepted change immediately. #178 recognizes every pending notice on Roadmap
+entry and shows the Change summary after the first visit; Node opening has no
+recognition effect and notices have no seen state. See
 [notification operations](docs/notifications-operations.md) for current behavior.
 
 ## Language (Lenguaje)

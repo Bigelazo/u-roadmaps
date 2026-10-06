@@ -1,7 +1,7 @@
 # Operación de avisos propios
 
 > Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md):
-> #177 activa los Objetos de título de Nodo. Este documento describe el estado
+> #177 activa los Objetos de título de Nodo y #178 el reconocimiento al entrar. Este documento describe el estado
 > vigente; las otras clases conservan la transición inmediata.
 
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
@@ -49,12 +49,12 @@ persisten tras actualizar o retirar un Aviso, por lo que un reintento no lo recr
 
 Los títulos llegan también a quienes ven el Nodo bloqueado. Una edición de título
 y descripción produce un Aviso de título y otro inmediato de contenido. Las demás
-clases mantienen su entrega inmediata y reconocimiento vigente; los siguientes
+clases mantienen su entrega inmediata; todas se reconocen al entrar al Roadmap. Los siguientes
 tickets implementarán las restantes reglas de ADR-0014.
 
 Las aperturas de reconocimiento (`NoticeAcknowledgement`) conservan su conjunto
 fijo de `noticeIds` para reintentos durante al menos 24 horas desde `openedAt`.
-Al crear una apertura de Roadmap o de Nodo, la misma transacción elimina solo
+Al crear una apertura de Roadmap, la misma transacción elimina solo
 las aperturas del mismo destinatario anteriores a 24 horas; conserva las del
 límite exacto, las recientes y las de otros Usuarios. El índice
 `(recipientId, openedAt)` acota esta limpieza por Usuario. No hay proceso
@@ -70,6 +70,22 @@ en el intervalo, el reconocimiento avanza al título capturado y reconcilia el
 valor posterior como pendiente; `recognizedAt` impide repetir ese avance en un
 reintento. Nunca se reconoce por accidente una actualización posterior del mismo
 Aviso.
+
+
+Entrar al Roadmap reconoce todos sus avisos pendientes, incluidos los de Nodos,
+y los retira del Inbox y de los contadores. El servidor captura el conjunto y
+el contenido del Resumen de cambios cuando el canvas prepara la entrada por
+HTTP al montarse; luego confirma el reconocimiento con la misma operación. Prefetch y render sin montar no reconocen ni crean una visita.
+`RoadmapVisit` conserva la primera entrada por Usuario y Roadmap independientemente
+de la poda de aperturas: esa primera entrada nunca muestra un dialog.
+En las posteriores, el resumen agrupa por título actual del Nodo y deja Ruta y
+clasificación al final, sin autores, fechas ni navegación. Cerrar con Entendido
+no hace consultas ni modifica el reconocimiento. Los avisos sobre contenido
+no accesible se reconocen sin exponerlo en el resumen.
+
+Abrir la campana o un Nodo no cambia estado. Se retiraron `seenAt`, la acción
+`seen`, el marcado por fila visible y el PATCH de avisos individuales. El clic
+solo navega al Roadmap; el antiguo dialog por `?notice=` ya no existe.
 
 El reset de datos de desarrollo y el de E2E son
 herramientas de pruebas, nunca pasos de operación en producción.

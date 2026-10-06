@@ -10,7 +10,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 afterEach(() => vi.unstubAllGlobals());
 
-test('a failed Node recognition retries the same opening operation without absorbing later arrivals', async () => {
+test('a failed Roadmap recognition retries the same opening operation without absorbing later arrivals', async () => {
   const operations: { path: string; input: Record<string, unknown> }[] = [];
   let fail = true;
   vi.stubGlobal(
@@ -25,7 +25,7 @@ test('a failed Node recognition retries the same opening operation without absor
     }),
   );
   const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-  const input = { roadmapId: 'roadmap-id', nodeId: 'node-id' };
+  const input = { roadmapId: 'roadmap-id', openingId: 'opening-id' };
   await act(async () => expect(await result.current.acknowledge(input)).toBe(false));
   await act(async () => expect(await result.current.retry(input)).toBe(true));
   expect(operations.map(({ path }) => path)).toEqual([
@@ -36,12 +36,12 @@ test('a failed Node recognition retries the same opening operation without absor
   ]);
   const operationId = operations[0].input.operationId;
   expect(operationId).toEqual(expect.any(String));
-  expect(operations[0].input).toEqual({ ...input, operationId, retry: false });
-  expect(operations[2].input).toEqual({ ...input, operationId, retry: true });
+  expect(operations[0].input).toEqual({ roadmapId: input.roadmapId, operationId, retry: false });
+  expect(operations[2].input).toEqual({ roadmapId: input.roadmapId, operationId, retry: true });
   expect(operations[1].input).toEqual(operations[3].input);
 });
 
-test('a pruned Node opening keeps retries failed and never recognizes a replacement opening', async () => {
+test('a pruned Roadmap opening keeps retries failed and never recognizes a replacement opening', async () => {
   const operations: { path: string; input: Record<string, unknown> }[] = [];
   vi.stubGlobal(
     'fetch',
@@ -50,12 +50,12 @@ test('a pruned Node opening keeps retries failed and never recognizes a replacem
       operations.push({ path, input });
       return Response.json(
         {},
-        { status: input.retry ? 404 : path.endsWith('/acknowledge') ? 503 : 200 },
+        { status: operations.length === 1 ? 200 : operations.length === 2 ? 503 : 404 },
       );
     }),
   );
   const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
-  const input = { roadmapId: 'roadmap-id', nodeId: 'node-id' };
+  const input = { roadmapId: 'roadmap-id', openingId: 'opening-id' };
   await act(async () => expect(await result.current.acknowledge(input)).toBe(false));
   await act(async () => expect(await result.current.retry(input)).toBe(false));
   await act(async () => expect(await result.current.retry(input)).toBe(false));
@@ -67,7 +67,7 @@ test('a pruned Node opening keeps retries failed and never recognizes a replacem
   ]);
   const operationId = operations[0].input.operationId;
   expect(operations.slice(2).map(({ input }) => input)).toEqual([
-    { ...input, operationId, retry: true },
-    { ...input, operationId, retry: true },
+    { roadmapId: input.roadmapId, operationId, retry: true },
+    { roadmapId: input.roadmapId, operationId, retry: true },
   ]);
 });

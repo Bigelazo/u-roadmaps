@@ -1,14 +1,10 @@
-import {
-  parseCourseOfferingIdentifier,
-  RoadmapCanvasSession,
-  type CourseOfferingIdentifier,
-} from '@/features/roadmap';
-import { readRoadmapForParticipant, synchronizeParticipation } from '@/features/roadmap/server';
+import { randomUUID } from 'node:crypto';
+import { parseCourseOfferingIdentifier, RoadmapCanvasSession } from '@/features/roadmap';
+import { synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
-import { RoadmapAvailabilityDialog } from '@/features/notifications';
-import { getInboxIdentity, prepareOwnNoticeOpening } from '@/features/notifications/server';
+import { getInboxIdentity } from '@/features/notifications/server';
 
 function redirectUnavailableNotice(
   noticeId: string | null,
@@ -25,32 +21,6 @@ function redirectUnavailableNotice(
       `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'roadmap-unavailable' })}`,
     );
   }
-}
-
-async function resolveNoticeTargetNode(
-  userId: string,
-  identifier: CourseOfferingIdentifier,
-  requestedNodeId: string | undefined,
-  role: string | undefined,
-  noticeId: string | null,
-) {
-  if (!noticeId || !requestedNodeId) return requestedNodeId;
-  const projection = await readRoadmapForParticipant({ userId, identifier }).match(
-    (value) => value,
-    () => null,
-  );
-  const target = projection?.nodes.find(({ id }) => id === requestedNodeId);
-  let canOpen = false;
-  if (target && role === 'TEACHER') {
-    canOpen =
-      'isVisible' in target &&
-      target.isVisible &&
-      'isTeacherBlocked' in target &&
-      !target.isTeacherBlocked;
-  } else if (target && role === 'STUDENT' && 'access' in target) {
-    canOpen = target.access?.status === 'ACCESSIBLE';
-  }
-  return canOpen ? requestedNodeId : undefined;
 }
 
 export default async function CoursePage(
@@ -95,14 +65,6 @@ export default async function CoursePage(
   const participation =
     courseOffering.participants[0] ?? (await synchronizeParticipation(user, identifier));
   redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
-  const requestedNodeId = singleSearchParam(searchParams.targetNode) ?? undefined;
-  const targetNodeId = await resolveNoticeTargetNode(
-    user.id,
-    identifier,
-    requestedNodeId,
-    participation?.role,
-    noticeId,
-  );
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(
     // This async Server Component evaluates the calendar for the current request.
@@ -111,31 +73,22 @@ export default async function CoursePage(
   );
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
-  const notificationOpeningId = courseOffering.roadmap
-    ? await prepareOwnNoticeOpening(user.id, courseOffering.roadmap.id).catch(() => null)
-    : null;
+  const notificationOpeningId = courseOffering.roadmap ? randomUUID() : null;
 
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
       <RoadmapCanvasSession
         notificationsEnabled={Boolean(inboxIdentity)}
         notificationOpeningId={notificationOpeningId}
-        targetNodeId={targetNodeId}
+        targetNodeId={
+          noticeId ? undefined : (singleSearchParam(searchParams.targetNode) ?? undefined)
+        }
         courseOffering={{ identifier, title: courseName }}
         experience={{
           kind: isTeaching ? 'teaching' : 'student',
           term: isHistorical ? 'historical' : 'current',
         }}
       />
-      {inboxIdentity && singleSearchParam(searchParams.notice) ? (
-        <RoadmapAvailabilityDialog
-          noticeId={singleSearchParam(searchParams.notice)}
-          courseCode={identifier.courseCode}
-          year={identifier.year}
-          semester={identifier.semester}
-          courseName={courseName}
-        />
-      ) : null}
     </main>
   );
 }

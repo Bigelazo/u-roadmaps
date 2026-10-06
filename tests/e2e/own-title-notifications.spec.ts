@@ -32,7 +32,6 @@ test('title target absorbs renames, withdraws a return to known and restarts aft
   await expect.poll(notices).toHaveLength(1);
   const opening = {
     roadmapId: roadmap.roadmap.id,
-    nodeId: node.id,
     operationId: crypto.randomUUID(),
   };
   expect((await recipient.post('/api/notifications/openings', { data: opening })).status()).toBe(
@@ -149,7 +148,6 @@ test('recognition preserves title changes delivered after its opening snapshot, 
   await expect.poll(notices).toHaveLength(1);
   const opening = {
     roadmapId: course.roadmapId,
-    nodeId: course.nodes.first,
     operationId: crypto.randomUUID(),
   };
   expect((await recipient.post('/api/notifications/openings', { data: opening })).status()).toBe(
