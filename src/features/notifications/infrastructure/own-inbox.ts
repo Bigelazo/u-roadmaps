@@ -311,3 +311,21 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
   });
   return { acknowledged: result.count };
 }
+
+export async function countOwnNoticesByNode(userId: string, params: URLSearchParams) {
+  const roadmapId = uuid(params.get('roadmapId'));
+  const rows = await prisma.$queryRaw<{ nodeId: string | null; count: bigint }[]>(Prisma.sql`
+    SELECT data->>'nodeId' AS "nodeId", COUNT(*) AS count
+    FROM "RoadmapNotice"
+    WHERE "recipientId" = ${userId}::uuid
+      AND "roadmapId" = ${roadmapId}::uuid
+      AND "acknowledgedAt" IS NULL
+    GROUP BY data->>'nodeId'
+  `);
+  return {
+    count: rows.reduce((total, row) => total + Number(row.count), 0),
+    byNode: Object.fromEntries(
+      rows.filter((row) => row.nodeId !== null).map((row) => [row.nodeId, Number(row.count)]),
+    ) as Record<string, number>,
+  };
+}

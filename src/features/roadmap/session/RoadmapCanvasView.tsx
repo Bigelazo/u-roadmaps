@@ -1,5 +1,7 @@
 'use client';
 
+import { NodeNoticeCountsProvider } from '@/features/notifications/client';
+
 import {
   useCallback,
   useEffect,
@@ -883,15 +885,20 @@ export function RoadmapCanvasView({ input }: Props) {
           aria-label="Lienzo del roadmap"
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
-          <RoadmapCanvasGraph
-            model={model}
-            input={input}
-            selectedNode={selectedNode}
-            addNodeAtOpenPosition={addNodeAtOpenPosition}
-            roadmap={roadmap}
-            displayedRoadmap={displayedRoadmap}
-            graphProjection={graphProjection}
-          />
+          <NodeNoticeCountsProvider
+            roadmapId={roadmap.roadmap.id}
+            enabled={Boolean(input.notificationsEnabled) && !model.isCanvasPreview}
+          >
+            <RoadmapCanvasGraph
+              model={model}
+              input={input}
+              selectedNode={selectedNode}
+              addNodeAtOpenPosition={addNodeAtOpenPosition}
+              roadmap={roadmap}
+              displayedRoadmap={displayedRoadmap}
+              graphProjection={graphProjection}
+            />
+          </NodeNoticeCountsProvider>
           <RoadmapCanvasFeedback />
           {error ? (
             <Button className="absolute right-5 bottom-20" type="button" onClick={retryRefresh}>

@@ -10,3 +10,5 @@ export {
 export { RoadmapAvailabilityDialog } from './components/RoadmapAvailabilityDialog';
 
 export { useCounts as useNotificationCounts } from './components/inbox-driver';
+
+export { NodeNoticeCountsProvider, useNodeNoticeCount } from './components/inbox-driver';

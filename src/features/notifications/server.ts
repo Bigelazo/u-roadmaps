@@ -19,6 +19,7 @@ import {
   findOwnNotice,
   noticeRecord,
   noticeFilter,
+  countOwnNoticesByNode,
   prepareOwnNoticeOpening as prepareNoticeOpening,
   prepareOwnNodeOpening as prepareNodeOpening,
 } from './infrastructure/own-inbox';
@@ -48,6 +49,7 @@ export async function markOwnNotice(userId: string, id: string, input: Record<st
 }
 
 export async function countOwnNotices(userId: string, params: URLSearchParams) {
+  if (params.get('groupBy') === 'nodeId') return countOwnNoticesByNode(userId, params);
   return {
     count: await prisma.roadmapNotice.count({
       where: { ...noticeFilter(params), recipientId: userId, acknowledgedAt: null },

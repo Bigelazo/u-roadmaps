@@ -1,10 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { InboxIdentity } from '../server';
 import { OwnInboxRealtime, OWN_INBOX_REFRESH_EVENT } from './own-realtime';
 import { request, record, type InboxRecord } from './inbox-api';
 
+type NoticeCounts = { count: number; byNode?: Record<string, number> };
 type Filter = Record<string, string | number>;
 type ListInput = {
   limit?: number;
@@ -128,17 +137,20 @@ export function useNotifications(input: ListInput) {
 }
 export function useCounts(input: { filters: { read?: boolean; data?: Filter }[] }) {
   const key = JSON.stringify(input.filters);
-  const [counts, setCounts] = useState<{ count: number }[]>();
+  const [result, setResult] = useState<{
+    queryKey: string;
+    counts: NoticeCounts[];
+  }>();
   const [error, setError] = useState<unknown>();
   const generation = useRef(0);
   const refetch = useCallback(async () => {
     const current = ++generation.current;
     try {
       const result = await Promise.all(
-        input.filters.map((filter) => request<{ count: number }>(`/counts?${query(filter)}`)),
+        input.filters.map((filter) => request<NoticeCounts>(`/counts?${query(filter)}`)),
       );
       if (current === generation.current) {
-        setCounts(result);
+        setResult({ queryKey: key, counts: result });
         setError(undefined);
       }
     } catch (failure) {
@@ -150,6 +162,7 @@ export function useCounts(input: { filters: { read?: boolean; data?: Filter }[] 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   useInboxRefresh(refetch, generation);
+  const counts = result?.queryKey === key ? result.counts : undefined;
   return { counts, error, isLoading: !counts && !error, refetch };
 }
 export function InboxDriverProvider({
@@ -165,4 +178,40 @@ export function InboxDriverProvider({
       {children}
     </>
   );
+}
+
+const NodeNoticeCountsContext = createContext<Record<string, number> | undefined>(undefined);
+
+function ActiveNodeNoticeCounts({
+  roadmapId,
+  children,
+}: {
+  roadmapId: string;
+  children: ReactNode;
+}) {
+  const { counts } = useCounts({ filters: [{ data: { roadmapId, groupBy: 'nodeId' } }] });
+  return <NodeNoticeCountsContext value={counts?.[0]?.byNode}>{children}</NodeNoticeCountsContext>;
+}
+
+export function NodeNoticeCountsProvider({
+  roadmapId,
+  enabled,
+  children,
+}: {
+  roadmapId: string;
+  enabled: boolean;
+  children: ReactNode;
+}) {
+  return enabled ? (
+    <ActiveNodeNoticeCounts key={roadmapId} roadmapId={roadmapId}>
+      {children}
+    </ActiveNodeNoticeCounts>
+  ) : (
+    <NodeNoticeCountsContext value={undefined}>{children}</NodeNoticeCountsContext>
+  );
+}
+
+export function useNodeNoticeCount(nodeId: string) {
+  const counts = useContext(NodeNoticeCountsContext);
+  return counts ? (counts[nodeId] ?? 0) : undefined;
 }
