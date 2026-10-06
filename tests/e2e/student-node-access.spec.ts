@@ -6,6 +6,60 @@ function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
 }
 
+for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
+  test(`a stale student canvas cannot complete a Node ${restriction} after entry`, async ({
+    page,
+    course,
+    apiAs,
+  }) => {
+    const teacher = await apiAs(course.users.teacher);
+    const student = await apiAs(course.users.studentWithoutProgress);
+    const creator = await prepareNodeCreator(teacher, course, {
+      description: 'Detalle conservado en la vista del estudiante.',
+      positionY: 150,
+    });
+    const node = await creator.createNode(uniqueName('Nodo pendiente'), 350);
+    await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
+    await page.goto(`${course.pagePath()}?targetNode=${node.id}`);
+    await expect(page.getByRole('button', { name: 'Completar', exact: true })).toBeEnabled();
+
+    const endpoint = course.apiPath(`/nodes/${node.id}`);
+    const restrict = {
+      blocked: () => teacher.post(`${endpoint}/teacher-block`),
+      hidden: () => teacher.patch(endpoint, { data: { isVisible: false } }),
+      deleted: () => teacher.delete(endpoint),
+    };
+    expect((await restrict[restriction]()).status()).toBe(restriction === 'deleted' ? 204 : 200);
+    // A real notice arriving confirms the change reached this tab without a canvas reload.
+    await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
+    await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const completion = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === `${endpoint}/completion`,
+    );
+    await page.getByRole('button', { name: 'Completar', exact: true }).click();
+    expect((await completion).status()).toBe(restriction === 'blocked' ? 403 : 404);
+    await expect(
+      page.getByRole('alert', {
+        name:
+          restriction === 'blocked'
+            ? 'El equipo docente bloqueó este nodo.'
+            : 'El nodo no existe en este roadmap.',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Completar', exact: true })).toBeEnabled();
+    await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
+    // Re-enter through authorized HTTP: the rejected action created no Completion.
+    const current = await student.get(course.apiPath());
+    expect(current.status()).toBe(200);
+    const currentNode = (await current.json()).nodes.find(
+      (candidate: { id: string }) => candidate.id === node.id,
+    );
+    expect(currentNode?.isCompleted ?? false).toBe(false);
+  });
+}
+
 test('student endpoints conceal prerequisite-blocked nodes without erasing past completion', async ({
   course,
   apiAs,
