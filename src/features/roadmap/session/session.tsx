@@ -40,7 +40,6 @@ import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 import {
   subscribeToRoadmapChanges,
   subscribeToRoadmapRecovery,
-  requestRoadmapRecovery,
 } from '@/features/roadmap/session/change-signal';
 
 import { RoadmapAccessLostError } from './access-lost';
@@ -193,29 +192,34 @@ function useInjectedSession(
     [courseCode, experienceKind, experienceTerm, semester, title, year],
   );
 
-  const refresh = useCallback(async () => {
-    const requestVersion = ++requestVersionRef.current;
-    const requestKey = roadmapCanvasSessionKey(stableInput);
-    try {
-      const loadedRoadmap = await persistence.load(stableInput);
-      if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
-        return false;
+  const refresh = useCallback(
+    async (applyProjection = true) => {
+      const requestVersion = ++requestVersionRef.current;
+      const requestKey = roadmapCanvasSessionKey(stableInput);
+      try {
+        const loadedRoadmap = await persistence.load(stableInput);
+        if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
+          return false;
+        }
+        if (applyProjection) {
+          setRoadmap(loadedRoadmap);
+          setRoadmapKey(requestKey);
+        }
+        return true;
+      } catch (cause) {
+        if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
+          return false;
+        }
+        if (cause instanceof RoadmapAccessLostError) {
+          setRoadmap(null);
+          setSimulationRoadmap(null);
+          setAccessLost(true);
+        }
+        throw cause;
       }
-      setRoadmap(loadedRoadmap);
-      setRoadmapKey(requestKey);
-      return true;
-    } catch (cause) {
-      if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
-        return false;
-      }
-      if (cause instanceof RoadmapAccessLostError) {
-        setRoadmap(null);
-        setSimulationRoadmap(null);
-        setAccessLost(true);
-      }
-      throw cause;
-    }
-  }, [persistence, stableInput]);
+    },
+    [persistence, stableInput],
+  );
 
   useEffect(() => {
     if (experienceTerm !== 'current') return;
@@ -224,7 +228,7 @@ function useInjectedSession(
     let retryDelay = 1000;
     const recover = () => {
       clearTimeout(retry);
-      void refresh().then(
+      void refresh(experienceKind === 'teaching').then(
         (loaded) => {
           if (loaded && active) {
             retryDelay = 1000;
@@ -250,16 +254,18 @@ function useInjectedSession(
         changedOffering.semester !== semester
       )
         return;
-      recover();
+      if (experienceKind === 'teaching' || changedOffering.accessLost) recover();
     });
-    const stopRecovery = subscribeToRoadmapRecovery(recover);
+    const stopRecovery = subscribeToRoadmapRecovery(() => {
+      if (experienceKind === 'teaching') recover();
+    });
     return () => {
       active = false;
       clearTimeout(retry);
       stopChanges();
       stopRecovery();
     };
-  }, [courseCode, experienceTerm, key, refresh, semester, year]);
+  }, [courseCode, experienceKind, experienceTerm, key, refresh, semester, year]);
 
   useEffect(() => {
     activeKeyRef.current = key;
@@ -294,6 +300,21 @@ function useInjectedSession(
       simulationVersionRef.current = Math.max(simulationVersionRef.current, simulationVersion + 1);
     };
   }, [initialRoadmapKey, key, persistence, stableInput]);
+
+  const retryRefresh = useCallback(() => {
+    void refresh().then(
+      (loaded) => {
+        if (!loaded) return;
+        setError(null);
+        setErrorKey(null);
+      },
+      (cause: unknown) => {
+        if (activeKeyRef.current !== key) return;
+        setError(messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'));
+        setErrorKey(key);
+      },
+    );
+  }, [key, refresh]);
 
   const dismissError = useCallback(() => {
     setError(null);
@@ -683,7 +704,7 @@ function useInjectedSession(
     simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
     error: errorKey === key ? error : null,
     dismissError,
-    retryRefresh: requestRoadmapRecovery,
+    retryRefresh,
     accessLost,
     loadSimulation,
     addNode,

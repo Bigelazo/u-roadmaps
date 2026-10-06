@@ -12,7 +12,9 @@ import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types
  */
 export function RoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
   return (
-    <RoadmapCanvasFeedbackProvider key={roadmapCanvasSessionKey(input)}>
+    <RoadmapCanvasFeedbackProvider
+      key={`${roadmapCanvasSessionKey(input)}:${input.notificationOpeningId ?? ''}`}
+    >
       <RoadmapCanvasView input={input} />
     </RoadmapCanvasFeedbackProvider>
   );

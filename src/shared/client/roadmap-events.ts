@@ -4,7 +4,7 @@ type CourseOfferingIdentifier = { courseCode: string; year: number; semester: nu
 export const ROADMAP_CHANGE_RECEIVED_EVENT = 'u-roadmaps:roadmap-change-received';
 
 export function subscribeToRoadmapChanges(
-  listener: (identifier: CourseOfferingIdentifier) => void,
+  listener: (identifier: CourseOfferingIdentifier & { accessLost?: boolean }) => void,
 ) {
   const onEvent = (event: Event) => {
     if (!(event instanceof CustomEvent)) return;
@@ -13,7 +13,12 @@ export function subscribeToRoadmapChanges(
     if (!('courseCode' in value) || typeof value.courseCode !== 'string') return;
     if (!('year' in value) || typeof value.year !== 'number') return;
     if (!('semester' in value) || typeof value.semester !== 'number') return;
-    listener({ courseCode: value.courseCode, year: value.year, semester: value.semester });
+    listener({
+      courseCode: value.courseCode,
+      year: value.year,
+      semester: value.semester,
+      ...('accessLost' in value && value.accessLost === true ? { accessLost: true } : {}),
+    });
   };
 
   window.addEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, onEvent);

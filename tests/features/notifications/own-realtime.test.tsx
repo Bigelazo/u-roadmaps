@@ -103,6 +103,14 @@ test('switching User closes the old stream and ignores its queued events', async
   expect(changed).not.toHaveBeenCalled();
   act(() => BrowserStream.instances[1].receive('roadmap', { ...change, userId: 'second' }));
   expect(changed.mock.calls[0][0].detail).toEqual(change);
+  act(() =>
+    BrowserStream.instances[1].receive('roadmap', {
+      ...change,
+      userId: 'second',
+      accessLost: true,
+    }),
+  );
+  expect(changed.mock.calls[1][0].detail).toEqual({ ...change, accessLost: true });
   rerender(
     <NotificationsProvider identity={null}>
       <span>Logged out</span>

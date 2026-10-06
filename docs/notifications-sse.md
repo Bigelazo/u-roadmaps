@@ -1,4 +1,4 @@
-# Own Inbox and Roadmap live updates
+# Own Inbox and role-scoped Roadmap live updates
 
 > Se reemplazará según [ADR-0014](adr/0014-target-based-notice-grouping.md)
 > (aceptado el 2026-10-05). Mientras no se implemente, este documento describe el
@@ -17,8 +17,8 @@ projection. Participation and Completion signals are scoped to their User.
 Inactive or removed Participations receive their access invalidation so that the
 subsequent authorized HTTP request can remove protected content.
 
-The payload contains only User/Course offering identifiers, never pedagogical
-content. Every projection/feed/count reload goes through existing authenticated
+The payload contains User/Course offering identifiers and an optional access-loss
+flag, never pedagogical content. Every projection/feed/count reload goes through existing authenticated
 HTTP endpoints. A tab coalesces Inbox signals arriving within 100 ms into one
 reload, so marking several shown rows as seen does not reload once per row. Each
 stream remembers the Course offerings already confirmed for its User, so Roadmap
@@ -26,8 +26,24 @@ signals only query the Participation once per stream and Course offering.
 Signals and reloads do not recognize notices. Opening an
 accessible Node or entering the Roadmap retains the existing recognition rules;
 Canvas preview retains its independent simulation and never recognizes real
-notices. Existing canvas reconciliation preserves selection, drafts and version
-checks, and removes protected content on authoritative access loss.
+notices. Only current teaching sessions reload the open Roadmap after content signals.
+Student and observer sessions retain their loaded canvas until they enter the
+Roadmap again, including refresh and clicking a notice for the same Roadmap.
+Inbox and counters remain live for every role; arrivals do not open a dialog
+mid-session. Each server-prepared entry has a fresh opening identifier, which
+starts a new canvas session even when client navigation keeps the same route.
+Dismissing a notice dialog only cleans up the URL through the native History API;
+it retains the current session and its recognition cutoff.
+Teaching canvas reconciliation preserves selection, drafts and version checks
+([ADR-0015](adr/0015-teacher-edit-concurrency-relies-on-realtime.md)); Canvas
+preview keeps its existing independent simulation behavior.
+
+User-scoped Participation/Completion signals check whether the Participation is
+still active. When it is lost, the stream adds `accessLost: true` to the
+identifier-only invalidation. Every current session, including student sessions,
+then verifies access through the authorized Roadmap HTTP endpoint; an
+authoritative denial removes protected content. An ordinary content signal does
+not perform this student reload.
 
 ## Node deployment
 
@@ -53,22 +69,25 @@ returning online opens a replacement connection.
 
 There is no replay log or permanent data polling. On a successful subscription,
 reconnection, network recovery or return to the foreground, the application
-reloads saved Inbox/counts and the open Roadmap. Missed signals are repaired by
-reading current state. Transient HTTP refresh failures retain prior state and
+reloads saved Inbox/counts for everyone and the open Roadmap only for current
+teaching sessions. Students and observers retain their canvas across recovery;
+re-entering reads its current state. Missed Inbox signals are repaired by reading
+current state. Transient HTTP refresh failures retain prior state and
 retry with exponential delays from one to thirty seconds, cancelled when the
 consumer unmounts. Slow stream consumers are disconnected to bound buffering.
 
 ## Verification
 
 `pnpm test:e2e tests/e2e/own-sse-notifications.spec.ts` covers a teacher browser
-edit, real SSE reception, authorized student detail, pending notices, cross-tab
-recognition/counters and offline recovery in Chromium and Firefox. Reconnection
+edit, real SSE reception, stable student detail, live pending notices and counters,
+cross-tab recognition, offline recovery, same-Roadmap notice navigation, refresh
+and authorized HTTP denial after access revocation. Reconnection
 is verified after the student browser goes offline and its real stream closes;
 the provider closes its native EventSource on offline and opens a replacement
 on online. The fault is limited to that browser, so other sessions and database
 connections remain running. No transport mock or client signal is used. The
-converted `roadmap-realtime-prototype.spec.ts` exercises real SSE for blocking, hiding,
-deletion and teaching draft conflicts. Existing canvas-session unit tests remain
+converted `roadmap-realtime-prototype.spec.ts` exercises real SSE for teaching live reloads, transient projection failures,
+reconnection and teaching draft conflicts including deletion. Existing canvas-session unit tests remain
 complementary coverage for reconciliation and stale responses.
 
 The focused Chromium and Firefox run on 2026-10-04 included both files above:
@@ -78,3 +97,24 @@ and existing full-suite limitations are recorded in `docs/agents/testing.md`.
 The full Chromium and Firefox E2E suite then passed: **124 passed, 0 failed,
 2 optional Cloud tests skipped**, in **2.4 minutes**, exit code 0. The E2E server
 released its port after completion.
+
+## Validation of #176 — 2026-10-06
+
+`pnpm test` completed with exit code 0: typechecking, **61 unit files / 321 tests**
+and **73 Chromium E2E tests**, with no failures or skips. This run used the local
+Chromium-only selection with two workers; Firefox was not run. The focused
+navigation/SSE run passed all **14 tests**, including same-Roadmap notice entry,
+stable student content, live Inbox/counters, reconnect recovery, access denial,
+recognition retry/cutoff, and teaching draft conflicts. Canvas preview also passed
+in the complete suite.
+
+Code-review ran once: its one Standards suggestion (a duplicate assertion) was
+applied; Spec reported no findings. Final validation also repaired the canvas test
+browser-global teardown, updated the old live-Resource expectation, and preserved
+the recognition cutoff when dismissing a notice dialog. ESLint, Prettier and
+`git diff --check` passed; `graphify update .` refreshed the AST graph.
+
+The post-suite audit found zero test-owned Courses, Users and rejection triggers.
+Development data retained fingerprint `1ac558d2cb366285e2bdef5529079188`; all 826
+historical seeded acknowledgements retained fingerprint
+`9de8e5a3ddd91c4136db4e829a216321`.

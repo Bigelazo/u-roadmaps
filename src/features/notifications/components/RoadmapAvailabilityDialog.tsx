@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useSelectedNotification } from './NotificationsInbox';
 import { CHANGE_SUMMARY_SUBJECT_PREFIX } from '../digest-projection';
 import {
@@ -64,17 +64,21 @@ function availabilityNotice(
 }
 
 export function RoadmapAvailabilityDialog(props: Props) {
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const { notification } = useSelectedNotification();
   const { subject, body, isSummary, summaryCount, effectiveDate, actorName, open } =
     availabilityNotice(notification, props);
 
   function close() {
-    router.replace(window.location.pathname, { scroll: false });
+    // Dismissal is URL cleanup, not a new Roadmap entry or recognition snapshot.
+    window.history.replaceState(null, '', window.location.pathname);
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && close()}>
+    <Dialog
+      open={open && searchParams.get('notice') === props.noticeId}
+      onOpenChange={(isOpen) => !isOpen && close()}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{subject}</DialogTitle>

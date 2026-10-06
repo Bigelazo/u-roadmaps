@@ -92,7 +92,7 @@ test('native SSE isolates Inbox and Roadmap frames from a User outside the Cours
   }
 });
 
-test('Resource changes stream immediately to two tabs, retain earlier notices and recognize as one unit', async ({
+test('Resource notices stream to two tabs while student content stays stable until re-entry', async ({
   browser,
   course,
 }, testInfo) => {
@@ -126,9 +126,12 @@ test('Resource changes stream immediately to two tabs, retain earlier notices an
     });
     expect(created.status()).toBe(201);
     const resourceId = (await created.json()).resource.id;
-    await expect(page.getByRole('link', { name: 'Primera guía' })).toBeVisible();
     await expect(
       other.getByRole('button', { name: /Cambio de recurso: Primera guía/ }),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Primera guía' })).toBeHidden();
+    await expect(
+      page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
     ).toBeVisible();
     await expect(
       other.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
@@ -148,7 +151,7 @@ test('Resource changes stream immediately to two tabs, retain earlier notices an
     }
     // Repeats are stored immediately (no grouping window or summary, see ADR-0014).
     await expect.poll(async () => (await notices()).length).toBe(3);
-    await expect(page.getByRole('link', { name: 'Última guía' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Última guía' })).toBeHidden();
     await expect(
       other.getByRole('button', { name: /Cambio de recurso: Última guía/ }),
     ).toBeVisible();
@@ -169,6 +172,10 @@ test('Resource changes stream immediately to two tabs, retain earlier notices an
     // The already-open Node did not recognize these subsequent arrivals.
     await other.getByRole('button', { name: /Cambio de recurso: Última guía/ }).click();
     await expect(other.getByRole('dialog', { name: latest.subject, exact: true })).toBeVisible();
+    await expect(
+      other.getByRole('link', { name: 'Última guía', includeHidden: true }),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Última guía' })).toBeHidden();
     await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toBeVisible();
     await expect
       .poll(async () => (await notices()).every((notice: { read: boolean }) => notice.read))

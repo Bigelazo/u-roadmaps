@@ -58,6 +58,7 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
               courseCode: value.courseCode,
               year: value.year,
               semester: value.semester,
+              ...(value.accessLost === true ? { accessLost: true } : {}),
             },
           }),
         );

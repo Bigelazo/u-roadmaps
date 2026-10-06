@@ -52,7 +52,16 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
               // Every connected tab would otherwise query on each Roadmap write.
               memberships.add(courseOfferingId);
             }
-            send('roadmap', { ...change, userId });
+            // User-scoped Participation/Completion signals also verify revocation.
+            // Students ignore ordinary content signals, but must still ask HTTP
+            // to remove protected content after their Participation is lost.
+            const accessLost =
+              change.userId === userId &&
+              !(await prisma.participation.findFirst({
+                where: { userId, courseOfferingId, isActive: true },
+                select: { id: true },
+              }));
+            send('roadmap', { ...change, userId, ...(accessLost ? { accessLost: true } : {}) });
           }
         })().catch(() => {
           console.warn('Roadmap live signal projection failed');

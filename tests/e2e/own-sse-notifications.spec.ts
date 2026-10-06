@@ -1,7 +1,8 @@
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
+import { literal, sql } from './database';
 
-test('real SSE refreshes authorized Node detail, pending notices, other tabs and reconnects', async ({
+test('real SSE keeps student content stable while notices and counters update, including recovery', async ({
   browser,
   course,
 }, testInfo) => {
@@ -54,8 +55,11 @@ test('real SSE refreshes authorized Node detail, pending notices, other tabs and
     await teacherPage.getByLabel('Título', { exact: true }).fill(title);
     await teacherPage.getByLabel('Descripción').fill('Delivered through real SSE');
     await teacherPage.getByRole('button', { name: 'Guardar cambios' }).click();
-    await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeVisible();
     await expect(other.getByRole('button', { name: new RegExp(title) })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
+    await expect(page.getByText('Original SSE detail', { exact: true })).toBeVisible();
+    await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeHidden();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => count()).toBe(1);
     // Visibility in the other Inbox tab propagates seen state without recognition.
     expect((await seenInOtherTab).status()).toBe(200);
@@ -91,8 +95,45 @@ test('real SSE refreshes authorized Node detail, pending notices, other tabs and
     await student.setOffline(false);
     expect((await reconnected).status()).toBe(200);
     await page.bringToFront();
-    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await expect.poll(() => count()).toBe(1);
+    await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
+    await expect(page.getByText('Original SSE detail', { exact: true })).toBeVisible();
+    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeHidden();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // Clicking a notice on the same Roadmap is a new entry, despite client routing.
+    await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+    await page
+      .getByRole('button', { name: new RegExp(title) })
+      .first()
+      .click();
+    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', { name: 'Entendido' }).click();
+    await page.goto(`${course.pagePath()}?targetNode=${nodeId}`);
+    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
+    expect(
+      (
+        await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
+          data: { description: 'Actualizado al refrescar' },
+        })
+      ).status(),
+    ).toBe(200);
+    await expect.poll(count).toBe(1);
+    await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeVisible();
+
+    // Revocation still makes an authorized HTTP request and clears protected content.
+    const denied = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === course.apiPath() && response.status() === 403,
+    );
+    await sql(`UPDATE "Participation" SET "isActive" = false
+      WHERE "courseOfferingId" = ${literal(course.id)}
+      AND "userId" = ${literal(course.users.studentWithoutProgress.id)};`);
+    expect((await denied).status()).toBe(403);
+    await expect(page).toHaveURL(/academic-overview\?accessLost=1/);
+    await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeHidden();
   } finally {
     // eslint-disable-next-line playwright/no-conditional-in-test
     if (nodeId) await teacher.request.delete(course.apiPath(`/nodes/${nodeId}`));

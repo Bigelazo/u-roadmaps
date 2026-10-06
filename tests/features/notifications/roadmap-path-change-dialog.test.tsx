@@ -20,7 +20,9 @@ const { notification } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams({ notice: notification.id }),
+}));
 vi.mock('@/features/notifications/components/NotificationsInbox', () => ({
   useSelectedNotification: () => ({ notification }),
 }));

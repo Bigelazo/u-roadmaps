@@ -1,11 +1,12 @@
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change-signal';
+import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
@@ -23,7 +24,8 @@ beforeEach(() => {
     dispatchEvent: () => false,
   }));
 });
-afterEach(() => vi.unstubAllGlobals());
+// The runner cleans up each canvas before these file-scoped globals are restored.
+afterAll(() => vi.unstubAllGlobals());
 
 vi.mock('next/dynamic', () => ({
   default: () =>
@@ -450,20 +452,127 @@ describe('RoadmapCanvasSession', () => {
     expect(screen.queryByRole('button', { name: 'Derivadas' })).toBeNull();
   });
 
+  test('student and observer sessions retain their Roadmap on changes and recovery until re-entry', async () => {
+    // Observers use the same student experience at the public canvas seam.
+    const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+    const load = vi.spyOn(persistence, 'load');
+    const input = {
+      ...teachingInput,
+      experience: { kind: 'student' as const, term: 'current' as const },
+    };
+    const { unmount } = render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...input} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+    await screen.findByRole('button', { name: 'Límites' });
+    load.mockResolvedValue({
+      ...roadmap,
+      nodes: [{ ...roadmap.nodes[0], title: 'Cambio remoto' }],
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
+          detail: input.courseOffering.identifier,
+        }),
+      );
+      window.dispatchEvent(new Event('online'));
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('u-roadmaps:roadmap-recovery'));
+    });
+    expect(screen.getByRole('button', { name: 'Límites' })).toBeTruthy();
+    expect(load).toHaveBeenCalledTimes(1);
+    unmount();
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...input} />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+    await screen.findByRole('button', { name: 'Cambio remoto' });
+  });
+
+  test('same-Roadmap re-entry loads current content when its opening changes', async () => {
+    const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+    const load = vi.spyOn(persistence, 'load');
+    const input = {
+      ...teachingInput,
+      experience: { kind: 'student' as const, term: 'current' as const },
+    };
+    const view = (opening: string) => (
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...input} notificationOpeningId={opening} />
+      </RoadmapCanvasSessionPersistenceProvider>
+    );
+    const { rerender } = render(view('first-entry'));
+    await screen.findByRole('button', { name: 'Límites' });
+    load.mockResolvedValue({
+      ...roadmap,
+      nodes: [{ ...roadmap.nodes[0], title: 'Cambio remoto' }],
+    });
+    rerender(view('notice-entry'));
+    expect(await screen.findByRole('button', { name: 'Cambio remoto' })).toBeTruthy();
+  });
+
+  test('students can retry an initial HTTP failure without enabling live reloads', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+    vi.spyOn(persistence, 'load').mockRejectedValueOnce(new Error('Fallo inicial'));
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          {...teachingInput}
+          experience={{ kind: 'student', term: 'current' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+    await screen.findByText('Fallo inicial');
+    await user.click(screen.getByRole('button', { name: 'Reintentar actualización' }));
+    expect(await screen.findByRole('button', { name: 'Límites' })).toBeTruthy();
+  });
+
+  test('an access invalidation removes student content after authoritative HTTP denial', async () => {
+    const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+    const load = vi.spyOn(persistence, 'load');
+    render(
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession
+          {...teachingInput}
+          experience={{ kind: 'student', term: 'current' }}
+        />
+      </RoadmapCanvasSessionPersistenceProvider>,
+    );
+    await screen.findByRole('button', { name: 'Límites' });
+    load.mockRejectedValue(new RoadmapAccessLostError('Acceso revocado'));
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, {
+          detail: { ...teachingInput.courseOffering.identifier, accessLost: true },
+        }),
+      );
+    });
+    expect(screen.queryByRole('button', { name: 'Límites' })).toBeNull();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   test('ignores unrelated signals and an older Roadmap refetch that finishes last', async () => {
-    let resolveOlder!: (value: StudentRoadmapDto) => void;
-    let resolveLatest!: (value: StudentRoadmapDto) => void;
-    const older = new Promise<StudentRoadmapDto>((resolve) => {
+    let resolveOlder!: (value: RoadmapDto) => void;
+    let resolveLatest!: (value: RoadmapDto) => void;
+    const older = new Promise<RoadmapDto>((resolve) => {
       resolveOlder = resolve;
     });
-    const latest = new Promise<StudentRoadmapDto>((resolve) => {
+    const latest = new Promise<RoadmapDto>((resolve) => {
       resolveLatest = resolve;
     });
     let loadCount = 0;
     const persistence = {
       load: vi.fn(() => {
         loadCount += 1;
-        return loadCount === 1 ? Promise.resolve(roadmap) : loadCount === 2 ? older : latest;
+        return loadCount === 1
+          ? Promise.resolve(teachingRoadmap)
+          : loadCount === 2
+            ? older
+            : latest;
       }),
       complete: vi.fn().mockResolvedValue(undefined),
     };
@@ -474,7 +583,7 @@ describe('RoadmapCanvasSession', () => {
             identifier: { courseCode: 'CC1001', year: 2026, semester: 2 },
             title: 'Programación I',
           }}
-          experience={{ kind: 'student', term: 'current' }}
+          experience={{ kind: 'teaching', term: 'current' }}
         />
       </RoadmapCanvasSessionPersistenceProvider>,
     );
@@ -500,12 +609,18 @@ describe('RoadmapCanvasSession', () => {
     });
     await waitFor(() => expect(persistence.load).toHaveBeenCalledTimes(3));
     await act(async () => {
-      resolveLatest({ ...roadmap, nodes: [{ ...roadmap.nodes[0], title: 'Integrales' }] });
+      resolveLatest({
+        ...teachingRoadmap,
+        nodes: [{ ...teachingRoadmap.nodes[0], title: 'Integrales' }],
+      });
       await latest;
     });
     await screen.findByRole('button', { name: 'Integrales' });
     await act(async () => {
-      resolveOlder({ ...roadmap, nodes: [{ ...roadmap.nodes[0], title: 'Derivadas' }] });
+      resolveOlder({
+        ...teachingRoadmap,
+        nodes: [{ ...teachingRoadmap.nodes[0], title: 'Derivadas' }],
+      });
       await older;
     });
     expect(screen.getByRole('button', { name: 'Integrales' })).toBeTruthy();
