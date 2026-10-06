@@ -35,7 +35,6 @@ let peak = 0;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-  delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
   vi.spyOn(console, 'info').mockImplementation(() => undefined);
   active = 0;
   peak = 0;

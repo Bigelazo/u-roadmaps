@@ -29,7 +29,6 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   course,
   apiAs,
 }) => {
-  test.setTimeout(120_000);
   const teacher = await apiAs(course.users.teacher);
   const student = await apiAs(course.users.studentWithoutProgress);
   const { createNode } = await prepareNodeCreator(teacher, course);
@@ -93,8 +92,8 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
     status: 'BLOCKED',
     reason: 'TEACHER_BLOCK',
   });
-  // Node creation already notified this student, so the release closes as a summary
-  // once the 60-second window ends; its latest change is attributed to teaching staff.
+  // The release is stored immediately (no grouping window, see ADR-0014);
+  // its latest change is attributed to teaching staff.
   await expect
     .poll(
       () =>
@@ -106,7 +105,7 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
            ORDER BY "occurredAt" DESC, id DESC
            LIMIT 1;`,
         ),
-      { timeout: 75_000, intervals: [1_000] },
+      { timeout: 15_000, intervals: [1_000] },
     )
     .toEqual({ changeKind: 'node-available', actorName: 'Equipo docente' });
 

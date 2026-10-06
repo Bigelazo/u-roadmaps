@@ -8,8 +8,8 @@ import {
   roadmapClassificationChangeMessage,
   roadmapPathChangeMessage,
 } from '../application/messages';
-import type { NoticeClass } from '../application/group-notices';
-import { deliverGroupedNotice } from './grouped-delivery';
+import type { NoticeClass } from '../application/notice-effect';
+import { deliverNotice } from './notice-delivery';
 import type {
   NodeChangeNotice,
   RoadmapClassificationChangeNotice,
@@ -54,7 +54,7 @@ async function storeNotice(
   for (let offset = 0; offset < participants.length; offset += DELIVERY_CONCURRENCY) {
     const results = await Promise.allSettled(
       participants.slice(offset, offset + DELIVERY_CONCURRENCY).map(({ userId }) =>
-        deliverGroupedNotice({
+        deliverNotice({
           eventId: notice.eventId,
           recipientId: userId,
           roadmapId: notice.roadmapId,

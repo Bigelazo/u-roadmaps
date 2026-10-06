@@ -135,12 +135,14 @@ test('used Type renames deliver one general notice across Sections and recognize
   });
   expect(reassigned.status()).toBe(200);
   expect(await classification()).toHaveLength(1);
-  // Reassigning the Node type is buffered in its existing Node window.
-  expect(
-    (await notices()).some(
-      (n) => n.data.nodeId === nodeIds[0] && n.data.changeKind === 'node-updated',
-    ),
-  ).toBe(false);
+  // Reassigning the Node type is stored immediately (no grouping window, see ADR-0014).
+  await expect
+    .poll(async () =>
+      (await notices()).some(
+        (n) => n.data.nodeId === nodeIds[0] && n.data.changeKind === 'node-updated',
+      ),
+    )
+    .toBe(true);
   expect(
     (await notices()).some(
       (n) => n.data.nodeId === nodeIds[0] && n.data.changeKind === 'node-available',

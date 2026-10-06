@@ -1,9 +1,13 @@
 # Operación de avisos propios
 
+> Se reemplazará según [ADR-0014](adr/0014-target-based-notice-grouping.md)
+> (aceptado el 2026-10-05). Mientras no se implemente, este documento describe el
+> comportamiento vigente.
+
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
 por SSE autenticado. Disponibilidad, Nodos y cambios de acceso, Recursos,
 Dependencias y clasificación usan exclusivamente esta entrega y el mismo
-agrupador. No hay SDK, configuración de suscriptores, workflows, publicación de
+almacenamiento inmediato. No hay SDK, configuración de suscriptores, workflows, publicación de
 Code Steps ni conexiones a Novu. No se importan avisos del proveedor anterior.
 El contrato acordado vive en [#152](https://github.com/Bigelazo/u-roadmaps/issues/152);
 [#139](https://github.com/Bigelazo/u-roadmaps/issues/139) y el historial Git conservan
@@ -26,11 +30,9 @@ pnpm start
 ```
 
 La operación admitida ejecuta **un único proceso Node persistente** mediante
-`next start`. El agrupador comparte sus ventanas entre las rutas del proceso,
-pero no entre réplicas; no usar varios workers, escalado horizontal ni procesos
-que suspendan la ejecución entre solicitudes. El repositorio no contiene archivos
-de despliegue Docker. PostgreSQL LISTEN permite distribuir señales entre procesos,
-pero eso por sí solo no coordina la agrupación.
+`next start`. Ya no hay ventanas de agrupación en memoria. Esta validación no
+certifica escalado horizontal; el repositorio no contiene archivos de despliegue
+Docker. PostgreSQL LISTEN distribuye las señales entre procesos.
 
 Aplicar las migraciones antes de arrancar. No limpiar ni recrear las tablas de
 avisos: las migraciones conservan los avisos anteriores. No hay caducidad ni tarea
@@ -52,12 +54,12 @@ location /api/notifications/stream {
 }
 ```
 
-Las ventanas cierran a los 60 segundos aunque no haya más cambios ni Inbox
-abierto. El primer aviso permanece inmutable; el resumen es otra fila con su
-propia identidad y cantidad de repeticiones. Se comprueba la Participación activa
-antes de publicar un resumen. Cerrar el proceso pierde repeticiones aún no
-publicadas, pero conserva los avisos ya guardados. No hay outbox, replay ni
-recuperación durable de avisos que no llegaron a persistirse.
+Cada efecto aceptado se guarda inmediatamente, incluidas las repeticiones,
+con una identidad independiente y sin resumen separado. `NoticeDeliveryEffect`
+y el aviso se guardan en una transacción; repetir una identidad no crea otra
+fila. Cerrar el proceso conserva los avisos confirmados. No hay outbox, replay
+ni recuperación durable de avisos que no llegaron a persistirse. El modelo
+acordado en ADR-0014 todavía no está implementado.
 
 ## Verificar
 
@@ -75,7 +77,7 @@ La comprobación del bundle inspecciona los artefactos de cliente, servidor,
 trazas de dependencias y lockfile sin necesitar un secreto centinela. La suite
 ordinaria arranca un servidor de producción y usa Chromium y Firefox. Los
 recorridos `own-sse-notifications`, `own-notification-operation` y
-`own-notification-summaries` comprueban entrega real, ventana de producción,
+`own-notification-summaries` comprueban entrega inmediata real, llegada posterior a una apertura,
 actualización del Roadmap, contadores, reconocimiento indivisible, propagación
 entre pestañas y recuperación. No omiten pruebas por falta de credenciales Cloud.
 Los escenarios de audiencia, destinos inaccesibles, acceso revocado y paginación
@@ -84,9 +86,9 @@ presentan como evidencia de transporte.
 
 ## Observabilidad
 
-- `Roadmap notice saved`: un aviso quedó guardado; incluye clase y si es resumen.
-- `* notice delivery failed` / `Roadmap availability delivery failed` /
-  `Roadmap change summary delivery failed`: fallo de notificación posterior al
+- `Roadmap notice saved`: un aviso quedó guardado; incluye la clase.
+- `* notice delivery failed` / `Roadmap availability delivery failed`: fallo de
+  notificación posterior al
   cambio. La edición docente permanece confirmada.
 - `Roadmap live signal connection/subscription/payload/projection failed`: fallo
   de señal SSE. Los avisos guardados siguen consultables y la reconexión vuelve

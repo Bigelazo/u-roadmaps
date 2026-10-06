@@ -1,16 +1,15 @@
 import { expect, test } from './fixtures';
 import { authenticateAs, sessionCookie } from './helpers';
 
-test('Node repeats close without another edit or open Inbox, remain pending after an earlier opening and read as one summary', async ({
+test('Node repeats arrive without an open Inbox and an earlier opening cannot acknowledge later changes', async ({
   request,
   page,
   course,
 }) => {
-  test.setTimeout(90_000);
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const recipient = { cookie: await sessionCookie(course.users.studentWithoutProgress.id) };
   const roadmap = await (await request.get(course.apiPath(), { headers: author })).json();
-  const title = `Resumen real ${crypto.randomUUID()}`;
+  const title = `Cambios propios ${crypto.randomUUID()}`;
   const created = await request.post(course.apiPath('/nodes'), {
     headers: author,
     data: { title, nodeTypeId: roadmap.nodeTypes[0].id, positionX: 600, positionY: 0 },
@@ -45,7 +44,17 @@ test('Node repeats close without another edit or open Inbox, remain pending afte
           })
         ).status(),
       ).toBe(200);
-    expect(await notices()).toEqual([first]);
+    const repeated = await notices();
+    expect(repeated).toHaveLength(3);
+    expect(repeated[2]).toEqual(first);
+    expect(repeated.slice(0, 2)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          read: false,
+          data: expect.objectContaining({ eventCount: 1, changedFields: ['description'] }),
+        }),
+      ]),
+    );
     const opening = { roadmapId: roadmap.roadmap.id, nodeId, operationId: crypto.randomUUID() };
     expect(
       (
@@ -59,28 +68,33 @@ test('Node repeats close without another edit or open Inbox, remain pending afte
     ).toBe(200);
     expect(await count()).toBe(0);
 
-    // No browser/Inbox is open and no more mutations occur during the window.
-    await expect
-      .poll(async () => (await notices()).length, { timeout: 70_000, intervals: [1000] })
-      .toBe(2);
-    const [summary, retainedFirst] = await notices();
-    expect(retainedFirst).toEqual({ ...first, read: true });
-    expect(summary).toMatchObject({
-      subject: `Resumen de cambios · Nodo «${title}»`,
+    // No browser/Inbox is open; a later edit is delivered immediately.
+    const laterTitle = `${title} actualizado`;
+    expect(
+      (
+        await request.patch(course.apiPath(`/nodes/${nodeId}`), {
+          headers: author,
+          data: { title: laterTitle },
+        })
+      ).status(),
+    ).toBe(200);
+    const [latest, ...retained] = await notices();
+    expect(retained).toEqual(repeated.map((notice: object) => ({ ...notice, read: true })));
+    expect(latest).toMatchObject({
+      subject: laterTitle,
       read: false,
       data: {
-        eventCount: 2,
+        eventCount: 1,
         actorName: course.users.teacher.name,
         changeKind: 'node-updated',
-        changedFields: ['description'],
+        changedFields: ['title'],
       },
     });
-    expect(summary.body).toContain('Último cambio:');
-    expect(new Date(summary.data.occurredAt).getTime()).toBeGreaterThanOrEqual(
+    expect(new Date(latest.data.occurredAt).getTime()).toBeGreaterThanOrEqual(
       new Date(first.data.occurredAt).getTime(),
     );
     expect(await count()).toBe(1);
-    // Retrying the earlier opening cannot absorb the newly published summary.
+    // Retrying the earlier opening cannot absorb the later notice.
     expect(
       (
         await request.post('/api/notifications/acknowledge', { headers: recipient, data: opening })
@@ -91,14 +105,12 @@ test('Node repeats close without another edit or open Inbox, remain pending afte
     await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
     await page.goto('/academic-overview');
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
-    await page.getByRole('button', { name: new RegExp(`Resumen de cambios.*${title}`) }).click();
+    await page.getByRole('button', { name: new RegExp(laterTitle) }).click();
     await expect(page).toHaveURL(new RegExp(`targetNode=${nodeId}`));
-    await expect(page.getByRole('dialog', { name: summary.subject, exact: true })).toBeVisible();
-    await expect(page.getByText('2 cambios', { exact: true })).toBeVisible();
-    await expect(page.getByText('Autor del último cambio', { exact: true })).toBeVisible();
-    await expect(page.getByText('Último cambio', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: latest.subject, exact: true })).toBeVisible();
+    await expect(page.getByText('Último detalle', { exact: true })).toBeVisible();
     await expect.poll(count).toBe(0);
-    expect((await notices()).filter((notice: { read: boolean }) => notice.read)).toHaveLength(2);
+    expect((await notices()).filter((notice: { read: boolean }) => notice.read)).toHaveLength(4);
   } finally {
     await request.delete(course.apiPath(`/nodes/${nodeId}`), { headers: author });
   }

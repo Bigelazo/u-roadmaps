@@ -6,10 +6,11 @@ import {
   fixtureCompletions,
   fixtureParticipations,
   fixtureRoadmaps,
+  fixtureUsers,
 } from '@/development/fixtures/catalog';
 import { insert, literal, queryJson, sql } from './database';
-import type { NoticeClass } from '@/features/notifications/application/group-notices';
-import { fixture, fixtureRoadmapPath, sessionCookie } from './helpers';
+import type { NoticeClass } from '@/features/notifications/application/notice-effect';
+import { fixtureRoadmapPath, sessionCookie } from './helpers';
 import {
   courseCodePrefix,
   noticeRejectionPrefix,
@@ -59,23 +60,35 @@ export type CourseOfferingOptions = {
   participants?: readonly { user: E2EUser; role: ParticipationRole; isActive?: boolean }[];
 };
 
+function catalogUserIdByRut(rut: string) {
+  const user = fixtureUsers.find((user) => user.rut === rut);
+  if (!user) throw new Error(`Catalog User with RUT ${rut} is missing.`);
+  return user.id;
+}
+
 // Each User takes its Participation and progress from a CC1002 catalog User.
 const templateUsers = {
   teacher: { catalogId: developmentFixtureIds.daniela, label: 'Docente' },
   teachingAssistant: { catalogId: developmentFixtureIds.nicolas, label: 'Ayudante' },
   studentWithoutProgress: {
-    catalogId: fixture.cc1002StudentWithoutProgress,
+    catalogId: catalogUserIdByRut('20000001'),
     label: 'Estudiante sin progreso',
   },
   studentWithProgress: {
-    catalogId: fixture.cc1002StudentWithProgress,
+    catalogId: catalogUserIdByRut('20000009'),
     label: 'Estudiante con progreso',
   },
-  studentComplete: { catalogId: fixture.cc1002StudentComplete, label: 'Estudiante completo' },
-  withdrawnStudent: { catalogId: fixture.cc1002WithdrawnStudent, label: 'Estudiante retirado' },
+  studentComplete: {
+    catalogId: catalogUserIdByRut('20000048'),
+    label: 'Estudiante completo',
+  },
+  withdrawnStudent: {
+    catalogId: catalogUserIdByRut('20000050'),
+    label: 'Estudiante retirado',
+  },
   // Also enrolled in MA1001 and FI1001 in the catalog; tests add other Courses explicitly.
   multiCourseStudent: {
-    catalogId: fixture.cc1002MultiCourseStudent,
+    catalogId: catalogUserIdByRut('20000002'),
     label: 'Estudiante multicurso',
   },
 } as const;

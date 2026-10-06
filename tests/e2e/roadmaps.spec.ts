@@ -44,6 +44,34 @@ async function createNodeFromCanvas(page: Page, title: string) {
   await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeVisible();
 }
 
+test('pages and Roadmap HTTP routes share the normalized Course offering identifier', async ({
+  page,
+  course,
+  apiAs,
+}) => {
+  const spacedCode = encodeURIComponent(` ${course.courseCode} `);
+  const api = await apiAs(course.users.teacher);
+  const term = `${course.year}/${course.semester}`;
+  const roadmap = await api.get(`/api/${spacedCode}/${term}/roadmap`);
+  expect(roadmap.status()).toBe(200);
+  expect((await roadmap.json()).course.code).toBe(course.courseCode);
+
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(`/courses/${spacedCode}/${term}`);
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
+
+  const invalidApi = await api.get(`/api/%20/${term}/roadmap`);
+  expect(invalidApi.status()).toBe(400);
+  await expect(invalidApi.json()).resolves.toEqual({
+    error: {
+      code: 'INVALID_ACADEMIC_IDENTITY',
+      message: 'El ramo, año y semestre no forman una identidad académica válida.',
+    },
+  });
+  const invalidPage = await page.goto(`/courses/%20/${term}`);
+  expect(invalidPage?.status()).toBe(404);
+});
+
 test('teacher creates and edits a custom node type with visual pickers', async ({
   page,
   course,

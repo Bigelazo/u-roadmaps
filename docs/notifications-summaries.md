@@ -1,46 +1,35 @@
-# Resúmenes de cambios propios
+# Entrega de cambios propios
 
-Las cinco clases del catálogo pasan por `deliverGroupedNotice`: disponibilidad,
-Nodos (contenido y acceso), Recursos, Dependencias y clasificación. Todas usan
-PostgreSQL y la misma publicación SSE, sin servicios externos ni un Inbox abierto.
+El agrupador de ventanas de 60 segundos se retiró en #168. Cada efecto aceptado
+se guarda inmediatamente como un Aviso del roadmap independiente, también si
+repite el mismo Nodo o aspecto. No se publica un aviso de resumen separado.
+La agrupación por Objeto del aviso y el Resumen de cambios acordados en
+[ADR-0014](adr/0014-target-based-notice-grouping.md) siguen pendientes de
+implementación; esta entrega inmediata es el comportamiento transitorio.
 
-Cada grupo corresponde a Usuario, Roadmap, Nodo cuando existe y clase. El autor
-y el tipo concreto de cambio no dividen el grupo. El primer aviso se guarda
-inmediatamente e inicia una ventana fija de 60 segundos. Las repeticiones se
-guardan juntas en otro aviso al cerrar esa ventana, incluso si no llega otra
-edición. Una sola repetición produce un resumen de un cambio. El primer aviso
-no cuenta entre las repeticiones ni se modifica.
+Las cinco clases del catálogo (disponibilidad, Nodos, Recursos, Dependencias y
+clasificación) usan `deliverNotice`, PostgreSQL y la misma publicación SSE,
+sin servicios externos ni necesidad de tener abierto el Inbox.
+`NoticeDeliveryEffect` registra cada identidad de evento por destinatario;
+aceptar el efecto y guardar su aviso ocurre en una transacción. Entregar el
+mismo efecto otra vez no crea otro aviso. No hay temporizadores ni repeticiones
+pendientes en memoria; los avisos confirmados sobreviven al reinicio de Node.
+Los errores de entrega no revierten la edición docente. No hay outbox ni
+recuperación durable de efectos que no llegaron a guardarse.
 
-`NoticeDeliveryEffect` registra las identidades aceptadas por destinatario,
-incluidas las repeticiones sin fila individual. La aceptación y la publicación
-del primer aviso son una transacción; entregar de nuevo un efecto no incrementa
-el grupo, ni siquiera después del cierre. La migración incorpora los avisos
-anteriores a esos registros de idempotencia.
+Cada aviso conserva el contexto y el autor de su cambio. La apertura de Nodo
+captura solo los avisos publicados en ese instante: un cambio posterior sigue
+pendiente incluso al reintentar el reconocimiento de aquella apertura. Los
+refrescos SSE del Inbox mantienen las páginas expandidas y todos los avisos
+anteriores. El reconocimiento y el estado visto mantienen sus contratos
+vigentes hasta implementar ADR-0014.
 
-Las ventanas y sus temporizadores viven en el proceso Node de la aplicación y se
-comparten entre los módulos de rutas de Next. Requieren un proceso de aplicación
-persistente. La operación vigente admite un único proceso Node: no coordina ventanas entre
-réplicas ni recupera repeticiones tras una caída. No añade recuperación durable. Un fallo al
-guardar un resumen se informa sin afectar la edición del Roadmap.
+El spec `own-notification-summaries.spec.ts` conserva el recorrido sin Inbox
+abierto, la inmutabilidad de los avisos anteriores, la llegada posterior a una
+apertura y el reconocimiento desde el navegador, ahora sin esperas ni omisiones.
+La validación vigente se registra en [la guía de pruebas](agents/testing.md).
 
-El resumen conserva cantidad de repeticiones y contexto del último cambio según
-su instante efectivo. Identifica a su autor como autor del último cambio, no de
-toda la agrupación. Reutiliza la proyección y los ejemplos de mensajes, sin el
-límite de 256 caracteres exclusivo de Novu. No enumera eventos ni calcula un
-estado neto y permanece guardado sin caducidad.
-
-Primeros avisos y resúmenes se publican en `RoadmapNotice`; su trigger existente
-emite la misma invalidación de Inbox para SSE. Inbox, diálogo, contadores y
-reconocimiento usan la identidad de esa fila. La apertura de Nodo captura solo
-los avisos ya publicados: un resumen publicado después sigue pendiente incluso
-si se reintenta el reconocimiento de aquella apertura.
-
-Los refrescos del Inbox conservan sus páginas expandidas. Las señales de
-publicación, lectura o visibilidad de filas vuelven a consultar esas páginas sin
-reducir la lista a sus diez primeros avisos; así un resumen nuevo no impide
-consultar avisos anteriores.
-
-## Revisión y validación del 2026-10-04
+## Antecedente: revisión y validación del 2026-10-04
 
 Se usó `code-review` una vez, con dos revisiones independientes. La revisión de
 estándares sugirió extraer la preparación repetida de Nodos existentes; se

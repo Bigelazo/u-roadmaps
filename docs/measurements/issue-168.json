@@ -1,0 +1,239 @@
+{
+  "description": "Full Chromium/Firefox E2E invocations; 140 passed, zero skipped each. CPU and RSS sampled for the pnpm process tree; connections exclude the sampler.",
+  "runs": [
+    {
+      "startedAt": "2026-10-06T14:11:45.213Z",
+      "machine": {
+        "cpu": "Apple A18 Pro",
+        "cores": 6,
+        "ramGiB": 8
+      },
+      "workers": 1,
+      "code": 0,
+      "signal": null,
+      "durationSeconds": 174.822470917,
+      "samples": 165,
+      "samplingErrors": [],
+      "meanCpuPercent": 140.79090909090917,
+      "peakCpuPercent": 329.7,
+      "peakRssMiB": 1900.0625,
+      "peakConnections": 17,
+      "peakE2eConnections": 17,
+      "developmentFingerprint": {
+        "before": "bae937b922d7fa123f1dc01ae609abd0",
+        "after": "bae937b922d7fa123f1dc01ae609abd0",
+        "unchanged": true
+      },
+      "cleanup": {
+        "courses": 0,
+        "users": 0,
+        "noticeRejectionTriggers": 0
+      }
+    },
+    {
+      "startedAt": "2026-10-06T14:03:58.491Z",
+      "machine": {
+        "cpu": "Apple A18 Pro",
+        "cores": 6,
+        "ramGiB": 8
+      },
+      "workers": 2,
+      "code": 0,
+      "signal": null,
+      "durationSeconds": 143.530124958,
+      "samples": 131,
+      "samplingErrors": [],
+      "meanCpuPercent": 239.18244274809157,
+      "peakCpuPercent": 414.3,
+      "peakRssMiB": 2026.109375,
+      "peakConnections": 19,
+      "peakE2eConnections": 19,
+      "developmentFingerprint": {
+        "before": "bae937b922d7fa123f1dc01ae609abd0",
+        "after": "bae937b922d7fa123f1dc01ae609abd0",
+        "unchanged": true
+      },
+      "cleanup": {
+        "courses": 0,
+        "users": 0,
+        "noticeRejectionTriggers": 0
+      }
+    },
+    {
+      "startedAt": "2026-10-06T14:06:42.476Z",
+      "machine": {
+        "cpu": "Apple A18 Pro",
+        "cores": 6,
+        "ramGiB": 8
+      },
+      "workers": 3,
+      "code": 0,
+      "signal": null,
+      "durationSeconds": 136.41090475000001,
+      "samples": 119,
+      "samplingErrors": [],
+      "meanCpuPercent": 292.25966386554626,
+      "peakCpuPercent": 449.8999999999999,
+      "peakRssMiB": 3133.453125,
+      "peakConnections": 20,
+      "peakE2eConnections": 20,
+      "developmentFingerprint": {
+        "before": "bae937b922d7fa123f1dc01ae609abd0",
+        "after": "bae937b922d7fa123f1dc01ae609abd0",
+        "unchanged": true
+      },
+      "cleanup": {
+        "courses": 0,
+        "users": 0,
+        "noticeRejectionTriggers": 0
+      }
+    },
+    {
+      "startedAt": "2026-10-06T14:09:09.203Z",
+      "machine": {
+        "cpu": "Apple A18 Pro",
+        "cores": 6,
+        "ramGiB": 8
+      },
+      "workers": 4,
+      "code": 0,
+      "signal": null,
+      "durationSeconds": 148.307746958,
+      "samples": 123,
+      "samplingErrors": [],
+      "meanCpuPercent": 307.98861788617893,
+      "peakCpuPercent": 470.90000000000003,
+      "peakRssMiB": 3964.984375,
+      "peakConnections": 22,
+      "peakE2eConnections": 22,
+      "developmentFingerprint": {
+        "before": "bae937b922d7fa123f1dc01ae609abd0",
+        "after": "bae937b922d7fa123f1dc01ae609abd0",
+        "unchanged": true
+      },
+      "cleanup": {
+        "courses": 0,
+        "users": 0,
+        "noticeRejectionTriggers": 0
+      }
+    }
+  ],
+  "benchmarkBase": "2ebba0d9198b8e18615c670eb059cd7f96b51dd2",
+  "reviewedValidation": {
+    "startedAt": "2026-10-06T14:22:16.661Z",
+    "machine": {
+      "cpu": "Apple A18 Pro",
+      "cores": 6,
+      "ramGiB": 8
+    },
+    "workers": 2,
+    "code": 0,
+    "signal": null,
+    "durationSeconds": 144.7391775,
+    "samples": 131,
+    "samplingErrors": [],
+    "meanCpuPercent": 245.22519083969456,
+    "peakCpuPercent": 398.2,
+    "peakRssMiB": 2540.375,
+    "peakConnections": 20,
+    "peakE2eConnections": 20,
+    "developmentFingerprint": {
+      "before": "48b77a82e512bd2606c0b3d3d670db4e",
+      "after": "48b77a82e512bd2606c0b3d3d670db4e",
+      "unchanged": true
+    },
+    "seededAcknowledgements": {
+      "before": {
+        "count": 826,
+        "fingerprint": "9de8e5a3ddd91c4136db4e829a216321"
+      },
+      "after": {
+        "count": 826,
+        "fingerprint": "9de8e5a3ddd91c4136db4e829a216321"
+      },
+      "unchanged": true
+    },
+    "cleanup": {
+      "courses": 0,
+      "users": 0,
+      "noticeRejectionTriggers": 0
+    }
+  },
+  "finalValidationBase": "bd3d939a4aedb53eed0686eccf04623617635ef0",
+  "finalAcceptance1": {
+    "startedAt": "2026-10-06T14:36:33.542Z",
+    "machine": {
+      "cpu": "Apple A18 Pro",
+      "cores": 6,
+      "ramGiB": 8
+    },
+    "workers": 2,
+    "code": 0,
+    "signal": null,
+    "durationSeconds": 159.751345084,
+    "samples": 144,
+    "samplingErrors": [],
+    "meanCpuPercent": 234.6784722222222,
+    "peakCpuPercent": 399.69999999999993,
+    "peakRssMiB": 2161.015625,
+    "peakConnections": 19,
+    "peakE2eConnections": 19,
+    "developmentFingerprint": {
+      "before": "1ac558d2cb366285e2bdef5529079188",
+      "after": "1ac558d2cb366285e2bdef5529079188",
+      "unchanged": true
+    },
+    "seededAcknowledgements": {
+      "before": {
+        "count": 826,
+        "fingerprint": "9de8e5a3ddd91c4136db4e829a216321"
+      },
+      "after": {
+        "count": 826,
+        "fingerprint": "9de8e5a3ddd91c4136db4e829a216321"
+      },
+      "unchanged": true
+    },
+    "cleanup": {
+      "courses": 0,
+      "users": 0,
+      "noticeRejectionTriggers": 0
+    }
+  },
+  "finalAcceptance2": {
+    "command": "pnpm test",
+    "exitCode": 0,
+    "typecheck": "passed",
+    "unitFilesPassed": 58,
+    "unitTestsPassed": 302,
+    "e2eTestsPassed": 140,
+    "e2eFailed": 0,
+    "e2eSkipped": 0,
+    "e2eReportedDuration": "2.8m",
+    "auditBefore": {
+      "developmentFingerprint": "1ac558d2cb366285e2bdef5529079188",
+      "seededAcknowledgements": {
+        "count": 826,
+        "fingerprint": "9de8e5a3ddd91c4136db4e829a216321"
+      },
+      "cleanup": {
+        "courses": 0,
+        "users": 0,
+        "noticeRejectionTriggers": 0
+      }
+    },
+    "auditAfter": {
+      "developmentFingerprint": "1ac558d2cb366285e2bdef5529079188",
+      "seededAcknowledgements": {
+        "count": 826,
+        "fingerprint": "9de8e5a3ddd91c4136db4e829a216321"
+      },
+      "cleanup": {
+        "courses": 0,
+        "users": 0,
+        "noticeRejectionTriggers": 0
+      }
+    },
+    "auditUnchanged": true
+  }
+}

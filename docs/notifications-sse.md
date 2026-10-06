@@ -1,5 +1,9 @@
 # Own Inbox and Roadmap live updates
 
+> Se reemplazará según [ADR-0014](adr/0014-target-based-notice-grouping.md)
+> (aceptado el 2026-10-05). Mientras no se implemente, este documento describe el
+> comportamiento vigente.
+
 `GET /api/notifications/stream` authenticates the current application User and
 streams invalidations through SSE. The application provider opens one EventSource
 per tab, shared by the Inbox, counters and Roadmap canvas session. Switching User

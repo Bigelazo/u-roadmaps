@@ -27,14 +27,14 @@ export default defineConfig({
   testDir: './tests/e2e',
   // Removes test-owned data left by interrupted runs (ADR-0013).
   globalSetup: './tests/e2e/global-setup.ts',
-  // Temporary shared-fixture baseline; parallel migration is tracked in ADR-0013.
-  fullyParallel: false,
-  workers: 1,
+  // Per-test data isolation (ADR-0013); worker count measured in issue #168.
+  fullyParallel: true,
+  workers: 2,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   // Stop repeated infrastructure failures; use --max-failures=0 for a full audit.
   maxFailures: 3,
-  // Sequential Chromium/Firefox acceptance cases use real 60-second windows.
+  // Bounds preparation and the complete suite in both browsers.
   globalTimeout: 25 * 60_000,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {

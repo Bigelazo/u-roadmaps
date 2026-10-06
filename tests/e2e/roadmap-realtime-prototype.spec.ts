@@ -80,17 +80,16 @@ test('two open sessions refetch the authoritative Roadmap through real SSE', asy
     await expect(student.locator(`.react-flow__node[data-id="${nodeId}"]`)).toHaveClass(/selected/);
 
     // A transient projection failure retains detail and recovers automatically.
-    await student.route(
-      `**${course.apiPath()}`,
-      async (route) => {
-        await route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: { message: 'Fallo transitorio de actualización' } }),
-        });
-      },
-      { times: 1 },
-    );
+    // Keep the fault active until its UI is observed; overlapping refreshes
+    // must not replace the error with a successful projection between polls.
+    const projectionRoute = `**${course.apiPath()}`;
+    await student.route(projectionRoute, async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Fallo transitorio de actualización' } }),
+      });
+    });
     expect(
       (
         await teacherContext.request.patch(nodePath, {
@@ -98,9 +97,9 @@ test('two open sessions refetch the authoritative Roadmap through real SSE', asy
         })
       ).status(),
     ).toBe(200);
-    await student.evaluate(() => window.dispatchEvent(new Event('online')));
     await expect(student.getByText('Fallo transitorio de actualización')).toBeVisible();
     await expect(student.getByRole('heading', { name: 'Nodo sincronizado' })).toBeVisible();
+    await student.unroute(projectionRoute);
     await expect(student.getByText('Cambio recuperado sin aviso', { exact: true })).toBeVisible();
     await expect(student.getByText('Fallo transitorio de actualización')).toBeHidden();
 

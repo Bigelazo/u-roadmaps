@@ -91,3 +91,47 @@ La recuperación operativa de la sesión actual será el punto de partida. Estas
 - [Playwright: buenas prácticas y control de los datos](https://playwright.dev/docs/best-practices).
 - [Playwright: paralelismo y aislamiento del estado compartido](https://playwright.dev/docs/test-parallel#avoiding-shared-state-in-parallel-tests).
 - [Playwright: fixtures y ciclo de vida de recursos](https://playwright.dev/docs/test-fixtures).
+
+## Medición final de #168 — 2026-10-06
+
+La suite completa de Chromium y Firefox, con datos propios por test, pasó
+consecutivamente con 2, 3 y 4 workers, sin limpieza manual: **140 aprobados,
+cero fallos y cero omisiones** en cada invocación. Se activa `fullyParallel:
+true` y se fijan **2 workers**, manteniendo `retries: 0` y `maxFailures: 3`.
+La migración se declara completa después de estas comprobaciones.
+
+| Workers | Duración completa | CPU media / pico (% de un núcleo) | RSS máximo (MiB) | Conexiones PostgreSQL total / E2E |
+| --- | ---: | ---: | ---: | ---: |
+| 1 (control) | 174,82 s | 140,8 / 329,7 | 1900,1 | 17 / 17 |
+| 2 | 143,53 s | 239,2 / 414,3 | 2026,1 | 19 / 19 |
+| 3 | 136,41 s | 292,3 / 449,9 | 3133,5 | 20 / 20 |
+| 4 | 148,31 s | 308,0 / 470,9 | 3965,0 | 22 / 22 |
+
+Subir de 2 a 3 mejora solo **4,96 %**, por debajo del umbral aproximado del
+10 %; con 4 aumenta la duración y la memoria. Se elige el menor candidato en
+ese punto: 2. Se midió en Apple A18 Pro, 6 núcleos y 8 GiB, con build cacheado.
+La CPU y RSS corresponden al árbol de procesos de la invocación; las conexiones
+son muestras de client backends y excluyen la observación. Las cifras no son
+picos continuos ni mediciones estadísticas de varias repeticiones.
+
+Todas las invocaciones dejaron cero Ramos y Usuarios E2E y cero triggers de
+rechazo de avisos; conservaron la huella completa de filas de `roadmap_dev_db`.
+El trigger permanente de Inbox de la aplicación se conserva para SSE.
+La [guía de pruebas](../agents/testing.md#paralelismo-y-mediciones-de-168--2026-10-06)
+y los [resúmenes medidos](../measurements/issue-168.json) registran metodología,
+comandos, estado transitorio de avisos y límites de la evidencia.
+
+El control con un worker sobre el mismo código pasó los 140 casos, sin
+omisiones, en **174,82 s**. Dos workers reducen esa duración en **17,90 %**
+(31,29 s). El control se ejecutó después de los candidatos 2, 3 y 4; todos
+usaron preparación y build cacheado, sin limpieza manual entre invocaciones.
+
+La aceptación final, después de resolver los cinco hallazgos de la revisión
+única e incorporar `bd3d939` del remoto, ejecutó dos suites completas
+consecutivas con la configuración elegida: **140 E2E aprobadas** en **159,75 s**
+y **140 E2E aprobadas** en **2,8 minutos**, sin fallos, omisiones ni limpieza
+manual. La segunda fue `pnpm test`, que también aprobó tipos y **302 unitarios**.
+Las auditorías conservaron desarrollo y los reconocimientos históricos del
+catálogo y no dejaron datos propios ni triggers de fallo. Estas comprobaciones
+validan el estado final; las mediciones de selección se hicieron sobre la base
+`2ebba0d` antes de los ajustes de revisión, manteniendo los mismos recorridos.

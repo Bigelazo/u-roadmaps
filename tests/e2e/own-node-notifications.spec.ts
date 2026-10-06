@@ -52,7 +52,6 @@ test('Resource notices persist context and share their Node destination and ackn
   course,
   page,
 }) => {
-  test.setTimeout(95_000);
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const student = course.users.studentWithoutProgress.id;
@@ -179,32 +178,32 @@ test('Resource notices persist context and share their Node destination and ackn
   });
   expect(nodeChange.status()).toBe(200);
 
-  // Node and Resource repeats close independently through the same production window.
-  await expect
-    .poll(() => count(nodeId), { timeout: 70_000, intervals: [1000] })
-    .toBe(initialNodeCount + 3);
+  // Repeats are stored immediately (no grouping window, see ADR-0014):
+  // resource added, updated and removed, plus the Node update.
+  await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 4);
   await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
   const noticesBeforeOpening = await getNotices(student, nodeId);
   expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('node-updated');
   expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('resource-added');
 
   const studentResourceNotices = await resourceNotices(student, nodeId);
-  expect(studentResourceNotices).toHaveLength(2);
+  expect(studentResourceNotices).toHaveLength(3);
   expect(studentResourceNotices.map((notice) => notice.data.changeKind).sort()).toEqual([
     'resource-added',
     'resource-removed',
+    'resource-updated',
   ]);
   const deletionNotice = studentResourceNotices.find(
     (notice) => notice.data.changeKind === 'resource-removed',
   );
   expect(deletionNotice).toMatchObject({
-    subject: expect.stringContaining('Resumen de cambios'),
+    subject: `Cambio de recurso: ${updatedTitle}`,
     read: false,
     data: {
       nodeId,
       nodeTitle: expect.any(String),
       resourceTitle: updatedTitle,
-      eventCount: 2,
+      eventCount: 1,
       actorName: course.users.teacher.name,
       occurredAt: expect.any(String),
     },
@@ -215,7 +214,7 @@ test('Resource notices persist context and share their Node destination and ackn
 
   expect(await resourceNotices(course.users.teacher.id, nodeId)).toHaveLength(0);
   expect(await resourceNotices(inactive, nodeId)).toHaveLength(0);
-  expect(await resourceNotices(teacher, nodeId)).toHaveLength(2);
+  expect(await resourceNotices(teacher, nodeId)).toHaveLength(3);
 
   await authenticateAs(page.context(), student);
   await page.goto('/academic-overview');
@@ -371,7 +370,6 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   createUser,
   createCourse,
 }) => {
-  test.setTimeout(90_000);
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
@@ -431,6 +429,10 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
     data: { sourceNodeId: prerequisite, targetNodeId: nodeId },
   });
   expect(dependency.status()).toBe(201);
+  // Dependency access notices are delivered after the HTTP response. Wait for
+  // them before capturing the baseline for the subsequent content changes.
+  for (const userId of [without, observer, withProgress])
+    await expect.poll(() => count(userId, nodeId)).toBe(2);
   expect(
     (
       await request.post(roadmapPath(`/nodes/${prerequisite}/completion`), {
@@ -454,16 +456,18 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
       (await request.patch(roadmapPath(`/nodes/${nodeId}`), { headers: author, data })).status(),
     ).toBe(200);
   }
+  // Content repeats are stored immediately (no grouping window, see ADR-0014),
+  // but only for recipients eligible to see the Node's content.
   expect(await count(without, nodeId)).toBe(beforeContent.get(without));
   expect(await count(observer, nodeId)).toBe(beforeContent.get(observer));
-  expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress));
-  expect(await count(course.users.teachingAssistant.id, nodeId)).toBe(
-    beforeContent.get(course.users.teachingAssistant.id),
+  expect(await count(withProgress, nodeId)).toBeGreaterThan(beforeContent.get(withProgress)!);
+  expect(await count(course.users.teachingAssistant.id, nodeId)).toBeGreaterThan(
+    beforeContent.get(course.users.teachingAssistant.id)!,
   );
+  const afterContent = await count(withProgress, nodeId);
   for (const data of [{ title: 'Nuevo título' }, { positionX: 99, positionY: 99 }])
     await request.patch(roadmapPath(`/nodes/${nodeId}`), { headers: author, data });
-  expect(await count(withProgress, nodeId)).toBe(beforeContent.get(withProgress));
-  // Only eligible content repeats appear in the delayed summary.
+  expect(await count(withProgress, nodeId)).toBe(afterContent);
   const latestKind = async (userId: string) => {
     const response = await request.get(`/api/notifications?nodeId=${nodeId}`, {
       headers: { cookie: await sessionCookie(userId) },
@@ -471,7 +475,7 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
     expect(response.status()).toBe(200);
     return (await response.json()).notifications[0]?.data.changeKind;
   };
-  await expect.poll(() => latestKind(withProgress), { timeout: 70_000 }).toBe('node-updated');
+  await expect.poll(() => latestKind(withProgress)).toBe('node-updated');
   expect(await latestKind(course.users.teachingAssistant.id)).toBe('node-updated');
   expect(await latestKind(without)).toBe('node-blocked');
   expect(await latestKind(observer)).toBe('node-blocked');

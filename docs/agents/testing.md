@@ -3,25 +3,16 @@
 ## Estado actual
 
 La configuración E2E está en [playwright.config.ts](../../playwright.config.ts).
-Usa Chromium y Firefox, un worker provisional y ningún reintento automático.
-La migración a datos propios por test del
-[ADR-0013](../adr/0013-enable-parallel-e2e-tests.md) está en curso: `own-notifications.spec.ts`, `roadmaps.spec.ts`,
-`own-classification-notifications.spec.ts`, `own-dependency-notifications.spec.ts`
-y `own-notification-operation.spec.ts`, junto con los seis specs de Roadmap
-documentados en la validación de #166 y los cuatro specs de Avisos por cambio
-de #167, están migrados; los demás specs
-todavía comparten el catálogo sembrado y requieren el worker único.
+Usa Chromium y Firefox con `fullyParallel: true`, workers fijos, `retries: 0`
+y `maxFailures: 3`. La selección de workers y la validación vigente de #168 se
+registran al final de esta guía; las validaciones anteriores son antecedentes.
 
-Validación de `roadmaps.spec.ts` del **2026-10-04**, con Chromium y Firefox:
-`--workers=3 --fully-parallel --repeat-each=5` terminó con **210 aprobados**, sin
-fallos ni omisiones, en **5,2 minutos** y código de salida 0; cada uno de sus 21
-casos también pasó por separado con `--grep`. Después no quedaron Ramos `E2E-*`,
-Usuarios del dominio reservado, triggers de fallo ni archivos subidos huérfanos.
-
-La última validación, del **2026-10-02**, ejecutó los **80 casos ajenos a
-notificaciones**: todos pasaron en **1,5 minutos**, con código de salida 0.
-Notificaciones quedó fuera de esa revisión por indicación del usuario. Sus tests
-siguen incluidos en `pnpm test:e2e`; no se añadieron omisiones permanentes.
+Todos los specs mutables usan datos propios por test del
+[ADR-0013](../adr/0013-enable-parallel-e2e-tests.md). Solo
+`development-fixture.spec.ts` consulta las identidades del catálogo sembrado,
+que queda de solo lectura. `fixtures.ts` usa el catálogo como plantilla para
+crear copias con IDs nuevos, sin modificarlo. El helper compartido conserva
+únicamente las identidades que necesita el spec del catálogo.
 
 ## Preparación y aislamiento
 
@@ -117,7 +108,7 @@ El filtro excluye los tres archivos de avisos y los dos de señales Novu.
 Reproducción de un caso en un navegador:
 
 ```sh
-pnpm test:e2e tests/e2e/development-fixture.spec.ts --project=firefox --grep 'normalized Course offering'
+pnpm test:e2e tests/e2e/roadmaps.spec.ts --project=firefox --workers=1 --grep 'normalized Course offering'
 ```
 
 La suite se detiene tras tres fallos. Para recoger todos los fallos en una
@@ -144,9 +135,10 @@ anteriores se conservan como antecedentes, no como configuración actual.
 | Suite completa                                   | 25 min                                                             |
 | Cierre del servidor con SIGTERM                  | 5 s antes del cierre forzado                                       |
 
-La suite dispone de 25 minutos porque los casos de agrupación ejecutan la ventana
-real de 60 segundos, secuencialmente y en ambos navegadores. Los límites por caso
-y por infraestructura no se ampliaron.
+La suite conserva un límite global de 25 minutos para preparación y ejecución
+paralela en ambos navegadores. La entrega es inmediata y ya no hay esperas de
+ventanas de agrupación de 60 segundos. Los límites por caso y por infraestructura
+no se ampliaron.
 
 El lanzamiento del navegador ocurre en un fixture de worker y tiene su propio
 plazo: el timeout normal del test no lo sustituye. Los límites SQL indicados
@@ -373,3 +365,133 @@ de un worker. La auditoría posterior volvió a devolver cero en todos los
 conteos. ESLint no encontró errores y conserva una advertencia previa por la
 espera fija de una animación en layout; Prettier y `git diff --check` pasaron.
 `graphify update .` actualizó el grafo AST.
+
+## Paralelismo y mediciones de #168 — 2026-10-06
+
+La configuración ordinaria usa **dos workers** y `fullyParallel: true` en
+Chromium y Firefox; conserva `retries: 0`, `maxFailures: 3` y el límite global
+de 25 minutos. Los 17 specs usan datos propios por test salvo el spec del
+catálogo, que solo lo consulta. La migración a datos propios queda verificada:
+las corridas completas de 2, 3 y 4 workers pasaron consecutivamente con **140
+aprobados, cero fallos y cero omisiones** cada una, sin limpieza manual.
+
+Se midió en un Apple A18 Pro de 6 núcleos y 8 GiB, con Node 26.10.0,
+pnpm 12.6.0 y PostgreSQL 18.6 local. Los tiempos incluyen migraciones, reset,
+build cacheado, arranque, tests y cierre del servidor. Las invocaciones fueron
+secuenciales. El estado medido incluye la retirada autorizada del agrupador
+de 60 segundos y entrega inmediata de cada repetición; no se compara ese cambio
+con las esperas de 19,1 minutos de #166 como si toda la mejora fuera paralelismo.
+
+| Workers | Duración | CPU media / pico (% de un núcleo) | RSS máximo (MiB) | Conexiones PostgreSQL total / E2E | Resultado |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1 (control) | 174,82 s | 140,8 / 329,7 | 1900,1 | 17 / 17 | 140 aprobados |
+| 2 | 143,53 s | 239,2 / 414,3 | 2026,1 | 19 / 19 | 140 aprobados |
+| 3 | 136,41 s | 292,3 / 449,9 | 3133,5 | 20 / 20 | 140 aprobados |
+| 4 | 148,31 s | 308,0 / 470,9 | 3965,0 | 22 / 22 | 140 aprobados |
+
+Se elige **2**: subir a 3 ahorra `(143,53 - 136,41) / 143,53 = 4,96 %`,
+inferior al umbral aproximado del 10 %. Con 4 se tarda más que con 2 o 3 y
+se consume más memoria. Son mediciones locales de una corrida por candidato,
+no una estimación estadística ni un presupuesto certificado para otra máquina.
+
+El script [measure-e2e.mjs](../../scripts/measure-e2e.mjs) escribe un `.log` y
+un `.json` con muestras y resumen. Muestrea aproximadamente cada segundo:
+suma `%CPU` y RSS del árbol de procesos de `pnpm`, incluido Next y navegadores,
+y cuenta los client backends de PostgreSQL sin su conexión de observación.
+`%CPU` es el valor de `ps`, con su promedio temporal propio; no es CPU
+instantánea. RSS suma procesos y puede contar memoria compartida más de una vez;
+no mide RAM física del sistema ni incluye el servicio PostgreSQL. Los máximos
+son máximos observados entre muestras, no picos continuos. Una muestra fallida
+se registra y hace fallar la medición, sin abandonar el runner. Se conservaron
+los [resúmenes de evidencia](../measurements/issue-168.json).
+
+Para repetir las mediciones, ejecutar estos comandos consecutivamente (en macOS,
+`caffeinate -i` evita suspensión por inactividad; puede omitirse si no aplica):
+
+```sh
+caffeinate -i node scripts/measure-e2e.mjs 2 /tmp/e2e-workers2
+caffeinate -i node scripts/measure-e2e.mjs 3 /tmp/e2e-workers3
+caffeinate -i node scripts/measure-e2e.mjs 4 /tmp/e2e-workers4
+```
+
+El script también exige `DATABASE_URL` local de `roadmap_dev_db` para comprobar
+la huella antes y después: MD5 por tabla de sus filas JSONB ordenadas, agregado
+por nombre de tabla, dentro de una instantánea repeatable read. En las cuatro
+mediciones de workers la huella fue `bae937b922d7fa123f1dc01ae609abd0`, sin
+cambios dentro de cada invocación. Las validaciones posteriores comparan su
+propia huella de entrada, porque desarrollo puede cambiar entre invocaciones. Los
+conteos posteriores de Ramos `E2E-*`, Usuarios `@e2e.u-roadmaps.test` y triggers
+de rechazo E2E fueron **0 / 0 / 0**. El trigger permanente `own_inbox_changed`,
+instalado por la migración `20261003000000_own_notification_sse`, permanece:
+es parte del transporte SSE de producción, no un residuo de pruebas.
+
+Para reproducir un solo caso con un worker:
+
+```sh
+pnpm test:e2e tests/e2e/own-node-notifications.spec.ts --project=firefox --workers=1 --grep 'content notices follow'
+```
+
+La validación inicial detectó dos supuestos de tiempo: `seen` podía cambiar al
+mostrar una fila, y los avisos de acceso por Dependencias llegaban después de
+la respuesta HTTP. El spec ahora conserva la comparación de contenido e
+identidad, y espera la entrega antes de capturar su baseline. Los dos casos
+pasaron 12 ejecuciones repetidas entre ambos navegadores. El antiguo recorrido
+omitido de resumen temporal se adaptó a entrega inmediata, llegada posterior a
+una apertura y reintento del reconocimiento anterior; pasó en ambos navegadores
+sin omisiones. Un ensayo de 3 workers se descartó por timeout de la observación
+SQL; no se cuenta como medición aprobada ni justifica aumentar límites de tests.
+
+El control con un worker sobre el mismo código pasó los 140 casos, sin
+omisiones, en **174,82 s**. Dos workers reducen esa duración en **17,90 %**
+(31,29 s). El control se ejecutó después de los candidatos 2, 3 y 4; todos
+usaron preparación y build cacheado, sin limpieza manual entre invocaciones.
+
+La revisión única de #168 encontró **3 sugerencias de Standards y 2 hallazgos
+de Spec**, todos resueltos: módulos renombrados `notice-delivery.ts` y
+`notice-effect.ts`, lookup de Usuario del catálogo centralizado con error
+explícito, títulos y comentario de tests actualizados, navegación con identidad
+normalizada trasladada del catálogo a un Curso propio, y explicación vigente del
+límite global corregida. Las mediciones anteriores preceden esta última
+corrección de datos del test de navegación; los recorridos y número de casos
+se conservan. La validación final del estado revisado se registra a continuación.
+
+La comprobación adicional de catálogo compara la cantidad y la huella de
+`NoticeAcknowledgement` de los Usuarios sembrados antes y después de cada
+validación. No exige borrar sus 826 filas históricas: la garantía de solo lectura
+consiste en conservarlas sin crear ni modificar ninguna. La comprobación inicial
+que exigía cero filas históricas se corrigió; esa invocación tuvo 140 tests
+aprobados pero no se cuenta como una validación del wrapper con salida 0.
+
+La primera invocación agregada posterior a la revisión pasó tipos y **302
+unitarios**, pero E2E terminó con **139 aprobados y un fallo** en Firefox:
+el recorrido SSE no observó su error transitorio de proyección. La traza mostró
+un 503 seguido por un 200 del mismo contexto 124 ms después. El fallo HTTP se
+mantiene ahora hasta observar el error y el detalle conservado, se retira, y se
+comprueba la recuperación automática. Se retiró el evento `online` sintético:
+la edición docente produce la señal SSE real. No se ampliaron timeouts ni se
+activaron reintentos del runner. Esa corrida fallida no cuenta como aceptación.
+
+El recorrido SSE corregido pasó **10 ejecuciones repetidas** (5 por navegador)
+con dos workers, salida 0. La primera aceptación completa del código final,
+después de incorporar `bd3d939` del remoto, pasó **140 E2E**, sin fallos ni
+omisiones, en **159,75 s**, salida 0. Los conteos de limpieza volvieron a cero;
+la huella de desarrollo `1ac558d2cb366285e2bdef5529079188` y las 826 filas de
+reconocimiento históricas del catálogo (huella
+`9de8e5a3ddd91c4136db4e829a216321`) quedaron iguales antes y después.
+
+## Resultado final de #168
+
+`pnpm test` completo terminó con **salida 0**: tipos aprobados, **58 archivos
+y 302 pruebas unitarias aprobadas**, y **140 E2E aprobadas, cero fallos y cero
+omisiones**, en **2,8 minutos** para E2E. Es la segunda corrida completa
+consecutiva del código final con dos workers, después de los 140 aprobados en
+159,75 s; no hubo limpieza manual entre ambas. La auditoría posterior conservó
+la huella de desarrollo y la cantidad y huella de reconocimientos del catálogo,
+y devolvió cero Ramos y Usuarios E2E y cero triggers de rechazo.
+
+ESLint de todo el código modificado pasó sin errores, con cuatro advertencias
+preexistentes por condicionales de `roadmaps.spec.ts`; Prettier y
+`git diff --check` pasaron. `graphify update .` actualizó el grafo AST sin
+llamadas externas. Se usó `code-review` una sola vez y se aplicaron todas sus
+cinco sugerencias. ADR-0014 sigue pendiente: el commit incluye su documentación
+y la entrega inmediata transitoria autorizada, no su rediseño completo.

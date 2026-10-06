@@ -15,18 +15,17 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-test('access notices and summaries retain context through blocking, unlocking, hiding and deletion', async ({
+test('access notices retain context through blocking, unlocking, hiding and deletion', async ({
   request,
   course,
   page,
 }) => {
-  test.setTimeout(90_000);
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const student = course.users.studentWithProgress.id;
   const withoutProgress = course.users.studentWithoutProgress.id;
   const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
-  // Existing visible Nodes are fixtures, so access changes start fresh windows.
+  // Existing visible Nodes avoid creation notices during these access changes.
   const existingNode = async (title: string) => {
     const id = await createExistingNode({
       roadmapId: roadmap.roadmap.id,
@@ -50,14 +49,11 @@ test('access notices and summaries retain context through blocking, unlocking, h
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     await page
       .getByRole('list', { name: 'Lista de avisos' })
-      .getByRole('button', { name: new RegExp(`^Resumen de cambios.*${escapeRegExp(title)}`) })
+      .getByRole('button', { name: new RegExp(`^${escapeRegExp(title)}`) })
       .first()
       .click();
-    await expect(
-      page.getByRole('dialog', { name: `Resumen de cambios · Nodo «${title}»`, exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText('Autor del último cambio', { exact: true })).toBeVisible();
-    await expect(page.getByText('Último cambio', { exact: true })).toBeVisible();
+    // Repeats are stored immediately without a summary (no grouping window, see ADR-0014).
+    await expect(page.getByRole('dialog', { name: title, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toHaveCount(0);
     await expect(page).not.toHaveURL(/targetNode=/);
     await expect
@@ -141,14 +137,11 @@ test('access notices and summaries retain context through blocking, unlocking, h
   ).toBe(204);
 
   await expect
-    .poll(async () => (await noticesFor(student, removedId))[0]?.data.changeKind, {
-      timeout: 70_000,
-      intervals: [1000],
-    })
+    .poll(async () => (await noticesFor(student, removedId))[0]?.data.changeKind)
     .toBe('node-deleted');
   const retired = (await noticesFor(student, rootId))[0];
   expect(retired).toMatchObject({
-    subject: `Resumen de cambios · Nodo «${rootTitle}»`,
+    subject: rootTitle,
     data: { changeKind: 'node-retired', targetKind: 'roadmap', nodeTitle: rootTitle },
   });
   expect(JSON.stringify(retired)).not.toContain('Detalle privado');
@@ -159,7 +152,7 @@ test('access notices and summaries retain context through blocking, unlocking, h
     'resource-added',
   ]);
   expect(deletionNotices[0]).toMatchObject({
-    subject: `Resumen de cambios · Nodo «${removedTitle}»`,
+    subject: removedTitle,
     data: { eventCount: 1, targetKind: 'roadmap', nodeTitle: removedTitle },
   });
   expect((await noticesFor(withoutProgress, removedId))[0].data.changeKind).toBe('node-deleted');

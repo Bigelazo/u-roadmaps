@@ -17,7 +17,6 @@ import { deliverNodeChange } from '@/features/notifications/server';
 
 beforeEach(() => {
   vi.useFakeTimers();
-  delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
   prisma.participation.findFirst.mockResolvedValue({ id: 'participation-id' });
   prisma.roadmapNotice.createMany.mockResolvedValue({ count: 1 });
   prisma.$transaction.mockImplementation((operation) => operation(prisma));
@@ -47,7 +46,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test('own Node summaries retain a long valid author and previous Node type through the production message builder', async () => {
+test('own Node notices retain a long valid author and previous Node type through the production message builder', async () => {
   const actorName = 'A'.repeat(200);
   const nodeTypeName = 'Evaluación '.repeat(10);
   prisma.participation.findMany
@@ -72,13 +71,14 @@ test('own Node summaries retain a long valid author and previous Node type throu
   };
   await deliverNodeChange({ ...input, eventId: 'first' });
   await deliverNodeChange({ ...input, eventId: 'repeat' });
-  await vi.advanceTimersByTimeAsync(60_000);
+  // Repeats are stored immediately; no grouping window or summary (ADR-0014 redesign pending).
+  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledTimes(2);
   expect(prisma.roadmapNotice.createMany).toHaveBeenLastCalledWith({
     skipDuplicates: true,
     data: [
       expect.objectContaining({
-        body: `Se agruparon 1 cambio. Último cambio: Nodo eliminado: ${actorName} informó este cambio en el Roadmap de CC3002. Tipo anterior: ${nodeTypeName}.`,
-        data: expect.objectContaining({ eventCount: 1, actorName, nodeTypeName }),
+        body: `Nodo eliminado: ${actorName} informó este cambio en el Roadmap de CC3002. Tipo anterior: ${nodeTypeName}.`,
+        data: expect.objectContaining({ eventId: 'repeat', actorName, nodeTypeName }),
       }),
     ],
   });

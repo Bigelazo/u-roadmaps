@@ -20,7 +20,6 @@ test('Dependency notices preserve route and access changes with separate recogni
   course,
   page,
 }) => {
-  test.setTimeout(90_000);
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const studentWithoutPrerequisite = course.users.studentWithoutProgress.id;
@@ -190,19 +189,14 @@ test('Dependency notices preserve route and access changes with separate recogni
   });
   expect(removal.status()).toBe(204);
   await expect
-    .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId), {
-      timeout: 70_000,
-      intervals: [1000],
-    })
+    .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
     .toHaveLength(2);
   for (const nodeId of [dependentId, transitiveId])
     await expect
-      .poll(
-        async () =>
-          (await nodeNoticesFor(studentWithoutPrerequisite, nodeId)).filter(
-            ({ data }) => data.changeKind === 'node-available',
-          ),
-        { timeout: 70_000, intervals: [1000] },
+      .poll(async () =>
+        (await nodeNoticesFor(studentWithoutPrerequisite, nodeId)).filter(
+          ({ data }) => data.changeKind === 'node-available',
+        ),
       )
       .toHaveLength(1);
 
@@ -210,7 +204,7 @@ test('Dependency notices preserve route and access changes with separate recogni
     ({ data }) => data.changeKind === 'dependency-removed',
   );
   expect(removedRouteNotice).toBeDefined();
-  // Newly delivered summaries can move an older route notice to another page.
+  // Newly delivered notices can move an older route notice to another page.
   // Make pagination deterministic instead of depending on earlier test timing.
   // Historical rows were already shown: scrolling them into view must not
   // generate seen signals that refresh and disable the pagination button mid-click.
@@ -221,7 +215,8 @@ test('Dependency notices preserve route and access changes with separate recogni
   await selectRouteNotice(studentWithoutPrerequisite, removedRouteNotice!);
   await expect(page).toHaveURL(new RegExp(`${course.pagePath()}\\?notice=`));
   await expect(
-    page.getByRole('dialog', { name: new RegExp(`Resumen de cambios.*${course.courseCode}`) }),
+    // Repeats are now stored immediately (no grouping window, see ADR-0014).
+    page.getByRole('dialog', { name: 'Ruta actualizada' }),
   ).toContainText(`«${dependentTitle}» ya no requiere «${prerequisiteTitle}»`);
   await expect
     .poll(

@@ -2,6 +2,11 @@
 
 This context describes the learning paths of university course offerings and their participants' progress.
 
+The notice definitions below describe the accepted target in ADR-0014. Its
+implementation is pending: the current transition stores each accepted change
+immediately and retains Node opening recognition and seen state. See
+[notification operations](docs/notifications-operations.md) for current behavior.
+
 ## Language (Lenguaje)
 
 **U-Roadmaps (U-Roadmaps)**:
@@ -57,20 +62,24 @@ A teaching-staff modification that meaningfully changes a participant's Roadmap 
 _Avoid_: Canvas movement, visual-only edit, notification
 
 **Roadmap notice (Aviso del roadmap)**:
-A message addressed to a User about Roadmap availability or relevant Roadmap changes, retaining the context needed to explain them even when the affected element no longer exists. It is distinct from the change itself and may represent an individual change or a Change summary.
+A message addressed to a User about Roadmap availability or relevant Roadmap changes, retaining the context needed to explain them even when the affected element no longer exists. It is distinct from the change itself and represents one Notice target, compared with what the recipient last knew.
 _Avoid_: Roadmap change, audit entry
 
 **Pending roadmap notice (Aviso pendiente del roadmap)**:
-A Roadmap notice that its recipient has not yet recognized by entering the corresponding Roadmap or opening the corresponding accessible Node. Merely seeing its Inbox row or opening its notice dialog does not recognize it.
+A Roadmap notice that its recipient has not yet recognized. Entering the corresponding Roadmap recognizes every pending notice of that Roadmap, after which those notices leave the Inbox; opening the Inbox does not recognize it, and notices have no separate seen state. While pending, it absorbs later changes to its Notice target and compares them with what the recipient last knew. It is withdrawn when its target returns to what the recipient last knew. It is neither shown nor counted while its target is not visible to the recipient. Losing the Participation withdraws every pending notice of that Roadmap.
 _Avoid_: Unseen notice, pending Roadmap change
 
 **Change summary (Resumen de cambios)**:
-A Roadmap notice that briefly represents repeated Roadmap changes from the same Roadmap, affected Node when applicable, and change class. It is recognized as one notice regardless of the number of changes represented and need not enumerate every individual modification.
-_Avoid_: Roadmap change, audit log
+The overview, shown once when a User enters a Roadmap, of every Roadmap notice pending for them since their previous entry. Entering without pending notices, or entering for the first time, shows none, regardless of how the User arrived.
+_Avoid_: Notice dialog, audit log, grouped notice
 
 **Notice target (Objeto del aviso)**:
-The single element and aspect a Roadmap notice is about, such as a Node's title, a Node's description, a Node's type, or a Node's access. Changes to different targets of the same Node are never merged; deleting a Node absorbs every pending notice about that Node.
+The single element and aspect a Roadmap notice is about, such as a Node's title, a Node's description, a Node's type, or a Node's access. Changes to different targets of the same Node are never merged; deleting a Node absorbs every pending notice about that Node, and a pending notice of a Node's creation absorbs every later change to it.
 _Avoid_: Node, notice destination, change class
+
+**Grouped roadmap notice (Aviso agrupado del roadmap)**:
+The single Inbox entry that stands for a recipient's pending Roadmap notices of one Roadmap when they concern three or more Notice targets. It counts as the number of targets it stands for, and each Roadmap is grouped separately.
+_Avoid_: Change summary, digest, general notice
 
 **User (Usuario)**:
 A person identified institutionally by a unique, normalized RUT who can participate in multiple course offerings. Their institutional email is unique but may be updated; conflicting identifiers must not be merged silently.
