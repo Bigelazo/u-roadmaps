@@ -1,17 +1,11 @@
+import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import 'server-only';
 import { recognitionSnapshot, acknowledgeCapturedNotice } from './recognition-snapshot';
 import { Prisma } from '@/shared/server/db';
 import { storedTitlePayload, type TitleNoticeEffect } from '../application/title-effect';
 import { reconcileTitleNotice } from '../application/reconcile-title';
 
-/** Delivery and recognition serialize at the recipient/Roadmap boundary. */
-export async function lockRecipientRoadmap(
-  transaction: Prisma.TransactionClient,
-  recipientId: string,
-  roadmapId: string,
-) {
-  await transaction.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${recipientId}:${roadmapId}`}, 0))`;
-}
+export { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 
 export async function reconcileStoredTitle(
   transaction: Prisma.TransactionClient,

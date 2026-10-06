@@ -1,3 +1,9 @@
+import {
+  NODE_ACCESS_STATES,
+  nodeAccessState,
+  accessNoticeDestination,
+  type NodeAccessState,
+} from '@/shared/node-access';
 import { studentNodeAccessById } from '@/features/roadmap/domain/access';
 
 export type NodeNotificationDescriptor = Readonly<{
@@ -8,6 +14,7 @@ export type NodeNotificationDescriptor = Readonly<{
   nodeTitle: string;
   nodeTypeName: string;
   targetKind: 'node' | 'roadmap';
+  previousAccess?: NodeAccessState;
   recipientIds: readonly string[];
 }>;
 
@@ -92,28 +99,39 @@ export function accessTransitionNotifications({
   excludedNodeIds?: ReadonlySet<string>;
 }): NodeNotificationDescriptor[] {
   const notices: NodeNotificationDescriptor[] = [];
+  const beforeNodes = new Map(before.nodes.map((node) => [node.id, node]));
   for (const node of after.nodes) {
-    if (!node.isVisible || excludedNodeIds.has(node.id)) continue;
-    const changedRecipients = after.participants.flatMap(({ userId }) => {
-      if (userId === actorId) return [];
-      const wasAccessible = before.accessibleByUser.get(userId)?.has(node.id) ?? false;
-      const isAccessible = after.accessibleByUser.get(userId)?.has(node.id) ?? false;
-      return wasAccessible === isAccessible ? [] : [{ userId, isAccessible }];
-    });
-    for (const isAvailable of [true, false]) {
-      const recipientIds = changedRecipients
-        .filter(({ isAccessible }) => isAccessible === isAvailable)
-        .map(({ userId }) => userId);
-      if (!recipientIds.length) continue;
-      notices.push({
-        nodeId: node.id,
-        roadmapId,
-        changeKind: isAvailable ? 'node-available' : 'node-blocked',
-        nodeTitle: node.title,
-        nodeTypeName: node.nodeType.name,
-        targetKind: isAvailable ? 'node' : 'roadmap',
-        recipientIds,
-      });
+    if (excludedNodeIds.has(node.id)) continue;
+    const previousNode = beforeNodes.get(node.id);
+    if (!previousNode) continue;
+    for (const previousAccess of NODE_ACCESS_STATES) {
+      for (const currentAccess of NODE_ACCESS_STATES) {
+        if (previousAccess === currentAccess) continue;
+        const recipientIds = after.participants
+          .filter(({ userId }) => {
+            if (userId === actorId) return false;
+            const beforeState = nodeAccessState(
+              previousNode.isVisible,
+              before.accessibleByUser.get(userId)?.has(node.id) ?? false,
+            );
+            const afterState = nodeAccessState(
+              node.isVisible,
+              after.accessibleByUser.get(userId)?.has(node.id) ?? false,
+            );
+            return beforeState === previousAccess && afterState === currentAccess;
+          })
+          .map(({ userId }) => userId);
+        if (!recipientIds.length) continue;
+        notices.push({
+          nodeId: node.id,
+          roadmapId,
+          ...accessNoticeDestination(currentAccess),
+          nodeTitle: node.title,
+          nodeTypeName: node.nodeType.name,
+          previousAccess,
+          recipientIds,
+        });
+      }
     }
   }
   return notices;
@@ -137,22 +155,17 @@ export function visibilityNotifications({
   const notices: NodeNotificationDescriptor[] = [];
   const beforeNodes = new Map(before.nodes.map((node) => [node.id, node]));
   const afterNodes = new Map(after.nodes.map((node) => [node.id, node]));
-  if (targetChange) {
+  if (targetChange === 'node-deleted') {
     const node = beforeNodes.get(targetNodeId) ?? afterNodes.get(targetNodeId);
     if (node) {
-      const recipients =
-        targetChange === 'node-available'
-          ? after.participants.filter(({ userId }) =>
-              after.accessibleByUser.get(userId)?.has(targetNodeId),
-            )
-          : before.participants;
+      const recipients = before.participants;
       notices.push({
         nodeId: targetNodeId,
         roadmapId,
         changeKind: targetChange,
         nodeTitle: node.title,
         nodeTypeName: node.nodeType.name,
-        targetKind: targetChange === 'node-available' ? 'node' : 'roadmap',
+        targetKind: 'roadmap',
         recipientIds: recipients.map(({ userId }) => userId).filter((id) => id !== actorId),
       });
     }
@@ -164,7 +177,7 @@ export function visibilityNotifications({
       after,
       actorId,
       roadmapId,
-      excludedNodeIds: new Set([targetNodeId]),
+      excludedNodeIds: targetChange === 'node-deleted' ? new Set([targetNodeId]) : new Set(),
     }),
   ];
 }

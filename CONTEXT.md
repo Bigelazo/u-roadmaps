@@ -7,7 +7,9 @@ implementation is incremental: #177 and #179 group Node title, description and
 type changes durably by independent Notice targets and withdraw returns to the
 known values. Title and type reach recipients who see a blocked Node; description
 only reaches recipients with access. Type assignments retain their captured names
-after type renames. Other classes still store each
+after type renames. #180 reconciles per-recipient Node access targets against
+Disponible, Bloqueado and Retirado, including cascades and Scheduled unlocks.
+Other classes still store each
 accepted change immediately. #178 recognizes every pending notice on Roadmap
 entry and shows the Change summary after the first visit; Node opening has no
 recognition effect and notices have no seen state. See

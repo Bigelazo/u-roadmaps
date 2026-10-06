@@ -81,6 +81,22 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
     (await teacher.put(schedulePath(standalone.id), { data: { unlockOn: tomorrow } })).status(),
   ).toBe(200);
 
+  // Recognize the blocks so a later Scheduled unlock compares with Bloqueado.
+  const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
+  await expect
+    .poll(async () =>
+      (
+        await (await student.get(`/api/notifications?nodeId=${standalone.id}`)).json()
+      ).notifications.some(
+        (notice: { data: { currentValue?: string } }) => notice.data.currentValue === 'Bloqueado',
+      ),
+    )
+    .toBe(true);
+  expect((await student.post('/api/notifications/openings', { data: opening })).status()).toBe(200);
+  expect((await student.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
+    200,
+  );
+
   // Both days arrive. The E2E server checks every second (SCHEDULED_UNLOCK_INTERVAL_MS):
   // the free node is released and notified, while the one behind a blocked prerequisite waits.
   await moveScheduleToYesterday(scheduled.id);

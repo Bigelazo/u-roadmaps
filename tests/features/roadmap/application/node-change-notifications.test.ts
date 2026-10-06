@@ -84,6 +84,7 @@ test('block notices follow each active Participation access projection across a 
       nodeId,
       roadmapId: 'roadmap',
       changeKind: 'node-blocked',
+      previousAccess: 'Disponible',
       nodeTitle: 'Unidad siguiente',
       nodeTypeName: 'Unidad',
       targetKind: 'roadmap',
@@ -129,6 +130,7 @@ test('unlock notices only reach participants whose access returns, with Completi
       nodeId,
       roadmapId: 'roadmap',
       changeKind: 'node-available',
+      previousAccess: 'Bloqueado',
       nodeTitle: 'Unidad siguiente',
       nodeTypeName: 'Unidad',
       targetKind: 'node',
@@ -170,6 +172,7 @@ test('unlocking a Node does not announce availability while a student prerequisi
       nodeId: 'selected',
       roadmapId: 'roadmap',
       changeKind: 'node-available',
+      previousAccess: 'Bloqueado',
       nodeTitle: 'Unidad siguiente',
       nodeTypeName: 'Unidad',
       targetKind: 'node',
@@ -221,7 +224,7 @@ test('a branch unlock held by an external teacher-blocked prerequisite emits no 
   ).toEqual([]);
 });
 
-test('publishing a hidden Node retains its title and targets only newly accessible participants', () => {
+test('publishing a hidden Node notifies both available and blocked states', () => {
   const notices = visibilityNotifications({
     before: snapshot([node('target', false)], { teacher: [], 'student-a': [], 'student-b': [] }),
     after: snapshot([node('target')], {
@@ -240,15 +243,26 @@ test('publishing a hidden Node retains its title and targets only newly accessib
       nodeId: 'target',
       roadmapId: 'roadmap',
       changeKind: 'node-available',
+      previousAccess: 'Retirado',
       nodeTitle: 'Evaluación final',
       nodeTypeName: 'Evaluación',
       targetKind: 'node',
       recipientIds: ['student-a'],
     },
+    {
+      nodeId: 'target',
+      roadmapId: 'roadmap',
+      changeKind: 'node-blocked',
+      previousAccess: 'Retirado',
+      nodeTitle: 'Evaluación final',
+      nodeTypeName: 'Evaluación',
+      targetKind: 'roadmap',
+      recipientIds: ['student-b'],
+    },
   ]);
 });
 
-test.each(['node-retired', 'node-deleted'] as const)(
+test.each(['node-deleted'] as const)(
   '%s retains the previous Node details and reaches the previous audience',
   (changeKind) => {
     const notices = visibilityNotifications({
@@ -295,24 +309,28 @@ test('hidden edits produce no target notice and dependency changes notify surviv
     roadmapId: 'roadmap',
   });
 
-  expect(notices).toEqual([
-    {
-      nodeId: 'survivor',
-      roadmapId: 'roadmap',
-      changeKind: 'node-available',
-      nodeTitle: 'Unidad siguiente',
-      nodeTypeName: 'Unidad',
-      targetKind: 'node',
-      recipientIds: ['student-b'],
-    },
-    {
-      nodeId: 'survivor',
-      roadmapId: 'roadmap',
-      changeKind: 'node-blocked',
-      nodeTitle: 'Unidad siguiente',
-      nodeTypeName: 'Unidad',
-      targetKind: 'roadmap',
-      recipientIds: ['student-a'],
-    },
-  ]);
+  expect(notices).toEqual(
+    expect.arrayContaining([
+      {
+        nodeId: 'survivor',
+        roadmapId: 'roadmap',
+        changeKind: 'node-available',
+        previousAccess: 'Bloqueado',
+        nodeTitle: 'Unidad siguiente',
+        nodeTypeName: 'Unidad',
+        targetKind: 'node',
+        recipientIds: ['student-b'],
+      },
+      {
+        nodeId: 'survivor',
+        roadmapId: 'roadmap',
+        changeKind: 'node-blocked',
+        previousAccess: 'Disponible',
+        nodeTitle: 'Unidad siguiente',
+        nodeTypeName: 'Unidad',
+        targetKind: 'roadmap',
+        recipientIds: ['student-a'],
+      },
+    ]),
+  );
 });

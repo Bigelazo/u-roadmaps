@@ -1,7 +1,7 @@
 # Operación de avisos propios
 
 > Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md):
-> #177 y #179 activan los Objetos de título, descripción y tipo de Nodo; #178 activa el reconocimiento al entrar. Este documento describe el estado
+> #177, #179 y #180 activan los Objetos de título, descripción, tipo y acceso de Nodo; #178 activa el reconocimiento al entrar. Este documento describe el estado
 > vigente; las otras clases conservan la transición inmediata.
 
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
@@ -48,14 +48,32 @@ actualizaciones y retiros emiten la misma invalidación SSE del Inbox. Los recib
 persisten tras actualizar o retirar un Aviso, por lo que un reintento no lo recrea.
 
 Título y tipo llegan también a quienes ven el Nodo bloqueado; descripción solo
-a quienes pueden acceder al Nodo. Los tres Objetos son independientes.
+a quienes pueden acceder al Nodo. Los Objetos son independientes.
 `NodeContentKnowledge` conserva el texto exacto de la descripción (sin recortar
 espacios) y la identidad del Tipo, con nombres capturados en la transacción de
 asignación. La transacción de edición captura la descripción anterior solo para
 participantes con acceso al Nodo; el trigger de tipo incluye también a quienes
 lo ven bloqueado. Repetir ediciones deja un Aviso pendiente por Objeto; volver al
 valor conocido lo retira. Renombrar un Tipo no reescribe los nombres del Aviso
-de asignación pendiente. Las demás
+de asignación pendiente.
+
+El acceso usa el Objeto `node-access` por Usuario y Nodo, con estados Disponible,
+Bloqueado y Retirado. La transacción docente captura la proyección anterior y
+actual en `NodeContentKnowledge` (`target = access`), incluyendo Completaciones
+por estudiante. La entrega consulta esa proyección actual, por lo que un efecto
+diferido no restaura un estado intermedio. Bloqueos y desbloqueos de Nodo o rama,
+Desbloqueos programados, cambios de Dependencias y visibilidad reconcilian cada
+Nodo cuyo estado cambió para ese destinatario. Un Aviso muestra el estado conocido
+y el actual, absorbe pasos intermedios y se retira al volver al conocido. También
+se reconoce y aparece en el Resumen de cambios cuando el estado actual es Retirado.
+La Completación actualiza la proyección de acceso de ese estudiante y avanza
+el valor conocido de los Nodos recién disponibles solo si no tienen un Objeto
+de acceso pendiente. Si hay uno, conserva su valor conocido, actualiza el estado
+actual y lo retira solo al volver al conocido; no reconoce otros Avisos. El Desbloqueo programado conserva
+la atribución a Equipo docente. La migración de
+#180 agrega la proyección actual sin borrar Avisos existentes.
+
+Las demás
 clases mantienen su entrega inmediata; todas se reconocen al entrar al Roadmap. Los siguientes
 tickets implementarán las restantes reglas de ADR-0014.
 
@@ -72,7 +90,7 @@ Reintentar una apertura ya podada devuelve 404. El cliente conserva el estado
 de error de reconocimiento y no sustituye la apertura por otra ni reconoce
 Avisos llegados después. Dentro de la retención, el reintento reutiliza el mismo
 `operationId` y el mismo conjunto, sin ampliar `noticeIds`. Para títulos también
-conserva `titleSnapshots`; descripción y tipo conservan `contentSnapshots`,
+conserva `titleSnapshots`; descripción, tipo y acceso conservan `contentSnapshots`,
 con los valores y nombres capturados al abrir. Si el Aviso cambió
 en el intervalo, el reconocimiento avanza al valor capturado y reconcilia el
 valor posterior como pendiente; `recognizedAt` impide repetir ese avance en un

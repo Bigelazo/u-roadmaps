@@ -18,7 +18,7 @@ export function changeSummary(
     const nodeId = typeof data.nodeId === 'string' ? data.nodeId : null;
     const node = nodeId ? currentNodes.get(nodeId) : undefined;
     const kind = data.changeKind;
-    if (node && !node.isVisible) continue;
+    if (node && !node.isVisible && data.noticeTarget !== 'node-access') continue;
     const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
     if (
       nodeId &&
@@ -31,54 +31,57 @@ export function changeSummary(
     )
       continue;
     const items: string[] = [];
-    switch (kind) {
-      case 'node-updated':
-        if (data.noticeTarget === 'node-title')
-          items.push(`«${data.knownTitle}» pasó a llamarse «${data.currentTitle}».`);
-        else if (fields.includes('title')) items.push('Se actualizó el título.');
-        if (fields.includes('description') && nodeId && accessible.has(nodeId))
-          items.push('Se actualizó la descripción.');
-        if (fields.includes('nodeType'))
+    if (data.noticeTarget === 'node-access') {
+      items.push(`Pasó de ${data.knownValue} a ${data.currentValue}.`);
+    } else
+      switch (kind) {
+        case 'node-updated':
+          if (data.noticeTarget === 'node-title')
+            items.push(`«${data.knownTitle}» pasó a llamarse «${data.currentTitle}».`);
+          else if (fields.includes('title')) items.push('Se actualizó el título.');
+          if (fields.includes('description') && nodeId && accessible.has(nodeId))
+            items.push('Se actualizó la descripción.');
+          if (fields.includes('nodeType'))
+            general.push(
+              data.noticeTarget === 'node-type'
+                ? `«${node?.title ?? data.nodeTitle}» pasó de tipo «${data.knownTypeName}» a tipo «${data.currentTypeName}».`
+                : `Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`,
+            );
+          break;
+        case 'node-available':
+          items.push('Nodo disponible.');
+          break;
+        case 'node-retired':
+          items.push('Nodo retirado.');
+          break;
+        case 'node-deleted':
+          items.push('Nodo eliminado.');
+          break;
+        case 'node-blocked':
+          items.push('Nodo bloqueado.');
+          break;
+        case 'resource-added':
+          items.push(`Nuevo recurso «${data.resourceTitle}».`);
+          break;
+        case 'resource-updated':
+          items.push(`Se actualizó el recurso «${data.resourceTitle}».`);
+          break;
+        case 'resource-removed':
+          items.push(`Se eliminó el recurso «${data.resourceTitle}».`);
+          break;
+        case 'dependency-added':
+        case 'dependency-removed':
           general.push(
-            data.noticeTarget === 'node-type'
-              ? `«${node?.title ?? data.nodeTitle}» pasó de tipo «${data.knownTypeName}» a tipo «${data.currentTypeName}».`
-              : `Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`,
+            `«${data.dependentNodeTitle}» ${kind === 'dependency-added' ? 'ahora requiere' : 'ya no requiere'} «${data.prerequisiteNodeTitle}».`,
           );
-        break;
-      case 'node-available':
-        items.push('Nodo disponible.');
-        break;
-      case 'node-retired':
-        items.push('Nodo retirado.');
-        break;
-      case 'node-deleted':
-        items.push('Nodo eliminado.');
-        break;
-      case 'node-blocked':
-        items.push('Nodo bloqueado.');
-        break;
-      case 'resource-added':
-        items.push(`Nuevo recurso «${data.resourceTitle}».`);
-        break;
-      case 'resource-updated':
-        items.push(`Se actualizó el recurso «${data.resourceTitle}».`);
-        break;
-      case 'resource-removed':
-        items.push(`Se eliminó el recurso «${data.resourceTitle}».`);
-        break;
-      case 'dependency-added':
-      case 'dependency-removed':
-        general.push(
-          `«${data.dependentNodeTitle}» ${kind === 'dependency-added' ? 'ahora requiere' : 'ya no requiere'} «${data.prerequisiteNodeTitle}».`,
-        );
-        break;
-      case 'classification-updated':
-        general.push(`El tipo «${data.previousTypeName}» ahora se llama «${data.nextTypeName}».`);
-        break;
-      case 'roadmap-available':
-        general.push('Roadmap disponible.');
-        break;
-    }
+          break;
+        case 'classification-updated':
+          general.push(`El tipo «${data.previousTypeName}» ahora se llama «${data.nextTypeName}».`);
+          break;
+        case 'roadmap-available':
+          general.push('Roadmap disponible.');
+          break;
+      }
     if (!items.length) continue;
     const key = nodeId ?? 'roadmap';
     const group = groups.get(key) ?? {

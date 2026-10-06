@@ -1,3 +1,4 @@
+import { captureAccessSnapshot } from './access-snapshot';
 import 'server-only';
 
 import { createHash } from 'node:crypto';
@@ -42,9 +43,7 @@ import { dependencyChangeNotifications } from '@/features/roadmap/application/de
 import { nodeTypeClassificationNotification } from '@/features/roadmap/application/node-type-classification-notifications';
 import {
   accessTransitionNotifications,
-  projectAccessSnapshot,
   visibilityNotifications,
-  type AccessSnapshot,
 } from '@/features/roadmap/application/node-change-notifications';
 
 type JsonObject = Record<string, unknown>;
@@ -65,42 +64,6 @@ type StructuralDependency = {
   sourceNodeId: string;
   targetNodeId: string;
 };
-
-async function captureAccessSnapshot(
-  transaction: Prisma.TransactionClient,
-  roadmapId: string,
-): Promise<AccessSnapshot> {
-  const [nodes, dependencies, participants] = await Promise.all([
-    transaction.roadmapNode.findMany({
-      where: { roadmapId },
-      select: {
-        id: true,
-        title: true,
-        isVisible: true,
-        isTeacherBlocked: true,
-        nodeType: { select: { name: true } },
-      },
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId } },
-      select: { sourceNodeId: true, targetNodeId: true },
-    }),
-    transaction.participation.findMany({
-      where: { courseOffering: { roadmap: { id: roadmapId } }, isActive: true },
-      select: { userId: true, role: true, isActive: true },
-    }),
-  ]);
-  const studentIds = participants
-    .filter(({ role }) => role === 'STUDENT')
-    .map(({ userId }) => userId);
-  const completions = studentIds.length
-    ? await transaction.completion.findMany({
-        where: { userId: { in: studentIds }, roadmapNode: { roadmapId } },
-        select: { userId: true, roadmapNodeId: true },
-      })
-    : [];
-  return projectAccessSnapshot({ nodes, dependencies, participants, completions });
-}
 
 function structuralDependencies(
   dependencies: readonly StructuralDependency[],

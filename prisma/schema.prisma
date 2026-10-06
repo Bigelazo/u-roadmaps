@@ -267,12 +267,14 @@ model NodeTitleKnowledge {
   @@id([recipientId, nodeId])
 }
 
-// Description text and type identity have independent recipient baselines.
+// Node target values have independent recipient baselines. Access also tracks
+// the current projection atomically with Roadmap edits for deferred delivery.
 model NodeContentKnowledge {
   recipientId     String      @db.Uuid
   nodeId          String      @db.Uuid
   target          String
   knownValue      String
+  currentValue    String?
   knownTypeName   String?
   currentTypeName String?
   recipient       User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)

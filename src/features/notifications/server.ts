@@ -135,6 +135,7 @@ export async function deliverNodeChange(
     changedFields: NodeChangeNotice['changedFields'];
     nodeTitle?: string;
     previousTitle?: string;
+    previousAccess?: NodeChangeNotice['previousAccess'];
     previousDescription?: string | null;
     previousTypeId?: string;
     previousTypeName?: string;
@@ -230,6 +231,7 @@ export async function deliverNodeChange(
     nodeTitle: input.nodeTitle ?? node!.title,
     changeKind: input.changeKind,
     changedFields: input.changedFields,
+    ...(input.previousAccess ? { contentTarget: 'access' as const, previousValue: input.previousAccess } : {}),
     ...(input.nodeTypeName ? { nodeTypeName: input.nodeTypeName } : {}),
     ...(input.targetKind ? { targetKind: input.targetKind } : {}),
     actorId: input.userId,

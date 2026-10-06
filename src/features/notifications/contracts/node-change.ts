@@ -1,3 +1,5 @@
+import type { NodeAccessState } from '@/shared/node-access';
+
 export type NodeChangeRecipient = Readonly<{ userId: string; name: string }>;
 
 type NodeScopedNotice = Readonly<{
@@ -26,8 +28,9 @@ export type NodeChangeNotice = NodeScopedNotice &
     previousTypeId?: string;
     previousTypeName?: string;
     currentTypeName?: string;
-    contentTarget?: 'description' | 'nodeType';
+    contentTarget?: 'description' | 'nodeType' | 'access';
     previousValue?: string;
+    previousAccess?: NodeAccessState;
     nodeTypeName?: string;
     targetKind?: 'node' | 'roadmap';
   }>;

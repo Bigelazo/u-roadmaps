@@ -1,3 +1,6 @@
+import { captureAccessSnapshot } from './access-snapshot';
+import { nodeAccessState, accessNoticeDestination } from '@/shared/node-access';
+import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
@@ -188,11 +191,65 @@ async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeIn
         );
         await requireCurrentRoadmap(transaction, courseOffering);
         await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
-        return transaction.completion.upsert({
+        await lockRecipientRoadmap(transaction, userId, roadmap.id);
+        const before = await captureAccessSnapshot(transaction, roadmap.id, userId);
+        const completion = await transaction.completion.upsert({
           where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
           update: {},
           create: { userId, roadmapNodeId: nodeId },
         });
+        const after = await captureAccessSnapshot(transaction, roadmap.id, userId);
+        const pending = await transaction.roadmapNotice.findMany({
+          where: {
+            recipientId: userId,
+            roadmapId: roadmap.id,
+            acknowledgedAt: null,
+            targetKey: { not: null },
+          },
+        });
+        const pendingTargets = new Map(pending.map((notice) => [notice.targetKey, notice]));
+        for (const node of after.nodes) {
+          const previous = nodeAccessState(
+            node.isVisible,
+            before.accessibleByUser.get(userId)?.has(node.id) ?? false,
+          );
+          const current = nodeAccessState(
+            node.isVisible,
+            after.accessibleByUser.get(userId)?.has(node.id) ?? false,
+          );
+          if (previous === current) continue;
+          const notice = pendingTargets.get(`node:${node.id}:access`);
+          if (notice) {
+            const data = notice.data as Prisma.JsonObject;
+            if (data.knownValue === current) {
+              await transaction.roadmapNotice.delete({ where: { id: notice.id } });
+            } else {
+              const occurredAt = new Date();
+              await transaction.roadmapNotice.update({
+                where: { id: notice.id },
+                data: {
+                  body: `«${node.title}» pasó de ${data.knownValue} a ${current}.`,
+                  data: {
+                    ...data,
+                    ...accessNoticeDestination(current),
+                    currentValue: current,
+                    occurredAt: occurredAt.toISOString(),
+                  },
+                  occurredAt,
+                  availableAt: occurredAt,
+                },
+              });
+            }
+            continue;
+          }
+          // Completion immediately exposes newly available Nodes to this student.
+          // Preserve pending/deferred differences rather than recognizing them here.
+          await transaction.nodeContentKnowledge.updateMany({
+            where: { recipientId: userId, nodeId: node.id, target: 'access', knownValue: previous },
+            data: { knownValue: current },
+          });
+        }
+        return completion;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),

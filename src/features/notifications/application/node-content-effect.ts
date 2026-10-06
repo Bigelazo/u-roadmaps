@@ -1,6 +1,6 @@
 import type { NoticeEffect } from './notice-effect';
 
-export type NodeContentTarget = 'description' | 'nodeType';
+export type NodeContentTarget = 'description' | 'nodeType' | 'access';
 export type NodeContentPayload = NoticeEffect['payload'] & {
   nodeId: string;
   contentTarget: NodeContentTarget;
@@ -22,7 +22,9 @@ function contentPayload(value: unknown): NodeContentPayload {
   const data = value as Record<string, unknown>;
   if (
     typeof data.nodeId !== 'string' ||
-    (data.contentTarget !== 'description' && data.contentTarget !== 'nodeType') ||
+    (data.contentTarget !== 'description' &&
+      data.contentTarget !== 'nodeType' &&
+      data.contentTarget !== 'access') ||
     typeof data.previousValue !== 'string' ||
     typeof data.occurredAt !== 'string' ||
     Number.isNaN(Date.parse(data.occurredAt)) ||

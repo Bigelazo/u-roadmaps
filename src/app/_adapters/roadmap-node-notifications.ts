@@ -25,6 +25,7 @@ export async function deliverRoadmapNodeNotifications(
           ...(notification.eventId ? { eventId: notification.eventId } : {}),
           changeKind: notification.changeKind,
           changedFields: [],
+          previousAccess: notification.previousAccess,
           nodeTitle: notification.nodeTitle,
           nodeTypeName: notification.nodeTypeName,
           recipientIds: notification.recipientIds,

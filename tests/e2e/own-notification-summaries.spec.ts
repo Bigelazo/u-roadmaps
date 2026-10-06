@@ -46,6 +46,17 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
         ).status(),
       ).toBe(200);
     await expect.poll(notices).toHaveLength(2);
+    // The target already exists after the first edit. Wait for the final value,
+    // since the second effect is persisted after its HTTP response.
+    await expect
+      .poll(
+        async () =>
+          (await notices()).find(
+            (notice: { data: { noticeTarget?: string; currentValue?: string } }) =>
+              notice.data.noticeTarget === 'node-description',
+          )?.data.currentValue,
+      )
+      .toBe('"Último detalle"');
     const repeated = await notices();
     expect(repeated).toHaveLength(2);
     expect(repeated[1]).toEqual(first);
