@@ -87,7 +87,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     course.users.teachingAssistant.id,
     course.users.multiCourseStudent.id,
   ])
-    expect(await classification(userId)).toHaveLength(1);
+    await expect.poll(() => classification(userId)).toHaveLength(1);
   for (const userId of [course.users.teacher.id, course.users.withdrawnStudent.id, outsider])
     expect(await classification(userId)).toHaveLength(0);
   const notice = (await classification())[0];
@@ -134,7 +134,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     data: { nodeTypeId: roadmap.nodeTypes[0].id },
   });
   expect(reassigned.status()).toBe(200);
-  expect(await classification()).toHaveLength(1);
+  await expect.poll(() => classification()).toHaveLength(1);
   // Reassigning the Node type is stored immediately (no grouping window, see ADR-0014).
   await expect
     .poll(async () =>
@@ -198,7 +198,7 @@ test('a PostgreSQL classification-notice failure preserves the confirmed Type re
   expect((await persisted.json()).nodeTypes).toContainEqual(
     expect.objectContaining({ id: typeId, name: nextName }),
   );
-  expect(await failure.wasAttempted()).toBe(true);
+  await expect.poll(() => failure.wasAttempted()).toBe(true);
   const inbox = await request.get('/api/notifications?limit=100', {
     headers: { cookie: await sessionCookie(course.users.studentWithoutProgress.id) },
   });

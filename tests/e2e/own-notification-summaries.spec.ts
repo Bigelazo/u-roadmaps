@@ -29,6 +29,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
       ).json()
     ).count;
   try {
+    await expect.poll(notices).toHaveLength(1);
     const first = (await notices())[0];
     expect(first).toMatchObject({
       subject: title,
@@ -44,6 +45,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
           })
         ).status(),
       ).toBe(200);
+    await expect.poll(notices).toHaveLength(3);
     const repeated = await notices();
     expect(repeated).toHaveLength(3);
     expect(repeated[2]).toEqual(first);
@@ -78,6 +80,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
         })
       ).status(),
     ).toBe(200);
+    await expect.poll(notices).toHaveLength(4);
     const [latest, ...retained] = await notices();
     expect(retained).toEqual(repeated.map((notice: object) => ({ ...notice, read: true })));
     expect(latest).toMatchObject({
@@ -93,14 +96,14 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     expect(new Date(latest.data.occurredAt).getTime()).toBeGreaterThanOrEqual(
       new Date(first.data.occurredAt).getTime(),
     );
-    expect(await count()).toBe(1);
+    await expect.poll(() => count()).toBe(1);
     // Retrying the earlier opening cannot absorb the later notice.
     expect(
       (
         await request.post('/api/notifications/acknowledge', { headers: recipient, data: opening })
       ).status(),
     ).toBe(200);
-    expect(await count()).toBe(1);
+    await expect.poll(() => count()).toBe(1);
 
     await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
     await page.goto('/academic-overview');

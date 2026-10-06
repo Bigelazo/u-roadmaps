@@ -89,7 +89,7 @@ beforeEach(() => {
   afterTasks.length = 0;
 });
 
-test('POST schedules notices after the confirmed mutation without delaying its response', async () => {
+test('POST prepares notices after the confirmed mutation before returning its response', async () => {
   const mutation = {
     dependency: { id: 'dependency-id', sourceNodeId: 'source-id', targetNodeId: 'target-id' },
     nodes: [{ id: 'target-id', title: 'Evaluación 1' }],
@@ -108,17 +108,13 @@ test('POST schedules notices after the confirmed mutation without delaying its r
 
   expect(response.status).toBe(201);
   expect(await response.json()).toEqual({ dependency: mutation.dependency, nodes: mutation.nodes });
-  expect(after).toHaveBeenCalledOnce();
-  expect(deliverRoadmapDependencyNotifications).not.toHaveBeenCalled();
-  expect(sequence).toEqual(['mutation-committed', 'scheduled']);
-
-  await afterTasks[0]();
+  expect(after).not.toHaveBeenCalled();
   expect(deliverRoadmapDependencyNotifications).toHaveBeenCalledExactlyOnceWith({
     actorId: 'teacher-id',
     identifier,
     notifications,
   });
-  expect(sequence).toEqual(['mutation-committed', 'scheduled', 'deliver']);
+  expect(sequence).toEqual(['mutation-committed', 'deliver']);
 });
 
 test('POST does not deliver when the confirmed Dependency action fails', async () => {
@@ -142,7 +138,7 @@ test('POST does not deliver when the confirmed Dependency action fails', async (
   expect(after).not.toHaveBeenCalled();
 });
 
-test('DELETE schedules route and access notices while keeping its 204 response', async () => {
+test('DELETE prepares route and access notices while keeping its 204 response', async () => {
   deleteRoadmapDependency.mockReturnValue(
     result({
       notifications: {
@@ -167,11 +163,7 @@ test('DELETE schedules route and access notices while keeping its 204 response',
     identifier,
     id: 'dependency-id',
   });
-  expect(after).toHaveBeenCalledOnce();
-  expect(deliverRoadmapDependencyNotifications).not.toHaveBeenCalled();
-  expect(sequence).toEqual(['mutation-committed', 'scheduled']);
-
-  await afterTasks[0]();
+  expect(after).not.toHaveBeenCalled();
   expect(deliverRoadmapDependencyNotifications).toHaveBeenCalledExactlyOnceWith({
     actorId: 'teacher-id',
     identifier,
@@ -180,5 +172,5 @@ test('DELETE schedules route and access notices while keeping its 204 response',
       path: { ...notifications.path, changeKind: 'dependency-removed' },
     },
   });
-  expect(sequence).toEqual(['mutation-committed', 'scheduled', 'deliver']);
+  expect(sequence).toEqual(['mutation-committed', 'deliver']);
 });

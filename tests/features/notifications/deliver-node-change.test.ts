@@ -13,6 +13,11 @@ const { prisma } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: (await import('./after-tasks')).scheduleAfter,
+}));
+import { afterTasks, finishResponse } from './after-tasks';
 import { deliverNodeChange } from '@/features/notifications/server';
 
 beforeEach(() => {
@@ -40,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  afterTasks.length = 0;
   vi.clearAllTimers();
   vi.useRealTimers();
   vi.clearAllMocks();
@@ -70,7 +76,9 @@ test('own Node notices retain a long valid author and previous Node type through
     recipientIds: ['student-id'],
   };
   await deliverNodeChange({ ...input, eventId: 'first' });
+  await finishResponse();
   await deliverNodeChange({ ...input, eventId: 'repeat' });
+  await finishResponse();
   // Repeats are stored immediately; no grouping window or summary (ADR-0014 redesign pending).
   expect(prisma.roadmapNotice.createMany).toHaveBeenCalledTimes(2);
   expect(prisma.roadmapNotice.createMany).toHaveBeenLastCalledWith({
@@ -99,6 +107,7 @@ test('retains deletion context in the own Inbox', async () => {
     targetKind: 'roadmap',
     recipientIds: ['student-id'],
   });
+  await finishResponse();
 
   expect(prisma.courseOffering.findUnique).toHaveBeenCalled();
   expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
@@ -153,6 +162,7 @@ test('accessible Node notices persist without external notification configuratio
     nodeTitle: 'Evaluación final',
     recipientIds: ['student-id'],
   });
+  await finishResponse();
   expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
     skipDuplicates: true,
     data: [
@@ -169,5 +179,28 @@ test('accessible Node notices persist without external notification configuratio
         }),
       }),
     ],
+  });
+});
+
+test('scheduled unlocks persist outside an HTTP request using the background scheduler', async () => {
+  await deliverNodeChange(
+    {
+      userId: 'author-id',
+      courseCode: 'CC3002',
+      year: 2026,
+      semester: 2,
+      nodeId: 'unlocked-node-id',
+      roadmapId: 'roadmap-id',
+      nodeTitle: 'Nodo disponible',
+      changeKind: 'node-available',
+      changedFields: [],
+      recipientIds: ['student-id'],
+    },
+    (persist) => persist(),
+  );
+  expect(afterTasks).toHaveLength(0);
+  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
+    skipDuplicates: true,
+    data: [expect.objectContaining({ recipientId: 'student-id', subject: 'Nodo disponible' })],
   });
 });

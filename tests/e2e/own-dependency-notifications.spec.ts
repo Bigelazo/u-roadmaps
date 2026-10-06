@@ -370,7 +370,7 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
   expect((await persisted.json()).dependencies).toContainEqual(
     expect.objectContaining({ sourceNodeId: prerequisiteId, targetNodeId: dependentId }),
   );
-  expect(await failure.wasAttempted()).toBe(true);
+  await expect.poll(() => failure.wasAttempted()).toBe(true);
   expect((await noticesFor()).some(({ data }) => data.dependencyId === dependencyId)).toBe(false);
   await expect
     .poll(async () =>

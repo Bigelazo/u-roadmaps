@@ -22,11 +22,14 @@ async function releaseDueScheduledUnlocks() {
     },
   );
   for (const { identifier, notifications } of released) {
-    await deliverRoadmapNodeNotifications({
-      actorId: SCHEDULED_UNLOCK_ACTOR_ID,
-      identifier,
-      notifications,
-    });
+    await deliverRoadmapNodeNotifications(
+      {
+        actorId: SCHEDULED_UNLOCK_ACTOR_ID,
+        identifier,
+        notifications,
+      },
+      (persist) => persist(),
+    );
   }
 }
 

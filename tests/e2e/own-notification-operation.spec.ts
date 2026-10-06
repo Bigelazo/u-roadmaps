@@ -239,6 +239,6 @@ test('classification and Dependency repeats stay separate, retain earlier notice
   await sql(
     `UPDATE "Participation" SET "isActive" = false WHERE "courseOfferingId" = ${literal(course.id)} AND "userId" = ${literal(course.users.studentComplete.id)};`,
   );
-  expect(await feed(revoked)).toHaveLength(6);
+  await expect.poll(() => feed(revoked)).toHaveLength(6);
   expect((await revoked.get(course.apiPath())).status()).toBe(403);
 });

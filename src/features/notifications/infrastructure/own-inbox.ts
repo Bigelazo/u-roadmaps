@@ -1,4 +1,5 @@
 import 'server-only';
+import { after } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
@@ -25,6 +26,13 @@ type Notice =
   | RoadmapPathChangeNotice
   | RoadmapClassificationChangeNotice;
 
+const deliveryFailureMessage: Record<NoticeClass, string> = {
+  'roadmap-available': 'Roadmap availability delivery failed',
+  'roadmap-node-changed': 'Node notice delivery failed',
+  'roadmap-resource-changed': 'Resource notice delivery failed',
+  'roadmap-path-changed': 'Roadmap path notice delivery failed',
+  'roadmap-classification-changed': 'Roadmap classification notice delivery failed',
+};
 const DELIVERY_CONCURRENCY = 5;
 const NOTICE_OPENING_RETENTION_MS = 24 * 60 * 60 * 1000;
 
@@ -41,10 +49,13 @@ async function pruneNoticeOpenings(
   });
 }
 
+export type NoticeDeliveryScheduler = (task: () => Promise<void>) => void | Promise<void>;
+
 async function storeNotice(
   notice: Notice,
   noticeClass: NoticeClass,
   context: Record<string, unknown>,
+  scheduleDelivery: NoticeDeliveryScheduler = after,
 ) {
   const { recipients, ...descriptor } = notice;
   const participants = await prisma.participation.findMany({
@@ -62,26 +73,33 @@ async function storeNotice(
     eventCount: 1,
     digestKey: notice.eventId,
   };
-  // Each recipient opens an interactive transaction. Bounding them keeps large Courses
-  // from exhausting the Prisma pool; every recipient is attempted before reporting failure.
-  let failure: { error: unknown } | undefined;
-  for (let offset = 0; offset < participants.length; offset += DELIVERY_CONCURRENCY) {
-    const results = await Promise.allSettled(
-      participants.slice(offset, offset + DELIVERY_CONCURRENCY).map(({ userId }) =>
-        deliverNotice({
-          eventId: notice.eventId,
-          recipientId: userId,
-          roadmapId: notice.roadmapId,
-          courseOfferingId: notice.courseOfferingId,
-          noticeClass,
-          payload,
-        }),
-      ),
-    );
-    for (const result of results)
-      if (result.status === 'rejected') failure ??= { error: result.reason };
-  }
-  if (failure) throw failure.error;
+  // Only persistence runs after the response: audience and pedagogical context
+  // above belong to the confirmed change, even if access changes immediately.
+  const { eventId, roadmapId, courseOfferingId } = descriptor;
+  await scheduleDelivery(async () => {
+    try {
+      // Bound recipient transactions without dropping later recipients on failure.
+      let failed = false;
+      for (let offset = 0; offset < participants.length; offset += DELIVERY_CONCURRENCY) {
+        const results = await Promise.allSettled(
+          participants.slice(offset, offset + DELIVERY_CONCURRENCY).map(({ userId }) =>
+            deliverNotice({
+              eventId,
+              recipientId: userId,
+              roadmapId,
+              courseOfferingId,
+              noticeClass,
+              payload,
+            }),
+          ),
+        );
+        failed ||= results.some((result) => result.status === 'rejected');
+      }
+      if (failed) console.warn(deliveryFailureMessage[noticeClass], { eventId });
+    } catch {
+      console.warn(deliveryFailureMessage[noticeClass], { eventId });
+    }
+  });
 }
 
 export function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
@@ -106,11 +124,19 @@ export function storeRoadmapClassificationChange(notice: RoadmapClassificationCh
   });
 }
 
-export function storeNodeChange(notice: NodeChangeNotice) {
-  return storeNotice(notice, 'roadmap-node-changed', {
-    ...nodeMessage(notice),
-    targetKind: notice.targetKind ?? 'node',
-  });
+export function storeNodeChange(
+  notice: NodeChangeNotice,
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
+  return storeNotice(
+    notice,
+    'roadmap-node-changed',
+    {
+      ...nodeMessage(notice),
+      targetKind: notice.targetKind ?? 'node',
+    },
+    scheduleDelivery,
+  );
 }
 
 export function storeResourceChange(notice: ResourceChangeNotice) {

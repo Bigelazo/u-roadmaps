@@ -12,6 +12,11 @@ const { prisma } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: (await import('./after-tasks')).scheduleAfter,
+}));
+import { afterTasks, finishResponse } from './after-tasks';
 import { deliverRoadmapPathChange } from '@/features/notifications/server';
 
 beforeEach(() => {
@@ -37,6 +42,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  afterTasks.length = 0;
   vi.clearAllTimers();
   vi.useRealTimers();
   vi.clearAllMocks();
@@ -55,6 +61,7 @@ test('stores the route notice for active explicit recipients through the own Inb
     prerequisiteNodeTitle: 'Leyes de Newton',
     recipientIds: ['teacher-id', 'student-id', 'observer-id'],
   });
+  await finishResponse();
 
   expect(prisma.courseOffering.findUnique).toHaveBeenCalledWith({
     where: { courseCode_year_semester: { courseCode: 'CC3002', year: 2026, semester: 2 } },
@@ -122,6 +129,7 @@ test('does not store a notice against a different current Course offering Roadma
     prerequisiteNodeTitle: 'Leyes de Newton',
     recipientIds: ['student-id'],
   });
+  await finishResponse();
 
   expect(prisma.participation.findMany).not.toHaveBeenCalled();
   expect(prisma.roadmapNotice.createMany).not.toHaveBeenCalled();

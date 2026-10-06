@@ -72,14 +72,18 @@ test('access notices retain context through blocking, unlocking, hiding and dele
       await request.post(roadmapPath(`/nodes/${rootId}/teacher-block`), { headers: author })
     ).status(),
   ).toBe(200);
-  expect((await noticesFor(withoutProgress, rootId))[0]).toMatchObject({
-    subject: rootTitle,
-    data: { changeKind: 'node-blocked', targetKind: 'roadmap', nodeTitle: rootTitle },
-  });
+  await expect
+    .poll(async () => (await noticesFor(withoutProgress, rootId))[0])
+    .toMatchObject({
+      subject: rootTitle,
+      data: { changeKind: 'node-blocked', targetKind: 'roadmap', nodeTitle: rootTitle },
+    });
   expect(await noticesFor(withoutProgress, dependentId)).toHaveLength(0);
-  expect((await noticesFor(student, dependentId))[0]).toMatchObject({
-    data: { changeKind: 'node-blocked', targetKind: 'roadmap' },
-  });
+  await expect
+    .poll(async () => (await noticesFor(student, dependentId))[0])
+    .toMatchObject({
+      data: { changeKind: 'node-blocked', targetKind: 'roadmap' },
+    });
   const version = async (operation: string) =>
     (
       await (
@@ -139,12 +143,16 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   await expect
     .poll(async () => (await noticesFor(student, removedId))[0]?.data.changeKind)
     .toBe('node-deleted');
+  await expect
+    .poll(async () => (await noticesFor(student, rootId))[0]?.data.changeKind)
+    .toBe('node-retired');
   const retired = (await noticesFor(student, rootId))[0];
   expect(retired).toMatchObject({
     subject: rootTitle,
     data: { changeKind: 'node-retired', targetKind: 'roadmap', nodeTitle: rootTitle },
   });
   expect(JSON.stringify(retired)).not.toContain('Detalle privado');
+  await expect.poll(() => noticesFor(student, removedId)).toHaveLength(3);
   const deletionNotices = await noticesFor(student, removedId);
   expect(deletionNotices.map(({ data }) => data.changeKind)).toEqual([
     'node-deleted',
@@ -155,7 +163,9 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     subject: removedTitle,
     data: { eventCount: 1, targetKind: 'roadmap', nodeTitle: removedTitle },
   });
-  expect((await noticesFor(withoutProgress, removedId))[0].data.changeKind).toBe('node-deleted');
+  await expect
+    .poll(async () => (await noticesFor(withoutProgress, removedId))[0]?.data.changeKind)
+    .toBe('node-deleted');
   expect(await noticesFor(course.users.withdrawnStudent.id, removedId)).toHaveLength(0);
   expect(await noticesFor(course.users.teacher.id, removedId)).toHaveLength(0);
   await selectNotice(rootId, rootTitle);
@@ -191,7 +201,7 @@ test('a PostgreSQL access-notice failure leaves the Node visibility change commi
   expect(
     (await persistedNodes.json()).nodes.find(({ id }: { id: string }) => id === nodeId),
   ).toMatchObject({ id: nodeId, isVisible: false });
-  expect(await failure.wasAttempted()).toBe(true);
+  await expect.poll(() => failure.wasAttempted()).toBe(true);
 
   const notices = await request.get(
     `/api/notifications?roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}`,
@@ -239,7 +249,9 @@ test('lost Course access retains saved notices and acknowledges only the selecte
   const secondTitle = `Aviso conservado B ${crypto.randomUUID()}`;
   const firstId = await createNode(firstTitle);
   const secondId = await createNode(secondTitle);
-  expect((await allNotices()).map(({ subject }) => subject)).toEqual([secondTitle, firstTitle]);
+  await expect
+    .poll(async () => (await allNotices()).map(({ subject }) => subject))
+    .toEqual([secondTitle, firstTitle]);
 
   await sql(
     `UPDATE "Participation" SET "isActive" = false WHERE "userId" = '${userId}' AND "courseOfferingId" = '${course.id}';`,

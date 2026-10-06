@@ -7,7 +7,7 @@
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
 por SSE autenticado. Disponibilidad, Nodos y cambios de acceso, Recursos,
 Dependencias y clasificación usan exclusivamente esta entrega y el mismo
-almacenamiento inmediato. No hay SDK, configuración de suscriptores, workflows, publicación de
+almacenamiento diferido tras la respuesta HTTP. No hay SDK, configuración de suscriptores, workflows, publicación de
 Code Steps ni conexiones a Novu. No se importan avisos del proveedor anterior.
 El contrato acordado vive en [#152](https://github.com/Bigelazo/u-roadmaps/issues/152);
 [#139](https://github.com/Bigelazo/u-roadmaps/issues/139) y el historial Git conservan
@@ -70,11 +70,24 @@ location /api/notifications/stream {
 }
 ```
 
-Cada efecto aceptado se guarda inmediatamente, incluidas las repeticiones,
+Antes de responder a una mutación confirmada se capturan los descriptores,
+los destinatarios elegibles (sin la autora ni Participaciones inactivas), títulos
+y contexto. Solo la persistencia por destinatario se difiere mediante `after()`
+de `next/server`, después de enviar la respuesta, en el mismo proceso Node.
+Un cambio posterior de acceso o contenido no recalcula esa audiencia ni contexto.
+Los fallos diferidos se registran sin datos sensibles ni rechazos no manejados;
+no cambian la respuesta ni revierten la edición. La llegada al Inbox es asíncrona:
+los clientes y las pruebas esperan la señal SSE o consultan hasta recibir el Aviso.
+La liberación periódica de Desbloqueos programados ocurre fuera de una petición
+HTTP: ese trabajo usa entrega directa y espera su persistencia antes de terminar
+la pasada, sin intentar registrar `after()` fuera de su contexto.
+
+Cada efecto aceptado se guarda sin una ventana de espera, incluidas las repeticiones,
 con una identidad independiente y sin resumen separado. `NoticeDeliveryEffect`
 y el aviso se guardan en una transacción; repetir una identidad no crea otra
 fila. Cerrar el proceso conserva los avisos confirmados. No hay outbox, replay
-ni recuperación durable de avisos que no llegaron a persistirse. El modelo
+ni recuperación durable de avisos que no llegaron a persistirse. Un reinicio
+puede perder el trabajo diferido todavía no guardado, coherente con #152 y #173. El modelo
 acordado en ADR-0014 todavía no está implementado.
 
 ## Verificar

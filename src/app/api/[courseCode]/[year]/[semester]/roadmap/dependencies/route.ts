@@ -1,4 +1,4 @@
-import { after, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import {
   handleApplicationResult,
   parseJsonObject as parseJson,
@@ -51,13 +51,11 @@ export async function POST(
       input: body,
     }).match((value) => value, throwApplicationError);
     const { notifications, ...result } = mutation;
-    after(() =>
-      deliverRoadmapDependencyNotifications({
-        actorId: user.id,
-        identifier,
-        notifications,
-      }).catch(() => undefined),
-    );
+    await deliverRoadmapDependencyNotifications({
+      actorId: user.id,
+      identifier,
+      notifications,
+    }).catch(() => undefined);
     return NextResponse.json(result, { status: 201 });
   });
 }

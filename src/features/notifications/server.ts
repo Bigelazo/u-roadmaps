@@ -11,6 +11,7 @@ import type {
   ResourceChangeNotice,
 } from './contracts';
 import {
+  type NoticeDeliveryScheduler,
   storeRoadmapAvailability,
   storeRoadmapClassificationChange,
   storeRoadmapPathChange,
@@ -25,6 +26,7 @@ import {
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
 export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
+export type { NoticeDeliveryScheduler } from './infrastructure/own-inbox';
 export type InboxIdentity = Readonly<{ userId: string }>;
 
 export function getInboxIdentity(userId: string): InboxIdentity {
@@ -134,21 +136,24 @@ export async function deliverRoadmapAvailability(notice: RoadmapAvailabilityNoti
   }
 }
 
-export async function deliverNodeChange(input: {
-  userId: string;
-  courseCode: string;
-  year: number;
-  semester: number;
-  nodeId: string;
-  eventId?: string;
-  changeKind: NodeChangeNotice['changeKind'];
-  changedFields: NodeChangeNotice['changedFields'];
-  nodeTitle?: string;
-  nodeTypeName?: string;
-  roadmapId?: string;
-  recipientIds?: readonly string[];
-  targetKind?: 'node' | 'roadmap';
-}) {
+export async function deliverNodeChange(
+  input: {
+    userId: string;
+    courseCode: string;
+    year: number;
+    semester: number;
+    nodeId: string;
+    eventId?: string;
+    changeKind: NodeChangeNotice['changeKind'];
+    changedFields: NodeChangeNotice['changedFields'];
+    nodeTitle?: string;
+    nodeTypeName?: string;
+    roadmapId?: string;
+    recipientIds?: readonly string[];
+    targetKind?: 'node' | 'roadmap';
+  },
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
   const node = await prisma.roadmapNode.findUnique({
     where: { id: input.nodeId },
     include: {
@@ -228,7 +233,7 @@ export async function deliverNodeChange(input: {
     recipients,
   };
 
-  await storeNodeChange(notice).catch(() => {
+  await storeNodeChange(notice, scheduleDelivery).catch(() => {
     console.warn('Node notice delivery failed', { eventId: notice.eventId });
   });
 }

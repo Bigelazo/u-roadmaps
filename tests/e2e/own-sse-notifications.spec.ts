@@ -56,7 +56,7 @@ test('real SSE refreshes authorized Node detail, pending notices, other tabs and
     await teacherPage.getByRole('button', { name: 'Guardar cambios' }).click();
     await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeVisible();
     await expect(other.getByRole('button', { name: new RegExp(title) })).toBeVisible();
-    expect(await count()).toBe(1);
+    await expect.poll(() => count()).toBe(1);
     // Visibility in the other Inbox tab propagates seen state without recognition.
     expect((await seenInOtherTab).status()).toBe(200);
     // HTTP recognition in one tab must update the already open Inbox in another.
@@ -92,7 +92,7 @@ test('real SSE refreshes authorized Node detail, pending notices, other tabs and
     expect((await reconnected).status()).toBe(200);
     await page.bringToFront();
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
-    expect(await count()).toBe(1);
+    await expect.poll(() => count()).toBe(1);
   } finally {
     // eslint-disable-next-line playwright/no-conditional-in-test
     if (nodeId) await teacher.request.delete(course.apiPath(`/nodes/${nodeId}`));

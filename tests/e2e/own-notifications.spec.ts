@@ -51,12 +51,25 @@ test('Roadmap creation persists one own notice for each eligible Participation a
   const roadmapId = (await created.json()).roadmap.id;
   expect((await request.post(path, { headers: author, data: {} })).status()).toBe(409);
   for (const { id } of Object.values(course.users)) {
+    const eligible = [teachingAssistant.id, multiCourseStudent.id, studentWithoutProgress.id];
+    await expect
+      .poll(
+        async () =>
+          (
+            await (
+              await request.get(`/api/notifications?roadmapId=${roadmapId}`, {
+                headers: { cookie: await sessionCookie(id) },
+              })
+            ).json()
+          ).notifications.length,
+        { message: `audience for ${id}` },
+      )
+      .toBe(eligible.includes(id) ? 1 : 0);
     const response = await request.get(`/api/notifications?roadmapId=${roadmapId}`, {
       headers: { cookie: await sessionCookie(id) },
     });
     expect(response.status()).toBe(200);
     const notices = (await response.json()).notifications;
-    const eligible = [teachingAssistant.id, multiCourseStudent.id, studentWithoutProgress.id];
     expect(notices, `audience for ${id}`).toHaveLength(eligible.includes(id) ? 1 : 0);
   }
   await sql(

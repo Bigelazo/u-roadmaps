@@ -14,6 +14,11 @@ const { prisma } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: (await import('./after-tasks')).scheduleAfter,
+}));
+import { afterTasks, finishResponse } from './after-tasks';
 import { deliverResourceChange } from '@/features/notifications/server';
 
 const input = {
@@ -60,6 +65,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  afterTasks.length = 0;
   vi.clearAllTimers();
   vi.useRealTimers();
   vi.clearAllMocks();
@@ -68,6 +74,7 @@ afterEach(() => {
 
 test('stores an own Resource notice for eligible recipients through the own Inbox', async () => {
   await deliverResourceChange(input);
+  await finishResponse();
 
   expect(prisma.participation.findMany).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -130,6 +137,7 @@ test('does not deliver a Resource notice when the owning Node is blocked', async
   ]);
 
   await deliverResourceChange(input);
+  await finishResponse();
 
   expect(prisma.roadmapNotice.createMany).not.toHaveBeenCalled();
 });
@@ -153,6 +161,7 @@ test('keeps teachers eligible when students cannot access the Node through prere
   ]);
 
   await deliverResourceChange(input);
+  await finishResponse();
 
   expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith(
     expect.objectContaining({

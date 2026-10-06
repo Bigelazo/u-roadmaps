@@ -12,6 +12,11 @@ const { prisma } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/shared/server/db', () => ({ prisma }));
+vi.mock('next/server', async (original) => ({
+  ...(await original<typeof import('next/server')>()),
+  after: (await import('./after-tasks')).scheduleAfter,
+}));
+import { afterTasks, finishResponse } from './after-tasks';
 import { deliverRoadmapClassificationChange } from '@/features/notifications/server';
 
 beforeEach(() => {
@@ -34,6 +39,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  afterTasks.length = 0;
   vi.clearAllTimers();
   vi.useRealTimers();
   vi.clearAllMocks();
@@ -49,6 +55,7 @@ test('stores the type rename to active recipients except the author on the match
     nextTypeName: 'Lecturas guiadas',
     recipientIds: ['teacher-id', 'student-id'],
   });
+  await finishResponse();
 
   expect(prisma.participation.findMany).toHaveBeenNthCalledWith(
     1,
@@ -96,6 +103,7 @@ test('does not send a descriptor for another Roadmap', async () => {
     nextTypeName: 'Lecturas guiadas',
     recipientIds: ['student-id'],
   });
+  await finishResponse();
 
   expect(prisma.participation.findMany).not.toHaveBeenCalled();
 });

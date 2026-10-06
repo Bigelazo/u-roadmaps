@@ -1,4 +1,4 @@
-import { after, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
@@ -18,13 +18,11 @@ export async function DELETE(
       identifier,
       id: params.dependencyId,
     }).match((value) => value, throwApplicationError);
-    after(() =>
-      deliverRoadmapDependencyNotifications({
-        actorId: user.id,
-        identifier,
-        notifications: mutation.notifications,
-      }).catch(() => undefined),
-    );
+    await deliverRoadmapDependencyNotifications({
+      actorId: user.id,
+      identifier,
+      notifications: mutation.notifications,
+    }).catch(() => undefined);
     return new NextResponse(null, { status: 204 });
   });
 }
