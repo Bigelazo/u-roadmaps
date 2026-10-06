@@ -1,8 +1,8 @@
 # Operación de avisos propios
 
-> Se reemplazará según [ADR-0014](adr/0014-target-based-notice-grouping.md)
-> (aceptado el 2026-10-05). Mientras no se implemente, este documento describe el
-> comportamiento vigente.
+> Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md):
+> #177 activa los Objetos de título de Nodo. Este documento describe el estado
+> vigente; las otras clases conservan la transición inmediata.
 
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
 por SSE autenticado. Disponibilidad, Nodos y cambios de acceso, Recursos,
@@ -34,9 +34,23 @@ La operación admitida ejecuta **un único proceso Node persistente** mediante
 certifica escalado horizontal; el repositorio no contiene archivos de despliegue
 Docker. PostgreSQL LISTEN distribuye las señales entre procesos.
 
-Aplicar las migraciones antes de arrancar. No limpiar ni recrear las tablas de
-avisos: las migraciones conservan los avisos anteriores. No hay caducidad ni tarea
-de eliminación por antigüedad para `RoadmapNotice`.
+Aplicar las migraciones antes de arrancar. La migración de #177 activa el primer
+Objeto del aviso (título de Nodo) y elimina todos los Avisos existentes, sus
+reconocimientos y sus recibos de deduplicación, según ADR-0014. Es un reset único;
+no hay caducidad ni tarea de eliminación por antigüedad para `RoadmapNotice`.
+
+El título usa `NodeTitleKnowledge` para conservar el último valor conocido por
+Usuario y Nodo. Un trigger captura el valor anterior en la transacción de edición;
+la entrega diferida consulta el título actual y reconcilia mediante una función
+pura. Una clave única parcial impide dos Avisos pendientes del mismo Objeto.
+Reconocimiento y entrega usan un lock transaccional por Usuario y Roadmap. Las
+actualizaciones y retiros emiten la misma invalidación SSE del Inbox. Los recibos
+persisten tras actualizar o retirar un Aviso, por lo que un reintento no lo recrea.
+
+Los títulos llegan también a quienes ven el Nodo bloqueado. Una edición de título
+y descripción produce un Aviso de título y otro inmediato de contenido. Las demás
+clases mantienen su entrega inmediata y reconocimiento vigente; los siguientes
+tickets implementarán las restantes reglas de ADR-0014.
 
 Las aperturas de reconocimiento (`NoticeAcknowledgement`) conservan su conjunto
 fijo de `noticeIds` para reintentos durante al menos 24 horas desde `openedAt`.
@@ -50,7 +64,12 @@ cree otra apertura. Esta poda no borra ni modifica Avisos.
 Reintentar una apertura ya podada devuelve 404. El cliente conserva el estado
 de error de reconocimiento y no sustituye la apertura por otra ni reconoce
 Avisos llegados después. Dentro de la retención, el reintento reutiliza el mismo
-`operationId` y el mismo conjunto, sin ampliar `noticeIds`.
+`operationId` y el mismo conjunto, sin ampliar `noticeIds`. Para títulos también
+conserva `titleSnapshots`, con los valores capturados al abrir. Si el Aviso cambió
+en el intervalo, el reconocimiento avanza al título capturado y reconcilia el
+valor posterior como pendiente; `recognizedAt` impide repetir ese avance en un
+reintento. Nunca se reconoce por accidente una actualización posterior del mismo
+Aviso.
 
 El reset de datos de desarrollo y el de E2E son
 herramientas de pruebas, nunca pasos de operación en producción.

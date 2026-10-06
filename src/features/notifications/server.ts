@@ -25,6 +25,7 @@ import {
   prepareOwnNodeOpening as prepareNodeOpening,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
+import { lockRecipientRoadmap } from './infrastructure/title-notice';
 export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
 export type { NoticeDeliveryScheduler } from './infrastructure/own-inbox';
 export type InboxIdentity = Readonly<{ userId: string }>;
@@ -43,9 +44,12 @@ export async function markOwnNotice(userId: string, id: string, input: Record<st
   }
   const notice = await findOwnNotice(userId, id);
   const field = input.action === 'seen' ? 'seenAt' : 'acknowledgedAt';
-  await prisma.roadmapNotice.updateMany({
-    where: { id: notice.id, recipientId: userId, [field]: null },
-    data: { [field]: new Date() },
+  await prisma.$transaction(async (transaction) => {
+    await lockRecipientRoadmap(transaction, userId, notice.roadmapId);
+    await transaction.roadmapNotice.updateMany({
+      where: { id: notice.id, recipientId: userId, [field]: null },
+      data: { [field]: new Date() },
+    });
   });
   return getOwnNotice(userId, id);
 }
@@ -147,6 +151,7 @@ export async function deliverNodeChange(
     changeKind: NodeChangeNotice['changeKind'];
     changedFields: NodeChangeNotice['changedFields'];
     nodeTitle?: string;
+    previousTitle?: string;
     nodeTypeName?: string;
     roadmapId?: string;
     recipientIds?: readonly string[];
@@ -209,7 +214,20 @@ export async function deliverNodeChange(
           actorId: input.userId,
         })
       : [];
-  if (!recipients.length) return;
+  const titleRecipients =
+    node?.isVisible && input.changedFields.includes('title') && input.previousTitle !== undefined
+      ? await prisma.participation
+          .findMany({
+            where: {
+              courseOfferingId: offeringInfo.id,
+              isActive: true,
+              userId: { not: input.userId },
+            },
+            include: { user: { select: { id: true, name: true } } },
+          })
+          .then((rows) => rows.map(({ user }) => ({ userId: user.id, name: user.name })))
+      : [];
+  if (!recipients.length && !titleRecipients.length) return;
 
   const notice: NodeChangeNotice = {
     eventId: input.eventId ?? randomUUID(),
@@ -233,9 +251,28 @@ export async function deliverNodeChange(
     recipients,
   };
 
-  await storeNodeChange(notice, scheduleDelivery).catch(() => {
-    console.warn('Node notice delivery failed', { eventId: notice.eventId });
-  });
+  if (titleRecipients.length) {
+    await storeNodeChange(
+      {
+        ...notice,
+        eventId: `${notice.eventId}:title`,
+        changedFields: ['title'],
+        previousTitle: input.previousTitle,
+        recipients: titleRecipients,
+      },
+      scheduleDelivery,
+    ).catch(() => {
+      console.warn('Node title notice delivery failed', { eventId: notice.eventId });
+    });
+  }
+  const changedFields = titleRecipients.length
+    ? notice.changedFields.filter((field) => field !== 'title')
+    : notice.changedFields;
+  if (recipients.length && (notice.changeKind !== 'node-updated' || changedFields.length)) {
+    await storeNodeChange({ ...notice, changedFields }, scheduleDelivery).catch(() => {
+      console.warn('Node notice delivery failed', { eventId: notice.eventId });
+    });
+  }
 }
 
 export async function deliverRoadmapPathChange(input: {

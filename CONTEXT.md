@@ -3,8 +3,9 @@
 This context describes the learning paths of university course offerings and their participants' progress.
 
 The notice definitions below describe the accepted target in ADR-0014. Its
-implementation is pending: the current transition stores each accepted change
-immediately and retains Node opening recognition and seen state. See
+implementation is incremental: #177 groups Node title changes durably by Notice
+target and withdraws returns to the known title. Other classes still store each
+accepted change immediately; Node opening recognition and seen state remain. See
 [notification operations](docs/notifications-operations.md) for current behavior.
 
 ## Language (Lenguaje)

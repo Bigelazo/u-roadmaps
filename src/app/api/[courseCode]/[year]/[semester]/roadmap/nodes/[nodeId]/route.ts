@@ -82,6 +82,8 @@ export async function PATCH(
         nodeId: result.node.id,
         changeKind: result.notification.kind,
         changedFields: result.notification.changedFields,
+        previousTitle: result.notification.previousTitle,
+        nodeTitle: result.node.title,
       }).catch(() => undefined);
     }
     await deliverRoadmapNodeNotifications({

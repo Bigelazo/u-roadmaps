@@ -338,7 +338,13 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
           resources: updated.resources.map((resource) => resourceDto(resource, editor.identifier)),
         },
         ...(node.isVisible && updated.isVisible && changedFields.length > 0
-          ? { notification: { kind: 'node-updated' as const, changedFields } }
+          ? {
+              notification: {
+                kind: 'node-updated' as const,
+                changedFields,
+                ...(changedFields.includes('title') ? { previousTitle: node.title } : {}),
+              },
+            }
           : {}),
         ...(requestedVisibility !== undefined
           ? { dependencies: structuralDependencies(removedDependencies) }

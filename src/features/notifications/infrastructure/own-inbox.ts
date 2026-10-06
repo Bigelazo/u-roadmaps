@@ -11,6 +11,11 @@ import {
 } from '../application/messages';
 import type { NoticeClass } from '../application/notice-effect';
 import { deliverNotice } from './notice-delivery';
+import {
+  lockRecipientRoadmap,
+  titleOpeningSnapshots,
+  recognizeTitleSnapshots,
+} from './title-notice';
 import type {
   NodeChangeNotice,
   RoadmapClassificationChangeNotice,
@@ -161,6 +166,7 @@ export async function prepareOwnNodeOpening(
   const nodeId = uuid(input.nodeId);
   const operationId = uuid(input.operationId);
   return prisma.$transaction(async (transaction) => {
+    await lockRecipientRoadmap(transaction, userId, roadmapId);
     const existing = await transaction.noticeAcknowledgement.findUnique({
       where: { recipientId_operationId: { recipientId: userId, operationId } },
     });
@@ -182,7 +188,7 @@ export async function prepareOwnNodeOpening(
         acknowledgedAt: null,
         data: { path: ['nodeId'], equals: nodeId },
       },
-      select: { id: true },
+      select: { id: true, data: true },
     });
     const openedAt = new Date();
     await pruneNoticeOpenings(transaction, userId, openedAt);
@@ -195,6 +201,7 @@ export async function prepareOwnNodeOpening(
         roadmapId,
         openedAt,
         noticeIds: notices.map(({ id }) => id),
+        titleSnapshots: titleOpeningSnapshots(notices),
       },
     });
     return { roadmapId, operationId };
@@ -305,6 +312,7 @@ export async function prepareOwnNoticeOpening(
   accessibleNodes: NoticeNodeAccess,
 ) {
   return prisma.$transaction(async (transaction) => {
+    await lockRecipientRoadmap(transaction, userId, roadmapId);
     const [accessible, notices] = await Promise.all([
       accessibleNodes(transaction, userId, roadmapId),
       transaction.roadmapNotice.findMany({
@@ -329,6 +337,7 @@ export async function prepareOwnNoticeOpening(
         roadmapId,
         openedAt,
         noticeIds: generalNotices.map(({ id }) => id),
+        titleSnapshots: titleOpeningSnapshots(generalNotices),
       },
     });
     return operation.operationId;
@@ -344,14 +353,35 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
   if (!operation || operation.roadmapId !== roadmapId) {
     throw new ApplicationError(404, 'NOT_FOUND', 'Apertura de Roadmap no encontrada.');
   }
-  const result = await prisma.roadmapNotice.updateMany({
-    where: {
+  const result = await prisma.$transaction(async (transaction) => {
+    await lockRecipientRoadmap(transaction, userId, roadmapId);
+    const retained = await transaction.noticeAcknowledgement.findUnique({
+      where: { recipientId_operationId: { recipientId: userId, operationId } },
+    });
+    if (!retained || retained.roadmapId !== roadmapId)
+      throw new ApplicationError(404, 'NOT_FOUND', 'Apertura de Roadmap no encontrada.');
+    if (retained.recognizedAt) return { count: 0 };
+    const result = await transaction.roadmapNotice.updateMany({
+      where: {
+        recipientId: userId,
+        roadmapId,
+        acknowledgedAt: null,
+        targetKey: null,
+        id: { in: retained.noticeIds },
+      },
+      data: { acknowledgedAt: new Date() },
+    });
+    const titleCount = await recognizeTitleSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
-      acknowledgedAt: null,
-      id: { in: operation.noticeIds },
-    },
-    data: { acknowledgedAt: new Date() },
+      operationId,
+      snapshots: retained.titleSnapshots,
+    });
+    await transaction.noticeAcknowledgement.update({
+      where: { recipientId_operationId: { recipientId: userId, operationId } },
+      data: { recognizedAt: new Date() },
+    });
+    return { count: result.count + titleCount };
   });
   return { acknowledged: result.count };
 }

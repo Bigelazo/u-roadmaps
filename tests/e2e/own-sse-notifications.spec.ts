@@ -55,12 +55,12 @@ test('real SSE keeps student content stable while notices and counters update, i
     await teacherPage.getByLabel('Título', { exact: true }).fill(title);
     await teacherPage.getByLabel('Descripción').fill('Delivered through real SSE');
     await teacherPage.getByRole('button', { name: 'Guardar cambios' }).click();
-    await expect(other.getByRole('button', { name: new RegExp(title) })).toBeVisible();
+    await expect(other.getByRole('button', { name: new RegExp(title) })).toHaveCount(2);
     await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
     await expect(page.getByText('Original SSE detail', { exact: true })).toBeVisible();
     await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeHidden();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect.poll(() => count()).toBe(1);
+    await expect.poll(() => count()).toBe(2);
     // Visibility in the other Inbox tab propagates seen state without recognition.
     expect((await seenInOtherTab).status()).toBe(200);
     // HTTP recognition in one tab must update the already open Inbox in another.

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 const { transaction, prisma } = vi.hoisted(() => {
   const transaction = {
+    $executeRaw: vi.fn(),
     noticeAcknowledgement: {
       findUnique: vi.fn(),
       create: vi.fn(),

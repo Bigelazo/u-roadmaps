@@ -21,6 +21,7 @@ export type NodeChangeNotice = NodeScopedNotice &
     changeKind:
       'node-available' | 'node-updated' | 'node-retired' | 'node-deleted' | 'node-blocked';
     changedFields: readonly ('title' | 'description' | 'nodeType')[];
+    previousTitle?: string;
     nodeTypeName?: string;
     targetKind?: 'node' | 'roadmap';
   }>;

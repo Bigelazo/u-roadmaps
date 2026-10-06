@@ -466,10 +466,10 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
       (await request.patch(roadmapPath(`/nodes/${nodeId}`), { headers: author, data })).status(),
     ).toBe(200);
   }
-  // Content repeats are stored immediately (no grouping window, see ADR-0014),
-  // but only for recipients eligible to see the Node's content.
-  await expect.poll(() => count(without, nodeId)).toBe(beforeContent.get(without));
-  await expect.poll(() => count(observer, nodeId)).toBe(beforeContent.get(observer));
+  // Titles are visible even when prerequisites block the Node. Description
+  // and type notices still follow their existing accessible-content audience.
+  await expect.poll(() => count(without, nodeId)).toBe(beforeContent.get(without)! + 1);
+  await expect.poll(() => count(observer, nodeId)).toBe(beforeContent.get(observer)! + 1);
   await expect
     .poll(() => count(withProgress, nodeId))
     .toBeGreaterThan(beforeContent.get(withProgress)!);
@@ -489,8 +489,8 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   };
   await expect.poll(() => latestKind(withProgress)).toBe('node-updated');
   expect(await latestKind(course.users.teachingAssistant.id)).toBe('node-updated');
-  expect(await latestKind(without)).toBe('node-blocked');
-  expect(await latestKind(observer)).toBe('node-blocked');
+  expect(await latestKind(without)).toBe('node-updated');
+  expect(await latestKind(observer)).toBe('node-updated');
   const opening = { roadmapId: roadmap.roadmap.id, nodeId, operationId: crypto.randomUUID() };
   expect((await request.post('/api/notifications/openings', { data: opening })).status()).toBe(401);
   for (const userId of [without, observer, outsider, course.users.withdrawnStudent.id])
