@@ -26,6 +26,20 @@ type Notice =
   | RoadmapClassificationChangeNotice;
 
 const DELIVERY_CONCURRENCY = 5;
+const NOTICE_OPENING_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+async function pruneNoticeOpenings(
+  transaction: Prisma.TransactionClient,
+  recipientId: string,
+  openedAt: Date,
+) {
+  await transaction.noticeAcknowledgement.deleteMany({
+    where: {
+      recipientId,
+      openedAt: { lt: new Date(openedAt.getTime() - NOTICE_OPENING_RETENTION_MS) },
+    },
+  });
+}
 
 async function storeNotice(
   notice: Notice,
@@ -144,6 +158,8 @@ export async function prepareOwnNodeOpening(
       },
       select: { id: true },
     });
+    const openedAt = new Date();
+    await pruneNoticeOpenings(transaction, userId, openedAt);
     await transaction.noticeAcknowledgement.upsert({
       where: { recipientId_operationId: { recipientId: userId, operationId } },
       update: {},
@@ -151,7 +167,7 @@ export async function prepareOwnNodeOpening(
         recipientId: userId,
         operationId,
         roadmapId,
-        openedAt: new Date(),
+        openedAt,
         noticeIds: notices.map(({ id }) => id),
       },
     });
@@ -278,12 +294,14 @@ export async function prepareOwnNoticeOpening(
         !accessible.has(context.nodeId)
       );
     });
+    const openedAt = new Date();
+    await pruneNoticeOpenings(transaction, userId, openedAt);
     const operation = await transaction.noticeAcknowledgement.create({
       data: {
         recipientId: userId,
         operationId: randomUUID(),
         roadmapId,
-        openedAt: new Date(),
+        openedAt,
         noticeIds: generalNotices.map(({ id }) => id),
       },
     });

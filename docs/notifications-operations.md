@@ -36,7 +36,23 @@ Docker. PostgreSQL LISTEN distribuye las señales entre procesos.
 
 Aplicar las migraciones antes de arrancar. No limpiar ni recrear las tablas de
 avisos: las migraciones conservan los avisos anteriores. No hay caducidad ni tarea
-de eliminación por antigüedad. El reset de datos de desarrollo y el de E2E son
+de eliminación por antigüedad para `RoadmapNotice`.
+
+Las aperturas de reconocimiento (`NoticeAcknowledgement`) conservan su conjunto
+fijo de `noticeIds` para reintentos durante al menos 24 horas desde `openedAt`.
+Al crear una apertura de Roadmap o de Nodo, la misma transacción elimina solo
+las aperturas del mismo destinatario anteriores a 24 horas; conserva las del
+límite exacto, las recientes y las de otros Usuarios. El índice
+`(recipientId, openedAt)` acota esta limpieza por Usuario. No hay proceso
+periódico: las aperturas antiguas de un Usuario inactivo permanecen hasta que
+cree otra apertura. Esta poda no borra ni modifica Avisos.
+
+Reintentar una apertura ya podada devuelve 404. El cliente conserva el estado
+de error de reconocimiento y no sustituye la apertura por otra ni reconoce
+Avisos llegados después. Dentro de la retención, el reintento reutiliza el mismo
+`operationId` y el mismo conjunto, sin ampliar `noticeIds`.
+
+El reset de datos de desarrollo y el de E2E son
 herramientas de pruebas, nunca pasos de operación en producción.
 
 LISTEN requiere una conexión directa a PostgreSQL o pooling de sesión. Cada

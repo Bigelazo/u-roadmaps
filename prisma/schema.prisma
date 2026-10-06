@@ -224,6 +224,7 @@ model NoticeAcknowledgement {
   noticeIds String[] @db.Uuid @default([])
 
   @@id([recipientId, operationId])
+  @@index([recipientId, openedAt])
 }
 
 // Idempotency receipts include repeats that have no individual Inbox row.
