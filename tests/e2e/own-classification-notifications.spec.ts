@@ -120,7 +120,7 @@ test('used Type renames deliver one general notice across Sections and recognize
   await page
     .getByRole('list', { name: 'Lista de avisos' })
     .getByRole('button')
-    .filter({ hasText: notice.subject })
+    .filter({ hasText: `El Roadmap de ${course.courseCode} ha recibido cambios` })
     .click();
   await expect(page).toHaveURL(course.pagePath());
   await expect(page).not.toHaveURL(/targetNode=/);

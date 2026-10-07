@@ -36,7 +36,7 @@ async function list(input: ListInput): Promise<Page> {
   const page = await request<{
     notifications: InboxRecord[];
     hasMore: boolean;
-  }>(`?${query(input)}`);
+  }>(`?${query(input)}&groupBy=roadmapId`);
   return page;
 }
 

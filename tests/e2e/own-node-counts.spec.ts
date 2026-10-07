@@ -55,7 +55,13 @@ test('one grouped canvas request supplies Node badges and isolates recipients', 
         courseOfferingId: course.id,
         subject: 'Conteo agrupado',
         body: 'Aviso de prueba',
-        data: JSON.stringify({ nodeId, roadmapId: course.roadmapId }),
+        data: JSON.stringify({
+          nodeId,
+          roadmapId: course.roadmapId,
+          courseCode: course.courseCode,
+          year: course.year,
+          semester: course.semester,
+        }),
         occurredAt: new Date(),
       })),
     ),
@@ -92,5 +98,9 @@ test('one grouped canvas request supplies Node badges and isolates recipients', 
   expect(groupedRequests()).toBeGreaterThan(baseline.requests);
   expect(requests.filter((url) => new URL(url).searchParams.has('nodeId'))).toHaveLength(0);
   await first.click();
-  await expect(page.getByRole('button', { name: /Conteo agrupado/ })).toHaveCount(2);
+  await expect(
+    page.getByRole('button', {
+      name: new RegExp(`El Roadmap de ${course.courseCode} ha recibido cambios`),
+    }),
+  ).toContainText('3 cambios');
 });

@@ -10,6 +10,7 @@ import {
   roadmapClassificationChangeMessage,
   roadmapPathChangeMessage,
 } from '../application/messages';
+import { groupRoadmapNotices } from '../application/group-roadmap-notices';
 import { changeSummary } from '../application/change-summary';
 import type { ChangeSummary } from '../contracts/change-summary';
 import type { NoticeClass } from '../application/notice-effect';
@@ -226,22 +227,18 @@ export async function listOwnNotices(userId: string, params: URLSearchParams) {
       })
     : null;
   if (after && !cursor) throw new ApplicationError(404, 'NOT_FOUND', 'Aviso no encontrado.');
-  const notifications = await prisma.roadmapNotice.findMany({
-    where: {
-      ...noticeFilter(params),
-      recipientId: userId,
-      ...(cursor
-        ? {
-            OR: [
-              { availableAt: { lt: cursor.availableAt } },
-              { availableAt: cursor.availableAt, id: { lt: cursor.id } },
-            ],
-          }
-        : {}),
-    },
+  const pending = await prisma.roadmapNotice.findMany({
+    where: { ...noticeFilter(params), recipientId: userId },
     orderBy: [{ availableAt: 'desc' }, { id: 'desc' }],
-    take: limit + 1,
   });
+  const rows = params.get('groupBy') === 'roadmapId' ? groupRoadmapNotices(pending) : pending;
+  const notifications = cursor
+    ? rows.filter(
+        (row) =>
+          row.availableAt < cursor.availableAt ||
+          (row.availableAt.getTime() === cursor.availableAt.getTime() && row.id < cursor.id),
+      )
+    : rows;
   return {
     notifications: notifications.slice(0, limit).map(noticeRecord),
     hasMore: notifications.length > limit,

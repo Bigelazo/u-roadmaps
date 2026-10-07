@@ -13,6 +13,18 @@ El contrato acordado vive en [#152](https://github.com/Bigelazo/u-roadmaps/issue
 [#139](https://github.com/Bigelazo/u-roadmaps/issues/139) y el historial Git conservan
 la documentación de la integración retirada como antecedente.
 
+## Agrupación del Inbox
+
+#183 agrega una proyección de lectura (`groupBy=roadmapId` en el listado HTTP,
+solicitada por el Inbox; el listado sin ese parámetro conserva los avisos individuales): tres o más Objetos pendientes del mismo
+Roadmap aparecen en una fila «El Roadmap de CC1002 ha recibido cambios», con
+«N cambios». Los contadores siguen contando los Objetos persistidos, no las
+filas. Un retiro que deja dos Objetos restaura las filas individuales.
+«Roadmap disponible» queda fuera de la agrupación. La fecha y la identidad de
+paginación de la fila agrupada pertenecen a su Objeto más reciente; agrupar
+antes de paginar evita dividir un Roadmap entre páginas. El clic conserva la
+navegación al Roadmap y su reconocimiento habitual.
+
 ## Instalar y arrancar
 
 Usar el PostgreSQL existente y configurar `.env.production` con `DATABASE_URL`,

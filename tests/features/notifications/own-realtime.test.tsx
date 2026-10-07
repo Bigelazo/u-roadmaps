@@ -341,7 +341,9 @@ test('a burst of Inbox signals refreshes once without marking shown rows', async
   await screen.findByRole('button', { name: /Saved Node change/ });
   const mutations = () =>
     fetch.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET').length;
-  const feedRequests = () => fetch.mock.calls.filter(([url]) => url.includes('?limit=')).length;
+  const feedRequests = () =>
+    fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').searchParams.has('limit'))
+      .length;
   await waitFor(() => expect(mutations()).toBe(0));
   const before = feedRequests();
   act(() => {

@@ -218,7 +218,9 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   await page.goto('/academic-overview');
   await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
   await page
-    .getByRole('button', { name: new RegExp(secondResourceTitle) })
+    .getByRole('button', {
+      name: new RegExp(`El Roadmap de ${course.courseCode} ha recibido cambios`),
+    })
     .first()
     .click();
   await expect(page).toHaveURL(course.pagePath());

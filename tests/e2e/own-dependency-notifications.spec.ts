@@ -80,15 +80,11 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     await page.goto('/academic-overview');
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     const noticeButton = page.getByRole('list', { name: 'Lista de avisos' }).getByRole('button', {
-      name: new RegExp(`^${escapeRegExp(notice.subject)}\\s+${escapeRegExp(notice.body)}`),
+      name: new RegExp(
+        `^El Roadmap de ${escapeRegExp(course.courseCode)} ha recibido cambios|^${escapeRegExp(notice.subject)}\\s+${escapeRegExp(notice.body)}`,
+      ),
     });
-    const rows = page.getByRole('list', { name: 'Lista de avisos' }).getByRole('listitem');
-    await expect(rows.first()).toBeVisible();
-    while ((await noticeButton.count()) === 0) {
-      const previousCount = await rows.count();
-      await page.getByRole('button', { name: 'Cargar más avisos' }).click();
-      await expect.poll(() => rows.count()).toBeGreaterThan(previousCount);
-    }
+    await expect(noticeButton).toBeVisible();
     await noticeButton.click();
   };
 

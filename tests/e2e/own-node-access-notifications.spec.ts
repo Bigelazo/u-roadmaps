@@ -52,7 +52,11 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     await page
       .getByRole('list', { name: 'Lista de avisos' })
-      .getByRole('button', { name: new RegExp(`^${escapeRegExp(title)}`) })
+      .getByRole('button', {
+        name: new RegExp(
+          `^El Roadmap de ${escapeRegExp(course.courseCode)} ha recibido cambios|^${escapeRegExp(title)}`,
+        ),
+      })
       .first()
       .click();
     // Repeats are stored immediately without a summary (no grouping window, see ADR-0014).
