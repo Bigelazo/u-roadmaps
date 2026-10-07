@@ -42,32 +42,32 @@ aviso «Resumen de cambios» al cerrarse. Sus problemas:
 
 Al iniciar la sesión se pidió identificar qué partes de la propuesta ya existían:
 
-| Propuesta | Estado al 2026-10-04 |
-|---|---|
-| Agrupar cambios a un mismo objeto | Parcial: grupo por destinatario + Roadmap + Nodo + clase, pero con ventana de 60 s y sin reemplazar el primer aviso |
-| Mostrar solo el último cambio | No existía: el primer aviso nunca se modifica |
-| Aviso general «El roadmap ha recibido cambios» | No existía |
-| Contadores | Existen tres: badge del Inbox, contador por curso en el Resumen académico y contador en el canvas del Roadmap (`RoadmapCanvasView.tsx`); cada aviso pendiente suma 1 |
-| Dialog de resumen al entrar al Roadmap | No existía: entrar reconocía avisos generales sin mostrar nada; el único dialog (`RoadmapAvailabilityDialog`) muestra un aviso y solo al llegar desde el Inbox (`?notice=`) |
-| Abrir la campana marca todo como visto | No: solo marca las filas mostradas |
-| Clic en un aviso redirige al Roadmap | No: abre el Nodo afectado (`targetNode`) y el dialog de ese aviso |
-| Aviso reconocido desaparece del Inbox | No: queda como leído |
-| Roadmap en tiempo real | Sí, para todos, mediante SSE |
+| Propuesta                                      | Estado al 2026-10-04                                                                                                                                                        |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agrupar cambios a un mismo objeto              | Parcial: grupo por destinatario + Roadmap + Nodo + clase, pero con ventana de 60 s y sin reemplazar el primer aviso                                                         |
+| Mostrar solo el último cambio                  | No existía: el primer aviso nunca se modifica                                                                                                                               |
+| Aviso general «El roadmap ha recibido cambios» | No existía                                                                                                                                                                  |
+| Contadores                                     | Existen tres: badge del Inbox, contador por curso en el Resumen académico y contador en el canvas del Roadmap (`RoadmapCanvasView.tsx`); cada aviso pendiente suma 1        |
+| Dialog de resumen al entrar al Roadmap         | No existía: entrar reconocía avisos generales sin mostrar nada; el único dialog (`RoadmapAvailabilityDialog`) muestra un aviso y solo al llegar desde el Inbox (`?notice=`) |
+| Abrir la campana marca todo como visto         | No: solo marca las filas mostradas                                                                                                                                          |
+| Clic en un aviso redirige al Roadmap           | No: abre el Nodo afectado (`targetNode`) y el dialog de ese aviso                                                                                                           |
+| Aviso reconocido desaparece del Inbox          | No: queda como leído                                                                                                                                                        |
+| Roadmap en tiempo real                         | Sí, para todos, mediante SSE                                                                                                                                                |
 
 ## Catálogo actual de cambios que generan avisos
 
-| # | Acción | Avisos actuales |
-|---|---|---|
-| 1 | Crear el Roadmap | `roadmap-available` |
-| 2 | Crear Nodo visible | `node-available` |
-| 3 | Editar título, descripción o tipo de un Nodo visible | `node-updated` con `changedFields` |
-| 4 | Ocultar o mostrar Nodo | `node-retired` o `node-available`, más avisos en cascada a dependientes que ganan o pierden acceso |
-| 5 | Eliminar Nodo | `node-deleted`, más cascada de acceso |
-| 6 | Bloqueo docente, Desbloqueo de nodo, Desbloqueo de rama | `node-blocked` o `node-available` en cada Nodo afectado de la cascada, con destinatarios distintos por estudiante |
-| 7 | Agregar, editar o quitar Recurso | `resource-added`, `resource-updated`, `resource-removed` |
-| 8 | Agregar o quitar Dependencia | `dependency-added`, `dependency-removed`, más cascada de acceso |
-| 9 | Renombrar un Tipo de nodo en uso | `classification-updated` |
-| 10 | Desbloqueo programado (commit `2ebba0d`) | Los mismos avisos que un desbloqueo manual, atribuidos al equipo docente |
+| #   | Acción                                                  | Avisos actuales                                                                                                   |
+| --- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 1   | Crear el Roadmap                                        | `roadmap-available`                                                                                               |
+| 2   | Crear Nodo visible                                      | `node-available`                                                                                                  |
+| 3   | Editar título, descripción o tipo de un Nodo visible    | `node-updated` con `changedFields`                                                                                |
+| 4   | Ocultar o mostrar Nodo                                  | `node-retired` o `node-available`, más avisos en cascada a dependientes que ganan o pierden acceso                |
+| 5   | Eliminar Nodo                                           | `node-deleted`, más cascada de acceso                                                                             |
+| 6   | Bloqueo docente, Desbloqueo de nodo, Desbloqueo de rama | `node-blocked` o `node-available` en cada Nodo afectado de la cascada, con destinatarios distintos por estudiante |
+| 7   | Agregar, editar o quitar Recurso                        | `resource-added`, `resource-updated`, `resource-removed`                                                          |
+| 8   | Agregar o quitar Dependencia                            | `dependency-added`, `dependency-removed`, más cascada de acceso                                                   |
+| 9   | Renombrar un Tipo de nodo en uso                        | `classification-updated`                                                                                          |
+| 10  | Desbloqueo programado (commit `2ebba0d`)                | Los mismos avisos que un desbloqueo manual, atribuidos al equipo docente                                          |
 
 No generan avisos: mover Nodos, reordenar el layout ni que un estudiante complete
 un Nodo.
@@ -83,24 +83,24 @@ debe ocultar el bloqueo).
 
 Contenido del Nodo, cada uno con su propio aviso y su propia agrupación:
 
-| Objeto | Texto orientativo (no definitivo) |
-|---|---|
-| Título del Nodo | «X» pasó a llamarse «Y» |
+| Objeto               | Texto orientativo (no definitivo)  |
+| -------------------- | ---------------------------------- |
+| Título del Nodo      | «X» pasó a llamarse «Y»            |
 | Descripción del Nodo | Se actualizó la descripción de «Y» |
-| Tipo del Nodo | «Y» pasó de tipo A a tipo B |
+| Tipo del Nodo        | «Y» pasó de tipo A a tipo B        |
 
 **Acceso al Nodo** es un único objeto, no dos (visibilidad y bloqueo por
 separado). Para el estudiante, un Nodo está en exactamente uno de tres estados:
 
-| Estado | Origen |
-|---|---|
-| Disponible | Visible y sin bloqueos |
-| Bloqueado | Bloqueo docente o Bloqueo por prerrequisitos |
-| Retirado | Oculto (el estudiante no lo ve) |
+| Estado     | Origen                                       |
+| ---------- | -------------------------------------------- |
+| Disponible | Visible y sin bloqueos                       |
+| Bloqueado  | Bloqueo docente o Bloqueo por prerrequisitos |
+| Retirado   | Oculto (el estudiante no lo ve)              |
 
 El aviso muestra el estado anterior conocido y el resultante, por ejemplo
-*«Colas» pasó de Disponible a Bloqueado*. Ocultar → mostrar → bloquear sin
-reconocer produce un único aviso *Disponible → Bloqueado*. Separar visibilidad y
+_«Colas» pasó de Disponible a Bloqueado_. Ocultar → mostrar → bloquear sin
+reconocer produce un único aviso _Disponible → Bloqueado_. Separar visibilidad y
 bloqueo daría avisos contradictorios: bloquear y luego ocultar dejaría a la vez
 «fue bloqueado» y «fue retirado», cuando solo «Retirado» está vigente.
 
@@ -117,12 +117,12 @@ de un solo dependiente no tendría un aviso propio que actualizar.
 **Recurso:** cada Recurso es su propio objeto y se trata como una unidad (no un
 objeto por campo). Su ciclo de vida se compone mientras el aviso esté pendiente:
 
-| Secuencia antes de reconocer | Aviso resultante (texto orientativo) |
-|---|---|
-| agregado → editado (n veces) | Nuevo recurso «Guía 3» en «Pilas», con el título actual |
-| agregado → eliminado | Se retira (regla 3b): para el destinatario nunca existió |
-| editado (n veces) | Se actualizó el recurso «Guía 3» en «Pilas» |
-| editado → eliminado | Se eliminó el recurso «Guía 3» de «Pilas», con el título conocido |
+| Secuencia antes de reconocer | Aviso resultante (texto orientativo)                              |
+| ---------------------------- | ----------------------------------------------------------------- |
+| agregado → editado (n veces) | Nuevo recurso «Guía 3» en «Pilas», con el título actual           |
+| agregado → eliminado         | Se retira (regla 3b): para el destinatario nunca existió          |
+| editado (n veces)            | Se actualizó el recurso «Guía 3» en «Pilas»                       |
+| editado → eliminado          | Se eliminó el recurso «Guía 3» de «Pilas», con el título conocido |
 
 En una edición solo se detalla el cambio de título («Guía 3» ahora se llama
 «Guía 3 resuelta»); cambios de URL, tipo o archivo no se detallan. Se descartó un
@@ -133,11 +133,11 @@ muestran URLs ni nombres de archivo.
 no la Dependencia, porque quitar y volver a agregar crea otra Dependencia con
 otro id.
 
-| Secuencia antes de reconocer | Aviso resultante (texto orientativo) |
-|---|---|
-| agregada | «Árboles» ahora requiere «Colas» |
-| quitada | «Árboles» ya no requiere «Colas» |
-| agregada → quitada, o quitada → agregada | Se retira (regla 3b) |
+| Secuencia antes de reconocer                  | Aviso resultante (texto orientativo)                         |
+| --------------------------------------------- | ------------------------------------------------------------ |
+| agregada                                      | «Árboles» ahora requiere «Colas»                             |
+| quitada                                       | «Árboles» ya no requiere «Colas»                             |
+| agregada → quitada, o quitada → agregada      | Se retira (regla 3b)                                         |
 | invertida («Colas» pasa a requerir «Árboles») | Dos pares distintos: uno quitado y otro agregado, dos avisos |
 
 Se mantiene la regla vigente: ocultar o eliminar un Nodo **no** genera avisos de
@@ -149,11 +149,11 @@ tengan aviso propio: a quien ya completó «Colas» no le cambia el acceso cuand
 
 **Tipo de nodo:** cada Tipo de nodo es su propio objeto, y solo su nombre.
 
-| Secuencia antes de reconocer | Aviso resultante (texto orientativo) |
-|---|---|
-| renombrado (n veces) | El tipo «Lectura» ahora se llama «Lectura obligatoria», del nombre conocido al actual |
-| renombrado → vuelve al nombre conocido | Se retira (regla 3b) |
-| cambio de ícono o color | Sin aviso, como hoy |
+| Secuencia antes de reconocer           | Aviso resultante (texto orientativo)                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| renombrado (n veces)                   | El tipo «Lectura» ahora se llama «Lectura obligatoria», del nombre conocido al actual |
+| renombrado → vuelve al nombre conocido | Se retira (regla 3b)                                                                  |
+| cambio de ícono o color                | Sin aviso, como hoy                                                                   |
 
 Solo se avisa si el Tipo tiene al menos un Nodo visible (regla vigente); los
 Tipos predefinidos no se editan. Renombrar un Tipo no genera avisos por Nodo: un
@@ -165,12 +165,12 @@ los avisos posteriores sobre ese Nodo y muestra su estado actual. Es simétrico 
 la excepción de eliminación: eliminar absorbe todo lo anterior; crear absorbe
 todo lo posterior.
 
-| Secuencia antes de reconocer | Aviso resultante (texto orientativo) |
-|---|---|
-| creado → cambios de título, descripción, tipo, acceso o Recursos | Un solo aviso «Nuevo Nodo «Pilas»» con el estado actual |
-| creado → eliminado | Se retira: el destinatario nunca lo conoció |
-| creado → ocultado | Se retira; si luego se muestra, vuelve a ser «Nuevo Nodo» |
-| creado → bloqueado | «Nuevo Nodo «Pilas» (bloqueado)»: un aviso que incluye su acceso |
+| Secuencia antes de reconocer                                     | Aviso resultante (texto orientativo)                             |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| creado → cambios de título, descripción, tipo, acceso o Recursos | Un solo aviso «Nuevo Nodo «Pilas»» con el estado actual          |
+| creado → eliminado                                               | Se retira: el destinatario nunca lo conoció                      |
+| creado → ocultado                                                | Se retira; si luego se muestra, vuelve a ser «Nuevo Nodo»        |
+| creado → bloqueado                                               | «Nuevo Nodo «Pilas» (bloqueado)»: un aviso que incluye su acceso |
 
 Se descartó mantener objetos separados para Nodos nuevos: produciría avisos como
 «Nodo nuevo» pasó a llamarse «Pilas» sobre un nombre que nunca se conoció.
@@ -188,7 +188,7 @@ las reglas normales.
 El aviso compara el valor que el destinatario **conoció por última vez** con el
 valor actual; los pasos intermedios no se muestran. Ejemplo: «Recursión» →
 «Recursividad» → «Recursividad avanzada» sin reconocer produce un único aviso
-*«Recursión» pasó a llamarse «Recursividad avanzada»*. La misma regla aplica al
+_«Recursión» pasó a llamarse «Recursividad avanzada»_. La misma regla aplica al
 tipo. La descripción no muestra valores.
 
 Hoy `node-updated` solo guarda `changedFields`; la implementación debe conservar
@@ -289,8 +289,8 @@ frecuente e inocuo, y le sirve a quien no ha entrado en días.
 ### 7. Aviso agrupado del Roadmap (3 o más objetos)
 
 Cuando un destinatario tiene **3 o más objetos pendientes en un mismo Roadmap**,
-el Inbox muestra una sola fila para ese Roadmap: *El Roadmap de CC1002 ha
-recibido cambios*, con el detalle *N cambios*.
+el Inbox muestra una sola fila para ese Roadmap: _El Roadmap de CC1002 ha
+recibido cambios_, con el detalle _N cambios_.
 
 - **Se cuenta por Roadmap y por destinatario.** Cada Roadmap tiene su propia
   agrupación; los cambios de CC1002 y MA1001 nunca se suman. Con 2 pendientes en
@@ -314,8 +314,8 @@ conservar la fecha original: un aviso actualizado el jueves quedaría fechado el
 lunes, antes del cambio que describe.
 
 Ejemplo: Ana tiene pendientes el título de «Pilas», el acceso de «Colas» y el
-Recurso «Guía 3» de «Árboles» tras 12 ediciones docentes. Ve una fila *El Roadmap
-de CC1002 ha recibido cambios — 3 cambios*, badge 3, contador del curso 3.
+Recurso «Guía 3» de «Árboles» tras 12 ediciones docentes. Ve una fila _El Roadmap
+de CC1002 ha recibido cambios — 3 cambios_, badge 3, contador del curso 3.
 
 ### 8. Contenido del dialog de Resumen de cambios
 
@@ -345,7 +345,7 @@ Ruta y clasificación
 4. **Sin navegación:** los ítems no son clicables. Resaltar o centrar el Nodo en
    el canvas queda para una iteración posterior.
 5. **«Desde tu última visita» sin fecha ni hora.**
-6. **Un único botón, *Entendido*.** Cerrarlo no tiene efectos: los avisos se
+6. **Un único botón, _Entendido_.** Cerrarlo no tiene efectos: los avisos se
    reconocieron al entrar.
 
 ### 9. Vista desactualizada del estudiante
@@ -362,14 +362,14 @@ detectar el rechazo, para no complicar esta iteración.
 
 ### 10. Destinatarios: se avisa lo que se puede ver
 
-| Objeto | Destinatarios |
-|---|---|
-| Título y tipo del Nodo | Quien ve el Nodo: visible, accesible **o bloqueado** (cambio respecto de hoy) |
-| Descripción y Recursos | Solo quien tiene el Nodo accesible (como hoy) |
-| Acceso al Nodo | Quien cambia de estado (como hoy) |
-| Dependencias | Todos, si ambos Nodos son visibles (como hoy) |
-| Tipo de nodo (nombre) | Todos, si tiene al menos un Nodo visible (como hoy) |
-| Creación de Nodo y Roadmap disponible | Como hoy |
+| Objeto                                | Destinatarios                                                                 |
+| ------------------------------------- | ----------------------------------------------------------------------------- |
+| Título y tipo del Nodo                | Quien ve el Nodo: visible, accesible **o bloqueado** (cambio respecto de hoy) |
+| Descripción y Recursos                | Solo quien tiene el Nodo accesible (como hoy)                                 |
+| Acceso al Nodo                        | Quien cambia de estado (como hoy)                                             |
+| Dependencias                          | Todos, si ambos Nodos son visibles (como hoy)                                 |
+| Tipo de nodo (nombre)                 | Todos, si tiene al menos un Nodo visible (como hoy)                           |
+| Creación de Nodo y Roadmap disponible | Como hoy                                                                      |
 
 Motivo del cambio: un Nodo bloqueado expone al estudiante título y tipo, pero no
 descripción ni Recursos (`completion-projection.ts`); hoy un renombre de un Nodo
@@ -399,7 +399,7 @@ Cuando la Participación de un destinatario se desactiva, **se retiran todos sus
 avisos pendientes de ese Roadmap**: desaparecen del Inbox y de los contadores. Si
 recupera la Participación, empieza de cero: no hay avisos que reaparezcan.
 
-Reemplaza el comportamiento vigente, en que los avisos se conservan y se
+Reemplazó el comportamiento anterior, en que los avisos se conservaban y se
 reconocen uno a uno al seleccionarlos («lost Course access retains saved notices
 and acknowledges only the selected one»). Con el reconocimiento solo al entrar al
 Roadmap, esos avisos quedarían para siempre en el Inbox. Se descartaron
@@ -410,8 +410,9 @@ ocultarlos hasta recuperar el acceso.
 
 Al activar este modelo se **eliminan todos los avisos guardados** (individuales y
 «Resumen de cambios») junto con sus registros asociados de reconocimiento y
-deduplicación. No se convierten al modelo nuevo. Reemplaza la indicación vigente
-de `docs/notifications-operations.md` de no limpiar las tablas de avisos.
+deduplicación. No se convierten al modelo nuevo. La migración de #177 ejecutó
+este reset y sustituyó la antigua indicación de no limpiar las tablas de avisos.
+La operación vigente se describe en [operaciones](../notifications-operations.md).
 
 ## Alternativas descartadas
 
@@ -443,30 +444,25 @@ de `docs/notifications-operations.md` de no limpiar las tablas de avisos.
   abierto**: el primero priva de información a quien no ha entrado; el segundo
   reintroduce lógica de «estar dentro».
 
-## Consecuencias
+## Consecuencias implementadas
 
-- Se elimina `group-notices.ts` (ventanas en memoria) y el aviso separado
-  «Resumen de cambios»; `NoticeDeliveryEffect` y la proyección de resúmenes deben
-  revisarse.
-- Se elimina `prepareOwnNodeOpening` y el reconocimiento por apertura de Nodo.
-- Se elimina `RoadmapNotice.seenAt`, la acción `seen` y su registro desde el Inbox.
-- Se retira el dialog por aviso (`RoadmapAvailabilityDialog`, hoy abierto con
-  `?notice=`): el clic solo redirige y la primera entrada no muestra dialog. Lo
-  reemplaza el dialog de Resumen de cambios de la decisión 4.
-- Las pruebas E2E dejan de esperar 60 segundos reales.
-- Desaparecen las líneas `Roadmap notice saved` de resúmenes; las de avisos
-  inmediatos dependerán del nuevo almacenamiento.
-- El canvas del estudiante deja de suscribirse a `ROADMAP_CHANGE_RECEIVED_EVENT`;
-  la parte de estudiante de `roadmap-realtime-prototype.spec.ts` cambia.
-- Documentación por actualizar al implementar: `docs/notifications-summaries.md`
-  (queda reemplazado), `docs/notifications-operations.md` (agrupador, ventanas,
-  conservación de avisos, observabilidad) y `docs/notifications-sse.md`
-  (reconocimiento por Nodo, `seen`, actualización en vivo del Roadmap del
-  estudiante). Cada uno lleva una nota que apunta a este ADR.
-- Pruebas E2E a reescribir: `own-node-notifications`, `own-node-access-notifications`,
-  `own-dependency-notifications`, `own-classification-notifications`,
-  `own-notification-operation`, `own-notification-summaries`,
-  `own-sse-notifications`, `own-notifications` y la parte de estudiante de
-  `roadmap-realtime-prototype`.
-- `UnavailableNoticeFallback` pierde su caso principal (avisos de un curso sin
-  acceso) por la decisión 11; se revisa al implementar.
+- Se retiraron las ventanas en memoria y el Aviso separado de resumen.
+  `NoticeDeliveryEffect` conserva deduplicación por efecto; los conocimientos por
+  destinatario y Objeto sostienen la reconciliación durable.
+- Se retiraron el reconocimiento por apertura de Nodo, `seenAt`, la acción `seen`
+  y el dialog por Aviso. El clic navega al Roadmap; la entrada reconoce y muestra
+  el Resumen de cambios salvo en la primera visita.
+- Los Avisos se agrupan por Objeto y el Inbox proyecta el Aviso agrupado del
+  roadmap desde tres Objetos visibles. No hay esperas reales para agrupar en tests.
+- Inbox y contadores siguen en vivo para todos; solo el contenido docente se
+  recarga por señales ordinarias. La pérdida de acceso se verifica en todos los roles.
+- La migración a cero retiró Avisos, aperturas y recibos del modelo anterior;
+  no convirtió su historial. Las migraciones siguientes preservan el modelo nuevo.
+- El fallback de destino no disponible queda para navegación antigua o en carrera,
+  o desaparición del Curso/Roadmap. La pérdida de Participación retira los Avisos
+  antes de que un Inbox actualizado ofrezca ese destino.
+
+La documentación vigente está en [Avisos y Resumen de cambios](../notifications-summaries.md),
+[operaciones](../notifications-operations.md) y [SSE](../notifications-sse.md).
+El catálogo y la comparación de estado previo de este ADR son antecedentes de la
+sesión de decisión, no una descripción del almacenamiento vigente.

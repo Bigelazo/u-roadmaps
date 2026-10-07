@@ -1,9 +1,6 @@
-'use client';
-
 export function UnavailableNoticeFallback({
   reason,
 }: {
-  noticeId: string;
   reason: 'course-unavailable' | 'roadmap-unavailable';
 }) {
   return (

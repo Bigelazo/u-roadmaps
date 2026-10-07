@@ -1,8 +1,8 @@
 # Operación de avisos propios
 
-> Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md):
-> #177, #179 y #180 activan los Objetos de título, descripción, tipo y acceso de Nodo; #178 activa el reconocimiento al entrar. Este documento describe el estado
-> vigente; #181 agrega el Recurso como Objeto y #182 los pares de Dependencias y los nombres de Tipos de nodo.
+> Modelo implementado de [ADR-0014](adr/0014-target-based-notice-grouping.md):
+> agrupación por Objeto del aviso, reconocimiento al entrar y proyección del Inbox
+> por Roadmap. No hay ventanas de tiempo ni estado «visto».
 
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
 por SSE autenticado. Disponibilidad, Nodos y cambios de acceso, Recursos,
@@ -93,8 +93,11 @@ Docker. PostgreSQL LISTEN distribuye las señales entre procesos.
 
 Aplicar las migraciones antes de arrancar. La migración de #177 activa el primer
 Objeto del aviso (título de Nodo) y elimina todos los Avisos existentes, sus
-reconocimientos y sus recibos de deduplicación, según ADR-0014. Es un reset único;
-no hay caducidad ni tarea de eliminación por antigüedad para `RoadmapNotice`.
+reconocimientos y sus recibos de deduplicación, según ADR-0014. Es la migración a cero del almacenamiento anterior, no una conversión de
+Avisos históricos. La limpieza de esas tablas forma parte de esa migración
+y de los resets aislados de pruebas; no es una tarea periódica de producción.
+Las migraciones posteriores conservan los Avisos del modelo nuevo.
+No hay caducidad ni tarea de eliminación por antigüedad para `RoadmapNotice`.
 
 El título usa `NodeTitleKnowledge` para conservar el último valor conocido por
 Usuario y Nodo. Un trigger captura el valor anterior en la transacción de edición;
@@ -155,9 +158,8 @@ Dependencias eliminadas en cascada. Apertura y reconocimiento conservan snapshot
 de ambos Objetos y rebasan ediciones posteriores sin reconocerlas. La migración
 de #182 agrega conocimientos y snapshots sin borrar Avisos existentes.
 
-Las demás
-clases mantienen su entrega inmediata; todas se reconocen al entrar al Roadmap. Los siguientes
-tickets implementarán las restantes reglas de ADR-0014.
+Todas las clases reconcilian su Objeto del aviso sin ventanas de tiempo y se
+reconocen únicamente al entrar al Roadmap.
 
 Las aperturas de reconocimiento (`NoticeAcknowledgement`) conservan su conjunto
 fijo de `noticeIds` para reintentos durante al menos 24 horas desde `openedAt`.
@@ -168,9 +170,12 @@ límite exacto, las recientes y las de otros Usuarios. El índice
 periódico: las aperturas antiguas de un Usuario inactivo permanecen hasta que
 cree otra apertura. Esta poda no borra ni modifica Avisos.
 
-Reintentar una apertura ya podada devuelve 404. El cliente conserva el estado
-de error de reconocimiento y no sustituye la apertura por otra ni reconoce
-Avisos llegados después. Dentro de la retención, el reintento reutiliza el mismo
+Reintentar una apertura ya podada mediante HTTP devuelve 404; esa petición no
+crea otra apertura ni reconoce Avisos llegados después. La interfaz actual no
+muestra un banner ni un botón para reintentar el reconocimiento fallido: los
+Avisos permanecen pendientes y no se muestra el Resumen de cambios. Una nueva
+entrada prepara una operación nueva. El contrato HTTP permite reintentar la
+operación original dentro de la retención, reutilizando el mismo
 `operationId` y el mismo conjunto, sin ampliar `noticeIds`. Para títulos también
 conserva `titleSnapshots`; descripción, tipo y acceso conservan `contentSnapshots`,
 con los valores y nombres capturados al abrir. Si el Aviso cambió
@@ -197,9 +202,10 @@ Abrir la campana o un Nodo no cambia estado. Se retiraron `seenAt`, la acción
 solo navega al Roadmap; el antiguo dialog por `?notice=` ya no existe.
 
 El resumen pertenece a la entrada activa: salir del Roadmap o refrescar descarta
-su estado visible y cualquier respuesta tardía. Si falla la preparación inicial,
-el reintento conserva el mismo ID de operación y puede preparar el conjunto;
-si ya se confirmó su preparación, conserva el conjunto sin reemplazarlo.
+su estado visible y cualquier respuesta tardía. En el contrato HTTP, si falla
+la preparación inicial, una petición con el mismo ID puede preparar el conjunto;
+si ya se confirmó su preparación, conserva el conjunto sin reemplazarlo. Esta
+idempotencia no implica que la interfaz ofrezca una acción de reintento.
 
 El reset de datos de desarrollo y el de E2E son
 herramientas de pruebas, nunca pasos de operación en producción.
@@ -231,13 +237,27 @@ La liberación periódica de Desbloqueos programados ocurre fuera de una petici�
 HTTP: ese trabajo usa entrega directa y espera su persistencia antes de terminar
 la pasada, sin intentar registrar `after()` fuera de su contexto.
 
-Cada efecto aceptado se guarda sin una ventana de espera, incluidas las repeticiones,
-con una identidad independiente y sin resumen separado. `NoticeDeliveryEffect`
-y el aviso se guardan en una transacción; repetir una identidad no crea otra
-fila. Cerrar el proceso conserva los avisos confirmados. No hay outbox, replay
-ni recuperación durable de avisos que no llegaron a persistirse. Un reinicio
-puede perder el trabajo diferido todavía no guardado, coherente con #152 y #173. El modelo
-acordado en ADR-0014 todavía no está implementado.
+Cada efecto aceptado se reconcilia de inmediato contra el estado actual y el
+último valor conocido del destinatario. `NoticeDeliveryEffect` deduplica la
+identidad del efecto en la misma transacción que crea, actualiza o retira el
+Aviso pendiente: repetir el efecto no crea otra fila. Varias ediciones del mismo
+Objeto actualizan su Aviso; volver al valor conocido lo retira. No se guarda un
+resumen separado. Cerrar el proceso conserva los Avisos confirmados y sus valores
+conocidos. No hay outbox, replay ni recuperación durable de efectos que no llegaron
+a persistirse. Un reinicio puede perder el trabajo diferido todavía no guardado,
+coherente con #152 y #173.
+
+## Destinos que dejaron de estar disponibles
+
+La pérdida de Participación retira los Avisos, por lo que el Inbox actualizado
+no ofrece enlaces a ese Curso. Una pestaña con una fila cargada antes del retiro,
+un enlace antiguo o una navegación en carrera todavía puede llegar con `?notice=`.
+Si ya no existe el Curso, no se recupera una Participación activa o falta el
+Roadmap, la página redirige al Resumen académico con una razón explícita y muestra
+el aviso de destino no disponible. Este fallback no consulta ni reconoce el
+Aviso retirado y no muestra su contenido. Un parámetro `notice` aislado en el
+Resumen académico no muestra ese mensaje. La revocación durante una sesión usa
+su flujo independiente `accessLost=1`, también para estudiantes y observadores.
 
 ## Verificar
 
@@ -253,10 +273,11 @@ NEXT_DIST_DIR=.next-e2e pnpm check:notification-bundle
 
 La comprobación del bundle inspecciona los artefactos de cliente, servidor,
 trazas de dependencias y lockfile sin necesitar un secreto centinela. La suite
-ordinaria arranca un servidor de producción y usa Chromium y Firefox. Los
+ordinaria arranca un servidor de producción y usa los proyectos configurados en
+`playwright.config.ts` (actualmente Chromium). Los
 recorridos `own-sse-notifications`, `own-notification-operation` y
-`own-notification-summaries` comprueban entrega inmediata real, llegada posterior a una apertura,
-actualización del Roadmap, contadores, reconocimiento indivisible, propagación
+`own-notice-absorption` y `roadmap-entry-summary` comprueban entrega inmediata real, llegada posterior a una apertura,
+actualización docente del Roadmap, contenido estudiantil estable, contadores, reconocimiento indivisible, propagación
 entre pestañas y recuperación. No omiten pruebas por falta de credenciales Cloud.
 Los escenarios de audiencia, destinos inaccesibles, acceso revocado y paginación
 complementan estos recorridos. Las señales inyectadas en tests unitarios no se

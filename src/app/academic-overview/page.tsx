@@ -12,7 +12,9 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
   const reason =
     searchParams.noticeFallback === 'course-unavailable'
       ? 'course-unavailable'
-      : 'roadmap-unavailable';
+      : searchParams.noticeFallback === 'roadmap-unavailable'
+        ? 'roadmap-unavailable'
+        : null;
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
 
@@ -24,7 +26,7 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
           Resumen académico.
         </p>
       ) : null}
-      {noticeId ? <UnavailableNoticeFallback noticeId={noticeId} reason={reason} /> : null}
+      {noticeId && reason ? <UnavailableNoticeFallback reason={reason} /> : null}
       <AcademicOverview
         overview={await getAcademicOverviewPage(user)}
         notificationsEnabled={Boolean(getInboxIdentity(user.id))}

@@ -1,7 +1,8 @@
 # Own Inbox and role-scoped Roadmap live updates
 
-> Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md)
-> (aceptado el 2026-10-05). #178 activa el reconocimiento en la entrada al Roadmap.
+> Implemented model: [ADR-0014](adr/0014-target-based-notice-grouping.md).
+> Notice targets group durably, recognition occurs on Roadmap entry, and only
+> teaching sessions reload pedagogical content live.
 
 `GET /api/notifications/stream` authenticates the current application User and
 streams invalidations through SSE. The application provider opens one EventSource
@@ -89,31 +90,8 @@ converted `roadmap-realtime-prototype.spec.ts` exercises real SSE for teaching l
 reconnection and teaching draft conflicts including deletion. Existing canvas-session unit tests remain
 complementary coverage for reconciliation and stale responses.
 
-The focused Chromium and Firefox run on 2026-10-04 included both files above:
-**8 passed, 0 failed, 0 skipped**, in **30.5 seconds**, exit code 0. Unit validation
-and existing full-suite limitations are recorded in `docs/agents/testing.md`.
-
-The full Chromium and Firefox E2E suite then passed: **124 passed, 0 failed,
-2 optional Cloud tests skipped**, in **2.4 minutes**, exit code 0. The E2E server
-released its port after completion.
-
-## Validation of #176 — 2026-10-06
-
-`pnpm test` completed with exit code 0: typechecking, **61 unit files / 321 tests**
-and **73 Chromium E2E tests**, with no failures or skips. This run used the local
-Chromium-only selection with two workers; Firefox was not run. The focused
-navigation/SSE run passed all **14 tests**, including same-Roadmap notice entry,
-stable student content, live Inbox/counters, reconnect recovery, access denial,
-recognition retry/cutoff, and teaching draft conflicts. Canvas preview also passed
-in the complete suite.
-
-Code-review ran once: its one Standards suggestion (a duplicate assertion) was
-applied; Spec reported no findings. Final validation also repaired the canvas test
-browser-global teardown, updated the old live-Resource expectation, and preserved
-the recognition cutoff when dismissing a notice dialog. ESLint, Prettier and
-`git diff --check` passed; `graphify update .` refreshed the AST graph.
-
-The post-suite audit found zero test-owned Courses, Users and rejection triggers.
-Development data retained fingerprint `1ac558d2cb366285e2bdef5529079188`; all 826
-historical seeded acknowledgements retained fingerprint
-`9de8e5a3ddd91c4136db4e829a216321`.
+Notice grouping has no real-time deadline. E2E assertions wait for persisted
+state or authorized HTTP projections, rather than sleeping for grouping windows.
+Unit transport tests use simulated time for debounce/retry behavior. Current
+suite results and configured browser scope belong in `docs/agents/testing.md`;
+historical runs are not evidence for the current implementation.
