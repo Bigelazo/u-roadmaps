@@ -2,7 +2,7 @@
 
 > Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md):
 > #177, #179 y #180 activan los Objetos de título, descripción, tipo y acceso de Nodo; #178 activa el reconocimiento al entrar. Este documento describe el estado
-> vigente; #181 agrega el Recurso como Objeto. Las otras clases conservan la transición inmediata.
+> vigente; #181 agrega el Recurso como Objeto y #182 los pares de Dependencias y los nombres de Tipos de nodo.
 
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
 por SSE autenticado. Disponibilidad, Nodos y cambios de acceso, Recursos,
@@ -83,6 +83,20 @@ solo detallan cambios de título; URLs, tipos y archivos no se muestran. Apertur
 y reconocimiento conservan snapshots de Recursos y rebasan los cambios posteriores
 sin reconocerlos en reintentos. La migración de #181 agrega las tablas y snapshots
 sin borrar Avisos existentes.
+
+Las Dependencias usan el Objeto `dependency:<origen>:<destino>`, independiente del
+id de la arista. `RouteNoticeKnowledge` conserva si el destinatario conocía ese
+par, o el nombre conocido de cada Tipo de nodo (`node-type:<id>:name`). La
+transacción docente captura el valor anterior antes de la entrega diferida, que
+consulta el estado actual. Quitar y volver a agregar un par, o renombrar un Tipo
+hasta volver al nombre conocido, retira el Aviso. Invertir una Dependencia crea
+dos Objetos distintos. Solo reciben Avisos los participantes activos distintos
+del autor: para Dependencias ambos Nodos deben ser visibles; para nombres de
+Tipos debe existir al menos un Nodo visible, incluso bloqueado. Ícono y color
+no generan Avisos. Ocultar o eliminar un Nodo no genera Avisos de ruta por sus
+Dependencias eliminadas en cascada. Apertura y reconocimiento conservan snapshots
+de ambos Objetos y rebasan ediciones posteriores sin reconocerlas. La migración
+de #182 agrega conocimientos y snapshots sin borrar Avisos existentes.
 
 Las demás
 clases mantienen su entrega inmediata; todas se reconocen al entrar al Roadmap. Los siguientes

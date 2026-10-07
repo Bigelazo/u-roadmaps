@@ -19,6 +19,7 @@ const { prisma, transaction, state } = vi.hoisted(() => {
   const transaction = {
     courseOffering: { findUnique: vi.fn() },
     participation: { findUnique: vi.fn(), findMany: vi.fn() },
+    routeNoticeKnowledge: { createMany: vi.fn() },
     nodeType: { findFirst: vi.fn(), update: vi.fn() },
     roadmapNode: { count: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   };
@@ -109,6 +110,7 @@ test('one confirmed rename notifies active participants once for a type used by 
       isPredefined: false,
     },
     notification: {
+      nodeTypeId: typeId,
       roadmapId: 'roadmap-id',
       previousTypeName: 'Lectura',
       nextTypeName: 'Lecturas guiadas',

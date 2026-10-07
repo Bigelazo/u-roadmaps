@@ -28,13 +28,14 @@ model CourseOffering {
 }
 
 model Roadmap {
-  id                   String                @id @default(uuid()) @db.Uuid
-  courseOfferingId     String                @unique @db.Uuid
-  courseOffering       CourseOffering        @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  id                   String                 @id @default(uuid()) @db.Uuid
+  courseOfferingId     String                 @unique @db.Uuid
+  courseOffering       CourseOffering         @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   nodeTypes            NodeType[]
   roadmapNodes         RoadmapNode[]
   simulatedCompletions SimulatedCompletion[]
   visits               RoadmapVisit[]
+  routeKnowledge       RouteNoticeKnowledge[]
 
   @@unique([id, courseOfferingId])
 }
@@ -138,6 +139,7 @@ model User {
   contentKnowledge   NodeContentKnowledge[]
   titleKnowledge     NodeTitleKnowledge[]
   resourceKnowledge  ResourceNoticeKnowledge[]
+  routeKnowledge     RouteNoticeKnowledge[]
   participations     Participation[]
   completions        Completion[]
 }
@@ -242,6 +244,7 @@ model NoticeAcknowledgement {
   contentSnapshots  Json      @default("[]")
   titleSnapshots    Json      @default("[]")
   resourceSnapshots Json      @default("[]")
+  routeSnapshots    Json      @default("[]")
   summary           Json      @default("null")
   recognizedAt      DateTime? @db.Timestamptz(3)
 
@@ -296,4 +299,16 @@ model ResourceNoticeKnowledge {
   node        RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@id([recipientId, resourceId])
+}
+
+// Route targets survive Dependency replacement and retain recipient baselines.
+model RouteNoticeKnowledge {
+  recipientId String  @db.Uuid
+  roadmapId   String  @db.Uuid
+  targetKey   String
+  knownValue  String
+  recipient   User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmap     Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  @@id([recipientId, roadmapId, targetKey])
 }

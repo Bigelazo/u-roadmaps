@@ -183,7 +183,7 @@ test('Resource notices stream to two tabs while student content stays stable unt
   }
 });
 
-test('classification and Dependency repeats stay separate, retain earlier notices and stop delivery after access loss', async ({
+test('classification and Dependency repeats reconcile independent targets and preserve pending notices after access loss', async ({
   course,
   apiAs,
 }) => {
@@ -222,26 +222,31 @@ test('classification and Dependency repeats stay separate, retain earlier notice
   expect((await teacher.delete(course.apiPath(`/dependencies/${firstDependency}`))).status()).toBe(
     204,
   );
-  const latestDependency = await connect();
-  // Every repeat is stored immediately (no grouping window or summary, see ADR-0014).
-  await expect.poll(async () => (await feed(student)).length).toBe(6);
+  await connect();
+  // Repeats reconcile one pending target per pair and Node type name (ADR-0014).
+  await expect.poll(async () => (await feed(student)).length).toBe(2);
   const delivered = await feed(student);
   const byClass = (noticeClass: string) =>
     delivered.filter(
       (notice: { data: { noticeClass: string } }) => notice.data.noticeClass === noticeClass,
     );
-  expect(byClass('roadmap-classification-changed')).toHaveLength(3);
-  expect(byClass('roadmap-path-changed')).toHaveLength(3);
+  expect(byClass('roadmap-classification-changed')).toHaveLength(1);
+  expect(byClass('roadmap-path-changed')).toHaveLength(1);
   expect(byClass('roadmap-classification-changed')[0]).toMatchObject({
-    data: { eventCount: 1, nextTypeName: 'Material final', previousTypeName: 'Guía' },
+    data: { eventCount: 1, nextTypeName: 'Material final', previousTypeName: 'Lectura inicial' },
   });
   expect(byClass('roadmap-path-changed')[0]).toMatchObject({
-    data: { eventCount: 1, dependencyId: latestDependency, changeKind: 'dependency-added' },
+    data: {
+      eventCount: 1,
+      sourceNodeId: course.nodes.first,
+      targetNodeId: nodeId,
+      changeKind: 'dependency-added',
+    },
   });
   expect(await feed(teacher)).toHaveLength(0);
   await sql(
     `UPDATE "Participation" SET "isActive" = false WHERE "courseOfferingId" = ${literal(course.id)} AND "userId" = ${literal(course.users.studentComplete.id)};`,
   );
-  await expect.poll(() => feed(revoked)).toHaveLength(6);
+  await expect.poll(() => feed(revoked)).toHaveLength(2);
   expect((await revoked.get(course.apiPath())).status()).toBe(403);
 });

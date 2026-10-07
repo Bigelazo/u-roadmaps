@@ -96,7 +96,7 @@ test('used Type renames deliver one general notice across Sections and recognize
   const notice = (await classification())[0];
   expect(notice).toMatchObject({
     subject: `Tipo «${before}» → «${after}»`,
-    body: expect.stringContaining(`actualizó la clasificación del Roadmap de ${course.courseCode}`),
+    body: `El tipo «${before}» ahora se llama «${after}».`,
     read: false,
     data: {
       targetKind: 'roadmap',

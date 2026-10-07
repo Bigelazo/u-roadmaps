@@ -7,6 +7,8 @@ import {
 export type DependencyPathNotificationDescriptor = Readonly<{
   eventId: string;
   dependencyId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
   roadmapId: string;
   changeKind: 'dependency-added' | 'dependency-removed';
   dependentNodeTitle: string;
@@ -26,6 +28,8 @@ export function dependencyChangeNotifications({
   after,
   actorId,
   dependencyId,
+  sourceNodeId,
+  targetNodeId,
   roadmapId,
   changeKind,
   sourceNode,
@@ -35,6 +39,8 @@ export function dependencyChangeNotifications({
   after: AccessSnapshot;
   actorId: string;
   dependencyId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
   roadmapId: string;
   changeKind: DependencyPathNotificationDescriptor['changeKind'];
   sourceNode: DependencyEndpoint;
@@ -48,6 +54,8 @@ export function dependencyChangeNotifications({
       ? {
           eventId: `${dependencyId}:${changeKind}`,
           dependencyId,
+          sourceNodeId,
+          targetNodeId,
           roadmapId,
           changeKind,
           dependentNodeTitle: targetNode.title,

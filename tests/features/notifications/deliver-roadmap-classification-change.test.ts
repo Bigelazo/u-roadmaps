@@ -5,7 +5,12 @@ const { prisma } = vi.hoisted(() => ({
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
-    roadmapNotice: { createMany: vi.fn() },
+    $executeRaw: vi.fn(),
+    roadmapNode: { findMany: vi.fn() },
+    dependency: { findUnique: vi.fn() },
+    nodeType: { findFirst: vi.fn() },
+    routeNoticeKnowledge: { upsert: vi.fn() },
+    roadmapNotice: { create: vi.fn(), findFirst: vi.fn() },
     noticeDeliveryEffect: { createMany: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -24,6 +29,15 @@ beforeEach(() => {
   delete (globalThis as typeof globalThis & { ownNoticeGrouper?: unknown }).ownNoticeGrouper;
   prisma.$transaction.mockImplementation((operation) => operation(prisma));
   prisma.noticeDeliveryEffect.createMany.mockResolvedValue({ count: 1 });
+  prisma.roadmapNotice.findFirst.mockResolvedValue(null);
+  prisma.routeNoticeKnowledge.upsert.mockResolvedValue({ knownValue: 'Lectura' });
+  prisma.roadmapNode.findMany.mockResolvedValue([
+    { id: 'source-id', title: 'Leyes de Newton' },
+    { id: 'target-id', title: 'Evaluación 1' },
+  ]);
+  prisma.dependency.findUnique.mockResolvedValue({ id: 'dependency-id' });
+  prisma.nodeType.findFirst.mockResolvedValue({ name: 'Lecturas guiadas' });
+
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
     courseCode: 'CC3002',
@@ -35,7 +49,6 @@ beforeEach(() => {
     .mockResolvedValueOnce([{ user: { id: 'student-id', name: 'Estudiante A' } }])
     .mockResolvedValueOnce([{ userId: 'student-id' }]);
   prisma.user.findUnique.mockResolvedValue({ name: 'Docente autora' });
-  prisma.roadmapNotice.createMany.mockResolvedValue({ count: 1 });
 });
 
 afterEach(() => {
@@ -51,6 +64,7 @@ test('stores the type rename to active recipients except the author on the match
     userId: 'teacher-id',
     identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
     roadmapId: 'roadmap-id',
+    nodeTypeId: 'type-id',
     previousTypeName: 'Lectura',
     nextTypeName: 'Lecturas guiadas',
     recipientIds: ['teacher-id', 'student-id'],
@@ -67,22 +81,20 @@ test('stores the type rename to active recipients except the author on the match
       },
     }),
   );
-  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
-    data: [
-      expect.objectContaining({
-        recipientId: 'student-id',
-        roadmapId: 'roadmap-id',
-        subject: 'Tipo «Lectura» → «Lecturas guiadas»',
-        body: 'Docente autora actualizó la clasificación del Roadmap de CC3002.',
-        data: expect.objectContaining({
-          targetKind: 'roadmap',
-          changeKind: 'classification-updated',
-          previousTypeName: 'Lectura',
-          nextTypeName: 'Lecturas guiadas',
-        }),
+  expect(prisma.roadmapNotice.create).toHaveBeenCalledWith({
+    data: expect.objectContaining({
+      recipientId: 'student-id',
+      roadmapId: 'roadmap-id',
+      subject: 'Tipo «Lectura» → «Lecturas guiadas»',
+      body: 'El tipo «Lectura» ahora se llama «Lecturas guiadas».',
+      data: expect.objectContaining({
+        targetKind: 'roadmap',
+        changeKind: 'classification-updated',
+        nodeTypeId: 'type-id',
+        previousTypeName: 'Lectura',
+        nextTypeName: 'Lecturas guiadas',
       }),
-    ],
-    skipDuplicates: true,
+    }),
   });
 });
 
@@ -99,6 +111,7 @@ test('does not send a descriptor for another Roadmap', async () => {
     userId: 'teacher-id',
     identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
     roadmapId: 'roadmap-id',
+    nodeTypeId: 'type-id',
     previousTypeName: 'Lectura',
     nextTypeName: 'Lecturas guiadas',
     recipientIds: ['student-id'],

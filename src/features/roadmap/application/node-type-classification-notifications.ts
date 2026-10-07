@@ -1,5 +1,6 @@
 export type NodeTypeClassificationNotification = Readonly<{
   roadmapId: string;
+  nodeTypeId: string;
   previousTypeName: string;
   nextTypeName: string;
   recipientIds: readonly string[];
@@ -7,6 +8,7 @@ export type NodeTypeClassificationNotification = Readonly<{
 
 export function nodeTypeClassificationNotification({
   roadmapId,
+  nodeTypeId,
   previousTypeName,
   nextTypeName,
   visibleNodeCount,
@@ -14,6 +16,7 @@ export function nodeTypeClassificationNotification({
   participants,
 }: {
   roadmapId: string;
+  nodeTypeId: string;
   previousTypeName: string;
   nextTypeName: string;
   visibleNodeCount: number;
@@ -27,5 +30,5 @@ export function nodeTypeClassificationNotification({
     .map(({ userId }) => userId);
   if (recipientIds.length === 0) return undefined;
 
-  return { roadmapId, previousTypeName, nextTypeName, recipientIds };
+  return { roadmapId, nodeTypeId, previousTypeName, nextTypeName, recipientIds };
 }

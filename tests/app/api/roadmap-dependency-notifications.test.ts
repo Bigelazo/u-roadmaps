@@ -21,6 +21,8 @@ test('maps confirmed Dependency and access descriptors to their respective notic
     path: {
       eventId: 'dependency-id:dependency-added',
       dependencyId: 'dependency-id',
+      sourceNodeId: 'source-id',
+      targetNodeId: 'target-id',
       roadmapId: 'roadmap-id',
       changeKind: 'dependency-added' as const,
       dependentNodeTitle: 'Evaluación 1',

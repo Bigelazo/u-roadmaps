@@ -1,3 +1,4 @@
+import { routeOpeningSnapshots, recognizeRouteSnapshots } from './route-notice';
 import 'server-only';
 import { after } from 'next/server';
 import { randomUUID } from 'node:crypto';
@@ -304,6 +305,7 @@ export async function prepareOwnNoticeOpening(
         titleSnapshots: titleOpeningSnapshots(notices),
         contentSnapshots: contentOpeningSnapshots(notices),
         resourceSnapshots: resourceOpeningSnapshots(notices),
+        routeSnapshots: routeOpeningSnapshots(notices),
         summary: changeSummary(roadmap.courseOffering.courseCode, notices, nodes, accessible),
       },
     });
@@ -354,6 +356,12 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       },
       data: { acknowledgedAt: new Date() },
     });
+    const routeCount = await recognizeRouteSnapshots(transaction, {
+      recipientId: userId,
+      roadmapId,
+      operationId,
+      snapshots: retained.routeSnapshots,
+    });
     const resourceCount = await recognizeResourceSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
@@ -373,7 +381,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       snapshots: retained.titleSnapshots,
     });
     const summary =
-      visited && result.count + titleCount + contentCount + resourceCount > 0
+      visited && result.count + titleCount + contentCount + resourceCount + routeCount > 0
         ? (retained.summary as ChangeSummary | null)
         : null;
     await transaction.noticeAcknowledgement.update({
@@ -381,7 +389,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
     return {
-      count: result.count + titleCount + contentCount + resourceCount,
+      count: result.count + titleCount + contentCount + resourceCount + routeCount,
       summary,
     };
   });

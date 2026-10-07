@@ -295,6 +295,8 @@ export async function deliverNodeChange(
 export async function deliverRoadmapPathChange(input: {
   eventId: string;
   dependencyId: string;
+  sourceNodeId: string;
+  targetNodeId: string;
   userId: string;
   identifier: { courseCode: string; year: number; semester: number };
   roadmapId: string;
@@ -328,6 +330,8 @@ export async function deliverRoadmapPathChange(input: {
   const notice: RoadmapPathChangeNotice = {
     eventId: input.eventId,
     dependencyId: input.dependencyId,
+    sourceNodeId: input.sourceNodeId,
+    targetNodeId: input.targetNodeId,
     roadmapId: input.roadmapId,
     courseOfferingId: offering.id,
     courseCode: offering.courseCode,
@@ -351,6 +355,7 @@ export async function deliverRoadmapClassificationChange(input: {
   userId: string;
   identifier: { courseCode: string; year: number; semester: number };
   roadmapId: string;
+  nodeTypeId: string;
   previousTypeName: string;
   nextTypeName: string;
   recipientIds: readonly string[];
@@ -385,6 +390,7 @@ export async function deliverRoadmapClassificationChange(input: {
       courseCode: offering.courseCode,
       year: offering.year,
       semester: offering.semester,
+      nodeTypeId: input.nodeTypeId,
       previousTypeName: input.previousTypeName,
       nextTypeName: input.nextTypeName,
       actorId: input.userId,

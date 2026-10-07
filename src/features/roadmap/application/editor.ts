@@ -1,3 +1,5 @@
+import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
+import { captureRouteNoticeKnowledge } from './route-notice-knowledge';
 import { captureAccessSnapshot } from './access-snapshot';
 import 'server-only';
 
@@ -515,6 +517,7 @@ async function updateRoadmapNodeTypeUnsafe({
           select: { userId: true, isActive: true },
         });
         notification = nodeTypeClassificationNotification({
+          nodeTypeId: nodeType.id,
           roadmapId: roadmap.id,
           previousTypeName: nodeType.name,
           nextTypeName: updated.name,
@@ -524,6 +527,14 @@ async function updateRoadmapNodeTypeUnsafe({
         });
       }
     }
+    if (notification)
+      await captureRouteNoticeKnowledge(
+        transaction,
+        roadmap.id,
+        notification.recipientIds,
+        nodeTypeNameTarget(nodeType.id),
+        nodeType.name,
+      );
     return {
       nodeType: typeDto(updated),
       ...(notification ? { notification } : {}),
@@ -674,6 +685,15 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
         });
       }
       const after = await captureAccessSnapshot(transaction, prepared.roadmapId);
+      await captureRouteNoticeKnowledge(
+        transaction,
+        prepared.roadmapId,
+        after.participants
+          .filter(({ userId }) => userId !== editor.userId)
+          .map(({ userId }) => userId),
+        dependencyTarget(prepared.sourceNodeId, prepared.targetNodeId),
+        'false',
+      );
       return {
         dependency: {
           id: dependency.id,
@@ -688,6 +708,8 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
           after,
           actorId: editor.userId,
           dependencyId: dependency.id,
+          sourceNodeId: prepared.sourceNodeId,
+          targetNodeId: prepared.targetNodeId,
           roadmapId: prepared.roadmapId,
           changeKind: 'dependency-added',
           sourceNode: prepared.sourceNode,
@@ -737,12 +759,24 @@ async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
       const before = await captureAccessSnapshot(transaction, roadmap.id);
       await transaction.dependency.delete({ where: { id: dependency.id } });
       const after = await captureAccessSnapshot(transaction, roadmap.id);
+      if (dependency.sourceNode.isVisible && dependency.targetNode.isVisible)
+        await captureRouteNoticeKnowledge(
+          transaction,
+          roadmap.id,
+          after.participants
+            .filter(({ userId }) => userId !== editor.userId)
+            .map(({ userId }) => userId),
+          dependencyTarget(dependency.sourceNodeId, dependency.targetNodeId),
+          'true',
+        );
       return {
         notifications: dependencyChangeNotifications({
           before,
           after,
           actorId: editor.userId,
           dependencyId: dependency.id,
+          sourceNodeId: dependency.sourceNodeId,
+          targetNodeId: dependency.targetNodeId,
           roadmapId: roadmap.id,
           changeKind: 'dependency-removed',
           sourceNode: dependency.sourceNode,
