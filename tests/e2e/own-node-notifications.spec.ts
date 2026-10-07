@@ -35,7 +35,7 @@ test('visible Node changes reach the Inbox and Roadmap entry recognizes them', a
   ).json();
   expect(notices.notifications).toHaveLength(1);
   expect(notices.notifications[0]).toMatchObject({
-    subject: title,
+    subject: `Nuevo Nodo «${title}»`,
     read: false,
     data: { nodeId, actorName: course.users.teacher.name, changeKind: 'node-available' },
   });
@@ -126,6 +126,17 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   const otherNodeId = await createNode(`Otra Unidad ${crypto.randomUUID()}`, 4400);
   await expect.poll(() => count(nodeId)).toBe(1);
   await expect.poll(() => count(otherNodeId)).toBe(1);
+  // Resource targets are independent after the new Nodes have been recognized.
+  for (const userId of [student, teacher]) {
+    const headers = { cookie: await sessionCookie(userId) };
+    const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
+    expect(
+      (await request.post('/api/notifications/openings', { headers, data: opening })).status(),
+    ).toBe(200);
+    expect(
+      (await request.post('/api/notifications/acknowledge', { headers, data: opening })).status(),
+    ).toBe(200);
+  }
   const initialNodeCount = await count(nodeId);
   const initialOtherNodeCount = await count(otherNodeId);
   const resourcePath = roadmapPath(`/nodes/${nodeId}/resources`);
@@ -219,7 +230,7 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
   await page
     .getByRole('button', {
-      name: new RegExp(`El Roadmap de ${course.courseCode} ha recibido cambios`),
+      name: new RegExp(secondResourceTitle),
     })
     .first()
     .click();
@@ -243,14 +254,11 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
 
   const otherNodeResourceNotices = await resourceNotices(student, otherNodeId);
   expect(otherNodeResourceNotices).toHaveLength(0);
-  const cascadeKindsBefore = (await resourceNotices(student, nodeId)).map(
-    (notice) => notice.data.changeKind,
-  );
   const cascade = await request.delete(roadmapPath(`/nodes/${nodeId}`), { headers: author });
   expect(cascade.status()).toBe(204);
-  const cascadeNotices = await resourceNotices(student, nodeId);
-  expect(cascadeNotices.map((notice) => notice.data.changeKind)).toEqual(cascadeKindsBefore);
-  expect(cascadeNotices.some((notice) => notice.data.changeKind === 'resource-added')).toBe(true);
+  await expect.poll(() => resourceNotices(student, nodeId)).toHaveLength(0);
+  await expect.poll(() => getNotices(student, nodeId)).toHaveLength(1);
+  expect((await getNotices(student, nodeId))[0].data.changeKind).toBe('node-deleted');
 
   const otherNodeDelete = await request.delete(roadmapPath(`/nodes/${otherNodeId}`), {
     headers: author,
@@ -412,6 +420,17 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
     data: { isVisible: true },
   });
   await expect.poll(() => count(without, hidden)).toBe(1);
+  // Recognize publication before testing independent content and access targets.
+  for (const userId of [without, observer, withProgress, course.users.teachingAssistant.id]) {
+    const headers = { cookie: await sessionCookie(userId) };
+    const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
+    expect(
+      (await request.post('/api/notifications/openings', { headers, data: opening })).status(),
+    ).toBe(200);
+    expect(
+      (await request.post('/api/notifications/acknowledge', { headers, data: opening })).status(),
+    ).toBe(200);
+  }
   const dependency = await request.post(roadmapPath('/dependencies'), {
     headers: author,
     data: { sourceNodeId: prerequisite, targetNodeId: nodeId },
@@ -420,7 +439,7 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   // Dependency access notices are delivered after the HTTP response. Wait for
   // them before capturing the baseline for the subsequent content changes.
   for (const userId of [without, observer, withProgress])
-    await expect.poll(() => count(userId, nodeId)).toBe(2);
+    await expect.poll(() => count(userId, nodeId)).toBe(1);
   expect(
     (
       await request.post(roadmapPath(`/nodes/${prerequisite}/completion`), {

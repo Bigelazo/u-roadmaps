@@ -201,19 +201,35 @@ async function createRoadmapNodeUnsafe({ input, ...editor }: WithInput) {
     const isVisible =
       input.isVisible === undefined ? true : requireBoolean(input.isVisible, 'isVisible');
     await requireType(transaction, nodeTypeId, roadmap.id);
-    return nodeDto(
-      await transaction.roadmapNode.create({
-        data: {
-          roadmapId: roadmap.id,
-          nodeTypeId,
-          title,
-          description,
-          positionX,
-          positionY,
-          isVisible,
-        },
-      }),
-    );
+    const node = await transaction.roadmapNode.create({
+      data: {
+        roadmapId: roadmap.id,
+        nodeTypeId,
+        title,
+        description,
+        positionX,
+        positionY,
+        isVisible,
+      },
+    });
+    const recipients = await transaction.participation.findMany({
+      where: {
+        courseOfferingId: roadmap.courseOfferingId,
+        isActive: true,
+        userId: { not: editor.userId },
+      },
+      select: { userId: true },
+    });
+    await transaction.nodeLifecycleKnowledge.createMany({
+      data: recipients.map(({ userId }) => ({
+        recipientId: userId,
+        roadmapId: roadmap.id,
+        nodeId: node.id,
+        isKnown: false,
+      })),
+      skipDuplicates: true,
+    });
+    return nodeDto(node);
   });
 }
 

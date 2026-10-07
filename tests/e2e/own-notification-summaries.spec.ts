@@ -32,7 +32,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     await expect.poll(notices).toHaveLength(1);
     const first = (await notices())[0];
     expect(first).toMatchObject({
-      subject: title,
+      subject: `Nuevo Nodo «${title}»`,
       read: false,
       data: { eventCount: 1, changeKind: 'node-available' },
     });
@@ -45,34 +45,17 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
           })
         ).status(),
       ).toBe(200);
-    await expect.poll(notices).toHaveLength(2);
-    // The target already exists after the first edit. Wait for the final value,
-    // since the second effect is persisted after its HTTP response.
     await expect
-      .poll(
-        async () =>
-          (await notices()).find(
-            (notice: { data: { noticeTarget?: string; currentValue?: string } }) =>
-              notice.data.noticeTarget === 'node-description',
-          )?.data.currentValue,
-      )
-      .toBe('"Último detalle"');
+      .poll(async () => (await notices())[0]?.data.nodeDescription)
+      .toBe('Último detalle');
     const repeated = await notices();
-    expect(repeated).toHaveLength(2);
-    expect(repeated[1]).toEqual(first);
-    expect(repeated.slice(0, 1)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          read: false,
-          data: expect.objectContaining({
-            eventCount: 1,
-            changedFields: ['description'],
-            noticeTarget: 'node-description',
-            currentValue: '"Último detalle"',
-          }),
-        }),
-      ]),
-    );
+    expect(repeated).toHaveLength(1);
+    expect(repeated[0]).toMatchObject({
+      id: first.id,
+      subject: first.subject,
+      read: false,
+      data: { noticeTarget: 'node-creation', nodeDescription: 'Último detalle' },
+    });
     const opening = { roadmapId: roadmap.roadmap.id, operationId: crypto.randomUUID() };
     expect(
       (

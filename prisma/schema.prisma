@@ -28,14 +28,15 @@ model CourseOffering {
 }
 
 model Roadmap {
-  id                   String                 @id @default(uuid()) @db.Uuid
-  courseOfferingId     String                 @unique @db.Uuid
-  courseOffering       CourseOffering         @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  nodeTypes            NodeType[]
-  roadmapNodes         RoadmapNode[]
-  simulatedCompletions SimulatedCompletion[]
-  visits               RoadmapVisit[]
-  routeKnowledge       RouteNoticeKnowledge[]
+  id                     String                   @id @default(uuid()) @db.Uuid
+  courseOfferingId       String                   @unique @db.Uuid
+  courseOffering         CourseOffering           @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  nodeTypes              NodeType[]
+  roadmapNodes           RoadmapNode[]
+  simulatedCompletions   SimulatedCompletion[]
+  visits                 RoadmapVisit[]
+  routeKnowledge         RouteNoticeKnowledge[]
+  nodeLifecycleKnowledge NodeLifecycleKnowledge[]
 
   @@unique([id, courseOfferingId])
 }
@@ -129,19 +130,20 @@ model Resource {
 }
 
 model User {
-  id                 String                    @id @default(uuid()) @db.Uuid
-  name               String                    @db.VarChar(200)
-  institutionalEmail String                    @unique @db.VarChar(320)
-  rut                String?                   @unique @db.VarChar(20)
-  notices            RoadmapNotice[]
-  noticeEffects      NoticeDeliveryEffect[]
-  roadmapVisits      RoadmapVisit[]
-  contentKnowledge   NodeContentKnowledge[]
-  titleKnowledge     NodeTitleKnowledge[]
-  resourceKnowledge  ResourceNoticeKnowledge[]
-  routeKnowledge     RouteNoticeKnowledge[]
-  participations     Participation[]
-  completions        Completion[]
+  id                     String                    @id @default(uuid()) @db.Uuid
+  name                   String                    @db.VarChar(200)
+  institutionalEmail     String                    @unique @db.VarChar(320)
+  rut                    String?                   @unique @db.VarChar(20)
+  notices                RoadmapNotice[]
+  noticeEffects          NoticeDeliveryEffect[]
+  roadmapVisits          RoadmapVisit[]
+  contentKnowledge       NodeContentKnowledge[]
+  titleKnowledge         NodeTitleKnowledge[]
+  resourceKnowledge      ResourceNoticeKnowledge[]
+  routeKnowledge         RouteNoticeKnowledge[]
+  nodeLifecycleKnowledge NodeLifecycleKnowledge[]
+  participations         Participation[]
+  completions            Completion[]
 }
 
 model VtiLoginTransaction {
@@ -236,17 +238,18 @@ model RoadmapVisit {
 }
 
 model NoticeAcknowledgement {
-  recipientId       String    @db.Uuid
-  operationId       String    @db.Uuid
-  roadmapId         String    @db.Uuid
-  openedAt          DateTime  @db.Timestamptz(3)
-  noticeIds         String[]  @default([]) @db.Uuid
-  contentSnapshots  Json      @default("[]")
-  titleSnapshots    Json      @default("[]")
-  resourceSnapshots Json      @default("[]")
-  routeSnapshots    Json      @default("[]")
-  summary           Json      @default("null")
-  recognizedAt      DateTime? @db.Timestamptz(3)
+  recipientId         String    @db.Uuid
+  operationId         String    @db.Uuid
+  roadmapId           String    @db.Uuid
+  openedAt            DateTime  @db.Timestamptz(3)
+  noticeIds           String[]  @default([]) @db.Uuid
+  contentSnapshots    Json      @default("[]")
+  titleSnapshots      Json      @default("[]")
+  resourceSnapshots   Json      @default("[]")
+  routeSnapshots      Json      @default("[]")
+  absorptionSnapshots Json      @default("[]")
+  summary             Json      @default("null")
+  recognizedAt        DateTime? @db.Timestamptz(3)
 
   @@id([recipientId, operationId])
   @@index([recipientId, openedAt])
@@ -287,6 +290,18 @@ model NodeContentKnowledge {
   node            RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 
   @@id([recipientId, nodeId, target])
+}
+
+// Recipient knowledge survives hiding and deletion until the Roadmap is removed.
+model NodeLifecycleKnowledge {
+  recipientId String  @db.Uuid
+  roadmapId   String  @db.Uuid
+  nodeId      String  @db.Uuid
+  isKnown     Boolean @default(false)
+  recipient   User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmap     Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  @@id([recipientId, roadmapId, nodeId])
 }
 
 // Resource identities survive removal so the recipient's known title remains available.

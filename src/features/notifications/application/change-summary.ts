@@ -49,7 +49,11 @@ export function changeSummary(
             );
           break;
         case 'node-available':
-          items.push('Nodo disponible.');
+          items.push(
+            data.noticeTarget === 'node-creation'
+              ? `Nuevo Nodo «${node?.title ?? data.nodeTitle}»${data.nodeAccess === 'Bloqueado' ? ' (Bloqueado)' : ''}.`
+              : 'Nodo disponible.',
+          );
           break;
         case 'node-retired':
           items.push('Nodo retirado.');

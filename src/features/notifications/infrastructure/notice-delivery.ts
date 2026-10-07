@@ -10,6 +10,7 @@ import { nodeContentEffect } from '../application/node-content-effect';
 import { resourceEffect } from '../application/resource-effect';
 import { reconcileStoredResource } from './resource-notice';
 import { titleEffect } from '../application/title-effect';
+import { reconcileStoredAbsorption } from './absorption-notice';
 
 function noticeRow(effect: NoticeEffect, projection: ReturnType<typeof projectDigestNotification>) {
   return {
@@ -35,6 +36,7 @@ export async function deliverNotice(effect: NoticeEffect) {
       skipDuplicates: true,
     });
     if (!accepted.count) return false;
+    if (await reconcileStoredAbsorption(transaction, effect)) return true;
     const route = routeEffect(effect);
     if (route) {
       await reconcileStoredRoute(transaction, route);

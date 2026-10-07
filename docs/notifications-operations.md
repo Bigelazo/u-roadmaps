@@ -25,6 +25,31 @@ paginación de la fila agrupada pertenecen a su Objeto más reciente; agrupar
 antes de paginar evita dividir un Roadmap entre páginas. El clic conserva la
 navegación al Roadmap y su reconocimiento habitual.
 
+## Absorción de creación, eliminación y disponibilidad
+
+#184 activa las absorciones de ADR-0014. Mientras un Nodo sea nuevo para un
+destinatario, todas sus ediciones de título, descripción, tipo, acceso y Recursos
+actualizan un único Aviso «Nuevo Nodo», con su estado actual. Un Bloqueo se indica
+en ese Aviso. Ocultarlo o eliminarlo antes del reconocimiento retira el Aviso;
+volver a mostrarlo produce de nuevo un Aviso de Nodo nuevo. Eliminar un Nodo
+conocido sustituye todos sus Avisos pendientes por el Aviso de eliminación.
+«Roadmap disponible» pendiente absorbe todos los demás Avisos de ese Roadmap.
+Cada absorción actualiza la fecha; los contadores cuentan únicamente los Objetos
+resultantes.
+
+`NodeLifecycleKnowledge` captura en la transacción de creación quién todavía
+no conoce el Nodo y conserva ese dato tras ocultarlo o eliminarlo. La relación
+pertenece al Roadmap y al Usuario; no depende de que el Nodo siga existiendo.
+La entrega y el reconocimiento usan el mismo lock por destinatario y Roadmap.
+La apertura captura los valores de los Objetos absorbidos en
+`NoticeAcknowledgement.absorptionSnapshots`; reconocerlos fija esos valores
+como conocidos y reconcilia los cambios posteriores. Reintentar la misma
+apertura no reconoce cambios nuevos. Entrar también fija el conocimiento de
+Nodos cuya entrega de creación aún no llegó al Inbox; una Dependencia creada
+entre apertura y reconocimiento conserva un Aviso posterior. Los estados de
+acceso capturados se validan antes de reconocerlos. Las migraciones agregan conocimiento y
+snapshots sin borrar Avisos existentes.
+
 ## Instalar y arrancar
 
 Usar el PostgreSQL existente y configurar `.env.production` con `DATABASE_URL`,

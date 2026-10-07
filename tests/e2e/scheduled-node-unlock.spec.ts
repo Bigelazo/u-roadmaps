@@ -81,14 +81,15 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
     (await teacher.put(schedulePath(standalone.id), { data: { unlockOn: tomorrow } })).status(),
   ).toBe(200);
 
-  // Recognize the blocks so a later Scheduled unlock compares with Bloqueado.
+  // The new Node absorbs its block; entry establishes Bloqueado for later unlocks.
   const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
   await expect
     .poll(async () =>
       (
         await (await student.get(`/api/notifications?nodeId=${standalone.id}`)).json()
       ).notifications.some(
-        (notice: { data: { currentValue?: string } }) => notice.data.currentValue === 'Bloqueado',
+        (notice: { data: { noticeTarget?: string; nodeAccess?: string } }) =>
+          notice.data.noticeTarget === 'node-creation' && notice.data.nodeAccess === 'Bloqueado',
       ),
     )
     .toBe(true);

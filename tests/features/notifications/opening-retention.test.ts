@@ -11,6 +11,7 @@ const { transaction, prisma } = vi.hoisted(() => {
     },
     roadmapNotice: { findMany: vi.fn(), updateMany: vi.fn() },
     roadmapNode: { findMany: vi.fn() },
+    nodeLifecycleKnowledge: { findMany: vi.fn() },
     roadmap: { findUniqueOrThrow: vi.fn() },
   };
   return { transaction, prisma: { ...transaction, $transaction: vi.fn() } };
@@ -36,6 +37,7 @@ beforeEach(() => {
   transaction.noticeAcknowledgement.upsert.mockImplementation(async ({ create }) => create);
   transaction.noticeAcknowledgement.deleteMany.mockResolvedValue({ count: 1 });
   transaction.roadmapNode.findMany.mockResolvedValue([]);
+  transaction.nodeLifecycleKnowledge.findMany.mockResolvedValue([]);
   transaction.roadmap.findUniqueOrThrow.mockResolvedValue({
     courseOffering: { courseCode: 'CC1002' },
   });

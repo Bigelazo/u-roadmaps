@@ -3,8 +3,11 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 const { prisma } = vi.hoisted(() => ({
   prisma: {
     roadmapNode: { findUnique: vi.fn() },
-    roadmapNotice: { createMany: vi.fn() },
+    roadmapNotice: { createMany: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn() },
     noticeDeliveryEffect: { createMany: vi.fn() },
+    $executeRaw: vi.fn(),
+    nodeLifecycleKnowledge: { findUnique: vi.fn() },
+    nodeContentKnowledge: { findUnique: vi.fn() },
     $transaction: vi.fn(),
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn(), findFirst: vi.fn() },
@@ -150,6 +153,7 @@ test('retains deletion context in the own Inbox', async () => {
 });
 
 test('accessible Node notices persist without external notification configuration', async () => {
+  prisma.roadmapNode.findUnique.mockResolvedValueOnce(null).mockResolvedValue({ isVisible: true });
   await deliverNodeChange({
     userId: 'author-id',
     courseCode: 'CC3002',
@@ -183,6 +187,7 @@ test('accessible Node notices persist without external notification configuratio
 });
 
 test('scheduled unlocks persist outside an HTTP request using the background scheduler', async () => {
+  prisma.roadmapNode.findUnique.mockResolvedValueOnce(null).mockResolvedValue({ isVisible: true });
   await deliverNodeChange(
     {
       userId: 'author-id',

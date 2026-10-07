@@ -22,6 +22,7 @@ import {
 } from './title-notice';
 import { resourceOpeningSnapshots, recognizeResourceSnapshots } from './resource-notice';
 import { contentOpeningSnapshots, recognizeContentSnapshots } from './node-content-notice';
+import { absorptionOpeningSnapshots, recognizeAbsorptionSnapshots } from './absorption-recognition';
 import type {
   NodeChangeNotice,
   RoadmapClassificationChangeNotice,
@@ -303,6 +304,13 @@ export async function prepareOwnNoticeOpening(
         contentSnapshots: contentOpeningSnapshots(notices),
         resourceSnapshots: resourceOpeningSnapshots(notices),
         routeSnapshots: routeOpeningSnapshots(notices),
+        absorptionSnapshots: await absorptionOpeningSnapshots(
+          transaction,
+          userId,
+          roadmapId,
+          notices,
+          accessible,
+        ),
         summary: changeSummary(roadmap.courseOffering.courseCode, notices, nodes, accessible),
       },
     });
@@ -353,6 +361,12 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       },
       data: { acknowledgedAt: new Date() },
     });
+    const absorptionCount = await recognizeAbsorptionSnapshots(transaction, {
+      recipientId: userId,
+      roadmapId,
+      operationId,
+      snapshots: retained.absorptionSnapshots,
+    });
     const routeCount = await recognizeRouteSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
@@ -378,7 +392,8 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       snapshots: retained.titleSnapshots,
     });
     const summary =
-      visited && result.count + titleCount + contentCount + resourceCount + routeCount > 0
+      visited &&
+      result.count + absorptionCount + titleCount + contentCount + resourceCount + routeCount > 0
         ? (retained.summary as ChangeSummary | null)
         : null;
     await transaction.noticeAcknowledgement.update({
@@ -386,7 +401,8 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
     return {
-      count: result.count + titleCount + contentCount + resourceCount + routeCount,
+      count:
+        result.count + absorptionCount + titleCount + contentCount + resourceCount + routeCount,
       summary,
     };
   });

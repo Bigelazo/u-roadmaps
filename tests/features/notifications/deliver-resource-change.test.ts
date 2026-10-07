@@ -7,8 +7,11 @@ const { prisma } = vi.hoisted(() => ({
     dependency: { findMany: vi.fn() },
     completion: { findMany: vi.fn() },
     user: { findUnique: vi.fn() },
-    roadmapNotice: { createMany: vi.fn() },
+    roadmapNotice: { createMany: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn() },
     noticeDeliveryEffect: { createMany: vi.fn() },
+    $executeRaw: vi.fn(),
+    nodeLifecycleKnowledge: { findUnique: vi.fn() },
+    nodeContentKnowledge: { findUnique: vi.fn() },
     $transaction: vi.fn(),
   },
 }));

@@ -9,9 +9,11 @@ known values. Title and type reach recipients who see a blocked Node; descriptio
 only reaches recipients with access. Type assignments retain their captured names
 after type renames. #180 reconciles per-recipient Node access targets against
 Disponible, Bloqueado and Retirado, including cascades and Scheduled unlocks.
-Other classes still store each
-accepted change immediately. #178 recognizes every pending notice on Roadmap
-entry and shows the Change summary after the first visit; Node opening has no
+#184 makes pending Node creation absorb later Node and Resource changes,
+withdraws creation when hidden or deleted, and lets deletion absorb pending Node
+targets. Pending Roadmap availability absorbs all later notices for that Roadmap.
+Recognition establishes baselines from the captured current state. #178 recognizes
+every pending notice on Roadmap entry and shows the Change summary after the first visit; Node opening has no
 recognition effect and notices have no seen state. See
 [notification operations](docs/notifications-operations.md) for current behavior.
 

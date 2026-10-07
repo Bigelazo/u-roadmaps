@@ -3,8 +3,12 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 const { prisma } = vi.hoisted(() => ({
   prisma: {
     participation: { findMany: vi.fn() },
-    roadmapNotice: { createMany: vi.fn() },
+    roadmapNotice: { createMany: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn() },
     noticeDeliveryEffect: { createMany: vi.fn() },
+    $executeRaw: vi.fn(),
+    nodeLifecycleKnowledge: { findUnique: vi.fn() },
+    nodeContentKnowledge: { findUnique: vi.fn() },
+    roadmapNode: { findUnique: vi.fn() },
     $transaction: vi.fn(),
   },
 }));

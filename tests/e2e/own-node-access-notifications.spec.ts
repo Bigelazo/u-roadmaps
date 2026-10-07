@@ -161,13 +161,9 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     data: { changeKind: 'node-retired', targetKind: 'roadmap', nodeTitle: rootTitle },
   });
   expect(JSON.stringify(retired)).not.toContain('Detalle privado');
-  await expect.poll(() => noticesFor(student, removedId)).toHaveLength(3);
+  await expect.poll(() => noticesFor(student, removedId)).toHaveLength(1);
   const deletionNotices = await noticesFor(student, removedId);
-  expect(deletionNotices.map(({ data }) => data.changeKind)).toEqual([
-    'node-deleted',
-    'node-blocked',
-    'resource-added',
-  ]);
+  expect(deletionNotices.map(({ data }) => data.changeKind)).toEqual(['node-deleted']);
   expect(deletionNotices[0]).toMatchObject({
     subject: removedTitle,
     data: { eventCount: 1, targetKind: 'roadmap', nodeTitle: removedTitle },
@@ -260,7 +256,7 @@ test('lost Course access prevents recognition of retained notices', async ({
   const secondId = await createNode(secondTitle);
   await expect
     .poll(async () => (await allNotices()).map(({ subject }) => subject))
-    .toEqual([secondTitle, firstTitle]);
+    .toEqual([`Nuevo Nodo «${secondTitle}»`, `Nuevo Nodo «${firstTitle}»`]);
 
   await sql(
     `UPDATE "Participation" SET "isActive" = false WHERE "userId" = '${userId}' AND "courseOfferingId" = '${course.id}';`,
@@ -268,10 +264,10 @@ test('lost Course access prevents recognition of retained notices', async ({
   await createNode(`Aviso posterior ${crypto.randomUUID()}`);
   const retained = await allNotices();
   expect(retained).toHaveLength(2);
-  expect(retained.find(({ subject }) => subject === firstTitle)).toMatchObject({
+  expect(retained.find(({ subject }) => subject === `Nuevo Nodo «${firstTitle}»`)).toMatchObject({
     data: { nodeId: firstId, targetKind: 'node' },
   });
-  expect(retained.find(({ subject }) => subject === secondTitle)).toMatchObject({
+  expect(retained.find(({ subject }) => subject === `Nuevo Nodo «${secondTitle}»`)).toMatchObject({
     data: { nodeId: secondId, targetKind: 'node' },
   });
 
