@@ -4,6 +4,7 @@ import type { ResourceNoticeState } from './contracts/resource-state';
 import { randomUUID } from 'node:crypto';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
+import { visibleOwnNotices } from './infrastructure/notice-visibility';
 import type {
   NodeChangeNotice,
   RoadmapClassificationChangeNotice,
@@ -13,6 +14,7 @@ import type {
 } from './contracts';
 import {
   type NoticeDeliveryScheduler,
+  listOwnNotices as listNotices,
   storeRoadmapAvailability,
   storeRoadmapClassificationChange,
   storeRoadmapPathChange,
@@ -26,7 +28,11 @@ import {
   prepareOwnNoticeOpening as prepareNoticeOpening,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
-export { listOwnNotices, acknowledgeOwnNotices } from './infrastructure/own-inbox';
+export { acknowledgeOwnNotices } from './infrastructure/own-inbox';
+
+export function listOwnNotices(userId: string, params: URLSearchParams) {
+  return listNotices(userId, params, accessibleNodes);
+}
 export type { NoticeDeliveryScheduler } from './infrastructure/own-inbox';
 export type InboxIdentity = Readonly<{ userId: string }>;
 
@@ -35,15 +41,23 @@ export function getInboxIdentity(userId: string): InboxIdentity {
 }
 
 export async function getOwnNotice(userId: string, id: string) {
-  return noticeRecord(await findOwnNotice(userId, id));
+  return noticeRecord(await findOwnNotice(userId, id, accessibleNodes));
 }
 
 export async function countOwnNotices(userId: string, params: URLSearchParams) {
-  if (params.get('groupBy') === 'nodeId') return countOwnNoticesByNode(userId, params);
+  if (params.get('groupBy') === 'nodeId')
+    return countOwnNoticesByNode(userId, params, accessibleNodes);
   return {
-    count: await prisma.roadmapNotice.count({
-      where: { ...noticeFilter(params), recipientId: userId, acknowledgedAt: null },
-    }),
+    count: (
+      await visibleOwnNotices(
+        userId,
+        await prisma.roadmapNotice.findMany({
+          where: { ...noticeFilter(params), recipientId: userId, acknowledgedAt: null },
+          select: { roadmapId: true, data: true },
+        }),
+        accessibleNodes,
+      )
+    ).length,
   };
 }
 

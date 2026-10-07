@@ -6,6 +6,7 @@ const { prisma } = vi.hoisted(() => ({
     roadmapNotice: { createMany: vi.fn(), findFirst: vi.fn(), deleteMany: vi.fn() },
     noticeDeliveryEffect: { createMany: vi.fn() },
     $executeRaw: vi.fn(),
+    $queryRaw: vi.fn().mockResolvedValue([{ isActive: true, noticeResetAt: null }]),
     nodeLifecycleKnowledge: { findUnique: vi.fn() },
     nodeContentKnowledge: { findUnique: vi.fn() },
     roadmapNode: { findUnique: vi.fn() },

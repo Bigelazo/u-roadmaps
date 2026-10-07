@@ -1,3 +1,4 @@
+import { isNoticeVisible } from './notice-visibility';
 import type { ChangeSummary } from '../contracts/change-summary';
 
 type SummaryNotice = { data: unknown };
@@ -18,18 +19,8 @@ export function changeSummary(
     const nodeId = typeof data.nodeId === 'string' ? data.nodeId : null;
     const node = nodeId ? currentNodes.get(nodeId) : undefined;
     const kind = data.changeKind;
-    if (node && !node.isVisible && data.noticeTarget !== 'node-access') continue;
+    if (!isNoticeVisible(data, nodes, accessible)) continue;
     const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
-    if (
-      nodeId &&
-      node &&
-      !accessible.has(nodeId) &&
-      (kind === 'resource-added' ||
-        kind === 'resource-updated' ||
-        kind === 'resource-removed' ||
-        (kind === 'node-updated' && !fields.includes('title') && !fields.includes('nodeType')))
-    )
-      continue;
     const items: string[] = [];
     if (data.noticeTarget === 'node-access') {
       items.push(`Pasó de ${data.knownValue} a ${data.currentValue}.`);

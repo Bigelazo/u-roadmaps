@@ -1,3 +1,4 @@
+import { lockNoticeParticipation } from './participation-lock';
 import { routeEffect } from '../application/route-effect';
 import { reconcileStoredRoute } from './route-notice';
 import 'server-only';
@@ -31,6 +32,20 @@ function noticeRow(effect: NoticeEffect, projection: ReturnType<typeof projectDi
 /** Stores every accepted effect immediately; duplicates are rejected by NoticeDeliveryEffect. */
 export async function deliverNotice(effect: NoticeEffect) {
   const accepted = await prisma.$transaction(async (transaction) => {
+    // Serialize with Participation deactivation: it either deletes this delivery
+    // after commit, or this transaction sees the loss and never stores it.
+    const participation = await lockNoticeParticipation(
+      transaction,
+      effect.recipientId,
+      effect.roadmapId,
+    );
+    if (
+      !participation?.isActive ||
+      (participation.noticeResetAt &&
+        new Date(String(effect.payload.occurredAt)) <= participation.noticeResetAt)
+    )
+      return false;
+
     const accepted = await transaction.noticeDeliveryEffect.createMany({
       data: [{ eventId: effect.eventId, recipientId: effect.recipientId }],
       skipDuplicates: true,

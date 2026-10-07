@@ -18,12 +18,32 @@ la documentación de la integración retirada como antecedente.
 #183 agrega una proyección de lectura (`groupBy=roadmapId` en el listado HTTP,
 solicitada por el Inbox; el listado sin ese parámetro conserva los avisos individuales): tres o más Objetos pendientes del mismo
 Roadmap aparecen en una fila «El Roadmap de CC1002 ha recibido cambios», con
-«N cambios». Los contadores siguen contando los Objetos persistidos, no las
+«N cambios». Los contadores cuentan los Objetos pendientes visibles para el destinatario, no las
 filas. Un retiro que deja dos Objetos restaura las filas individuales.
 «Roadmap disponible» queda fuera de la agrupación. La fecha y la identidad de
 paginación de la fila agrupada pertenecen a su Objeto más reciente; agrupar
 antes de paginar evita dividir un Roadmap entre páginas. El clic conserva la
 navegación al Roadmap y su reconocimiento habitual.
+
+## Visibilidad y pérdida de Participación
+
+#185 aplica la visibilidad antes de agrupar, paginar y contar. Los Avisos de
+Descripción y Recursos no se muestran mientras el Nodo esté bloqueado para el
+destinatario; ocultar el Nodo oculta también sus Avisos de título y tipo.
+Estos Avisos permanecen pendientes y reaparecen con la misma identidad si el
+Objeto vuelve a ser visible antes del reconocimiento. Entrar al Roadmap los
+reconoce igualmente, sin incluirlos en el Resumen de cambios. Los Avisos de
+acceso a Retirado y de eliminación describen cambios del Roadmap y conservan
+su presentación aunque el Nodo ya no esté representado.
+
+Desactivar una Participación retira sus Avisos pendientes de ese Curso y
+elimina sus aperturas guardadas, de forma indivisible en PostgreSQL. Recuperar
+la Participación no los restaura ni permite reintentar una apertura anterior.
+`Participation.noticeResetAt` descarta entregas diferidas anteriores a la
+pérdida incluso si la Participación ya volvió a estar activa. La entrega, la apertura y el reconocimiento bloquean
+la fila de Participación con `FOR SHARE` antes del lock por destinatario y Roadmap hasta terminar; la desactivación espera
+esa entrega y retira sus Avisos, o la entrega ve la Participación desactivada.
+Los cambios de visibilidad y Completación invalidan también el Inbox por SSE.
 
 ## Absorción de creación, eliminación y disponibilidad
 

@@ -159,6 +159,7 @@ model Participation {
   courseOfferingId     String                @db.Uuid
   role                 ParticipationRole
   isActive             Boolean               @default(true)
+  noticeResetAt        DateTime?             @db.Timestamptz(3)
   user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   courseOffering       CourseOffering        @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   simulatedCompletions SimulatedCompletion[]

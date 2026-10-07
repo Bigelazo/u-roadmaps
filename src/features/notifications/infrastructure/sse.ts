@@ -61,6 +61,8 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
                 where: { userId, courseOfferingId, isActive: true },
                 select: { id: true },
               }));
+            // Visibility can change without a Notice write (for example a Completion).
+            send('inbox', { userId });
             send('roadmap', { ...change, userId, ...(accessLost ? { accessLost: true } : {}) });
           }
         })().catch(() => {

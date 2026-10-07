@@ -275,8 +275,15 @@ test('deleting a known Node absorbs pending title, access and Resource targets',
       })
     ).status(),
   ).toBe(201);
+  await expect.poll(notices).toHaveLength(2);
   expect((await author.post(`${path}/teacher-block`)).status()).toBe(200);
-  await expect.poll(notices).toHaveLength(3);
+  await expect
+    .poll(async () =>
+      (await notices())
+        .map((notice: { data: { noticeTarget: string } }) => notice.data.noticeTarget)
+        .sort(),
+    )
+    .toEqual(['node-access', 'node-title']);
   expect((await author.delete(path)).status()).toBe(204);
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0].data.changeKind).toBe('node-deleted');

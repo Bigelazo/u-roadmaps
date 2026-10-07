@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 const { transaction, prisma } = vi.hoisted(() => {
   const transaction = {
     $executeRaw: vi.fn(),
+    $queryRaw: vi.fn(),
     noticeAcknowledgement: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -31,6 +32,7 @@ const accessibleNodes = async () => new Set([nodeId]);
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-10-06T12:00:00.000Z'));
+  transaction.$queryRaw.mockResolvedValue([{ isActive: true, noticeResetAt: null }]);
   prisma.$transaction.mockImplementation(async (operation) => operation(transaction));
   transaction.noticeAcknowledgement.findUnique.mockResolvedValue(null);
   transaction.noticeAcknowledgement.create.mockImplementation(async ({ data }) => data);

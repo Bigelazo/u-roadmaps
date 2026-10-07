@@ -1,7 +1,14 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 const { database, session } = vi.hoisted(() => ({
-  database: { $queryRaw: vi.fn(), roadmapNotice: { count: vi.fn() } },
+  database: {
+    roadmapNotice: { findMany: vi.fn() },
+    participation: { findFirst: vi.fn() },
+    roadmapNode: { findMany: vi.fn() },
+    dependency: { findMany: vi.fn() },
+    completion: { findMany: vi.fn() },
+    $transaction: vi.fn(),
+  },
   session: { userId: '11111111-1111-1111-1111-111111111111' },
 }));
 vi.mock('@/shared/server/db', () => ({
@@ -13,17 +20,31 @@ vi.mock('@/app/_adapters/auth', () => ({
 }));
 import { GET } from '@/app/api/notifications/counts/route';
 const roadmapId = '22222222-2222-2222-2222-222222222222';
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  database.$transaction.mockImplementation(async (operation) => operation(database));
+  database.participation.findFirst.mockResolvedValue({ id: 'participation', role: 'TEACHER' });
+  database.roadmapNode.findMany.mockResolvedValue([
+    { id: 'node-a', isVisible: true, isTeacherBlocked: false },
+    { id: 'node-b', isVisible: true, isTeacherBlocked: false },
+    { id: 'blocked', isVisible: true, isTeacherBlocked: true },
+  ]);
+  database.dependency.findMany.mockResolvedValue([]);
+  database.completion.findMany.mockResolvedValue([]);
+});
 
-test('grouped counts use session identity and return node counts and the Roadmap total', async () => {
-  database.$queryRaw.mockImplementation(async (query) => {
-    expect(query.values).toEqual([session.userId, roadmapId]);
-    expect(query.strings.join('')).toContain('"acknowledgedAt" IS NULL');
-    return session.userId.startsWith('1')
+test('grouped counts use session identity and exclude invisible targets from Node and Roadmap totals', async () => {
+  database.roadmapNotice.findMany.mockImplementation(async ({ where }) => {
+    expect(where.acknowledgedAt).toBeNull();
+    return where.recipientId === '11111111-1111-1111-1111-111111111111'
       ? [
-          { nodeId: 'node-a', count: BigInt(2) },
-          { nodeId: 'node-b', count: BigInt(1) },
-          { nodeId: null, count: BigInt(3) },
+          { roadmapId, data: { nodeId: 'node-a', noticeTarget: 'node-title' } },
+          { roadmapId, data: { nodeId: 'node-a', noticeTarget: 'node-type' } },
+          { roadmapId, data: { nodeId: 'node-b', noticeTarget: 'node-title' } },
+          { roadmapId, data: { changeKind: 'roadmap-available' } },
+          { roadmapId, data: { changeKind: 'classification-updated' } },
+          { roadmapId, data: { changeKind: 'dependency-added' } },
+          { roadmapId, data: { nodeId: 'blocked', noticeTarget: 'node-description' } },
         ]
       : [];
   });
@@ -47,6 +68,6 @@ test.each(['', 'invalid'])(
       new Request(`http://localhost/api/notifications/counts?groupBy=nodeId&roadmapId=${id}`),
     );
     expect(response.status).toBe(400);
-    expect(database.$queryRaw).not.toHaveBeenCalled();
+    expect(database.roadmapNotice.findMany).not.toHaveBeenCalled();
   },
 );

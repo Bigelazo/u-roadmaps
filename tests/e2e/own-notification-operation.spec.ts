@@ -183,7 +183,7 @@ test('Resource notices stream to two tabs while student content stays stable unt
   }
 });
 
-test('classification and Dependency repeats reconcile independent targets and preserve pending notices after access loss', async ({
+test('classification and Dependency repeats reconcile independent targets and withdraw pending notices after access loss', async ({
   course,
   apiAs,
 }) => {
@@ -247,6 +247,6 @@ test('classification and Dependency repeats reconcile independent targets and pr
   await sql(
     `UPDATE "Participation" SET "isActive" = false WHERE "courseOfferingId" = ${literal(course.id)} AND "userId" = ${literal(course.users.studentComplete.id)};`,
   );
-  await expect.poll(() => feed(revoked)).toHaveLength(2);
+  await expect.poll(() => feed(revoked)).toHaveLength(0);
   expect((await revoked.get(course.apiPath())).status()).toBe(403);
 });

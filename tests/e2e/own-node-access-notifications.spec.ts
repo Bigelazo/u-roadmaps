@@ -216,11 +216,7 @@ test('a PostgreSQL access-notice failure leaves the Node visibility change commi
   expect((await notices.json()).notifications).toHaveLength(0);
 });
 
-test('lost Course access prevents recognition of retained notices', async ({
-  request,
-  course,
-  page,
-}) => {
+test('lost Course offering access withdraws pending notices', async ({ request, course, page }) => {
   const roadmapPath = course.apiPath;
   const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const userId = course.users.studentWithoutProgress.id;
@@ -252,8 +248,8 @@ test('lost Course access prevents recognition of retained notices', async ({
 
   const firstTitle = `Aviso conservado A ${crypto.randomUUID()}`;
   const secondTitle = `Aviso conservado B ${crypto.randomUUID()}`;
-  const firstId = await createNode(firstTitle);
-  const secondId = await createNode(secondTitle);
+  await createNode(firstTitle);
+  await createNode(secondTitle);
   await expect
     .poll(async () => (await allNotices()).map(({ subject }) => subject))
     .toEqual([`Nuevo Nodo «${secondTitle}»`, `Nuevo Nodo «${firstTitle}»`]);
@@ -262,17 +258,10 @@ test('lost Course access prevents recognition of retained notices', async ({
     `UPDATE "Participation" SET "isActive" = false WHERE "userId" = '${userId}' AND "courseOfferingId" = '${course.id}';`,
   );
   await createNode(`Aviso posterior ${crypto.randomUUID()}`);
-  const retained = await allNotices();
-  expect(retained).toHaveLength(2);
-  expect(retained.find(({ subject }) => subject === `Nuevo Nodo «${firstTitle}»`)).toMatchObject({
-    data: { nodeId: firstId, targetKind: 'node' },
-  });
-  expect(retained.find(({ subject }) => subject === `Nuevo Nodo «${secondTitle}»`)).toMatchObject({
-    data: { nodeId: secondId, targetKind: 'node' },
-  });
+  expect(await allNotices()).toHaveLength(0);
 
   await authenticateAs(page.context(), userId);
   await page.goto(course.pagePath());
   await expect(page).toHaveURL(/academic-overview/);
-  expect(await allNotices()).toEqual(retained);
+  expect(await allNotices()).toHaveLength(0);
 });

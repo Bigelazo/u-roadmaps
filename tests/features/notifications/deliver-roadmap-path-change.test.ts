@@ -5,6 +5,7 @@ const { prisma } = vi.hoisted(() => ({
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn() },
     $executeRaw: vi.fn(),
+    $queryRaw: vi.fn().mockResolvedValue([{ isActive: true, noticeResetAt: null }]),
     roadmapNode: { findMany: vi.fn() },
     dependency: { findUnique: vi.fn() },
     nodeType: { findFirst: vi.fn() },
