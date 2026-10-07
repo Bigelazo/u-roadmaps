@@ -146,7 +146,7 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   const afterUpload = await resourceNotices(student, nodeId);
   expect(afterUpload).toHaveLength(1);
   expect(afterUpload[0]).toMatchObject({
-    subject: `Cambio de recurso: ${resourceTitle}`,
+    subject: resourceTitle,
     data: {
       targetKind: 'node',
       nodeId,
@@ -195,49 +195,30 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   });
   expect(nodeChange.status()).toBe(200);
 
-  // Repeats are stored immediately (no grouping window, see ADR-0014):
-  // resource added, updated and removed, plus the Node update.
-  await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 4);
+  // The unrecognized addition was removed: only the Node update remains (#181).
+  await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 1);
   await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
   const noticesBeforeOpening = await getNotices(student, nodeId);
   expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('node-updated');
-  expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('resource-added');
+  expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).not.toContain(
+    'resource-added',
+  );
 
   const studentResourceNotices = await resourceNotices(student, nodeId);
-  expect(studentResourceNotices).toHaveLength(3);
-  expect(studentResourceNotices.map((notice) => notice.data.changeKind).sort()).toEqual([
-    'resource-added',
-    'resource-removed',
-    'resource-updated',
-  ]);
-  const deletionNotice = studentResourceNotices.find(
-    (notice) => notice.data.changeKind === 'resource-removed',
+  expect(studentResourceNotices).toHaveLength(0);
+  expect(JSON.stringify(await resourceNotices(student, otherNodeId))).not.toMatch(
+    /https?:|description|bytes/i,
   );
-  expect(deletionNotice).toMatchObject({
-    subject: `Cambio de recurso: ${updatedTitle}`,
-    read: false,
-    data: {
-      nodeId,
-      nodeTitle: expect.any(String),
-      resourceTitle: updatedTitle,
-      eventCount: 1,
-      actorName: course.users.teacher.name,
-      occurredAt: expect.any(String),
-    },
-  });
-  expect(Number.isNaN(Date.parse(deletionNotice!.createdAt))).toBe(false);
-  expect(Number.isNaN(Date.parse(String(deletionNotice!.data.occurredAt)))).toBe(false);
-  expect(JSON.stringify(studentResourceNotices)).not.toMatch(/https?:|description|bytes/i);
 
   expect(await resourceNotices(course.users.teacher.id, nodeId)).toHaveLength(0);
   expect(await resourceNotices(inactive, nodeId)).toHaveLength(0);
-  await expect.poll(() => resourceNotices(teacher, nodeId)).toHaveLength(3);
+  await expect.poll(() => resourceNotices(teacher, nodeId)).toHaveLength(0);
 
   await authenticateAs(page.context(), student);
   await page.goto('/academic-overview');
   await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
   await page
-    .getByRole('button', { name: new RegExp(updatedTitle) })
+    .getByRole('button', { name: new RegExp(secondResourceTitle) })
     .first()
     .click();
   await expect(page).toHaveURL(course.pagePath());

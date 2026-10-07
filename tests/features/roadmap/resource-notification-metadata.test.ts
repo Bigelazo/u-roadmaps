@@ -4,9 +4,12 @@ const { prisma, transaction, deleteUploadedFile, saveUploadedFile, validateUploa
   vi.hoisted(() => {
     const transaction = {
       courseOffering: { findUnique: vi.fn() },
-      participation: { findUnique: vi.fn() },
+      participation: { findUnique: vi.fn(), findMany: vi.fn() },
+      dependency: { findMany: vi.fn() },
+      nodeContentKnowledge: { createMany: vi.fn(), updateMany: vi.fn() },
+      resourceNoticeKnowledge: { createMany: vi.fn() },
       resource: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-      roadmapNode: { findFirst: vi.fn() },
+      roadmapNode: { findFirst: vi.fn(), findMany: vi.fn() },
     };
     return {
       transaction,
@@ -44,6 +47,7 @@ const resource = {
   url: 'https://example.test/guide',
   type: 'LINK' as const,
   fileKey: null,
+  updatedAt: new Date('2026-10-06T12:00:00Z'),
 };
 
 beforeEach(() => {
@@ -53,6 +57,9 @@ beforeEach(() => {
   );
   transaction.courseOffering.findUnique.mockResolvedValue({ roadmap: { id: 'roadmap-id' } });
   transaction.participation.findUnique.mockResolvedValue({ isActive: true, role: 'TEACHER' });
+  transaction.participation.findMany.mockResolvedValue([]);
+  transaction.roadmapNode.findMany.mockResolvedValue([]);
+  transaction.dependency.findMany.mockResolvedValue([]);
   transaction.resource.findFirst.mockResolvedValue(resource);
   transaction.resource.update.mockResolvedValue({ ...resource, title: 'Updated guide' });
   transaction.resource.delete.mockResolvedValue(resource);
@@ -93,7 +100,12 @@ test('effective Resource updates return notification metadata from the committed
     where: { id: resource.id },
     data: { title: 'Updated guide' },
   });
-  expect(result.notification).toEqual({ nodeId, resourceTitle: 'Updated guide' });
+  expect(result.notification).toEqual({
+    nodeId,
+    resourceId: resource.id,
+    resourceTitle: 'Updated guide',
+    previousResource: { title: resource.title, revision: '2026-10-06T12:00:00.000Z' },
+  });
 });
 
 test('deletion returns the Resource title and owner Node after preserving them before delete', async () => {
@@ -110,7 +122,12 @@ test('deletion returns the Resource title and owner Node after preserving them b
 
   expect(transaction.resource.delete).toHaveBeenCalledWith({ where: { id: resource.id } });
   expect(deleteUploadedFile).toHaveBeenCalledWith('stored-file-key');
-  expect(result).toEqual({ nodeId, resourceTitle: resource.title });
+  expect(result).toEqual({
+    nodeId,
+    resourceId: resource.id,
+    resourceTitle: resource.title,
+    previousResource: { title: resource.title, revision: '2026-10-06T12:00:00.000Z' },
+  });
 });
 
 test('compensates a stored file when the Resource transaction fails', async () => {

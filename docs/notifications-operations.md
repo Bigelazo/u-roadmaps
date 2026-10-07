@@ -2,7 +2,7 @@
 
 > Implementación incremental de [ADR-0014](adr/0014-target-based-notice-grouping.md):
 > #177, #179 y #180 activan los Objetos de título, descripción, tipo y acceso de Nodo; #178 activa el reconocimiento al entrar. Este documento describe el estado
-> vigente; las otras clases conservan la transición inmediata.
+> vigente; #181 agrega el Recurso como Objeto. Las otras clases conservan la transición inmediata.
 
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
 por SSE autenticado. Disponibilidad, Nodos y cambios de acceso, Recursos,
@@ -72,6 +72,17 @@ de acceso pendiente. Si hay uno, conserva su valor conocido, actualiza el estado
 actual y lo retira solo al volver al conocido; no reconoce otros Avisos. El Desbloqueo programado conserva
 la atribución a Equipo docente. La migración de
 #180 agrega la proyección actual sin borrar Avisos existentes.
+
+Cada Recurso usa un Objeto `resource:<id>` y `ResourceNoticeKnowledge` conserva
+su título y revisión conocidos por destinatario, incluso tras quitar el Recurso.
+La transacción de creación, edición o eliminación captura el valor anterior solo
+para participantes con acceso al Nodo, excluyendo al autor. La entrega consulta
+la versión actual: agregado → editado sigue siendo nuevo, agregado → eliminado
+retira el Aviso y editado → eliminado conserva el título conocido. Las ediciones
+solo detallan cambios de título; URLs, tipos y archivos no se muestran. Apertura
+y reconocimiento conservan snapshots de Recursos y rebasan los cambios posteriores
+sin reconocerlos en reintentos. La migración de #181 agrega las tablas y snapshots
+sin borrar Avisos existentes.
 
 Las demás
 clases mantienen su entrega inmediata; todas se reconocen al entrar al Roadmap. Los siguientes

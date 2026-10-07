@@ -18,6 +18,7 @@ import {
   titleOpeningSnapshots,
   recognizeTitleSnapshots,
 } from './title-notice';
+import { resourceOpeningSnapshots, recognizeResourceSnapshots } from './resource-notice';
 import { contentOpeningSnapshots, recognizeContentSnapshots } from './node-content-notice';
 import type {
   NodeChangeNotice,
@@ -302,6 +303,7 @@ export async function prepareOwnNoticeOpening(
         noticeIds: notices.map(({ id }) => id),
         titleSnapshots: titleOpeningSnapshots(notices),
         contentSnapshots: contentOpeningSnapshots(notices),
+        resourceSnapshots: resourceOpeningSnapshots(notices),
         summary: changeSummary(roadmap.courseOffering.courseCode, notices, nodes, accessible),
       },
     });
@@ -352,6 +354,12 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       },
       data: { acknowledgedAt: new Date() },
     });
+    const resourceCount = await recognizeResourceSnapshots(transaction, {
+      recipientId: userId,
+      roadmapId,
+      operationId,
+      snapshots: retained.resourceSnapshots,
+    });
     const contentCount = await recognizeContentSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
@@ -365,7 +373,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       snapshots: retained.titleSnapshots,
     });
     const summary =
-      visited && result.count + titleCount + contentCount > 0
+      visited && result.count + titleCount + contentCount + resourceCount > 0
         ? (retained.summary as ChangeSummary | null)
         : null;
     await transaction.noticeAcknowledgement.update({
@@ -373,7 +381,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
     return {
-      count: result.count + titleCount + contentCount,
+      count: result.count + titleCount + contentCount + resourceCount,
       summary,
     };
   });

@@ -126,9 +126,7 @@ test('Resource notices stream to two tabs while student content stays stable unt
     });
     expect(created.status()).toBe(201);
     const resourceId = (await created.json()).resource.id;
-    await expect(
-      other.getByRole('button', { name: /Cambio de recurso: Primera guía/ }),
-    ).toBeVisible();
+    await expect(other.getByRole('button', { name: /Primera guía/ })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Primera guía' })).toBeHidden();
     await expect(
       page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
@@ -149,18 +147,17 @@ test('Resource notices stream to two tabs while student content stays stable unt
         ).status(),
       ).toBe(200);
     }
-    // Repeats are stored immediately (no grouping window or summary, see ADR-0014).
-    await expect.poll(async () => (await notices()).length).toBe(3);
+    // Pending additions absorb edits into one Resource target (#181).
+    await expect.poll(async () => (await notices())[0]?.data.resourceTitle).toBe('Última guía');
+    expect(await notices()).toHaveLength(1);
     await expect(page.getByRole('link', { name: 'Última guía' })).toBeHidden();
+    await expect(other.getByRole('button', { name: /Última guía/ })).toBeVisible();
     await expect(
-      other.getByRole('button', { name: /Cambio de recurso: Última guía/ }),
+      other.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
     ).toBeVisible();
-    await expect(
-      other.getByRole('button', { name: 'Avisos, 3 sin leer', exact: true }),
-    ).toBeVisible();
-    const [latest, , retained] = await notices();
+    const [latest] = await notices();
     // Opening the Inbox leaves pending notices unchanged.
-    expect(retained).toEqual(first);
+    expect(latest.id).toBe(first.id);
     expect(latest).toMatchObject({
       read: false,
       data: {
@@ -170,7 +167,7 @@ test('Resource notices stream to two tabs while student content stays stable unt
       },
     });
     // The already-open Node did not recognize these subsequent arrivals.
-    await other.getByRole('button', { name: /Cambio de recurso: Última guía/ }).click();
+    await other.getByRole('button', { name: /Última guía/ }).click();
     await expect(
       other.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
     ).toBeVisible();

@@ -1,3 +1,4 @@
+import type { ResourceNoticeState } from './resource-state';
 import type { NodeAccessState } from '@/shared/node-access';
 
 export type NodeChangeRecipient = Readonly<{ userId: string; name: string }>;
@@ -39,4 +40,6 @@ export type ResourceChangeNotice = NodeScopedNotice &
   Readonly<{
     changeKind: 'resource-added' | 'resource-updated' | 'resource-removed';
     resourceTitle: string;
+    resourceId?: string;
+    previousResource?: ResourceNoticeState | null;
   }>;

@@ -40,6 +40,8 @@ export async function POST(
       identifier,
       nodeId: params.nodeId,
       resourceTitle: resource.title,
+      resourceId: resource.id,
+      previousResource: null,
       changeKind: 'resource-added',
     });
     return NextResponse.json({ resource }, { status: 201 });

@@ -5,6 +5,8 @@ import { projectDigestNotification } from '../digest-projection';
 import { reconcileStoredTitle } from './title-notice';
 import { reconcileStoredNodeContent } from './node-content-notice';
 import { nodeContentEffect } from '../application/node-content-effect';
+import { resourceEffect } from '../application/resource-effect';
+import { reconcileStoredResource } from './resource-notice';
 import { titleEffect } from '../application/title-effect';
 
 function noticeRow(effect: NoticeEffect, projection: ReturnType<typeof projectDigestNotification>) {
@@ -31,6 +33,11 @@ export async function deliverNotice(effect: NoticeEffect) {
       skipDuplicates: true,
     });
     if (!accepted.count) return false;
+    const resource = resourceEffect(effect);
+    if (resource) {
+      await reconcileStoredResource(transaction, resource);
+      return true;
+    }
     const content = nodeContentEffect(effect);
     if (content) {
       await reconcileStoredNodeContent(transaction, content);

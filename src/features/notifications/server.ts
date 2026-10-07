@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { ResourceNoticeState } from './contracts/resource-state';
 import { randomUUID } from 'node:crypto';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
@@ -231,7 +232,9 @@ export async function deliverNodeChange(
     nodeTitle: input.nodeTitle ?? node!.title,
     changeKind: input.changeKind,
     changedFields: input.changedFields,
-    ...(input.previousAccess ? { contentTarget: 'access' as const, previousValue: input.previousAccess } : {}),
+    ...(input.previousAccess
+      ? { contentTarget: 'access' as const, previousValue: input.previousAccess }
+      : {}),
     ...(input.nodeTypeName ? { nodeTypeName: input.nodeTypeName } : {}),
     ...(input.targetKind ? { targetKind: input.targetKind } : {}),
     actorId: input.userId,
@@ -401,6 +404,8 @@ export async function deliverResourceChange(input: {
   identifier: { courseCode: string; year: number; semester: number };
   nodeId: string;
   resourceTitle: string;
+  resourceId?: string;
+  previousResource?: ResourceNoticeState | null;
   changeKind: ResourceChangeNotice['changeKind'];
 }) {
   try {
@@ -433,6 +438,8 @@ export async function deliverResourceChange(input: {
       nodeId: node.id,
       nodeTitle: node.title,
       resourceTitle: input.resourceTitle,
+      resourceId: input.resourceId,
+      previousResource: input.previousResource,
       changeKind: input.changeKind,
       actorId: input.userId,
       actorName:

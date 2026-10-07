@@ -65,6 +65,7 @@ export function changeSummary(
           break;
         case 'resource-updated':
           items.push(`Se actualizó el recurso «${data.resourceTitle}».`);
+          if (typeof data.titleChange === 'string') items.push(data.titleChange);
           break;
         case 'resource-removed':
           items.push(`Se eliminó el recurso «${data.resourceTitle}».`);
