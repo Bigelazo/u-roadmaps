@@ -10,6 +10,8 @@ export type RoadmapViewNode = Readonly<{
   isVisible: boolean;
   isTeacherBlocked: boolean;
   nodeTypeId: string;
+  nodeTypeName: string;
+  description: string | null;
 }>;
 
 /** What a descriptor may read about one Roadmap; the module implements it over a transaction. */
@@ -22,14 +24,23 @@ export interface RoadmapView {
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
 }
 
-/** The live value of a target; `visible` is its visibility gate for creating or updating notices. */
-export type TargetCurrent = Readonly<{ value: string; visible: boolean }>;
+export type TargetContext = Readonly<Record<string, unknown>>;
 
-/** What a stored notice keeps: the target's Known value, current value and context. */
+/**
+ * The live value of a target; `visible` is its visibility gate for creating or updating
+ * notices. `context` is the value's presentation context (e.g. a type name); it is kept
+ * with the notice and, once recognized, with the Known value.
+ */
+export type TargetCurrent = Readonly<{ value: string; visible: boolean; context?: TargetContext }>;
+
+/** What a stored notice keeps: the target's Known value, current value and their context. */
 export type TargetValues = Readonly<{
   knownValue: string;
   currentValue: string;
-  context: Readonly<Record<string, unknown>>;
+  /** Presentation context of the current value, as it was when the notice was written. */
+  context: TargetContext;
+  /** Presentation context of the Known value, from the Known value store. */
+  knownContext?: TargetContext;
 }>;
 
 /** Read-time text, shared by the Inbox and the Change summary. */
@@ -38,6 +49,8 @@ export type TargetWording = Readonly<{
   body: string;
   /** `node` items are grouped under their Node; `general` items under «Ruta y clasificación». */
   summaryGroup: 'node' | 'general';
+  /** Change summary item when it differs from `body` (e.g. a Node group already names the Node). */
+  summary?: string;
 }>;
 
 /**
@@ -59,6 +72,8 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   target(fact: F): NoticeTargetRef;
   /** The value recipients knew before the change. */
   previousValue(fact: F): string;
+  /** Presentation context of the previous value, recorded with the Known value. */
+  previousContext?(fact: F): TargetContext;
   /** Recipients whose Known value is recorded as the previous value (first baseline wins). */
   knowers(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
   /** Recipients told about the change; the module never tells the actor. */

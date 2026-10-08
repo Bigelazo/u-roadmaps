@@ -126,6 +126,49 @@ test('node creation and edits report per-object previous values and return plain
   expect(recording.facts()).toEqual([]);
 });
 
+test('description and type edits report previous values and write no notice baselines', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
+  const nextType = await prisma.nodeType.create({
+    data: {
+      roadmapId: course.roadmapId,
+      name: 'Taller',
+      normalizedName: 'taller',
+      icon: 'BookOpen',
+      color: '#024AD8',
+    },
+  });
+  const nodeId = course.change.nodeId;
+  await confirmed(
+    updateRoadmapNode(
+      {
+        ...editor(course),
+        id: nodeId,
+        input: { description: 'Nueva', nodeTypeId: nextType.id },
+      },
+      recording.port,
+    ),
+  );
+  expect(recording.facts()).toEqual([
+    { kind: 'node-description', nodeId, previous: null, current: 'Nueva' },
+    {
+      kind: 'node-type',
+      nodeId,
+      previous: { id: type.id, name: 'Tema' },
+      current: { id: nextType.id, name: 'Taller' },
+    },
+  ]);
+  // Known values are recorded by the notice lifecycle module through the port.
+  expect(
+    await prisma.nodeContentKnowledge.count({
+      where: { nodeId, target: { in: ['description', 'nodeType'] } },
+    }),
+  ).toBe(0);
+  expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
+});
+
 test('visibility and deletion report their facts and recipient access transitions', async ({
   course,
 }) => {

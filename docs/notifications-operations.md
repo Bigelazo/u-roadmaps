@@ -119,13 +119,15 @@ persisten tras actualizar o retirar un Aviso, por lo que un reintento no lo recr
 
 Título y tipo llegan también a quienes ven el Nodo bloqueado; descripción solo
 a quienes pueden acceder al Nodo. Los Objetos son independientes.
-`NodeContentKnowledge` conserva el texto exacto de la descripción (sin recortar
-espacios) y la identidad del Tipo, con nombres capturados en la transacción de
-asignación. La transacción de edición captura la descripción anterior solo para
-participantes con acceso al Nodo; el trigger de tipo incluye también a quienes
-lo ven bloqueado. Repetir ediciones deja un Aviso pendiente por Objeto; volver al
-valor conocido lo retira. Renombrar un Tipo no reescribe los nombres del Aviso
-de asignación pendiente.
+Descripción (`node:<id>:description`) y tipo (`node:<id>:nodeType`) también son
+Objetos del módulo (#202): `NoticeKnownValue` conserva el texto exacto de la
+descripción (sin recortar espacios) y la identidad del Tipo; el nombre del Tipo
+conocido se guarda como contexto de presentación (`context.typeName`) junto al
+valor conocido. El módulo registra la descripción anterior solo para
+participantes con acceso al Nodo y el tipo anterior también para quienes lo ven
+bloqueado (sin trigger ni escritura desde el editor). Repetir ediciones deja un
+Aviso pendiente por Objeto; volver al valor conocido lo retira. Renombrar un Tipo
+no reescribe los nombres del Aviso de asignación pendiente ni el nombre conocido.
 
 El acceso usa el Objeto `node-access` por Usuario y Nodo, con estados Disponible,
 Bloqueado y Retirado. La transacción docente captura la proyección anterior y

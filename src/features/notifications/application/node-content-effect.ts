@@ -1,19 +1,17 @@
 import type { NoticeEffect } from './notice-effect';
 
-export type NodeContentTarget = 'description' | 'nodeType' | 'access';
+// Node description and Node type moved to the notice lifecycle module (ADR-0024, #202).
+export type NodeContentTarget = 'access';
 export type NodeContentPayload = NoticeEffect['payload'] & {
   nodeId: string;
   contentTarget: NodeContentTarget;
   previousValue: string;
   occurredAt: string;
-  previousTypeName?: string;
-  currentTypeName?: string;
 };
 export type NodeContentEffect = Omit<NoticeEffect, 'payload'> & { payload: NodeContentPayload };
 export type StoredNodeContentPayload = NodeContentPayload & {
   knownValue: string;
   currentValue: string;
-  knownTypeName?: string;
 };
 
 function contentPayload(value: unknown): NodeContentPayload {
@@ -22,14 +20,10 @@ function contentPayload(value: unknown): NodeContentPayload {
   const data = value as Record<string, unknown>;
   if (
     typeof data.nodeId !== 'string' ||
-    (data.contentTarget !== 'description' &&
-      data.contentTarget !== 'nodeType' &&
-      data.contentTarget !== 'access') ||
+    data.contentTarget !== 'access' ||
     typeof data.previousValue !== 'string' ||
     typeof data.occurredAt !== 'string' ||
-    Number.isNaN(Date.parse(data.occurredAt)) ||
-    (data.contentTarget === 'nodeType' &&
-      (typeof data.previousTypeName !== 'string' || typeof data.currentTypeName !== 'string'))
+    Number.isNaN(Date.parse(data.occurredAt))
   )
     throw new Error('Invalid Node content fields.');
   return data as NodeContentPayload;
@@ -43,11 +37,7 @@ export function nodeContentEffect(effect: NoticeEffect): NodeContentEffect | nul
 
 export function storedNodeContentPayload(value: unknown): StoredNodeContentPayload {
   const payload = contentPayload(value);
-  if (
-    typeof payload.knownValue !== 'string' ||
-    typeof payload.currentValue !== 'string' ||
-    (payload.contentTarget === 'nodeType' && typeof payload.knownTypeName !== 'string')
-  )
+  if (typeof payload.knownValue !== 'string' || typeof payload.currentValue !== 'string')
     throw new Error('Invalid stored Node content.');
   return payload as StoredNodeContentPayload;
 }

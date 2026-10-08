@@ -30,16 +30,24 @@ export function roadmapView(
     node(nodeId) {
       let node = nodes.get(nodeId);
       if (!node) {
-        node = transaction.roadmapNode.findFirst({
-          where: { id: nodeId, roadmapId },
-          select: {
-            id: true,
-            title: true,
-            isVisible: true,
-            isTeacherBlocked: true,
-            nodeTypeId: true,
-          },
-        });
+        node = transaction.roadmapNode
+          .findFirst({
+            where: { id: nodeId, roadmapId },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              isVisible: true,
+              isTeacherBlocked: true,
+              nodeTypeId: true,
+              nodeType: { select: { name: true } },
+            },
+          })
+          .then((found) => {
+            if (!found) return null;
+            const { nodeType, ...node } = found;
+            return { ...node, nodeTypeName: nodeType.name };
+          });
         nodes.set(nodeId, node);
       }
       return node;

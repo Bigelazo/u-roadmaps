@@ -19,10 +19,7 @@ export async function reconcileStoredNodeContent(
 ) {
   await lockRecipientRoadmap(transaction, effect.recipientId, effect.roadmapId);
   const { nodeId, contentTarget } = effect.payload;
-  const node = await transaction.roadmapNode.findUnique({
-    where: { id: nodeId },
-    include: { nodeType: true },
-  });
+  const node = await transaction.roadmapNode.findUnique({ where: { id: nodeId } });
   if (!node) return;
   const knowledge = await transaction.nodeContentKnowledge.upsert({
     where: {
@@ -33,8 +30,6 @@ export async function reconcileStoredNodeContent(
       nodeId,
       target: contentTarget,
       knownValue: effect.payload.previousValue,
-      knownTypeName: effect.payload.previousTypeName,
-      currentTypeName: effect.payload.currentTypeName,
     },
     update: {},
   });
@@ -48,12 +43,7 @@ export async function reconcileStoredNodeContent(
     },
   });
   const pendingData = pending ? storedNodeContentPayload(pending.data) : null;
-  const currentValue =
-    contentTarget === 'access'
-      ? (knowledge.currentValue ?? effect.payload.previousValue)
-      : contentTarget === 'description'
-        ? JSON.stringify(node.description)
-        : node.nodeTypeId;
+  const currentValue = knowledge.currentValue ?? effect.payload.previousValue;
   const result = reconcileNodeContentNotice({
     knownValue: knowledge.knownValue,
     pendingValue: pendingData?.currentValue ?? null,
@@ -65,42 +55,23 @@ export async function reconcileStoredNodeContent(
     await transaction.roadmapNotice.delete({ where: { id: pending!.id } });
     return;
   }
-  if (!node.isVisible && contentTarget !== 'access') return;
   const occurredAt = new Date(
     Math.max(Date.parse(effect.payload.occurredAt), pending?.occurredAt.getTime() ?? 0),
   );
-  // Preserve the name captured by the assignment, even if the type was renamed.
-  const currentTypeName =
-    pendingData?.currentValue === currentValue
-      ? pendingData.currentTypeName
-      : (knowledge.currentTypeName ?? effect.payload.currentTypeName);
   const data = {
     ...effect.payload,
     noticeClass: effect.noticeClass,
-    noticeTarget:
-      contentTarget === 'access'
-        ? 'node-access'
-        : contentTarget === 'description'
-          ? 'node-description'
-          : 'node-type',
-    ...(contentTarget === 'access' ? accessNoticeDestination(currentValue) : {}),
+    noticeTarget: 'node-access',
+    ...accessNoticeDestination(currentValue),
     nodeTitle: node.title,
     knownValue: result.knownValue,
     currentValue: result.currentValue,
-    ...(contentTarget === 'nodeType'
-      ? { knownTypeName: knowledge.knownTypeName, currentTypeName }
-      : {}),
     occurredAt: occurredAt.toISOString(),
     changedFields: [contentTarget],
   } as Prisma.InputJsonObject;
   const row = {
     subject: node.title,
-    body:
-      contentTarget === 'access'
-        ? nodeAccessChangeText(node.title, result.knownValue, result.currentValue)
-        : contentTarget === 'description'
-          ? `Se actualizó la descripción de «${node.title}».`
-          : `«${node.title}» pasó de tipo «${knowledge.knownTypeName}» a tipo «${currentTypeName}».`,
+    body: nodeAccessChangeText(node.title, result.knownValue, result.currentValue),
     data,
     occurredAt,
     availableAt: occurredAt,
@@ -128,9 +99,7 @@ export function contentOpeningSnapshots(
       !data ||
       typeof data !== 'object' ||
       Array.isArray(data) ||
-      (data.noticeTarget !== 'node-description' &&
-        data.noticeTarget !== 'node-type' &&
-        data.noticeTarget !== 'node-access')
+      data.noticeTarget !== 'node-access'
     )
       return [];
     return [{ id, payload: storedNodeContentPayload(data) }];
@@ -142,40 +111,28 @@ export async function recognizeNodeContentValue(
   transaction: Prisma.TransactionClient,
   effect: NodeContentEffect,
   knownValue: string,
-  knownTypeName?: string,
   reconcileOnlyPending = false,
 ) {
   const { nodeId, contentTarget: target } = effect.payload;
   const node = await transaction.roadmapNode.findUnique({ where: { id: nodeId } });
   if (!node) return;
   const identity = { recipientId: effect.recipientId, nodeId, target };
-  const baseline = { knownValue, ...(target === 'nodeType' ? { knownTypeName } : {}) };
   const existing = await transaction.nodeContentKnowledge.findUnique({
     where: { recipientId_nodeId_target: identity },
   });
-  if (
-    !existing ||
-    existing.knownValue !== knownValue ||
-    (target === 'nodeType' &&
-      knownTypeName !== undefined &&
-      existing.knownTypeName !== knownTypeName)
-  ) {
+  if (!existing || existing.knownValue !== knownValue) {
     await transaction.nodeContentKnowledge.upsert({
       where: { recipientId_nodeId_target: identity },
       create: {
         ...identity,
-        ...baseline,
-        ...(target === 'access'
-          ? {
-              currentValue: !node.isVisible
-                ? 'Retirado'
-                : node.isTeacherBlocked
-                  ? 'Bloqueado'
-                  : knownValue,
-            }
-          : {}),
+        knownValue,
+        currentValue: !node.isVisible
+          ? 'Retirado'
+          : node.isTeacherBlocked
+            ? 'Bloqueado'
+            : knownValue,
       },
-      update: baseline,
+      update: { knownValue },
     });
   }
   await reconcileRecognizedTarget(
@@ -222,7 +179,6 @@ export async function recognizeContentSnapshots(
         payload,
       },
       payload.currentValue,
-      payload.currentTypeName,
     );
   }
   return acknowledged;

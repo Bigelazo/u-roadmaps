@@ -24,11 +24,13 @@ export function changeSummary(
     if (!isNoticeVisible(data, nodes, accessible)) continue;
     const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
     const items: string[] = [];
-    // Lifecycle notices share their read-time wording with the Inbox.
-    const projected = projectTargetNotice(data);
+    // Lifecycle notices share their read-time wording with the Inbox, naming Nodes by
+    // their current title.
+    const projected = projectTargetNotice(data, node ? { nodeTitle: node.title } : {});
     if (projected) {
-      if (projected.wording.summaryGroup === 'node') items.push(projected.wording.body);
-      else general.push(projected.wording.body);
+      const item = projected.wording.summary ?? projected.wording.body;
+      if (projected.wording.summaryGroup === 'node') items.push(item);
+      else general.push(item);
     } else if (data.noticeTarget === 'node-access') {
       items.push(
         nodeAccessChangeText(
@@ -44,11 +46,7 @@ export function changeSummary(
           if (fields.includes('description') && nodeId && accessible.has(nodeId))
             items.push('Se actualizó la descripción.');
           if (fields.includes('nodeType'))
-            general.push(
-              data.noticeTarget === 'node-type'
-                ? `«${node?.title ?? data.nodeTitle}» pasó de tipo «${data.knownTypeName}» a tipo «${data.currentTypeName}».`
-                : `Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`,
-            );
+            general.push(`Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`);
           break;
         case 'node-available':
           items.push(

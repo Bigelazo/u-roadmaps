@@ -14,7 +14,7 @@ const { transaction, prisma } = vi.hoisted(() => {
     roadmapNode: { findMany: vi.fn() },
     nodeLifecycleKnowledge: { findMany: vi.fn() },
     resourceNoticeKnowledge: { findMany: vi.fn() },
-    nodeContentKnowledge: { findMany: vi.fn() },
+    noticeKnownValue: { findMany: vi.fn() },
     dependency: { findMany: vi.fn() },
     nodeType: { findMany: vi.fn() },
     routeNoticeKnowledge: { findMany: vi.fn() },
@@ -46,7 +46,7 @@ beforeEach(() => {
   transaction.roadmapNode.findMany.mockResolvedValue([]);
   transaction.nodeLifecycleKnowledge.findMany.mockResolvedValue([]);
   transaction.resourceNoticeKnowledge.findMany.mockResolvedValue([]);
-  transaction.nodeContentKnowledge.findMany.mockResolvedValue([]);
+  transaction.noticeKnownValue.findMany.mockResolvedValue([]);
   transaction.dependency.findMany.mockResolvedValue([]);
   transaction.nodeType.findMany.mockResolvedValue([]);
   transaction.routeNoticeKnowledge.findMany.mockResolvedValue([]);

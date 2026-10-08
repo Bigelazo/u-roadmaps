@@ -4,6 +4,7 @@ import type {
   NoticeTargetDescriptor,
   NoticeTargetRef,
   RoadmapView,
+  TargetContext,
 } from '../../application/notice-targets';
 import { storedTargetValues } from '../../application/notice-targets';
 import { reconcileTarget } from '../../application/reconcile-target';
@@ -25,8 +26,9 @@ export type TargetReconciliationInput = Readonly<{
   descriptor: NoticeTargetDescriptor;
   identity: RecipientRoadmap;
   target: NoticeTargetRef;
-  /** Known value to record when the recipient has no baseline for the target yet. */
+  /** Known value (and its context) to record when the recipient has no baseline yet. */
   fallbackKnown: string;
+  fallbackContext?: TargetContext;
   roadmap: RoadmapView;
   /** Loaded only when a notice is written. */
   envelope: () => Promise<NoticeEnvelope>;
@@ -46,7 +48,13 @@ export async function reconcileNoticeTarget(
   const { descriptor, identity, target } = input;
   const current = await descriptor.current(target, input.roadmap);
   if (!current) return;
-  const knownValue = await ensureKnownValue(transaction, identity, target, input.fallbackKnown);
+  const known = await ensureKnownValue(
+    transaction,
+    identity,
+    target,
+    input.fallbackKnown,
+    input.fallbackContext,
+  );
   const pending = await transaction.roadmapNotice.findFirst({
     where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
   });
@@ -55,7 +63,7 @@ export async function reconcileNoticeTarget(
     ? (storedTargetValues(pending.data)?.values ?? { knownValue: '', currentValue: '' })
     : null;
   const result = reconcileTarget({
-    knownValue,
+    knownValue: known.knownValue,
     pending: pendingValues,
     currentValue: current.value,
   });
@@ -68,7 +76,17 @@ export async function reconcileNoticeTarget(
   const occurredAt = new Date(
     Math.max(input.occurredAt.getTime(), pending?.occurredAt.getTime() ?? 0),
   );
-  const values = { knownValue: result.knownValue, currentValue: result.currentValue, context: {} };
+  const values = {
+    knownValue: result.knownValue,
+    currentValue: result.currentValue,
+    // An unchanged current value keeps the context it was announced with (e.g. type
+    // names at assignment, even after a rename).
+    context:
+      pendingValues && 'context' in pendingValues && pendingValues.currentValue === current.value
+        ? pendingValues.context
+        : (current.context ?? {}),
+    knownContext: known.context,
+  };
   const wording = descriptor.wording(values);
   const envelope = await input.envelope();
   const row = {

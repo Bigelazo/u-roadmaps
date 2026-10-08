@@ -4,6 +4,8 @@ import type { ResourceNoticeState } from '../contracts/resource-state';
 import { Prisma } from '@/shared/server/db';
 import { recognizeKnownValue, lazyRoadmapEnvelope } from './notice-lifecycle';
 import { nodeTitleTarget } from '../application/notice-targets/node-title';
+import { nodeDescriptionTarget } from '../application/notice-targets/node-description';
+import { nodeTypeTarget } from '../application/notice-targets/node-type';
 import { recognizeNodeContentValue } from './node-content-notice';
 import { recognizeResourceValue } from './resource-notice';
 import { recognizeRouteValue } from './route-notice';
@@ -101,8 +103,8 @@ export async function absorptionOpeningSnapshots(
       where: { recipientId, node: { roadmapId } },
       select: { nodeId: true, resourceId: true },
     }),
-    transaction.nodeContentKnowledge.findMany({
-      where: { recipientId, target: 'description', node: { roadmapId } },
+    transaction.noticeKnownValue.findMany({
+      where: { recipientId, roadmapId, targetKey: { endsWith: ':description' } },
       select: { nodeId: true },
     }),
   ]);
@@ -376,37 +378,38 @@ export async function recognizeAbsorptionSnapshots(
         envelope,
         onlyPending: reconcileOnlyPending,
       });
-      for (const target of [
-        'access',
-        'nodeType',
-        ...(node.access === 'Disponible' || node.recognizesDescription ? ['description'] : []),
-      ] as const) {
-        const contentTarget = target as 'access' | 'nodeType' | 'description';
-        const knownValue =
-          target === 'access'
-            ? node.access
-            : target === 'nodeType'
-              ? node.nodeTypeId
-              : JSON.stringify(node.description);
-        await recognizeNodeContentValue(
-          transaction,
-          {
-            ...effect,
-            eventId: `${effect.eventId}:${target}`,
-            payload: {
-              ...payload,
-              contentTarget,
-              previousValue: knownValue,
-              ...(target === 'nodeType'
-                ? { previousTypeName: node.nodeTypeName, currentTypeName: current.nodeType.name }
-                : {}),
-            },
-          },
-          knownValue,
-          target === 'nodeType' ? node.nodeTypeName : undefined,
-          reconcileOnlyPending,
-        );
-      }
+      await recognizeNodeContentValue(
+        transaction,
+        {
+          ...effect,
+          eventId: `${effect.eventId}:access`,
+          payload: { ...payload, contentTarget: 'access', previousValue: node.access },
+        },
+        node.access,
+        reconcileOnlyPending,
+      );
+      await recognizeKnownValue(transaction, {
+        identity: { recipientId: identity.recipientId, roadmapId: identity.roadmapId },
+        descriptor: nodeTypeTarget,
+        target: { targetKey: `node:${node.id}:nodeType`, nodeId: node.id },
+        knownValue: node.nodeTypeId,
+        context: { typeName: node.nodeTypeName, nodeTitle: node.title },
+        eventId: `${effect.eventId}:nodeType`,
+        envelope,
+        onlyPending: reconcileOnlyPending,
+      });
+      // A blocked recipient never saw the description, unless it already knew one.
+      if (node.access === 'Disponible' || node.recognizesDescription)
+        await recognizeKnownValue(transaction, {
+          identity: { recipientId: identity.recipientId, roadmapId: identity.roadmapId },
+          descriptor: nodeDescriptionTarget,
+          target: { targetKey: `node:${node.id}:description`, nodeId: node.id },
+          knownValue: JSON.stringify(node.description),
+          context: { nodeTitle: node.title },
+          eventId: `${effect.eventId}:description`,
+          envelope,
+          onlyPending: reconcileOnlyPending,
+        });
       const knownResources = new Map(node.resources.map((resource) => [resource.id, resource]));
       const resourceIds = new Set([
         ...(node.resourceIds ?? []),

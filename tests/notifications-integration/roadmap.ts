@@ -10,9 +10,12 @@ import {
   type NoticeDelivery,
 } from '@/features/notifications/server';
 import {
+  changeTeacherBlock,
   createRoadmapNode,
   deleteRoadmapNode,
+  previewTeacherBlock,
   updateRoadmapNode,
+  updateRoadmapNodeType,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import type { IntegrationCourse } from './fixtures';
@@ -48,13 +51,34 @@ export function teacherEdits(
     update: (nodeId: string, input: Record<string, unknown>) =>
       confirmed(updateRoadmapNode({ ...editor, id: nodeId, input }, port)),
     remove: (nodeId: string) => confirmed(deleteRoadmapNode({ ...editor, id: nodeId }, port)),
+    block: (nodeId: string) =>
+      confirmed(changeTeacherBlock({ ...editor, id: nodeId, operation: 'BLOCK' }, port)),
+    async unblock(nodeId: string) {
+      const input = { ...editor, id: nodeId, operation: 'UNBLOCK' as const };
+      const preview = await confirmed(previewTeacherBlock(input));
+      return confirmed(changeTeacherBlock({ ...input, previewVersion: preview.version }, port));
+    },
+    renameType: (nodeTypeId: string, name: string) =>
+      confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input: { name } }, port)),
   };
+}
+
+export function addType(course: IntegrationCourse, name: string) {
+  return prisma.nodeType.create({
+    data: {
+      roadmapId: course.roadmapId,
+      name,
+      normalizedName: name.toLowerCase(),
+      icon: 'BookOpen',
+      color: '#024AD8',
+    },
+  });
 }
 
 export function addNode(
   course: IntegrationCourse,
   title: string,
-  state: { isVisible?: boolean; isTeacherBlocked?: boolean } = {},
+  state: { isVisible?: boolean; isTeacherBlocked?: boolean; description?: string } = {},
 ) {
   return prisma.roadmapNode.create({
     data: {

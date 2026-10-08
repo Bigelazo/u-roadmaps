@@ -305,29 +305,6 @@ async function updateRoadmapNodeUnsafe(
           },
         });
       }
-      if (
-        node.isVisible &&
-        data.isVisible !== false &&
-        data.description !== undefined &&
-        data.description !== node.description
-      ) {
-        // Capture only descriptions these recipients can see, atomically with
-        // the edit; a blocked recipient has no baseline for this content yet.
-        const access = beforeVisibility ?? (await captureAccessSnapshot(transaction, roadmap.id));
-        const recipients = access.participants.filter(({ userId }) =>
-          access.accessibleByUser.get(userId)?.has(node.id),
-        );
-        if (recipients.length)
-          await transaction.nodeContentKnowledge.createMany({
-            data: recipients.map(({ userId }) => ({
-              recipientId: userId,
-              nodeId: node.id,
-              target: 'description',
-              knownValue: JSON.stringify(node.description),
-            })),
-            skipDuplicates: true,
-          });
-      }
       const updated = await transaction.roadmapNode.update({
         where: { id: node.id },
         data,

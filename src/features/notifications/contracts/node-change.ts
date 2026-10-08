@@ -24,11 +24,7 @@ export type NodeChangeNotice = NodeScopedNotice &
     changeKind:
       'node-available' | 'node-updated' | 'node-retired' | 'node-deleted' | 'node-blocked';
     changedFields: readonly ('title' | 'description' | 'nodeType')[];
-    previousDescription?: string | null;
-    previousTypeId?: string;
-    previousTypeName?: string;
-    currentTypeName?: string;
-    contentTarget?: 'description' | 'nodeType' | 'access';
+    contentTarget?: 'access';
     previousValue?: string;
     previousAccess?: NodeAccessState;
     nodeTypeName?: string;

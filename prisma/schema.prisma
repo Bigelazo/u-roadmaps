@@ -346,8 +346,9 @@ model NodeTitleKnowledge {
   @@id([recipientId, nodeId])
 }
 
-// Node target values have independent recipient baselines. Access also tracks
-// the current projection atomically with Roadmap edits for deferred delivery.
+// Node access baselines (description and type moved to NoticeKnownValue in #202;
+// the type name columns are unused). Access also tracks the current projection
+// atomically with Roadmap edits for deferred delivery.
 model NodeContentKnowledge {
   recipientId     String      @db.Uuid
   nodeId          String      @db.Uuid

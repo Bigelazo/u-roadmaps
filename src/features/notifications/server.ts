@@ -157,10 +157,6 @@ export async function deliverNodeChange(
     changedFields: NodeChangeNotice['changedFields'];
     nodeTitle?: string;
     previousAccess?: NodeChangeNotice['previousAccess'];
-    previousDescription?: string | null;
-    previousTypeId?: string;
-    previousTypeName?: string;
-    currentTypeName?: string;
     nodeTypeName?: string;
     roadmapId?: string;
     recipientIds?: readonly string[];
@@ -223,22 +219,7 @@ export async function deliverNodeChange(
           actorId: input.userId,
         })
       : [];
-  const visibleRecipients =
-    node?.isVisible &&
-    input.changedFields.includes('nodeType') &&
-    input.previousTypeId !== undefined
-      ? await prisma.participation
-          .findMany({
-            where: {
-              courseOfferingId: offeringInfo.id,
-              isActive: true,
-              userId: { not: input.userId },
-            },
-            include: { user: { select: { id: true, name: true } } },
-          })
-          .then((rows) => rows.map(({ user }) => ({ userId: user.id, name: user.name })))
-      : [];
-  if (!recipients.length && !visibleRecipients.length) return;
+  if (!recipients.length) return;
 
   const notice: NodeChangeNotice = {
     eventId: input.eventId ?? randomUUID(),
@@ -265,47 +246,9 @@ export async function deliverNodeChange(
     recipients,
   };
 
-  const handledFields = new Set<string>();
-  for (const field of notice.changedFields) {
-    if (notice.changeKind !== 'node-updated') break;
-    const audience = field === 'description' ? recipients : visibleRecipients;
-    const previousValue =
-      field === 'description'
-        ? input.previousDescription === undefined
-          ? undefined
-          : JSON.stringify(input.previousDescription)
-        : field === 'nodeType'
-          ? input.previousTypeId
-          : undefined;
-    if (previousValue === undefined) continue;
-    handledFields.add(field);
-    if (!audience.length) continue;
-    await storeNodeChange(
-      {
-        ...notice,
-        eventId: `${notice.eventId}:${field}`,
-        changedFields: [field],
-        contentTarget: field as 'description' | 'nodeType',
-        previousValue,
-        ...(field === 'nodeType'
-          ? {
-              previousTypeName: input.previousTypeName,
-              currentTypeName: input.currentTypeName,
-            }
-          : {}),
-        recipients: audience,
-      },
-      scheduleDelivery,
-    ).catch(() => {
-      console.warn('Node content notice delivery failed', { eventId: notice.eventId });
-    });
-  }
-  const changedFields = notice.changedFields.filter((field) => !handledFields.has(field));
-  if (recipients.length && (notice.changeKind !== 'node-updated' || changedFields.length)) {
-    await storeNodeChange({ ...notice, changedFields }, scheduleDelivery).catch(() => {
-      console.warn('Node notice delivery failed', { eventId: notice.eventId });
-    });
-  }
+  await storeNodeChange(notice, scheduleDelivery).catch(() => {
+    console.warn('Node notice delivery failed', { eventId: notice.eventId });
+  });
 }
 
 export async function deliverRoadmapPathChange(

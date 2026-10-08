@@ -7,6 +7,7 @@ import {
   descriptorForFact,
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
+  type TargetContext,
 } from '../../application/notice-targets';
 import { acceptDelivery } from '../notice-delivery';
 import { reconcileStoredAbsorption } from '../absorption-notice';
@@ -23,6 +24,7 @@ type RecordedTarget = Readonly<{
   descriptor: NoticeTargetDescriptor;
   target: NoticeTargetRef;
   previousValue: string;
+  previousContext?: TargetContext;
   recipientIds: readonly string[];
 }>;
 
@@ -46,17 +48,20 @@ export async function recordNoticeTargets(
     if (!descriptor) continue;
     const target = descriptor.target(fact);
     const previousValue = descriptor.previousValue(fact);
+    const previousContext = descriptor.previousContext?.(fact);
     await recordKnownValues(
       transaction,
       changes.roadmapId,
       target,
       await descriptor.knowers(fact, changes, roadmap),
       previousValue,
+      previousContext,
     );
     const recipientIds = (await descriptor.audience(fact, changes, roadmap)).filter(
       (recipientId) => recipientId !== changes.actorId,
     );
-    if (recipientIds.length) targets.push({ descriptor, target, previousValue, recipientIds });
+    if (recipientIds.length)
+      targets.push({ descriptor, target, previousValue, previousContext, recipientIds });
   }
   if (!targets.length) return undefined;
   const eventId = randomUUID();
@@ -99,7 +104,7 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
 
 /** (B) Deliver to one recipient in its own transaction, in the shared lock order. */
 async function deliverTarget(
-  { descriptor, target, previousValue }: RecordedTarget,
+  { descriptor, target, previousValue, previousContext }: RecordedTarget,
   recipientId: string,
   { eventId, occurredAt, envelope, accessibleNodes }: RecordedChange,
 ) {
@@ -140,6 +145,7 @@ async function deliverTarget(
       identity: { recipientId, roadmapId },
       target,
       fallbackKnown: previousValue,
+      fallbackContext: previousContext,
       roadmap: roadmapView(transaction, roadmapId, accessibleNodes),
       envelope: async () => envelope,
       eventId: targetEventId,

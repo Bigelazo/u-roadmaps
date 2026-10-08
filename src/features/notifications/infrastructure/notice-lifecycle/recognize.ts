@@ -3,8 +3,10 @@ import type { Prisma } from '@/shared/server/db';
 import {
   descriptorForNoticeTarget,
   storedTargetValues,
+  targetContext,
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
+  type TargetContext,
 } from '../../application/notice-targets';
 import { acknowledgeCapturedNotice } from '../recognition-snapshot';
 import { setKnownValue, type RecipientRoadmap } from './known-values';
@@ -19,25 +21,27 @@ type TargetSnapshot = Readonly<{
   targetKey: string;
   nodeId: string | null;
   currentValue: string;
+  /** Presentation context of the captured value, recognized with it. */
+  context?: TargetContext;
 }>;
 
 /** (C) Capture: the single snapshot collection of an opening record. */
 export function targetOpeningSnapshots(
   notices: readonly { id: string; data: Prisma.JsonValue }[],
 ): Prisma.InputJsonArray {
-  return notices.flatMap((notice): TargetSnapshot[] => {
+  return notices.flatMap((notice) => {
     const stored = storedTargetValues(notice.data);
     const data = notice.data as Record<string, unknown>;
     if (!stored || typeof data.targetKey !== 'string') return [];
-    return [
-      {
-        id: notice.id,
-        noticeTarget: stored.descriptor.noticeTarget,
-        targetKey: data.targetKey,
-        nodeId: typeof data.nodeId === 'string' ? data.nodeId : null,
-        currentValue: stored.values.currentValue,
-      },
-    ];
+    const snapshot: TargetSnapshot = {
+      id: notice.id,
+      noticeTarget: stored.descriptor.noticeTarget,
+      targetKey: data.targetKey,
+      nodeId: typeof data.nodeId === 'string' ? data.nodeId : null,
+      currentValue: stored.values.currentValue,
+      context: stored.values.context,
+    };
+    return [snapshot as Prisma.InputJsonObject];
   });
 }
 
@@ -83,6 +87,7 @@ export async function recognizeTargetSnapshots(
       descriptor,
       target: { targetKey: snapshot.targetKey, nodeId: snapshot.nodeId },
       knownValue: snapshot.currentValue,
+      context: targetContext(snapshot.context),
       eventId: `recognition:${operationId}:${snapshot.targetKey}`,
       envelope,
     });
@@ -111,6 +116,8 @@ export async function recognizeKnownValue(
     descriptor: NoticeTargetDescriptor;
     target: NoticeTargetRef;
     knownValue: string;
+    /** Presentation context of the recognized value. */
+    context?: TargetContext;
     eventId: string;
     envelope: () => Promise<NoticeEnvelope>;
     onlyPending?: boolean;
@@ -119,7 +126,7 @@ export async function recognizeKnownValue(
   const { identity, target } = input;
   const roadmap = roadmapView(transaction, identity.roadmapId);
   if (!(await input.descriptor.current(target, roadmap))) return;
-  await setKnownValue(transaction, identity, target, input.knownValue);
+  await setKnownValue(transaction, identity, target, input.knownValue, input.context);
   if (
     input.onlyPending &&
     !(await transaction.roadmapNotice.findFirst({
@@ -133,6 +140,7 @@ export async function recognizeKnownValue(
     identity,
     target,
     fallbackKnown: input.knownValue,
+    fallbackContext: input.context,
     roadmap,
     envelope: input.envelope,
     eventId: input.eventId,

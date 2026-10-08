@@ -107,39 +107,6 @@ async function deliver(
           );
           break;
         }
-        case 'node-description':
-        case 'node-type': {
-          // Content edited while revealing a hidden Node was silent before this prefactor.
-          if (
-            changes.facts.some(
-              (change) =>
-                change.kind === 'node-visibility' &&
-                change.nodeId === fact.nodeId &&
-                !change.previous,
-            )
-          )
-            break;
-          const field = fact.kind === 'node-description' ? 'description' : 'nodeType';
-          await deliverNodeChange(
-            {
-              userId: actorId,
-              ...identifier,
-              roadmapId,
-              nodeId: fact.nodeId,
-              changeKind: 'node-updated',
-              changedFields: [field],
-              ...(fact.kind === 'node-description'
-                ? { previousDescription: fact.previous }
-                : {
-                    previousTypeId: fact.previous.id,
-                    previousTypeName: fact.previous.name,
-                    currentTypeName: fact.current.name,
-                  }),
-            },
-            scheduleDelivery,
-          );
-          break;
-        }
         case 'node-access':
           if (fact.recipientId !== actorId)
             await deliverNodeChange(
@@ -228,6 +195,8 @@ async function deliver(
           break;
         // Owned by the notice lifecycle module.
         case 'node-title':
+        case 'node-description':
+        case 'node-type':
           break;
         // Completion and promotion already reconcile inside their transactions in this prefactor.
         case 'node-visibility':

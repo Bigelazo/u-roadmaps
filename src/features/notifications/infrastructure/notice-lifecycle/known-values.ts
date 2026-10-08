@@ -1,6 +1,10 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
-import type { NoticeTargetRef } from '../../application/notice-targets';
+import {
+  targetContext,
+  type NoticeTargetRef,
+  type TargetContext,
+} from '../../application/notice-targets';
 
 export type RecipientRoadmap = Readonly<{ recipientId: string; roadmapId: string }>;
 
@@ -11,6 +15,7 @@ export async function recordKnownValues(
   target: NoticeTargetRef,
   recipientIds: readonly string[],
   knownValue: string,
+  context: TargetContext = {},
 ) {
   if (!recipientIds.length) return;
   await transaction.noticeKnownValue.createMany({
@@ -20,17 +25,19 @@ export async function recordKnownValues(
       targetKey: target.targetKey,
       nodeId: target.nodeId,
       knownValue,
+      context: context as Prisma.InputJsonObject,
     })),
     skipDuplicates: true,
   });
 }
 
-/** The recipient's Known value, recording `fallback` when the target has no baseline yet. */
+/** The recipient's Known value and its context, recording `fallback` when the target has no baseline yet. */
 export async function ensureKnownValue(
   transaction: Prisma.TransactionClient,
   identity: RecipientRoadmap,
   target: NoticeTargetRef,
   fallback: string,
+  fallbackContext?: TargetContext,
 ) {
   await recordKnownValues(
     transaction,
@@ -38,12 +45,13 @@ export async function ensureKnownValue(
     target,
     [identity.recipientId],
     fallback,
+    fallbackContext,
   );
   const row = await transaction.noticeKnownValue.findUniqueOrThrow({
     where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
-    select: { knownValue: true },
+    select: { knownValue: true, context: true },
   });
-  return row.knownValue;
+  return { knownValue: row.knownValue, context: targetContext(row.context) };
 }
 
 /** Recognition: the recipient now knows `knownValue`. */
@@ -52,11 +60,13 @@ export async function setKnownValue(
   identity: RecipientRoadmap,
   target: NoticeTargetRef,
   knownValue: string,
+  context: TargetContext = {},
 ) {
+  const known = { knownValue, context: context as Prisma.InputJsonObject };
   await transaction.noticeKnownValue.upsert({
     where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
-    create: { ...identity, targetKey: target.targetKey, nodeId: target.nodeId, knownValue },
-    update: { knownValue },
+    create: { ...identity, targetKey: target.targetKey, nodeId: target.nodeId, ...known },
+    update: known,
   });
 }
 
