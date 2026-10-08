@@ -3,8 +3,6 @@ import { roadmapChangeTransaction } from '../change-transaction';
 import 'server-only';
 import { resourceContentState } from '@/shared/server/resource-content-state';
 
-import { captureAccessSnapshot } from '../access-snapshot';
-import { type Prisma } from '@/shared/server/db';
 import {
   requireResourceType,
   requireString,
@@ -33,30 +31,6 @@ type UploadedResourceInput = ResourceInput & {
   file: unknown;
 };
 
-async function captureResourceKnowledge(
-  transaction: Prisma.TransactionClient,
-  roadmapId: string,
-  actorId: string,
-  resource: { id: string; roadmapNodeId: string },
-  previous: Parameters<typeof resourceContentState>[0] | null,
-) {
-  const access = await captureAccessSnapshot(transaction, roadmapId);
-  const recipients = access.participants.filter(
-    ({ userId }) =>
-      userId !== actorId && access.accessibleByUser.get(userId)?.has(resource.roadmapNodeId),
-  );
-  if (recipients.length)
-    await transaction.resourceNoticeKnowledge.createMany({
-      data: recipients.map(({ userId }) => ({
-        recipientId: userId,
-        resourceId: resource.id,
-        nodeId: resource.roadmapNodeId,
-        knownState: previous ? JSON.stringify(resourceContentState(previous)) : null,
-      })),
-      skipDuplicates: true,
-    });
-}
-
 async function createRoadmapResourceUnsafe(
   { id, input, ...editor }: ResourceInput & { input: JsonObject },
   changePort: RoadmapChangePort,
@@ -70,7 +44,6 @@ async function createRoadmapResourceUnsafe(
     const resource = await transaction.resource.create({
       data: { roadmapNodeId: node.id, title, url, type },
     });
-    await captureResourceKnowledge(transaction, roadmap.id, editor.userId, resource, null);
     await report({
       actorId: editor.userId,
       identifier: editor.identifier,
@@ -127,7 +100,6 @@ async function uploadRoadmapResourceUnsafe(
           fileContentType: file.type || null,
         },
       });
-      await captureResourceKnowledge(transaction, roadmap.id, editor.userId, resource, null);
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -170,8 +142,6 @@ async function updateRoadmapResourceUnsafe(
     const changed = Object.entries(data).some(
       ([field, value]) => resource[field as 'title' | 'url' | 'type'] !== value,
     );
-    if (changed)
-      await captureResourceKnowledge(transaction, roadmap.id, editor.userId, resource, resource);
     const updated = changed
       ? await transaction.resource.update({ where: { id: resource.id }, data })
       : resource;
@@ -201,7 +171,6 @@ async function removeRoadmapResourceUnsafe(
   const deleted = await roadmapChangeTransaction(changePort, async (transaction, report) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
-    await captureResourceKnowledge(transaction, roadmap.id, editor.userId, resource, resource);
     await transaction.resource.delete({ where: { id: resource.id } });
     await report({
       actorId: editor.userId,

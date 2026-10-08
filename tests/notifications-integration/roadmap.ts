@@ -11,8 +11,11 @@ import {
 } from '@/features/notifications/server';
 import {
   createRoadmapNode,
+  createRoadmapResource,
   deleteRoadmapNode,
+  removeRoadmapResource,
   updateRoadmapNode,
+  updateRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import type { IntegrationCourse } from './fixtures';
@@ -48,6 +51,14 @@ export function teacherEdits(
     update: (nodeId: string, input: Record<string, unknown>) =>
       confirmed(updateRoadmapNode({ ...editor, id: nodeId, input }, port)),
     remove: (nodeId: string) => confirmed(deleteRoadmapNode({ ...editor, id: nodeId }, port)),
+    addResource: (nodeId: string, title: string, url = 'https://example.test/guide') =>
+      confirmed(
+        createRoadmapResource({ ...editor, id: nodeId, input: { title, url, type: 'LINK' } }, port),
+      ),
+    editResource: (resourceId: string, input: Record<string, unknown>) =>
+      confirmed(updateRoadmapResource({ ...editor, id: resourceId, input }, port)),
+    removeResource: (resourceId: string) =>
+      confirmed(removeRoadmapResource({ ...editor, id: resourceId }, port)),
   };
 }
 

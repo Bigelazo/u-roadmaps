@@ -3,6 +3,5 @@ export type {
   RoadmapAvailabilityRecipient,
 } from './roadmap-availability';
 export type { NodeChangeNotice, NodeChangeRecipient } from './node-change';
-export type { ResourceChangeNotice } from './node-change';
 export type { RoadmapPathChangeNotice } from './path-change';
 export type { RoadmapClassificationChangeNotice } from './roadmap-classification-change';

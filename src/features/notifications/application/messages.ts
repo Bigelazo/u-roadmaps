@@ -1,6 +1,5 @@
 import type {
   NodeChangeNotice,
-  ResourceChangeNotice,
   RoadmapPathChangeNotice,
   RoadmapClassificationChangeNotice,
 } from '../contracts';
@@ -26,12 +25,6 @@ export function nodeMessage(notice: NodeChangeNotice) {
     noticeBody: body,
     label,
   };
-}
-
-export function resourceMessage(notice: ResourceChangeNotice) {
-  const noticeTitle = `Cambio de recurso: ${notice.resourceTitle}`;
-  const noticeBody = `${notice.actorName} modificó un recurso en un Nodo del Roadmap de ${notice.courseCode}.`;
-  return { noticeTitle, noticeBody };
 }
 
 export function roadmapPathChangeMessage(notice: RoadmapPathChangeNotice) {

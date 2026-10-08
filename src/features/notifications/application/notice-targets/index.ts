@@ -1,19 +1,25 @@
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import type { NoticeTargetDescriptor, TargetValues, TargetWording } from './descriptor';
 import { nodeTitleTarget } from './node-title';
+import { resourceTarget } from './resource';
 
 export type {
+  NoticeReadSide,
   NoticeTargetDescriptor,
   NoticeTargetRef,
   RoadmapView,
   RoadmapViewNode,
+  RoadmapViewResource,
   TargetCurrent,
   TargetValues,
   TargetWording,
 } from './descriptor';
 
 /** Every Notice target kind handled by the notice lifecycle module (ADR-0024). */
-export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [nodeTitleTarget];
+export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [
+  nodeTitleTarget,
+  resourceTarget,
+];
 
 export function descriptorForFact(fact: RoadmapChangeFact) {
   return noticeTargetDescriptors.find((descriptor) => descriptor.matches(fact)) ?? null;

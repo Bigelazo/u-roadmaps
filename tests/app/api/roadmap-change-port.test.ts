@@ -2,7 +2,6 @@ import { beforeEach, expect, test, vi } from 'vitest';
 const {
   afterTasks,
   deliverNodeChange,
-  deliverResourceChange,
   deliverRoadmapAvailability,
   deliverRoadmapPathChange,
   deliverRoadmapClassificationChange,
@@ -11,7 +10,6 @@ const {
   deliverNodeChange: vi.fn<typeof import('@/features/notifications/server').deliverNodeChange>(
     async () => undefined,
   ),
-  deliverResourceChange: vi.fn(async () => undefined),
   deliverRoadmapAvailability: vi.fn(async () => undefined),
   deliverRoadmapPathChange: vi.fn(async () => undefined),
   deliverRoadmapClassificationChange: vi.fn(async () => undefined),
@@ -20,7 +18,6 @@ vi.mock('next/server', () => ({ after: (task: () => Promise<void>) => afterTasks
 vi.mock('@/features/notifications/server', () => ({
   recordRoadmapNotices: async () => undefined,
   deliverNodeChange,
-  deliverResourceChange,
   deliverRoadmapAvailability,
   deliverRoadmapPathChange,
   deliverRoadmapClassificationChange,
@@ -129,20 +126,23 @@ test('one delivery failure does not prevent later facts from reaching their entr
     facts: [
       ...changes.facts,
       {
-        kind: 'resource',
-        nodeId: 'node',
-        resourceId: 'resource',
+        kind: 'roadmap-created',
         previous: null,
-        current: { title: 'Guía', revision: 'revision' },
+        current: {
+          courseOfferingId: 'offering',
+          courseName: 'Estructuras de Datos',
+          actorName: 'Docente',
+          occurredAt: new Date(),
+          recipients: [{ userId: 'student', name: 'Estudiante' }],
+        },
       },
     ],
   });
   if (commit) await commit();
-  expect(deliverResourceChange).toHaveBeenCalledWith(
+  expect(deliverRoadmapAvailability).toHaveBeenCalledWith(
     expect.objectContaining({
-      resourceId: 'resource',
-      previousResource: null,
-      changeKind: 'resource-added',
+      roadmapId: 'roadmap',
+      recipients: [{ userId: 'student', name: 'Estudiante' }],
     }),
     expect.any(Function),
   );

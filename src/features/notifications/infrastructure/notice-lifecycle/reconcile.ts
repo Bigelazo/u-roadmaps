@@ -68,7 +68,11 @@ export async function reconcileNoticeTarget(
   const occurredAt = new Date(
     Math.max(input.occurredAt.getTime(), pending?.occurredAt.getTime() ?? 0),
   );
-  const values = { knownValue: result.knownValue, currentValue: result.currentValue, context: {} };
+  const values = {
+    knownValue: result.knownValue,
+    currentValue: result.currentValue,
+    context: current.context ?? {},
+  };
   const wording = descriptor.wording(values);
   const envelope = await input.envelope();
   const row = {
@@ -82,6 +86,7 @@ export async function reconcileNoticeTarget(
       noticeClass: descriptor.noticeClass,
       noticeTarget: descriptor.noticeTarget,
       ...descriptor.readSide,
+      ...descriptor.valueReadSide?.(values),
       ...values,
       occurredAt: occurredAt.toISOString(),
       eventCount: 1,
