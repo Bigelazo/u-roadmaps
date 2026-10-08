@@ -9,7 +9,6 @@ import type {
 } from '@/features/roadmap/server';
 import {
   deliverNodeChange,
-  deliverResourceChange,
   deliverRoadmapAvailability,
   recordRoadmapNotices,
   type NoticeDeliveryScheduler,
@@ -144,24 +143,6 @@ async function deliver(
               scheduleDelivery,
             );
           break;
-        case 'resource':
-          await deliverResourceChange(
-            {
-              userId: actorId,
-              identifier,
-              nodeId: fact.nodeId,
-              resourceId: fact.resourceId,
-              resourceTitle: (fact.current ?? fact.previous)!.title,
-              previousResource: fact.previous,
-              changeKind: !fact.previous
-                ? 'resource-added'
-                : !fact.current
-                  ? 'resource-removed'
-                  : 'resource-updated',
-            },
-            scheduleDelivery,
-          );
-          break;
         case 'roadmap-created':
           await deliverRoadmapAvailability(
             {
@@ -177,6 +158,7 @@ async function deliver(
           break;
         // Owned by the notice lifecycle module.
         case 'node-title':
+        case 'resource':
         case 'dependency':
         case 'node-type-name':
           break;

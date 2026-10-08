@@ -12,12 +12,21 @@ export type RoadmapViewNode = Readonly<{
   nodeTypeId: string;
 }>;
 
+/** A Resource's pedagogical label and opaque content revision (never its URL or file). */
+export type RoadmapViewResource = Readonly<{
+  id: string;
+  nodeId: string;
+  title: string;
+  revision: string;
+}>;
+
 /** What a descriptor may read about one Roadmap; the module implements it over a transaction. */
 export interface RoadmapView {
   readonly roadmapId: string;
   /** Active Participations, including the actor of the change. */
   participants(): Promise<readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[]>;
   node(nodeId: string): Promise<RoadmapViewNode | null>;
+  resource(resourceId: string): Promise<RoadmapViewResource | null>;
   /** Nodes accessible to the participant (ADR-0014 decision 10 "accessible"). */
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
   /** The Dependency between an ordered pair of this Roadmap's Nodes, if any. */
@@ -29,7 +38,7 @@ export interface RoadmapView {
 
 /**
  * The live value of a target; `visible` is its visibility gate for creating or updating
- * notices, and `context` the live presentation context (e.g. Node titles) it is worded with.
+ * notices, and `context` the live presentation context (e.g. Node titles) stored with the notice.
  */
 export type TargetCurrent = Readonly<{
   value: string;
@@ -57,16 +66,20 @@ export type TargetWording = Readonly<{
  * audience (ADR-0014 decision 10), visibility gate, equality and wording.
  * Values are encoded strings; equality is exact string equality.
  */
+export type NoticeReadSide = Readonly<{
+  changeKind: string;
+  changedFields: readonly string[];
+  targetKind: 'node' | 'roadmap';
+}>;
+
 export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapChangeFact> {
   /** Stored as `data.noticeTarget`; also selects the descriptor at read time. */
   readonly noticeTarget: string;
   readonly noticeClass: NoticeClass;
   /** Read-side discriminators the Inbox SQL, grouping and counts still use. */
-  readonly readSide: Readonly<{
-    changeKind: string;
-    changedFields: readonly string[];
-    targetKind: 'node' | 'roadmap';
-  }>;
+  readonly readSide: NoticeReadSide;
+  /** Read-side discriminators that depend on the stored values (stored over `readSide`). */
+  valueReadSide?(values: TargetValues): Partial<NoticeReadSide>;
   matches(fact: RoadmapChangeFact): fact is F;
   target(fact: F): NoticeTargetRef;
   /** The value recipients knew before the change. */
@@ -79,8 +92,8 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   current(target: NoticeTargetRef, roadmap: RoadmapView): Promise<TargetCurrent | null>;
   /** Presentation context only the change itself knows (e.g. a removed Dependency's id). */
   factContext?(fact: F): Readonly<Record<string, unknown>>;
-  /** Discriminators the read side (Inbox SQL and TS visibility) reads from stored `data`. */
-  storedData?(target: NoticeTargetRef, values: TargetValues): Readonly<Record<string, unknown>>;
+  /** Target identity the read side (Inbox SQL and TS visibility) reads from stored `data`. */
+  storedData?(target: NoticeTargetRef): Readonly<Record<string, unknown>>;
   wording(values: TargetValues): TargetWording;
   /** Fields the notice API exposes in `data` besides the stored values. */
   apiData(values: TargetValues): Readonly<Record<string, unknown>>;

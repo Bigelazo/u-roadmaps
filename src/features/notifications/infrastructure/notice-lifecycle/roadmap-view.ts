@@ -1,6 +1,11 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
-import type { RoadmapView, RoadmapViewNode } from '../../application/notice-targets';
+import { resourceContentState } from '@/shared/server/resource-content-state';
+import type {
+  RoadmapView,
+  RoadmapViewNode,
+  RoadmapViewResource,
+} from '../../application/notice-targets';
 
 export type NodeAccessReader = (
   transaction: Prisma.TransactionClient,
@@ -16,6 +21,7 @@ export function roadmapView(
 ): RoadmapView {
   let participants: ReturnType<RoadmapView['participants']> | undefined;
   const nodes = new Map<string, Promise<RoadmapViewNode | null>>();
+  const resources = new Map<string, Promise<RoadmapViewResource | null>>();
   const accessible = new Map<string, Promise<ReadonlySet<string>>>();
   const nodeTypes = new Map<string, ReturnType<RoadmapView['nodeType']>>();
   return {
@@ -44,6 +50,18 @@ export function roadmapView(
         nodes.set(nodeId, node);
       }
       return node;
+    },
+    resource(resourceId) {
+      let resource = resources.get(resourceId);
+      if (!resource) {
+        resource = transaction.resource
+          .findFirst({ where: { id: resourceId, roadmapNode: { roadmapId } } })
+          .then((row) =>
+            row ? { id: row.id, nodeId: row.roadmapNodeId, ...resourceContentState(row) } : null,
+          );
+        resources.set(resourceId, resource);
+      }
+      return resource;
     },
     accessibleNodeIds(userId) {
       if (!accessibleNodes) throw new Error('Node access is not available in this view.');

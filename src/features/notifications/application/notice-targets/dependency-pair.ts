@@ -58,10 +58,8 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
     };
   },
   factContext: (fact) => ({ dependencyId: fact.dependencyId }),
-  storedData: (target, { currentValue }) => ({
-    ...dependencyPair(target),
-    changeKind: changeKind(currentValue),
-  }),
+  valueReadSide: ({ currentValue }) => ({ changeKind: changeKind(currentValue) }),
+  storedData: dependencyPair,
   wording: ({ currentValue, context }) => ({
     subject: 'Ruta actualizada',
     body: `«${String(context.dependentNodeTitle)}» ${currentValue === 'true' ? 'ahora requiere' : 'ya no requiere'} «${String(context.prerequisiteNodeTitle)}».`,

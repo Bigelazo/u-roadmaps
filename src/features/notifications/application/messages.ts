@@ -1,4 +1,4 @@
-import type { NodeChangeNotice, ResourceChangeNotice } from '../contracts';
+import type { NodeChangeNotice } from '../contracts';
 
 export function nodeMessage(notice: NodeChangeNotice) {
   const label =
@@ -21,10 +21,4 @@ export function nodeMessage(notice: NodeChangeNotice) {
     noticeBody: body,
     label,
   };
-}
-
-export function resourceMessage(notice: ResourceChangeNotice) {
-  const noticeTitle = `Cambio de recurso: ${notice.resourceTitle}`;
-  const noticeBody = `${notice.actorName} modificó un recurso en un Nodo del Roadmap de ${notice.courseCode}.`;
-  return { noticeTitle, noticeBody };
 }

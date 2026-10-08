@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
-import { nodeMessage, resourceMessage } from '../application/messages';
+import { nodeMessage } from '../application/messages';
 import {
   queryInboxPage,
   queryInboxCounts,
@@ -19,16 +19,11 @@ import { deliverNotice } from './notice-delivery';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import { targetOpeningSnapshots, recognizeTargetSnapshots } from './notice-lifecycle';
 import { projectTargetNotice } from '../application/notice-targets';
-import { resourceOpeningSnapshots, recognizeResourceSnapshots } from './resource-notice';
 import { contentOpeningSnapshots, recognizeContentSnapshots } from './node-content-notice';
 import { absorptionOpeningSnapshots, recognizeAbsorptionSnapshots } from './absorption-recognition';
-import type {
-  NodeChangeNotice,
-  RoadmapAvailabilityNotice,
-  ResourceChangeNotice,
-} from '../contracts';
+import type { NodeChangeNotice, RoadmapAvailabilityNotice } from '../contracts';
 
-type Notice = RoadmapAvailabilityNotice | NodeChangeNotice | ResourceChangeNotice;
+type Notice = RoadmapAvailabilityNotice | NodeChangeNotice;
 
 const deliveryFailureMessage: Record<NoticeClass, string> = {
   'roadmap-available': 'Roadmap availability delivery failed',
@@ -131,21 +126,6 @@ export function storeNodeChange(
     {
       ...nodeMessage(notice),
       targetKind: notice.targetKind ?? 'node',
-    },
-    scheduleDelivery,
-  );
-}
-
-export function storeResourceChange(
-  notice: ResourceChangeNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-resource-changed',
-    {
-      ...resourceMessage(notice),
-      targetKind: 'node',
     },
     scheduleDelivery,
   );
@@ -342,7 +322,6 @@ export async function prepareOwnNoticeOpening(
         noticeIds: notices.map(({ id }) => id),
         snapshots: targetOpeningSnapshots(notices),
         contentSnapshots: contentOpeningSnapshots(notices),
-        resourceSnapshots: resourceOpeningSnapshots(notices),
         absorptionSnapshots: await absorptionOpeningSnapshots(
           transaction,
           userId,
@@ -411,12 +390,6 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       },
       data: { acknowledgedAt: new Date() },
     });
-    const resourceCount = await recognizeResourceSnapshots(transaction, {
-      recipientId: userId,
-      roadmapId,
-      operationId,
-      snapshots: retained.resourceSnapshots,
-    });
     const contentCount = await recognizeContentSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
@@ -436,7 +409,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       snapshots: retained.absorptionSnapshots,
     });
     const summary =
-      visited && result.count + absorptionCount + targetCount + contentCount + resourceCount > 0
+      visited && result.count + absorptionCount + targetCount + contentCount > 0
         ? (retained.summary as ChangeSummary | null)
         : null;
     await transaction.noticeAcknowledgement.update({
@@ -444,7 +417,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
     return {
-      count: result.count + absorptionCount + targetCount + contentCount + resourceCount,
+      count: result.count + absorptionCount + targetCount + contentCount,
       summary,
     };
   });

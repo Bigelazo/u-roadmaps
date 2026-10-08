@@ -13,9 +13,12 @@ import {
   createRoadmapDependency,
   createRoadmapNode,
   deleteRoadmapDependency,
+  createRoadmapResource,
   deleteRoadmapNode,
+  removeRoadmapResource,
   updateRoadmapNode,
   updateRoadmapNodeType,
+  updateRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import type { IntegrationCourse } from './fixtures';
@@ -61,6 +64,14 @@ export function teacherEdits(
       confirmed(deleteRoadmapDependency({ ...editor, id: dependencyId }, port)),
     updateType: (nodeTypeId: string, input: Record<string, unknown>) =>
       confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input }, port)),
+    addResource: (nodeId: string, title: string, url = 'https://example.test/guide') =>
+      confirmed(
+        createRoadmapResource({ ...editor, id: nodeId, input: { title, url, type: 'LINK' } }, port),
+      ),
+    editResource: (resourceId: string, input: Record<string, unknown>) =>
+      confirmed(updateRoadmapResource({ ...editor, id: resourceId, input }, port)),
+    removeResource: (resourceId: string) =>
+      confirmed(removeRoadmapResource({ ...editor, id: resourceId }, port)),
   };
 }
 

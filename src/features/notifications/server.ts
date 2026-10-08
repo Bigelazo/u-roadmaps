@@ -1,20 +1,14 @@
 import 'server-only';
 
-import type { ResourceNoticeState } from './contracts/resource-state';
 import { randomUUID } from 'node:crypto';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
-import type {
-  NodeChangeNotice,
-  RoadmapAvailabilityNotice,
-  ResourceChangeNotice,
-} from './contracts';
+import type { NodeChangeNotice, RoadmapAvailabilityNotice } from './contracts';
 import {
   type NoticeDeliveryScheduler,
   listOwnNotices as listNotices,
   storeRoadmapAvailability,
   storeNodeChange,
-  storeResourceChange,
   findOwnNotice,
   noticeRecord,
   countOwnNoticeTargets,
@@ -301,64 +295,6 @@ export async function deliverNodeChange(
     await storeNodeChange({ ...notice, changedFields }, scheduleDelivery).catch(() => {
       console.warn('Node notice delivery failed', { eventId: notice.eventId });
     });
-  }
-}
-
-export async function deliverResourceChange(
-  input: {
-    userId: string;
-    identifier: { courseCode: string; year: number; semester: number };
-    nodeId: string;
-    resourceTitle: string;
-    resourceId?: string;
-    previousResource?: ResourceNoticeState | null;
-    changeKind: ResourceChangeNotice['changeKind'];
-  },
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  try {
-    const node = await prisma.roadmapNode.findUnique({
-      where: { id: input.nodeId },
-      include: { roadmap: { include: { courseOffering: { include: { course: true } } } } },
-    });
-    if (!node) return;
-    const offering = node.roadmap.courseOffering;
-    if (
-      offering.courseCode !== input.identifier.courseCode ||
-      offering.year !== input.identifier.year ||
-      offering.semester !== input.identifier.semester
-    )
-      return;
-    const recipients = await eligibleNodeRecipients({
-      node,
-      courseOfferingId: offering.id,
-      actorId: input.userId,
-    });
-    if (!recipients.length) return;
-    const notice: ResourceChangeNotice = {
-      eventId: randomUUID(),
-      roadmapId: node.roadmapId,
-      courseOfferingId: offering.id,
-      courseCode: offering.courseCode,
-      year: offering.year,
-      semester: offering.semester,
-      courseName: offering.course.name,
-      nodeId: node.id,
-      nodeTitle: node.title,
-      resourceTitle: input.resourceTitle,
-      resourceId: input.resourceId,
-      previousResource: input.previousResource,
-      changeKind: input.changeKind,
-      actorId: input.userId,
-      actorName:
-        (await prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }))
-          ?.name ?? 'Equipo docente',
-      occurredAt: new Date(),
-      recipients,
-    };
-    await storeResourceChange(notice, scheduleDelivery);
-  } catch {
-    console.warn('Resource notice delivery failed', { nodeId: input.nodeId });
   }
 }
 
