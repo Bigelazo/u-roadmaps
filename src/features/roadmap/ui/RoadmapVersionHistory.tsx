@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { History } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { buttonVariants } from '@/shared/ui/button';
-import { originLabel, positionLabels } from '@/features/roadmap/ui/version-labels';
+import { creatorLabel, originLabel, positionLabels } from '@/features/roadmap/ui/version-labels';
 import { versionUrl } from '@/shared/version-history-url';
 import type { RoadmapVersionHistory as VersionHistory } from '@/features/roadmap/server';
 
@@ -47,7 +47,7 @@ export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHi
                 </div>
                 <dl className="grid gap-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
                   <dt className="font-semibold">Creada por</dt>
-                  <dd>{version.creator?.name ?? 'Sin registro'}</dd>
+                  <dd>{creatorLabel(version.creator)}</dd>
                   <dt className="font-semibold">Equipo docente</dt>
                   <dd>
                     {version.teachingStaff.length === 0 ? (

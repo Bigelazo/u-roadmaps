@@ -6,21 +6,26 @@ export type CourseOfferingIdentifierParams = Readonly<{
   semester: string;
 }>;
 
-export function parseCourseOfferingIdentifier(
-  params: CourseOfferingIdentifierParams,
-): CourseOfferingIdentifier | null {
+/** The canonical Course code of a route parameter, or null when it cannot be one. */
+export function parseCourseCode(param: string): string | null {
   let courseCode: string;
   try {
-    courseCode = decodeURIComponent(params.courseCode).trim();
+    courseCode = decodeURIComponent(param).trim();
   } catch {
     return null;
   }
+  return courseCode && courseCode.length <= 20 ? courseCode : null;
+}
+
+export function parseCourseOfferingIdentifier(
+  params: CourseOfferingIdentifierParams,
+): CourseOfferingIdentifier | null {
+  const courseCode = parseCourseCode(params.courseCode);
   const year = Number(params.year);
   const semester = Number(params.semester);
 
   if (
     !courseCode ||
-    courseCode.length > 20 ||
     !Number.isInteger(year) ||
     year < 1 ||
     !Number.isInteger(semester) ||

@@ -29,6 +29,17 @@ describe('versionHistoryHorizon', () => {
     ).toEqual({ year: 2025, semester: 1 });
   });
 
+  it('advances to a later term when the person rejoins the teaching staff', () => {
+    expect(
+      versionHistoryHorizon([
+        teaching(2024, 2),
+        { year: 2025, semester: 1, role: 'STUDENT', isActive: true },
+        teaching(2025, 2, false),
+        teaching(2026, 2),
+      ]),
+    ).toEqual({ year: 2026, semester: 2 });
+  });
+
   it('is absent without an active teaching-staff Participation', () => {
     expect(versionHistoryHorizon([teaching(2026, 1, false)])).toBeNull();
     expect(versionHistoryHorizon([])).toBeNull();

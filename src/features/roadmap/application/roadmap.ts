@@ -2,7 +2,11 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '../domain/closure';
-import { planRoadmapCopy, type RoadmapCopySource } from '../domain/roadmap-copy';
+import {
+  planRoadmapCopy,
+  resourcesWithStoredFiles,
+  type RoadmapCopySource,
+} from '../domain/roadmap-copy';
 import type { VersionIdentifier } from '@/shared/version-history-url';
 import {
   copyUploadedFile,
@@ -277,24 +281,31 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
   };
 }
 
-/** The optional frozen version to copy, as `{ courseCode, year, semester }`. */
-function parseCopySource(value: unknown): VersionIdentifier | undefined {
+/**
+ * The optional frozen version to copy, identified by its Academic term as
+ * `{ year, semester }`. A `courseCode` defaults to the target's own Course.
+ */
+function parseCopySource(
+  value: unknown,
+  identifier: CourseOfferingIdentifier,
+): VersionIdentifier | undefined {
   if (value === undefined || value === null) return undefined;
   const source = value as JsonObject;
   if (
     typeof value !== 'object' ||
     Array.isArray(value) ||
-    typeof source.courseCode !== 'string' ||
+    (source.courseCode !== undefined && typeof source.courseCode !== 'string') ||
     !Number.isInteger(source.year) ||
     !Number.isInteger(source.semester)
   )
     throw new ApplicationError(
       400,
       'INVALID_REQUEST',
-      'source debe identificar una versión con courseCode, year y semester.',
+      'source debe identificar una versión con year y semester.',
     );
   return {
-    courseCode: source.courseCode.trim(),
+    courseCode:
+      typeof source.courseCode === 'string' ? source.courseCode.trim() : identifier.courseCode,
     year: source.year as number,
     semester: source.semester as number,
   };
@@ -304,11 +315,24 @@ function parseCopySource(value: unknown): VersionIdentifier | undefined {
 function fileCopyLedger() {
   const copied: string[] = [];
   return {
-    /** Duplicates the bytes; false when the source file is missing from storage. */
-    async copy(sourceFileKey: string, fileKey: string) {
-      const stored = await copyUploadedFile(sourceFileKey, fileKey);
-      if (stored) copied.push(fileKey);
-      return stored;
+    /**
+     * Duplicates every file's bytes and returns the keys stored; a source file
+     * missing from storage is skipped. Waits for every copy before failing, so
+     * no copy finishes after a rollback.
+     */
+    async copyAll(copies: readonly { sourceFileKey: string; fileKey: string }[]) {
+      // Fresh keys are only ever ours, and a failed copy can leave partial bytes.
+      copied.push(...copies.map(({ fileKey }) => fileKey));
+      const results = await Promise.allSettled(
+        copies.map(({ sourceFileKey, fileKey }) => copyUploadedFile(sourceFileKey, fileKey)),
+      );
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure) throw failure.reason;
+      return new Set(
+        copies
+          .filter((_, index) => (results[index] as PromiseFulfilledResult<boolean>).value)
+          .map(({ fileKey }) => fileKey),
+      );
     },
     rollback() {
       return Promise.all(
@@ -330,23 +354,25 @@ type FileCopyLedger = ReturnType<typeof fileCopyLedger>;
 async function persistRoadmapCopy(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
-  sourceRoadmapId: string,
+  sourceVersion: { roadmapId: string; year: number; semester: number },
   source: RoadmapCopySource,
   files: FileCopyLedger,
 ) {
   const plan = planRoadmapCopy(source, roadmapId, randomUUID);
-  const stored = await Promise.all(
-    plan.fileCopies.map(({ sourceFileKey, fileKey }) => files.copy(sourceFileKey, fileKey)),
-  );
-  const missing = new Set(
-    plan.fileCopies.filter((_, index) => !stored[index]).map(({ resourceId }) => resourceId),
-  );
-  await transaction.roadmap.update({ where: { id: roadmapId }, data: { sourceRoadmapId } });
+  const storedFileKeys = await files.copyAll(plan.fileCopies);
+  await transaction.roadmap.update({
+    where: { id: roadmapId },
+    data: {
+      sourceRoadmapId: sourceVersion.roadmapId,
+      sourceYear: sourceVersion.year,
+      sourceSemester: sourceVersion.semester,
+    },
+  });
   await transaction.nodeType.createMany({ data: plan.nodeTypes });
   await transaction.roadmapNode.createMany({ data: plan.nodes });
   await transaction.dependency.createMany({ data: plan.dependencies });
   await transaction.resource.createMany({
-    data: plan.resources.filter(({ id }) => !missing.has(id)),
+    data: resourcesWithStoredFiles(plan.resources, storedFileKeys),
   });
 }
 
@@ -407,7 +433,7 @@ async function copyFrozenVersion(
   await persistRoadmapCopy(
     transaction,
     roadmapId,
-    sourceRoadmap.id,
+    { roadmapId: sourceRoadmap.id, year: source.year, semester: source.semester },
     {
       customNodeTypes: sourceRoadmap.nodeTypes,
       nodes: sourceRoadmap.roadmapNodes,
@@ -421,6 +447,9 @@ async function copyFrozenVersion(
 // Copying file bytes inside the transaction can outlast Prisma's 5 s default.
 const copyTransactionOptions = { timeout: 30_000 };
 
+const roadmapConflict = () =>
+  new ApplicationError(409, 'ROADMAP_CONFLICT', 'Ya existe un roadmap para este curso.');
+
 // El curso puede llegar sin descripción cuando ya está materializado desde
 // U-Campus. En ese caso conserva el nombre y el departamento registrados.
 async function createRoadmapUnsafe(
@@ -432,7 +461,7 @@ async function createRoadmapUnsafe(
     body.course && typeof body.course === 'object' && !Array.isArray(body.course)
       ? (body.course as JsonObject)
       : undefined;
-  const source = parseCopySource(body.source);
+  const source = parseCopySource(body.source, identifier);
   const files = fileCopyLedger();
 
   try {
@@ -447,12 +476,7 @@ async function createRoadmapUnsafe(
             include: { roadmap: true },
           }),
         ]);
-        if (existingCourseOffering?.roadmap)
-          throw new ApplicationError(
-            409,
-            'ROADMAP_CONFLICT',
-            'Ya existe un roadmap para este curso.',
-          );
+        if (existingCourseOffering?.roadmap) throw roadmapConflict();
         const term = await transaction.academicTerm.findUnique({
           where: { year_semester: { year: identifier.year, semester: identifier.semester } },
         });
@@ -525,6 +549,9 @@ async function createRoadmapUnsafe(
       },
     };
   } catch (error) {
+    // A concurrent creation (double click, two tabs) committed first.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+      throw roadmapConflict();
     handlePrismaError(error);
   }
 }

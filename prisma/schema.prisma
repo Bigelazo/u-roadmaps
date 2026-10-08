@@ -37,6 +37,9 @@ model Roadmap {
   // The closed version this Roadmap was copied from; absent for empty Roadmaps.
   sourceRoadmapId        String?                       @db.Uuid
   sourceRoadmap          Roadmap?                      @relation("RoadmapCopies", fields: [sourceRoadmapId], references: [id], onDelete: SetNull)
+  // The source version's Academic term, kept when the source Roadmap is later removed.
+  sourceYear             Int?
+  sourceSemester         Int?
   copies                 Roadmap[]                     @relation("RoadmapCopies")
   courseOfferingId       String                        @unique @db.Uuid
   courseOffering         CourseOffering                @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)

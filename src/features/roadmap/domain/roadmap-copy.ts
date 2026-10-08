@@ -6,13 +6,6 @@ export function normalizeName(name: string): string {
   return name.trim().toLocaleLowerCase('es-CL');
 }
 
-/**
- * Maps a frozen version's content onto a new Roadmap. Visible Nodes start
- * Teacher-blocked, hidden Nodes stay hidden and unblocked, Scheduled unlocks are
- * dropped, Custom node types are copied and Predefined node types stay shared.
- * File Resources get new file keys; `fileCopies` lists the bytes to duplicate.
- */
-
 export type RoadmapCopySource = Readonly<{
   customNodeTypes: readonly { id: string; name: string; icon: string; color: string }[];
   nodes: readonly {
@@ -40,6 +33,12 @@ export type RoadmapCopySource = Readonly<{
   }[];
 }>;
 
+/**
+ * Maps a frozen version's content onto a new Roadmap. Visible Nodes start
+ * Teacher-blocked, hidden Nodes stay hidden and unblocked, Scheduled unlocks are
+ * dropped, Custom node types are copied and Predefined node types stay shared.
+ * File Resources get new file keys; `fileCopies` lists the bytes to duplicate.
+ */
 export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, newId: () => string) {
   const remap = (ids: readonly { id: string }[]) => new Map(ids.map(({ id }) => [id, newId()]));
   const typeIds = remap(source.customNodeTypes);
@@ -49,7 +48,7 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
     if (!copied) throw new Error(`Node ${id} is not part of the copied Roadmap.`);
     return copied;
   };
-  const fileCopies: { resourceId: string; sourceFileKey: string; fileKey: string }[] = [];
+  const fileCopies: { sourceFileKey: string; fileKey: string }[] = [];
   const resources = source.resources.map((resource) => {
     const copied = {
       id: newId(),
@@ -67,7 +66,7 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
         fileKey,
         fileContentType: resource.fileContentType ?? null,
       });
-      fileCopies.push({ resourceId: copied.id, sourceFileKey: resource.fileKey, fileKey });
+      fileCopies.push({ sourceFileKey: resource.fileKey, fileKey });
     }
     return copied;
   });
@@ -103,4 +102,12 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
     resources,
     fileCopies,
   };
+}
+
+/** The planned Resources to create once bytes are copied; a file missing from storage omits its Resource. */
+export function resourcesWithStoredFiles<T extends { fileKey: string | null }>(
+  resources: readonly T[],
+  storedFileKeys: ReadonlySet<string>,
+) {
+  return resources.filter(({ fileKey }) => !fileKey || storedFileKeys.has(fileKey));
 }

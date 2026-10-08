@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { ExternalLink, Plus } from 'lucide-react';
 import { roadmapUrl, versionUrl } from '@/features/roadmap/client';
-import { originLabel } from '@/features/roadmap/ui/version-labels';
+import { creatorLabel, originLabel } from '@/features/roadmap/ui/version-labels';
 import { versionHistoryApiUrl } from '@/shared/version-history-url';
 import type { RoadmapVersionHistory } from '@/features/roadmap/server';
 import { Button } from '@/shared/ui/button';
@@ -82,7 +82,7 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
-        version ? { source: { courseCode, year: version.year, semester: version.semester } } : {},
+        version ? { source: { year: version.year, semester: version.semester } } : {},
       ),
     }).catch(() => null);
     if (!response?.ok) {
@@ -143,7 +143,7 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
                     <span className="grid min-w-0">
                       <span className="font-medium">{version.edition}</span>
                       <span className="text-xs text-muted-foreground">
-                        {version.creator?.name ?? 'Sin registro'} · {originLabel(version.origin)}
+                        {creatorLabel(version.creator)} · {originLabel(version.origin)}
                       </span>
                     </span>
                   </label>

@@ -75,6 +75,9 @@ function CourseRow({
     : course.role === 'TEACHER'
       ? { label: 'Equipo docente', accentClass: 'border-l-[#1d3193]' }
       : { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' };
+  // Teaching staff who cannot create the Roadmap still reach the version history.
+  const awaitsCreation =
+    course.role === 'TEACHER' && !course.hasRoadmap && !course.canCreateRoadmap && !isPastTerm;
 
   return (
     <li className={`min-w-0 border-l-4 ${position.accentClass}`}>
@@ -139,8 +142,12 @@ function CourseRow({
               semester: course.semester,
               year: course.year,
             })
+          ) : awaitsCreation ? (
+            <p className="max-w-56 text-sm text-muted-foreground">
+              Solo el profesor de cátedra puede crear el roadmap.
+            </p>
           ) : null}
-          {isPastTerm && course.role === 'TEACHER' ? (
+          {(isPastTerm && course.role === 'TEACHER') || awaitsCreation ? (
             <Link
               aria-label={`Historial de versiones de ${course.name}`}
               className={buttonVariants({ variant: 'outline', className: 'min-h-11' })}

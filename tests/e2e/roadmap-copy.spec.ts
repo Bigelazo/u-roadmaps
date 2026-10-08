@@ -116,10 +116,9 @@ const copyScenario = test.extend<{
   },
 });
 
+/** The creation body copying a version of the same Course, named by its Academic term. */
 function sourceOf(offering: E2ECourseOffering) {
-  return {
-    source: { courseCode: offering.courseCode, year: offering.year, semester: offering.semester },
-  };
+  return { source: { year: offering.year, semester: offering.semester } };
 }
 
 copyScenario(
@@ -207,6 +206,24 @@ copyScenario(
       closed.year,
       next.year,
     ]);
+
+    // Removing the source Roadmap keeps the recorded origin and lineage.
+    const sourceFileKey = await fileKeyOf(fileResources(source)[0]!.id);
+    await sql(`DELETE FROM "Roadmap" WHERE "id" = ${literal(closed.roadmapId!)};`);
+    await rm(join(uploadsDirectory(), sourceFileKey), { force: true });
+    const afterRemoval = await (
+      await api.get(`/api/${next.courseCode}/versions/${next.year}/${next.semester}`)
+    ).json();
+    expect(afterRemoval.version.origin).toEqual({
+      kind: 'COPY',
+      year: closed.year,
+      semester: closed.semester,
+      edition: `Edición ${closed.year}-${closed.semester}`,
+    });
+    expect(afterRemoval.version.lineage.map(({ year }: { year: number }) => year)).toEqual([
+      closed.year,
+      next.year,
+    ]);
   },
 );
 
@@ -264,15 +281,23 @@ copyScenario(
       participants: [{ user: course.users.teacher, role: 'TEACHER' }],
     });
     const professor = await apiAs(course.users.teacher);
-    for (const [offering, status] of [
-      [open, 409],
-      [otherCourse, 404],
-      [{ ...closed, semester: closed.semester + 1 }, 404],
+    for (const [source, status, code] of [
+      [sourceOf(open).source, 409, 'VERSION_NOT_CLOSED'],
+      [
+        {
+          courseCode: otherCourse.courseCode,
+          year: otherCourse.year,
+          semester: otherCourse.semester,
+        },
+        404,
+        'VERSION_NOT_FOUND',
+      ],
+      [{ year: closed.year, semester: closed.semester + 1 }, 404, 'VERSION_NOT_FOUND'],
+      [{ year: 'anterior', semester: closed.semester }, 400, 'INVALID_REQUEST'],
     ] as const) {
-      const refused = await professor.post(next.apiPath(), {
-        data: sourceOf(offering as E2ECourseOffering),
-      });
+      const refused = await professor.post(next.apiPath(), { data: { source } });
       expect(refused.status()).toBe(status);
+      expect((await refused.json()).error.code).toBe(code);
     }
     expect(Number(await roadmapCount(next))).toBe(0);
   },
@@ -282,12 +307,14 @@ copyScenario(
   'concurrent copy requests create exactly one Roadmap',
   async ({ course, scenario, apiAs }) => {
     const api = await apiAs(course.users.teacher);
-    const statuses = await Promise.all(
+    const responses = await Promise.all(
       Array.from({ length: 4 }, () =>
         api.post(scenario.next.apiPath(), { data: sourceOf(scenario.closed) }),
       ),
-    ).then((responses) => responses.map((response) => response.status()).sort());
-    expect(statuses).toEqual([201, 409, 409, 409]);
+    );
+    expect(responses.map((response) => response.status()).sort()).toEqual([201, 409, 409, 409]);
+    for (const refused of responses.filter((response) => response.status() === 409))
+      expect((await refused.json()).error.code).toBe('ROADMAP_CONFLICT');
     expect(Number(await roadmapCount(scenario.next))).toBe(1);
   },
 );

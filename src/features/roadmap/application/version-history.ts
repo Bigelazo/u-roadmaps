@@ -27,8 +27,9 @@ import { ApplicationError, applicationResult } from '@/shared/errors/server';
 const recordedVersionSelect = {
   closedAt: true,
   sourceRoadmapId: true,
+  sourceYear: true,
+  sourceSemester: true,
   creator: { select: { id: true, name: true } },
-  sourceRoadmap: { select: { courseOffering: { select: { year: true, semester: true } } } },
   closureTeachingStaff: {
     select: {
       institutionalPosition: true,
@@ -74,25 +75,33 @@ async function requireCourseWithHorizon(actor: RoadmapActor, courseCode: string)
   return { course, horizon };
 }
 
+/** The recorded source edition, which outlives the source Roadmap itself. */
+function recordedSource(roadmap: {
+  sourceYear: number | null;
+  sourceSemester: number | null;
+}): AcademicTermKey | null {
+  return roadmap.sourceYear !== null && roadmap.sourceSemester !== null
+    ? { year: roadmap.sourceYear, semester: roadmap.sourceSemester }
+    : null;
+}
+
 function recordedAuthorship(roadmap: {
   creator: { id: string; name: string } | null;
-  sourceRoadmap: { courseOffering: AcademicTermKey } | null;
+  sourceYear: number | null;
+  sourceSemester: number | null;
   closureTeachingStaff: {
     institutionalPosition: InstitutionalCoursePosition | null;
     user: { id: string; name: string };
   }[];
 }) {
+  const source = recordedSource(roadmap);
   return {
     creator: roadmap.creator,
     teachingStaff: roadmap.closureTeachingStaff
       .map(({ user, institutionalPosition }) => ({ ...user, institutionalPosition }))
       .sort(compareRecordedStaff),
-    origin: roadmap.sourceRoadmap
-      ? {
-          kind: 'COPY' as const,
-          ...roadmap.sourceRoadmap.courseOffering,
-          edition: editionLabel(roadmap.sourceRoadmap.courseOffering),
-        }
+    origin: source
+      ? { kind: 'COPY' as const, ...source, edition: editionLabel(source) }
       : { kind: 'EMPTY' as const },
   };
 }
@@ -168,18 +177,31 @@ async function readRoadmapVersionUnsafe(actor: RoadmapActor, identifier: CourseO
   const term = { year: offering.year, semester: offering.semester };
   // Oldest first, ending at this version, following each copy to its source.
   const ancestry: AcademicTermKey[] = [term];
-  let ancestorId = roadmap.sourceRoadmapId;
+  let oldest: {
+    sourceRoadmapId: string | null;
+    sourceYear: number | null;
+    sourceSemester: number | null;
+  } = roadmap;
   const visited = new Set([roadmap.id]);
   // The guard stops on a corrupt cyclic lineage instead of looping forever.
-  while (ancestorId && !visited.has(ancestorId)) {
-    visited.add(ancestorId);
-    const ancestor = await prisma.roadmap.findUniqueOrThrow({
-      where: { id: ancestorId },
-      select: { sourceRoadmapId: true, courseOffering: { select: { year: true, semester: true } } },
+  while (oldest.sourceRoadmapId && !visited.has(oldest.sourceRoadmapId)) {
+    visited.add(oldest.sourceRoadmapId);
+    const ancestor = await prisma.roadmap.findUnique({
+      where: { id: oldest.sourceRoadmapId },
+      select: {
+        sourceRoadmapId: true,
+        sourceYear: true,
+        sourceSemester: true,
+        courseOffering: { select: { year: true, semester: true } },
+      },
     });
+    if (!ancestor) break;
     ancestry.unshift(ancestor.courseOffering);
-    ancestorId = ancestor.sourceRoadmapId;
+    oldest = ancestor;
   }
+  // The oldest reachable version still names its source's edition if that source was removed.
+  const removedSource = recordedSource(oldest);
+  if (removedSource) ancestry.unshift(removedSource);
   const lineage = ancestry
     .filter((ancestor) => isWithinVersionHorizon(ancestor, horizon))
     .map((ancestor) => ({ ...ancestor, edition: editionLabel(ancestor) }));

@@ -12,6 +12,11 @@ export const positionLabels: Record<InstitutionalCoursePosition, string> = {
 
 type VersionOrigin = RoadmapVersionHistory['versions'][number]['origin'];
 
+/** Roadmaps that predate recorded authorship never get an inferred creator. */
+export function creatorLabel(creator: { name: string } | null): string {
+  return creator?.name ?? 'Creador no registrado';
+}
+
 export function originLabel(origin: VersionOrigin): string {
   switch (origin.kind) {
     case 'COPY':

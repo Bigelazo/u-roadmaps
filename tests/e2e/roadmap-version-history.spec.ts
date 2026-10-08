@@ -204,6 +204,8 @@ test('teaching staff reach the history from the Roadmap and from past offerings'
   const version = page.getByRole('listitem', { name: `Edición ${pastTerm.year}-1` });
   await expect(version).toContainText('Creada desde cero');
   await expect(version).toContainText(`${teacher.name} · Profesor de cátedra`);
+  // Seeded without a recorded creator, which is never inferred.
+  await expect(version).toContainText('Creador no registrado');
 
   await page.goto('/academic-overview');
   await expect(
@@ -214,4 +216,45 @@ test('teaching staff reach the history from the Roadmap and from past offerings'
   await expect(
     page.getByRole('link', { name: `Historial de versiones de ${past.courseName}` }),
   ).toBeVisible();
+});
+
+test('teaching staff who cannot create the Roadmap are told so and still reach the history', async ({
+  createCourse,
+  createTerm,
+  createUser,
+  page,
+  reportPosition,
+}) => {
+  const term = await createTerm();
+  const professor = await createUser();
+  const assistant = await createUser();
+  const offering = await createCourse({
+    ...term,
+    roadmap: false,
+    participants: [
+      { user: professor, role: 'TEACHER', institutionalPosition: 'COURSE_PROFESSOR' },
+      { user: assistant, role: 'TEACHER', institutionalPosition: 'TEACHING_ASSISTANT' },
+    ],
+  });
+  await reportPosition(assistant, offering, 'TEACHING_ASSISTANT');
+  const onlyProfessor = 'Solo el profesor de cátedra puede crear el roadmap.';
+
+  await authenticateAs(page.context(), assistant.id);
+  await page.goto('/academic-overview');
+  await expect(page.getByText(onlyProfessor)).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: `Crear roadmap de ${offering.courseName}` }),
+  ).toHaveCount(0);
+  await page
+    .getByRole('link', { name: `Historial de versiones de ${offering.courseName}` })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/courses/${offering.courseCode}/versions$`));
+  await expect(page.getByRole('heading', { name: 'Historial de versiones' })).toBeVisible();
+
+  await authenticateAs(page.context(), professor.id);
+  await page.goto('/academic-overview');
+  await expect(
+    page.getByRole('button', { name: `Crear roadmap de ${offering.courseName}` }),
+  ).toBeVisible();
+  await expect(page.getByText(onlyProfessor)).toHaveCount(0);
 });

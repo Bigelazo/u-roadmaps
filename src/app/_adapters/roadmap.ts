@@ -1,5 +1,6 @@
 import { ApplicationError } from '@/shared/errors/types';
 import {
+  parseCourseCode,
   parseCourseOfferingIdentifier,
   type CourseOfferingIdentifier,
   type CourseOfferingIdentifierParams,
@@ -17,4 +18,16 @@ export function requireCourseOfferingIdentifier(
     );
   }
   return identifier;
+}
+
+export function requireCourseCode(param: string): string {
+  const courseCode = parseCourseCode(param);
+  if (!courseCode) {
+    throw new ApplicationError(
+      400,
+      'INVALID_ACADEMIC_IDENTITY',
+      'El código del ramo no es válido.',
+    );
+  }
+  return courseCode;
 }

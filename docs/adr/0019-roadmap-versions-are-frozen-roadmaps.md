@@ -12,7 +12,7 @@ Una versión de un Ramo es **el propio Roadmap cerrado** de uno de sus Cursos, i
 - **Roadmap version history:** cualquier miembro del equipo docente puede consultarlo en cualquier momento.
   - Ve las versiones cerradas del Ramo hasta el último Período académico en que tiene una Participation docente **activa** en él. Nunca ve versiones posteriores. Si vuelve a ser docente, su horizonte avanza.
   - Solo ve contenido pedagógico, origen y autoría. No ve Completions, progreso ni Participations de estudiantes, ni siquiera de un Curso en el que participó.
-  - Se consulta en un **visor de versiones dedicado** de solo lectura, separado de la página del Curso. Hay tres entradas: el Roadmap vigente, el diálogo de creación y las filas de Cursos pasados del Academic overview.
+  - Se consulta en un **visor de versiones dedicado** de solo lectura, separado de la página del Curso. Hay tres entradas: el Roadmap vigente, el diálogo de creación y las filas de Cursos pasados del Academic overview. Mientras un Curso vigente no tiene Roadmap, el equipo docente que no puede crearlo lo consulta desde la fila de ese Curso, en lugar del diálogo.
   - Los estudiantes no tienen acceso al historial.
 - **Roadmap copy:** la hace exclusivamente el profesor de cátedra, y solo al crear el Roadmap, como alternativa a crearlo vacío.
   - Solo se pueden elegir versiones cerradas del mismo Ramo.

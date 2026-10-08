@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { fileResourceUrl } from '@/features/roadmap/domain/resource';
-import { planRoadmapCopy, type RoadmapCopySource } from '@/features/roadmap/domain/roadmap-copy';
+import {
+  planRoadmapCopy,
+  resourcesWithStoredFiles,
+  type RoadmapCopySource,
+} from '@/features/roadmap/domain/roadmap-copy';
 
 function sequentialIds() {
   let next = 0;
@@ -104,6 +108,16 @@ describe('planRoadmapCopy', () => {
   });
 
   it('remaps Custom node types and keeps Predefined node types shared', () => {
+    expect(plan.nodeTypes).toEqual([
+      {
+        id: expect.stringMatching(/^new-/),
+        roadmapId: 'roadmap-new',
+        name: 'Taller',
+        normalizedName: 'taller',
+        icon: 'wrench',
+        color: '#123456',
+      },
+    ]);
     expect(nodeById('Visible').nodeTypeId).toBe(plan.nodeTypes[0]!.id);
     expect(nodeById('Oculto').nodeTypeId).toBe('type-predefined');
   });
@@ -154,8 +168,14 @@ describe('planRoadmapCopy', () => {
       fileKey: expect.stringMatching(/^new-/),
       fileContentType: 'application/pdf',
     });
-    expect(plan.fileCopies).toEqual([
-      { resourceId: file.id, sourceFileKey: 'key-a', fileKey: file.fileKey },
-    ]);
+    expect(plan.fileCopies).toEqual([{ sourceFileKey: 'key-a', fileKey: file.fileKey }]);
+  });
+
+  it('omits file Resources whose bytes are missing from storage and keeps the rest', () => {
+    const file = plan.resources[2]!;
+    expect(resourcesWithStoredFiles(plan.resources, new Set())).toEqual(plan.resources.slice(0, 2));
+    expect(resourcesWithStoredFiles(plan.resources, new Set([file.fileKey!]))).toEqual(
+      plan.resources,
+    );
   });
 });
