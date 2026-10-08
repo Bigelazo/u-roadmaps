@@ -20,19 +20,6 @@ vi.mock('@xyflow/react', () => ({
   Background: () => null,
   BackgroundVariant: { Dots: 'dots' },
   ConnectionMode: { Loose: 'loose' },
-  ControlButton: ({
-    children,
-    onClick,
-    ...props
-  }: {
-    children: ReactNode;
-    onClick: () => void;
-  }) => (
-    <button type="button" onClick={onClick} {...props}>
-      {children}
-    </button>
-  ),
-  Controls: ({ children }: { children: ReactNode }) => <>{children}</>,
   Handle: () => null,
   MarkerType: { ArrowClosed: 'arrow-closed' },
   Panel: ({ children, position, ...props }: { children: ReactNode; position: string }) => (
@@ -65,136 +52,136 @@ vi.mock('@xyflow/react', () => ({
       event: unknown,
       node: { id: string; position: { x: number; y: number } },
     ) => void;
-    onMoveEnd?: (
-      event: object | null,
-      viewport: { x: number; y: number; zoom: number },
-    ) => void;
+    onMoveEnd?: (event: object | null, viewport: { x: number; y: number; zoom: number }) => void;
     children: ReactNode;
   }) => {
     reactFlowHandlers.onMoveEnd = onMoveEnd;
     return (
       <>
-      {nodes.map((node) => (
+        {nodes.map((node) => (
+          <button
+            key={`rendered-${node.id}`}
+            type="button"
+            className="react-flow__node"
+            data-id={node.id}
+            data-testid={`rendered-node-${node.id}`}
+          >
+            Nodo renderizado {node.id}
+          </button>
+        ))}
+        {nodes.map((node) => (
+          <output key={node.id} data-testid={`node-position-${node.id}`}>
+            {`${node.position.x},${node.position.y}`}
+          </output>
+        ))}
+        <output data-testid="selected-node">{nodes.find((node) => node.selected)?.id ?? ''}</output>
         <button
-          key={`rendered-${node.id}`}
+          type="button"
+          onClick={() =>
+            onNodesChange([{ id: 'node-1', type: 'position', position: { x: 207, y: 153 } }])
+          }
+        >
+          Arrastrar nodo
+        </button>
+        <button
+          type="button"
+          onClick={() => onNodeDragStop?.(null, { id: 'node-1', position: { x: 27, y: 13 } })}
+        >
+          Finalizar arrastre
+        </button>
+        <button
+          type="button"
+          onClick={() => onMoveEnd?.({ type: 'pointerup' }, { x: 120, y: 80, zoom: 1.2 })}
+        >
+          Finalizar movimiento del viewport
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onConnect?.({
+              source: 'node-1',
+              target: 'node-2',
+              sourceHandle: 'right',
+              targetHandle: 'left',
+            })
+          }
+        >
+          Conectar dependencia
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onConnect?.({
+              source: 'node-1',
+              target: 'node-2',
+              sourceHandle: null,
+              targetHandle: null,
+            })
+          }
+        >
+          Conectar dependencia sin puntos
+        </button>
+        <button type="button" onClick={() => onConnect?.({ source: null, target: 'node-2' })}>
+          Intentar conexión incompleta
+        </button>
+        <button
+          type="button"
+          onClick={() => onEdgesDelete?.([{ id: 'dependency-1' }, { id: 'dependency-2' }])}
+        >
+          Eliminar dependencias
+        </button>
+        <button
+          type="button"
+          onClick={() => onNodeClick({ currentTarget: document.body }, nodes[0])}
+        >
+          Seleccionar nodo
+        </button>
+        <button
+          data-testid="keyboard-node"
           type="button"
           className="react-flow__node"
-          data-id={node.id}
-          data-testid={`rendered-node-${node.id}`}
+          data-id="node-1"
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowRight')
+              onNodesChange([{ id: 'node-1', type: 'position', position: { x: 27, y: 13 } }]);
+          }}
         >
-          Nodo renderizado {node.id}
+          Nodo con teclado
         </button>
-      ))}
-      {nodes.map((node) => (
-        <output key={node.id} data-testid={`node-position-${node.id}`}>
-          {`${node.position.x},${node.position.y}`}
-        </output>
-      ))}
-      <output data-testid="selected-node">{nodes.find((node) => node.selected)?.id ?? ''}</output>
-      <button
-        type="button"
-        onClick={() =>
-          onNodesChange([{ id: 'node-1', type: 'position', position: { x: 207, y: 153 } }])
-        }
-      >
-        Arrastrar nodo
-      </button>
-      <button
-        type="button"
-        onClick={() => onNodeDragStop?.(null, { id: 'node-1', position: { x: 27, y: 13 } })}
-      >
-        Finalizar arrastre
-      </button>
-      <button
-        type="button"
-        onClick={() => onMoveEnd?.({ type: 'pointerup' }, { x: 120, y: 80, zoom: 1.2 })}
-      >
-        Finalizar movimiento del viewport
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          onConnect?.({
-            source: 'node-1',
-            target: 'node-2',
-            sourceHandle: 'right',
-            targetHandle: 'left',
-          })
-        }
-      >
-        Conectar dependencia
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          onConnect?.({
-            source: 'node-1',
-            target: 'node-2',
-            sourceHandle: null,
-            targetHandle: null,
-          })
-        }
-      >
-        Conectar dependencia sin puntos
-      </button>
-      <button type="button" onClick={() => onConnect?.({ source: null, target: 'node-2' })}>
-        Intentar conexión incompleta
-      </button>
-      <button
-        type="button"
-        onClick={() => onEdgesDelete?.([{ id: 'dependency-1' }, { id: 'dependency-2' }])}
-      >
-        Eliminar dependencias
-      </button>
-      <button type="button" onClick={() => onNodeClick({ currentTarget: document.body }, nodes[0])}>
-        Seleccionar nodo
-      </button>
-      <button
-        data-testid="keyboard-node"
-        type="button"
-        className="react-flow__node"
-        data-id="node-1"
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowRight')
-            onNodesChange([{ id: 'node-1', type: 'position', position: { x: 27, y: 13 } }]);
-        }}
-      >
-        Nodo con teclado
-      </button>
-      {nodes.map((node) => {
-        const actionData = node.data as {
-          canManageActions?: boolean;
-          isActionMenuOpen?: boolean;
-          onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
-          onAction?: (intent: RoadmapGraphEditingIntent) => void;
-          isTeacherBlocked?: boolean;
-        };
-        if (!actionData.canManageActions) return null;
-        return (
-          <div key={node.id}>
-            <button
-              type="button"
-              aria-label={`${actionData.isActionMenuOpen ? 'Cerrar' : 'Abrir'} acciones ${node.id}`}
-              onClick={(event) => actionData.onToggleActionMenu?.(node.id, event.currentTarget)}
-            />
-            {actionData.isActionMenuOpen ? (
+        {nodes.map((node) => {
+          const actionData = node.data as {
+            canManageActions?: boolean;
+            isActionMenuOpen?: boolean;
+            onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
+            onAction?: (intent: RoadmapGraphEditingIntent) => void;
+            isTeacherBlocked?: boolean;
+          };
+          if (!actionData.canManageActions) return null;
+          return (
+            <div key={node.id}>
               <button
                 type="button"
-                onClick={() =>
-                  actionData.onAction?.({
-                    kind: 'change-teacher-block',
-                    nodeId: node.id,
-                    operation: actionData.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK',
-                  })
-                }
-              >
-                Ejecutar acceso {node.id}
-              </button>
-            ) : null}
-          </div>
-        );
-      })}
-      {children}
+                aria-label={`${actionData.isActionMenuOpen ? 'Cerrar' : 'Abrir'} acciones ${node.id}`}
+                onClick={(event) => actionData.onToggleActionMenu?.(node.id, event.currentTarget)}
+              />
+              {actionData.isActionMenuOpen ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    actionData.onAction?.({
+                      kind: 'change-teacher-block',
+                      nodeId: node.id,
+                      operation: actionData.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK',
+                    })
+                  }
+                >
+                  Ejecutar acceso {node.id}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+        {children}
       </>
     );
   },
@@ -476,9 +463,7 @@ test('applies each viewport restoration token once without reporting an echoed m
     />,
   );
 
-  await waitFor(() =>
-    expect(setViewportMock).toHaveBeenCalledWith({ x: 120, y: 80, zoom: 1.2 }),
-  );
+  await waitFor(() => expect(setViewportMock).toHaveBeenCalledWith({ x: 120, y: 80, zoom: 1.2 }));
   expect(onViewportChange).not.toHaveBeenCalled();
 
   rerender(
@@ -603,7 +588,11 @@ test('reports no available position to toolbar content when the title cannot fit
   try {
     const { rerender } = render(
       <RoadmapGraph
-        projection={{ kind: 'teaching', roadmap: { ...roadmap, nodes: [] }, editing: editingCapability() }}
+        projection={{
+          kind: 'teaching',
+          roadmap: { ...roadmap, nodes: [] },
+          editing: editingCapability(),
+        }}
         onSelectNode={vi.fn()}
         topRightActions={(findOpenPosition) => (
           <button
@@ -813,9 +802,9 @@ test('emits a fresh automatic-layout request for each gesture', async () => {
   await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
   await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
   expect(onEditingIntent).toHaveBeenCalledTimes(2);
-  expect(onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'request-automatic-layout')).toBe(
-    true,
-  );
+  expect(
+    onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'request-automatic-layout'),
+  ).toBe(true);
 });
 
 test('emits complete dependency intents and ignores incomplete connection gestures', async () => {

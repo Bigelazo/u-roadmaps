@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: u-roadmaps-campus-wayfinding
-description: Student-first visual language for U-Roadmaps. Campus wayfinding informs a clear academic interface where FCFM blue structures navigation and action, Jade green marks personal progress and orientation, Archivo SemiCondensed gives headings a compact institutional voice, and Plus Jakarta Sans keeps interface text approachable and legible.
+description: Student-first visual language for U-Roadmaps. Campus wayfinding informs a clear academic interface where FCFM blue structures navigation and action, Jade green marks personal progress and orientation, Poppins gives headings a clear geometric voice, and Plus Jakarta Sans keeps interface text approachable and legible.
 
 colors:
   primary: "#024ad8"
@@ -19,6 +19,7 @@ colors:
   fog: "#dce1e8"
   steel: "#aeb7c3"
   graphite: "#5a6474"
+  blocked: "#40506a"
   error: "#b3262b"
   teaching-assistant: "#933D8A"
   auxiliary-professor: "#f0195c"
@@ -27,10 +28,10 @@ colors:
   enrolled-student: "#f4ce62"
 
 typography:
-  display-lg: { fontFamily: Archivo SemiCondensed, fontSize: 56px, fontWeight: 650, lineHeight: 0.98, letterSpacing: -2.8px }
-  display-md: { fontFamily: Archivo SemiCondensed, fontSize: 40px, fontWeight: 650, lineHeight: 1.0, letterSpacing: -1.6px }
-  display-sm: { fontFamily: Archivo SemiCondensed, fontSize: 28px, fontWeight: 650, lineHeight: 1.08, letterSpacing: -0.8px }
-  heading-sm: { fontFamily: Archivo SemiCondensed, fontSize: 22px, fontWeight: 650, lineHeight: 1.15, letterSpacing: -0.4px }
+  display-lg: { fontFamily: Poppins, fontSize: 56px, fontWeight: 600, lineHeight: 0.98, letterSpacing: -2.8px }
+  display-md: { fontFamily: Poppins, fontSize: 40px, fontWeight: 600, lineHeight: 1.0, letterSpacing: -1.6px }
+  display-sm: { fontFamily: Poppins, fontSize: 28px, fontWeight: 600, lineHeight: 1.08, letterSpacing: -0.8px }
+  heading-sm: { fontFamily: Poppins, fontSize: 22px, fontWeight: 600, lineHeight: 1.15, letterSpacing: -0.4px }
   body-lg: { fontFamily: Plus Jakarta Sans, fontSize: 18px, fontWeight: 400, lineHeight: 1.55 }
   body-md: { fontFamily: Plus Jakarta Sans, fontSize: 16px, fontWeight: 400, lineHeight: 1.5 }
   caption-md: { fontFamily: Plus Jakarta Sans, fontSize: 14px, fontWeight: 500, lineHeight: 1.5 }
@@ -93,7 +94,8 @@ Never place white body text on `{colors.progress}`; the contrast is insufficient
 - **Canvas** (`{colors.canvas}`) and **Cloud** (`{colors.cloud}`): primary and supporting surfaces.
 - **Fog** (`{colors.fog}`) and **Steel** (`{colors.steel}`): dividers, inactive borders, and low-emphasis structure.
 - **Ink** (`{colors.ink}`) and **Graphite** (`{colors.graphite}`): primary and supporting text.
-- **Error** (`{colors.error}`): destructive actions and validation errors only.
+- **Blocked** (`{colors.blocked}`): blocked roadmap nodes, whether locked by prerequisites or by teaching staff. It replaces the node-type color on the border and type icon, and fills the node at 20% opacity over `{colors.canvas}`. Always pair it with the lock badge; gray alone does not communicate the block.
+- **Error** (`{colors.error}`): destructive actions, validation errors, and the Node change mark on the roadmap canvas, a count of changes since the participant last opened that node. Do not use it for other counters.
 
 Do not use green alone to communicate completion or current position. Pair it with a label, icon, shape, or change in fill.
 
@@ -109,13 +111,13 @@ Academic-overview course cards use a 4px left border to describe the person's re
 
 ## Typography
 
-Use **Plus Jakarta Sans** as the primary interface family for body text, controls, navigation, labels, captions, and metadata. Use **Archivo** with its width axis set to a semi-condensed proportion (`font-variation-settings: "wdth" 87.5`) for display titles, page headers, course names, major percentages, and the future wordmark only if the approved logo direction supports it.
+Use **Plus Jakarta Sans** as the primary interface family for body text, controls, navigation, labels, captions, and metadata. Use **Poppins** (weights 500–700) for display titles, page headers, course names, major percentages, and the future wordmark only if the approved logo direction supports it.
 
-Archivo creates the compact rhythm of campus signage and keeps long Spanish course names useful at display scale. Plus Jakarta Sans provides a more open texture for instructions and operational content. Arial and Arial Narrow are last-resort system fallbacks; production font loading should use self-hosted assets or `next/font`.
+Poppins gives headings the clear geometric shapes of campus signage. It is wider than a condensed face, so long Spanish course names must be allowed to wrap. Plus Jakarta Sans provides a more open texture for instructions and operational content. Arial and Arial Narrow are last-resort system fallbacks; production font loading should use self-hosted assets or `next/font`.
 
 Use sentence case for headings, actions, menu items, and descriptive labels. Reserve uppercase for course codes, very short wayfinding labels, and institutional provenance. Do not apply global uppercase transformation to buttons.
 
-Use negative letter spacing only on large Archivo headings. Body copy and controls retain normal tracking. Avoid explanatory text below 12px and preserve user-configured browser font scaling.
+Use negative letter spacing only on large Poppins headings. Body copy and controls retain normal tracking. Avoid explanatory text below 12px and preserve user-configured browser font scaling.
 
 ## Editorial Voice
 
@@ -132,7 +134,7 @@ Use an 8px grid with 4px subdivisions. Center desktop content at a maximum width
 Page hierarchy follows wayfinding structure:
 
 1. A short context label identifies the course, term, or current area.
-2. An Archivo heading states the destination or task.
+2. A Poppins heading states the destination or task.
 3. Plus Jakarta Sans explains requirements and next steps.
 4. The roadmap, course list, or authoring workspace becomes the dominant working surface.
 
@@ -149,7 +151,7 @@ Preserve the established radius hierarchy:
 - `{rounded.xl}` for cards, page sections, side panels, and major framed canvases.
 - `{rounded.pill}` only for progress tracks, global filters, or values whose shape encodes continuity.
 
-Use flat surfaces and 1px hairlines by default. Apply restrained shadows such as `0 4px 10px rgb(18 33 58 / 7%)` to draggable nodes and `0 18px 50px rgb(18 33 58 / 8%)` only to major demonstration or floating surfaces. The reusable roadmap-node elevation and its hover/focus treatments are exposed as `--shadow-roadmap-node`, `--shadow-roadmap-node-hover`, and `--shadow-roadmap-node-focus`; use them only for React Flow roadmap nodes. Hierarchy should come from structure and contrast before elevation.
+Use flat surfaces and 1px hairlines by default. Apply restrained shadows such as `0 4px 10px rgb(18 33 58 / 7%)` to draggable nodes and `0 18px 50px rgb(18 33 58 / 8%)` only to major demonstration or floating surfaces. The reusable roadmap-node elevation and its hover/focus treatments are exposed as `--shadow-roadmap-node`, `--shadow-roadmap-node-hover`, and `--shadow-roadmap-node-focus`; use them only for React Flow roadmap nodes. The hover shadow takes the node's own color (its node-type color, or `{colors.blocked}` when blocked) from `--roadmap-node-color`. Hierarchy should come from structure and contrast before elevation.
 
 ## Iconography
 
@@ -164,9 +166,9 @@ Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram 
 - **Primary button**: blue surface, white sentence-case label, minimum 44px height, and a direct verb. Add a Lucide icon only when it clarifies direction or outcome.
 - **Secondary button**: white or cloud surface with blue or ink border. It must not compete with the primary action.
 - **Progress badge**: use the shared `progress` Badge variant for concise completion or current-position labels. It pairs `{colors.progress-soft}` with `{colors.progress-deep}` and must retain a textual state.
-- **Course header**: compact context label, Archivo course name, supporting term/code information, and visible progress when applicable.
+- **Course header**: compact context label, Poppins course name, supporting term/code information, and visible progress when applicable.
 - **Progress track**: neutral base with Jade completion fill, a numeric value, and a textual completed/total description.
-- **Roadmap node**: white 8px-radius card with pedagogical title, node type, status label, and direct resource affordance. The current node uses a Jade border or marker; completed nodes use a filled completion symbol plus text.
+- **Roadmap node**: white 8px-radius card with pedagogical title, node type, status label, and direct resource affordance. The current node uses a Jade border or marker; completed nodes use a filled completion symbol plus text. Blocked nodes use `{colors.blocked}` for border, type icon, and a 20% fill.
 - **Dependency**: blue directional structure. It remains distinguishable from Jade progress and from custom node-type colors.
 - **Resource card**: compact title, resource type, and Lucide icon with an explicit external or download affordance.
 - **Teacher panel**: denser authoring surface that uses Ink and Blue for structure. Jade appears only when teacher actions affect or report participant progress.
@@ -180,7 +182,7 @@ Future logo work must retain the approved brand attributes—orientation, advanc
 
 All interactive controls require a 44px minimum touch target. On screens below 768px, stack comparison and information regions, collapse secondary editing panels into accessible drawers or sections, and preserve the roadmap as a readable consultation surface.
 
-At 768–1023px, favor a single working column with expandable controls. At 1024px and above, the graph may share the viewport with a persistent teacher or resource panel. Long Archivo headings must wrap naturally without clipping; do not solve narrow layouts by shrinking them below useful reading size.
+At 768–1023px, favor a single working column with expandable controls. At 1024px and above, the graph may share the viewport with a persistent teacher or resource panel. Long Poppins headings must wrap naturally without clipping; do not solve narrow layouts by shrinking them below useful reading size.
 
 Route traces may simplify or disappear on mobile when they stop communicating useful structure. Core progress information must remain available as text and icons.
 
@@ -202,7 +204,7 @@ The laboratory is reviewed manually and has no dedicated unit, integration, end-
 
 ## Do and Don't
 
-Do use Blue for platform structure and action, Jade for personal progress and orientation, Archivo SemiCondensed for meaningful headings, and Plus Jakarta Sans for readable interaction.
+Do use Blue for platform structure and action, Jade for personal progress and orientation, Poppins for meaningful headings, and Plus Jakarta Sans for readable interaction.
 
 Do make the roadmap the visual protagonist, preserve 4/8/16px radii, use sentence case, and show the participant where they are and what can happen next.
 

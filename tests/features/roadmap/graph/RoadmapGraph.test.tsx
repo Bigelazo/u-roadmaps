@@ -41,19 +41,6 @@ vi.mock('@xyflow/react', () => ({
   Background: () => null,
   BackgroundVariant: { Lines: 'lines' },
   ConnectionMode: { Loose: 'loose' },
-  ControlButton: ({
-    children,
-    onClick,
-    ...props
-  }: {
-    children: ReactNode;
-    onClick: () => void;
-  }) => (
-    <button type="button" onClick={onClick} {...props}>
-      {children}
-    </button>
-  ),
-  Controls: ({ children }: { children: ReactNode }) => <>{children}</>,
   Handle: () => null,
   MarkerType: { ArrowClosed: 'arrow-closed' },
   Panel: ({ children, position, ...props }: { children: ReactNode; position: string }) => (

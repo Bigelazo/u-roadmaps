@@ -449,6 +449,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
   const editing = data.status === 'editing';
   const teacherBlocked = editing && data.isTeacherBlocked;
   const blocked = locked || teacherBlocked;
+  const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
   return (
     <div
       data-slot="roadmap-card"
@@ -467,23 +468,26 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
               !hidden && 'shadow-(--shadow-roadmap-node)',
             ),
       )}
-      style={{
-        width: size.width,
-        height: size.height,
-        backgroundColor: blocked
-          ? 'color-mix(in srgb, var(--graphite) 20%, var(--card))'
-          : `color-mix(in srgb, ${data.typeColor} 3%, var(--card))`,
-        backgroundImage: hidden
-          ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 9px, color-mix(in srgb, ${data.typeColor} 11%, transparent) 11px)`
-          : undefined,
-        borderColor: data.typeColor,
-      }}
+      style={
+        {
+          '--roadmap-node-color': nodeColor,
+          width: size.width,
+          height: size.height,
+          backgroundColor: blocked
+            ? 'color-mix(in srgb, var(--blocked) 20%, var(--card))'
+            : `color-mix(in srgb, ${data.typeColor} 3%, var(--card))`,
+          backgroundImage: hidden
+            ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 11px)`
+            : undefined,
+          borderColor: nodeColor,
+        } as CSSProperties
+      }
     >
       <div
         data-testid="roadmap-node-content"
         className="flex h-full min-w-0 items-center justify-start gap-2.5"
       >
-        <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={data.typeColor} />
+        <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={nodeColor} />
         <p
           title={data.title}
           className="line-clamp-2 min-w-0 text-left text-[15.5px] leading-tight font-medium wrap-break-word text-ink"

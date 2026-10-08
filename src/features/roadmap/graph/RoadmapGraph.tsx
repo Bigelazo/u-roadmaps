@@ -13,8 +13,6 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
-  ControlButton,
-  Controls,
   MarkerType,
   Panel,
   ReactFlow,
@@ -237,7 +235,7 @@ function RoadmapGraphToolbar({
   ) => ReactNode;
   nodes: readonly RoadmapFlowNode[];
 }) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
   const getViewport = useCallback(() => {
     const bounds = containerRef.current?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0, width: 0, height: 0 };
@@ -272,8 +270,19 @@ function RoadmapGraphToolbar({
 
   return (
     <>
-      <Panel position="top-right" className="mt-5 mr-5">
+      <Panel position="top-right" className="mt-5 mr-4! sm:mr-6!">
         <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
+          <Button
+            aria-label="Centrar mapa"
+            title="Centrar mapa"
+            type="button"
+            variant="outline"
+            size="icon"
+            className="self-end sm:self-auto"
+            onClick={() => void fitView(roadmapFitViewOptions)}
+          >
+            <Maximize aria-hidden="true" />
+          </Button>
           {showAutoLayout ? (
             <Button
               type="button"
@@ -295,27 +304,12 @@ function RoadmapGraphToolbar({
       {bottomRightActions ? (
         <Panel
           position="bottom-right"
-          className="pointer-events-none mr-5! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end [&>*]:col-start-1 [&>*]:row-start-1"
+          className="pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1"
         >
           <div className="pointer-events-auto">{bottomRightActions(findOpenPosition)}</div>
         </Panel>
       ) : null}
     </>
-  );
-}
-
-function RoadmapViewportControls() {
-  const { fitView } = useReactFlow();
-  return (
-    <Controls position="bottom-left" showZoom={false} showFitView={false} showInteractive={false}>
-      <ControlButton
-        aria-label="Centrar mapa"
-        title="Centrar mapa"
-        onClick={() => void fitView(roadmapFitViewOptions)}
-      >
-        <Maximize aria-hidden="true" />
-      </ControlButton>
-    </Controls>
   );
 }
 
@@ -422,7 +416,7 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
       {slots?.bottomRight ? (
         <Panel
           position="bottom-right"
-          className="pointer-events-none mr-5! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end [&>*]:col-start-1 [&>*]:row-start-1"
+          className="pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1"
         >
           {slots.bottomRight}
         </Panel>
@@ -853,24 +847,21 @@ function RoadmapGraphContents({ model }: { model: ReturnType<typeof useRoadmapGr
     <>
       {' '}
       <RoadmapGraphOverlays slots={overlaySlots} />
-      <RoadmapViewportControls />
       <RoadmapViewportRestorer restoration={viewportRestoration} />
       <ActionMenuViewportAdjustment
         nodeId={canEdit ? openActionMenuNodeId : null}
         containerRef={containerRef}
       />
-      {canEdit || topRightActions ? (
-        <RoadmapGraphToolbar
-          containerRef={containerRef}
-          layoutDirection={layoutDirection}
-          showAutoLayout={canEdit}
-          canAutoLayout={canEdit && flow.nodes.length >= 2}
-          onAutoLayout={proposeAutoLayout}
-          topRightActions={topRightActions}
-          bottomRightActions={bottomRightActions}
-          nodes={flow.nodes}
-        />
-      ) : null}
+      <RoadmapGraphToolbar
+        containerRef={containerRef}
+        layoutDirection={layoutDirection}
+        showAutoLayout={canEdit}
+        canAutoLayout={canEdit && flow.nodes.length >= 2}
+        onAutoLayout={proposeAutoLayout}
+        topRightActions={topRightActions}
+        bottomRightActions={bottomRightActions}
+        nodes={flow.nodes}
+      />
       <Background
         aria-label="Cuadrícula del lienzo"
         variant={BackgroundVariant.Lines}

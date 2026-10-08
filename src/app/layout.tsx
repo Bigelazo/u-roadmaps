@@ -5,13 +5,17 @@ import { DevelopmentBar, developmentPersonas } from '@/development';
 import GlobalNavigation from '@/app/_components/GlobalNavigation';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { developmentEnvironmentEnabled } from '@/shared/server/environment/development';
-import { Archivo, Plus_Jakarta_Sans } from 'next/font/google';
+import { Plus_Jakarta_Sans, Poppins } from 'next/font/google';
 import { cn } from 'cn';
 import { getInboxIdentity } from '@/features/notifications/server';
 import { NotificationsProvider } from '@/features/notifications';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
-const archivo = Archivo({ axes: ['wdth'], subsets: ['latin'], variable: '--font-archivo' });
+const poppins = Poppins({
+  weight: ['500', '600', '700'],
+  subsets: ['latin'],
+  variable: '--font-poppins',
+});
 
 export const metadata: Metadata = {
   title: 'U-Roadmaps',
@@ -24,7 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const inboxIdentity = user ? getInboxIdentity(user.id) : null;
 
   return (
-    <html lang="es" className={cn('font-sans', plusJakartaSans.variable, archivo.variable)}>
+    <html lang="es" className={cn('font-sans', plusJakartaSans.variable, poppins.variable)}>
       <body>
         <NotificationsProvider identity={inboxIdentity}>
           <GlobalNavigation

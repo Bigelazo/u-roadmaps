@@ -142,6 +142,12 @@ body {
   border: 2px solid var(--card) !important;
 }
 
+[data-slot='roadmap-card'] {
+  --shadow-roadmap-node-hover:
+    0 0 0 4px color-mix(in srgb, var(--roadmap-node-color, var(--primary)) 16%, transparent),
+    0 9px 18px color-mix(in srgb, var(--roadmap-node-color, var(--primary)) 18%, transparent);
+}
+
 .react-flow__node-roadmap:focus-visible > [data-slot='roadmap-card'] {
   border-color: var(--primary) !important;
   box-shadow: var(--shadow-roadmap-node-focus);
@@ -162,13 +168,14 @@ body {
 }
 
 @theme inline {
-  --font-heading: var(--font-archivo);
+  --font-heading: var(--font-poppins);
   --color-primary-bright: var(--primary-bright);
   --color-primary-soft: var(--primary-soft);
   --color-cloud: var(--cloud);
   --color-fog: var(--fog);
   --color-steel: var(--steel);
   --color-graphite: var(--graphite);
+  --color-blocked: var(--blocked);
   --color-ink: var(--ink);
   --color-primary-deep: var(--primary-deep);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -211,10 +218,6 @@ body {
   --radius-xl: 16px;
 }
 
-.font-heading {
-  font-variation-settings: 'wdth' 87.5;
-}
-
 :root {
   --background: #ffffff;
   --foreground: #12213a;
@@ -230,6 +233,7 @@ body {
   --cloud: #f3f5f7;
   --fog: #dce1e8;
   --graphite: #5a6474;
+  --blocked: #40506a;
   --ink: #12213a;
   --secondary: #f3f5f7;
   --secondary-foreground: #12213a;
@@ -252,9 +256,6 @@ body {
   --chart-5: oklch(0.269 0 0);
   --radius: 8px;
   --shadow-roadmap-node: 0 4px 10px rgb(18 33 58 / 7%);
-  --shadow-roadmap-node-hover:
-    0 0 0 4px color-mix(in srgb, var(--primary) 16%, transparent),
-    0 9px 18px color-mix(in srgb, var(--primary) 18%, transparent);
   --shadow-roadmap-node-focus:
     0 0 0 4px color-mix(in srgb, var(--primary) 24%, transparent), var(--shadow-roadmap-node);
   --shadow-roadmap-panel: -4px 0 14px rgb(18 33 58 / 7%);

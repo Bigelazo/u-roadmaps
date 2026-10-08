@@ -631,7 +631,8 @@ test('shows teacher blocks like student blocks without disabling editing', () =>
   const card = screen.getByTestId('roadmap-card');
   expect(screen.queryByText('Bloqueado por docencia')).toBeNull();
   expect(screen.getByRole('img', { name: 'Bloqueado por docencia' })).toBeTruthy();
-  expect(card.style.backgroundColor).toBe('color-mix(in srgb, var(--graphite) 20%, var(--card))');
+  expect(card.style.backgroundColor).toBe('color-mix(in srgb, var(--blocked) 20%, var(--card))');
+  expect(card.style.borderColor).toBe('var(--blocked)');
   expect(card.className).toContain('cursor-pointer');
   expect(card.getAttribute('aria-disabled')).toBeNull();
 });
