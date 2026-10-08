@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import {
   handleApplicationResult,
@@ -6,7 +7,6 @@ import {
 } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import { deliverRoadmapClassificationChange } from '@/features/notifications/server';
 import { deleteRoadmapNodeType, updateRoadmapNodeType } from '@/features/roadmap/server';
 
 export async function PATCH(
@@ -17,19 +17,16 @@ export async function PATCH(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
-    const result = await updateRoadmapNodeType({
-      userId: user.id,
-      identifier,
-      id: params.typeId,
-      input: body,
-    }).match((value) => value, throwApplicationError);
-    if (result.notification) {
-      await deliverRoadmapClassificationChange({
+    const result = await updateRoadmapNodeType(
+      {
         userId: user.id,
         identifier,
-        ...result.notification,
-      }).catch(() => undefined);
-    }
+        id: params.typeId,
+        input: body,
+      },
+      roadmapChangePort,
+    ).match((value) => value, throwApplicationError);
+
     return NextResponse.json({ nodeType: result.nodeType });
   });
 }

@@ -1,10 +1,10 @@
+vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 import { beforeEach, expect, test, vi } from 'vitest';
 
 const {
   createRoadmapDependency,
   deleteRoadmapDependency,
   previewRoadmapDependency,
-  deliverRoadmapDependencyNotifications,
   after,
   afterTasks,
   sequence,
@@ -12,9 +12,6 @@ const {
   createRoadmapDependency: vi.fn(),
   deleteRoadmapDependency: vi.fn(),
   previewRoadmapDependency: vi.fn(),
-  deliverRoadmapDependencyNotifications: vi.fn(async () => {
-    sequence.push('deliver');
-  }),
   after: vi.fn((task: () => void | Promise<void>) => {
     afterTasks.push(task);
     sequence.push('scheduled');
@@ -41,9 +38,6 @@ vi.mock('@/app/_adapters/auth', () => ({
 vi.mock('@/app/_adapters/roadmap', () => ({
   requireCourseOfferingIdentifier: () => ({ courseCode: 'CC3002', year: 2026, semester: 2 }),
 }));
-vi.mock('@/app/_adapters/roadmap-dependency-notifications', () => ({
-  deliverRoadmapDependencyNotifications,
-}));
 vi.mock('@/features/roadmap/server', () => ({
   createRoadmapDependency,
   deleteRoadmapDependency,
@@ -54,17 +48,6 @@ import { POST } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependenc
 import { DELETE } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/[dependencyId]/route';
 
 const identifier = { courseCode: 'CC3002', year: 2026, semester: 2 };
-const notifications = {
-  path: {
-    roadmapId: 'roadmap-id',
-    changeKind: 'dependency-added' as const,
-    dependentNodeTitle: 'Evaluación 1',
-    prerequisiteNodeTitle: 'Leyes de Newton',
-    recipientIds: ['student-id'],
-  },
-  nodes: [],
-};
-
 function result<T>(value: T) {
   return {
     match: async (onSuccess: (value: T) => unknown) => {
@@ -89,11 +72,10 @@ beforeEach(() => {
   afterTasks.length = 0;
 });
 
-test('POST prepares notices after the confirmed mutation before returning its response', async () => {
+test('POST returns the plain confirmed mutation', async () => {
   const mutation = {
     dependency: { id: 'dependency-id', sourceNodeId: 'source-id', targetNodeId: 'target-id' },
     nodes: [{ id: 'target-id', title: 'Evaluación 1' }],
-    notifications,
   };
   createRoadmapDependency.mockReturnValue(result(mutation));
 
@@ -109,15 +91,10 @@ test('POST prepares notices after the confirmed mutation before returning its re
   expect(response.status).toBe(201);
   expect(await response.json()).toEqual({ dependency: mutation.dependency, nodes: mutation.nodes });
   expect(after).not.toHaveBeenCalled();
-  expect(deliverRoadmapDependencyNotifications).toHaveBeenCalledExactlyOnceWith({
-    actorId: 'teacher-id',
-    identifier,
-    notifications,
-  });
-  expect(sequence).toEqual(['mutation-committed', 'deliver']);
+  expect(sequence).toEqual(['mutation-committed']);
 });
 
-test('POST does not deliver when the confirmed Dependency action fails', async () => {
+test('POST returns a failed Dependency action', async () => {
   const error = new Error('DEPENDENCY_CYCLE');
   createRoadmapDependency.mockReturnValue({
     match: async (_onSuccess: (value: unknown) => unknown, onError: (error: Error) => unknown) =>
@@ -134,22 +111,11 @@ test('POST does not deliver when the confirmed Dependency action fails', async (
       context as never,
     ),
   ).rejects.toThrow('DEPENDENCY_CYCLE');
-  expect(deliverRoadmapDependencyNotifications).not.toHaveBeenCalled();
   expect(after).not.toHaveBeenCalled();
 });
 
-test('DELETE prepares route and access notices while keeping its 204 response', async () => {
-  deleteRoadmapDependency.mockReturnValue(
-    result({
-      notifications: {
-        ...notifications,
-        path: {
-          ...notifications.path,
-          changeKind: 'dependency-removed' as const,
-        },
-      },
-    }),
-  );
+test('DELETE returns an empty 204 response', async () => {
+  deleteRoadmapDependency.mockReturnValue(result({}));
 
   const response = await DELETE(
     new Request('http://localhost/dependencies/dependency-id'),
@@ -158,19 +124,14 @@ test('DELETE prepares route and access notices while keeping its 204 response', 
 
   expect(response.status).toBe(204);
   expect(await response.text()).toBe('');
-  expect(deleteRoadmapDependency).toHaveBeenCalledWith({
-    userId: 'teacher-id',
-    identifier,
-    id: 'dependency-id',
-  });
-  expect(after).not.toHaveBeenCalled();
-  expect(deliverRoadmapDependencyNotifications).toHaveBeenCalledExactlyOnceWith({
-    actorId: 'teacher-id',
-    identifier,
-    notifications: {
-      ...notifications,
-      path: { ...notifications.path, changeKind: 'dependency-removed' },
+  expect(deleteRoadmapDependency).toHaveBeenCalledWith(
+    {
+      userId: 'teacher-id',
+      identifier,
+      id: 'dependency-id',
     },
-  });
-  expect(sequence).toEqual(['mutation-committed', 'deliver']);
+    expect.any(Object),
+  );
+  expect(after).not.toHaveBeenCalled();
+  expect(sequence).toEqual(['mutation-committed']);
 });

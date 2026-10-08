@@ -1,3 +1,6 @@
+import type { RoadmapChangePort, RoadmapChangeFact } from './change-port';
+import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-transaction';
+import { accessChanges } from './access-changes';
 import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
 import { captureRouteNoticeKnowledge } from './route-notice-knowledge';
 import { captureAccessSnapshot } from './access-snapshot';
@@ -41,12 +44,7 @@ import {
   type EditorInput,
 } from '@/features/roadmap/application/editor-access';
 import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
-import { dependencyChangeNotifications } from '@/features/roadmap/application/dependency-change-notifications';
 import { nodeTypeClassificationNotification } from '@/features/roadmap/application/node-type-classification-notifications';
-import {
-  accessTransitionNotifications,
-  visibilityNotifications,
-} from '@/features/roadmap/application/node-change-notifications';
 
 type JsonObject = Record<string, unknown>;
 
@@ -120,15 +118,20 @@ async function requireCustomType(
 }
 
 async function withSerializableTransaction<T>(
-  operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  operation: (transaction: Prisma.TransactionClient, report: RoadmapChangeReporter) => Promise<T>,
   concurrentModification: () => ApplicationError,
+  changePort?: RoadmapChangePort,
 ) {
   const maxAttempts = 5;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      return await prisma.$transaction(operation, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      });
+      return await (changePort
+        ? roadmapChangeTransaction(changePort, operation, {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          })
+        : prisma.$transaction((transaction) => operation(transaction, async () => undefined), {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          }));
     } catch (error) {
       if (!isTransactionWriteConflict(error)) throw error;
       if (attempt === maxAttempts - 1) throw concurrentModification();
@@ -190,8 +193,11 @@ function typeDto(nodeType: {
   };
 }
 
-async function createRoadmapNodeUnsafe({ input, ...editor }: WithInput) {
-  return prisma.$transaction(async (transaction) => {
+async function createRoadmapNodeUnsafe(
+  { input, ...editor }: WithInput,
+  changePort: RoadmapChangePort,
+) {
+  return roadmapChangeTransaction(changePort, async (transaction, report) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const title = requireString(input.title, 'title', 240);
     const description = nodeDescription(input.description);
@@ -229,13 +235,22 @@ async function createRoadmapNodeUnsafe({ input, ...editor }: WithInput) {
       })),
       skipDuplicates: true,
     });
+    await report({
+      actorId: editor.userId,
+      identifier: editor.identifier,
+      roadmapId: roadmap.id,
+      facts: [{ kind: 'node-created', nodeId: node.id, previous: null, current: node }],
+    });
     return nodeDto(node);
   });
 }
 
-async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { input: JsonObject }) {
+async function updateRoadmapNodeUnsafe(
+  { id, input, ...editor }: WithId & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
   return withSerializableTransaction(
-    async (transaction) => {
+    async (transaction, report) => {
       const roadmap = await requireEditorRoadmap(transaction, editor);
       const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
       const requestedVisibility =
@@ -332,45 +347,54 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
           : null,
         data.nodeTypeId !== undefined && data.nodeTypeId !== node.nodeTypeId ? 'nodeType' : null,
       ].filter((field): field is 'title' | 'description' | 'nodeType' => field !== null);
-      const notifications =
-        beforeVisibility && requestedVisibility !== node.isVisible
-          ? visibilityNotifications({
-              before: beforeVisibility,
-              after: await captureAccessSnapshot(transaction, roadmap.id),
-              actorId: editor.userId,
-              targetNodeId: node.id,
-              targetChange: requestedVisibility ? 'node-available' : 'node-retired',
-              roadmapId: roadmap.id,
-            })
-          : [];
+      const facts: RoadmapChangeFact[] = [];
+      if (changedFields.includes('title'))
+        facts.push({
+          kind: 'node-title',
+          nodeId: node.id,
+          previous: node.title,
+          current: updated.title,
+        });
+      if (changedFields.includes('description'))
+        facts.push({
+          kind: 'node-description',
+          nodeId: node.id,
+          previous: node.description,
+          current: updated.description,
+        });
+      if (previousType && currentType)
+        facts.push({
+          kind: 'node-type',
+          nodeId: node.id,
+          previous: { id: previousType.id, name: previousType.name },
+          current: { id: currentType.id, name: currentType.name },
+        });
+      if (beforeVisibility && requestedVisibility !== node.isVisible) {
+        facts.push({
+          kind: 'node-visibility',
+          nodeId: node.id,
+          previous: node.isVisible,
+          current: updated.isVisible,
+        });
+        facts.push(
+          ...accessChanges(beforeVisibility, await captureAccessSnapshot(transaction, roadmap.id)),
+        );
+      }
+      if (facts.length)
+        await report({
+          actorId: editor.userId,
+          identifier: editor.identifier,
+          roadmapId: roadmap.id,
+          facts,
+        });
       return {
         node: {
           ...nodeDto(updated),
           resources: updated.resources.map((resource) => resourceDto(resource, editor.identifier)),
         },
-        ...(node.isVisible && updated.isVisible && changedFields.length > 0
-          ? {
-              notification: {
-                kind: 'node-updated' as const,
-                changedFields,
-                ...(changedFields.includes('title') ? { previousTitle: node.title } : {}),
-                ...(changedFields.includes('description')
-                  ? { previousDescription: node.description }
-                  : {}),
-                ...(previousType && currentType
-                  ? {
-                      previousTypeId: previousType.id,
-                      previousTypeName: previousType.name,
-                      currentTypeName: currentType.name,
-                    }
-                  : {}),
-              },
-            }
-          : {}),
         ...(requestedVisibility !== undefined
           ? { dependencies: structuralDependencies(removedDependencies) }
           : {}),
-        ...(notifications.length ? { notifications } : {}),
       };
     },
     () =>
@@ -379,6 +403,7 @@ async function updateRoadmapNodeUnsafe({ id, input, ...editor }: WithId & { inpu
         'CONFLICT',
         'La operación entra en conflicto con otra modificación.',
       ),
+    changePort,
   );
 }
 
@@ -429,9 +454,12 @@ async function previewNodeDeletionUnsafe(input: WithId) {
   });
 }
 
-async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDeletePreview) {
+async function deleteRoadmapNodeUnsafe(
+  { id, previewVersion, ...editor }: WithDeletePreview,
+  changePort: RoadmapChangePort,
+) {
   const deletion = await withSerializableTransaction(
-    async (transaction) => {
+    async (transaction, report) => {
       const preview = await nodeDeletionPreview(transaction, { id, ...editor });
       if (previewVersion && previewVersion !== preview.version) {
         throw new ApplicationError(
@@ -448,21 +476,26 @@ async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDe
         requireEditorRoadmap(transaction, editor),
       ]);
       const before = await captureAccessSnapshot(transaction, roadmap.id);
+      const node = await requireNode(transaction, id, roadmap.id);
+      const nodeType = await requireType(transaction, node.nodeTypeId, roadmap.id);
       await transaction.roadmapNode.delete({ where: { id: requireUuid(id, 'nodeId') } });
       const after = await captureAccessSnapshot(transaction, roadmap.id);
-      return {
-        fileKeys: resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : [])),
-        notifications: visibilityNotifications({
-          before,
-          after,
-          actorId: editor.userId,
-          targetNodeId: id,
-          targetChange: before.nodes.some((node) => node.id === id && node.isVisible)
-            ? 'node-deleted'
-            : undefined,
-          roadmapId: roadmap.id,
-        }),
-      };
+      await report({
+        actorId: editor.userId,
+        identifier: editor.identifier,
+        roadmapId: roadmap.id,
+        facts: [
+          {
+            kind: 'node-deleted',
+            nodeId: id,
+            nodeTypeName: nodeType.name,
+            previous: node,
+            current: null,
+          },
+          ...accessChanges(before, after),
+        ],
+      });
+      return { fileKeys: resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : [])) };
     },
     () =>
       new ApplicationError(
@@ -470,11 +503,12 @@ async function deleteRoadmapNodeUnsafe({ id, previewVersion, ...editor }: WithDe
         'CONFLICT',
         'La eliminación entra en conflicto con otra modificación.',
       ),
+    changePort,
   );
   await Promise.all(
     deletion.fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)),
   );
-  return { notifications: deletion.notifications };
+  return {};
 }
 
 async function createRoadmapNodeTypeUnsafe({ input, ...editor }: WithInput) {
@@ -499,12 +533,11 @@ async function createRoadmapNodeTypeUnsafe({ input, ...editor }: WithInput) {
   });
 }
 
-async function updateRoadmapNodeTypeUnsafe({
-  id,
-  input,
-  ...editor
-}: WithId & { input: JsonObject }) {
-  return prisma.$transaction(async (transaction) => {
+async function updateRoadmapNodeTypeUnsafe(
+  { id, input, ...editor }: WithId & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
+  return roadmapChangeTransaction(changePort, async (transaction, report) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const nodeType = await requireCustomType(transaction, requireUuid(id, 'typeId'), roadmap.id);
     const data: { name?: string; normalizedName?: string; icon?: string; color?: string } = {};
@@ -551,9 +584,22 @@ async function updateRoadmapNodeTypeUnsafe({
         nodeTypeNameTarget(nodeType.id),
         nodeType.name,
       );
+    if (data.name !== undefined && data.name !== nodeType.name)
+      await report({
+        actorId: editor.userId,
+        identifier: editor.identifier,
+        roadmapId: roadmap.id,
+        facts: [
+          {
+            kind: 'node-type-name',
+            nodeTypeId: nodeType.id,
+            previous: nodeType.name,
+            current: updated.name,
+          },
+        ],
+      });
     return {
       nodeType: typeDto(updated),
-      ...(notification ? { notification } : {}),
     };
   });
 }
@@ -667,9 +713,12 @@ async function teacherBlockedDependentNodes(
   }, []);
 }
 
-async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
+async function createRoadmapDependencyUnsafe(
+  { input, ...editor }: WithInput,
+  changePort: RoadmapChangePort,
+) {
   return withSerializableTransaction(
-    async (transaction) => {
+    async (transaction, report) => {
       const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
       const [nodes, { before, dependency }] = await Promise.all([
         teacherBlockedDependentNodes(transaction, {
@@ -710,6 +759,24 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
         dependencyTarget(prepared.sourceNodeId, prepared.targetNodeId),
         'false',
       );
+      await report({
+        actorId: editor.userId,
+        identifier: editor.identifier,
+        roadmapId: prepared.roadmapId,
+        facts: [
+          {
+            kind: 'dependency' as const,
+            dependencyId: dependency.id,
+            sourceNodeId: prepared.sourceNodeId,
+            targetNodeId: prepared.targetNodeId,
+            previous: false,
+            current: true,
+            sourceNode: prepared.sourceNode,
+            targetNode: prepared.targetNode,
+          },
+          ...accessChanges(before, after),
+        ],
+      });
       return {
         dependency: {
           id: dependency.id,
@@ -719,18 +786,6 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
           targetHandle: prepared.targetHandle,
         },
         nodes,
-        notifications: dependencyChangeNotifications({
-          before,
-          after,
-          actorId: editor.userId,
-          dependencyId: dependency.id,
-          sourceNodeId: prepared.sourceNodeId,
-          targetNodeId: prepared.targetNodeId,
-          roadmapId: prepared.roadmapId,
-          changeKind: 'dependency-added',
-          sourceNode: prepared.sourceNode,
-          targetNode: prepared.targetNode,
-        }),
       };
     },
     () =>
@@ -739,6 +794,7 @@ async function createRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
         'DEPENDENCY_CONFLICT',
         'La dependencia entra en conflicto con otra modificación.',
       ),
+    changePort,
   );
 }
 
@@ -754,9 +810,12 @@ async function previewRoadmapDependencyUnsafe({ input, ...editor }: WithInput) {
   );
 }
 
-async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
+async function deleteRoadmapDependencyUnsafe(
+  { id, ...editor }: WithId,
+  changePort: RoadmapChangePort,
+) {
   return withSerializableTransaction(
-    async (transaction) => {
+    async (transaction, report) => {
       const roadmap = await requireEditorRoadmap(transaction, editor);
       const dependencyId = requireUuid(id, 'dependencyId');
       const dependency = await transaction.dependency.findFirst({
@@ -785,20 +844,25 @@ async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
           dependencyTarget(dependency.sourceNodeId, dependency.targetNodeId),
           'true',
         );
-      return {
-        notifications: dependencyChangeNotifications({
-          before,
-          after,
-          actorId: editor.userId,
-          dependencyId: dependency.id,
-          sourceNodeId: dependency.sourceNodeId,
-          targetNodeId: dependency.targetNodeId,
-          roadmapId: roadmap.id,
-          changeKind: 'dependency-removed',
-          sourceNode: dependency.sourceNode,
-          targetNode: dependency.targetNode,
-        }),
-      };
+      await report({
+        actorId: editor.userId,
+        identifier: editor.identifier,
+        roadmapId: roadmap.id,
+        facts: [
+          {
+            kind: 'dependency' as const,
+            dependencyId: dependency.id,
+            sourceNodeId: dependency.sourceNodeId,
+            targetNodeId: dependency.targetNodeId,
+            previous: true,
+            current: false,
+            sourceNode: dependency.sourceNode,
+            targetNode: dependency.targetNode,
+          },
+          ...accessChanges(before, after),
+        ],
+      });
+      return {};
     },
     () =>
       new ApplicationError(
@@ -806,6 +870,7 @@ async function deleteRoadmapDependencyUnsafe({ id, ...editor }: WithId) {
         'DEPENDENCY_CONFLICT',
         'La dependencia entra en conflicto con otra modificación.',
       ),
+    changePort,
   );
 }
 
@@ -888,9 +953,12 @@ async function previewTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
   });
 }
 
-async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
+async function changeTeacherBlockUnsafe(
+  input: WithTeacherBlockOperation,
+  changePort: RoadmapChangePort,
+) {
   return withSerializableTransaction(
-    async (transaction) => {
+    async (transaction, report) => {
       const roadmap = await requireEditorRoadmap(transaction, input);
       const preview = await teacherBlockPreview(transaction, input, roadmap);
       if (
@@ -916,15 +984,13 @@ async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
       // Unlocking a prerequisite can release dependents whose scheduled day already arrived.
       if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(transaction, roadmap.id);
       const after = await captureAccessSnapshot(transaction, roadmap.id);
-      return {
-        ...preview,
-        notifications: accessTransitionNotifications({
-          before,
-          after,
-          actorId: input.userId,
-          roadmapId: roadmap.id,
-        }),
-      };
+      await report({
+        actorId: input.userId,
+        identifier: input.identifier,
+        roadmapId: roadmap.id,
+        facts: accessChanges(before, after),
+      });
+      return preview;
     },
     () =>
       new ApplicationError(
@@ -932,6 +998,7 @@ async function changeTeacherBlockUnsafe(input: WithTeacherBlockOperation) {
         'CONFLICT',
         'La operación entra en conflicto con otra modificación.',
       ),
+    changePort,
   );
 }
 
@@ -1020,7 +1087,10 @@ async function scheduleTeacherUnlockUnsafe({ id, unlockOn, ...editor }: WithTeac
 }
 
 /** Releases every due scheduled unlock; run by the daily scheduled job. */
-async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) {
+async function releaseScheduledTeacherUnlocksUnsafe(
+  changePort: RoadmapChangePort,
+  today = chileCalendarDay(),
+) {
   const roadmaps = await prisma.roadmap.findMany({
     where: {
       closedAt: null,
@@ -1039,22 +1109,20 @@ async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) 
     // transaction keeps those passes from contending with teaching edits on its Roadmap.
     if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
     const result = await withSerializableTransaction(
-      async (transaction) => {
+      async (transaction, report) => {
         await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
         const current = await transaction.roadmap.findUnique({ where: { id: roadmap.id } });
-        if (!current || current.closedAt) return { releasedNodeIds: [], notifications: [] };
+        if (!current || current.closedAt) return { releasedNodeIds: [] };
         const before = await captureAccessSnapshot(transaction, roadmap.id);
         const releasedNodeIds = await releaseDueScheduledUnlocks(transaction, roadmap.id, today);
         const after = await captureAccessSnapshot(transaction, roadmap.id);
-        return {
-          releasedNodeIds: [...releasedNodeIds],
-          notifications: accessTransitionNotifications({
-            before,
-            after,
-            actorId: SCHEDULED_UNLOCK_ACTOR_ID,
-            roadmapId: roadmap.id,
-          }),
-        };
+        await report({
+          actorId: SCHEDULED_UNLOCK_ACTOR_ID,
+          identifier: roadmap.courseOffering,
+          roadmapId: roadmap.id,
+          facts: accessChanges(before, after),
+        });
+        return { releasedNodeIds: [...releasedNodeIds] };
       },
       () =>
         new ApplicationError(
@@ -1062,18 +1130,22 @@ async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) 
           'CONFLICT',
           'El desbloqueo programado entra en conflicto con otra modificación.',
         ),
+      changePort,
     );
     released.push({ identifier: roadmap.courseOffering, ...result });
   }
   return released;
 }
 
-export function createRoadmapNode(input: WithInput) {
-  return applicationResult(() => createRoadmapNodeUnsafe(input));
+export function createRoadmapNode(input: WithInput, changePort: RoadmapChangePort) {
+  return applicationResult(() => createRoadmapNodeUnsafe(input, changePort));
 }
 
-export function updateRoadmapNode(input: WithId & { input: JsonObject }) {
-  return applicationResult(() => updateRoadmapNodeUnsafe(input));
+export function updateRoadmapNode(
+  input: WithId & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
+  return applicationResult(() => updateRoadmapNodeUnsafe(input, changePort));
 }
 
 export function previewNodeVisibility(input: WithId) {
@@ -1084,46 +1156,52 @@ export function previewNodeDeletion(input: WithId) {
   return applicationResult(() => previewNodeDeletionUnsafe(input));
 }
 
-export function deleteRoadmapNode(input: WithDeletePreview) {
-  return applicationResult(() => deleteRoadmapNodeUnsafe(input));
+export function deleteRoadmapNode(input: WithDeletePreview, changePort: RoadmapChangePort) {
+  return applicationResult(() => deleteRoadmapNodeUnsafe(input, changePort));
 }
 
 export function createRoadmapNodeType(input: WithInput) {
   return applicationResult(() => createRoadmapNodeTypeUnsafe(input));
 }
 
-export function updateRoadmapNodeType(input: WithId & { input: JsonObject }) {
-  return applicationResult(() => updateRoadmapNodeTypeUnsafe(input));
+export function updateRoadmapNodeType(
+  input: WithId & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
+  return applicationResult(() => updateRoadmapNodeTypeUnsafe(input, changePort));
 }
 
 export function deleteRoadmapNodeType(input: WithId) {
   return applicationResult(() => deleteRoadmapNodeTypeUnsafe(input));
 }
 
-export function createRoadmapDependency(input: WithInput) {
-  return applicationResult(() => createRoadmapDependencyUnsafe(input));
+export function createRoadmapDependency(input: WithInput, changePort: RoadmapChangePort) {
+  return applicationResult(() => createRoadmapDependencyUnsafe(input, changePort));
 }
 
 export function previewRoadmapDependency(input: WithInput) {
   return applicationResult(() => previewRoadmapDependencyUnsafe(input));
 }
 
-export function deleteRoadmapDependency(input: WithId) {
-  return applicationResult(() => deleteRoadmapDependencyUnsafe(input));
+export function deleteRoadmapDependency(input: WithId, changePort: RoadmapChangePort) {
+  return applicationResult(() => deleteRoadmapDependencyUnsafe(input, changePort));
 }
 
 export function previewTeacherBlock(input: WithTeacherBlockOperation) {
   return applicationResult(() => previewTeacherBlockUnsafe(input));
 }
 
-export function changeTeacherBlock(input: WithTeacherBlockOperation) {
-  return applicationResult(() => changeTeacherBlockUnsafe(input));
+export function changeTeacherBlock(
+  input: WithTeacherBlockOperation,
+  changePort: RoadmapChangePort,
+) {
+  return applicationResult(() => changeTeacherBlockUnsafe(input, changePort));
 }
 
 export function scheduleTeacherUnlock(input: WithTeacherUnlockSchedule) {
   return applicationResult(() => scheduleTeacherUnlockUnsafe(input));
 }
 
-export function releaseScheduledTeacherUnlocks(today?: CalendarDay) {
-  return applicationResult(() => releaseScheduledTeacherUnlocksUnsafe(today));
+export function releaseScheduledTeacherUnlocks(changePort: RoadmapChangePort, today?: CalendarDay) {
+  return applicationResult(() => releaseScheduledTeacherUnlocksUnsafe(changePort, today));
 }

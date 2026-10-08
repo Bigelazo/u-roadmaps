@@ -1,3 +1,5 @@
+import type { RoadmapChangePort } from './change-port';
+import { roadmapChangeTransaction } from './change-transaction';
 import 'server-only';
 
 import {
@@ -7,7 +9,7 @@ import {
 import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
 import { NODE_ACCESS_STATES, nodeAccessState } from '@/shared/node-access';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
-import { prisma, type Prisma } from '@/shared/server/db';
+import { type Prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 
 export type AcademicUser = Readonly<{
@@ -78,11 +80,12 @@ export async function materializeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
   access: MufasaCourseAccess,
+  changePort: RoadmapChangePort,
 ) {
   const institutionalPosition = effectivePosition(access.positions);
   if (!institutionalPosition) return null;
   const { role } = positionCapabilities(institutionalPosition);
-  return prisma.$transaction(async (transaction) => {
+  return roadmapChangeTransaction(changePort, async (transaction, report) => {
     await transaction.course.upsert({
       where: { code: identifier.courseCode },
       update: {},
@@ -116,6 +119,19 @@ export async function materializeParticipation(
     });
     if (previous?.role === 'STUDENT' && role === 'TEACHER' && roadmap) {
       await resetStudentAccessNotices(transaction, user.id, roadmap.id);
+      await report({
+        actorId: user.id,
+        identifier,
+        roadmapId: roadmap.id,
+        facts: [
+          {
+            kind: 'participation-role',
+            recipientId: user.id,
+            previous: 'STUDENT',
+            current: 'TEACHER',
+          },
+        ],
+      });
       await transaction.simulatedCompletion.deleteMany({
         where: { participationId: participation.id },
       });
@@ -128,14 +144,18 @@ export async function materializeParticipation(
 export async function synchronizeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
 ) {
   const access = await getMufasaCourseAccess(user, identifier);
   if (!access) return null;
-  return materializeParticipation(user, identifier, access);
+  return materializeParticipation(user, identifier, access, changePort);
 }
 
 /** Synchronize every reported offering once, combining all of its positions. */
-export async function synchronizeAcademicParticipations(user: AcademicUser) {
+export async function synchronizeAcademicParticipations(
+  user: AcademicUser,
+  changePort: RoadmapChangePort,
+) {
   const source = await getMufasaAcademicCourses(user.rut, {
     useLocalFixtureData: user.useLocalFixtureData === true,
   });
@@ -161,6 +181,7 @@ export async function synchronizeAcademicParticipations(user: AcademicUser) {
               institutionalPosition ? [institutionalPosition] : [],
             ),
           },
+          changePort,
         );
       }),
     );

@@ -1,3 +1,4 @@
+import type { RoadmapChangePort } from '../change-port';
 import 'server-only';
 
 import { prisma } from '@/shared/server/db';
@@ -24,11 +25,16 @@ type ResourceDownloadInput = {
   resourceId: string;
 };
 
-async function requireResourceRoadmap(actor: RoadmapActor, identifier: CourseOfferingIdentifier) {
+async function requireResourceRoadmap(
+  actor: RoadmapActor,
+  identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
+) {
   const { participation, courseOffering } = await requireCourseOfferingParticipation(
     actor,
     identifier,
     ['STUDENT', 'TEACHER'],
+    changePort,
   ).match(
     (value) => value,
     (error) => {
@@ -67,8 +73,11 @@ async function requireStudentResourceAccess(
   }
 }
 
-async function getRoadmapNodeResourcesUnsafe({ actor, identifier, nodeId }: NodeResourcesInput) {
-  const { participation, roadmap } = await requireResourceRoadmap(actor, identifier);
+async function getRoadmapNodeResourcesUnsafe(
+  { actor, identifier, nodeId }: NodeResourcesInput,
+  changePort: RoadmapChangePort,
+) {
+  const { participation, roadmap } = await requireResourceRoadmap(actor, identifier, changePort);
   const parsedNodeId = requireUuid(nodeId, 'nodeId');
   const node = await prisma.roadmapNode.findFirst({
     where: { id: parsedNodeId, roadmapId: roadmap.id },
@@ -83,12 +92,11 @@ async function getRoadmapNodeResourcesUnsafe({ actor, identifier, nodeId }: Node
   return resources.map((resource) => resourceDto(resource, identifier));
 }
 
-async function downloadRoadmapResourceUnsafe({
-  actor,
-  identifier,
-  resourceId,
-}: ResourceDownloadInput) {
-  const { participation, roadmap } = await requireResourceRoadmap(actor, identifier);
+async function downloadRoadmapResourceUnsafe(
+  { actor, identifier, resourceId }: ResourceDownloadInput,
+  changePort: RoadmapChangePort,
+) {
+  const { participation, roadmap } = await requireResourceRoadmap(actor, identifier, changePort);
   const resource = await prisma.resource.findFirst({
     where: {
       id: requireUuid(resourceId, 'resourceId'),
@@ -114,10 +122,13 @@ async function downloadRoadmapResourceUnsafe({
   }
 }
 
-export function getRoadmapNodeResources(input: NodeResourcesInput) {
-  return applicationResult(() => getRoadmapNodeResourcesUnsafe(input));
+export function getRoadmapNodeResources(input: NodeResourcesInput, changePort: RoadmapChangePort) {
+  return applicationResult(() => getRoadmapNodeResourcesUnsafe(input, changePort));
 }
 
-export function downloadRoadmapResource(input: ResourceDownloadInput) {
-  return applicationResult(() => downloadRoadmapResourceUnsafe(input));
+export function downloadRoadmapResource(
+  input: ResourceDownloadInput,
+  changePort: RoadmapChangePort,
+) {
+  return applicationResult(() => downloadRoadmapResourceUnsafe(input, changePort));
 }

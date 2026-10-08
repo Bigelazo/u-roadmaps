@@ -26,12 +26,41 @@ vi.mock('@/app/_adapters/auth', () => ({
   requireAuthenticatedUser: async () => ({ id: 'author-id' }),
 }));
 vi.mock('@/features/roadmap/server', () => ({
-  createRoadmapForActor: () => ({
-    match: async (success: (value: unknown) => unknown) =>
-      success({
-        roadmap: { id: 'roadmap-id' },
-        availabilityNotice: notice,
-      }),
+  createRoadmapForActor: (
+    _actor: unknown,
+    _identifier: unknown,
+    _input: unknown,
+    port: import('@/features/roadmap/server').RoadmapChangePort,
+  ) => ({
+    match: async (success: (value: unknown) => unknown) => {
+      const commit = await port.report(
+        {} as import('@/shared/server/db').Prisma.TransactionClient,
+        {
+          actorId: notice.actorId,
+          roadmapId: notice.roadmapId,
+          identifier: {
+            courseCode: notice.courseCode,
+            year: notice.year,
+            semester: notice.semester,
+          },
+          facts: [
+            {
+              kind: 'roadmap-created',
+              previous: null,
+              current: {
+                courseOfferingId: notice.courseOfferingId,
+                courseName: notice.courseName,
+                actorName: notice.actorName,
+                occurredAt: notice.occurredAt,
+                recipients: notice.recipients,
+              },
+            },
+          ],
+        },
+      );
+      if (commit) await commit();
+      return success({ roadmap: { id: 'roadmap-id' } });
+    },
   }),
 }));
 import { POST } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/route';

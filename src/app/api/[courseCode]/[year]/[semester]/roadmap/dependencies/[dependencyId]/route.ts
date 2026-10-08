@@ -1,8 +1,8 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import { deliverRoadmapDependencyNotifications } from '@/app/_adapters/roadmap-dependency-notifications';
 import { deleteRoadmapDependency } from '@/features/roadmap/server';
 
 export async function DELETE(
@@ -13,16 +13,14 @@ export async function DELETE(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const user = await requireAuthenticatedUser();
-    const mutation = await deleteRoadmapDependency({
-      userId: user.id,
-      identifier,
-      id: params.dependencyId,
-    }).match((value) => value, throwApplicationError);
-    await deliverRoadmapDependencyNotifications({
-      actorId: user.id,
-      identifier,
-      notifications: mutation.notifications,
-    }).catch(() => undefined);
+    await deleteRoadmapDependency(
+      {
+        userId: user.id,
+        identifier,
+        id: params.dependencyId,
+      },
+      roadmapChangePort,
+    ).match((value) => value, throwApplicationError);
     return new NextResponse(null, { status: 204 });
   });
 }

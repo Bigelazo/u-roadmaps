@@ -1,8 +1,10 @@
+import type { RoadmapChangePort } from '../change-port';
+import { roadmapChangeTransaction } from '../change-transaction';
 import 'server-only';
 import { resourceContentState } from '@/shared/server/resource-content-state';
 
 import { captureAccessSnapshot } from '../access-snapshot';
-import { prisma, type Prisma } from '@/shared/server/db';
+import { type Prisma } from '@/shared/server/db';
 import {
   requireResourceType,
   requireString,
@@ -55,12 +57,11 @@ async function captureResourceKnowledge(
     });
 }
 
-async function createRoadmapResourceUnsafe({
-  id,
-  input,
-  ...editor
-}: ResourceInput & { input: JsonObject }) {
-  return prisma.$transaction(async (transaction) => {
+async function createRoadmapResourceUnsafe(
+  { id, input, ...editor }: ResourceInput & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
+  return roadmapChangeTransaction(changePort, async (transaction, report) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
     const title = requireString(input.title, 'title', 240);
@@ -70,6 +71,20 @@ async function createRoadmapResourceUnsafe({
       data: { roadmapNodeId: node.id, title, url, type },
     });
     await captureResourceKnowledge(transaction, roadmap.id, editor.userId, resource, null);
+    await report({
+      actorId: editor.userId,
+      identifier: editor.identifier,
+      roadmapId: roadmap.id,
+      facts: [
+        {
+          kind: 'resource',
+          nodeId: node.id,
+          resourceId: resource.id,
+          previous: null,
+          current: resourceContentState(resource),
+        },
+      ],
+    });
     return resourceDto(resource, editor.identifier);
   });
 }
@@ -84,7 +99,10 @@ function uploadedFileError(error: unknown): never {
   throw error;
 }
 
-async function uploadRoadmapResourceUnsafe({ file, id, ...editor }: UploadedResourceInput) {
+async function uploadRoadmapResourceUnsafe(
+  { file, id, ...editor }: UploadedResourceInput,
+  changePort: RoadmapChangePort,
+) {
   if (!(file instanceof File)) {
     throw new ApplicationError(400, 'INVALID_REQUEST', 'Debes seleccionar un archivo para subir.');
   }
@@ -96,7 +114,7 @@ async function uploadRoadmapResourceUnsafe({ file, id, ...editor }: UploadedReso
   const fileKey = crypto.randomUUID();
   await saveUploadedFile(fileKey, file);
   try {
-    return await prisma.$transaction(async (transaction) => {
+    return await roadmapChangeTransaction(changePort, async (transaction, report) => {
       const roadmap = await requireEditorRoadmap(transaction, editor);
       const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
       const resource = await transaction.resource.create({
@@ -110,6 +128,20 @@ async function uploadRoadmapResourceUnsafe({ file, id, ...editor }: UploadedReso
         },
       });
       await captureResourceKnowledge(transaction, roadmap.id, editor.userId, resource, null);
+      await report({
+        actorId: editor.userId,
+        identifier: editor.identifier,
+        roadmapId: roadmap.id,
+        facts: [
+          {
+            kind: 'resource',
+            nodeId: node.id,
+            resourceId: resource.id,
+            previous: null,
+            current: resourceContentState(resource),
+          },
+        ],
+      });
       return resourceDto(resource, editor.identifier);
     });
   } catch (error) {
@@ -118,12 +150,11 @@ async function uploadRoadmapResourceUnsafe({ file, id, ...editor }: UploadedReso
   }
 }
 
-async function updateRoadmapResourceUnsafe({
-  id,
-  input,
-  ...editor
-}: ResourceInput & { input: JsonObject }) {
-  return prisma.$transaction(async (transaction) => {
+async function updateRoadmapResourceUnsafe(
+  { id, input, ...editor }: ResourceInput & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
+  return roadmapChangeTransaction(changePort, async (transaction, report) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
     const data: { title?: string; url?: string; type?: 'FILE' | 'LINK' | 'VIDEO' } = {};
@@ -144,57 +175,72 @@ async function updateRoadmapResourceUnsafe({
     const updated = changed
       ? await transaction.resource.update({ where: { id: resource.id }, data })
       : resource;
-    return {
-      resource: resourceDto(updated, editor.identifier),
-      ...(changed
-        ? {
-            notification: {
-              nodeId: resource.roadmapNodeId,
-              resourceId: resource.id,
-              resourceTitle: updated.title,
-              previousResource: resourceContentState(resource),
-            },
-          }
-        : {}),
-    };
+    if (changed)
+      await report({
+        actorId: editor.userId,
+        identifier: editor.identifier,
+        roadmapId: roadmap.id,
+        facts: [
+          {
+            kind: 'resource',
+            nodeId: resource.roadmapNodeId,
+            resourceId: resource.id,
+            previous: resourceContentState(resource),
+            current: resourceContentState(updated),
+          },
+        ],
+      });
+    return { resource: resourceDto(updated, editor.identifier) };
   });
 }
 
-async function removeRoadmapResourceUnsafe({ id, ...editor }: ResourceInput) {
-  const deleted = await prisma.$transaction(async (transaction) => {
+async function removeRoadmapResourceUnsafe(
+  { id, ...editor }: ResourceInput,
+  changePort: RoadmapChangePort,
+) {
+  const deleted = await roadmapChangeTransaction(changePort, async (transaction, report) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const resource = await requireResource(transaction, requireUuid(id, 'resourceId'), roadmap.id);
     await captureResourceKnowledge(transaction, roadmap.id, editor.userId, resource, resource);
     await transaction.resource.delete({ where: { id: resource.id } });
-    return {
-      resourceId: resource.id,
-      previousResource: resourceContentState(resource),
-      fileKey: resource.fileKey,
-      nodeId: resource.roadmapNodeId,
-      resourceTitle: resource.title,
-    };
+    await report({
+      actorId: editor.userId,
+      identifier: editor.identifier,
+      roadmapId: roadmap.id,
+      facts: [
+        {
+          kind: 'resource',
+          nodeId: resource.roadmapNodeId,
+          resourceId: resource.id,
+          previous: resourceContentState(resource),
+          current: null,
+        },
+      ],
+    });
+    return { fileKey: resource.fileKey };
   });
   if (deleted.fileKey) await deleteUploadedFile(deleted.fileKey).catch(() => undefined);
-  return {
-    nodeId: deleted.nodeId,
-    resourceId: deleted.resourceId,
-    resourceTitle: deleted.resourceTitle,
-    previousResource: deleted.previousResource,
-  };
+  return {};
 }
 
-export function createRoadmapResource(input: ResourceInput & { input: JsonObject }) {
-  return applicationResult(() => createRoadmapResourceUnsafe(input));
+export function createRoadmapResource(
+  input: ResourceInput & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
+  return applicationResult(() => createRoadmapResourceUnsafe(input, changePort));
 }
 
-export function uploadRoadmapResource(input: UploadedResourceInput) {
-  return applicationResult(() => uploadRoadmapResourceUnsafe(input));
+export function uploadRoadmapResource(input: UploadedResourceInput, changePort: RoadmapChangePort) {
+  return applicationResult(() => uploadRoadmapResourceUnsafe(input, changePort));
 }
 
-export function updateRoadmapResource(input: ResourceInput & { input: JsonObject }) {
-  return applicationResult(() => updateRoadmapResourceUnsafe(input));
+export function updateRoadmapResource(
+  input: ResourceInput & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) {
+  return applicationResult(() => updateRoadmapResourceUnsafe(input, changePort));
 }
 
-export function removeRoadmapResource(input: ResourceInput) {
-  return applicationResult(() => removeRoadmapResourceUnsafe(input));
+export function removeRoadmapResource(input: ResourceInput, changePort: RoadmapChangePort) {
+  return applicationResult(() => removeRoadmapResourceUnsafe(input, changePort));
 }

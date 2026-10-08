@@ -36,11 +36,11 @@ async function bounds(locator: Locator) {
   return box;
 }
 
-async function expectBottomRightOverlay(canvas: Locator, overlay: Locator) {
+async function expectTopRightOverlay(canvas: Locator, overlay: Locator) {
   const [canvasBox, overlayBox] = await Promise.all([bounds(canvas), bounds(overlay)]);
   expect(overlayBox.x).toBeGreaterThanOrEqual(canvasBox.x);
   expect(canvasBox.x + canvasBox.width - overlayBox.x - overlayBox.width).toBeCloseTo(20, 0);
-  expect(canvasBox.y + canvasBox.height - overlayBox.y - overlayBox.height).toBeCloseTo(18, 0);
+  expect(overlayBox.y - canvasBox.y).toBeCloseTo(20, 0);
 }
 
 test('roadmap fits the viewport for teachers and students without residual vertical scrolling', async ({
@@ -195,7 +195,7 @@ test('keeps feedback visible beside an open editor', async ({ page, course }) =>
   await page.getByRole('button', { name: 'Guardar cambios' }).click();
   const success = page.getByRole('status', { name: 'Cambios guardados exitosamente.' });
   await expect(success).toBeVisible();
-  await expectBottomRightOverlay(canvas, success);
+  await expectTopRightOverlay(canvas, success);
 
   await page.route(`**${course.apiPath(`/nodes/${course.nodes.first}`)}`, async (route) => {
     await route.fulfill({ status: 409, json: { error: 'No se pudo guardar el nodo.' } });
@@ -204,8 +204,8 @@ test('keeps feedback visible beside an open editor', async ({ page, course }) =>
   await page.getByRole('button', { name: 'Guardar cambios' }).click();
   const error = page.getByRole('alert', { name: 'No se pudo guardar el nodo.' });
   await expect(error).toBeVisible();
-  await expectBottomRightOverlay(canvas, error);
-  await expectBottomRightOverlay(canvas, success);
+  await expectTopRightOverlay(canvas, error);
+  await expectTopRightOverlay(canvas, success);
   // The later success surface retains priority while both notifications exist.
   await page.getByRole('button', { name: 'Cerrar notificación' }).click();
   await expect(success).toHaveCount(0);

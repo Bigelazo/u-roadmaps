@@ -120,9 +120,12 @@ async function eligibleNodeRecipients({
   });
 }
 
-export async function deliverRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
+export async function deliverRoadmapAvailability(
+  notice: RoadmapAvailabilityNotice,
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
   try {
-    await storeRoadmapAvailability(notice);
+    await storeRoadmapAvailability(notice, scheduleDelivery);
   } catch {
     console.warn('Roadmap availability delivery failed', { eventId: notice.eventId });
   }
@@ -296,19 +299,22 @@ export async function deliverNodeChange(
   }
 }
 
-export async function deliverRoadmapPathChange(input: {
-  eventId: string;
-  dependencyId: string;
-  sourceNodeId: string;
-  targetNodeId: string;
-  userId: string;
-  identifier: { courseCode: string; year: number; semester: number };
-  roadmapId: string;
-  changeKind: RoadmapPathChangeNotice['changeKind'];
-  dependentNodeTitle: string;
-  prerequisiteNodeTitle: string;
-  recipientIds: readonly string[];
-}) {
+export async function deliverRoadmapPathChange(
+  input: {
+    eventId: string;
+    dependencyId: string;
+    sourceNodeId: string;
+    targetNodeId: string;
+    userId: string;
+    identifier: { courseCode: string; year: number; semester: number };
+    roadmapId: string;
+    changeKind: RoadmapPathChangeNotice['changeKind'];
+    dependentNodeTitle: string;
+    prerequisiteNodeTitle: string;
+    recipientIds: readonly string[];
+  },
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
   if (input.recipientIds.length === 0) return;
 
   const [offering, actor] = await Promise.all([
@@ -350,20 +356,23 @@ export async function deliverRoadmapPathChange(input: {
     recipients,
   };
 
-  await storeRoadmapPathChange(notice).catch(() => {
+  await storeRoadmapPathChange(notice, scheduleDelivery).catch(() => {
     console.warn('Roadmap path notice delivery failed', { eventId: notice.eventId });
   });
 }
 
-export async function deliverRoadmapClassificationChange(input: {
-  userId: string;
-  identifier: { courseCode: string; year: number; semester: number };
-  roadmapId: string;
-  nodeTypeId: string;
-  previousTypeName: string;
-  nextTypeName: string;
-  recipientIds: readonly string[];
-}) {
+export async function deliverRoadmapClassificationChange(
+  input: {
+    userId: string;
+    identifier: { courseCode: string; year: number; semester: number };
+    roadmapId: string;
+    nodeTypeId: string;
+    previousTypeName: string;
+    nextTypeName: string;
+    recipientIds: readonly string[];
+  },
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
   try {
     if (input.recipientIds.length === 0) return;
 
@@ -403,21 +412,24 @@ export async function deliverRoadmapClassificationChange(input: {
       recipients,
     };
 
-    await storeRoadmapClassificationChange(notice);
+    await storeRoadmapClassificationChange(notice, scheduleDelivery);
   } catch {
     console.warn('Roadmap classification notice delivery failed', { roadmapId: input.roadmapId });
   }
 }
 
-export async function deliverResourceChange(input: {
-  userId: string;
-  identifier: { courseCode: string; year: number; semester: number };
-  nodeId: string;
-  resourceTitle: string;
-  resourceId?: string;
-  previousResource?: ResourceNoticeState | null;
-  changeKind: ResourceChangeNotice['changeKind'];
-}) {
+export async function deliverResourceChange(
+  input: {
+    userId: string;
+    identifier: { courseCode: string; year: number; semester: number };
+    nodeId: string;
+    resourceTitle: string;
+    resourceId?: string;
+    previousResource?: ResourceNoticeState | null;
+    changeKind: ResourceChangeNotice['changeKind'];
+  },
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
   try {
     const node = await prisma.roadmapNode.findUnique({
       where: { id: input.nodeId },
@@ -458,7 +470,7 @@ export async function deliverResourceChange(input: {
       occurredAt: new Date(),
       recipients,
     };
-    await storeResourceChange(notice);
+    await storeResourceChange(notice, scheduleDelivery);
   } catch {
     console.warn('Resource notice delivery failed', { nodeId: input.nodeId });
   }

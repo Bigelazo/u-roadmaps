@@ -2,30 +2,16 @@ import 'server-only';
 
 import { startPeriodicPass } from './periodic-pass';
 
-import { deliverRoadmapNodeNotifications } from '@/app/_adapters/roadmap-node-notifications';
-import {
-  releaseScheduledTeacherUnlocks,
-  SCHEDULED_UNLOCK_ACTOR_ID,
-} from '@/features/roadmap/server';
+import { scheduledRoadmapChangePort } from './roadmap-changes';
+import { releaseScheduledTeacherUnlocks } from '@/features/roadmap/server';
 
 async function releaseDueScheduledUnlocks() {
-  const released = await releaseScheduledTeacherUnlocks().match(
-    (value) => value,
+  await releaseScheduledTeacherUnlocks(scheduledRoadmapChangePort).match(
+    () => undefined,
     (error) => {
       console.warn('Scheduled unlock release failed', { code: error.code });
-      return [];
     },
   );
-  for (const { identifier, notifications } of released) {
-    await deliverRoadmapNodeNotifications(
-      {
-        actorId: SCHEDULED_UNLOCK_ACTOR_ID,
-        identifier,
-        notifications,
-      },
-      (persist) => persist(),
-    );
-  }
 }
 
 /**

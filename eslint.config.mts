@@ -416,6 +416,10 @@ export default defineConfig([
     settings: { vitest: { vitestImports: ['./fixtures'] } },
   },
   {
+    files: ['tests/features/roadmap/change-port-operations.test.ts'],
+    settings: { vitest: { vitestImports: ['../../notifications-integration/fixtures'] } },
+  },
+  {
     files: ['tests/**/*.test.tsx'],
     ...testingLibrary.configs['flat/react'],
   },

@@ -20,12 +20,6 @@ export {
   updateRoadmapNode,
   updateRoadmapNodeType,
 } from '@/features/roadmap/application/editor';
-export type { NodeNotificationDescriptor } from '@/features/roadmap/application/node-change-notifications';
-export type { NodeTypeClassificationNotification } from '@/features/roadmap/application/node-type-classification-notifications';
-export type {
-  DependencyNotificationBatch,
-  DependencyPathNotificationDescriptor,
-} from '@/features/roadmap/application/dependency-change-notifications';
 export {
   createRoadmapResource,
   downloadRoadmapResource,
@@ -60,3 +54,9 @@ export {
   type RoadmapVersion,
   type RoadmapVersionHistory,
 } from './application/version-history';
+
+export type {
+  RoadmapChangePort,
+  RoadmapChanges,
+  RoadmapChangeFact,
+} from './application/change-port';

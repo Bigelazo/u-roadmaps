@@ -1,3 +1,5 @@
+import type { RoadmapChangePort } from './change-port';
+import { roadmapChangeTransaction } from './change-transaction';
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
@@ -456,6 +458,7 @@ async function createRoadmapUnsafe(
   identifier: CourseOfferingIdentifier,
   body: JsonObject,
   actor: { id: string; name?: string },
+  changePort: RoadmapChangePort,
 ) {
   const courseBody =
     body.course && typeof body.course === 'object' && !Array.isArray(body.course)
@@ -465,8 +468,9 @@ async function createRoadmapUnsafe(
   const files = fileCopyLedger();
 
   try {
-    const creation = await prisma
-      .$transaction(async (transaction) => {
+    const creation = await roadmapChangeTransaction(
+      changePort,
+      async (transaction, report) => {
         const [existingCourse, existingCourseOffering] = await Promise.all([
           transaction.course.findUnique({ where: { code: identifier.courseCode } }),
           transaction.courseOffering.findUnique({
@@ -521,35 +525,33 @@ async function createRoadmapUnsafe(
           }),
         ]);
         if (source) await copyFrozenVersion(transaction, identifier, source, roadmap.id, files);
-        return {
-          roadmap,
-          courseOfferingId: materializedCourseOffering.id,
-          courseName: course.name,
-          recipients: recipients.map(({ userId, user }) => ({ userId, name: user.name })),
-          occurredAt: new Date(),
-        };
-      }, copyTransactionOptions)
-      .catch(async (error) => {
-        // Only an uncommitted creation discards its copied bytes.
-        await files.rollback();
-        throw error;
-      });
-    return {
-      roadmap: creation.roadmap,
-      availabilityNotice: {
-        eventId: creation.roadmap.id,
-        roadmapId: creation.roadmap.id,
-        courseOfferingId: creation.courseOfferingId,
-        courseCode: identifier.courseCode,
-        year: identifier.year,
-        semester: identifier.semester,
-        courseName: creation.courseName,
-        actorId: actor.id,
-        actorName: actor.name ?? actor.id,
-        occurredAt: creation.occurredAt,
-        recipients: creation.recipients.filter(({ userId }) => userId !== actor.id),
+        await report({
+          actorId: actor.id,
+          identifier,
+          roadmapId: roadmap.id,
+          facts: [
+            {
+              kind: 'roadmap-created',
+              previous: null,
+              current: {
+                courseOfferingId: materializedCourseOffering.id,
+                courseName: course.name,
+                actorName: actor.name ?? actor.id,
+                occurredAt: new Date(),
+                recipients: recipients.map(({ userId, user }) => ({ userId, name: user.name })),
+              },
+            },
+          ],
+        });
+        return { roadmap };
       },
-    };
+      copyTransactionOptions,
+    ).catch(async (error) => {
+      // Only an uncommitted creation discards its copied bytes.
+      await files.rollback();
+      throw error;
+    });
+    return creation;
   } catch (error) {
     // A concurrent creation (double click, two tabs) committed first.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
@@ -570,6 +572,7 @@ export function createRoadmap(
   identifier: CourseOfferingIdentifier,
   body: JsonObject,
   actor: { id: string; name?: string },
+  changePort: RoadmapChangePort,
 ) {
-  return applicationResult(() => createRoadmapUnsafe(identifier, body, actor));
+  return applicationResult(() => createRoadmapUnsafe(identifier, body, actor, changePort));
 }

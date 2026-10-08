@@ -234,6 +234,14 @@ agregado `pnpm test` por los fallos unitarios documentados a continuación.
 
 ## Suite unitaria y comando agregado
 
+Desde #200, la suite unitaria incluye las operaciones del Roadmap con un adapter
+que graba los Roadmap changes y PostgreSQL local para las escrituras de líneas
+base, sin mocks de Prisma para avisos. Esos casos requieren
+`NOTIFICATIONS_DATABASE_URL` hacia `roadmap_notifications_test_db`, al igual que
+la suite de integración. Reutilizan su preparación y sus fixtures propios; el
+comando agregado ejecuta unitarios e integración consecutivamente. El contrato y
+la composición se documentan en [roadmap-change-port.md](../roadmap-change-port.md).
+
 `pnpm test:unit` ejecuta Vitest con `globals: true`, que permite a React Testing
 Library registrar la limpieza automática del DOM. Ya no referencia el archivo
 eliminado `vitest.setup.ts`. Los tests mantienen sus imports explícitos de Vitest;
@@ -643,3 +651,29 @@ y E2E, en ese orden.
 Límites del harness: conexión PostgreSQL 5 s, sentencia SQL 10 s, espera de lock
 5 s y consulta del cliente 15 s; migraciones 60 s, test y hooks 15 s. Los clientes
 de setup y limpieza se cierran incluso si falla la conexión.
+
+## Validación de #200 del 2026-10-08
+
+El prefactor del Roadmap change port, basado en `f40cfb2`, pasó el comando agregado
+`pnpm test` completo con salida 0: **74 archivos y 494 pruebas unitarias**, **dos
+pruebas de integración PostgreSQL** y **171 E2E en Chromium**, sin fallos ni
+omisiones. Los specs `own-*` permanecen sin modificaciones y aprobaron tanto la
+selección focalizada de **67 casos** como la suite completa, incluidos los fallos
+reales de PostgreSQL que conservan las mutaciones confirmadas. ESLint pasó sin
+errores; conserva ocho advertencias existentes de E2E. El grafo de código se
+actualizó con `graphify update .`.
+
+Se ejecutó `code-review` una sola vez y se resolvieron sus dos hallazgos: extraer
+la consulta repetida de destinatarios activos y capturar la audiencia y la
+eligibilidad del cambio de nombre de Tipo de nodo dentro de la transacción. Un
+test del adapter cambia las Participations y el conteo de Nodos visibles antes de
+entregar y comprueba que se conserva el contexto capturado.
+
+La primera corrida completa encontró una aserción obsoleta en
+`roadmap-layout.spec.ts`: medía feedback a 18 px del borde inferior aunque
+`f40cfb2` ya lo había movido a 20 px del borde superior. El caso aislado reprodujo
+el mismo fallo; se corrigió la medición del test sin cambiar la UI ni los specs
+`own-*`. El caso aislado y la corrida completa posterior aprobaron. Los logs
+locales quedaron en `/tmp/issue200-full-tests.log` (primer intento),
+`/tmp/issue200-feedback-repro.log`, `/tmp/issue200-feedback-fixed.log` y
+`/tmp/issue200-final-tests.log` (validación completa aprobada).

@@ -121,26 +121,50 @@ async function storeNotice(
   });
 }
 
-export function storeRoadmapAvailability(notice: RoadmapAvailabilityNotice) {
-  return storeNotice(notice, 'roadmap-available', {
-    targetKind: 'roadmap',
-    changeKind: 'roadmap-available',
-  });
+export function storeRoadmapAvailability(
+  notice: RoadmapAvailabilityNotice,
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
+  return storeNotice(
+    notice,
+    'roadmap-available',
+    {
+      targetKind: 'roadmap',
+      changeKind: 'roadmap-available',
+    },
+    scheduleDelivery,
+  );
 }
 
-export function storeRoadmapPathChange(notice: RoadmapPathChangeNotice) {
-  return storeNotice(notice, 'roadmap-path-changed', {
-    ...roadmapPathChangeMessage(notice),
-    targetKind: 'roadmap',
-  });
+export function storeRoadmapPathChange(
+  notice: RoadmapPathChangeNotice,
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
+  return storeNotice(
+    notice,
+    'roadmap-path-changed',
+    {
+      ...roadmapPathChangeMessage(notice),
+      targetKind: 'roadmap',
+    },
+    scheduleDelivery,
+  );
 }
 
-export function storeRoadmapClassificationChange(notice: RoadmapClassificationChangeNotice) {
-  return storeNotice(notice, 'roadmap-classification-changed', {
-    ...roadmapClassificationChangeMessage(notice),
-    targetKind: 'roadmap',
-    changeKind: 'classification-updated',
-  });
+export function storeRoadmapClassificationChange(
+  notice: RoadmapClassificationChangeNotice,
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
+  return storeNotice(
+    notice,
+    'roadmap-classification-changed',
+    {
+      ...roadmapClassificationChangeMessage(notice),
+      targetKind: 'roadmap',
+      changeKind: 'classification-updated',
+    },
+    scheduleDelivery,
+  );
 }
 
 export function storeNodeChange(
@@ -158,11 +182,19 @@ export function storeNodeChange(
   );
 }
 
-export function storeResourceChange(notice: ResourceChangeNotice) {
-  return storeNotice(notice, 'roadmap-resource-changed', {
-    ...resourceMessage(notice),
-    targetKind: 'node',
-  });
+export function storeResourceChange(
+  notice: ResourceChangeNotice,
+  scheduleDelivery?: NoticeDeliveryScheduler,
+) {
+  return storeNotice(
+    notice,
+    'roadmap-resource-changed',
+    {
+      ...resourceMessage(notice),
+      targetKind: 'node',
+    },
+    scheduleDelivery,
+  );
 }
 
 export type NoticeNodeAccess = (

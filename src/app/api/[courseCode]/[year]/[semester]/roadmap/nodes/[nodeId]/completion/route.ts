@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
@@ -12,11 +13,14 @@ export async function POST(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const user = await requireAuthenticatedUser();
-    const completion = await completeNode({
-      userId: user.id,
-      identifier,
-      nodeId: params.nodeId,
-    }).match((value) => value, throwApplicationError);
+    const completion = await completeNode(
+      {
+        userId: user.id,
+        identifier,
+        nodeId: params.nodeId,
+      },
+      roadmapChangePort,
+    ).match((value) => value, throwApplicationError);
     return NextResponse.json({
       completion: {
         id: completion.id,

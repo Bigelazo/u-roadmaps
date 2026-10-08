@@ -1,3 +1,6 @@
+import type { RoadmapChangePort } from './change-port';
+import { roadmapChangeTransaction } from './change-transaction';
+import { accessChanges } from './access-changes';
 import { captureAccessSnapshot } from './access-snapshot';
 import {
   nodeAccessState,
@@ -175,10 +178,14 @@ function withTeacherRoadmapTransaction<Result>(
   );
 }
 
-async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeInput) {
+async function completeNodeUnsafe(
+  { userId, identifier, nodeId }: CompleteNodeInput,
+  changePort: RoadmapChangePort,
+) {
   return withSerializableRetry(() =>
-    prisma.$transaction(
-      async (transaction) => {
+    roadmapChangeTransaction(
+      changePort,
+      async (transaction, report) => {
         const { roadmap } = await requireParticipantRoadmap(
           transaction,
           { userId, identifier },
@@ -245,6 +252,12 @@ async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeIn
             data: { knownValue: current },
           });
         }
+        await report({
+          actorId: userId,
+          identifier,
+          roadmapId: roadmap.id,
+          facts: accessChanges(before, after),
+        });
         return completion;
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -321,8 +334,8 @@ export function readRoadmapForParticipant(input: ParticipantRoadmapInput) {
   return applicationResult(() => readRoadmapForParticipantUnsafe(input));
 }
 
-export function completeNode(input: CompleteNodeInput) {
-  return applicationResult(() => completeNodeUnsafe(input));
+export function completeNode(input: CompleteNodeInput, changePort: RoadmapChangePort) {
+  return applicationResult(() => completeNodeUnsafe(input, changePort));
 }
 
 export function readSimulatedRoadmap(input: ParticipantRoadmapInput) {

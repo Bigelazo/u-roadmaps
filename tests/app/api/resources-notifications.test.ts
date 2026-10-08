@@ -1,13 +1,12 @@
+vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const { createResource, uploadResource, updateResource, removeResource, deliverResourceChange } =
-  vi.hoisted(() => ({
-    createResource: vi.fn(),
-    uploadResource: vi.fn(),
-    updateResource: vi.fn(),
-    removeResource: vi.fn(),
-    deliverResourceChange: vi.fn(async () => undefined),
-  }));
+const { createResource, uploadResource, updateResource, removeResource } = vi.hoisted(() => ({
+  createResource: vi.fn(),
+  uploadResource: vi.fn(),
+  updateResource: vi.fn(),
+  removeResource: vi.fn(),
+}));
 
 vi.mock('@/app/_adapters/http', () => ({
   handleApplicationResult: (operation: () => Promise<Response>) => operation(),
@@ -29,7 +28,6 @@ vi.mock('@/features/roadmap/server', () => ({
   removeRoadmapResource: removeResource,
   getRoadmapNodeResources: vi.fn(),
 }));
-vi.mock('@/features/notifications/server', () => ({ deliverResourceChange }));
 
 import { POST } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/resources/route';
 import {
@@ -63,13 +61,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   createResource.mockReturnValue(result(resource));
   uploadResource.mockReturnValue(result(resource));
-  updateResource.mockReturnValue(
-    result({ resource, notification: { nodeId: 'node-id', resourceTitle: resource.title } }),
-  );
-  removeResource.mockReturnValue(result({ nodeId: 'node-id', resourceTitle: resource.title }));
+  updateResource.mockReturnValue(result({ resource }));
+  removeResource.mockReturnValue(result({}));
 });
 
-test.each(['LINK', 'VIDEO'] as const)('emits a confirmed %s Resource addition', async (type) => {
+test.each(['LINK', 'VIDEO'] as const)('returns a confirmed %s Resource addition', async (type) => {
   const response = await POST(
     new Request('http://localhost/resources', {
       method: 'POST',
@@ -80,27 +76,17 @@ test.each(['LINK', 'VIDEO'] as const)('emits a confirmed %s Resource addition', 
   );
 
   expect(response.status).toBe(201);
-  expect(deliverResourceChange).toHaveBeenCalledWith(
-    expect.objectContaining({
-      nodeId: 'node-id',
-      resourceTitle: resource.title,
-      changeKind: 'resource-added',
-    }),
-  );
 });
 
-test('emits a confirmed file addition through its Resource', async () => {
+test('returns a confirmed uploaded Resource', async () => {
   const response = await POST(fileUploadRequest(), context as never);
 
   expect(response.status).toBe(201);
   expect(uploadResource).toHaveBeenCalledOnce();
-  expect(deliverResourceChange).toHaveBeenCalledWith(
-    expect.objectContaining({ resourceTitle: resource.title, changeKind: 'resource-added' }),
-  );
 });
 
-test('emits only effective updates and retains the title for deletion', async () => {
-  await PATCH(
+test('returns the updated Resource and an empty deletion response', async () => {
+  const updated = await PATCH(
     new Request('http://localhost/resources/resource-id', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -108,37 +94,17 @@ test('emits only effective updates and retains the title for deletion', async ()
     }),
     context as never,
   );
-  expect(deliverResourceChange).toHaveBeenCalledWith(
-    expect.objectContaining({ changeKind: 'resource-updated', resourceTitle: resource.title }),
-  );
-
-  deliverResourceChange.mockClear();
-  updateResource.mockReturnValue(result({ resource, notification: undefined }));
-  await PATCH(
-    new Request('http://localhost/resources/resource-id', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: resource.title }),
-    }),
-    context as never,
-  );
-  expect(deliverResourceChange).not.toHaveBeenCalled();
-
-  await DELETE(
+  expect(await updated.json()).toEqual({ resource });
+  const deleted = await DELETE(
     new Request('http://localhost/resources/resource-id', { method: 'DELETE' }),
     context as never,
   );
-  expect(deliverResourceChange).toHaveBeenCalledWith(
-    expect.objectContaining({
-      changeKind: 'resource-removed',
-      resourceTitle: resource.title,
-      nodeId: 'node-id',
-    }),
-  );
+  expect(deleted.status).toBe(204);
+  expect(await deleted.text()).toBe('');
 });
 
 test.each(['storage failure', 'validation failure'] as const)(
-  'does not emit when a Resource %s prevents persistence',
+  'returns the error when a Resource %s prevents persistence',
   async (failure) => {
     uploadResource.mockReturnValue({
       match: async (
@@ -147,6 +113,5 @@ test.each(['storage failure', 'validation failure'] as const)(
       ) => onError(new Error(failure)),
     });
     await expect(POST(fileUploadRequest(), context as never)).rejects.toThrow(failure);
-    expect(deliverResourceChange).not.toHaveBeenCalled();
   },
 );

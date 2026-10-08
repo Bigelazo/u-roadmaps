@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import {
   handleApplicationResult,
@@ -6,7 +7,6 @@ import {
 } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import { deliverRoadmapDependencyNotifications } from '@/app/_adapters/roadmap-dependency-notifications';
 import { createRoadmapDependency, previewRoadmapDependency } from '@/features/roadmap/server';
 
 function dependencyPreviewQuery(request: Request) {
@@ -45,17 +45,14 @@ export async function POST(
   return handleApplicationResult(async () => {
     const identifier = requireCourseOfferingIdentifier(await context.params);
     const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
-    const mutation = await createRoadmapDependency({
-      userId: user.id,
-      identifier,
-      input: body,
-    }).match((value) => value, throwApplicationError);
-    const { notifications, ...result } = mutation;
-    await deliverRoadmapDependencyNotifications({
-      actorId: user.id,
-      identifier,
-      notifications,
-    }).catch(() => undefined);
+    const result = await createRoadmapDependency(
+      {
+        userId: user.id,
+        identifier,
+        input: body,
+      },
+      roadmapChangePort,
+    ).match((value) => value, throwApplicationError);
     return NextResponse.json(result, { status: 201 });
   });
 }

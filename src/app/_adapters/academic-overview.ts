@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import 'server-only';
 import {
   getAcademicOverviewApi as projectApi,
@@ -12,7 +13,7 @@ import {
 /** The synchronized U-Campus courses and the Roadmap closure calendar the overview reads. */
 async function overviewSources(actor: AcademicOverviewActor) {
   const [source, isPastClosure] = await Promise.all([
-    synchronizeAcademicParticipations(actor),
+    synchronizeAcademicParticipations(actor, roadmapChangePort),
     readRoadmapClosureCalendar(),
   ]);
   return { source, isPastClosure };

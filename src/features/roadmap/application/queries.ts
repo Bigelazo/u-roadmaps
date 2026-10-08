@@ -1,3 +1,4 @@
+import type { RoadmapChangePort } from './change-port';
 import 'server-only';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
@@ -18,15 +19,16 @@ export function createRoadmapForActor(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
   readInput: () => Promise<Record<string, unknown>>,
+  changePort: RoadmapChangePort,
 ) {
   return applicationResult(async () => {
-    await requireRoadmapCreationAccess(actor, identifier).match(
+    await requireRoadmapCreationAccess(actor, identifier, changePort).match(
       (value) => value,
       (error) => {
         throw error;
       },
     );
-    return createRoadmap(identifier, await readInput(), actor).match(
+    return createRoadmap(identifier, await readInput(), actor, changePort).match(
       (value) => value,
       (error) => {
         throw error;
@@ -35,12 +37,18 @@ export function createRoadmapForActor(
   });
 }
 
-export function getNodeTypesForActor(actor: RoadmapActor, identifier: CourseOfferingIdentifier) {
+export function getNodeTypesForActor(
+  actor: RoadmapActor,
+  identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
+) {
   return applicationResult(async () => {
-    const { courseOffering } = await requireCourseOfferingParticipation(actor, identifier, [
-      'STUDENT',
-      'TEACHER',
-    ]).match(
+    const { courseOffering } = await requireCourseOfferingParticipation(
+      actor,
+      identifier,
+      ['STUDENT', 'TEACHER'],
+      changePort,
+    ).match(
       (value) => value,
       (error) => {
         throw error;
@@ -59,12 +67,18 @@ export function getNodeTypesForActor(actor: RoadmapActor, identifier: CourseOffe
   });
 }
 
-export function getRoadmapNodesForActor(actor: RoadmapActor, identifier: CourseOfferingIdentifier) {
+export function getRoadmapNodesForActor(
+  actor: RoadmapActor,
+  identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
+) {
   return applicationResult(async () => {
-    const { participation } = await requireCourseOfferingParticipation(actor, identifier, [
-      'STUDENT',
-      'TEACHER',
-    ]).match(
+    const { participation } = await requireCourseOfferingParticipation(
+      actor,
+      identifier,
+      ['STUDENT', 'TEACHER'],
+      changePort,
+    ).match(
       (value) => value,
       (error) => {
         throw error;

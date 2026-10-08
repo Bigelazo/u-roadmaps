@@ -1,18 +1,14 @@
+vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const {
-  createRoadmapNodeType,
-  updateRoadmapNodeType,
-  deleteRoadmapNodeType,
-  deliverRoadmapClassificationChange,
-  calls,
-} = vi.hoisted(() => ({
-  createRoadmapNodeType: vi.fn(),
-  updateRoadmapNodeType: vi.fn(),
-  deleteRoadmapNodeType: vi.fn(),
-  deliverRoadmapClassificationChange: vi.fn(async () => undefined),
-  calls: [] as string[],
-}));
+const { createRoadmapNodeType, updateRoadmapNodeType, deleteRoadmapNodeType, calls } = vi.hoisted(
+  () => ({
+    createRoadmapNodeType: vi.fn(),
+    updateRoadmapNodeType: vi.fn(),
+    deleteRoadmapNodeType: vi.fn(),
+    calls: [] as string[],
+  }),
+);
 
 vi.mock('@/app/_adapters/http', () => ({
   handleApplicationResult: (operation: () => Promise<Response>) => operation(),
@@ -32,7 +28,6 @@ vi.mock('@/features/roadmap/server', () => ({
   updateRoadmapNodeType,
   deleteRoadmapNodeType,
 }));
-vi.mock('@/features/notifications/server', () => ({ deliverRoadmapClassificationChange }));
 
 import { POST as createNodeType } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/node-types/route';
 import { PATCH } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/node-types/[typeId]/route';
@@ -44,12 +39,6 @@ const nodeType = {
   icon: 'BookOpen',
   color: '#024AD8',
   isPredefined: false,
-};
-const notification = {
-  roadmapId: 'roadmap-id',
-  previousTypeName: 'Lectura',
-  nextTypeName: 'Lecturas guiadas',
-  recipientIds: ['student-id'],
 };
 const context = {
   params: Promise.resolve({
@@ -70,15 +59,12 @@ beforeEach(() => {
   createRoadmapNodeType.mockReturnValue(result(nodeType));
   updateRoadmapNodeType.mockImplementation(() => {
     calls.push('committed');
-    return result({ nodeType, notification });
-  });
-  deliverRoadmapClassificationChange.mockImplementation(async () => {
-    calls.push('delivered');
+    return result({ nodeType });
   });
   deleteRoadmapNodeType.mockReturnValue(result(undefined));
 });
 
-test('delivers the committed rename and keeps notification metadata out of the API response', async () => {
+test('returns the committed rename as a plain response', async () => {
   const response = await PATCH(
     new Request('http://localhost/node-types/type-id', {
       method: 'PATCH',
@@ -88,16 +74,11 @@ test('delivers the committed rename and keeps notification metadata out of the A
     context as never,
   );
 
-  expect(calls).toEqual(['committed', 'delivered']);
-  expect(deliverRoadmapClassificationChange).toHaveBeenCalledExactlyOnceWith({
-    userId: 'teacher-id',
-    identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
-    ...notification,
-  });
+  expect(calls).toEqual(['committed']);
   expect(await response.json()).toEqual({ nodeType });
 });
 
-test('does not deliver when the confirmed update has no classification notice', async () => {
+test('returns the type after an appearance edit', async () => {
   updateRoadmapNodeType.mockImplementation(() => result({ nodeType }));
 
   const response = await PATCH(
@@ -109,11 +90,10 @@ test('does not deliver when the confirmed update has no classification notice', 
     context as never,
   );
 
-  expect(deliverRoadmapClassificationChange).not.toHaveBeenCalled();
   expect(await response.json()).toEqual({ nodeType });
 });
 
-test('creating and deleting an unused type do not deliver classification notices', async () => {
+test('creating and deleting an unused type keep their status codes', async () => {
   const created = await createNodeType(
     new Request('http://localhost/node-types', {
       method: 'POST',
@@ -129,14 +109,9 @@ test('creating and deleting an unused type do not deliver classification notices
 
   expect(created.status).toBe(201);
   expect(deleted.status).toBe(204);
-  expect(deliverRoadmapClassificationChange).not.toHaveBeenCalled();
 });
 
-test('a delivery failure does not change the successful type update response', async () => {
-  deliverRoadmapClassificationChange.mockRejectedValueOnce(
-    new Error('Notice persistence unavailable'),
-  );
-
+test('a confirmed type update returns HTTP 200', async () => {
   const response = await PATCH(
     new Request('http://localhost/node-types/type-id', {
       method: 'PATCH',

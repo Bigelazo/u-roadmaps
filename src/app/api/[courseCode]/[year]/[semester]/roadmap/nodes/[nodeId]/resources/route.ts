@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import {
   handleApplicationResult,
@@ -11,7 +12,6 @@ import {
   getRoadmapNodeResources,
   uploadRoadmapResource,
 } from '@/features/roadmap/server';
-import { deliverResourceChange } from '@/features/notifications/server';
 
 export async function POST(
   request: Request,
@@ -22,28 +22,25 @@ export async function POST(
     const identifier = requireCourseOfferingIdentifier(params);
     const user = await requireAuthenticatedUser();
     const resourceResult = request.headers.get('content-type')?.startsWith('multipart/form-data')
-      ? uploadRoadmapResource({
-          userId: user.id,
-          identifier,
-          id: params.nodeId,
-          file: (await request.formData()).get('file'),
-        })
-      : createRoadmapResource({
-          userId: user.id,
-          identifier,
-          id: params.nodeId,
-          input: await parseJson(request),
-        });
+      ? uploadRoadmapResource(
+          {
+            userId: user.id,
+            identifier,
+            id: params.nodeId,
+            file: (await request.formData()).get('file'),
+          },
+          roadmapChangePort,
+        )
+      : createRoadmapResource(
+          {
+            userId: user.id,
+            identifier,
+            id: params.nodeId,
+            input: await parseJson(request),
+          },
+          roadmapChangePort,
+        );
     const resource = await resourceResult.match((value) => value, throwApplicationError);
-    await deliverResourceChange({
-      userId: user.id,
-      identifier,
-      nodeId: params.nodeId,
-      resourceTitle: resource.title,
-      resourceId: resource.id,
-      previousResource: null,
-      changeKind: 'resource-added',
-    });
     return NextResponse.json({ resource }, { status: 201 });
   });
 }
@@ -56,11 +53,14 @@ export async function GET(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const actor = await requireAuthenticatedUser();
-    const resources = await getRoadmapNodeResources({
-      actor,
-      identifier,
-      nodeId: params.nodeId,
-    }).match((value) => value, throwApplicationError);
+    const resources = await getRoadmapNodeResources(
+      {
+        actor,
+        identifier,
+        nodeId: params.nodeId,
+      },
+      roadmapChangePort,
+    ).match((value) => value, throwApplicationError);
     return NextResponse.json({ resources });
   });
 }

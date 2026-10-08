@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import {
   handleApplicationResult,
@@ -16,7 +17,7 @@ export async function GET(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const actor = await requireAuthenticatedUser();
-    const nodeTypes = await getNodeTypesForActor(actor, identifier).match(
+    const nodeTypes = await getNodeTypesForActor(actor, identifier, roadmapChangePort).match(
       (value) => value,
       throwApplicationError,
     );

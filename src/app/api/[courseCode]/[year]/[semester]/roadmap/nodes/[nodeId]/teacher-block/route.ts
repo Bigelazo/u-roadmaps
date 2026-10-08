@@ -1,8 +1,8 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import { deliverRoadmapNodeNotifications } from '@/app/_adapters/roadmap-node-notifications';
 import type { TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock, previewTeacherBlock } from '@/features/roadmap/server';
 import { ApplicationError } from '@/shared/errors/types';
@@ -35,14 +35,11 @@ async function teacherBlockInput(
 }
 
 async function applyTeacherBlock(input: Awaited<ReturnType<typeof teacherBlockInput>>) {
-  const result = await changeTeacherBlock(input).match((value) => value, throwApplicationError);
-  const { notifications, ...response } = result;
-  await deliverRoadmapNodeNotifications({
-    actorId: input.userId,
-    identifier: input.identifier,
-    notifications,
-  });
-  return response;
+  const result = await changeTeacherBlock(input, roadmapChangePort).match(
+    (value) => value,
+    throwApplicationError,
+  );
+  return result;
 }
 
 export async function GET(

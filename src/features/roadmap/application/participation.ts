@@ -1,3 +1,4 @@
+import type { RoadmapChangePort } from './change-port';
 import 'server-only';
 
 import {
@@ -23,12 +24,13 @@ async function resolveParticipation(
   identifier: CourseOfferingIdentifier,
   courseOfferingId: string,
   allowedRoles: readonly ParticipationRole[],
+  changePort: RoadmapChangePort,
 ) {
   const participation = await prisma.participation.findFirst({
     where: { userId: actor.id, courseOfferingId, isActive: true },
   });
   if (participation && allowedRoles.includes(participation.role)) return participation;
-  const synchronized = await synchronizeParticipation(actor, identifier);
+  const synchronized = await synchronizeParticipation(actor, identifier, changePort);
   return synchronized && allowedRoles.includes(synchronized.role) ? synchronized : null;
 }
 
@@ -36,6 +38,7 @@ async function requireCourseOfferingParticipationUnsafe(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
   allowedRoles: readonly ParticipationRole[],
+  changePort: RoadmapChangePort,
 ) {
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
@@ -53,6 +56,7 @@ async function requireCourseOfferingParticipationUnsafe(
     identifier,
     courseOffering.id,
     allowedRoles,
+    changePort,
   );
   if (!participation) {
     throw new ApplicationError(
@@ -67,6 +71,7 @@ async function requireCourseOfferingParticipationUnsafe(
 async function requireRoadmapCreationAccessUnsafe(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
 ) {
   const [{ access, isComplete }, courseOffering] = await Promise.all([
     readMufasaCourseAccess(actor, identifier),
@@ -78,7 +83,7 @@ async function requireRoadmapCreationAccessUnsafe(
     'Solo el profesor de cátedra puede crear el roadmap de este curso.',
   );
   if (access) {
-    await materializeParticipation(actor, identifier, access);
+    await materializeParticipation(actor, identifier, access, changePort);
     if (!canCreateRoadmap(access)) throw forbidden;
     return { actor, courseOffering };
   }
@@ -100,15 +105,17 @@ export function requireCourseOfferingParticipation(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
   allowedRoles: readonly ParticipationRole[],
+  changePort: RoadmapChangePort,
 ) {
   return applicationResult(() =>
-    requireCourseOfferingParticipationUnsafe(actor, identifier, allowedRoles),
+    requireCourseOfferingParticipationUnsafe(actor, identifier, allowedRoles, changePort),
   );
 }
 
 export function requireRoadmapCreationAccess(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
 ) {
-  return applicationResult(() => requireRoadmapCreationAccessUnsafe(actor, identifier));
+  return applicationResult(() => requireRoadmapCreationAccessUnsafe(actor, identifier, changePort));
 }

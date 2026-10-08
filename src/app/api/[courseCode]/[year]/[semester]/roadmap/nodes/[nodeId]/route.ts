@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import {
   handleApplicationResult,
@@ -6,7 +7,6 @@ import {
 } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import { deliverRoadmapNodeNotifications } from '@/app/_adapters/roadmap-node-notifications';
 import { ApplicationError } from '@/shared/errors/types';
 import {
   deleteRoadmapNode,
@@ -14,7 +14,6 @@ import {
   previewNodeVisibility,
   updateRoadmapNode,
 } from '@/features/roadmap/server';
-import { deliverNodeChange } from '@/features/notifications/server';
 
 function previewOperation(request: Request) {
   const operation = new URL(request.url).searchParams.get('operation');
@@ -69,36 +68,17 @@ export async function PATCH(
       requireAuthenticatedUser(),
     ]);
     const identifier = requireCourseOfferingIdentifier(params);
-    const result = await updateRoadmapNode({
-      userId: user.id,
-      identifier,
-      id: params.nodeId,
-      input: body,
-    }).match((value) => value, throwApplicationError);
-    if (result.notification) {
-      await deliverNodeChange({
+    const result = await updateRoadmapNode(
+      {
         userId: user.id,
-        ...identifier,
-        nodeId: result.node.id,
-        changeKind: result.notification.kind,
-        changedFields: result.notification.changedFields,
-        previousTitle: result.notification.previousTitle,
-        previousDescription: result.notification.previousDescription,
-        previousTypeId: result.notification.previousTypeId,
-        previousTypeName: result.notification.previousTypeName,
-        currentTypeName: result.notification.currentTypeName,
-        nodeTitle: result.node.title,
-      }).catch(() => undefined);
-    }
-    await deliverRoadmapNodeNotifications({
-      actorId: user.id,
-      identifier,
-      notifications: result.notifications ?? [],
-    });
-    const response = { ...result };
-    delete response.notification;
-    delete response.notifications;
-    return NextResponse.json(response);
+        identifier,
+        id: params.nodeId,
+        input: body,
+      },
+      roadmapChangePort,
+    ).match((value) => value, throwApplicationError);
+
+    return NextResponse.json(result);
   });
 }
 
@@ -108,12 +88,10 @@ export async function DELETE(
 ) {
   return handleApplicationResult(async () => {
     const input = await deletionInput(context, request);
-    const result = await deleteRoadmapNode(input).match((value) => value, throwApplicationError);
-    await deliverRoadmapNodeNotifications({
-      actorId: input.userId,
-      identifier: input.identifier,
-      notifications: result.notifications,
-    });
+    await deleteRoadmapNode(input, roadmapChangePort).match(
+      (value) => value,
+      throwApplicationError,
+    );
     return new NextResponse(null, { status: 204 });
   });
 }

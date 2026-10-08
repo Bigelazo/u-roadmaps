@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
@@ -12,11 +13,14 @@ export async function GET(
     const params = await context.params;
     const identifier = requireCourseOfferingIdentifier(params);
     const actor = await requireAuthenticatedUser();
-    const download = await downloadRoadmapResource({
-      actor,
-      identifier,
-      resourceId: params.resourceId,
-    }).match((value) => value, throwApplicationError);
+    const download = await downloadRoadmapResource(
+      {
+        actor,
+        identifier,
+        resourceId: params.resourceId,
+      },
+      roadmapChangePort,
+    ).match((value) => value, throwApplicationError);
     return new NextResponse(Uint8Array.from(download.bytes).buffer, {
       headers: {
         'Content-Type': download.contentType,

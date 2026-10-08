@@ -1,3 +1,4 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { randomUUID } from 'node:crypto';
 import { parseCourseOfferingIdentifier, RoadmapCanvasSession } from '@/features/roadmap';
 import { synchronizeParticipation } from '@/features/roadmap/server';
@@ -58,7 +59,8 @@ export default async function CoursePage(
   }
   // Refresh stored roles on entry; an unavailable source preserves local access.
   const participation =
-    (await synchronizeParticipation(user, identifier)) ?? courseOffering.participants[0];
+    (await synchronizeParticipation(user, identifier, roadmapChangePort)) ??
+    courseOffering.participants[0];
   redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(courseOffering.roadmap?.closedAt);
