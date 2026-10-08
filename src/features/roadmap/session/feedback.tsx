@@ -73,7 +73,7 @@ export function RoadmapCanvasFeedback() {
   if (!feedback) return null;
 
   return (
-    <div className="pointer-events-none absolute right-5 bottom-[18px] z-5 grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
+    <div className="pointer-events-none absolute top-5 right-5 z-5 grid w-[min(23rem,calc(100%-2.5rem))] items-start justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
       {feedback.error ? (
         <RoadmapErrorToast message={feedback.error.message} onDismiss={feedback.error.onDismiss} />
       ) : null}

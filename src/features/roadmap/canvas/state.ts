@@ -34,7 +34,6 @@ export type CanvasStateAction =
       focusReturn: () => void;
     }
   | { type: 'completeTeacherPreview' }
-  | { type: 'toggleEditor' }
   | { type: 'toggleStudentDetail' };
 
 export const initialCanvasState: CanvasState = {
@@ -141,8 +140,6 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
       };
     case 'completeTeacherPreview':
       return { ...state, isTeacherPreviewCompleted: true };
-    case 'toggleEditor':
-      return { ...state, isEditorOpen: !state.isEditorOpen };
     case 'toggleStudentDetail':
       return { ...state, isStudentDetailOpen: !state.isStudentDetailOpen };
   }

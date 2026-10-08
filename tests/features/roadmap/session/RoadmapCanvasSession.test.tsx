@@ -142,7 +142,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     projection,
     onSelectNode,
     selectedNodeId,
-    topRightActions,
+    bottomLeftActions,
     bottomRightActions,
     overlaySlots,
   }: {
@@ -153,7 +153,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     };
     onSelectNode: (nodeId: string) => void;
     selectedNodeId?: string | null;
-    topRightActions?: (
+    bottomLeftActions?: (
       findOpenPosition: (title: string) => { x: number; y: number } | null,
     ) => ReactNode;
     bottomRightActions?: (
@@ -162,7 +162,7 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     overlaySlots?: { topCenter?: ReactNode };
   }) => (
     <>
-      {topRightActions?.(() => ({ x: 480, y: 240 }))}
+      {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
       {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
       <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>

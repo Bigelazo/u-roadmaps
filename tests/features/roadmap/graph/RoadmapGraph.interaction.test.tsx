@@ -517,7 +517,7 @@ test('offers toolbar content a snapped open position without exposing viewport g
       <RoadmapGraph
         projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
         onSelectNode={vi.fn()}
-        topRightActions={(findOpenPosition) => (
+        bottomLeftActions={(findOpenPosition) => (
           <button type="button" onClick={() => requests.push(findOpenPosition('Nuevo hito'))}>
             Solicitar posición
           </button>
@@ -555,7 +555,7 @@ test('finds a grid-aligned gap when toolbar content requests an occupied positio
       <RoadmapGraph
         projection={{ kind: 'teaching', roadmap: occupiedRoadmap, editing: editingCapability() }}
         onSelectNode={vi.fn()}
-        topRightActions={(findOpenPosition) => (
+        bottomLeftActions={(findOpenPosition) => (
           <button type="button" onClick={() => (position = findOpenPosition('Nuevo hito'))}>
             Solicitar posición libre
           </button>
@@ -594,7 +594,7 @@ test('reports no available position to toolbar content when the title cannot fit
           editing: editingCapability(),
         }}
         onSelectNode={vi.fn()}
-        topRightActions={(findOpenPosition) => (
+        bottomLeftActions={(findOpenPosition) => (
           <button
             type="button"
             onClick={() => {
@@ -619,7 +619,7 @@ test('reports no available position to toolbar content when the title cannot fit
       <RoadmapGraph
         projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
         onSelectNode={vi.fn()}
-        topRightActions={(findOpenPosition) => (
+        bottomLeftActions={(findOpenPosition) => (
           <button type="button" onClick={() => responses.push(findOpenPosition('Corto'))}>
             Solicitar posición ocupada
           </button>

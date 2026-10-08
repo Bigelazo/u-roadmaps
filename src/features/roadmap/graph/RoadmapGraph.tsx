@@ -220,7 +220,7 @@ function RoadmapGraphToolbar({
   showAutoLayout,
   canAutoLayout,
   onAutoLayout,
-  topRightActions,
+  bottomLeftActions,
   bottomRightActions,
   nodes,
 }: {
@@ -229,7 +229,9 @@ function RoadmapGraphToolbar({
   showAutoLayout: boolean;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
-  topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
+  bottomLeftActions?: (
+    findOpenPosition: (title: string) => RoadmapNodePosition | null,
+  ) => ReactNode;
   bottomRightActions?: (
     findOpenPosition: (title: string) => RoadmapNodePosition | null,
   ) => ReactNode;
@@ -270,15 +272,15 @@ function RoadmapGraphToolbar({
 
   return (
     <>
-      <Panel position="top-right" className="mt-5 mr-4! sm:mr-6!">
-        <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:items-center">
+      <Panel position="bottom-left" className="m-4! max-w-[calc(100%-2rem)] sm:m-6!">
+        <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:flex-wrap sm:items-center">
           <Button
             aria-label="Centrar mapa"
             title="Centrar mapa"
             type="button"
             variant="outline"
             size="icon"
-            className="self-end sm:self-auto"
+            className="self-start sm:self-auto"
             onClick={() => void fitView(roadmapFitViewOptions)}
           >
             <Maximize aria-hidden="true" />
@@ -296,8 +298,8 @@ function RoadmapGraphToolbar({
               Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
             </Button>
           ) : null}
-          {topRightActions ? (
-            <div className="flex justify-end gap-1.5">{topRightActions(findOpenPosition)}</div>
+          {bottomLeftActions ? (
+            <div className="flex flex-wrap gap-1.5">{bottomLeftActions(findOpenPosition)}</div>
           ) : null}
         </div>
       </Panel>
@@ -381,7 +383,9 @@ export type RoadmapGraphProps = {
   onClearSelectedNode?: () => void;
   selectedNodeId?: string | null;
   focusReturnRequest?: string | null;
-  topRightActions?: (findOpenPosition: (title: string) => RoadmapNodePosition | null) => ReactNode;
+  bottomLeftActions?: (
+    findOpenPosition: (title: string) => RoadmapNodePosition | null,
+  ) => ReactNode;
   bottomRightActions?: (
     findOpenPosition: (title: string) => RoadmapNodePosition | null,
   ) => ReactNode;
@@ -432,7 +436,7 @@ function useRoadmapGraphController({
   onClearSelectedNode,
   selectedNodeId,
   focusReturnRequest,
-  topRightActions,
+  bottomLeftActions,
   bottomRightActions,
   overlaySlots,
   onViewportChange,
@@ -668,7 +672,7 @@ function useRoadmapGraphController({
     onViewportChange,
     overlaySlots,
     viewportRestoration,
-    topRightActions,
+    bottomLeftActions,
     bottomRightActions,
   };
 }
@@ -837,7 +841,7 @@ function RoadmapGraphContents({ model }: { model: ReturnType<typeof useRoadmapGr
     canEdit,
     openActionMenuNodeId,
     containerRef,
-    topRightActions,
+    bottomLeftActions,
     layoutDirection,
     flow,
     proposeAutoLayout,
@@ -858,7 +862,7 @@ function RoadmapGraphContents({ model }: { model: ReturnType<typeof useRoadmapGr
         showAutoLayout={canEdit}
         canAutoLayout={canEdit && flow.nodes.length >= 2}
         onAutoLayout={proposeAutoLayout}
-        topRightActions={topRightActions}
+        bottomLeftActions={bottomLeftActions}
         bottomRightActions={bottomRightActions}
         nodes={flow.nodes}
       />

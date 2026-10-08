@@ -8,6 +8,21 @@ body {
   overflow-x: hidden;
 }
 
+@media (width < 64rem) {
+  /* Let the loading canvas fill the space below a navigation bar that can wrap. */
+  body:has(.roadmap-canvas-loading) {
+    display: flex;
+    min-height: 100dvh;
+    flex-direction: column;
+  }
+
+  body main:has(.roadmap-canvas-loading) {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+  }
+}
+
 .markdown-editor {
   position: relative;
   font-family: var(--font-mono, monospace);

@@ -99,14 +99,16 @@ test('groups editing controls without visual overlap on narrow viewports', async
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
-  await page.getByRole('button', { name: 'Ocultar panel de edición' }).click();
-  await expect(page.getByRole('button', { name: 'Mostrar panel de edición' })).toBeVisible();
+  await expect(page.locator('#roadmap-editor-panel')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /(?:Ocultar|Mostrar) panel de edición/ }),
+  ).toHaveCount(0);
 
   await page.setViewportSize({ width: 375, height: 812 });
   const controls = [
     page.getByRole('button', { name: /Ordenar/ }),
     page.getByRole('button', { name: 'Crear en el mapa' }),
-    page.getByRole('button', { name: 'Mostrar panel de edición' }),
+    page.getByRole('link', { name: 'Historial de versiones' }),
   ];
   for (const control of controls) await expect(control).toBeVisible();
 
@@ -143,7 +145,6 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   expect(metadataBox.x - canvasBox.x).toBeCloseTo(24, 0);
   expect(metadataBox.y - canvasBox.y).toBeCloseTo(24, 0);
   await expect(canvas.locator('header')).toHaveCSS('pointer-events', 'none');
-  await page.getByRole('button', { name: 'Ocultar panel de edición' }).click();
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
   await expect(page.getByText('Previsualización del canvas')).toBeVisible();
   const previewToolbar = canvas.locator('.react-flow__panel.top.center');

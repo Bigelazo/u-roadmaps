@@ -13,7 +13,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, Eye, History, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { CircleAlert, Eye, History, X } from 'lucide-react';
 import { versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -51,7 +51,7 @@ import type {
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
 import { Badge } from '@/shared/ui/badge';
 import { Button, buttonVariants } from '@/shared/ui/button';
@@ -129,6 +129,32 @@ const NodeEditor = dynamic(
 );
 
 type Props = { input: RoadmapCanvasSessionInput };
+
+function RoadmapCanvasLoading({ isSimulation = false }: { isSimulation?: boolean }) {
+  const title = isSimulation ? 'Cargando simulación...' : 'Cargando roadmap...';
+
+  return (
+    <section
+      data-page-width="full"
+      aria-busy="true"
+      className="roadmap-canvas-loading flex min-h-0 w-full flex-1 bg-background lg:h-full"
+    >
+      <Empty role="status" aria-label={title} className="rounded-none">
+        <EmptyHeader>
+          <EmptyMedia>
+            <Spinner role="img" aria-hidden="true" className="size-8 motion-reduce:animate-none" />
+          </EmptyMedia>
+          <EmptyTitle>{title}</EmptyTitle>
+          <EmptyDescription>
+            {isSimulation
+              ? 'Preparando la vista de estudiante.'
+              : 'Preparando los nodos y sus conexiones.'}
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    </section>
+  );
+}
 
 function useRoadmapCanvasController({ input }: Props) {
   const { identifier, title } = input.courseOffering;
@@ -768,28 +794,10 @@ export function RoadmapCanvasView({ input }: Props) {
     );
   }
   if (!roadmap) {
-    return (
-      <Empty className="m-4 min-h-56 w-auto border bg-card">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Spinner aria-label="Cargando roadmap" className="motion-reduce:animate-none" />
-          </EmptyMedia>
-          <EmptyTitle>Cargando roadmap...</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
-    );
+    return <RoadmapCanvasLoading />;
   }
   if (!displayedRoadmap || !graphProjection) {
-    return (
-      <Empty className="m-4 min-h-56 w-auto border bg-card">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <Spinner aria-label="Cargando simulación" className="motion-reduce:animate-none" />
-          </EmptyMedia>
-          <EmptyTitle>Cargando simulación...</EmptyTitle>
-        </EmptyHeader>
-      </Empty>
-    );
+    return <RoadmapCanvasLoading isSimulation />;
   }
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
   const addNodeAtOpenPosition = (
@@ -833,7 +841,6 @@ export function RoadmapCanvasView({ input }: Props) {
             <RoadmapCanvasGraph
               model={model}
               input={input}
-              selectedNode={selectedNode}
               addNodeAtOpenPosition={addNodeAtOpenPosition}
               roadmap={roadmap}
               displayedRoadmap={displayedRoadmap}
@@ -842,14 +849,14 @@ export function RoadmapCanvasView({ input }: Props) {
           </NodeChangeCountsProvider>
           <RoadmapCanvasFeedback />
           {error ? (
-            <Button className="absolute right-5 bottom-20" type="button" onClick={retryRefresh}>
+            <Button className="absolute top-24 right-5" type="button" onClick={retryRefresh}>
               Reintentar actualización
             </Button>
           ) : null}
           {syncedSelectionNotice ? (
             <Alert
               role="status"
-              className="absolute bottom-5 left-5 z-5 w-[min(23rem,calc(100%-2.5rem))] bg-card shadow-sm"
+              className="absolute top-20 right-5 z-5 w-[min(23rem,calc(100%-2.5rem))] bg-card shadow-sm"
             >
               <AlertDescription>{syncedSelectionNotice}</AlertDescription>
               <AlertAction>
@@ -1092,7 +1099,6 @@ function LostRoadmapAccess() {
 function RoadmapCanvasGraph({
   model,
   input,
-  selectedNode,
   addNodeAtOpenPosition,
   roadmap,
   displayedRoadmap,
@@ -1100,7 +1106,6 @@ function RoadmapCanvasGraph({
 }: {
   model: ReturnType<typeof useRoadmapCanvasController>;
   input: Props['input'];
-  selectedNode: RoadmapDto['nodes'][number] | StudentRoadmapDto['nodes'][number] | undefined;
   addNodeAtOpenPosition: (
     node: Parameters<ReturnType<typeof useRoadmapCanvasController>['addNode']>[0],
     findOpenPosition: (title: string) => { x: number; y: number } | null,
@@ -1118,7 +1123,6 @@ function RoadmapCanvasGraph({
     focusReturnRequest,
     dismissSelectionNotice,
     selectedNodeId,
-    isEditorOpen,
     guardEditorDraft,
     addNodeType,
     updateNodeType,
@@ -1165,13 +1169,13 @@ function RoadmapCanvasGraph({
       onViewportChange={canvasPreviewWorkflow.onViewportChange}
       viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
       confirmedAutomaticLayout={confirmedAutomaticLayout}
-      topRightActions={
+      bottomLeftActions={
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
               <>
                 {canPreviewCanvas ? (
                   <Link
-                    className={buttonVariants({ variant: 'outline' })}
+                    className={cn(buttonVariants({ variant: 'outline' }))}
                     href={versionHistoryUrl(courseCode)}
                   >
                     <History data-icon="inline-start" />
@@ -1189,20 +1193,6 @@ function RoadmapCanvasGraph({
                   >
                     <Eye data-icon="inline-start" />
                     Vista estudiante
-                  </Button>
-                ) : null}
-                {canEditRoadmap && selectedNode ? (
-                  <Button
-                    aria-label={
-                      isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'
-                    }
-                    title={isEditorOpen ? 'Ocultar panel de edición' : 'Mostrar panel de edición'}
-                    type="button"
-                    size="icon"
-                    variant="outline"
-                    onClick={() => dispatchCanvas({ type: 'toggleEditor' })}
-                  >
-                    {isEditorOpen ? <PanelRightClose /> : <PanelRightOpen />}
                   </Button>
                 ) : null}
               </>
