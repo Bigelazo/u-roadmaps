@@ -54,6 +54,9 @@ export {
 
 export { synchronizeAcademicParticipations } from './application/academic-participation';
 export {
+  downloadRoadmapVersionResource,
+  readRoadmapVersion,
   readRoadmapVersionHistory,
+  type RoadmapVersion,
   type RoadmapVersionHistory,
 } from './application/version-history';

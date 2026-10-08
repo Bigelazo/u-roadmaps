@@ -5,4 +5,4 @@ export function roadmapUrl(identifier: CourseOfferingIdentifier, suffix = ''): s
   return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap${suffix}`;
 }
 
-export { versionHistoryUrl } from '@/shared/version-history-url';
+export { versionHistoryUrl, versionUrl } from '@/shared/version-history-url';

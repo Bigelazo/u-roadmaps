@@ -1,20 +1,10 @@
+import Link from 'next/link';
 import { History } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
-import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
+import { buttonVariants } from '@/shared/ui/button';
+import { originLabels, positionLabels } from '@/features/roadmap/ui/version-labels';
+import { versionUrl } from '@/shared/version-history-url';
 import type { RoadmapVersionHistory as VersionHistory } from '@/features/roadmap/server';
-
-const positionLabels: Record<InstitutionalCoursePosition, string> = {
-  COURSE_PROFESSOR: 'Profesor de cátedra',
-  COORDINATING_PROFESSOR: 'Profesor coordinador',
-  AUXILIARY_PROFESSOR: 'Auxiliar',
-  TEACHING_ASSISTANT: 'Ayudante',
-  STUDENT: 'Estudiante',
-  OBSERVER: 'Oyente',
-};
-
-const originLabels: Record<VersionHistory['versions'][number]['origin']['kind'], string> = {
-  EMPTY: 'Creada desde cero',
-};
 
 export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHistory }>) {
   return (
@@ -78,6 +68,16 @@ export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHi
                     )}
                   </dd>
                 </dl>
+                <Link
+                  aria-label={`Ver ${version.edition}`}
+                  className={buttonVariants({
+                    variant: 'outline',
+                    className: 'justify-self-start',
+                  })}
+                  href={versionUrl({ courseCode: history.course.code, ...version })}
+                >
+                  Ver versión
+                </Link>
               </li>
             ))}
           </ol>
