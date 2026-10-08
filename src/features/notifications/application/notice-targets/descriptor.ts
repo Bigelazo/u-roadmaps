@@ -14,12 +14,21 @@ export type RoadmapViewNode = Readonly<{
   description: string | null;
 }>;
 
+/** A Resource's pedagogical label and opaque content revision (never its URL or file). */
+export type RoadmapViewResource = Readonly<{
+  id: string;
+  nodeId: string;
+  title: string;
+  revision: string;
+}>;
+
 /** What a descriptor may read about one Roadmap; the module implements it over a transaction. */
 export interface RoadmapView {
   readonly roadmapId: string;
   /** Active Participations, including the actor of the change. */
   participants(): Promise<readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[]>;
   node(nodeId: string): Promise<RoadmapViewNode | null>;
+  resource(resourceId: string): Promise<RoadmapViewResource | null>;
   /** Nodes accessible to the participant (ADR-0014 decision 10 "accessible"). */
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
 }
@@ -58,16 +67,20 @@ export type TargetWording = Readonly<{
  * audience (ADR-0014 decision 10), visibility gate, equality and wording.
  * Values are encoded strings; equality is exact string equality.
  */
+export type NoticeReadSide = Readonly<{
+  changeKind: string;
+  changedFields: readonly string[];
+  targetKind: 'node' | 'roadmap';
+}>;
+
 export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapChangeFact> {
   /** Stored as `data.noticeTarget`; also selects the descriptor at read time. */
   readonly noticeTarget: string;
   readonly noticeClass: NoticeClass;
   /** Read-side discriminators the Inbox SQL, grouping and counts still use. */
-  readonly readSide: Readonly<{
-    changeKind: string;
-    changedFields: readonly string[];
-    targetKind: 'node' | 'roadmap';
-  }>;
+  readonly readSide: NoticeReadSide;
+  /** Read-side discriminators that depend on the stored values (stored over `readSide`). */
+  valueReadSide?(values: TargetValues): Partial<NoticeReadSide>;
   matches(fact: RoadmapChangeFact): fact is F;
   target(fact: F): NoticeTargetRef;
   /** The value recipients knew before the change. */

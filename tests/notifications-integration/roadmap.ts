@@ -12,10 +12,13 @@ import {
 import {
   changeTeacherBlock,
   createRoadmapNode,
+  createRoadmapResource,
   deleteRoadmapNode,
   previewTeacherBlock,
+  removeRoadmapResource,
   updateRoadmapNode,
   updateRoadmapNodeType,
+  updateRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import type { IntegrationCourse } from './fixtures';
@@ -60,6 +63,14 @@ export function teacherEdits(
     },
     renameType: (nodeTypeId: string, name: string) =>
       confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input: { name } }, port)),
+    addResource: (nodeId: string, title: string, url = 'https://example.test/guide') =>
+      confirmed(
+        createRoadmapResource({ ...editor, id: nodeId, input: { title, url, type: 'LINK' } }, port),
+      ),
+    editResource: (resourceId: string, input: Record<string, unknown>) =>
+      confirmed(updateRoadmapResource({ ...editor, id: resourceId, input }, port)),
+    removeResource: (resourceId: string) =>
+      confirmed(removeRoadmapResource({ ...editor, id: resourceId }, port)),
   };
 }
 

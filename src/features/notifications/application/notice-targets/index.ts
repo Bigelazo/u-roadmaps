@@ -8,12 +8,15 @@ import type {
 import { nodeTitleTarget } from './node-title';
 import { nodeDescriptionTarget } from './node-description';
 import { nodeTypeTarget } from './node-type';
+import { resourceTarget } from './resource';
 
 export type {
+  NoticeReadSide,
   NoticeTargetDescriptor,
   NoticeTargetRef,
   RoadmapView,
   RoadmapViewNode,
+  RoadmapViewResource,
   TargetContext,
   TargetCurrent,
   TargetValues,
@@ -25,6 +28,7 @@ export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [
   nodeTitleTarget,
   nodeDescriptionTarget,
   nodeTypeTarget,
+  resourceTarget,
 ];
 
 export function descriptorForFact(fact: RoadmapChangeFact) {

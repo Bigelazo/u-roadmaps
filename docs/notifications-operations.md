@@ -145,22 +145,23 @@ actual y lo retira solo al volver al conocido; no reconoce otros Avisos. El Desb
 la atribución a Equipo docente. La migración de
 #180 agrega la proyección actual sin borrar Avisos existentes.
 
-Cada Recurso usa un Objeto `resource:<id>` y `ResourceNoticeKnowledge` conserva
-su título y revisión conocidos por destinatario, incluso tras quitar el Recurso.
+Cada Recurso usa un Objeto `resource:<id>` del módulo de ciclo de vida (#204):
+`NoticeKnownValue` conserva por destinatario el Recurso conocido (ausente, o su
+título y revisión), incluso tras quitar el Recurso.
 La revisión es una huella SHA-256 del contenido significativo (título, URL,
 tipo, identidad del archivo y tipo MIME), independiente de `updatedAt`.
-Restaurar todos esos campos retira el Aviso. La migración convierte las revisiones
-históricas de fecha solo cuando coinciden con la versión actual del Recurso;
-conserva las demás hasta reconocerlas, pues no se puede reconstruir su contenido
-anterior sin inventar un baseline.
-La transacción de creación, edición o eliminación captura el valor anterior solo
-para participantes con acceso al Nodo, excluyendo al autor. La entrega consulta
-la versión actual: agregado → editado sigue siendo nuevo, agregado → eliminado
-retira el Aviso y editado → eliminado conserva el título conocido. Las ediciones
-solo detallan cambios de título; URLs, tipos y archivos no se muestran. Apertura
-y reconocimiento conservan snapshots de Recursos y rebasan los cambios posteriores
-sin reconocerlos en reintentos. La migración de #181 agrega las tablas y snapshots
-sin borrar Avisos existentes.
+Restaurar todos esos campos retira el Aviso.
+El adapter del port de cambios del Roadmap registra el valor anterior en la
+transacción de creación, edición o eliminación solo para participantes con acceso
+al Nodo, excluyendo al autor. La entrega consulta la versión actual: agregado →
+editado sigue siendo nuevo, agregado → eliminado retira el Aviso y editado →
+eliminado conserva el título conocido. Las ediciones solo detallan cambios de
+título; URLs, tipos y archivos no se muestran. El Aviso guarda `knownValue`,
+`currentValue` y el título del Nodo como contexto; su texto se proyecta al leer.
+Apertura y reconocimiento capturan los Recursos pendientes en `snapshots` y
+rebasan los cambios posteriores sin reconocerlos en reintentos. La migración de
+#204 parte de cero: borra los Avisos de Recursos, sus `resourceSnapshots` y las
+filas de `ResourceNoticeKnowledge`, que ya no se lee ni se escribe.
 
 Las Dependencias usan el Objeto `dependency:<origen>:<destino>`, independiente del
 id de la arista. `RouteNoticeKnowledge` conserva si el destinatario conocía ese
@@ -195,7 +196,7 @@ Avisos permanecen pendientes y no se muestra el Resumen de cambios. Una nueva
 entrada prepara una operación nueva. El contrato HTTP permite reintentar la
 operación original dentro de la retención, reutilizando el mismo
 `operationId` y el mismo conjunto, sin ampliar `noticeIds`. Los Objetos del
-módulo de ciclo de vida (hoy, el título) se capturan en la colección única
+módulo de ciclo de vida (hoy, título y Recursos) se capturan en la colección única
 `snapshots`; descripción, tipo y acceso conservan `contentSnapshots`,
 con los valores y nombres capturados al abrir. Si el Aviso cambió
 en el intervalo, el reconocimiento avanza al valor capturado y reconcilia el

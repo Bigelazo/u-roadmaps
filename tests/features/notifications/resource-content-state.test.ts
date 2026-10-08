@@ -1,6 +1,5 @@
 import { expect, test } from 'vitest';
 import { resourceContentState } from '@/shared/server/resource-content-state';
-import { reconcileResourceNotice } from '@/features/notifications/application/reconcile-resource';
 
 const original = {
   title: 'Guía',
@@ -10,12 +9,12 @@ const original = {
   fileContentType: null,
 };
 
-test('restoring every Resource field withdraws the pending change despite a newer timestamp', () => {
+test('restoring every Resource field restores the content state despite a newer timestamp', () => {
   const known = resourceContentState({ ...original, updatedAt: new Date('2026-01-01') });
   const changed = resourceContentState({ ...original, url: 'https://example.test/new' });
-  expect(reconcileResourceNotice(known, changed)?.changeKind).toBe('resource-updated');
+  expect(changed).not.toEqual(known);
   const restored = resourceContentState({ ...original, updatedAt: new Date('2026-01-03') });
-  expect(reconcileResourceNotice(known, restored)).toBeNull();
+  expect(restored).toEqual(known);
 });
 
 test('each meaningful Resource field changes the opaque revision without disclosing its contents', () => {
@@ -24,6 +23,5 @@ test('each meaningful Resource field changes the opaque revision without disclos
     const changed = resourceContentState({ ...original, [field]: 'different' });
     expect(changed.revision).not.toBe(known.revision);
     expect(changed.revision).not.toContain('different');
-    expect(reconcileResourceNotice(known, changed)?.changeKind).toBe('resource-updated');
   }
 });

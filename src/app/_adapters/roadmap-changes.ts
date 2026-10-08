@@ -9,7 +9,6 @@ import type {
 } from '@/features/roadmap/server';
 import {
   deliverNodeChange,
-  deliverResourceChange,
   deliverRoadmapPathChange,
   deliverRoadmapClassificationChange,
   deliverRoadmapAvailability,
@@ -125,24 +124,6 @@ async function deliver(
               scheduleDelivery,
             );
           break;
-        case 'resource':
-          await deliverResourceChange(
-            {
-              userId: actorId,
-              identifier,
-              nodeId: fact.nodeId,
-              resourceId: fact.resourceId,
-              resourceTitle: (fact.current ?? fact.previous)!.title,
-              previousResource: fact.previous,
-              changeKind: !fact.previous
-                ? 'resource-added'
-                : !fact.current
-                  ? 'resource-removed'
-                  : 'resource-updated',
-            },
-            scheduleDelivery,
-          );
-          break;
         case 'dependency': {
           if (!fact.sourceNode.isVisible || !fact.targetNode.isVisible) break;
           const changeKind = fact.current ? 'dependency-added' : 'dependency-removed';
@@ -197,6 +178,7 @@ async function deliver(
         case 'node-title':
         case 'node-description':
         case 'node-type':
+        case 'resource':
           break;
         // Completion and promotion already reconcile inside their transactions in this prefactor.
         case 'node-visibility':

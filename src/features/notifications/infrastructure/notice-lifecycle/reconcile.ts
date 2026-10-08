@@ -100,6 +100,7 @@ export async function reconcileNoticeTarget(
       noticeClass: descriptor.noticeClass,
       noticeTarget: descriptor.noticeTarget,
       ...descriptor.readSide,
+      ...descriptor.valueReadSide?.(values),
       ...values,
       occurredAt: occurredAt.toISOString(),
       eventCount: 1,

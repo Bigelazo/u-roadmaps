@@ -1,13 +1,12 @@
 import 'server-only';
 import { resourceContentState } from '@/shared/server/resource-content-state';
-import type { ResourceNoticeState } from '../contracts/resource-state';
 import { Prisma } from '@/shared/server/db';
 import { recognizeKnownValue, lazyRoadmapEnvelope } from './notice-lifecycle';
 import { nodeTitleTarget } from '../application/notice-targets/node-title';
 import { nodeDescriptionTarget } from '../application/notice-targets/node-description';
 import { nodeTypeTarget } from '../application/notice-targets/node-type';
+import { resourceTarget, resourceValue } from '../application/notice-targets/resource';
 import { recognizeNodeContentValue } from './node-content-notice';
-import { recognizeResourceValue } from './resource-notice';
 import { recognizeRouteValue } from './route-notice';
 import type { RoutePayload } from '../application/route-effect';
 import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
@@ -22,7 +21,7 @@ type CapturedNode = {
   nodeTypeId: string;
   nodeTypeName: string;
   access: NodeAccessState;
-  resources: (ResourceNoticeState & { id: string })[];
+  resources: { id: string; title: string; revision: string }[];
   resourceIds?: string[];
   recognizesDescription?: boolean;
 };
@@ -99,18 +98,22 @@ export async function absorptionOpeningSnapshots(
     transaction.nodeLifecycleKnowledge.findMany({
       where: { recipientId, roadmapId, isKnown: true },
     }),
-    transaction.resourceNoticeKnowledge.findMany({
-      where: { recipientId, node: { roadmapId } },
-      select: { nodeId: true, resourceId: true },
+    transaction.noticeKnownValue.findMany({
+      where: { recipientId, roadmapId, targetKey: { startsWith: 'resource:' } },
+      select: { nodeId: true, targetKey: true },
     }),
     transaction.noticeKnownValue.findMany({
       where: { recipientId, roadmapId, targetKey: { endsWith: ':description' } },
       select: { nodeId: true },
     }),
   ]);
-  const knownResourceIds = new Set(knownResources.map(({ resourceId }) => resourceId));
+  const knownResourceIds = new Set(
+    knownResources.map(({ targetKey }) => targetKey.slice('resource:'.length)),
+  );
   const resourcesByNode = new Map<string, string[]>();
-  for (const { nodeId, resourceId } of knownResources) {
+  for (const { nodeId, targetKey } of knownResources) {
+    if (!nodeId) continue;
+    const resourceId = targetKey.slice('resource:'.length);
     const ids = resourcesByNode.get(nodeId) ?? [];
     ids.push(resourceId);
     resourcesByNode.set(nodeId, ids);
@@ -418,18 +421,15 @@ export async function recognizeAbsorptionSnapshots(
       ]);
       for (const resourceId of resourceIds) {
         const resource = knownResources.get(resourceId);
-        const known = resource ? { title: resource.title, revision: resource.revision } : null;
-        await recognizeResourceValue(
-          transaction,
-          {
-            ...effect,
-            eventId: `${effect.eventId}:${resourceId}`,
-            noticeClass: 'roadmap-resource-changed',
-            payload: { ...payload, resourceId, previousResource: known },
-          },
-          known,
-          reconcileOnlyPending,
-        );
+        await recognizeKnownValue(transaction, {
+          identity: { recipientId: identity.recipientId, roadmapId: identity.roadmapId },
+          descriptor: resourceTarget,
+          target: { targetKey: `resource:${resourceId}`, nodeId: node.id },
+          knownValue: resourceValue(resource ?? null),
+          eventId: `${effect.eventId}:${resourceId}`,
+          envelope,
+          onlyPending: reconcileOnlyPending,
+        });
       }
     }
     const routes = [...snapshot.routes];
