@@ -205,6 +205,22 @@ test('visibility and deletion report their facts and recipient access transition
   ]);
 });
 
+test('Dependencies removed by hiding a Node are not reported as Dependency facts', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const input = editor(course);
+  const target = await addNode(course);
+  await prisma.dependency.create({
+    data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
+  });
+  await confirmed(
+    updateRoadmapNode({ ...input, id: target.id, input: { isVisible: false } }, recording.port),
+  );
+  expect(await prisma.dependency.count({ where: { targetNodeId: target.id } })).toBe(0);
+  expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([]);
+});
+
 test('dependencies report the pair and distinct access for each recipient; Completion targets its actor', async ({
   course,
 }) => {

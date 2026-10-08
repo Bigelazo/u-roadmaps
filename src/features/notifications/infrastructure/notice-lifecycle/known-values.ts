@@ -70,11 +70,20 @@ export async function setKnownValue(
   });
 }
 
-/** A deleted Node's targets have no Known values left to compare with. */
+/** A deleted Node's targets, and the Dependency pairs it was part of, have nothing left to compare. */
 export async function forgetNodeKnownValues(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   nodeId: string,
 ) {
-  await transaction.noticeKnownValue.deleteMany({ where: { roadmapId, nodeId } });
+  await transaction.noticeKnownValue.deleteMany({
+    where: {
+      roadmapId,
+      OR: [
+        { nodeId },
+        { targetKey: { startsWith: `dependency:${nodeId}:` } },
+        { targetKey: { startsWith: 'dependency:', endsWith: `:${nodeId}` } },
+      ],
+    },
+  });
 }

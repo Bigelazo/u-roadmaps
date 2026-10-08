@@ -30,6 +30,8 @@ export type TargetReconciliationInput = Readonly<{
   fallbackKnown: string;
   fallbackContext?: TargetContext;
   roadmap: RoadmapView;
+  /** Context the change itself reported (see `NoticeTargetDescriptor.factContext`). */
+  context?: Readonly<Record<string, unknown>>;
   /** Loaded only when a notice is written. */
   envelope: () => Promise<NoticeEnvelope>;
   eventId: string;
@@ -60,7 +62,11 @@ export async function reconcileNoticeTarget(
   });
   // A pending row without stored values can only be replaced in place.
   const pendingValues = pending
-    ? (storedTargetValues(pending.data)?.values ?? { knownValue: '', currentValue: '' })
+    ? (storedTargetValues(pending.data)?.values ?? {
+        knownValue: '',
+        currentValue: '',
+        context: {},
+      })
     : null;
   const result = reconcileTarget({
     knownValue: known.knownValue,
@@ -79,12 +85,8 @@ export async function reconcileNoticeTarget(
   const values = {
     knownValue: result.knownValue,
     currentValue: result.currentValue,
-    // An unchanged current value keeps the context it was announced with (e.g. type
-    // names at assignment, even after a rename).
-    context:
-      pendingValues && 'context' in pendingValues && pendingValues.currentValue === current.value
-        ? pendingValues.context
-        : (current.context ?? {}),
+    // Live context wins over the change's, which wins over what the pending notice kept.
+    context: { ...pendingValues?.context, ...input.context, ...current.context },
     knownContext: known.context,
   };
   const wording = descriptor.wording(values);
@@ -101,6 +103,7 @@ export async function reconcileNoticeTarget(
       noticeTarget: descriptor.noticeTarget,
       ...descriptor.readSide,
       ...descriptor.valueReadSide?.(values),
+      ...descriptor.storedData?.(target),
       ...values,
       occurredAt: occurredAt.toISOString(),
       eventCount: 1,

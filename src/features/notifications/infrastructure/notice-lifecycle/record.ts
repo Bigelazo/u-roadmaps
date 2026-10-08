@@ -25,6 +25,7 @@ type RecordedTarget = Readonly<{
   target: NoticeTargetRef;
   previousValue: string;
   previousContext?: TargetContext;
+  context?: Readonly<Record<string, unknown>>;
   recipientIds: readonly string[];
 }>;
 
@@ -61,7 +62,14 @@ export async function recordNoticeTargets(
       (recipientId) => recipientId !== changes.actorId,
     );
     if (recipientIds.length)
-      targets.push({ descriptor, target, previousValue, previousContext, recipientIds });
+      targets.push({
+        descriptor,
+        target,
+        previousValue,
+        previousContext,
+        context: descriptor.factContext?.(fact),
+        recipientIds,
+      });
   }
   if (!targets.length) return undefined;
   const eventId = randomUUID();
@@ -104,7 +112,7 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
 
 /** (B) Deliver to one recipient in its own transaction, in the shared lock order. */
 async function deliverTarget(
-  { descriptor, target, previousValue, previousContext }: RecordedTarget,
+  { descriptor, target, previousValue, previousContext, context }: RecordedTarget,
   recipientId: string,
   { eventId, occurredAt, envelope, accessibleNodes }: RecordedChange,
 ) {
@@ -146,6 +154,7 @@ async function deliverTarget(
       target,
       fallbackKnown: previousValue,
       fallbackContext: previousContext,
+      context,
       roadmap: roadmapView(transaction, roadmapId, accessibleNodes),
       envelope: async () => envelope,
       eventId: targetEventId,

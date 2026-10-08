@@ -11,7 +11,9 @@ import {
 } from '@/features/notifications/server';
 import {
   changeTeacherBlock,
+  createRoadmapDependency,
   createRoadmapNode,
+  deleteRoadmapDependency,
   createRoadmapResource,
   deleteRoadmapNode,
   previewTeacherBlock,
@@ -63,6 +65,16 @@ export function teacherEdits(
     },
     renameType: (nodeTypeId: string, name: string) =>
       confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input: { name } }, port)),
+    connect: async (sourceNodeId: string, targetNodeId: string) =>
+      (
+        await confirmed(
+          createRoadmapDependency({ ...editor, input: { sourceNodeId, targetNodeId } }, port),
+        )
+      ).dependency.id,
+    disconnect: (dependencyId: string) =>
+      confirmed(deleteRoadmapDependency({ ...editor, id: dependencyId }, port)),
+    updateType: (nodeTypeId: string, input: Record<string, unknown>) =>
+      confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input }, port)),
     addResource: (nodeId: string, title: string, url = 'https://example.test/guide') =>
       confirmed(
         createRoadmapResource({ ...editor, id: nodeId, input: { title, url, type: 'LINK' } }, port),

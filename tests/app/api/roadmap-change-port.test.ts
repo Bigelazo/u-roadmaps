@@ -1,31 +1,20 @@
 import { beforeEach, expect, test, vi } from 'vitest';
-const {
-  afterTasks,
-  deliverNodeChange,
-  deliverRoadmapAvailability,
-  deliverRoadmapPathChange,
-  deliverRoadmapClassificationChange,
-} = vi.hoisted(() => ({
+const { afterTasks, deliverNodeChange, deliverRoadmapAvailability } = vi.hoisted(() => ({
   afterTasks: [] as (() => Promise<void>)[],
   deliverNodeChange: vi.fn<typeof import('@/features/notifications/server').deliverNodeChange>(
     async () => undefined,
   ),
   deliverRoadmapAvailability: vi.fn(async () => undefined),
-  deliverRoadmapPathChange: vi.fn(async () => undefined),
-  deliverRoadmapClassificationChange: vi.fn(async () => undefined),
 }));
 vi.mock('next/server', () => ({ after: (task: () => Promise<void>) => afterTasks.push(task) }));
 vi.mock('@/features/notifications/server', () => ({
   recordRoadmapNotices: async () => undefined,
   deliverNodeChange,
   deliverRoadmapAvailability,
-  deliverRoadmapPathChange,
-  deliverRoadmapClassificationChange,
 }));
 vi.mock('@/shared/server/db', () => ({
   prisma: {
     participation: { findMany: async () => [{ userId: 'student' }] },
-    roadmapNode: { count: async () => 1 },
   },
 }));
 import { roadmapChangePort, scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
@@ -149,11 +138,10 @@ test('one delivery failure does not prevent later facts from reaching their entr
   vi.restoreAllMocks();
 });
 
-test('committed delivery keeps the audience and classification eligibility captured inside the mutation', async () => {
-  const state = { participants: [{ userId: 'original-student' }], visibleNodeCount: 1 };
+test('committed delivery keeps the audience captured inside the mutation', async () => {
+  const state = { participants: [{ userId: 'original-student' }] };
   const transaction = {
     participation: { findMany: async () => [...state.participants] },
-    roadmapNode: { count: async () => state.visibleNodeCount },
   } as unknown as Prisma.TransactionClient;
   const commit = await scheduledRoadmapChangePort.report(transaction, {
     ...changes,
@@ -171,37 +159,13 @@ test('committed delivery keeps the audience and classification eligibility captu
         current: null,
         nodeTypeName: 'Tema',
       },
-      {
-        kind: 'dependency',
-        dependencyId: 'dependency',
-        sourceNodeId: 'source',
-        targetNodeId: 'target',
-        previous: false,
-        current: true,
-        sourceNode: { title: 'Pilas', isVisible: true },
-        targetNode: { title: 'Colas', isVisible: true },
-      },
-      { kind: 'node-type-name', nodeTypeId: 'type', previous: 'Tema', current: 'Lectura' },
     ],
   });
   state.participants = [{ userId: 'new-student' }];
-  state.visibleNodeCount = 0;
   if (!commit) throw new Error('Expected delivery');
   await commit();
   expect(deliverNodeChange).toHaveBeenCalledWith(
     expect.objectContaining({ recipientIds: ['original-student'], changeKind: 'node-deleted' }),
-    expect.any(Function),
-  );
-  expect(deliverRoadmapPathChange).toHaveBeenCalledWith(
-    expect.objectContaining({ recipientIds: ['original-student'], changeKind: 'dependency-added' }),
-    expect.any(Function),
-  );
-  expect(deliverRoadmapClassificationChange).toHaveBeenCalledWith(
-    expect.objectContaining({
-      recipientIds: ['original-student'],
-      previousTypeName: 'Tema',
-      nextTypeName: 'Lectura',
-    }),
     expect.any(Function),
   );
 });

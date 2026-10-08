@@ -23,6 +23,7 @@ export function roadmapView(
   const nodes = new Map<string, Promise<RoadmapViewNode | null>>();
   const resources = new Map<string, Promise<RoadmapViewResource | null>>();
   const accessible = new Map<string, Promise<ReadonlySet<string>>>();
+  const nodeTypes = new Map<string, ReturnType<RoadmapView['nodeType']>>();
   return {
     roadmapId,
     participants() {
@@ -78,6 +79,31 @@ export function roadmapView(
         accessible.set(userId, ids);
       }
       return ids;
+    },
+    dependency(sourceNodeId, targetNodeId) {
+      return transaction.dependency.findFirst({
+        where: { sourceNodeId, targetNodeId, sourceNode: { roadmapId } },
+        select: { id: true },
+      });
+    },
+    nodeType(nodeTypeId) {
+      let nodeType = nodeTypes.get(nodeTypeId);
+      if (!nodeType) {
+        nodeType = transaction.nodeType
+          .findFirst({
+            where: { id: nodeTypeId, roadmapId },
+            select: {
+              id: true,
+              name: true,
+              nodes: { where: { roadmapId, isVisible: true }, select: { id: true }, take: 1 },
+            },
+          })
+          .then((type) =>
+            type ? { id: type.id, name: type.name, hasVisibleNode: type.nodes.length > 0 } : null,
+          );
+        nodeTypes.set(nodeTypeId, nodeType);
+      }
+      return nodeType;
     },
   };
 }

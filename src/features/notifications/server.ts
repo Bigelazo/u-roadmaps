@@ -3,18 +3,11 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
-import type {
-  NodeChangeNotice,
-  RoadmapClassificationChangeNotice,
-  RoadmapAvailabilityNotice,
-  RoadmapPathChangeNotice,
-} from './contracts';
+import type { NodeChangeNotice, RoadmapAvailabilityNotice } from './contracts';
 import {
   type NoticeDeliveryScheduler,
   listOwnNotices as listNotices,
   storeRoadmapAvailability,
-  storeRoadmapClassificationChange,
-  storeRoadmapPathChange,
   storeNodeChange,
   findOwnNotice,
   noticeRecord,
@@ -246,125 +239,6 @@ export async function deliverNodeChange(
   await storeNodeChange(notice, scheduleDelivery).catch(() => {
     console.warn('Node notice delivery failed', { eventId: notice.eventId });
   });
-}
-
-export async function deliverRoadmapPathChange(
-  input: {
-    eventId: string;
-    dependencyId: string;
-    sourceNodeId: string;
-    targetNodeId: string;
-    userId: string;
-    identifier: { courseCode: string; year: number; semester: number };
-    roadmapId: string;
-    changeKind: RoadmapPathChangeNotice['changeKind'];
-    dependentNodeTitle: string;
-    prerequisiteNodeTitle: string;
-    recipientIds: readonly string[];
-  },
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  if (input.recipientIds.length === 0) return;
-
-  const [offering, actor] = await Promise.all([
-    prisma.courseOffering.findUnique({
-      where: { courseCode_year_semester: input.identifier },
-      include: { roadmap: { select: { id: true } } },
-    }),
-    prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }),
-  ]);
-  if (!offering || offering.roadmap?.id !== input.roadmapId) return;
-
-  const participants = await prisma.participation.findMany({
-    where: {
-      courseOfferingId: offering.id,
-      isActive: true,
-      userId: { in: [...input.recipientIds], not: input.userId },
-    },
-    include: { user: { select: { id: true, name: true } } },
-  });
-  const recipients = participants.map(({ user }) => ({ userId: user.id, name: user.name }));
-  if (!recipients.length) return;
-
-  const notice: RoadmapPathChangeNotice = {
-    eventId: input.eventId,
-    dependencyId: input.dependencyId,
-    sourceNodeId: input.sourceNodeId,
-    targetNodeId: input.targetNodeId,
-    roadmapId: input.roadmapId,
-    courseOfferingId: offering.id,
-    courseCode: offering.courseCode,
-    year: offering.year,
-    semester: offering.semester,
-    changeKind: input.changeKind,
-    dependentNodeTitle: input.dependentNodeTitle,
-    prerequisiteNodeTitle: input.prerequisiteNodeTitle,
-    actorId: input.userId,
-    actorName: actor?.name ?? 'Equipo docente',
-    occurredAt: new Date(),
-    recipients,
-  };
-
-  await storeRoadmapPathChange(notice, scheduleDelivery).catch(() => {
-    console.warn('Roadmap path notice delivery failed', { eventId: notice.eventId });
-  });
-}
-
-export async function deliverRoadmapClassificationChange(
-  input: {
-    userId: string;
-    identifier: { courseCode: string; year: number; semester: number };
-    roadmapId: string;
-    nodeTypeId: string;
-    previousTypeName: string;
-    nextTypeName: string;
-    recipientIds: readonly string[];
-  },
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  try {
-    if (input.recipientIds.length === 0) return;
-
-    const [offering, actor] = await Promise.all([
-      prisma.courseOffering.findUnique({
-        where: { courseCode_year_semester: input.identifier },
-        include: { roadmap: { select: { id: true } } },
-      }),
-      prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }),
-    ]);
-    if (!offering || offering.roadmap?.id !== input.roadmapId) return;
-
-    const participants = await prisma.participation.findMany({
-      where: {
-        courseOfferingId: offering.id,
-        isActive: true,
-        userId: { in: [...input.recipientIds], not: input.userId },
-      },
-      include: { user: { select: { id: true, name: true } } },
-    });
-    const recipients = participants.map(({ user }) => ({ userId: user.id, name: user.name }));
-    if (recipients.length === 0) return;
-
-    const notice: RoadmapClassificationChangeNotice = {
-      eventId: randomUUID(),
-      roadmapId: input.roadmapId,
-      courseOfferingId: offering.id,
-      courseCode: offering.courseCode,
-      year: offering.year,
-      semester: offering.semester,
-      nodeTypeId: input.nodeTypeId,
-      previousTypeName: input.previousTypeName,
-      nextTypeName: input.nextTypeName,
-      actorId: input.userId,
-      actorName: actor?.name ?? 'Equipo docente',
-      occurredAt: new Date(),
-      recipients,
-    };
-
-    await storeRoadmapClassificationChange(notice, scheduleDelivery);
-  } catch {
-    console.warn('Roadmap classification notice delivery failed', { roadmapId: input.roadmapId });
-  }
 }
 
 async function accessibleNodes(

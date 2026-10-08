@@ -9,8 +9,6 @@ import type {
 } from '@/features/roadmap/server';
 import {
   deliverNodeChange,
-  deliverRoadmapPathChange,
-  deliverRoadmapClassificationChange,
   deliverRoadmapAvailability,
   recordRoadmapNotices,
   type NoticeDeliveryScheduler,
@@ -30,7 +28,6 @@ async function activeRecipientIds(
 type PreparedFact = Readonly<{
   fact: RoadmapChangeFact;
   recipientIds?: readonly string[];
-  visibleNodeCount?: number;
 }>;
 
 async function prepareDeliveryContext(
@@ -41,18 +38,7 @@ async function prepareDeliveryContext(
     changes.facts.map(async (fact): Promise<PreparedFact> => {
       switch (fact.kind) {
         case 'node-deleted':
-        case 'dependency':
           return { fact, recipientIds: await activeRecipientIds(transaction, changes.roadmapId) };
-        case 'node-type-name': {
-          const visibleNodeCount = await transaction.roadmapNode.count({
-            where: { roadmapId: changes.roadmapId, nodeTypeId: fact.nodeTypeId, isVisible: true },
-          });
-          return {
-            fact,
-            visibleNodeCount,
-            recipientIds: await activeRecipientIds(transaction, changes.roadmapId),
-          };
-        }
         default:
           return { fact };
       }
@@ -70,7 +56,7 @@ async function deliver(
   scheduleDelivery: NoticeDeliveryScheduler,
 ) {
   const { actorId, identifier, roadmapId } = changes;
-  for (const { fact, recipientIds, visibleNodeCount } of prepared) {
+  for (const { fact, recipientIds } of prepared) {
     try {
       switch (fact.kind) {
         case 'node-created':
@@ -124,43 +110,6 @@ async function deliver(
               scheduleDelivery,
             );
           break;
-        case 'dependency': {
-          if (!fact.sourceNode.isVisible || !fact.targetNode.isVisible) break;
-          const changeKind = fact.current ? 'dependency-added' : 'dependency-removed';
-          await deliverRoadmapPathChange(
-            {
-              userId: actorId,
-              identifier,
-              roadmapId,
-              dependencyId: fact.dependencyId,
-              sourceNodeId: fact.sourceNodeId,
-              targetNodeId: fact.targetNodeId,
-              eventId: `${fact.dependencyId}:${changeKind}`,
-              changeKind,
-              dependentNodeTitle: fact.targetNode.title,
-              prerequisiteNodeTitle: fact.sourceNode.title,
-              recipientIds: recipientIds ?? [],
-            },
-            scheduleDelivery,
-          );
-          break;
-        }
-        case 'node-type-name': {
-          if (!visibleNodeCount) break;
-          await deliverRoadmapClassificationChange(
-            {
-              userId: actorId,
-              identifier,
-              roadmapId,
-              nodeTypeId: fact.nodeTypeId,
-              previousTypeName: fact.previous,
-              nextTypeName: fact.current,
-              recipientIds: recipientIds ?? [],
-            },
-            scheduleDelivery,
-          );
-          break;
-        }
         case 'roadmap-created':
           await deliverRoadmapAvailability(
             {
@@ -179,6 +128,8 @@ async function deliver(
         case 'node-description':
         case 'node-type':
         case 'resource':
+        case 'dependency':
+        case 'node-type-name':
           break;
         // Completion and promotion already reconcile inside their transactions in this prefactor.
         case 'node-visibility':

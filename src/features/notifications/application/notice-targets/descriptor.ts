@@ -31,14 +31,19 @@ export interface RoadmapView {
   resource(resourceId: string): Promise<RoadmapViewResource | null>;
   /** Nodes accessible to the participant (ADR-0014 decision 10 "accessible"). */
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
+  /** The Dependency between an ordered pair of this Roadmap's Nodes, if any. */
+  dependency(sourceNodeId: string, targetNodeId: string): Promise<{ id: string } | null>;
+  nodeType(
+    nodeTypeId: string,
+  ): Promise<{ id: string; name: string; hasVisibleNode: boolean } | null>;
 }
 
 export type TargetContext = Readonly<Record<string, unknown>>;
 
 /**
  * The live value of a target; `visible` is its visibility gate for creating or updating
- * notices. `context` is the value's presentation context (e.g. a type name); it is kept
- * with the notice and, once recognized, with the Known value.
+ * notices. `context` is the live presentation context (e.g. Node titles, a type name),
+ * stored with the notice and, once recognized, with the Known value.
  */
 export type TargetCurrent = Readonly<{ value: string; visible: boolean; context?: TargetContext }>;
 
@@ -93,6 +98,10 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   audience(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
   /** The target's live value, or null when it no longer exists. */
   current(target: NoticeTargetRef, roadmap: RoadmapView): Promise<TargetCurrent | null>;
+  /** Presentation context only the change itself knows (e.g. a removed Dependency's id). */
+  factContext?(fact: F): Readonly<Record<string, unknown>>;
+  /** Target identity the read side (Inbox SQL and TS visibility) reads from stored `data`. */
+  storedData?(target: NoticeTargetRef): Readonly<Record<string, unknown>>;
   wording(values: TargetValues): TargetWording;
   /** Fields the notice API exposes in `data` besides the stored values. */
   apiData(values: TargetValues): Readonly<Record<string, unknown>>;
