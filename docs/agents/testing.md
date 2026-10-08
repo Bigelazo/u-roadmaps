@@ -141,8 +141,10 @@ como profesor de cátedra a sus Participations docentes activas para los tests d
 creación; los casos de otros cargos sobrescriben ese dato explícitamente.
 
 No se infiere un cargo institucional desde un rol guardado en la aplicación.
-La creación real exige confirmación de U-Campus; una respuesta fallida o parcial
-no autoriza crear ni reescribe Participations. La proyección de los datos válidos
+Desde #187, la creación usa el cargo confirmado por U-Campus o, ante una respuesta
+fallida o parcial, el cargo de profesor de cátedra guardado en una Participation
+activa. Un cargo desconocido nunca autoriza crear. Una respuesta fallida o parcial
+no reescribe Participations. La proyección de los datos válidos
 parciales sigue disponible sin reemplazar el rol local guardado.
 
 ## Límites y evidencias de fallo
@@ -552,3 +554,22 @@ corrección por entrada y sincronización personal, avisos pendientes, Canvas
 preview, rechazo de Completion real para docentes, observador y catálogo MA1001.
 ESLint terminó sin errores; conserva cuatro advertencias anteriores en
 `roadmaps.spec.ts`. Prettier de los archivos modificados también pasó.
+
+## Validación de #187 del 2026-10-08
+
+Se ejecutó `code-review` una sola vez contra `8a54851` y se aplicaron sus dos
+sugerencias: materializar el cargo confirmado antes de rechazar una creación y
+conservar los Cursos locales ausentes en una respuesta institucional parcial.
+Ambos defectos se reprodujeron por HTTP antes de corregirse.
+
+El comando agregado `pnpm test` terminó con salida 0: tipos aprobados,
+**72 archivos y 459 pruebas unitarias aprobadas**, y **139 pruebas E2E aprobadas**
+en **1,4 minutos**, sin fallos ni omisiones. La configuración de Playwright en
+esta revisión contiene únicamente Chromium; esta evidencia no incluye Firefox.
+ESLint y Prettier de todos los archivos modificados también pasaron.
+
+La cobertura incluye cargos guardados, creación sin U-Campus, rechazo de cargo
+nulo y de profesor coordinador, actualización y preservación del cargo en
+sincronizaciones, despromoción antes de un rechazo de creación, edición del
+ayudante sin U-Campus, Cursos retenidos ante respuestas parciales, backfill de
+Participations anteriores y los cargos declarados por todo el catálogo local.

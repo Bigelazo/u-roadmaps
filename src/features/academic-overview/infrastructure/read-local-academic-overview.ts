@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { positionCapabilities } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
 import type { AcademicOverviewActor, AcademicOverviewCourse } from '../types';
 
@@ -12,7 +13,7 @@ export async function readLocalAcademicOverview(
     orderBy: [{ courseOffering: { year: 'desc' } }, { courseOffering: { semester: 'desc' } }],
   });
 
-  return participations.map(({ role, courseOffering }) => ({
+  return participations.map(({ role, institutionalPosition, courseOffering }) => ({
     courseCode: courseOffering.course.code,
     name: courseOffering.course.name,
     department: courseOffering.course.department,
@@ -20,9 +21,8 @@ export async function readLocalAcademicOverview(
     semester: courseOffering.semester,
     section: null,
     role,
-    institutionalPosition: null,
+    institutionalPosition,
     hasRoadmap: Boolean(courseOffering.roadmap),
-    // A stored role cannot confirm the institutional course position.
-    canCreateRoadmap: false,
+    canCreateRoadmap: positionCapabilities(institutionalPosition).canCreateRoadmap,
   }));
 }

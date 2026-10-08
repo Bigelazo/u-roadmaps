@@ -219,3 +219,134 @@ test('a partial institutional response preserves a stored teaching Participation
   );
   expect((await api.get(course.apiPath('/simulation'))).status()).toBe(200);
 });
+
+for (const [position, expected] of [
+  ['COURSE_PROFESSOR', 201],
+  ['COORDINATING_PROFESSOR', 403],
+  [null, 403],
+] as const) {
+  test(`stored ${position} creation rights survive an institutional outage`, async ({
+    course,
+    createCourse,
+    apiAs,
+  }) => {
+    const user = course.users.teacher;
+    const offering = await createCourse({
+      roadmap: false,
+      participants: [{ user, role: 'TEACHER', institutionalPosition: position }],
+    });
+    await forgetUcampusUser(user);
+    const api = await apiAs(user);
+    expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(expected);
+  });
+}
+
+test('successful synchronization updates the position; partial and failed responses preserve it', async ({
+  course,
+  apiAs,
+  reportPosition,
+}) => {
+  const user = course.users.teachingAssistant;
+  const api = await apiAs(user);
+  const position = async () =>
+    (await (await api.get('/api/academic-overview')).json()).offerings.find(
+      (offering: { courseCode: string }) => offering.courseCode === course.courseCode,
+    ).institutionalPosition;
+  await reportPosition(user, course, 'AUXILIARY_PROFESSOR');
+  expect(await position()).toBe('AUXILIARY_PROFESSOR');
+  await reportPosition(user, course, 'OBSERVER');
+  await failUcampusEndpoint(user, 'cursos_inscritos');
+  expect(await position()).toBe('AUXILIARY_PROFESSOR');
+  await forgetUcampusUser(user);
+  expect(await position()).toBe('AUXILIARY_PROFESSOR');
+  expect((await api.get(course.apiPath('/simulation'))).status()).toBe(200);
+});
+
+test('a legacy Participation acquires its position on successful synchronization', async ({
+  course,
+  createCourse,
+  apiAs,
+  reportPosition,
+}) => {
+  const user = course.users.teacher;
+  const offering = await createCourse({
+    roadmap: false,
+    participants: [{ user, role: 'TEACHER', institutionalPosition: null }],
+  });
+  const api = await apiAs(user);
+  await reportPosition(user, offering, 'COURSE_PROFESSOR');
+  const overview = await (await api.get('/api/academic-overview')).json();
+  expect(overview.offerings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        courseCode: offering.courseCode,
+        institutionalPosition: 'COURSE_PROFESSOR',
+      }),
+    ]),
+  );
+  await forgetUcampusUser(user);
+  expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(201);
+});
+
+test('a denied creation records demotion and stays denied during an outage', async ({
+  course,
+  createCourse,
+  apiAs,
+  reportPosition,
+}) => {
+  const user = course.users.teacher;
+  const offering = await createCourse({
+    roadmap: false,
+    participants: [{ user, role: 'TEACHER', institutionalPosition: 'COURSE_PROFESSOR' }],
+  });
+  const api = await apiAs(user);
+  await reportPosition(user, offering, 'COORDINATING_PROFESSOR');
+  expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(403);
+  await forgetUcampusUser(user);
+  expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(403);
+});
+
+test('a partial response keeps absent teaching offerings and their stored labels in both views', async ({
+  course,
+  apiAs,
+  reportPosition,
+  page,
+}) => {
+  const user = course.users.teachingAssistant;
+  const api = await apiAs(user);
+  await reportPosition(user, course, 'AUXILIARY_PROFESSOR');
+  expect((await api.get('/api/academic-overview')).status()).toBe(200);
+  await failUcampusEndpoint(user, 'cursos_dictados');
+  const { offerings } = await (await api.get('/api/academic-overview')).json();
+  expect(offerings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        courseCode: course.courseCode,
+        institutionalPosition: 'AUXILIARY_PROFESSOR',
+      }),
+    ]),
+  );
+  await authenticateAs(page.context(), user.id);
+  await page.goto('/academic-overview');
+  await expect(page.getByText(course.courseName, { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Auxiliar · /)).toBeVisible();
+});
+
+test('a stored teaching assistant can edit while U-Campus is unavailable', async ({
+  course,
+  apiAs,
+  reportPosition,
+}) => {
+  const user = course.users.teachingAssistant;
+  const api = await apiAs(user);
+  await reportPosition(user, course, 'TEACHING_ASSISTANT');
+  expect((await api.get('/api/academic-overview')).status()).toBe(200);
+  await forgetUcampusUser(user);
+  expect(
+    (
+      await api.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+        data: { title: 'Edición del ayudante sin U-Campus' },
+      })
+    ).status(),
+  ).toBe(200);
+});

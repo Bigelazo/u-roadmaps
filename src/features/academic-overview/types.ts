@@ -9,11 +9,7 @@ export type AcademicOverviewSource = 'MUFASA' | 'LOCAL';
 export type AcademicOverviewRole = 'STUDENT' | 'TEACHER';
 
 export type AcademicOverviewInstitutionalPosition =
-  | 'TEACHING_ASSISTANT'
-  | 'AUXILIARY_PROFESSOR'
-  | 'COURSE_PROFESSOR'
-  | 'COORDINATING_PROFESSOR'
-  | 'OBSERVER';
+  import('@/shared/institutional-position').InstitutionalCoursePosition;
 
 export type AcademicOverviewCourse = Readonly<{
   courseCode: string;

@@ -22,6 +22,8 @@ import {
 
 export { expect } from '@playwright/test';
 
+type InstitutionalCoursePosition =
+  import('@/shared/institutional-position').InstitutionalCoursePosition;
 type ParticipationRole = 'TEACHER' | 'STUDENT';
 
 export type E2EUser = {
@@ -59,7 +61,12 @@ export type CourseOfferingOptions = {
   semester?: number;
   /** Another offering of the test's Course (Ramo), instead of a new Course. */
   sameCourseAs?: E2ECourseOffering;
-  participants?: readonly { user: E2EUser; role: ParticipationRole; isActive?: boolean }[];
+  participants?: readonly {
+    user: E2EUser;
+    role: ParticipationRole;
+    institutionalPosition?: InstitutionalCoursePosition | null;
+    isActive?: boolean;
+  }[];
 };
 
 function catalogUserIdByRut(rut: string) {
@@ -149,13 +156,16 @@ function courseOfferingScript(options: CourseOfferingOptions, workerIndex: numbe
     insert('CourseOffering', [{ id: offeringId, courseCode, year, semester }]) +
     insert(
       'Participation',
-      (options.participants ?? []).map(({ user, role, isActive = true }) => ({
-        id: randomUUID(),
-        userId: user.id,
-        courseOfferingId: offeringId,
-        role,
-        isActive,
-      })),
+      (options.participants ?? []).map(
+        ({ user, role, institutionalPosition = null, isActive = true }) => ({
+          id: randomUUID(),
+          userId: user.id,
+          courseOfferingId: offeringId,
+          role,
+          institutionalPosition,
+          isActive,
+        }),
+      ),
     );
   if (roadmap) {
     const updatedAt = new Date();
@@ -217,8 +227,10 @@ export const test = base.extend<{
       keys.map((key) => [key, newUser(key, testInfo.workerIndex)]),
     ) as Record<CourseUserKey, E2EUser>;
     const participants = keys.map((key) => {
-      const { role, isActive } = templateParticipation(templateUsers[key].catalogId);
-      return { user: users[key], role, isActive };
+      const { role, institutionalPosition, isActive } = templateParticipation(
+        templateUsers[key].catalogId,
+      );
+      return { user: users[key], role, institutionalPosition, isActive };
     });
     const { offering, script, roadmap } = courseOfferingScript(
       { participants },

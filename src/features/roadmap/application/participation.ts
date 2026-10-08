@@ -2,12 +2,13 @@ import 'server-only';
 
 import {
   canCreateRoadmap,
-  getMufasaCourseAccess,
+  readMufasaCourseAccess,
   materializeParticipation,
   synchronizeParticipation,
   type AcademicUser,
 } from './academic-participation';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
+import { positionCapabilities } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
 
@@ -67,8 +68,8 @@ async function requireRoadmapCreationAccessUnsafe(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
 ) {
-  const [access, courseOffering] = await Promise.all([
-    getMufasaCourseAccess(actor, identifier),
+  const [{ access, isComplete }, courseOffering] = await Promise.all([
+    readMufasaCourseAccess(actor, identifier),
     prisma.courseOffering.findUnique({ where: { courseCode_year_semester: identifier } }),
   ]);
   const forbidden = new ApplicationError(
@@ -77,9 +78,20 @@ async function requireRoadmapCreationAccessUnsafe(
     'Solo el profesor de cátedra puede crear el roadmap de este curso.',
   );
   if (access) {
-    if (!canCreateRoadmap(access)) throw forbidden;
     await materializeParticipation(actor, identifier, access);
+    if (!canCreateRoadmap(access)) throw forbidden;
     return { actor, courseOffering };
+  }
+  if (!isComplete && courseOffering) {
+    const participation = await prisma.participation.findUnique({
+      where: { userId_courseOfferingId: { userId: actor.id, courseOfferingId: courseOffering.id } },
+    });
+    if (
+      participation?.isActive &&
+      positionCapabilities(participation.institutionalPosition).canCreateRoadmap
+    ) {
+      return { actor, courseOffering };
+    }
   }
   throw forbidden;
 }

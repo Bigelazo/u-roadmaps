@@ -2,10 +2,9 @@ import 'server-only';
 
 import {
   getMufasaAcademicCourses,
-  isCourseLeadPosition,
-  isTeachingPosition,
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
+import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
 import { NODE_ACCESS_STATES, nodeAccessState } from '@/shared/node-access';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import { prisma, type Prisma } from '@/shared/server/db';
@@ -24,11 +23,11 @@ export type MufasaCourseAccess = Readonly<{
 }>;
 
 export function canCreateRoadmap(access: MufasaCourseAccess) {
-  return access.positions.some(isCourseLeadPosition);
+  return positionCapabilities(effectivePosition(access.positions)).canCreateRoadmap;
 }
 
 export function canEditRoadmap(access: MufasaCourseAccess) {
-  return access.positions.some(isTeachingPosition);
+  return positionCapabilities(effectivePosition(access.positions)).canEdit;
 }
 
 export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' {
@@ -40,27 +39,38 @@ export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' 
  * person can appear more than once, for instance teaching one section and
  * assisting another, so every position counts toward the resolved access.
  */
-export async function getMufasaCourseAccess(
+export async function readMufasaCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
-): Promise<MufasaCourseAccess | null> {
+): Promise<{ access: MufasaCourseAccess | null; isComplete: boolean }> {
   const mufasa = await getMufasaAcademicCourses(user.rut, {
     useLocalFixtureData: user.useLocalFixtureData === true,
   });
-  if (mufasa.source !== 'MUFASA' || mufasa.isComplete === false) return null;
+  if (mufasa.source !== 'MUFASA' || mufasa.isComplete === false)
+    return { access: null, isComplete: false };
   const matches = mufasa.courses.filter(
     (course) =>
       course.courseCode === identifier.courseCode &&
       course.year === identifier.year &&
       course.semester === identifier.semester,
   );
-  if (matches.length === 0) return null;
+  if (matches.length === 0) return { access: null, isComplete: true };
   return {
-    name: matches[0].name,
-    positions: matches.flatMap((course) =>
-      course.institutionalPosition ? [course.institutionalPosition] : [],
-    ),
+    isComplete: true,
+    access: {
+      name: matches[0].name,
+      positions: matches.flatMap((course) =>
+        course.institutionalPosition ? [course.institutionalPosition] : [],
+      ),
+    },
   };
+}
+
+export async function getMufasaCourseAccess(
+  user: AcademicUser,
+  identifier: CourseOfferingIdentifier,
+) {
+  return (await readMufasaCourseAccess(user, identifier)).access;
 }
 
 /** Materializes the institutionally reported participation for one offering. */
@@ -69,7 +79,9 @@ export async function materializeParticipation(
   identifier: CourseOfferingIdentifier,
   access: MufasaCourseAccess,
 ) {
-  const role = academicRole(access);
+  const institutionalPosition = effectivePosition(access.positions);
+  if (!institutionalPosition) return null;
+  const { role } = positionCapabilities(institutionalPosition);
   return prisma.$transaction(async (transaction) => {
     await transaction.course.upsert({
       where: { code: identifier.courseCode },
@@ -99,8 +111,8 @@ export async function materializeParticipation(
       where: {
         userId_courseOfferingId: { userId: user.id, courseOfferingId: courseOffering.id },
       },
-      update: { role, isActive: true },
-      create: { userId: user.id, courseOfferingId: courseOffering.id, role },
+      update: { role, institutionalPosition, isActive: true },
+      create: { userId: user.id, courseOfferingId: courseOffering.id, role, institutionalPosition },
     });
     if (previous?.role === 'STUDENT' && role === 'TEACHER' && roadmap) {
       await resetStudentAccessNotices(transaction, user.id, roadmap.id);

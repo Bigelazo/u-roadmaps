@@ -1,20 +1,16 @@
 import 'server-only';
 
-export type MufasaInstitutionalCoursePosition =
-  | 'TEACHING_ASSISTANT'
-  | 'AUXILIARY_PROFESSOR'
-  | 'COURSE_PROFESSOR'
-  | 'COORDINATING_PROFESSOR'
-  | 'OBSERVER';
+import {
+  positionCapabilities,
+  type InstitutionalCoursePosition,
+} from '@/shared/institutional-position';
 
-/** Only the course professor may create the shared Roadmap. */
-export function isCourseLeadPosition(position: MufasaInstitutionalCoursePosition | null) {
-  return position === 'COURSE_PROFESSOR';
+export type MufasaInstitutionalCoursePosition = InstitutionalCoursePosition;
+export function isCourseLeadPosition(position: InstitutionalCoursePosition | null) {
+  return positionCapabilities(position).canCreateRoadmap;
 }
-
-/** Every recognized teaching position grants Roadmap editing. */
-export function isTeachingPosition(position: MufasaInstitutionalCoursePosition | null) {
-  return position !== null && position !== 'OBSERVER';
+export function isTeachingPosition(position: InstitutionalCoursePosition | null) {
+  return positionCapabilities(position).isTeachingStaff;
 }
 
 export type MufasaEnrolledCourse = Readonly<{
@@ -132,7 +128,7 @@ function parseCourse(value: unknown, isTeaching: boolean): MufasaEnrolledCourse 
     semester,
     section,
     isTeaching,
-    institutionalPosition: institutionalPosition(course),
+    institutionalPosition: institutionalPosition(course) ?? (isTeaching ? null : 'STUDENT'),
   };
 }
 

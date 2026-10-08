@@ -1,16 +1,6 @@
-import type {
-  AcademicOverviewCourse,
-  AcademicOverviewInstitutionalPosition,
-  AcademicOverviewTerm,
-} from '../types';
+import type { AcademicOverviewCourse, AcademicOverviewTerm } from '../types';
 
-const institutionalPositionPriorities: Record<AcademicOverviewInstitutionalPosition, number> = {
-  COORDINATING_PROFESSOR: 2,
-  COURSE_PROFESSOR: 1,
-  AUXILIARY_PROFESSOR: 3,
-  TEACHING_ASSISTANT: 4,
-  OBSERVER: 6,
-};
+import { POSITION_PRIORITY } from '@/shared/institutional-position';
 
 export function academicOverviewCourseKey(
   course: Pick<AcademicOverviewCourse, 'courseCode' | 'year' | 'semester'>,
@@ -20,7 +10,7 @@ export function academicOverviewCourseKey(
 
 function coursePriority(course: AcademicOverviewCourse) {
   if (course.institutionalPosition) {
-    return institutionalPositionPriorities[course.institutionalPosition];
+    return POSITION_PRIORITY.indexOf(course.institutionalPosition) + 1;
   }
   return course.role === 'TEACHER' ? 4 : 5;
 }

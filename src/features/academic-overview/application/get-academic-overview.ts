@@ -46,19 +46,46 @@ function courseFromMufasa(
     semester: course.semester,
     section: course.section,
     department: localCourse?.department ?? null,
-    role:
-      !isComplete && localCourse
-        ? localCourse.role
-        : isTeachingPosition(course.institutionalPosition)
-          ? 'TEACHER'
-          : 'STUDENT',
-    institutionalPosition: course.institutionalPosition,
+    role: localCourse
+      ? localCourse.role
+      : isTeachingPosition(course.institutionalPosition)
+        ? 'TEACHER'
+        : 'STUDENT',
+    institutionalPosition: localCourse
+      ? localCourse.institutionalPosition
+      : course.institutionalPosition,
     hasRoadmap: localCourse?.hasRoadmap ?? false,
-    canCreateRoadmap: isComplete && isCourseLeadPosition(course.institutionalPosition),
+    canCreateRoadmap: localCourse
+      ? localCourse.canCreateRoadmap
+      : isComplete && isCourseLeadPosition(course.institutionalPosition),
   };
 }
 
-function apiOfferingFromMufasa(course: AcademicOverviewCourse): AcademicOverviewApiOffering {
+function projectOverviewCourses(
+  mufasa: MufasaEnrolledCoursesResult,
+  localCourses: AcademicOverviewCourse[],
+) {
+  if (mufasa.source === 'LOCAL') return localCourses;
+  const localCoursesByKey = new Map(
+    localCourses.map((course) => [academicOverviewCourseKey(course), course]),
+  );
+  const courses = mufasa.courses.map((course) =>
+    courseFromMufasa(
+      course,
+      localCoursesByKey.get(academicOverviewCourseKey(course)),
+      mufasa.isComplete !== false,
+    ),
+  );
+  if (mufasa.isComplete === false) {
+    const reported = new Set(courses.map(academicOverviewCourseKey));
+    courses.push(
+      ...localCourses.filter((course) => !reported.has(academicOverviewCourseKey(course))),
+    );
+  }
+  return courses;
+}
+
+function apiOffering(course: AcademicOverviewCourse): AcademicOverviewApiOffering {
   return {
     courseCode: course.courseCode,
     name: course.name,
@@ -66,20 +93,6 @@ function apiOfferingFromMufasa(course: AcademicOverviewCourse): AcademicOverview
     semester: course.semester,
     section: course.section,
     department: course.department,
-    role: course.role,
-    institutionalPosition: course.institutionalPosition,
-    hasRoadmap: course.hasRoadmap,
-  };
-}
-
-function apiOfferingFromLocal(course: AcademicOverviewCourse): AcademicOverviewApiOffering {
-  return {
-    courseCode: course.courseCode,
-    name: course.name,
-    department: course.department,
-    year: course.year,
-    semester: course.semester,
-    section: course.section,
     role: course.role,
     institutionalPosition: course.institutionalPosition,
     hasRoadmap: course.hasRoadmap,
@@ -91,19 +104,7 @@ export async function getAcademicOverviewPage(
   source?: MufasaEnrolledCoursesResult,
 ): Promise<AcademicOverviewPage> {
   const { mufasa, localCourses } = await getAcademicOverview(actor, source);
-  const localCoursesByKey = new Map(
-    localCourses.map((course) => [academicOverviewCourseKey(course), course]),
-  );
-  const courses =
-    mufasa.source === 'MUFASA'
-      ? mufasa.courses.map((course) =>
-          courseFromMufasa(
-            course,
-            localCoursesByKey.get(academicOverviewCourseKey(course)),
-            mufasa.isComplete !== false,
-          ),
-        )
-      : localCourses;
+  const courses = projectOverviewCourses(mufasa, localCourses);
 
   return {
     source: mufasa.source,
@@ -116,21 +117,7 @@ export async function getAcademicOverviewApi(
   source?: MufasaEnrolledCoursesResult,
 ): Promise<AcademicOverviewApiResponse> {
   const { mufasa, localCourses } = await getAcademicOverview(actor, source);
-  const localCoursesByKey = new Map(
-    localCourses.map((course) => [academicOverviewCourseKey(course), course]),
-  );
-  const offerings =
-    mufasa.source === 'MUFASA'
-      ? mufasa.courses.map((course) => {
-          return apiOfferingFromMufasa(
-            courseFromMufasa(
-              course,
-              localCoursesByKey.get(academicOverviewCourseKey(course)),
-              mufasa.isComplete !== false,
-            ),
-          );
-        })
-      : localCourses.map(apiOfferingFromLocal);
+  const offerings = projectOverviewCourses(mufasa, localCourses).map(apiOffering);
 
   return { source: mufasa.source, offerings };
 }

@@ -156,15 +156,16 @@ model VtiLoginTransaction {
 }
 
 model Participation {
-  id                   String                @id @default(uuid()) @db.Uuid
-  userId               String                @db.Uuid
-  courseOfferingId     String                @db.Uuid
-  role                 ParticipationRole
-  isActive             Boolean               @default(true)
-  noticeResetAt        DateTime?             @db.Timestamptz(3)
-  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseOffering       CourseOffering        @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  simulatedCompletions SimulatedCompletion[]
+  id                    String                       @id @default(uuid()) @db.Uuid
+  userId                String                       @db.Uuid
+  courseOfferingId      String                       @db.Uuid
+  institutionalPosition InstitutionalCoursePosition?
+  role                  ParticipationRole
+  isActive              Boolean                      @default(true)
+  noticeResetAt         DateTime?                    @db.Timestamptz(3)
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseOffering        CourseOffering               @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  simulatedCompletions  SimulatedCompletion[]
 
   @@unique([userId, courseOfferingId])
   @@unique([id, courseOfferingId])
@@ -344,4 +345,13 @@ model RouteNoticeKnowledge {
   roadmap     Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
 
   @@id([recipientId, roadmapId, targetKey])
+}
+
+enum InstitutionalCoursePosition {
+  COURSE_PROFESSOR
+  COORDINATING_PROFESSOR
+  AUXILIARY_PROFESSOR
+  TEACHING_ASSISTANT
+  STUDENT
+  OBSERVER
 }

@@ -1,4 +1,5 @@
 import { expect, request as apiRequest, test } from '@playwright/test';
+import { fixtureParticipations, developmentFixtureOfferings } from '@/development/fixtures/catalog';
 import { fixture, fixtureRoadmapPath, sessionCookie } from './helpers';
 
 function hasCycle(
@@ -132,6 +133,7 @@ test('academic overview and development session retain their public JSON and coo
             year: 2026,
             semester: 2,
             role: 'STUDENT',
+            institutionalPosition: 'STUDENT',
             hasRoadmap: true,
           }),
         ]),
@@ -243,7 +245,13 @@ test('the MA1001 catalog teaching assistant has teaching-staff capabilities', as
     const overview = await assistant.get('/api/academic-overview');
     expect((await overview.json()).offerings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ courseCode: 'MA1001', year: 2026, semester: 2, role: 'TEACHER' }),
+        expect.objectContaining({
+          courseCode: 'MA1001',
+          year: 2026,
+          semester: 2,
+          role: 'TEACHER',
+          institutionalPosition: 'TEACHING_ASSISTANT',
+        }),
       ]),
     );
     const roadmap = await (await assistant.get(fixtureRoadmapPath(fixture.ma1001))).json();
@@ -251,5 +259,38 @@ test('the MA1001 catalog teaching assistant has teaching-staff capabilities', as
     expect(roadmap.nodes.some((node: { canComplete?: boolean }) => node.canComplete)).toBe(false);
   } finally {
     await assistant.dispose();
+  }
+});
+
+test('every catalog Participation exposes its declared institutional position', async ({}, testInfo) => {
+  for (const userId of new Set(
+    fixtureParticipations.map((participation) => participation.userId),
+  )) {
+    const api = await apiRequest.newContext({
+      baseURL: testInfo.project.use.baseURL as string,
+      extraHTTPHeaders: { cookie: await sessionCookie(userId) },
+    });
+    try {
+      const { offerings } = await (await api.get('/api/academic-overview')).json();
+      for (const participation of fixtureParticipations.filter(
+        (participation) => participation.userId === userId && participation.isActive,
+      )) {
+        const offering = developmentFixtureOfferings.find(
+          (offering) => offering.id === participation.courseOfferingId,
+        )!;
+        expect(offerings).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              courseCode: offering.courseCode,
+              year: offering.year,
+              semester: offering.semester,
+              institutionalPosition: participation.institutionalPosition,
+            }),
+          ]),
+        );
+      }
+    } finally {
+      await api.dispose();
+    }
   }
 });

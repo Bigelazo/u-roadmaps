@@ -42,7 +42,7 @@ it('reads enrolled courses from MUFASA without exposing its token in the URL', a
         semester: 2,
         section: '1',
         isTeaching: false,
-        institutionalPosition: null,
+        institutionalPosition: 'STUDENT',
       },
     ],
   });
@@ -92,7 +92,7 @@ it('keeps valid enrolled courses when MUFASA includes a course with an unsupport
         semester: 2,
         section: null,
         isTeaching: false,
-        institutionalPosition: null,
+        institutionalPosition: 'STUDENT',
       },
     ],
   });
@@ -184,7 +184,7 @@ it('queries MUFASA for a real user while development fixtures are enabled', asyn
         semester: 2,
         section: null,
         isTeaching: false,
-        institutionalPosition: null,
+        institutionalPosition: 'STUDENT',
       },
     ],
   });

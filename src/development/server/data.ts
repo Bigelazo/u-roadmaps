@@ -106,12 +106,15 @@ export async function resetDevelopmentData() {
     });
     await transaction.user.createMany({ data: [...fixtureUsers] });
     await transaction.participation.createMany({
-      data: fixtureParticipations.map(({ userId, courseOfferingId, role, isActive }) => ({
-        userId,
-        courseOfferingId,
-        role,
-        isActive,
-      })),
+      data: fixtureParticipations.map(
+        ({ userId, courseOfferingId, role, institutionalPosition, isActive }) => ({
+          userId,
+          courseOfferingId,
+          role,
+          institutionalPosition,
+          isActive,
+        }),
+      ),
     });
     await transaction.roadmap.createMany({
       data: fixtureRoadmaps.map(({ id, courseOfferingId }) => ({ id, courseOfferingId })),

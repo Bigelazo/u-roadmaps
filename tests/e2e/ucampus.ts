@@ -67,6 +67,7 @@ export async function reportUcampusPosition(
 ) {
   // Send the documented institution labels; parsing stays part of the HTTP test.
   const labels = {
+    STUDENT: null,
     COURSE_PROFESSOR: 'profesor de cátedra',
     COORDINATING_PROFESSOR: 'profesor coordinador',
     AUXILIARY_PROFESSOR: 'profesor auxiliar',

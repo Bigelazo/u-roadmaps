@@ -34,6 +34,7 @@ const institutionalPositionDetails: Record<
     accentClass: 'border-l-[#f0195c]',
   },
   TEACHING_ASSISTANT: { label: 'Ayudante', accentClass: 'border-l-[#933D8A]' },
+  STUDENT: { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' },
   OBSERVER: { label: 'Oyente', accentClass: 'border-l-[#6f7a8a]' },
 };
 
