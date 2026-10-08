@@ -33,24 +33,29 @@ function mufasaResponse(courses: Array<Record<string, unknown>>) {
   });
 }
 
-it('reserves roadmap creation for the course and coordinating professors', () => {
-  expect(isCourseLeadPosition('COURSE_PROFESSOR')).toBe(true);
-  expect(isCourseLeadPosition('COORDINATING_PROFESSOR')).toBe(true);
-  for (const position of ['AUXILIARY_PROFESSOR', 'TEACHING_ASSISTANT', 'OBSERVER', null] as const) {
-    expect(isCourseLeadPosition(position)).toBe(false);
-  }
+it.each([
+  ['COURSE_PROFESSOR', 'TEACHER', true, true],
+  ['COORDINATING_PROFESSOR', 'TEACHER', true, false],
+  ['AUXILIARY_PROFESSOR', 'TEACHER', true, false],
+  ['TEACHING_ASSISTANT', 'TEACHER', true, false],
+  ['OBSERVER', 'STUDENT', false, false],
+  [null, 'STUDENT', false, false],
+] as const)('derives permissions for %s', (position, role, edit, create) => {
+  const access = { name: 'Curso', positions: position ? [position] : [] };
+  expect(academicRole(access)).toBe(role);
+  expect(canEditRoadmap(access)).toBe(edit);
+  expect(canCreateRoadmap(access)).toBe(create);
+  expect(isCourseLeadPosition(position)).toBe(create);
 });
 
-it('extends roadmap editing to auxiliary professors and no further', () => {
-  const access = (position: string) => ({ name: 'Curso', positions: [position] as never });
-
-  expect(canEditRoadmap(access('AUXILIARY_PROFESSOR'))).toBe(true);
-  expect(canCreateRoadmap(access('AUXILIARY_PROFESSOR'))).toBe(false);
-  expect(academicRole(access('AUXILIARY_PROFESSOR'))).toBe('TEACHER');
-  expect(academicRole(access('COURSE_PROFESSOR'))).toBe('TEACHER');
-  expect(academicRole(access('TEACHING_ASSISTANT'))).toBe('STUDENT');
-  expect(academicRole(access('OBSERVER'))).toBe('STUDENT');
-  expect(academicRole({ name: 'Curso', positions: [] })).toBe('STUDENT');
+it.each([
+  [['OBSERVER', 'TEACHING_ASSISTANT'], 'TEACHER', false],
+  [['TEACHING_ASSISTANT', 'AUXILIARY_PROFESSOR'], 'TEACHER', false],
+  [['COORDINATING_PROFESSOR', 'COURSE_PROFESSOR'], 'TEACHER', true],
+] as const)('uses the highest applicable rights for %s', (positions, role, create) => {
+  const access = { name: 'Curso', positions };
+  expect(academicRole(access)).toBe(role);
+  expect(canCreateRoadmap(access)).toBe(create);
 });
 
 it('collects every position the person holds in one course offering', async () => {

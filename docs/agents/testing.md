@@ -129,6 +129,22 @@ comprueba SSE propio y resúmenes contra Node y PostgreSQL sin credenciales
 externas ni omisiones por falta de Novu. Las omisiones Cloud de las evidencias
 anteriores se conservan como antecedentes, no como configuración actual.
 
+## U-Campus local para permisos institucionales
+
+Desde #191, `globalSetup` inicia un servidor HTTP de U-Campus en
+`127.0.0.1:3201`, cerrado por su teardown. Playwright configura ese origen y un
+token de prueba para el servidor de la aplicación. Las respuestas se registran
+por RUT propio de cada test con `reportPosition`; su fixture elimina los registros
+al terminar. Los Usuarios sin respuesta registrada reciben un 503 institucional
+y mantienen el comportamiento local. `createCourse({ roadmap: false })` registra
+como profesor de cátedra a sus Participations docentes activas para los tests de
+creación; los casos de otros cargos sobrescriben ese dato explícitamente.
+
+No se infiere un cargo institucional desde un rol guardado en la aplicación.
+La creación real exige confirmación de U-Campus; una respuesta fallida o parcial
+no autoriza crear ni reescribe Participations. La proyección de los datos válidos
+parciales sigue disponible sin reemplazar el rol local guardado.
+
 ## Límites y evidencias de fallo
 
 | Operación                                        | Límite                                                             |
@@ -504,3 +520,35 @@ preexistentes por condicionales de `roadmaps.spec.ts`; Prettier y
 llamadas externas. Se usó `code-review` una sola vez y se aplicaron todas sus
 cinco sugerencias. ADR-0014 sigue pendiente: el commit incluye su documentación
 y la entrega inmediata transitoria autorizada, no su rediseño completo.
+
+## Validación de #191 del 2026-10-08
+
+Se ejecutó `code-review` una sola vez sobre el trabajo desde `8d3cd9a`.
+
+### Standards
+
+Sin hallazgos accionables. Se conserva el aislamiento por test de ADR-0013 y
+la composición entre features mediante un adaptador de aplicación.
+
+### Spec
+
+Sin hallazgos accionables. El usuario excluyó explícitamente la implementación
+nueva de Student progress tracking, que este estado del repositorio todavía no
+incluye. La corrección conserva Completions reales pero la proyección docente
+las ignora; retira avisos de acceso del antiguo rol estudiante y reinicia esos
+baselines, conservando avisos de contenido de colegas.
+
+Hallazgos: cero de Standards y cero de Spec. Después de la revisión, una prueba
+HTTP adicional reprodujo la degradación del rol docente ante una respuesta
+institucional parcial; se corrigió preservando el rol local y evitando la
+materialización desde datos incompletos. No se ejecutó otra revisión.
+
+`pnpm test` completo pasó con salida 0: tipos, **71 archivos y 388 pruebas
+unitarias aprobadas** en **24,95 s**, y **130 E2E aprobados** en **1,4 minutos**,
+sin fallos ni omisiones. E2E usa Chromium, el único proyecto configurado en este
+estado de la rama, y PostgreSQL local real. Incluye cargos docentes, creación
+exclusiva de cátedra, indisponibilidad institucional completa y parcial,
+corrección por entrada y sincronización personal, avisos pendientes, Canvas
+preview, rechazo de Completion real para docentes, observador y catálogo MA1001.
+ESLint terminó sin errores; conserva cuatro advertencias anteriores en
+`roadmaps.spec.ts`. Prettier de los archivos modificados también pasó.

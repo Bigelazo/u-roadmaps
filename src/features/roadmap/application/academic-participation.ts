@@ -3,16 +3,13 @@ import 'server-only';
 import {
   getMufasaAcademicCourses,
   isCourseLeadPosition,
+  isTeachingPosition,
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
-import { prisma } from '@/shared/server/db';
+import { NODE_ACCESS_STATES, nodeAccessState } from '@/shared/node-access';
+import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
+import { prisma, type Prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-
-const roadmapEditingPositions: readonly MufasaInstitutionalCoursePosition[] = [
-  'COURSE_PROFESSOR',
-  'COORDINATING_PROFESSOR',
-  'AUXILIARY_PROFESSOR',
-];
 
 export type AcademicUser = Readonly<{
   id: string;
@@ -31,7 +28,7 @@ export function canCreateRoadmap(access: MufasaCourseAccess) {
 }
 
 export function canEditRoadmap(access: MufasaCourseAccess) {
-  return access.positions.some((position) => roadmapEditingPositions.includes(position));
+  return access.positions.some(isTeachingPosition);
 }
 
 export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' {
@@ -50,7 +47,7 @@ export async function getMufasaCourseAccess(
   const mufasa = await getMufasaAcademicCourses(user.rut, {
     useLocalFixtureData: user.useLocalFixtureData === true,
   });
-  if (mufasa.source !== 'MUFASA') return null;
+  if (mufasa.source !== 'MUFASA' || mufasa.isComplete === false) return null;
   const matches = mufasa.courses.filter(
     (course) =>
       course.courseCode === identifier.courseCode &&
@@ -88,13 +85,30 @@ export async function materializeParticipation(
         semester: identifier.semester,
       },
     });
-    return transaction.participation.upsert({
+    const roadmap = await transaction.roadmap.findUnique({
+      where: { courseOfferingId: courseOffering.id },
+      select: { id: true },
+    });
+    // Match notice delivery's parent -> Participation -> recipient lock order.
+    if (roadmap)
+      await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
+    const [previous] = await transaction.$queryRaw<{ role: string }[]>`
+      SELECT role FROM "Participation" WHERE "userId" = ${user.id}::uuid
+        AND "courseOfferingId" = ${courseOffering.id}::uuid FOR UPDATE`;
+    const participation = await transaction.participation.upsert({
       where: {
         userId_courseOfferingId: { userId: user.id, courseOfferingId: courseOffering.id },
       },
       update: { role, isActive: true },
       create: { userId: user.id, courseOfferingId: courseOffering.id, role },
     });
+    if (previous?.role === 'STUDENT' && role === 'TEACHER' && roadmap) {
+      await resetStudentAccessNotices(transaction, user.id, roadmap.id);
+      await transaction.simulatedCompletion.deleteMany({
+        where: { participationId: participation.id },
+      });
+    }
+    return participation;
   });
 }
 
@@ -106,4 +120,79 @@ export async function synchronizeParticipation(
   const access = await getMufasaCourseAccess(user, identifier);
   if (!access) return null;
   return materializeParticipation(user, identifier, access);
+}
+
+/** Synchronize every reported offering once, combining all of its positions. */
+export async function synchronizeAcademicParticipations(user: AcademicUser) {
+  const source = await getMufasaAcademicCourses(user.rut, {
+    useLocalFixtureData: user.useLocalFixtureData === true,
+  });
+  if (source.source === 'MUFASA' && source.isComplete !== false) {
+    const offerings = new Map<string, typeof source.courses>();
+    for (const course of source.courses) {
+      const key = `${course.courseCode}:${course.year}:${course.semester}`;
+      offerings.set(key, [...(offerings.get(key) ?? []), course]);
+    }
+    await Promise.all(
+      [...offerings.values()].map((courses) => {
+        const course = courses[0];
+        return materializeParticipation(
+          user,
+          {
+            courseCode: course.courseCode,
+            year: course.year,
+            semester: course.semester,
+          },
+          {
+            name: course.name,
+            positions: courses.flatMap(({ institutionalPosition }) =>
+              institutionalPosition ? [institutionalPosition] : [],
+            ),
+          },
+        );
+      }),
+    );
+  }
+  return source;
+}
+
+/** Promotion establishes staff access without carrying over the student projection. */
+async function resetStudentAccessNotices(
+  transaction: Prisma.TransactionClient,
+  recipientId: string,
+  roadmapId: string,
+) {
+  await lockRecipientRoadmap(transaction, recipientId, roadmapId);
+  const nodes = await transaction.roadmapNode.findMany({
+    where: { roadmapId },
+    select: { id: true, isVisible: true, isTeacherBlocked: true },
+  });
+  for (const state of NODE_ACCESS_STATES) {
+    const ids = nodes
+      .filter((node) => nodeAccessState(node.isVisible, !node.isTeacherBlocked) === state)
+      .map(({ id }) => id);
+    if (!ids.length) continue;
+    await transaction.nodeContentKnowledge.createMany({
+      data: ids.map((nodeId) => ({
+        recipientId,
+        nodeId,
+        target: 'access',
+        knownValue: state,
+        currentValue: state,
+      })),
+      skipDuplicates: true,
+    });
+    await transaction.nodeContentKnowledge.updateMany({
+      where: { recipientId, nodeId: { in: ids }, target: 'access' },
+      data: { knownValue: state, currentValue: state },
+    });
+  }
+  await transaction.roadmapNotice.deleteMany({
+    where: {
+      recipientId,
+      roadmapId,
+      acknowledgedAt: null,
+      data: { path: ['noticeTarget'], equals: 'node-access' },
+    },
+  });
 }

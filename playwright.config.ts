@@ -17,7 +17,8 @@ Object.assign(process.env, {
   U_ROADMAPS_E2E_DATA: 'true',
   NEXT_DIST_DIR: '.next-e2e',
   UPLOADS_DIRECTORY: 'uploads-e2e',
-  MUFASA_TOKEN: '',
+  MUFASA_TOKEN: 'e2e-ucampus-token',
+  MUFASA_BASE_URL: 'http://127.0.0.1:3201',
   PGCONNECT_TIMEOUT: '5',
   PGOPTIONS: '-c statement_timeout=10000 -c lock_timeout=5000',
   // Scheduled unlock specs wait for the in-process release instead of the default 5 minutes.

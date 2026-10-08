@@ -81,17 +81,7 @@ async function requireRoadmapCreationAccessUnsafe(
     await materializeParticipation(actor, identifier, access);
     return { actor, courseOffering };
   }
-  if (!courseOffering) throw forbidden;
-  const participation = await prisma.participation.findFirst({
-    where: {
-      userId: actor.id,
-      courseOfferingId: courseOffering.id,
-      isActive: true,
-      role: 'TEACHER',
-    },
-  });
-  if (!participation) throw forbidden;
-  return { actor, courseOffering };
+  throw forbidden;
 }
 
 export function requireCourseOfferingParticipation(

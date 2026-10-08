@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import CreateRoadmapButton from '@/app/_components/CreateRoadmapButton';
 import { AcademicOverview } from '@/features/academic-overview';
-import { getAcademicOverviewPage } from '@/features/academic-overview/server';
+import { getAcademicOverviewPage } from '@/app/_adapters/academic-overview';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { getInboxIdentity } from '@/features/notifications/server';
 import { UnavailableNoticeFallback } from '@/features/notifications';

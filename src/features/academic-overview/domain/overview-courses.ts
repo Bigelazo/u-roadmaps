@@ -5,8 +5,8 @@ import type {
 } from '../types';
 
 const institutionalPositionPriorities: Record<AcademicOverviewInstitutionalPosition, number> = {
-  COORDINATING_PROFESSOR: 1,
-  COURSE_PROFESSOR: 2,
+  COORDINATING_PROFESSOR: 2,
+  COURSE_PROFESSOR: 1,
   AUXILIARY_PROFESSOR: 3,
   TEACHING_ASSISTANT: 4,
   OBSERVER: 6,

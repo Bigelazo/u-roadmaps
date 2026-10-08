@@ -49,3 +49,5 @@ export {
   synchronizeParticipation,
   type RoadmapActor,
 } from '@/features/roadmap/application/participation';
+
+export { synchronizeAcademicParticipations } from './application/academic-participation';

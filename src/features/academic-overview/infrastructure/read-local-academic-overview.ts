@@ -22,8 +22,7 @@ export async function readLocalAcademicOverview(
     role,
     institutionalPosition: null,
     hasRoadmap: Boolean(courseOffering.roadmap),
-    // Sin respuesta de U-Campus, la participación docente vigente sostiene el
-    // permiso, igual que en la ruta de creación.
-    canCreateRoadmap: role === 'TEACHER',
+    // A stored role cannot confirm the institutional course position.
+    canCreateRoadmap: false,
   }));
 }

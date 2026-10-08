@@ -7,9 +7,14 @@ export type MufasaInstitutionalCoursePosition =
   | 'COORDINATING_PROFESSOR'
   | 'OBSERVER';
 
-/** Positions that lead a course offering in the institutional source. */
+/** Only the course professor may create the shared Roadmap. */
 export function isCourseLeadPosition(position: MufasaInstitutionalCoursePosition | null) {
-  return position === 'COURSE_PROFESSOR' || position === 'COORDINATING_PROFESSOR';
+  return position === 'COURSE_PROFESSOR';
+}
+
+/** Every recognized teaching position grants Roadmap editing. */
+export function isTeachingPosition(position: MufasaInstitutionalCoursePosition | null) {
+  return position !== null && position !== 'OBSERVER';
 }
 
 export type MufasaEnrolledCourse = Readonly<{
@@ -23,7 +28,7 @@ export type MufasaEnrolledCourse = Readonly<{
 }>;
 
 export type MufasaEnrolledCoursesResult =
-  | Readonly<{ source: 'MUFASA'; courses: MufasaEnrolledCourse[] }>
+  | Readonly<{ source: 'MUFASA'; courses: MufasaEnrolledCourse[]; isComplete?: boolean }>
   | Readonly<{ source: 'LOCAL'; courses: [] }>;
 
 type GetMufasaEnrolledCoursesOptions = Readonly<{
@@ -138,12 +143,7 @@ async function getMufasaCourses(
   { useLocalFixtureData = false }: GetMufasaEnrolledCoursesOptions = {},
 ): Promise<MufasaEnrolledCoursesResult> {
   const token = process.env.MUFASA_TOKEN;
-  if (
-    !rut ||
-    !token ||
-    useLocalFixtureData ||
-    (process.env.NODE_ENV === 'production' && process.env.U_ROADMAPS_E2E_DATA === 'true')
-  ) {
+  if (!rut || !token || useLocalFixtureData) {
     return { source: 'LOCAL', courses: [] };
   }
 
@@ -173,7 +173,11 @@ async function getMufasaCourses(
     if (remoteCourses.length > 0 && courses.length === 0) {
       throw new Error('MUFASA returned no valid courses.');
     }
-    return { source: 'MUFASA', courses };
+    return {
+      source: 'MUFASA',
+      courses,
+      ...(courses.length !== remoteCourses.length ? { isComplete: false } : {}),
+    };
   } catch {
     // The overview remains useful with materialized offerings during a remote outage.
     return { source: 'LOCAL', courses: [] };
@@ -211,5 +215,13 @@ export async function getMufasaAcademicCourses(
   if (enrolled.source === 'LOCAL' && taught.source === 'LOCAL')
     return { source: 'LOCAL', courses: [] };
 
-  return { source: 'MUFASA', courses: [...enrolled.courses, ...taught.courses] };
+  return {
+    source: 'MUFASA',
+    courses: [...enrolled.courses, ...taught.courses],
+    isComplete:
+      enrolled.source === 'MUFASA' &&
+      taught.source === 'MUFASA' &&
+      enrolled.isComplete !== false &&
+      taught.isComplete !== false,
+  };
 }

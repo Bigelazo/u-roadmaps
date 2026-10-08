@@ -83,6 +83,7 @@ it('keeps valid enrolled courses when MUFASA includes a course with an unsupport
 
   await expect(getMufasaEnrolledCourses('12345678')).resolves.toEqual({
     source: 'MUFASA',
+    isComplete: false,
     courses: [
       {
         courseCode: 'CC5002',

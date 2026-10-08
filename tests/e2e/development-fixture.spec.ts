@@ -233,3 +233,23 @@ test('fixture progress only completes nodes after every visible prerequisite', a
     }
   }
 });
+
+test('the MA1001 catalog teaching assistant has teaching-staff capabilities', async ({}, testInfo) => {
+  const assistant = await apiRequest.newContext({
+    baseURL: testInfo.project.use.baseURL as string,
+    extraHTTPHeaders: { cookie: await sessionCookie(fixture.nicolas) },
+  });
+  try {
+    const overview = await assistant.get('/api/academic-overview');
+    expect((await overview.json()).offerings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ courseCode: 'MA1001', year: 2026, semester: 2, role: 'TEACHER' }),
+      ]),
+    );
+    const roadmap = await (await assistant.get(fixtureRoadmapPath(fixture.ma1001))).json();
+    expect(roadmap.nodes.some((node: { isVisible: boolean }) => !node.isVisible)).toBe(true);
+    expect(roadmap.nodes.some((node: { canComplete?: boolean }) => node.canComplete)).toBe(false);
+  } finally {
+    await assistant.dispose();
+  }
+});

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAcademicOverviewApi } from '@/features/academic-overview/server';
+import { getAcademicOverviewApi } from '@/app/_adapters/academic-overview';
 import { handleApplicationResult } from '@/app/_adapters/http';
 import { requireAuthenticatedUser } from '@/app/_adapters/auth';
 

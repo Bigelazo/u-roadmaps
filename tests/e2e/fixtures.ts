@@ -1,3 +1,5 @@
+import { reportUcampusPosition, forgetUcampusUser } from './ucampus';
+import type { MufasaInstitutionalCoursePosition } from '@/integrations/ucampus/server';
 import { randomUUID } from 'node:crypto';
 import { test as base, type APIRequestContext } from '@playwright/test';
 import {
@@ -194,6 +196,11 @@ export const test = base.extend<{
   rejectNoticeInserts: (
     target: ({ roadmapId: string } | { courseOfferingId: string }) & { noticeClass?: NoticeClass },
   ) => Promise<{ wasAttempted: () => Promise<boolean> }>;
+  reportPosition: (
+    user: E2EUser,
+    offering: E2ECourseOffering,
+    position: MufasaInstitutionalCoursePosition | null,
+  ) => Promise<void>;
   /** An API client authenticated as a User; disposed when the test ends. */
   apiAs: (user: E2EUser) => Promise<APIRequestContext>;
 }>({
@@ -246,11 +253,17 @@ export const test = base.extend<{
     });
   },
 
-  createCourse: async ({ ownedTestData }, provide, testInfo) => {
+  createCourse: async ({ ownedTestData, reportPosition }, provide, testInfo) => {
     await provide(async (options = {}) => {
       const { offering, script } = courseOfferingScript(options, testInfo.workerIndex);
       ownedTestData.courseCodes.push(offering.courseCode);
       await sql(script);
+      if (options.roadmap === false) {
+        for (const { user, role, isActive = true } of options.participants ?? []) {
+          if (role === 'TEACHER' && isActive)
+            await reportPosition(user, offering, 'COURSE_PROFESSOR');
+        }
+      }
       return offering;
     });
   },
@@ -290,6 +303,15 @@ export const test = base.extend<{
       await sql(insert('User', [user]));
       return user;
     });
+  },
+
+  reportPosition: async ({}, provide) => {
+    const users = new Map<string, E2EUser>();
+    await provide(async (user, offering, position) => {
+      users.set(user.id, user);
+      await reportUcampusPosition(user, offering, position);
+    });
+    await Promise.all([...users.values()].map(forgetUcampusUser));
   },
 
   apiAs: async ({ playwright, baseURL }, provide) => {

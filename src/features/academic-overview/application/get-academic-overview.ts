@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { getMufasaAcademicCourses, isCourseLeadPosition } from '@/integrations/ucampus/server';
+import {
+  getMufasaAcademicCourses,
+  isCourseLeadPosition,
+  isTeachingPosition,
+  type MufasaEnrolledCoursesResult,
+} from '@/integrations/ucampus/server';
 import {
   academicOverviewCourseKey,
   groupAcademicOverviewCoursesByAcademicTerm,
@@ -15,20 +20,24 @@ import type {
   AcademicOverviewPage,
 } from '../types';
 
-async function getAcademicOverview(actor: AcademicOverviewActor) {
+async function getAcademicOverview(
+  actor: AcademicOverviewActor,
+  source?: MufasaEnrolledCoursesResult,
+) {
   const [mufasa, localCourses] = await Promise.all([
-    getMufasaAcademicCourses(actor.rut, {
-      useLocalFixtureData: actor.useLocalFixtureData === true,
-    }),
+    source ??
+      getMufasaAcademicCourses(actor.rut, {
+        useLocalFixtureData: actor.useLocalFixtureData === true,
+      }),
     readLocalAcademicOverview(actor),
   ]);
-
   return { mufasa, localCourses };
 }
 
 function courseFromMufasa(
   course: Awaited<ReturnType<typeof getMufasaAcademicCourses>>['courses'][number],
   localCourse: AcademicOverviewCourse | undefined,
+  isComplete: boolean,
 ): AcademicOverviewCourse {
   return {
     courseCode: course.courseCode,
@@ -38,13 +47,14 @@ function courseFromMufasa(
     section: course.section,
     department: localCourse?.department ?? null,
     role:
-      course.isTeaching ||
-      (course.institutionalPosition !== null && course.institutionalPosition !== 'OBSERVER')
-        ? 'TEACHER'
-        : (localCourse?.role ?? 'STUDENT'),
+      !isComplete && localCourse
+        ? localCourse.role
+        : isTeachingPosition(course.institutionalPosition)
+          ? 'TEACHER'
+          : 'STUDENT',
     institutionalPosition: course.institutionalPosition,
     hasRoadmap: localCourse?.hasRoadmap ?? false,
-    canCreateRoadmap: isCourseLeadPosition(course.institutionalPosition),
+    canCreateRoadmap: isComplete && isCourseLeadPosition(course.institutionalPosition),
   };
 }
 
@@ -78,15 +88,20 @@ function apiOfferingFromLocal(course: AcademicOverviewCourse): AcademicOverviewA
 
 export async function getAcademicOverviewPage(
   actor: AcademicOverviewActor,
+  source?: MufasaEnrolledCoursesResult,
 ): Promise<AcademicOverviewPage> {
-  const { mufasa, localCourses } = await getAcademicOverview(actor);
+  const { mufasa, localCourses } = await getAcademicOverview(actor, source);
   const localCoursesByKey = new Map(
     localCourses.map((course) => [academicOverviewCourseKey(course), course]),
   );
   const courses =
     mufasa.source === 'MUFASA'
       ? mufasa.courses.map((course) =>
-          courseFromMufasa(course, localCoursesByKey.get(academicOverviewCourseKey(course))),
+          courseFromMufasa(
+            course,
+            localCoursesByKey.get(academicOverviewCourseKey(course)),
+            mufasa.isComplete !== false,
+          ),
         )
       : localCourses;
 
@@ -98,8 +113,9 @@ export async function getAcademicOverviewPage(
 
 export async function getAcademicOverviewApi(
   actor: AcademicOverviewActor,
+  source?: MufasaEnrolledCoursesResult,
 ): Promise<AcademicOverviewApiResponse> {
-  const { mufasa, localCourses } = await getAcademicOverview(actor);
+  const { mufasa, localCourses } = await getAcademicOverview(actor, source);
   const localCoursesByKey = new Map(
     localCourses.map((course) => [academicOverviewCourseKey(course), course]),
   );
@@ -107,7 +123,11 @@ export async function getAcademicOverviewApi(
     mufasa.source === 'MUFASA'
       ? mufasa.courses.map((course) => {
           return apiOfferingFromMufasa(
-            courseFromMufasa(course, localCoursesByKey.get(academicOverviewCourseKey(course))),
+            courseFromMufasa(
+              course,
+              localCoursesByKey.get(academicOverviewCourseKey(course)),
+              mufasa.isComplete !== false,
+            ),
           );
         })
       : localCourses.map(apiOfferingFromLocal);

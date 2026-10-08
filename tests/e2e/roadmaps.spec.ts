@@ -169,6 +169,7 @@ test('course participants receive their authorized roadmap representation', asyn
 });
 
 test('roadmap creation rejects conflicts and preserves authorization and cross-roadmap boundaries', async ({
+  reportPosition,
   request,
   course,
   createCourse,
@@ -188,6 +189,7 @@ test('roadmap creation rejects conflicts and preserves authorization and cross-r
   });
 
   const teacher = await apiAs(course.users.teacher);
+  await reportPosition(course.users.teacher, course, 'COURSE_PROFESSOR');
   const conflict = await teacher.post(course.apiPath(), {
     data: { course: { name: course.courseName, department: 'Departamento E2E' } },
   });

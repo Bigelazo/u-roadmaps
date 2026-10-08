@@ -60,11 +60,9 @@ export default async function CoursePage(
     where: { year_semester: { year: identifier.year, semester: identifier.semester } },
     select: { roadmapFreezeDate: true },
   });
-  // U-Campus manda sobre el cargo: quien nunca abrió el curso obtiene su
-  // participación al entrar. Con una participación vigente, la vista evita el
-  // viaje a U-Campus y el cargo se actualiza en la siguiente operación.
+  // Refresh stored roles on entry; an unavailable source preserves local access.
   const participation =
-    courseOffering.participants[0] ?? (await synchronizeParticipation(user, identifier));
+    (await synchronizeParticipation(user, identifier)) ?? courseOffering.participants[0];
   redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(
