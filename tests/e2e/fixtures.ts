@@ -15,10 +15,10 @@ import type { NoticeClass } from '@/features/notifications/application/notice-ef
 import { fixtureRoadmapPath, sessionCookie } from './helpers';
 import {
   courseCodePrefix,
-  noticeRejectionPrefix,
   syntheticTermYearStart,
   syntheticTermYearEnd,
-  closureRejectionPrefix,
+  rejectionPrefixes,
+  type RejectedTable,
   removeTestData,
   userEmailDomain,
 } from './test-data';
@@ -204,9 +204,8 @@ export type E2EAcademicTerm = {
 type OwnedTestData = {
   courseCodes: string[];
   userIds: string[];
-  noticeRejections: string[];
   termYears: number[];
-  closureRejections: string[];
+  rejections: Record<RejectedTable, string[]>;
 };
 let termSerial = 0;
 
@@ -227,6 +226,8 @@ export const test = base.extend<{
   rejectNoticeInserts: (
     target: ({ roadmapId: string } | { courseOfferingId: string }) & { noticeClass?: NoticeClass },
   ) => Promise<{ wasAttempted: () => Promise<boolean> }>;
+  /** Makes PostgreSQL reject inserts of Resources into a Course offering's Roadmap. */
+  rejectResourceInserts: (offering: E2ECourseOffering) => Promise<void>;
   reportPosition: (
     user: E2EUser,
     offering: E2ECourseOffering,
@@ -240,9 +241,8 @@ export const test = base.extend<{
     const owned: OwnedTestData = {
       courseCodes: [],
       userIds: [],
-      noticeRejections: [],
       termYears: [],
-      closureRejections: [],
+      rejections: { Roadmap: [], RoadmapNotice: [], Resource: [] },
     };
     await provide(owned);
     await removeTestData(owned);
@@ -347,8 +347,8 @@ export const test = base.extend<{
 
   rejectClosure: async ({ ownedTestData }, provide, testInfo) => {
     await provide(async (course) => {
-      const name = `${closureRejectionPrefix}${nextSerial(testInfo.workerIndex).token}`;
-      ownedTestData.closureRejections.push(name);
+      const name = `${rejectionPrefixes.Roadmap}${nextSerial(testInfo.workerIndex).token}`;
+      ownedTestData.rejections.Roadmap.push(name);
       await sql(`CREATE SEQUENCE ${name}_attempts;
       CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         IF NEW.id = ${literal(course.roadmapId)}::uuid AND NEW."closedAt" IS NOT NULL THEN
@@ -390,14 +390,14 @@ export const test = base.extend<{
 
   rejectNoticeInserts: async ({ ownedTestData }, provide, testInfo) => {
     await provide(async (target) => {
-      const name = `${noticeRejectionPrefix}${nextSerial(testInfo.workerIndex).token}`;
+      const name = `${rejectionPrefixes.RoadmapNotice}${nextSerial(testInfo.workerIndex).token}`;
       const scope =
         'roadmapId' in target
           ? `NEW."roadmapId" = ${literal(target.roadmapId)}`
           : `NEW."courseOfferingId" = ${literal(target.courseOfferingId)}`;
       const condition = `${scope}${target.noticeClass ? ` AND NEW."data"->>'noticeClass' = ${literal(target.noticeClass)}` : ''}`;
       const sequence = `${name}_attempts`;
-      ownedTestData.noticeRejections.push(name);
+      ownedTestData.rejections.RoadmapNotice.push(name);
       await sql(`
         CREATE SEQUENCE ${sequence};
         CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
@@ -413,6 +413,26 @@ export const test = base.extend<{
       return {
         wasAttempted: () => queryJson<boolean>(`SELECT to_json(is_called) FROM ${sequence};`),
       };
+    });
+  },
+
+  rejectResourceInserts: async ({ ownedTestData }, provide, testInfo) => {
+    await provide(async (offering) => {
+      const name = `${rejectionPrefixes.Resource}${nextSerial(testInfo.workerIndex).token}`;
+      ownedTestData.rejections.Resource.push(name);
+      await sql(`
+        CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+          IF EXISTS (
+            SELECT 1 FROM "RoadmapNode" n JOIN "Roadmap" r ON r."id" = n."roadmapId"
+            WHERE n."id" = NEW."roadmapNodeId" AND r."courseOfferingId" = ${literal(offering.id)}
+          ) THEN
+            RAISE EXCEPTION 'E2E resource failure';
+          END IF;
+          RETURN NEW;
+        END; $$;
+        CREATE TRIGGER ${name} BEFORE INSERT ON "Resource"
+          FOR EACH ROW EXECUTE FUNCTION ${name}();
+      `);
     });
   },
 

@@ -1,4 +1,5 @@
 import type { Resource } from '../types';
+import { fileResourceUrl } from './resource';
 
 /** Case- and whitespace-insensitive identity of a Node type name. */
 export function normalizeName(name: string): string {
@@ -9,7 +10,7 @@ export function normalizeName(name: string): string {
  * Maps a frozen version's content onto a new Roadmap. Visible Nodes start
  * Teacher-blocked, hidden Nodes stay hidden and unblocked, Scheduled unlocks are
  * dropped, Custom node types are copied and Predefined node types stay shared.
- * File Resources are not copied yet.
+ * File Resources get new file keys; `fileCopies` lists the bytes to duplicate.
  */
 
 export type RoadmapCopySource = Readonly<{
@@ -34,6 +35,8 @@ export type RoadmapCopySource = Readonly<{
     title: string;
     url: string;
     type: Resource['type'];
+    fileKey?: string | null;
+    fileContentType?: string | null;
   }[];
 }>;
 
@@ -46,6 +49,28 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
     if (!copied) throw new Error(`Node ${id} is not part of the copied Roadmap.`);
     return copied;
   };
+  const fileCopies: { resourceId: string; sourceFileKey: string; fileKey: string }[] = [];
+  const resources = source.resources.map((resource) => {
+    const copied = {
+      id: newId(),
+      roadmapNodeId: nodeId(resource.roadmapNodeId),
+      title: resource.title,
+      url: resource.url,
+      type: resource.type,
+      fileKey: null as string | null,
+      fileContentType: null as string | null,
+    };
+    if (resource.fileKey) {
+      const fileKey = newId();
+      Object.assign(copied, {
+        url: fileResourceUrl(fileKey),
+        fileKey,
+        fileContentType: resource.fileContentType ?? null,
+      });
+      fileCopies.push({ resourceId: copied.id, sourceFileKey: resource.fileKey, fileKey });
+    }
+    return copied;
+  });
 
   return {
     nodeTypes: source.customNodeTypes.map(({ id, name, icon, color }) => ({
@@ -75,14 +100,7 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
       sourceHandle: dependency.sourceHandle,
       targetHandle: dependency.targetHandle,
     })),
-    resources: source.resources
-      .filter(({ type }) => type !== 'FILE')
-      .map((resource) => ({
-        id: newId(),
-        roadmapNodeId: nodeId(resource.roadmapNodeId),
-        title: resource.title,
-        url: resource.url,
-        type: resource.type,
-      })),
+    resources,
+    fileCopies,
   };
 }

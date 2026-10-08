@@ -7,21 +7,26 @@ export const syntheticTermYearStart = 1000;
 export const syntheticTermYearEnd = 1999;
 export const courseCodePrefix = 'E2E-';
 export const userEmailDomain = 'e2e.u-roadmaps.test';
-export const closureRejectionPrefix = 'e2e_reject_closure_';
-export const noticeRejectionPrefix = 'e2e_reject_notices_';
+/** Tables a test can make PostgreSQL reject writes to, with their trigger name prefix. */
+export const rejectionPrefixes = {
+  Roadmap: 'e2e_reject_closure_',
+  RoadmapNotice: 'e2e_reject_notices_',
+  Resource: 'e2e_reject_resources_',
+} as const;
+export type RejectedTable = keyof typeof rejectionPrefixes;
 
 /** What one test created, or every test-owned leftover of an interrupted run. */
 export type TestDataScope =
   | {
       courseCodes: readonly string[];
       userIds: readonly string[];
-      noticeRejections: readonly string[];
       termYears: readonly number[];
-      closureRejections: readonly string[];
+      rejections: Readonly<Record<RejectedTable, readonly string[]>>;
     }
   | 'orphans';
 
-const uploadsDirectory = () => join(process.cwd(), process.env.UPLOADS_DIRECTORY || 'uploads-e2e');
+export const uploadsDirectory = () =>
+  join(process.cwd(), process.env.UPLOADS_DIRECTORY || 'uploads-e2e');
 
 /**
  * Drops notice rejection triggers, then deletes Courses (Ramos) and Users with
@@ -29,18 +34,8 @@ const uploadsDirectory = () => join(process.cwd(), process.env.UPLOADS_DIRECTORY
  */
 export async function removeTestData(scope: TestDataScope) {
   try {
-    await dropRejections(
-      scope,
-      'RoadmapNotice',
-      noticeRejectionPrefix,
-      scope === 'orphans' ? [] : scope.noticeRejections,
-    );
-    await dropRejections(
-      scope,
-      'Roadmap',
-      closureRejectionPrefix,
-      scope === 'orphans' ? [] : scope.closureRejections,
-    );
+    for (const table of Object.keys(rejectionPrefixes) as RejectedTable[])
+      await dropRejections(scope, table, scope === 'orphans' ? [] : scope.rejections[table]);
   } finally {
     await deleteCoursesAndUsers(scope);
     const condition =
@@ -51,12 +46,8 @@ export async function removeTestData(scope: TestDataScope) {
   }
 }
 
-function dropRejections(
-  scope: TestDataScope,
-  table: string,
-  prefix: string,
-  names: readonly string[],
-) {
+function dropRejections(scope: TestDataScope, table: RejectedTable, names: readonly string[]) {
+  const prefix = rejectionPrefixes[table];
   const condition =
     scope === 'orphans'
       ? `starts_with(tgname, ${literal(prefix)})`

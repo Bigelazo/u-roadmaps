@@ -20,6 +20,7 @@ import {
   saveUploadedFile,
   validateUploadedFile,
 } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { fileResourceUrl } from '@/features/roadmap/domain/resource';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
 
@@ -102,7 +103,7 @@ async function uploadRoadmapResourceUnsafe({ file, id, ...editor }: UploadedReso
         data: {
           roadmapNodeId: node.id,
           title: requireString(file.name, 'title', 240),
-          url: `https://files.u-roadmaps.invalid/${requireUuid(fileKey, 'fileKey')}`,
+          url: fileResourceUrl(requireUuid(fileKey, 'fileKey')),
           type: 'FILE',
           fileKey,
           fileContentType: file.type || null,

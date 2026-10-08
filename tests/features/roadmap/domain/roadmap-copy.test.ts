@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { fileResourceUrl } from '@/features/roadmap/domain/resource';
 import { planRoadmapCopy, type RoadmapCopySource } from '@/features/roadmap/domain/roadmap-copy';
 
 function sequentialIds() {
@@ -48,7 +49,14 @@ const source: RoadmapCopySource = {
   resources: [
     { roadmapNodeId: 'visible', title: 'Guía', url: 'https://example.com', type: 'LINK' },
     { roadmapNodeId: 'visible', title: 'Clase', url: 'https://video.example', type: 'VIDEO' },
-    { roadmapNodeId: 'hidden', title: 'Apunte', url: '/uploads/a', type: 'FILE' },
+    {
+      roadmapNodeId: 'hidden',
+      title: 'Apunte',
+      url: 'https://files.u-roadmaps.invalid/key-a',
+      type: 'FILE',
+      fileKey: 'key-a',
+      fileContentType: 'application/pdf',
+    },
   ],
 };
 
@@ -112,14 +120,16 @@ describe('planRoadmapCopy', () => {
     ]);
   });
 
-  it('copies link and video Resources but not file Resources', () => {
-    expect(plan.resources).toEqual([
+  it('copies link and video Resources as they are', () => {
+    expect(plan.resources.slice(0, 2)).toEqual([
       {
         id: expect.any(String),
         roadmapNodeId: nodeById('Visible').id,
         title: 'Guía',
         url: 'https://example.com',
         type: 'LINK',
+        fileKey: null,
+        fileContentType: null,
       },
       {
         id: expect.any(String),
@@ -127,7 +137,25 @@ describe('planRoadmapCopy', () => {
         title: 'Clase',
         url: 'https://video.example',
         type: 'VIDEO',
+        fileKey: null,
+        fileContentType: null,
       },
+    ]);
+  });
+
+  it('gives each file Resource a new file key and records the bytes to copy', () => {
+    const file = plan.resources[2]!;
+    expect(file).toEqual({
+      id: expect.any(String),
+      roadmapNodeId: nodeById('Oculto').id,
+      title: 'Apunte',
+      url: fileResourceUrl(file.fileKey!),
+      type: 'FILE',
+      fileKey: expect.stringMatching(/^new-/),
+      fileContentType: 'application/pdf',
+    });
+    expect(plan.fileCopies).toEqual([
+      { resourceId: file.id, sourceFileKey: 'key-a', fileKey: file.fileKey },
     ]);
   });
 });

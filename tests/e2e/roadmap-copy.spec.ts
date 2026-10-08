@@ -1,7 +1,11 @@
+import { readdir, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { APIRequestContext } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { literal, queryJson, sql } from './database';
 import { authenticateAs } from './helpers';
+import { uploadsDirectory } from './test-data';
 
 function yesterday() {
   const day = new Date(`${chileCalendarDay()}T12:00:00Z`);
@@ -32,6 +36,13 @@ type RoadmapBody = {
   }[];
 };
 
+type ResourceBody = RoadmapBody['nodes'][number]['resources'][number];
+
+/** Copied Resource content; file URLs are omitted because every edition downloads its own. */
+function resourceContent({ title, url, type }: ResourceBody) {
+  return { title, type, url: type === 'FILE' ? undefined : url };
+}
+
 function roadmapCount(offering: E2ECourseOffering) {
   return queryJson<number>(`
     SELECT count(*)::int FROM "Roadmap" r JOIN "CourseOffering" o ON o."id" = r."courseOfferingId"
@@ -53,6 +64,7 @@ const copyScenario = test.extend<{
     nextTerm: { year: number; semester: number; setFreezeDate(day: string | null): Promise<void> };
     source: RoadmapBody;
     scheduledNodeId: string;
+    fileContent: string;
   };
 }>({
   scenario: async (
@@ -89,16 +101,18 @@ const copyScenario = test.extend<{
     await sql(
       `UPDATE "RoadmapNode" SET "isTeacherBlocked" = true, "teacherUnlockOn" = '2099-01-01' WHERE "id" = ${literal(scheduledNodeId)};`,
     );
+    // Unique bytes let a test find every stored copy of this file.
+    const fileContent = `contenido ${closed.courseCode}`;
     const upload = await api.post(closed.apiPath(`/nodes/${scheduledNodeId}/resources`), {
       multipart: {
-        file: { name: 'guia.txt', mimeType: 'text/plain', buffer: Buffer.from('contenido') },
+        file: { name: 'guia.txt', mimeType: 'text/plain', buffer: Buffer.from(fileContent) },
       },
     });
     expect(upload.status()).toBe(201);
     const source: RoadmapBody = await (await api.get(closed.apiPath())).json();
     await closedTerm.setFreezeDate(yesterday());
     await waitForClosure(closed);
-    await provide({ closed, closedTerm, next, nextTerm, source, scheduledNodeId });
+    await provide({ closed, closedTerm, next, nextTerm, source, scheduledNodeId, fileContent });
   },
 });
 
@@ -152,10 +166,8 @@ copyScenario(
       expect(copied.nodeTypeId === original.nodeTypeId).toBe(
         predefined(source, original.nodeTypeId),
       );
-      expect(copied.resources.map(({ title, url, type }) => ({ title, url, type }))).toEqual(
-        original.resources
-          .filter(({ type }) => type !== 'FILE')
-          .map(({ title, url, type }) => ({ title, url, type })),
+      expect(copied.resources.map(resourceContent)).toEqual(
+        original.resources.map(resourceContent),
       );
     }
     expect(
@@ -309,6 +321,97 @@ copyScenario(
       new RegExp(`/courses/${next.courseCode}/${next.year}/${next.semester}$`),
     );
     await expect(page.locator('.react-flow__node')).toHaveCount(source.nodes.length);
+  },
+);
+
+function fileResources(body: RoadmapBody) {
+  return body.nodes.flatMap(({ resources }) => resources).filter(({ type }) => type === 'FILE');
+}
+
+function fileKeyOf(resourceId: string) {
+  return queryJson<string>(
+    `SELECT to_json("fileKey") FROM "Resource" WHERE "id" = ${literal(resourceId)};`,
+  );
+}
+
+async function download(api: APIRequestContext, url: string) {
+  const response = await api.get(url);
+  expect(response.status()).toBe(200);
+  return (await response.body()).toString();
+}
+
+/** Stored files holding exactly these bytes, so leftovers of a failed copy are visible. */
+async function storedCopies(content: string) {
+  const directory = uploadsDirectory();
+  const names = await readdir(directory);
+  const contents = await Promise.all(
+    names.map((name) => readFile(join(directory, name), 'utf8').catch(() => null)),
+  );
+  return contents.filter((stored) => stored === content).length;
+}
+
+copyScenario(
+  'copied file Resources own their bytes independently of the version',
+  async ({ course, scenario, apiAs }) => {
+    // A closed version refuses every edit, so independence is checked from the new edition.
+    const { closed, next, source, fileContent } = scenario;
+    const api = await apiAs(course.users.teacher);
+    expect((await api.post(next.apiPath(), { data: sourceOf(closed) })).status()).toBe(201);
+    const copy: RoadmapBody = await (await api.get(next.apiPath())).json();
+    const [original] = fileResources(source);
+    const [copied] = fileResources(copy);
+    expect(copied).toMatchObject({ title: original!.title });
+    expect(await fileKeyOf(copied!.id)).not.toBe(await fileKeyOf(original!.id));
+    expect(await download(api, copied!.url)).toBe(fileContent);
+    expect(await download(api, original!.url)).toBe(fileContent);
+
+    // Replacing the file means removing it and uploading new bytes on the same Node.
+    const removed = await api.delete(next.apiPath(`/resources/${copied!.id}`));
+    expect(removed.ok()).toBe(true);
+    expect(await download(api, original!.url)).toBe(fileContent);
+    expect(await storedCopies(fileContent)).toBe(1);
+    const node = copy.nodes.find(({ resources }) => resources.some(({ id }) => id === copied!.id));
+    const replacement = await api.post(next.apiPath(`/nodes/${node!.id}/resources`), {
+      multipart: {
+        file: { name: 'guia.txt', mimeType: 'text/plain', buffer: Buffer.from('reemplazo') },
+      },
+    });
+    expect(replacement.status()).toBe(201);
+    expect(await download(api, (await replacement.json()).resource.url)).toBe('reemplazo');
+    expect(await download(api, original!.url)).toBe(fileContent);
+  },
+);
+
+copyScenario(
+  'a file missing from storage is omitted while the rest of the copy succeeds',
+  async ({ course, scenario, apiAs }) => {
+    const { closed, next, source } = scenario;
+    const [original] = fileResources(source);
+    await rm(join(uploadsDirectory(), await fileKeyOf(original!.id)));
+    const api = await apiAs(course.users.teacher);
+    expect((await api.post(next.apiPath(), { data: sourceOf(closed) })).status()).toBe(201);
+    const copy: RoadmapBody = await (await api.get(next.apiPath())).json();
+    expect(fileResources(copy)).toEqual([]);
+    const others = (body: RoadmapBody) =>
+      body.nodes
+        .flatMap(({ resources }) => resources)
+        .filter(({ type }) => type !== 'FILE')
+        .map(resourceContent);
+    expect(others(copy)).toEqual(others(source));
+    expect(copy.nodes).toHaveLength(source.nodes.length);
+  },
+);
+
+copyScenario(
+  'a creation that fails after copying bytes leaves no orphaned files',
+  async ({ course, scenario, apiAs, rejectResourceInserts }) => {
+    const { closed, next, fileContent } = scenario;
+    await rejectResourceInserts(next);
+    const api = await apiAs(course.users.teacher);
+    const refused = await api.post(next.apiPath(), { data: sourceOf(closed) });
+    expect(refused.ok()).toBe(false);
+    expect(Number(await roadmapCount(next))).toBe(0);
+    expect(await storedCopies(fileContent)).toBe(1);
   },
 );
 

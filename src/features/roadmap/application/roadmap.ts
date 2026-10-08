@@ -4,6 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '../domain/closure';
 import { planRoadmapCopy, type RoadmapCopySource } from '../domain/roadmap-copy';
 import type { VersionIdentifier } from '@/shared/version-history-url';
+import {
+  copyUploadedFile,
+  deleteUploadedFile,
+} from '@/features/roadmap/infrastructure/resources/filesystem';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import {
@@ -296,19 +300,54 @@ function parseCopySource(value: unknown): VersionIdentifier | undefined {
   };
 }
 
-/** Writes a frozen version's content into the new Roadmap, recording it as the source. */
+/** Stored files duplicated for a creation, removable if that creation fails. */
+function fileCopyLedger() {
+  const copied: string[] = [];
+  return {
+    /** Duplicates the bytes; false when the source file is missing from storage. */
+    async copy(sourceFileKey: string, fileKey: string) {
+      const stored = await copyUploadedFile(sourceFileKey, fileKey);
+      if (stored) copied.push(fileKey);
+      return stored;
+    },
+    rollback() {
+      return Promise.all(
+        copied.map((fileKey) =>
+          deleteUploadedFile(fileKey).catch((error) =>
+            console.warn('Copied file cleanup failed', { fileKey, error }),
+          ),
+        ),
+      );
+    },
+  };
+}
+type FileCopyLedger = ReturnType<typeof fileCopyLedger>;
+
+/**
+ * Writes a frozen version's content into the new Roadmap, recording it as the source.
+ * File bytes are duplicated first; a file missing from storage omits its Resource.
+ */
 async function persistRoadmapCopy(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   sourceRoadmapId: string,
   source: RoadmapCopySource,
+  files: FileCopyLedger,
 ) {
   const plan = planRoadmapCopy(source, roadmapId, randomUUID);
+  const stored = await Promise.all(
+    plan.fileCopies.map(({ sourceFileKey, fileKey }) => files.copy(sourceFileKey, fileKey)),
+  );
+  const missing = new Set(
+    plan.fileCopies.filter((_, index) => !stored[index]).map(({ resourceId }) => resourceId),
+  );
   await transaction.roadmap.update({ where: { id: roadmapId }, data: { sourceRoadmapId } });
   await transaction.nodeType.createMany({ data: plan.nodeTypes });
   await transaction.roadmapNode.createMany({ data: plan.nodes });
   await transaction.dependency.createMany({ data: plan.dependencies });
-  await transaction.resource.createMany({ data: plan.resources });
+  await transaction.resource.createMany({
+    data: plan.resources.filter(({ id }) => !missing.has(id)),
+  });
 }
 
 /** Copies a frozen version of the same Course into the new Roadmap. */
@@ -317,6 +356,7 @@ async function copyFrozenVersion(
   identifier: CourseOfferingIdentifier,
   source: VersionIdentifier,
   roadmapId: string,
+  files: FileCopyLedger,
 ) {
   const missing = new ApplicationError(
     404,
@@ -339,7 +379,16 @@ async function copyFrozenVersion(
           positionX: true,
           positionY: true,
           isVisible: true,
-          resources: { select: { roadmapNodeId: true, title: true, url: true, type: true } },
+          resources: {
+            select: {
+              roadmapNodeId: true,
+              title: true,
+              url: true,
+              type: true,
+              fileKey: true,
+              fileContentType: true,
+            },
+          },
         },
       },
     },
@@ -355,13 +404,22 @@ async function copyFrozenVersion(
     where: { sourceNode: { roadmapId: sourceRoadmap.id } },
     select: { sourceNodeId: true, targetNodeId: true, sourceHandle: true, targetHandle: true },
   });
-  await persistRoadmapCopy(transaction, roadmapId, sourceRoadmap.id, {
-    customNodeTypes: sourceRoadmap.nodeTypes,
-    nodes: sourceRoadmap.roadmapNodes,
-    dependencies,
-    resources: sourceRoadmap.roadmapNodes.flatMap(({ resources }) => resources),
-  });
+  await persistRoadmapCopy(
+    transaction,
+    roadmapId,
+    sourceRoadmap.id,
+    {
+      customNodeTypes: sourceRoadmap.nodeTypes,
+      nodes: sourceRoadmap.roadmapNodes,
+      dependencies,
+      resources: sourceRoadmap.roadmapNodes.flatMap(({ resources }) => resources),
+    },
+    files,
+  );
 }
+
+// Copying file bytes inside the transaction can outlast Prisma's 5 s default.
+const copyTransactionOptions = { timeout: 30_000 };
 
 // El curso puede llegar sin descripción cuando ya está materializado desde
 // U-Campus. En ese caso conserva el nombre y el departamento registrados.
@@ -375,74 +433,81 @@ async function createRoadmapUnsafe(
       ? (body.course as JsonObject)
       : undefined;
   const source = parseCopySource(body.source);
+  const files = fileCopyLedger();
 
   try {
-    const creation = await prisma.$transaction(async (transaction) => {
-      const [existingCourse, existingCourseOffering] = await Promise.all([
-        transaction.course.findUnique({ where: { code: identifier.courseCode } }),
-        transaction.courseOffering.findUnique({
-          where: {
-            courseCode_year_semester: identifier,
-          },
-          include: { roadmap: true },
-        }),
-      ]);
-      if (existingCourseOffering?.roadmap)
-        throw new ApplicationError(
-          409,
-          'ROADMAP_CONFLICT',
-          'Ya existe un roadmap para este curso.',
+    const creation = await prisma
+      .$transaction(async (transaction) => {
+        const [existingCourse, existingCourseOffering] = await Promise.all([
+          transaction.course.findUnique({ where: { code: identifier.courseCode } }),
+          transaction.courseOffering.findUnique({
+            where: {
+              courseCode_year_semester: identifier,
+            },
+            include: { roadmap: true },
+          }),
+        ]);
+        if (existingCourseOffering?.roadmap)
+          throw new ApplicationError(
+            409,
+            'ROADMAP_CONFLICT',
+            'Ya existe un roadmap para este curso.',
+          );
+        const term = await transaction.academicTerm.findUnique({
+          where: { year_semester: { year: identifier.year, semester: identifier.semester } },
+        });
+        const freezeDate = resolveRoadmapFreezeDate(
+          identifier,
+          term?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
         );
-      const term = await transaction.academicTerm.findUnique({
-        where: { year_semester: { year: identifier.year, semester: identifier.semester } },
+        if (roadmapClosureInstant(freezeDate) <= new Date()) {
+          throw new ApplicationError(
+            409,
+            'ROADMAP_CLOSED',
+            'El período de este curso terminó. No se puede crear un roadmap.',
+          );
+        }
+        const name =
+          courseBody?.name === undefined && existingCourse
+            ? existingCourse.name
+            : requireString(courseBody?.name, 'name', 200);
+        const department =
+          courseBody?.department === undefined && existingCourse
+            ? existingCourse.department
+            : requireString(courseBody?.department, 'department', 200);
+        const course = await transaction.course.upsert({
+          where: { code: identifier.courseCode },
+          update: { name, department },
+          create: { code: identifier.courseCode, name, department },
+        });
+        const materializedCourseOffering =
+          existingCourseOffering ??
+          (await transaction.courseOffering.create({
+            data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
+          }));
+        const [roadmap, recipients] = await Promise.all([
+          transaction.roadmap.create({
+            data: { courseOfferingId: materializedCourseOffering.id, creatorId: actor.id },
+          }),
+          transaction.participation.findMany({
+            where: { courseOfferingId: materializedCourseOffering.id, isActive: true },
+            select: { userId: true, user: { select: { name: true } } },
+          }),
+        ]);
+        if (source) await copyFrozenVersion(transaction, identifier, source, roadmap.id, files);
+        return {
+          roadmap,
+          courseOfferingId: materializedCourseOffering.id,
+          courseName: course.name,
+          recipients: recipients.map(({ userId, user }) => ({ userId, name: user.name })),
+          occurredAt: new Date(),
+        };
+      }, copyTransactionOptions)
+      .catch(async (error) => {
+        // Only an uncommitted creation discards its copied bytes.
+        await files.rollback();
+        throw error;
       });
-      const freezeDate = resolveRoadmapFreezeDate(
-        identifier,
-        term?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
-      );
-      if (roadmapClosureInstant(freezeDate) <= new Date()) {
-        throw new ApplicationError(
-          409,
-          'ROADMAP_CLOSED',
-          'El período de este curso terminó. No se puede crear un roadmap.',
-        );
-      }
-      const name =
-        courseBody?.name === undefined && existingCourse
-          ? existingCourse.name
-          : requireString(courseBody?.name, 'name', 200);
-      const department =
-        courseBody?.department === undefined && existingCourse
-          ? existingCourse.department
-          : requireString(courseBody?.department, 'department', 200);
-      const course = await transaction.course.upsert({
-        where: { code: identifier.courseCode },
-        update: { name, department },
-        create: { code: identifier.courseCode, name, department },
-      });
-      const materializedCourseOffering =
-        existingCourseOffering ??
-        (await transaction.courseOffering.create({
-          data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
-        }));
-      const [roadmap, recipients] = await Promise.all([
-        transaction.roadmap.create({
-          data: { courseOfferingId: materializedCourseOffering.id, creatorId: actor.id },
-        }),
-        transaction.participation.findMany({
-          where: { courseOfferingId: materializedCourseOffering.id, isActive: true },
-          select: { userId: true, user: { select: { name: true } } },
-        }),
-      ]);
-      if (source) await copyFrozenVersion(transaction, identifier, source, roadmap.id);
-      return {
-        roadmap,
-        courseOfferingId: materializedCourseOffering.id,
-        courseName: course.name,
-        recipients: recipients.map(({ userId, user }) => ({ userId, name: user.name })),
-        occurredAt: new Date(),
-      };
-    });
     return {
       roadmap: creation.roadmap,
       availabilityNotice: {
