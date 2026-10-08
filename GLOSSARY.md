@@ -107,6 +107,10 @@ _Avoid_: Notice dialog, audit log, grouped notice
 The single element and aspect a Roadmap notice is about, such as a Node's title, a Node's description, a Node's type, or a Node's access. Changes to different targets of the same Node are never merged; deleting a Node absorbs every pending notice about that Node, and a pending notice of a Node's creation absorbs every later change to it.
 _Avoid_: Node, notice destination, change class
 
+**Known value (Valor conocido)**:
+The value of a Notice target that a User is taken to know: the one they recognized on Roadmap entry, or the one they produced themselves with their own change. Every Roadmap notice compares it with the current value.
+_Avoid_: Baseline, knowledge, last seen value
+
 **Grouped roadmap notice (Aviso agrupado del roadmap)**:
 The single Inbox entry that stands for a recipient's pending Roadmap notices of one Roadmap when they concern three or more Notice targets. It counts as the number of targets it stands for, and each Roadmap is grouped separately.
 _Avoid_: Change summary, digest, general notice
@@ -230,3 +234,11 @@ _Avoid_: Preview, student access preview, draft preview
 **Resource (Recurso)**:
 A URL reference with a title and file, link, or video type to pedagogical material stored outside the database and attached to one node.
 _Avoid_: File, global material
+
+**Roadmap tutorial (Tutorial del roadmap)**:
+A guided, repeatable walkthrough of the Roadmap canvas on the Practice roadmap for one experience: explanatory for students and observers, interactive for teaching staff, who perform each action themselves. Each User is invited once, on their first Academic overview visit, to choose either tutorial or decline; it can be repeated from the Academic overview or from the Roadmap canvas for the current experience, never inside Canvas preview.
+_Avoid_: Onboarding, tour, help, Canvas preview
+
+**Practice roadmap (Mapa de práctica)**:
+A fixed sample map on which every Roadmap tutorial takes place; in the student experience it shows a simulated progress, and in the teaching experience its actions take effect without any lasting consequence. Every opening starts from the same initial state. It is not a Roadmap: it belongs to no Course offering and produces no Participations, Completions, or Roadmap notices.
+_Avoid_: Tutorial roadmap, sandbox course, demo Roadmap, seed nodes
