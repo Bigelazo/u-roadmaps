@@ -1,5 +1,9 @@
 import { captureAccessSnapshot } from './access-snapshot';
-import { nodeAccessState, accessNoticeDestination } from '@/shared/node-access';
+import {
+  nodeAccessState,
+  accessNoticeDestination,
+  nodeAccessChangeText,
+} from '@/shared/node-access';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import 'server-only';
 
@@ -189,6 +193,7 @@ async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeIn
           { userId, identifier },
           'STUDENT',
         );
+        await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
         await requireCurrentRoadmap(transaction, courseOffering);
         await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
         await lockRecipientRoadmap(transaction, userId, roadmap.id);
@@ -228,7 +233,7 @@ async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeIn
               await transaction.roadmapNotice.update({
                 where: { id: notice.id },
                 data: {
-                  body: `«${node.title}» pasó de ${data.knownValue} a ${current}.`,
+                  body: nodeAccessChangeText(node.title, String(data.knownValue), current),
                   data: {
                     ...data,
                     ...accessNoticeDestination(current),

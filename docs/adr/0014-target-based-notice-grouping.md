@@ -19,6 +19,12 @@ equipo docente conserva su actualización en vivo.
 Especificación acordada en la sesión de grilling del 2026-10-04/05. Los textos
 de avisos y del dialog son orientativos; las reglas son vinculantes.
 
+**Modificación del 2026-10-07**, tras revisar la implementación en uso: se retira
+el contador del canvas (decisiones 7 y 9), el título de cada fila del Inbox pasa a
+ser el nombre del ramo y los avisos de acceso describen lo ocurrido al Nodo
+(decisión 13), y el canvas marca cada Nodo con cambios hasta que se abre ese Nodo,
+independientemente del reconocimiento (decisión 14).
+
 ## Contexto
 
 La ventana actual guarda el primer aviso de inmediato y, si hubo repeticiones del
@@ -98,9 +104,10 @@ separado). Para el estudiante, un Nodo está en exactamente uno de tres estados:
 | Bloqueado  | Bloqueo docente o Bloqueo por prerrequisitos |
 | Retirado   | Oculto (el estudiante no lo ve)              |
 
-El aviso muestra el estado anterior conocido y el resultante, por ejemplo
-_«Colas» pasó de Disponible a Bloqueado_. Ocultar → mostrar → bloquear sin
-reconocer produce un único aviso _Disponible → Bloqueado_. Separar visibilidad y
+El aviso compara el estado anterior conocido con el resultante y describe lo que
+le ocurrió al Nodo, por ejemplo _«Colas» fue bloqueado_ para Disponible →
+Bloqueado (textos en la decisión 13). Ocultar → mostrar → bloquear sin reconocer
+produce un único aviso _Disponible → Bloqueado_. Separar visibilidad y
 bloqueo daría avisos contradictorios: bloquear y luego ocultar dejaría a la vez
 «fue bloqueado» y «fue retirado», cuando solo «Retirado» está vigente.
 
@@ -244,7 +251,8 @@ destinatario no cambió nada.
   primera entrada al Roadmap (ver Disponibilidad del Roadmap en la decisión 1).
 - **Reconocimiento:** entrar al Roadmap reconoce **todos** sus avisos pendientes,
   incluidos los de Nodos. Abrir un Nodo ya no reconoce avisos (se retira el
-  reconocimiento por apertura de Nodo).
+  reconocimiento por apertura de Nodo); solo revisa la marca de cambios de ese
+  Nodo en el canvas (decisión 14), que es independiente del Inbox.
 - **Inbox:** los avisos reconocidos **desaparecen** del Inbox; no permanecen como
   leídos.
 - **Clics repetidos:** volver a hacer clic en un aviso no vuelve a abrir el
@@ -298,8 +306,9 @@ recibido cambios_, con el detalle _N cambios_.
 - **Se cuentan objetos pendientes**, ya aplicadas absorciones y retiros, no
   ediciones: 12 ediciones sobre 3 objetos cuentan 3; un Nodo nuevo con 5 ediciones
   cuenta 1.
-- **Los números muestran objetos:** el badge de la campana, el contador del curso
-  en el Resumen académico y el del canvas muestran N (3 en el ejemplo), no 1.
+- **Los números muestran objetos:** el badge de la campana y el contador del curso
+  en el Resumen académico muestran N (3 en el ejemplo), no 1. El contador del
+  canvas se retiró el 2026-10-07 (decisión 9).
 - **El umbral rige en ambos sentidos:** si un retiro baja el total de 3 a 2, el
   Inbox vuelve a mostrar 2 filas individuales.
 - **«Roadmap disponible» nunca se agrupa:** absorbe todo y siempre cuenta 1.
@@ -314,8 +323,9 @@ conservar la fecha original: un aviso actualizado el jueves quedaría fechado el
 lunes, antes del cambio que describe.
 
 Ejemplo: Ana tiene pendientes el título de «Pilas», el acceso de «Colas» y el
-Recurso «Guía 3» de «Árboles» tras 12 ediciones docentes. Ve una fila _El Roadmap
-de CC1002 ha recibido cambios — 3 cambios_, badge 3, contador del curso 3.
+Recurso «Guía 3» de «Árboles» tras 12 ediciones docentes. Ve una fila titulada
+con el nombre del ramo, _Estructuras de Datos — El Roadmap ha recibido 3
+cambios_ (decisión 13), badge 3, contador del curso 3.
 
 ### 8. Contenido del dialog de Resumen de cambios
 
@@ -342,8 +352,9 @@ Ruta y clasificación
    actual; Dependencias y Tipos de nodo van en una sección general al final.
 2. **Orden por cambio más reciente**, como el Inbox.
 3. **Sin autores:** una absorción puede mezclar ediciones de varios docentes.
-4. **Sin navegación:** los ítems no son clicables. Resaltar o centrar el Nodo en
-   el canvas queda para una iteración posterior.
+4. **Sin navegación:** los ítems no son clicables. La marca de cambios de la
+   decisión 14 señala en el canvas los Nodos afectados; centrar el Nodo queda
+   para una iteración posterior.
 5. **«Desde tu última visita» sin fecha ni hora.**
 6. **Un único botón, _Entendido_.** Cerrarlo no tiene efectos: los avisos se
    reconocieron al entrar.
@@ -354,8 +365,14 @@ Sin tiempo real, el canvas del estudiante puede quedar desactualizado. No se
 agrega tratamiento especial: las acciones rechazadas muestran el error genérico
 actual. El servidor ya impide completar un Nodo bloqueado, oculto o eliminado
 (`completion.ts`); la descripción y los Recursos ya cargados siguen visibles en
-su versión anterior, y la descarga de un archivo eliminado falla. El contador de
-avisos del canvas sí sube en vivo y sirve de señal para volver a entrar.
+su versión anterior, y la descarga de un archivo eliminado falla. La campana
+global, visible también dentro del Roadmap, sube en vivo y sirve de señal para
+volver a entrar.
+
+Se decidió inicialmente conservar un contador de avisos propio del canvas, bajo
+el título del Roadmap; se retiró el 2026-10-07 porque repetía la campana global,
+visible en la misma pantalla, y su número coincidía con ella mientras se trabaja
+en un solo Roadmap. El contador por curso del Resumen académico se conserva.
 
 Se descartaron un mensaje con botón «Volver a cargar» y la recarga automática al
 detectar el rechazo, para no complicar esta iteración.
@@ -414,6 +431,72 @@ deduplicación. No se convierten al modelo nuevo. La migración de #177 ejecutó
 este reset y sustituyó la antigua indicación de no limpiar las tablas de avisos.
 La operación vigente se describe en [operaciones](../notifications-operations.md).
 
+### 13. Título y texto de las filas del Inbox
+
+Agregado el 2026-10-07. Un aviso que solo nombraba al Nodo no decía a qué Roadmap
+pertenecía el cambio.
+
+- **Título:** toda fila del Inbox, individual o agrupada, se titula con el **nombre
+  del ramo** (por ejemplo _Introducción a la Programación_). Se proyecta al leer
+  desde el Curso del aviso, de modo que también corrige avisos ya guardados. El
+  `subject` guardado conserva el objeto y sigue disponible en la API.
+- **Texto:** describe el cambio y nombra el Nodo afectado. La fila agrupada dice
+  _El Roadmap ha recibido N cambios._
+- **Acceso:** describe lo que le ocurrió al Nodo según el estado conocido y el
+  actual, en lugar de nombrar los estados. Vale igual para el equipo docente, que
+  sigue viendo y editando un Nodo oculto:
+
+| Conocido → actual                 | Texto                                                              |
+| --------------------------------- | ------------------------------------------------------------------ |
+| Disponible o Bloqueado → Retirado | «Variables» fue ocultado del Roadmap.                              |
+| Retirado → Disponible             | «Variables» volvió a mostrarse en el Roadmap.                      |
+| Retirado → Bloqueado              | «Variables» volvió a mostrarse en el Roadmap, pero está bloqueado. |
+| Disponible → Bloqueado            | «Variables» fue bloqueado.                                         |
+| Bloqueado → Disponible            | «Variables» fue desbloqueado.                                      |
+
+El Resumen de cambios usa los mismos textos de acceso bajo el título del Nodo.
+Se descartó «X pasó de Disponible a Retirado»: «Retirado» describe el estado del
+estudiante y es falso para el equipo docente, que recibe el mismo aviso.
+
+### 14. Marca de cambios por Nodo en el canvas
+
+Agregado el 2026-10-07. La insignia por Nodo existente contaba avisos pendientes,
+así que desaparecía al entrar al Roadmap, al mismo tiempo que se abría el dialog,
+y nunca llegaba a verse. Se separan dos señales:
+
+- **Campana e Inbox:** se vacían al entrar al Roadmap (decisión 4).
+- **Marca del Nodo:** persiste hasta que el destinatario **abre ese Nodo**: su
+  panel de edición o su detalle de estudiante. Entrar al Roadmap no la quita.
+
+Reglas:
+
+1. **Forma:** un círculo rojo en la esquina superior izquierda del Nodo con el
+   número de cambios, sin ícono ni acción propia. La esquina superior derecha
+   queda para el resumen de Recursos.
+2. **Cuenta objetos:** como los demás números (decisión 7), cuenta Objetos del
+   aviso distintos con cambios posteriores a la última apertura del Nodo, ya
+   reconocidos o pendientes. Tres ediciones de la descripción cuentan 1.
+3. **Aplica la visibilidad de la decisión 10:** no cuenta lo que el destinatario
+   no puede ver, y los retiros (3b) y absorciones también la bajan.
+4. **Revisión al abrir:** abrir el Nodo registra la revisión de lo que había. Un
+   cambio que llega mientras el Nodo sigue abierto queda marcado hasta la
+   próxima apertura: el estudiante no lo ve sin volver a entrar (decisión 5).
+5. **Solo en Nodos que se pueden abrir:** el estudiante no ve la marca en un Nodo
+   bloqueado; aparece cuando se desbloquea. El equipo docente la ve también en
+   Nodos ocultos o con Bloqueo docente, que sí puede abrir.
+6. **Pérdida de acceso:** como en la decisión 11, al recuperar la Participación la
+   marca empieza de cero.
+
+Ejemplo: el docente edita la descripción de «Pilas» y oculta «Variables». Ana
+entra al Roadmap: ve el dialog y la campana queda en 0, pero «Pilas» conserva su
+marca _1_ hasta que lo abre; «Variables» no tiene marca para ella porque no lo ve.
+Una ayudante que entra ve la marca _1_ en ambos, porque el equipo docente sigue
+viendo «Variables».
+
+Se descartaron mantener la marca solo mientras el aviso esté pendiente (el caso
+que motivó esta decisión) y volver a reconocer avisos al abrir el Nodo, que
+mezclaría ambas señales y dejaría en el Inbox cambios ya leídos en el dialog.
+
 ## Alternativas descartadas
 
 - **Objeto = Nodo completo mostrando solo el último cambio:** un cambio de
@@ -438,6 +521,8 @@ La operación vigente se describe en [operaciones](../notifications-operations.m
   dialogs mientras se estudia.
 - **Badge de la campana que cuente lo no visto** (baja a 0 al abrir la campana) o
   **«Visto» solo como destaque visual:** se prefirió eliminar el estado.
+- **Contador de avisos propio del canvas:** se retiró el 2026-10-07 por repetir la
+  campana global (decisión 9).
 - **Mantener agrupado el aviso general hasta la entrada aunque baje de 3:** haría
   depender el Inbox de su historial en lugar de una regla única.
 - **El equipo docente no recibe avisos**, o **los reconoce solo si tenía el Roadmap
@@ -461,6 +546,14 @@ La operación vigente se describe en [operaciones](../notifications-operations.m
 - El fallback de destino no disponible queda para navegación antigua o en carrera,
   o desaparición del Curso/Roadmap. La pérdida de Participación retira los Avisos
   antes de que un Inbox actualizado ofrezca ese destino.
+- (2026-10-07) El canvas ya no muestra contador de avisos. Las filas del Inbox se
+  titulan con el nombre del ramo (`courseName` en la API) y el texto de acceso
+  sale de `nodeAccessChangeText`; la migración reescribió los textos de acceso ya
+  guardados.
+- (2026-10-07) `NodeChangeReview` guarda, por destinatario y Nodo, la última
+  apertura. `GET /api/notifications/node-changes` cuenta por Nodo los Objetos con
+  avisos posteriores y `POST` registra la apertura. La migración dio por revisados
+  los avisos ya reconocidos, para no marcar de golpe cambios del modelo anterior.
 
 La documentación vigente está en [Avisos y Resumen de cambios](../notifications-summaries.md),
 [operaciones](../notifications-operations.md) y [SSE](../notifications-sse.md).

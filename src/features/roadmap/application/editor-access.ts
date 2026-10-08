@@ -40,6 +40,10 @@ export async function requireEditorRoadmap(
       'El profesor todavía no ha creado un roadmap para este curso.',
     );
   }
+  // Recognition takes a parent KEY SHARE lock before touching knowledge rows.
+  // Serialize edits here, before baseline capture and Node deletion can invert
+  // that order through foreign-key locks.
+  await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${courseOffering.roadmap.id}::uuid FOR UPDATE`;
   return courseOffering.roadmap;
 }
 

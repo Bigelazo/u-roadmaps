@@ -81,7 +81,7 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     const noticeButton = page.getByRole('list', { name: 'Lista de avisos' }).getByRole('button', {
       name: new RegExp(
-        `^El Roadmap de ${escapeRegExp(course.courseCode)} ha recibido cambios|^${escapeRegExp(notice.subject)}\\s+${escapeRegExp(notice.body)}`,
+        `^${escapeRegExp(course.courseName)}\\s+(El Roadmap ha recibido \\d+ cambios\\.|${escapeRegExp(notice.body)})`,
       ),
     });
     await expect(noticeButton).toBeVisible();

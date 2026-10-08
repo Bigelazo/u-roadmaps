@@ -1,4 +1,6 @@
 import 'server-only';
+import { resourceContentState } from '@/shared/server/resource-content-state';
+import type { ResourceNoticeState } from '../contracts/resource-state';
 import { Prisma } from '@/shared/server/db';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import { reconcileResourceNotice } from '../application/reconcile-resource';
@@ -7,7 +9,11 @@ import {
   storedResourcePayload,
   type ResourceNoticeEffect,
 } from '../application/resource-effect';
-import { recognitionSnapshot, acknowledgeCapturedNotice } from './recognition-snapshot';
+import {
+  recognitionSnapshot,
+  acknowledgeCapturedNotice,
+  reconcileRecognizedTarget,
+} from './recognition-snapshot';
 
 export async function reconcileStoredResource(
   transaction: Prisma.TransactionClient,
@@ -16,7 +22,7 @@ export async function reconcileStoredResource(
   await lockRecipientRoadmap(transaction, effect.recipientId, effect.roadmapId);
   const { nodeId, resourceId } = effect.payload;
   const node = await transaction.roadmapNode.findUnique({ where: { id: nodeId } });
-  if (!node || !node.isVisible) return;
+  if (!node) return;
   const knowledge = await transaction.resourceNoticeKnowledge.upsert({
     where: { recipientId_resourceId: { recipientId: effect.recipientId, resourceId } },
     create: {
@@ -31,9 +37,7 @@ export async function reconcileStoredResource(
     update: {},
   });
   const resource = await transaction.resource.findUnique({ where: { id: resourceId } });
-  const currentResource = resource
-    ? { title: resource.title, revision: resource.updatedAt.toISOString() }
-    : null;
+  const currentResource = resource ? resourceContentState(resource) : null;
   const knownResource =
     knowledge.knownState === null ? null : resourceNoticeState(JSON.parse(knowledge.knownState));
   const targetKey = `resource:${resourceId}`;
@@ -50,6 +54,7 @@ export async function reconcileStoredResource(
     if (pending) await transaction.roadmapNotice.delete({ where: { id: pending.id } });
     return;
   }
+  if (!node.isVisible) return;
   const pendingData = pending ? storedResourcePayload(pending.data) : null;
   if (
     pendingData &&
@@ -127,13 +132,6 @@ export async function recognizeResourceSnapshots(
   for (const value of snapshots) {
     const snapshot = recognitionSnapshot(value);
     const payload = storedResourcePayload(snapshot.payload);
-    const known = await transaction.resourceNoticeKnowledge.updateMany({
-      where: { recipientId, resourceId: payload.resourceId },
-      data: {
-        knownState:
-          payload.currentResource === null ? null : JSON.stringify(payload.currentResource),
-      },
-    });
     acknowledged += await acknowledgeCapturedNotice(
       transaction,
       { id: snapshot.id, recipientId, roadmapId },
@@ -141,17 +139,54 @@ export async function recognizeResourceSnapshots(
         JSON.stringify(storedResourcePayload(data).currentResource) ===
         JSON.stringify(payload.currentResource),
     );
-    if (!known.count) continue;
     if (typeof payload.courseOfferingId !== 'string')
       throw new Error('Invalid Resource Course offering.');
-    await reconcileStoredResource(transaction, {
-      eventId: `recognition:${operationId}:${payload.resourceId}`,
-      recipientId,
-      roadmapId,
-      courseOfferingId: payload.courseOfferingId,
-      noticeClass: 'roadmap-resource-changed',
-      payload,
-    });
+    await recognizeResourceValue(
+      transaction,
+      {
+        eventId: `recognition:${operationId}:${payload.resourceId}`,
+        recipientId,
+        roadmapId,
+        courseOfferingId: payload.courseOfferingId,
+        noticeClass: 'roadmap-resource-changed',
+        payload,
+      },
+      payload.currentResource,
+    );
   }
   return acknowledged;
+}
+
+/** Establish one captured Resource baseline and rebase any changes after entry. */
+export async function recognizeResourceValue(
+  transaction: Prisma.TransactionClient,
+  effect: ResourceNoticeEffect,
+  knownState: ResourceNoticeState | null,
+  reconcileOnlyPending = false,
+) {
+  const { resourceId, nodeId } = effect.payload;
+  if (!(await transaction.roadmapNode.findUnique({ where: { id: nodeId }, select: { id: true } })))
+    return;
+  const identity = { recipientId: effect.recipientId, resourceId };
+  const baseline = { knownState: knownState === null ? null : JSON.stringify(knownState) };
+  const existing = await transaction.resourceNoticeKnowledge.findUnique({
+    where: { recipientId_resourceId: identity },
+  });
+  if (!existing || existing.knownState !== baseline.knownState) {
+    await transaction.resourceNoticeKnowledge.upsert({
+      where: { recipientId_resourceId: identity },
+      create: { ...identity, nodeId, ...baseline },
+      update: baseline,
+    });
+  }
+  await reconcileRecognizedTarget(
+    transaction,
+    {
+      recipientId: effect.recipientId,
+      roadmapId: effect.roadmapId,
+      targetKey: `resource:${resourceId}`,
+    },
+    reconcileOnlyPending,
+    () => reconcileStoredResource(transaction, effect),
+  );
 }

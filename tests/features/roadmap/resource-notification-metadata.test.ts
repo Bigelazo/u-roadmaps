@@ -3,6 +3,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 const { prisma, transaction, deleteUploadedFile, saveUploadedFile, validateUploadedFile } =
   vi.hoisted(() => {
     const transaction = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       courseOffering: { findUnique: vi.fn() },
       participation: { findUnique: vi.fn(), findMany: vi.fn() },
       dependency: { findMany: vi.fn() },
@@ -47,6 +48,7 @@ const resource = {
   url: 'https://example.test/guide',
   type: 'LINK' as const,
   fileKey: null,
+  fileContentType: null,
   updatedAt: new Date('2026-10-06T12:00:00Z'),
 };
 
@@ -104,7 +106,10 @@ test('effective Resource updates return notification metadata from the committed
     nodeId,
     resourceId: resource.id,
     resourceTitle: 'Updated guide',
-    previousResource: { title: resource.title, revision: '2026-10-06T12:00:00.000Z' },
+    previousResource: {
+      title: resource.title,
+      revision: 'content-v1:cd5489149c42aa94cfe55058902f4a44d24cb4c43b2f6539b1191f10622b9190',
+    },
   });
 });
 
@@ -126,7 +131,10 @@ test('deletion returns the Resource title and owner Node after preserving them b
     nodeId,
     resourceId: resource.id,
     resourceTitle: resource.title,
-    previousResource: { title: resource.title, revision: '2026-10-06T12:00:00.000Z' },
+    previousResource: {
+      title: resource.title,
+      revision: 'content-v1:071cae0addf4fa98ddcc5dc94eeb6ee3133ad34ab3b11f94ab2787406c846e50',
+    },
   });
 });
 

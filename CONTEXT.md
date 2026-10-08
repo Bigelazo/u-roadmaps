@@ -111,6 +111,10 @@ _Avoid_: Node, notice destination, change class
 The single Inbox entry that stands for a recipient's pending Roadmap notices of one Roadmap when they concern three or more Notice targets. It counts as the number of targets it stands for, and each Roadmap is grouped separately.
 _Avoid_: Change summary, digest, general notice
 
+**Node change mark (Marca de cambios del nodo)**:
+The count shown on a Node in the canvas of the Notice targets of that Node that changed since its recipient last opened it, whether their notices are still pending or already recognized. Entering the Roadmap does not clear it; opening the Node does. It is independent of the Inbox.
+_Avoid_: Unread badge, Node notice count
+
 **User (Usuario)**:
 A person identified institutionally by a unique, normalized RUT who can participate in multiple course offerings. Their institutional email is unique but may be updated; conflicting identifiers must not be merged silently.
 _Avoid_: Student, teacher

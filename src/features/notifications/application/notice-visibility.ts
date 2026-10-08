@@ -1,4 +1,4 @@
-export type NoticeVisibilityNode = { id: string; isVisible: boolean };
+export type NoticeVisibilityNode = { id: string; isVisible: boolean; nodeTypeId?: string };
 
 /** Visibility affects presentation only; hidden notices remain pending for recognition. */
 export function isNoticeVisible(
@@ -8,6 +8,15 @@ export function isNoticeVisible(
 ): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const data = value as Record<string, unknown>;
+  if (data.noticeTarget === 'dependency')
+    return [data.sourceNodeId, data.targetNodeId].every((nodeId) =>
+      nodes.some((node) => node.id === nodeId && node.isVisible),
+    );
+  if (data.noticeTarget === 'node-type-name')
+    return (
+      typeof data.nodeTypeId === 'string' &&
+      nodes.some((node) => node.nodeTypeId === data.nodeTypeId && node.isVisible)
+    );
   const node = nodes.find(({ id }) => id === data.nodeId);
   // Access withdrawal and deletion describe a change in the Roadmap itself.
   if (data.noticeTarget === 'node-access' || data.changeKind === 'node-deleted') return true;

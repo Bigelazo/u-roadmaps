@@ -33,3 +33,21 @@ export async function acknowledgeCapturedNotice(
   });
   return 1;
 }
+
+/** Synthetic entry baselines must not bypass the delivery path's author filtering. */
+export async function reconcileRecognizedTarget(
+  transaction: Prisma.TransactionClient,
+  identity: { recipientId: string; roadmapId: string; targetKey: string },
+  onlyPending: boolean,
+  reconcile: () => Promise<void>,
+) {
+  if (
+    onlyPending &&
+    !(await transaction.roadmapNotice.findFirst({
+      where: { ...identity, acknowledgedAt: null },
+      select: { id: true },
+    }))
+  )
+    return;
+  await reconcile();
+}

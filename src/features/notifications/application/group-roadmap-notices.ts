@@ -34,23 +34,26 @@ export function groupRoadmapNotices(notices: readonly PendingNotice[]): PendingN
     )
       return [notice];
     if (targets[0].id !== notice.id) return [];
-    const data = notice.data as Record<string, NoticeData>;
-    return [
-      {
-        ...notice,
-        subject: `El Roadmap de ${data.courseCode} ha recibido cambios`,
-        body: `${targets.length} cambios`,
-        data: {
-          roadmapId: notice.roadmapId,
-          courseCode: data.courseCode,
-          year: data.year,
-          semester: data.semester,
-          occurredAt: notice.availableAt.toISOString(),
-          changeKind: 'roadmap-grouped',
-          targetKind: 'roadmap',
-          targetCount: targets.length,
-        },
-      },
-    ];
+    return [groupedRoadmapNotice(notice, targets.length)];
   });
+}
+
+/** Project a grouped row after either in-memory or database aggregation. */
+export function groupedRoadmapNotice(notice: PendingNotice, count: number): PendingNotice {
+  const data = notice.data as Record<string, NoticeData>;
+  return {
+    ...notice,
+    subject: `El Roadmap de ${data.courseCode} ha recibido cambios`,
+    body: `El Roadmap ha recibido ${count} cambios.`,
+    data: {
+      roadmapId: notice.roadmapId,
+      courseCode: data.courseCode,
+      year: data.year,
+      semester: data.semester,
+      occurredAt: notice.availableAt.toISOString(),
+      changeKind: 'roadmap-grouped',
+      targetKind: 'roadmap',
+      targetCount: count,
+    },
+  };
 }

@@ -132,3 +132,32 @@ test('Resource recognition rebases edits after opening and retries preserve late
     });
   }
 });
+
+test('restoring Resource title URL and type withdraws the known-content notice', async ({
+  course,
+  apiAs,
+}) => {
+  const author = await apiAs(course.users.teacher);
+  const recipient = await apiAs(course.users.studentWithoutProgress);
+  const notices = () => pendingNotices(recipient, course.nodes.first);
+  const resource = await addResource(author, course);
+  await expect.poll(notices).toHaveLength(1);
+  await acknowledgeOpening(recipient, await prepareOpening(recipient, course.roadmapId));
+  const path = course.apiPath(`/resources/${resource.id}`);
+  expect(
+    (
+      await author.patch(path, {
+        data: { title: 'Renamed', url: 'https://example.test/revised', type: 'VIDEO' },
+      })
+    ).status(),
+  ).toBe(200);
+  await expect.poll(notices).toHaveLength(1);
+  expect(
+    (
+      await author.patch(path, {
+        data: { title: 'Guía 3', url: 'https://example.test/guide', type: 'LINK' },
+      })
+    ).status(),
+  ).toBe(200);
+  await expect.poll(notices).toHaveLength(0);
+});

@@ -1,9 +1,11 @@
 import 'server-only';
+import { resourceContentState } from '@/shared/server/resource-content-state';
+import type { ResourceNoticeState } from '../contracts/resource-state';
 import { Prisma } from '@/shared/server/db';
-import { reconcileStoredTitle } from './title-notice';
-import { reconcileStoredNodeContent } from './node-content-notice';
-import { reconcileStoredResource } from './resource-notice';
-import { reconcileStoredRoute } from './route-notice';
+import { recognizeTitleValue } from './title-notice';
+import { recognizeNodeContentValue } from './node-content-notice';
+import { recognizeResourceValue } from './resource-notice';
+import { recognizeRouteValue } from './route-notice';
 import type { RoutePayload } from '../application/route-effect';
 import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
 import { reconcileStoredAbsorption } from './absorption-notice';
@@ -17,16 +19,23 @@ type CapturedNode = {
   nodeTypeId: string;
   nodeTypeName: string;
   access: NodeAccessState;
-  resources: { id: string; title: string; revision: string }[];
+  resources: (ResourceNoticeState & { id: string })[];
+  resourceIds?: string[];
+  recognizesDescription?: boolean;
 };
 type AbsorptionSnapshot = {
   noticeId: string | null;
   payload: Record<string, unknown>;
   nodes: CapturedNode[];
   routes: RoutePayload[];
+  deletedNodeIds?: string[];
 };
 
-/** Capture the values actually exposed on entry, including absorbed targets. */
+function capturesRoadmapState(payload: Record<string, unknown>) {
+  return payload.changeKind === 'roadmap-available' || payload.snapshotKind === 'roadmap-entry';
+}
+
+/** Capture entry state even when a return to known has withdrawn every notice. */
 export async function absorptionOpeningSnapshots(
   transaction: Prisma.TransactionClient,
   recipientId: string,
@@ -79,13 +88,64 @@ export async function absorptionOpeningSnapshots(
         },
       });
   }
-  if (!broad.length) return [] as Prisma.InputJsonArray;
+  const [roadmap, knownNodes, knownResources, knownDescriptions] = await Promise.all([
+    transaction.roadmap.findUniqueOrThrow({
+      where: { id: roadmapId },
+      include: { courseOffering: true },
+    }),
+    transaction.nodeLifecycleKnowledge.findMany({
+      where: { recipientId, roadmapId, isKnown: true },
+    }),
+    transaction.resourceNoticeKnowledge.findMany({
+      where: { recipientId, node: { roadmapId } },
+      select: { nodeId: true, resourceId: true },
+    }),
+    transaction.nodeContentKnowledge.findMany({
+      where: { recipientId, target: 'description', node: { roadmapId } },
+      select: { nodeId: true },
+    }),
+  ]);
+  const knownResourceIds = new Set(knownResources.map(({ resourceId }) => resourceId));
+  const resourcesByNode = new Map<string, string[]>();
+  for (const { nodeId, resourceId } of knownResources) {
+    const ids = resourcesByNode.get(nodeId) ?? [];
+    ids.push(resourceId);
+    resourcesByNode.set(nodeId, ids);
+  }
+  const descriptionNodeIds = new Set(knownDescriptions.map(({ nodeId }) => nodeId));
+  // No notice identity is attached: this records what entry exposed, rather
+  // than inventing an availability notice or expanding recognition on retry.
+  broad.push({
+    id: null,
+    data: {
+      snapshotKind: 'roadmap-entry',
+      eventCount: 1,
+      digestKey: `entry:${roadmapId}`,
+      roadmapId,
+      courseOfferingId: roadmap.courseOfferingId,
+      courseCode: roadmap.courseOffering.courseCode,
+      year: roadmap.courseOffering.year,
+      semester: roadmap.courseOffering.semester,
+      actorName: 'Equipo docente',
+      occurredAt: new Date().toISOString(),
+      targetKind: 'roadmap',
+    },
+  });
   const nodes = await transaction.roadmapNode.findMany({
-    where: { roadmapId, isVisible: true },
+    where: {
+      roadmapId,
+      // A missing lifecycle row means an existing known Node. Only explicit
+      // unknown creations must remain unknown while hidden.
+      OR: [{ isVisible: true }, { id: { notIn: unknown.map(({ nodeId }) => nodeId) } }],
+    },
     include: { nodeType: true, resources: true },
   });
+  const currentNodeIds = new Set(nodes.map(({ id }) => id));
+  const deletedNodeIds = knownNodes
+    .map(({ nodeId }) => nodeId)
+    .filter((nodeId) => !currentNodeIds.has(nodeId));
   const routes: RoutePayload[] = [];
-  if (broad.some(({ data }) => (data as Prisma.JsonObject).changeKind === 'roadmap-available')) {
+  if (broad.some(({ data }) => capturesRoadmapState(data as Prisma.JsonObject))) {
     const [dependencies, types, knowledge] = await Promise.all([
       transaction.dependency.findMany({ where: { sourceNode: { roadmapId } } }),
       transaction.nodeType.findMany({ where: { roadmapId } }),
@@ -126,23 +186,26 @@ export async function absorptionOpeningSnapshots(
     return {
       noticeId: id,
       payload,
-      routes: payload.changeKind === 'roadmap-available' ? routes : [],
+      deletedNodeIds: payload.snapshotKind === 'roadmap-entry' ? deletedNodeIds : [],
+      routes: capturesRoadmapState(payload) ? routes : [],
       nodes: nodes
-        .filter((node) => payload.changeKind === 'roadmap-available' || node.id === payload.nodeId)
+        .filter((node) => capturesRoadmapState(payload) || node.id === payload.nodeId)
         .map((node) => ({
           id: node.id,
           title: node.title,
           description: node.description,
           nodeTypeId: node.nodeTypeId,
           nodeTypeName: node.nodeType.name,
-          access: accessible.has(node.id) ? 'Disponible' : 'Bloqueado',
-          resources: accessible.has(node.id)
-            ? node.resources.map((resource) => ({
-                id: resource.id,
-                title: resource.title,
-                revision: resource.updatedAt.toISOString(),
-              }))
-            : [],
+          access: !node.isVisible
+            ? 'Retirado'
+            : accessible.has(node.id)
+              ? 'Disponible'
+              : 'Bloqueado',
+          resourceIds: resourcesByNode.get(node.id) ?? [],
+          recognizesDescription: accessible.has(node.id) || descriptionNodeIds.has(node.id),
+          resources: node.resources
+            .filter((resource) => accessible.has(node.id) || knownResourceIds.has(resource.id))
+            .map((resource) => ({ id: resource.id, ...resourceContentState(resource) })),
         })),
     };
   }) as Prisma.InputJsonArray;
@@ -179,6 +242,32 @@ export async function recognizeAbsorptionSnapshots(
     )
       throw new Error('Invalid absorption snapshot.');
     const snapshot = value as unknown as AbsorptionSnapshot;
+    const reconcileOnlyPending = snapshot.payload.snapshotKind === 'roadmap-entry';
+    // Internal snapshot markers must never leak into stored Notice payloads,
+    // where they could make a later Node notice masquerade as a broad entry.
+    const deliveryPayload = { ...snapshot.payload };
+    delete deliveryPayload.snapshotKind;
+    if (snapshot.deletedNodeIds?.length) {
+      await transaction.nodeLifecycleKnowledge.updateMany({
+        where: {
+          recipientId: identity.recipientId,
+          roadmapId: identity.roadmapId,
+          nodeId: { in: snapshot.deletedNodeIds },
+          isKnown: true,
+        },
+        data: { isKnown: false },
+      });
+      await transaction.roadmapNotice.deleteMany({
+        where: {
+          recipientId: identity.recipientId,
+          roadmapId: identity.roadmapId,
+          acknowledgedAt: null,
+          OR: snapshot.deletedNodeIds.map((nodeId) => ({
+            data: { path: ['nodeId'], equals: nodeId },
+          })),
+        },
+      });
+    }
     if (snapshot.noticeId) {
       acknowledged += (
         await transaction.roadmapNotice.updateMany({
@@ -198,11 +287,16 @@ export async function recognizeAbsorptionSnapshots(
         roadmapId: identity.roadmapId,
         nodeId: node.id,
       };
-      await transaction.nodeLifecycleKnowledge.upsert({
+      const lifecycleKnowledge = await transaction.nodeLifecycleKnowledge.findUnique({
         where: { recipientId_roadmapId_nodeId: lifecycle },
-        create: { ...lifecycle, isKnown: true },
-        update: { isKnown: true },
       });
+      if (!lifecycleKnowledge?.isKnown) {
+        await transaction.nodeLifecycleKnowledge.upsert({
+          where: { recipientId_roadmapId_nodeId: lifecycle },
+          create: { ...lifecycle, isKnown: true },
+          update: { isKnown: true },
+        });
+      }
       const effect = {
         eventId: `recognition:${identity.operationId}:${node.id}`,
         recipientId: identity.recipientId,
@@ -211,7 +305,7 @@ export async function recognizeAbsorptionSnapshots(
         noticeClass: 'roadmap-node-changed' as const,
       };
       const payload = {
-        ...snapshot.payload,
+        ...deliveryPayload,
         nodeId: node.id,
         nodeTitle: node.title,
         changeKind: 'node-updated',
@@ -223,6 +317,24 @@ export async function recognizeAbsorptionSnapshots(
         include: { resources: true, nodeType: true },
       });
       if (!current) {
+        // An ordinary entry must not manufacture a notice for the recipient's
+        // own deletion, which deliberately has no delivery to that actor.
+        if (
+          reconcileOnlyPending &&
+          !(await transaction.roadmapNotice.findFirst({
+            where: {
+              recipientId: identity.recipientId,
+              roadmapId: identity.roadmapId,
+              acknowledgedAt: null,
+              AND: [
+                { data: { path: ['nodeId'], equals: node.id } },
+                { data: { path: ['changeKind'], equals: 'node-deleted' } },
+              ],
+            },
+            select: { id: true },
+          }))
+        )
+          continue;
         const deletionPayload = {
           ...payload,
           nodeTypeName: node.nodeTypeName,
@@ -253,19 +365,19 @@ export async function recognizeAbsorptionSnapshots(
         });
         continue;
       }
-      await transaction.nodeTitleKnowledge.upsert({
-        where: { recipientId_nodeId: { recipientId: identity.recipientId, nodeId: node.id } },
-        create: { recipientId: identity.recipientId, nodeId: node.id, knownTitle: node.title },
-        update: { knownTitle: node.title },
-      });
-      await reconcileStoredTitle(transaction, {
-        ...effect,
-        payload: { ...payload, previousTitle: node.title },
-      });
+      await recognizeTitleValue(
+        transaction,
+        {
+          ...effect,
+          payload: { ...payload, previousTitle: node.title },
+        },
+        node.title,
+        reconcileOnlyPending,
+      );
       for (const target of [
         'access',
         'nodeType',
-        ...(node.access === 'Disponible' ? ['description'] : []),
+        ...(node.access === 'Disponible' || node.recognizesDescription ? ['description'] : []),
       ] as const) {
         const contentTarget = target as 'access' | 'nodeType' | 'description';
         const knownValue =
@@ -274,71 +386,49 @@ export async function recognizeAbsorptionSnapshots(
             : target === 'nodeType'
               ? node.nodeTypeId
               : JSON.stringify(node.description);
-        const knowledge = { recipientId: identity.recipientId, nodeId: node.id, target };
-        const baseline = {
+        await recognizeNodeContentValue(
+          transaction,
+          {
+            ...effect,
+            eventId: `${effect.eventId}:${target}`,
+            payload: {
+              ...payload,
+              contentTarget,
+              previousValue: knownValue,
+              ...(target === 'nodeType'
+                ? { previousTypeName: node.nodeTypeName, currentTypeName: current.nodeType.name }
+                : {}),
+            },
+          },
           knownValue,
-          ...(target === 'nodeType' ? { knownTypeName: node.nodeTypeName } : {}),
-        };
-        await transaction.nodeContentKnowledge.upsert({
-          where: { recipientId_nodeId_target: knowledge },
-          create: {
-            ...knowledge,
-            ...baseline,
-            ...(target === 'access'
-              ? {
-                  currentValue: current.isVisible
-                    ? current.isTeacherBlocked
-                      ? 'Bloqueado'
-                      : node.access
-                    : 'Retirado',
-                }
-              : {}),
-          },
-          update: baseline,
-        });
-        await reconcileStoredNodeContent(transaction, {
-          ...effect,
-          eventId: `${effect.eventId}:${target}`,
-          payload: {
-            ...payload,
-            contentTarget,
-            previousValue: knownValue,
-            ...(target === 'nodeType'
-              ? { previousTypeName: node.nodeTypeName, currentTypeName: current.nodeType.name }
-              : {}),
-          },
-        });
+          target === 'nodeType' ? node.nodeTypeName : undefined,
+          reconcileOnlyPending,
+        );
       }
-      if (node.access !== 'Disponible') continue;
-      const resources = new Map(node.resources.map((resource) => [resource.id, resource]));
-      for (const resource of current.resources)
-        if (!resources.has(resource.id))
-          resources.set(resource.id, { id: resource.id, title: resource.title, revision: '' });
-      for (const resource of resources.values()) {
-        const known = resource.revision
-          ? { title: resource.title, revision: resource.revision }
-          : null;
-        const resourceIdentity = { recipientId: identity.recipientId, resourceId: resource.id };
-        const knownState = known ? JSON.stringify(known) : null;
-        await transaction.resourceNoticeKnowledge.upsert({
-          where: { recipientId_resourceId: resourceIdentity },
-          create: { ...resourceIdentity, nodeId: node.id, knownState },
-          update: { knownState },
-        });
-        await reconcileStoredResource(transaction, {
-          ...effect,
-          eventId: `${effect.eventId}:${resource.id}`,
-          noticeClass: 'roadmap-resource-changed',
-          payload: {
-            ...payload,
-            resourceId: resource.id,
-            previousResource: known,
+      const knownResources = new Map(node.resources.map((resource) => [resource.id, resource]));
+      const resourceIds = new Set([
+        ...(node.resourceIds ?? []),
+        ...knownResources.keys(),
+        ...(node.access === 'Disponible' ? current.resources.map(({ id }) => id) : []),
+      ]);
+      for (const resourceId of resourceIds) {
+        const resource = knownResources.get(resourceId);
+        const known = resource ? { title: resource.title, revision: resource.revision } : null;
+        await recognizeResourceValue(
+          transaction,
+          {
+            ...effect,
+            eventId: `${effect.eventId}:${resourceId}`,
+            noticeClass: 'roadmap-resource-changed',
+            payload: { ...payload, resourceId, previousResource: known },
           },
-        });
+          known,
+          reconcileOnlyPending,
+        );
       }
     }
     const routes = [...snapshot.routes];
-    if (snapshot.payload.changeKind === 'roadmap-available') {
+    if (capturesRoadmapState(snapshot.payload)) {
       // A pair absent on entry is known to be absent, even if its first-ever
       // insertion was absorbed before acknowledgement.
       const [dependencies, knowledge] = await Promise.all([
@@ -373,38 +463,33 @@ export async function recognizeAbsorptionSnapshots(
         }
     }
     for (const route of routes) {
-      const routeIdentity = {
-        recipientId: identity.recipientId,
-        roadmapId: identity.roadmapId,
-        targetKey: route.routeTargetKey,
-      };
-      await transaction.routeNoticeKnowledge.upsert({
-        where: { recipientId_roadmapId_targetKey: routeIdentity },
-        create: { ...routeIdentity, knownValue: route.previousValue },
-        update: { knownValue: route.previousValue },
-      });
-      await reconcileStoredRoute(transaction, {
-        eventId: `recognition:${identity.operationId}:${route.routeTargetKey}`,
-        recipientId: identity.recipientId,
-        roadmapId: identity.roadmapId,
-        courseOfferingId: String(snapshot.payload.courseOfferingId),
-        noticeClass:
-          route.routeTarget === 'dependency'
-            ? 'roadmap-path-changed'
-            : 'roadmap-classification-changed',
-        payload: {
-          ...snapshot.payload,
-          ...route,
-          changeKind:
+      await recognizeRouteValue(
+        transaction,
+        {
+          eventId: `recognition:${identity.operationId}:${route.routeTargetKey}`,
+          recipientId: identity.recipientId,
+          roadmapId: identity.roadmapId,
+          courseOfferingId: String(snapshot.payload.courseOfferingId),
+          noticeClass:
             route.routeTarget === 'dependency'
-              ? route.previousValue === 'true'
-                ? 'dependency-added'
-                : 'dependency-removed'
-              : 'classification-updated',
+              ? 'roadmap-path-changed'
+              : 'roadmap-classification-changed',
+          payload: {
+            ...deliveryPayload,
+            ...route,
+            changeKind:
+              route.routeTarget === 'dependency'
+                ? route.previousValue === 'true'
+                  ? 'dependency-added'
+                  : 'dependency-removed'
+                : 'classification-updated',
+          },
         },
-      });
+        route.previousValue,
+        reconcileOnlyPending,
+      );
     }
-    if (snapshot.payload.changeKind === 'roadmap-available') {
+    if (capturesRoadmapState(snapshot.payload)) {
       const unrecognized = await transaction.nodeLifecycleKnowledge.findMany({
         where: {
           recipientId: identity.recipientId,
@@ -421,7 +506,7 @@ export async function recognizeAbsorptionSnapshots(
           courseOfferingId: String(snapshot.payload.courseOfferingId),
           noticeClass: 'roadmap-node-changed',
           payload: {
-            ...snapshot.payload,
+            ...deliveryPayload,
             nodeId,
             changeKind: 'node-available',
             occurredAt: new Date().toISOString(),

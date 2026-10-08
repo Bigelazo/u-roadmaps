@@ -33,11 +33,14 @@ beforeEach(() => {
   prisma.roadmapNotice.findFirst.mockResolvedValue(null);
   prisma.routeNoticeKnowledge.upsert.mockResolvedValue({ knownValue: 'Lectura' });
   prisma.roadmapNode.findMany.mockResolvedValue([
-    { id: 'source-id', title: 'Leyes de Newton' },
-    { id: 'target-id', title: 'Evaluación 1' },
+    { id: 'source-id', title: 'Leyes de Newton', isVisible: true },
+    { id: 'target-id', title: 'Evaluación 1', isVisible: true },
   ]);
   prisma.dependency.findUnique.mockResolvedValue({ id: 'dependency-id' });
-  prisma.nodeType.findFirst.mockResolvedValue({ name: 'Lecturas guiadas' });
+  prisma.nodeType.findFirst.mockResolvedValue({
+    name: 'Lecturas guiadas',
+    nodes: [{ id: 'source-id' }],
+  });
 
   prisma.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',

@@ -21,8 +21,7 @@ import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
-import { Bell } from 'lucide-react';
-import { useNodeNoticeCount, useOpenNotificationInbox } from '@/features/notifications/client';
+import { useNodeChangeCount } from '@/features/notifications/client';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> &
@@ -47,33 +46,20 @@ export type RoadmapNodeData = Record<string, unknown> &
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
 
-function NodeUnreadBadge({
-  enabled,
-  roadmapId,
-  nodeId,
-}: {
-  enabled: boolean;
-  roadmapId: string;
-  nodeId: string;
-}) {
-  const openInbox = useOpenNotificationInbox();
-  const count = useNodeNoticeCount(nodeId);
-  if (!enabled) return null;
+/** Changes stay marked after the Roadmap entry recognizes them, until this Node is opened. */
+function NodeChangeBadge({ nodeId }: { nodeId: string }) {
+  const count = useNodeChangeCount(nodeId);
   if (!count) return null;
+  const label = `${count} ${count === 1 ? 'cambio' : 'cambios'} sin revisar`;
   return (
-    <button
-      aria-label={`${count} avisos sin leer para este Nodo`}
-      className="absolute top-[-10px] right-[-10px] z-10 flex size-8 items-center justify-center rounded-full border-2 border-card bg-primary text-primary-foreground shadow-sm"
-      onClick={(event) => {
-        event.stopPropagation();
-        openInbox({ roadmapId, nodeId });
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
-      type="button"
+    <span
+      aria-label={label}
+      title={label}
+      role="img"
+      className="absolute top-[-10px] left-[-10px] z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-card bg-destructive px-1 text-xs leading-none font-bold text-white tabular-nums shadow-sm"
     >
-      <Bell aria-hidden="true" className="size-4" />
-      <span className="text-[10px] leading-none font-bold">{count > 99 ? '99+' : count}</span>
-    </button>
+      {count > 99 ? '99+' : count}
+    </span>
   );
 }
 
@@ -450,10 +436,10 @@ function NodeActionBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | '
 }
 
 function NodeNotificationBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | 'data'>) {
-  if (!data.notificationsEnabled || !data.roadmapId || data.isHidden || data.status === 'locked')
-    return null;
-  if (data.status === 'editing' && data.isTeacherBlocked) return null;
-  return <NodeUnreadBadge enabled roadmapId={data.roadmapId} nodeId={id} />;
+  // Only a Node its viewer can open can clear the mark. Teaching staff open hidden
+  // and Teacher-blocked Nodes; a student cannot open a locked one.
+  if (!data.notificationsEnabled || !data.roadmapId || data.status === 'locked') return null;
+  return <NodeChangeBadge nodeId={id} />;
 }
 
 export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) {

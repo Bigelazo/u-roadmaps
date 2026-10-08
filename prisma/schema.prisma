@@ -94,6 +94,7 @@ model RoadmapNode {
   resourceKnowledge    ResourceNoticeKnowledge[]
   completions          Completion[]
   simulatedCompletions SimulatedCompletion[]
+  changeReviews        NodeChangeReview[]
 
   @@unique([id, roadmapId])
   @@index([roadmapId])
@@ -142,6 +143,7 @@ model User {
   resourceKnowledge      ResourceNoticeKnowledge[]
   routeKnowledge         RouteNoticeKnowledge[]
   nodeLifecycleKnowledge NodeLifecycleKnowledge[]
+  nodeChangeReviews      NodeChangeReview[]
   participations         Participation[]
   completions            Completion[]
 }
@@ -229,16 +231,31 @@ model RoadmapNotice {
   @@index([recipientId, roadmapId, acknowledgedAt])
 }
 
+// The canvas marks a Node while it has notice targets newer than the
+// recipient's last opening of that Node, independently of Roadmap recognition.
+model NodeChangeReview {
+  recipientId String      @db.Uuid
+  nodeId      String      @db.Uuid
+  reviewedAt  DateTime    @db.Timestamptz(3)
+  recipient   User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  node        RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@id([recipientId, nodeId])
+  @@index([nodeId])
+}
+
 model RoadmapVisit {
-  recipientId String  @db.Uuid
-  roadmapId   String  @db.Uuid
-  recipient   User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  roadmap     Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  lastRecognizedOpeningSequence BigInt  @default(0)
+  recipientId                   String  @db.Uuid
+  roadmapId                     String  @db.Uuid
+  recipient                     User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmap                       Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
 
   @@id([recipientId, roadmapId])
 }
 
 model NoticeAcknowledgement {
+  openingSequence     BigInt    @default(autoincrement())
   recipientId         String    @db.Uuid
   operationId         String    @db.Uuid
   roadmapId           String    @db.Uuid

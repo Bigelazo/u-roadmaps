@@ -1,6 +1,10 @@
-import { accessNoticeDestination } from '@/shared/node-access';
+import { accessNoticeDestination, nodeAccessChangeText } from '@/shared/node-access';
 import 'server-only';
-import { recognitionSnapshot, acknowledgeCapturedNotice } from './recognition-snapshot';
+import {
+  recognitionSnapshot,
+  acknowledgeCapturedNotice,
+  reconcileRecognizedTarget,
+} from './recognition-snapshot';
 import { Prisma } from '@/shared/server/db';
 import {
   storedNodeContentPayload,
@@ -19,7 +23,7 @@ export async function reconcileStoredNodeContent(
     where: { id: nodeId },
     include: { nodeType: true },
   });
-  if (!node || (!node.isVisible && contentTarget !== 'access')) return;
+  if (!node) return;
   const knowledge = await transaction.nodeContentKnowledge.upsert({
     where: {
       recipientId_nodeId_target: { recipientId: effect.recipientId, nodeId, target: contentTarget },
@@ -61,6 +65,7 @@ export async function reconcileStoredNodeContent(
     await transaction.roadmapNotice.delete({ where: { id: pending!.id } });
     return;
   }
+  if (!node.isVisible && contentTarget !== 'access') return;
   const occurredAt = new Date(
     Math.max(Date.parse(effect.payload.occurredAt), pending?.occurredAt.getTime() ?? 0),
   );
@@ -92,7 +97,7 @@ export async function reconcileStoredNodeContent(
     subject: node.title,
     body:
       contentTarget === 'access'
-        ? `«${node.title}» pasó de ${result.knownValue} a ${result.currentValue}.`
+        ? nodeAccessChangeText(node.title, result.knownValue, result.currentValue)
         : contentTarget === 'description'
           ? `Se actualizó la descripción de «${node.title}».`
           : `«${node.title}» pasó de tipo «${knowledge.knownTypeName}» a tipo «${currentTypeName}».`,
@@ -132,6 +137,59 @@ export function contentOpeningSnapshots(
   }) as Prisma.InputJsonArray;
 }
 
+/** All entry paths establish content knowledge and rebase through this operation. */
+export async function recognizeNodeContentValue(
+  transaction: Prisma.TransactionClient,
+  effect: NodeContentEffect,
+  knownValue: string,
+  knownTypeName?: string,
+  reconcileOnlyPending = false,
+) {
+  const { nodeId, contentTarget: target } = effect.payload;
+  const node = await transaction.roadmapNode.findUnique({ where: { id: nodeId } });
+  if (!node) return;
+  const identity = { recipientId: effect.recipientId, nodeId, target };
+  const baseline = { knownValue, ...(target === 'nodeType' ? { knownTypeName } : {}) };
+  const existing = await transaction.nodeContentKnowledge.findUnique({
+    where: { recipientId_nodeId_target: identity },
+  });
+  if (
+    !existing ||
+    existing.knownValue !== knownValue ||
+    (target === 'nodeType' &&
+      knownTypeName !== undefined &&
+      existing.knownTypeName !== knownTypeName)
+  ) {
+    await transaction.nodeContentKnowledge.upsert({
+      where: { recipientId_nodeId_target: identity },
+      create: {
+        ...identity,
+        ...baseline,
+        ...(target === 'access'
+          ? {
+              currentValue: !node.isVisible
+                ? 'Retirado'
+                : node.isTeacherBlocked
+                  ? 'Bloqueado'
+                  : knownValue,
+            }
+          : {}),
+      },
+      update: baseline,
+    });
+  }
+  await reconcileRecognizedTarget(
+    transaction,
+    {
+      recipientId: effect.recipientId,
+      roadmapId: effect.roadmapId,
+      targetKey: `node:${nodeId}:${target}`,
+    },
+    reconcileOnlyPending,
+    () => reconcileStoredNodeContent(transaction, effect),
+  );
+}
+
 export async function recognizeContentSnapshots(
   transaction: Prisma.TransactionClient,
   {
@@ -146,26 +204,26 @@ export async function recognizeContentSnapshots(
   for (const value of snapshots) {
     const snapshot = recognitionSnapshot(value);
     const payload = storedNodeContentPayload(snapshot.payload);
-    const known = await transaction.nodeContentKnowledge.updateMany({
-      where: { recipientId, nodeId: payload.nodeId, target: payload.contentTarget },
-      data: { knownValue: payload.currentValue, knownTypeName: payload.currentTypeName },
-    });
     acknowledged += await acknowledgeCapturedNotice(
       transaction,
       { id: snapshot.id, recipientId, roadmapId },
       (data) => storedNodeContentPayload(data).currentValue === payload.currentValue,
     );
-    if (!known.count) continue; // Deleted Nodes retain notices until recognition.
     if (typeof payload.courseOfferingId !== 'string')
       throw new Error('Invalid content Course offering.');
-    await reconcileStoredNodeContent(transaction, {
-      eventId: `recognition:${operationId}:${payload.nodeId}:${payload.contentTarget}`,
-      recipientId,
-      roadmapId,
-      courseOfferingId: payload.courseOfferingId,
-      noticeClass: 'roadmap-node-changed',
-      payload,
-    });
+    await recognizeNodeContentValue(
+      transaction,
+      {
+        eventId: `recognition:${operationId}:${payload.nodeId}:${payload.contentTarget}`,
+        recipientId,
+        roadmapId,
+        courseOfferingId: payload.courseOfferingId,
+        noticeClass: 'roadmap-node-changed',
+        payload,
+      },
+      payload.currentValue,
+      payload.currentTypeName,
+    );
   }
   return acknowledged;
 }

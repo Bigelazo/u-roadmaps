@@ -40,6 +40,10 @@ test('real SSE keeps student content stable while notices and counters update, i
     const count = async () =>
       (await (await student.request.get(`/api/notifications/counts?${filter}`)).json()).count;
     await expect.poll(count).toBe(0);
+    await expect(other.getByRole('button', { name: /^Avisos(,|$)/ })).toHaveAttribute(
+      'aria-label',
+      'Avisos',
+    );
     const originalCounter = await other
       .getByRole('button', { name: /^Avisos(,|$)/ })
       .getAttribute('aria-label');

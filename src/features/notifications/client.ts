@@ -11,4 +11,4 @@ export {
 
 export { useCounts as useNotificationCounts } from './components/inbox-driver';
 
-export { NodeNoticeCountsProvider, useNodeNoticeCount } from './components/inbox-driver';
+export { NodeChangeCountsProvider, useNodeChangeCount } from './components/inbox-driver';

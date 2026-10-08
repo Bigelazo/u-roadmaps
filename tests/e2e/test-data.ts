@@ -63,6 +63,11 @@ async function deleteCoursesAndUsers(scope: TestDataScope) {
   const users = `SELECT "id" FROM "User" WHERE ${userCondition}`;
   const roadmaps = `SELECT r."id" FROM "Roadmap" r JOIN "CourseOffering" o ON o."id" = r."courseOfferingId" WHERE o."courseCode" IN (${courses})`;
   const fileKeys = await queryJson<string[] | null>(`
+    -- Match entry's parent-before-receipt lock order while requests finish.
+    DO $$ BEGIN
+      PERFORM r."id" FROM "Roadmap" r WHERE r."id" IN (${roadmaps})
+        ORDER BY r."id" FOR UPDATE;
+    END $$;
     SELECT json_agg(resource."fileKey") FROM "Resource" resource
     JOIN "RoadmapNode" node ON node."id" = resource."roadmapNodeId"
     WHERE resource."fileKey" IS NOT NULL AND node."roadmapId" IN (${roadmaps});

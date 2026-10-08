@@ -3,6 +3,7 @@ import { OWN_INBOX_REFRESH_EVENT as refreshEvent } from './own-realtime';
 
 export type InboxRecord = {
   id: string;
+  courseName?: string;
   subject?: string | null;
   body?: string | null;
   data?: Record<string, unknown>;

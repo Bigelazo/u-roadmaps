@@ -26,7 +26,7 @@ test('blocking hides a pending description from Inbox and counts; unblocking res
     )
     .toEqual(['node-access']);
   const count = await (
-    await recipient.get(`/api/notifications/counts?roadmapId=${course.roadmapId}&groupBy=nodeId`)
+    await recipient.get(`/api/notifications/node-changes?roadmapId=${course.roadmapId}`)
   ).json();
   expect(count.byNode[course.nodes.first]).toBe(1);
   expect(
@@ -168,7 +168,7 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
   const recognized = await recognize();
   expect(recognized.acknowledged).toBe(5);
   expect(recognized.summary.groups).toEqual([
-    { title: 'Título pendiente', items: ['Pasó de Disponible a Retirado.'] },
+    { title: 'Título pendiente', items: ['«Título pendiente» fue ocultado del Roadmap.'] },
   ]);
   expect(await notices()).toHaveLength(0);
   expect((await author.patch(path, { data: { isVisible: true } })).status()).toBe(200);
@@ -180,7 +180,7 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
     )
     .toEqual(['node-access']);
   expect((await recognize()).summary.groups).toEqual([
-    { title: 'Título pendiente', items: ['Pasó de Retirado a Disponible.'] },
+    { title: 'Título pendiente', items: ['«Título pendiente» volvió a mostrarse en el Roadmap.'] },
   ]);
 });
 

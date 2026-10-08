@@ -1,106 +1,81 @@
-import { randomUUID } from 'node:crypto';
 import { expect, test } from './fixtures';
-import { insert, sql } from './database';
 import { authenticateAs } from './helpers';
 
-test('one grouped canvas request supplies Node badges and isolates recipients', async ({
+test('Node marks outlive Roadmap recognition and clear only when that Node is opened', async ({
   page,
   course,
   apiAs,
   createUser,
 }) => {
   const user = course.users.studentWithProgress;
-  const nodeIds = [course.nodes.first, course.nodes.first, course.nodes.second, null];
+  const author = await apiAs(course.users.teacher);
+  const api = await apiAs(user);
+  const roadmap = await (await author.get(course.apiPath())).json();
+  const titleOf = (id: string) =>
+    roadmap.nodes.find((node: { id: string; title: string }) => node.id === id).title as string;
+  const card = (id: string) => page.getByTestId('roadmap-card').filter({ hasText: titleOf(id) });
+  const mark = (id: string) => card(id).getByRole('img', { name: /cambios? sin revisar/ });
+  const changesUrl = `/api/notifications/node-changes?roadmapId=${course.roadmapId}`;
+  const changes = async () => (await (await api.get(changesUrl)).json()).byNode;
+  const pending = async () =>
+    (await (await api.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)).json()).count;
   await authenticateAs(page.context(), user.id);
-  const requests: string[] = [];
-  page.on('request', (request) => {
-    if (request.url().includes('/api/notifications/counts')) requests.push(request.url());
-  });
-  await page.addInitScript(() => {
-    (window as unknown as Window & { inboxRefreshes: number }).inboxRefreshes = 0;
-    window.addEventListener('own-inbox-updated', () => {
-      (window as unknown as Window & { inboxRefreshes: number }).inboxRefreshes++;
-    });
-  });
-  const acknowledged = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/notifications/acknowledge') &&
-      response.request().method() === 'POST',
-  );
+  const entered = () =>
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/notifications/acknowledge') &&
+        response.request().method() === 'POST',
+    );
+  let acknowledged = entered();
   await page.goto(course.pagePath());
   expect((await acknowledged).status()).toBe(200);
-  await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
-  const api = await apiAs(user);
-  // Entering recognizes existing notices. Seed arrivals only after opening completes.
-  await expect
-    .poll(
-      async () =>
-        (await (await api.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)).json())
-          .count,
-    )
-    .toBe(0);
-  const groupedRequests = () => requests.filter((url) => url.includes('groupBy=nodeId')).length;
-  const refreshes = () =>
-    page.evaluate(() => (window as unknown as Window & { inboxRefreshes: number }).inboxRefreshes);
-  const baseline = { refreshes: await refreshes(), requests: groupedRequests() };
-  expect(baseline.requests).toBeGreaterThan(0);
-  await sql(
-    insert(
-      'RoadmapNotice',
-      nodeIds.map((nodeId) => ({
-        id: randomUUID(),
-        eventId: randomUUID(),
-        recipientId: user.id,
-        roadmapId: course.roadmapId,
-        courseOfferingId: course.id,
-        subject: 'Conteo agrupado',
-        body: 'Aviso de prueba',
-        data: JSON.stringify({
-          nodeId,
-          roadmapId: course.roadmapId,
-          courseCode: course.courseCode,
-          year: course.year,
-          semester: course.semester,
-        }),
-        occurredAt: new Date(),
-      })),
-    ),
+
+  for (const description of ['Primera revisión', 'Segunda revisión']) {
+    const response = await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { description },
+    });
+    expect(response.status()).toBe(200);
+  }
+  // Repeated edits to one object count once, and the mark arrives live.
+  await expect(mark(course.nodes.first)).toHaveAccessibleName('1 cambio sin revisar');
+  await expect(mark(course.nodes.first)).toHaveText('1');
+  expect(await changes()).toEqual({ [course.nodes.first]: 1 });
+  await expect(mark(course.nodes.second)).toHaveCount(0);
+  // The canvas no longer repeats the global bell.
+  await expect(page.getByRole('button', { name: /avisos sin leer para este Roadmap/ })).toHaveCount(
+    0,
   );
-  const groupedUrl = `/api/notifications/counts?roadmapId=${course.roadmapId}&groupBy=nodeId`;
-  expect(await (await api.get(groupedUrl)).json()).toEqual({
-    count: 4,
-    byNode: { [course.nodes.first]: 2, [course.nodes.second]: 1 },
-  });
-  const outsider = await apiAs(await createUser());
-  expect(await (await outsider.get(groupedUrl)).json()).toEqual({ count: 0, byNode: {} });
-  expect(
-    (await api.get('/api/notifications/counts?roadmapId=invalid&groupBy=nodeId')).status(),
-  ).toBe(400);
-  const author = await apiAs(course.users.teacher);
+
+  acknowledged = entered();
+  await page.reload();
+  expect((await acknowledged).status()).toBe(200);
+  await page.getByRole('button', { name: 'Entendido' }).click();
+  // Entering empties the Inbox, but the Node keeps its mark until it is reviewed.
+  await expect.poll(pending).toBe(0);
+  await expect(mark(course.nodes.first)).toHaveText('1');
+
+  await card(course.nodes.first).click();
+  await expect(mark(course.nodes.first)).toHaveCount(0);
+  await expect.poll(changes).toEqual({});
+
+  // A later change marks the Node again, without reopening the reviewed one.
   expect(
     (
       await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { description: 'Cambio posterior a la entrada' },
+        data: { description: 'Tercera revisión' },
       })
     ).status(),
   ).toBe(200);
-  const first = page.getByRole('button', { name: '3 avisos sin leer para este Nodo' });
-  await expect(first).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '1 avisos sin leer para este Nodo' }),
-  ).toBeVisible();
-  await expect
-    .poll(
-      async () =>
-        groupedRequests() - baseline.requests - ((await refreshes()) - baseline.refreshes),
-    )
-    .toBe(0);
-  expect(groupedRequests()).toBeGreaterThan(baseline.requests);
-  expect(requests.filter((url) => new URL(url).searchParams.has('nodeId'))).toHaveLength(0);
-  await first.click();
-  await expect(
-    page.getByRole('button', {
-      name: new RegExp(`El Roadmap de ${course.courseCode} ha recibido cambios`),
-    }),
-  ).toContainText('3 cambios');
+  await expect.poll(changes).toEqual({ [course.nodes.first]: 1 });
+
+  const outsider = await apiAs(await createUser());
+  expect(await (await outsider.get(changesUrl)).json()).toEqual({ byNode: {} });
+  expect(
+    (
+      await outsider.post('/api/notifications/node-changes', {
+        data: { roadmapId: course.roadmapId, nodeId: course.nodes.first },
+      })
+    ).status(),
+  ).toBe(403);
+  expect((await api.get('/api/notifications/node-changes?roadmapId=invalid')).status()).toBe(400);
 });

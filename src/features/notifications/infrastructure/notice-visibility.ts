@@ -12,7 +12,10 @@ export async function visibleOwnNotices<T extends { roadmapId: string; data: unk
   return prisma.$transaction(async (transaction) => {
     const contexts = new Map<
       string,
-      { nodes: { id: string; isVisible: boolean }[]; accessible: ReadonlySet<string> }
+      {
+        nodes: { id: string; isVisible: boolean; nodeTypeId: string }[];
+        accessible: ReadonlySet<string>;
+      }
     >();
     for (const roadmapId of new Set(notices.map((notice) => notice.roadmapId))) {
       const participation = await transaction.participation.findFirst({
@@ -23,7 +26,7 @@ export async function visibleOwnNotices<T extends { roadmapId: string; data: unk
       const [nodes, accessible] = await Promise.all([
         transaction.roadmapNode.findMany({
           where: { roadmapId },
-          select: { id: true, isVisible: true },
+          select: { id: true, isVisible: true, nodeTypeId: true },
         }),
         accessibleNodes(transaction, userId, roadmapId),
       ]);

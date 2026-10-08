@@ -13,7 +13,7 @@ import type { InboxIdentity } from '../server';
 import { OwnInboxRealtime, OWN_INBOX_REFRESH_EVENT } from './own-realtime';
 import { request, type InboxRecord } from './inbox-api';
 
-type NoticeCounts = { count: number; byNode?: Record<string, number> };
+type NoticeCounts = { count: number };
 type Filter = Record<string, string | number>;
 type ListInput = {
   limit?: number;
@@ -180,38 +180,79 @@ export function InboxDriverProvider({
   );
 }
 
-const NodeNoticeCountsContext = createContext<Record<string, number> | undefined>(undefined);
+const NodeChangeCountsContext = createContext<Record<string, number> | undefined>(undefined);
 
-function ActiveNodeNoticeCounts({
+function useNodeChangeCounts(roadmapId: string) {
+  const [result, setResult] = useState<{ roadmapId: string; byNode: Record<string, number> }>();
+  const generation = useRef(0);
+  const refetch = useCallback(async () => {
+    const current = ++generation.current;
+    try {
+      const { byNode } = await request<{ byNode: Record<string, number> }>(
+        `/node-changes?${new URLSearchParams({ roadmapId })}`,
+      );
+      if (current === generation.current) setResult({ roadmapId, byNode });
+    } catch {
+      if (current === generation.current) return false;
+    }
+  }, [roadmapId]);
+  useInboxRefresh(refetch, generation);
+  return { byNode: result?.roadmapId === roadmapId ? result.byNode : undefined, refetch };
+}
+
+function ActiveNodeChangeCounts({
   roadmapId,
+  openedNodeId,
   children,
 }: {
   roadmapId: string;
+  openedNodeId: string | null;
   children: ReactNode;
 }) {
-  const { counts } = useCounts({ filters: [{ data: { roadmapId, groupBy: 'nodeId' } }] });
-  return <NodeNoticeCountsContext value={counts?.[0]?.byNode}>{children}</NodeNoticeCountsContext>;
+  const { byNode, refetch } = useNodeChangeCounts(roadmapId);
+  // Review once per opening: changes arriving while the Node stays open remain
+  // marked, because a student's open Node does not show them until re-entry.
+  const reviewedOpening = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openedNodeId) {
+      reviewedOpening.current = null;
+      return;
+    }
+    if (!byNode || reviewedOpening.current === openedNodeId) return;
+    reviewedOpening.current = openedNodeId;
+    if (!byNode[openedNodeId]) return;
+    void request('/node-changes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roadmapId, nodeId: openedNodeId }),
+    }).then(refetch, () => {
+      reviewedOpening.current = null;
+    });
+  }, [byNode, openedNodeId, refetch, roadmapId]);
+  return <NodeChangeCountsContext value={byNode}>{children}</NodeChangeCountsContext>;
 }
 
-export function NodeNoticeCountsProvider({
+export function NodeChangeCountsProvider({
   roadmapId,
+  openedNodeId = null,
   enabled,
   children,
 }: {
   roadmapId: string;
+  openedNodeId?: string | null;
   enabled: boolean;
   children: ReactNode;
 }) {
   return enabled ? (
-    <ActiveNodeNoticeCounts key={roadmapId} roadmapId={roadmapId}>
+    <ActiveNodeChangeCounts key={roadmapId} roadmapId={roadmapId} openedNodeId={openedNodeId}>
       {children}
-    </ActiveNodeNoticeCounts>
+    </ActiveNodeChangeCounts>
   ) : (
-    <NodeNoticeCountsContext value={undefined}>{children}</NodeNoticeCountsContext>
+    <NodeChangeCountsContext value={undefined}>{children}</NodeChangeCountsContext>
   );
 }
 
-export function useNodeNoticeCount(nodeId: string) {
-  const counts = useContext(NodeNoticeCountsContext);
+export function useNodeChangeCount(nodeId: string) {
+  const counts = useContext(NodeChangeCountsContext);
   return counts ? (counts[nodeId] ?? 0) : undefined;
 }

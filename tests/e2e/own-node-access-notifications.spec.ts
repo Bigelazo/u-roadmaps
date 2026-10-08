@@ -54,7 +54,7 @@ test('access notices retain context through blocking, unlocking, hiding and dele
       .getByRole('list', { name: 'Lista de avisos' })
       .getByRole('button', {
         name: new RegExp(
-          `^El Roadmap de ${escapeRegExp(course.courseCode)} ha recibido cambios|^${escapeRegExp(title)}`,
+          `^${escapeRegExp(course.courseName)}\\s+(El Roadmap ha recibido \\d+ cambios\\.|.*${escapeRegExp(title)})`,
         ),
       })
       .first()

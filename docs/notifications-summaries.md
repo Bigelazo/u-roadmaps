@@ -31,8 +31,11 @@ pendientes de reconocimiento.
 
 ## Aviso agrupado del roadmap
 
+Toda fila del Inbox se titula con el nombre del ramo, proyectado al leer
+(`courseName`); su texto describe el cambio y nombra el Nodo. Los Avisos de acceso
+describen lo ocurrido («Variables» fue ocultado del Roadmap) y no los estados.
 Con tres o más Objetos visibles pendientes del mismo Roadmap, el Inbox presenta
-una fila «El Roadmap de CC1002 ha recibido cambios» con «N cambios». Con uno o dos
+una fila con el texto «El Roadmap ha recibido N cambios.». Con uno o dos
 presenta Avisos individuales. Cada Roadmap se agrupa por separado y disponibilidad
 queda fuera de esta proyección. No se crea otra fila persistida de resumen.
 Los contadores suman Objetos, no filas. Se agrupa antes de paginar; la fecha y el
@@ -47,7 +50,8 @@ un único dialog: Nodos agrupados bajo su título actual, ordenados por el cambi
 reciente, con Ruta y clasificación al final. No muestra autores, fechas ni enlaces;
 Entendido solo cierra el dialog. Sin cambios pendientes no aparece.
 
-Abrir el Inbox o un Nodo no reconoce nada; no existe estado «visto». El clic en un
+Abrir el Inbox o un Nodo no reconoce nada; no existe estado «visto». Abrir un
+Nodo solo revisa su marca de cambios en el canvas. El clic en un
 Aviso navega al Roadmap sin abrir el Nodo. El conjunto y los valores capturados
 pertenecen a una operación idempotente: una actualización posterior permanece
 pendiente, incluso si se reintenta reconocer la operación anterior. Prefetch no
@@ -59,12 +63,25 @@ cargan el estado nuevo al volver a entrar; una llegada de Avisos no abre un dial
 en medio de su sesión. La revocación de acceso sí verifica y retira contenido
 protegido en cualquier rol. Véase [SSE](notifications-sse.md).
 
+## Marca de cambios por Nodo
+
+El canvas marca con un círculo rojo, en la esquina superior izquierda, cada Nodo
+con Objetos cambiados desde que el destinatario lo abrió por última vez. Cuenta
+Objetos visibles, reconocidos o pendientes, así que sobrevive a la entrada al
+Roadmap y al Resumen de cambios. Abrir el panel de edición o el detalle de
+estudiante del Nodo registra la revisión en `NodeChangeReview`; lo que llega con
+el Nodo abierto queda marcado. Un estudiante no ve la marca en Nodos bloqueados;
+el equipo docente la ve también en Nodos ocultos o con Bloqueo docente. El canvas
+no tiene contador de avisos propio: la campana global cumple esa función. Véase
+la decisión 14 de [ADR-0014](adr/0014-target-based-notice-grouping.md).
+
 ## Verificación
 
 `own-notice-absorption.spec.ts` conserva el recorrido de entrega sin Inbox abierto,
 absorción de cambios y reconocimiento con corte idempotente. El antiguo spec
 `own-notification-summaries.spec.ts` de ventanas se retiró; su cobertura útil se
-conserva bajo ese nombre nuevo. `roadmap-entry-summary.spec.ts` verifica el dialog.
+conserva bajo ese nombre nuevo. `roadmap-entry-summary.spec.ts` verifica el dialog y `own-node-counts.spec.ts`
+la marca de cambios por Nodo.
 Los specs de Objetos, agrupación, visibilidad y SSE complementan esos recorridos.
 
 Las pruebas no esperan tiempo real para agrupar Avisos: esperan el estado guardado

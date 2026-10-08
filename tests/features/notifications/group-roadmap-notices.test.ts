@@ -22,7 +22,7 @@ test('three pending targets become one row with the newest identity, date and ta
     {
       id: '3',
       subject: 'El Roadmap de CC1002 ha recibido cambios',
-      body: '3 cambios',
+      body: 'El Roadmap ha recibido 3 cambios.',
       data: { changeKind: 'roadmap-grouped', targetCount: 3 },
       availableAt: new Date('2026-10-06T12:00:03Z'),
     },

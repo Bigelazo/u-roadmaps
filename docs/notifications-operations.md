@@ -25,6 +25,11 @@ paginación de la fila agrupada pertenecen a su Objeto más reciente; agrupar
 antes de paginar evita dividir un Roadmap entre páginas. El clic conserva la
 navegación al Roadmap y su reconocimiento habitual.
 
+La consulta aplica visibilidad, agrupación y cursor en PostgreSQL; solo devuelve
+la página solicitada y una fila adicional para detectar la página siguiente.
+Los contadores agregan los Objetos visibles en la base de datos con la misma
+proyección de visibilidad que el listado.
+
 ## Visibilidad y pérdida de Participación
 
 #185 aplica la visibilidad antes de agrupar, paginar y contar. Los Avisos de
@@ -135,6 +140,12 @@ la atribución a Equipo docente. La migración de
 
 Cada Recurso usa un Objeto `resource:<id>` y `ResourceNoticeKnowledge` conserva
 su título y revisión conocidos por destinatario, incluso tras quitar el Recurso.
+La revisión es una huella SHA-256 del contenido significativo (título, URL,
+tipo, identidad del archivo y tipo MIME), independiente de `updatedAt`.
+Restaurar todos esos campos retira el Aviso. La migración convierte las revisiones
+históricas de fecha solo cuando coinciden con la versión actual del Recurso;
+conserva las demás hasta reconocerlas, pues no se puede reconstruir su contenido
+anterior sin inventar un baseline.
 La transacción de creación, edición o eliminación captura el valor anterior solo
 para participantes con acceso al Nodo, excluyendo al autor. La entrega consulta
 la versión actual: agregado → editado sigue siendo nuevo, agregado → eliminado
@@ -183,6 +194,14 @@ en el intervalo, el reconocimiento avanza al valor capturado y reconcilia el
 valor posterior como pendiente; `recognizedAt` impide repetir ese avance en un
 reintento. Nunca se reconoce por accidente una actualización posterior del mismo
 Aviso.
+
+Cada apertura recibe una secuencia persistente. `RoadmapVisit` conserva la mayor
+secuencia reconocida, incluso después de podar aperturas: una confirmación tardía
+de una apertura anterior no retrocede los valores conocidos. También se captura
+el estado de los Objetos al entrar cuando no quedan Avisos pendientes, para que
+una apertura posterior sin cambios prevalezca sobre una anterior. Esta captura
+no agrega Objetos al Resumen. La captura sintética solo reconcilia Objetos con
+Avisos pendientes, para no crear avisos a partir de una edición de la autora.
 
 Entrar al Roadmap reconoce todos sus avisos pendientes, incluidos los de Nodos,
 y los retira del Inbox y de los contadores. El servidor captura el conjunto y

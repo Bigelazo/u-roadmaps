@@ -17,6 +17,7 @@ const { prisma, transaction, state } = vi.hoisted(() => {
     ],
   };
   const transaction = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     courseOffering: { findUnique: vi.fn() },
     participation: { findUnique: vi.fn(), findMany: vi.fn() },
     routeNoticeKnowledge: { createMany: vi.fn() },

@@ -87,9 +87,12 @@ test('first entry clears pending notices silently and opening a Node or Inbox re
   await page.keyboard.press('Escape');
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toBeVisible();
+  // Opening the Node only reviews its canvas mark; it recognizes nothing (ADR-0014, decision 14).
+  await expect
+    .poll(() => mutations.map((url) => new URL(url).pathname))
+    .toEqual(['/api/notifications/node-changes']);
   expect(await pending()).toEqual(before);
   expect(before[0]).not.toHaveProperty('seen');
-  expect(mutations).toEqual([]);
   expect(
     (
       await recipient.post('/api/notifications/openings', {
@@ -206,7 +209,7 @@ test('entry from Academic overview groups changes under current Node titles and 
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('retry recovers an entry whose initial preparation failed without creating a different operation', async ({
+test('failed entry preparation leaves notices pending without a banner', async ({
   page,
   course,
   apiAs,
@@ -233,15 +236,8 @@ test('retry recovers an entry whose initial preparation failed without creating 
     else await route.continue();
   });
   await page.goto(course.pagePath());
-  await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toBeVisible();
+  await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toHaveCount(0);
   expect(await pending()).toHaveLength(1);
-  await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
-  await expect(
-    page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
-  ).toBeVisible();
-  await expect.poll(pending).toHaveLength(0);
-  expect(new Set(operations).size).toBe(1);
-  expect(operations).toHaveLength(2);
 });
 
 test('a delayed acknowledgement from a previous entry never shows its summary on Academic overview', async ({

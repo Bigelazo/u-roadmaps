@@ -4,7 +4,6 @@ import type { ResourceNoticeState } from './contracts/resource-state';
 import { randomUUID } from 'node:crypto';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
-import { visibleOwnNotices } from './infrastructure/notice-visibility';
 import type {
   NodeChangeNotice,
   RoadmapClassificationChangeNotice,
@@ -22,16 +21,16 @@ import {
   storeResourceChange,
   findOwnNotice,
   noticeRecord,
-  noticeFilter,
-  countOwnNoticesByNode,
+  countOwnNoticeTargets,
+  countOwnNodeChanges,
   uuid,
   prepareOwnNoticeOpening as prepareNoticeOpening,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
-export { acknowledgeOwnNotices } from './infrastructure/own-inbox';
+export { acknowledgeOwnNotices, reviewOwnNode } from './infrastructure/own-inbox';
 
 export function listOwnNotices(userId: string, params: URLSearchParams) {
-  return listNotices(userId, params, accessibleNodes);
+  return listNotices(userId, params);
 }
 export type { NoticeDeliveryScheduler } from './infrastructure/own-inbox';
 export type InboxIdentity = Readonly<{ userId: string }>;
@@ -44,21 +43,12 @@ export async function getOwnNotice(userId: string, id: string) {
   return noticeRecord(await findOwnNotice(userId, id, accessibleNodes));
 }
 
-export async function countOwnNotices(userId: string, params: URLSearchParams) {
-  if (params.get('groupBy') === 'nodeId')
-    return countOwnNoticesByNode(userId, params, accessibleNodes);
-  return {
-    count: (
-      await visibleOwnNotices(
-        userId,
-        await prisma.roadmapNotice.findMany({
-          where: { ...noticeFilter(params), recipientId: userId, acknowledgedAt: null },
-          select: { roadmapId: true, data: true },
-        }),
-        accessibleNodes,
-      )
-    ).length,
-  };
+export function countOwnNotices(userId: string, params: URLSearchParams) {
+  return countOwnNoticeTargets(userId, params);
+}
+
+export function countOwnNodeChangeTargets(userId: string, params: URLSearchParams) {
+  return countOwnNodeChanges(userId, params);
 }
 
 type RecipientNode = Readonly<{

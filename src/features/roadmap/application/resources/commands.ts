@@ -1,4 +1,5 @@
 import 'server-only';
+import { resourceContentState } from '@/shared/server/resource-content-state';
 
 import { captureAccessSnapshot } from '../access-snapshot';
 import { prisma, type Prisma } from '@/shared/server/db';
@@ -34,7 +35,7 @@ async function captureResourceKnowledge(
   roadmapId: string,
   actorId: string,
   resource: { id: string; roadmapNodeId: string },
-  previous: { title: string; updatedAt: Date } | null,
+  previous: Parameters<typeof resourceContentState>[0] | null,
 ) {
   const access = await captureAccessSnapshot(transaction, roadmapId);
   const recipients = access.participants.filter(
@@ -47,9 +48,7 @@ async function captureResourceKnowledge(
         recipientId: userId,
         resourceId: resource.id,
         nodeId: resource.roadmapNodeId,
-        knownState: previous
-          ? JSON.stringify({ title: previous.title, revision: previous.updatedAt.toISOString() })
-          : null,
+        knownState: previous ? JSON.stringify(resourceContentState(previous)) : null,
       })),
       skipDuplicates: true,
     });
@@ -152,10 +151,7 @@ async function updateRoadmapResourceUnsafe({
               nodeId: resource.roadmapNodeId,
               resourceId: resource.id,
               resourceTitle: updated.title,
-              previousResource: {
-                title: resource.title,
-                revision: resource.updatedAt.toISOString(),
-              },
+              previousResource: resourceContentState(resource),
             },
           }
         : {}),
@@ -171,7 +167,7 @@ async function removeRoadmapResourceUnsafe({ id, ...editor }: ResourceInput) {
     await transaction.resource.delete({ where: { id: resource.id } });
     return {
       resourceId: resource.id,
-      previousResource: { title: resource.title, revision: resource.updatedAt.toISOString() },
+      previousResource: resourceContentState(resource),
       fileKey: resource.fileKey,
       nodeId: resource.roadmapNodeId,
       resourceTitle: resource.title,

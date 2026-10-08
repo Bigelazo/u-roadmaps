@@ -1,6 +1,6 @@
 'use client';
 
-import { NodeNoticeCountsProvider } from '@/features/notifications/client';
+import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
 import {
   useCallback,
@@ -56,7 +56,6 @@ import { Button } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
-import { NotificationCountButton } from '@/features/notifications/client';
 import {
   nodeTypeDeletionConfirmation,
   roadmapAutoLayoutConfirmation,
@@ -136,13 +135,8 @@ function useRoadmapCanvasController({ input }: Props) {
   const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
   const [syncedSelectionNotice, setSyncedSelectionNotice] = useState<string | null>(null);
   const [dismissedInvalidTargetId, setDismissedInvalidTargetId] = useState<string | null>(null);
-  const [acknowledgementError, setAcknowledgementError] = useState(false);
-  const acknowledgementInputRef = useRef<{
-    roadmapId: string;
-    entryKey?: string | null;
-  } | null>(null);
   const acknowledgedRoadmapRef = useRef<string | null>(null);
-  const { acknowledge, retry } = useNotificationAcknowledgement();
+  const { acknowledge } = useNotificationAcknowledgement();
   const canvasFocusRef = useRef<HTMLDivElement>(null);
   const {
     selectedNodeId,
@@ -448,8 +442,7 @@ function useRoadmapCanvasController({ input }: Props) {
     if (acknowledgedRoadmapRef.current === roadmapId) return;
     acknowledgedRoadmapRef.current = roadmapId;
     const operation = { roadmapId, entryKey: input.roadmapEntryKey };
-    acknowledgementInputRef.current = operation;
-    void acknowledge(operation).then((success) => setAcknowledgementError(!success));
+    void acknowledge(operation);
   }, [
     acknowledge,
     accessibleNodeIds,
@@ -684,10 +677,6 @@ function useRoadmapCanvasController({ input }: Props) {
     focusReturnRequest,
     syncedSelectionNotice: selectionNotice,
     dismissSelectionNotice,
-    acknowledgementError,
-    setAcknowledgementError,
-    acknowledgementInputRef,
-    retry,
     canvasFocusRef,
     selectedNodeId,
     isEditorOpen,
@@ -747,10 +736,6 @@ export function RoadmapCanvasView({ input }: Props) {
     dispatchCanvas,
     syncedSelectionNotice,
     dismissSelectionNotice,
-    acknowledgementError,
-    setAcknowledgementError,
-    acknowledgementInputRef,
-    retry,
     canvasFocusRef,
     selectedNodeId,
     roadmap,
@@ -825,40 +810,21 @@ export function RoadmapCanvasView({ input }: Props) {
       }
     >
       <section
+        data-page-width="full"
         className={cn(
           'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
           isSidePanelOpen ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]' : 'lg:grid-cols-1',
         )}
       >
-        {acknowledgementError ? (
-          <div
-            className="absolute top-2 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-md border bg-card px-3 py-2 text-sm shadow"
-            role="status"
-          >
-            No se pudieron reconocer algunos avisos.
-            <button
-              className="font-semibold underline"
-              onClick={() => {
-                const operation = acknowledgementInputRef.current;
-                if (!operation) return;
-                void retry(operation)
-                  .then((success) => setAcknowledgementError(!success))
-                  .catch(() => setAcknowledgementError(true));
-              }}
-              type="button"
-            >
-              Reintentar
-            </button>
-          </div>
-        ) : null}
         <div
           ref={canvasFocusRef}
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
-          <NodeNoticeCountsProvider
+          <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
+            openedNodeId={isSidePanelOpen ? selectedNodeId : null}
             enabled={Boolean(input.notificationsEnabled) && !model.isCanvasPreview}
           >
             <RoadmapCanvasGraph
@@ -870,7 +836,7 @@ export function RoadmapCanvasView({ input }: Props) {
               displayedRoadmap={displayedRoadmap}
               graphProjection={graphProjection}
             />
-          </NodeNoticeCountsProvider>
+          </NodeChangeCountsProvider>
           <RoadmapCanvasFeedback />
           {error ? (
             <Button className="absolute right-5 bottom-20" type="button" onClick={retryRefresh}>
@@ -1253,8 +1219,6 @@ function RoadmapCanvasGraph({
             semester={semester}
             isCanvasPreview={isCanvasPreview}
             isEditing={canvasMode.isEditing}
-            notificationsEnabled={Boolean(input.notificationsEnabled)}
-            roadmapId={roadmap.roadmap.id}
           />
         ),
         topCenter: isCanvasPreview ? (
@@ -1279,12 +1243,10 @@ function RoadmapCanvasHeader({
   semester,
   isCanvasPreview,
   isEditing,
-  notificationsEnabled,
-  roadmapId,
 }: Pick<
   ReturnType<typeof useRoadmapCanvasController>,
   'title' | 'courseCode' | 'year' | 'semester' | 'isCanvasPreview'
-> & { isEditing: boolean; notificationsEnabled: boolean; roadmapId: string }) {
+> & { isEditing: boolean }) {
   return (
     <header>
       <div className="flex flex-wrap items-center gap-2">
@@ -1301,15 +1263,6 @@ function RoadmapCanvasHeader({
           <Badge variant="secondary">Modo edición</Badge>
         ) : null}
       </div>
-      {!isCanvasPreview ? (
-        <div className="mt-2">
-          <NotificationCountButton
-            enabled={notificationsEnabled}
-            filter={{ roadmapId: roadmapId }}
-            label="este Roadmap"
-          />
-        </div>
-      ) : null}
       <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
         {title}
       </h1>

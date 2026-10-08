@@ -3,7 +3,11 @@ import { Prisma } from '@/shared/server/db';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import { reconcileRouteNotice } from '../application/reconcile-route';
 import { storedRoutePayload, type RouteEffect } from '../application/route-effect';
-import { recognitionSnapshot, acknowledgeCapturedNotice } from './recognition-snapshot';
+import {
+  recognitionSnapshot,
+  acknowledgeCapturedNotice,
+  reconcileRecognizedTarget,
+} from './recognition-snapshot';
 
 export async function reconcileStoredRoute(
   transaction: Prisma.TransactionClient,
@@ -13,16 +17,17 @@ export async function reconcileStoredRoute(
   const payload = effect.payload;
   let currentValue: string;
   let titles: Record<string, string>;
+  let visible: boolean;
   if (payload.routeTarget === 'dependency') {
     const nodes = await transaction.roadmapNode.findMany({
       where: {
         roadmapId: effect.roadmapId,
         id: { in: [String(payload.sourceNodeId), String(payload.targetNodeId)] },
-        isVisible: true,
       },
-      select: { id: true, title: true },
+      select: { id: true, title: true, isVisible: true },
     });
     if (nodes.length !== 2) return;
+    visible = nodes.every((node) => node.isVisible);
     const dependency = await transaction.dependency.findUnique({
       where: {
         sourceNodeId_targetNodeId: {
@@ -41,10 +46,11 @@ export async function reconcileStoredRoute(
       where: {
         id: String(payload.nodeTypeId),
         roadmapId: effect.roadmapId,
-        nodes: { some: { isVisible: true } },
       },
+      include: { nodes: { where: { isVisible: true }, select: { id: true } } },
     });
     if (!nodeType) return;
+    visible = nodeType.nodes.length > 0;
     currentValue = nodeType.name;
     titles = { nextTypeName: nodeType.name };
   }
@@ -66,6 +72,7 @@ export async function reconcileStoredRoute(
     if (pending) await transaction.roadmapNotice.delete({ where: { id: pending.id } });
     return;
   }
+  if (!visible) return;
   if (pending) {
     const previous = storedRoutePayload(pending.data);
     if (previous.knownValue === knowledge.knownValue && previous.currentValue === currentValue)
@@ -121,6 +128,40 @@ export function routeOpeningSnapshots(notices: readonly { id: string; data: Pris
   }) as Prisma.InputJsonArray;
 }
 
+/** Recognize a route value from either an independent or an absorbed snapshot. */
+export async function recognizeRouteValue(
+  transaction: Prisma.TransactionClient,
+  effect: RouteEffect,
+  knownValue: string,
+  reconcileOnlyPending = false,
+) {
+  const identity = {
+    recipientId: effect.recipientId,
+    roadmapId: effect.roadmapId,
+    targetKey: effect.payload.routeTargetKey,
+  };
+  const existing = await transaction.routeNoticeKnowledge.findUnique({
+    where: { recipientId_roadmapId_targetKey: identity },
+  });
+  if (existing?.knownValue !== knownValue) {
+    await transaction.routeNoticeKnowledge.upsert({
+      where: { recipientId_roadmapId_targetKey: identity },
+      create: { ...identity, knownValue },
+      update: { knownValue },
+    });
+  }
+  await reconcileRecognizedTarget(
+    transaction,
+    {
+      recipientId: effect.recipientId,
+      roadmapId: effect.roadmapId,
+      targetKey: effect.payload.routeTargetKey,
+    },
+    reconcileOnlyPending,
+    () => reconcileStoredRoute(transaction, effect),
+  );
+}
+
 export async function recognizeRouteSnapshots(
   transaction: Prisma.TransactionClient,
   {
@@ -135,29 +176,28 @@ export async function recognizeRouteSnapshots(
   for (const value of snapshots) {
     const snapshot = recognitionSnapshot(value);
     const payload = storedRoutePayload(snapshot.payload);
-    const known = await transaction.routeNoticeKnowledge.updateMany({
-      where: { recipientId, roadmapId, targetKey: payload.routeTargetKey },
-      data: { knownValue: payload.currentValue },
-    });
     acknowledged += await acknowledgeCapturedNotice(
       transaction,
       { id: snapshot.id, recipientId, roadmapId },
       (data) => storedRoutePayload(data).currentValue === payload.currentValue,
     );
-    if (!known.count) continue;
     if (typeof payload.courseOfferingId !== 'string')
       throw new Error('Invalid route Course offering.');
-    await reconcileStoredRoute(transaction, {
-      eventId: `recognition:${operationId}:${payload.routeTargetKey}`,
-      recipientId,
-      roadmapId,
-      courseOfferingId: payload.courseOfferingId,
-      noticeClass:
-        payload.routeTarget === 'dependency'
-          ? 'roadmap-path-changed'
-          : 'roadmap-classification-changed',
-      payload,
-    });
+    await recognizeRouteValue(
+      transaction,
+      {
+        eventId: `recognition:${operationId}:${payload.routeTargetKey}`,
+        recipientId,
+        roadmapId,
+        courseOfferingId: payload.courseOfferingId,
+        noticeClass:
+          payload.routeTarget === 'dependency'
+            ? 'roadmap-path-changed'
+            : 'roadmap-classification-changed',
+        payload,
+      },
+      payload.currentValue,
+    );
   }
   return acknowledged;
 }

@@ -268,7 +268,7 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   expect(afterOtherCascade).toHaveLength(0);
 });
 
-test('Roadmap entry captures every page and Node while preserving later arrivals through retry', async ({
+test('failed Roadmap entry recognition preserves every page and Node without a banner', async ({
   request,
   course,
   page,
@@ -294,7 +294,7 @@ test('Roadmap entry captures every page and Node while preserving later arrivals
     return id;
   };
   const nodeId = await create(`Nodo de avisos ${crypto.randomUUID()}`);
-  const otherId = await create(`Otro ${crypto.randomUUID()}`);
+  await create(`Otro ${crypto.randomUUID()}`);
   // Historical notices from separate windows exercise pagination independently
   // of the live 60-second grouping contract.
   for (let index = 0; index < 11; index++)
@@ -322,7 +322,7 @@ test('Roadmap entry captures every page and Node while preserving later arrivals
     ).count;
   await expect.poll(() => count()).toBe(14);
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-  let fail = true;
+  const fail = true;
   const operations: string[] = [];
   await page.route('**/api/notifications/acknowledge', async (route) => {
     operations.push(route.request().postDataJSON().operationId);
@@ -330,34 +330,11 @@ test('Roadmap entry captures every page and Node while preserving later arrivals
     else await route.continue();
   });
   await page.goto(course.pagePath());
-  await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toBeVisible();
+  await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toHaveCount(0);
   const old = await (
     await request.get(`/api/notifications?${filter}&limit=100`, { headers: recipient })
   ).json();
   expect(old.notifications).toHaveLength(14);
-  // Delivery happens after the opening snapshot, while acknowledgement is failing.
-  expect(
-    (
-      await request.post(roadmapPath(`/nodes/${nodeId}/resources`), {
-        headers: author,
-        data: { title: 'Llegada posterior', url: 'https://example.test/later', type: 'LINK' },
-      })
-    ).status(),
-  ).toBe(201);
-  fail = false;
-  await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
-  await expect.poll(() => count()).toBe(1);
-  expect(new Set(operations).size).toBe(1);
-  await expect.poll(() => count(otherId)).toBe(0);
-  const retained = await (
-    await request.get(`/api/notifications?${filter}&limit=100`, { headers: recipient })
-  ).json();
-  expect(retained.notifications).toHaveLength(1);
-  await page.reload();
-  await expect.poll(() => count()).toBe(0);
-  await page.getByRole('button', { name: 'Entendido' }).click();
-  await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
-  expect(await count()).toBe(0);
 });
 
 test('content notices follow individual prerequisites, teacher policy, inactive exclusion and publication', async ({

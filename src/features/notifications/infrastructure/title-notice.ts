@@ -1,6 +1,10 @@
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import 'server-only';
-import { recognitionSnapshot, acknowledgeCapturedNotice } from './recognition-snapshot';
+import {
+  recognitionSnapshot,
+  acknowledgeCapturedNotice,
+  reconcileRecognizedTarget,
+} from './recognition-snapshot';
 import { Prisma } from '@/shared/server/db';
 import { storedTitlePayload, type TitleNoticeEffect } from '../application/title-effect';
 import { reconcileTitleNotice } from '../application/reconcile-title';
@@ -14,7 +18,7 @@ export async function reconcileStoredTitle(
   await lockRecipientRoadmap(transaction, effect.recipientId, effect.roadmapId);
   const nodeId = effect.payload.nodeId;
   const node = await transaction.roadmapNode.findUnique({ where: { id: nodeId } });
-  if (!node || !node.isVisible) return;
+  if (!node) return;
   const knowledge = await transaction.nodeTitleKnowledge.upsert({
     where: { recipientId_nodeId: { recipientId: effect.recipientId, nodeId } },
     create: {
@@ -45,6 +49,7 @@ export async function reconcileStoredTitle(
     await transaction.roadmapNotice.delete({ where: { id: pending!.id } });
     return;
   }
+  if (!node.isVisible) return;
   const occurredAt = new Date(
     Math.max(Date.parse(effect.payload.occurredAt), pending?.occurredAt.getTime() ?? 0),
   );
@@ -95,6 +100,39 @@ export function titleOpeningSnapshots(notices: readonly { id: string; data: Pris
   }) as Prisma.InputJsonArray;
 }
 
+/** Advance the captured baseline and rebase later edits for either kind of entry snapshot. */
+export async function recognizeTitleValue(
+  transaction: Prisma.TransactionClient,
+  effect: TitleNoticeEffect,
+  knownTitle: string,
+  reconcileOnlyPending = false,
+) {
+  const nodeId = effect.payload.nodeId;
+  if (!(await transaction.roadmapNode.findUnique({ where: { id: nodeId }, select: { id: true } })))
+    return;
+  const identity = { recipientId: effect.recipientId, nodeId };
+  const existing = await transaction.nodeTitleKnowledge.findUnique({
+    where: { recipientId_nodeId: identity },
+  });
+  if (existing?.knownTitle !== knownTitle) {
+    await transaction.nodeTitleKnowledge.upsert({
+      where: { recipientId_nodeId: identity },
+      create: { ...identity, knownTitle },
+      update: { knownTitle },
+    });
+  }
+  await reconcileRecognizedTarget(
+    transaction,
+    {
+      recipientId: effect.recipientId,
+      roadmapId: effect.roadmapId,
+      targetKey: `node:${nodeId}:title`,
+    },
+    reconcileOnlyPending,
+    () => reconcileStoredTitle(transaction, effect),
+  );
+}
+
 /** Recognize captured values once, rebasing any later delivery onto those values. */
 export async function recognizeTitleSnapshots(
   transaction: Prisma.TransactionClient,
@@ -110,11 +148,6 @@ export async function recognizeTitleSnapshots(
   for (const value of snapshots) {
     const snapshot = recognitionSnapshot(value);
     const payload = storedTitlePayload(snapshot.payload);
-    const known = await transaction.nodeTitleKnowledge.updateMany({
-      where: { recipientId, nodeId: payload.nodeId },
-      data: { knownTitle: payload.currentTitle },
-    });
-    if (!known.count) continue; // The Node may have been deleted since opening.
     acknowledged += await acknowledgeCapturedNotice(
       transaction,
       { id: snapshot.id, recipientId, roadmapId },
@@ -122,14 +155,18 @@ export async function recognizeTitleSnapshots(
     );
     if (typeof payload.courseOfferingId !== 'string')
       throw new Error('Invalid title Course offering.');
-    await reconcileStoredTitle(transaction, {
-      eventId: `recognition:${operationId}:${payload.nodeId}`,
-      recipientId,
-      roadmapId,
-      courseOfferingId: payload.courseOfferingId,
-      noticeClass: 'roadmap-node-changed',
-      payload,
-    });
+    await recognizeTitleValue(
+      transaction,
+      {
+        eventId: `recognition:${operationId}:${payload.nodeId}`,
+        recipientId,
+        roadmapId,
+        courseOfferingId: payload.courseOfferingId,
+        noticeClass: 'roadmap-node-changed',
+        payload,
+      },
+      payload.currentTitle,
+    );
   }
   return acknowledged;
 }

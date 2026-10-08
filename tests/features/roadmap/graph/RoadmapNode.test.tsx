@@ -1,13 +1,15 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
+import { NodeChangeCountsProvider } from '@/features/notifications/components/inbox-driver';
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 function mountBlockedNode(blockReason: StudentNodeBlockReason) {
@@ -759,4 +761,63 @@ test('clamps long card titles to two lines while preserving the full title as a 
   expect(heading.className).toContain('line-clamp-2');
   expect(heading.className).toContain('wrap-break-word');
   expect(heading.className).toContain('text-left');
+});
+
+function mountChangedNode(data: Partial<RoadmapFlowNode['data']>) {
+  const fetch = vi.fn(async () => Response.json({ byNode: { 'changed-node': 3 } }));
+  vi.stubGlobal('fetch', fetch);
+  render(
+    <NodeChangeCountsProvider roadmapId="roadmap" enabled>
+      <ReactFlowProvider>
+        <RoadmapNode
+          {...({
+            id: 'changed-node',
+            type: 'roadmap',
+            data: {
+              title: 'Variables',
+              roadmapId: 'roadmap',
+              notificationsEnabled: true,
+              typeColor: '#024AD8',
+              typeName: 'Contenido',
+              typeIcon: 'BookOpen',
+              status: 'editing',
+              isTeacherBlocked: false,
+              isHidden: false,
+              linkCount: 1,
+              ...data,
+            },
+            selected: false,
+            selectable: true,
+            draggable: false,
+            dragging: false,
+            deletable: false,
+            isConnectable: false,
+            positionAbsoluteX: 0,
+            positionAbsoluteY: 0,
+            zIndex: 0,
+          } as NodeProps<RoadmapFlowNode>)}
+        />
+      </ReactFlowProvider>
+    </NodeChangeCountsProvider>,
+  );
+  return fetch;
+}
+
+test.each([
+  ['a visible Node', {}],
+  ['a hidden Node in the teaching view', { isHidden: true }],
+  ['a Teacher-blocked Node in the teaching view', { isTeacherBlocked: true }],
+])('marks unreviewed changes of %s with a red count opposite the resources', async (_, data) => {
+  mountChangedNode(data);
+  const badge = await screen.findByRole('img', { name: '3 cambios sin revisar' });
+  expect(badge.textContent).toBe('3');
+  expect(badge.className).toContain('bg-destructive');
+  expect(badge.className).toContain('left-[-10px]');
+  expect(screen.getByTestId('roadmap-node-resources').className).toContain('right-[-10px]');
+});
+
+test('does not mark a Node its student cannot open', async () => {
+  const fetch = mountChangedNode({ status: 'locked', blockReason: 'PREREQUISITE_BLOCK' });
+  await waitFor(() => expect(fetch).toHaveBeenCalled());
+  expect(screen.queryByRole('img', { name: /cambios? sin revisar/ })).toBeNull();
 });

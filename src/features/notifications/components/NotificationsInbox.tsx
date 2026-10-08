@@ -126,7 +126,9 @@ function NotificationRow({
           onClick={() => onSelect(notification)}
           type="button"
         >
-          <span className="font-semibold">{notification.subject ?? 'Aviso de U-Roadmaps'}</span>
+          <span className="font-semibold">
+            {notification.courseName ?? notification.subject ?? 'Aviso de U-Roadmaps'}
+          </span>
           <span className="text-sm text-muted-foreground">{notification.body}</span>
           <time className="text-xs text-muted-foreground">{notificationDate(notification)}</time>
         </button>

@@ -7,6 +7,9 @@ export async function lockNoticeParticipation(
   recipientId: string,
   roadmapId: string,
 ) {
+  // Course deletion locks its Roadmap before cascading into Participations.
+  // Take the parent lock first so baseline FK writes cannot invert that order.
+  await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmapId}::uuid FOR KEY SHARE`;
   const [participation] = await transaction.$queryRaw<
     { isActive: boolean; noticeResetAt: Date | null }[]
   >`SELECT p."isActive", p."noticeResetAt" FROM "Participation" p

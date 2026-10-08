@@ -1,8 +1,9 @@
+import { nodeAccessChangeText } from '@/shared/node-access';
 import { isNoticeVisible } from './notice-visibility';
 import type { ChangeSummary } from '../contracts/change-summary';
 
 type SummaryNotice = { data: unknown };
-type SummaryNode = { id: string; title: string; isVisible: boolean };
+type SummaryNode = { id: string; title: string; isVisible: boolean; nodeTypeId?: string };
 
 // Notices arrive newest first. Group insertion order preserves that ordering.
 export function changeSummary(
@@ -23,7 +24,13 @@ export function changeSummary(
     const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
     const items: string[] = [];
     if (data.noticeTarget === 'node-access') {
-      items.push(`Pasó de ${data.knownValue} a ${data.currentValue}.`);
+      items.push(
+        nodeAccessChangeText(
+          node?.title ?? String(data.nodeTitle),
+          String(data.knownValue),
+          String(data.currentValue),
+        ),
+      );
     } else
       switch (kind) {
         case 'node-updated':

@@ -82,7 +82,7 @@ test('hide → show → block collapses to one access notice and recognition reb
   expect((await author.post(`${path}/teacher-block`)).status()).toBe(200);
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0]).toMatchObject({
-    body: expect.stringContaining('pasó de Disponible a Bloqueado'),
+    body: expect.stringContaining('fue bloqueado.'),
     data: { noticeTarget: 'node-access', knownValue: 'Disponible', currentValue: 'Bloqueado' },
   });
   const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
@@ -108,7 +108,7 @@ test('hide → show → block collapses to one access notice and recognition reb
   expect(recognized.status()).toBe(200);
   expect((await recognized.json()).summary.groups).toContainEqual({
     title: title,
-    items: ['Pasó de Bloqueado a Retirado.'],
+    items: [`«${title}» fue ocultado del Roadmap.`],
   });
   await expect.poll(notices).toHaveLength(0);
 });

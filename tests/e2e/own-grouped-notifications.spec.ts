@@ -36,26 +36,28 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
       ).toBe(200);
     }
   }
-  await expect
-    .poll(notices)
-    .toMatchObject([
-      { body: '3 cambios', data: { targetCount: 3, changeKind: 'roadmap-grouped' } },
-    ]);
+  await expect.poll(notices).toMatchObject([
+    {
+      courseName: course.courseName,
+      body: 'El Roadmap ha recibido 3 cambios.',
+      data: { targetCount: 3, changeKind: 'roadmap-grouped' },
+    },
+  ]);
   expect(await notices()).toHaveLength(1);
   for (const filter of [
     '',
     `roadmapId=${course.roadmapId}`,
     `courseCode=${course.courseCode}&year=${course.year}&semester=${course.semester}`,
-    `roadmapId=${course.roadmapId}&groupBy=nodeId`,
   ]) {
     expect((await (await recipient.get(`/api/notifications/counts?${filter}`)).json()).count).toBe(
       3,
     );
   }
   await expect(page.getByRole('button', { name: 'Avisos, 3 sin leer', exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '3 avisos sin leer para este Roadmap', exact: true }),
-  ).toBeVisible();
+  // The global bell is the only Inbox counter inside the canvas.
+  await expect(page.getByRole('button', { name: /avisos sin leer para este Roadmap/ })).toHaveCount(
+    0,
+  );
   await page.goto('/academic-overview');
   await expect(
     page.getByRole('button', {
@@ -64,10 +66,8 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
     }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Avisos, 3 sin leer', exact: true }).click();
-  const row = page.getByRole('button', {
-    name: new RegExp(`El Roadmap de ${course.courseCode} ha recibido cambios`),
-  });
-  await expect(row).toContainText('3 cambios');
+  const row = page.getByRole('button', { name: /El Roadmap ha recibido 3 cambios\./ });
+  await expect(row).toContainText(course.courseName);
   await row.click();
   await expect(page).toHaveURL(course.pagePath());
   await expect.poll(notices).toHaveLength(0);

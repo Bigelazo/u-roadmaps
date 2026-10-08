@@ -1046,6 +1046,7 @@ async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) 
     if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
     const result = await withSerializableTransaction(
       async (transaction) => {
+        await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
         const before = await captureAccessSnapshot(transaction, roadmap.id);
         const releasedNodeIds = await releaseDueScheduledUnlocks(transaction, roadmap.id, today);
         const after = await captureAccessSnapshot(transaction, roadmap.id);
