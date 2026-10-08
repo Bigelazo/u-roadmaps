@@ -573,3 +573,36 @@ nulo y de profesor coordinador, actualización y preservación del cargo en
 sincronizaciones, despromoción antes de un rechazo de creación, edición del
 ayudante sin U-Campus, Cursos retenidos ante respuestas parciales, backfill de
 Participations anteriores y los cargos declarados por todo el catálogo local.
+
+## Validación de #192 del 2026-10-08
+
+El cierre del Roadmap se valida con nueve pruebas unitarias de resolución de
+fecha e instante chileno, incluidas ambas transiciones de horario de verano, y
+cinco recorridos de `roadmap-closure.spec.ts`. Los recorridos comprueban el cierre
+silencioso, la conservación de avisos pendientes, ambos respaldos sin fila de
+Academic term, idempotencia, acceso estudiantil, rechazo de Completions y
+previsualización histórica. Un trigger propio del test rechaza el registro del
+cierre: se espera su intento con polling, se verifica que los Teacher blocks y
+Scheduled unlocks siguen intactos, y se retira para comprobar la recuperación.
+
+`createTerm()` reserva años **1000–1999**, con hasta 99 términos por worker y
+identidades distintas entre workers. La fecha inicial mantiene el término abierto;
+`setFreezeDate(day)` permite hacerlo vencer y `setFreezeDate(null)` elimina la
+fila para probar el respaldo. `waitForClosure()` usa `expect.poll`, sin pausas
+fijas. El servidor usa `ROADMAP_CLOSURE_INTERVAL_MS=1000`; en producción el
+intervalo por defecto es cinco minutos. El teardown y la limpieza de huérfanos
+retiran estos términos y los triggers de fallo junto con los datos propios.
+
+Se ejecutó `code-review` **una sola vez** desde `2f5bc9f`: Standards encontró una
+sugerencia de duplicación del ciclo periódico; se aplicó mediante
+`startPeriodicPass`, compartido por cierre y Scheduled unlock release. Spec no
+encontró hallazgos. La protección general de las mutaciones docentes pertenece
+al issue #193.
+
+La suite completa `pnpm test` posterior a la revisión terminó con salida 0:
+tipos aprobados, **73 archivos / 468 pruebas unitarias** y **144 E2E en Chromium**,
+sin fallos ni omisiones, en **1,5 minutos** para E2E. También pasaron ESLint sobre
+el código modificado, Prettier y `git diff --check`. `graphify update .` actualizó
+el grafo AST sin llamadas externas.
+La auditoría posterior encontró **0 Cursos E2E, 0 Usuarios E2E, 0 términos
+sintéticos y 0 triggers de rechazo**.

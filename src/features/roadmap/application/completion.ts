@@ -105,17 +105,8 @@ async function requireParticipantRoadmap(
   return { courseOffering, participation, roadmap: courseOffering.roadmap };
 }
 
-async function requireCurrentRoadmap(
-  transaction: Prisma.TransactionClient,
-  courseOffering: { year: number; semester: number },
-) {
-  const academicTerm = await transaction.academicTerm.findUnique({
-    where: {
-      year_semester: { year: courseOffering.year, semester: courseOffering.semester },
-    },
-    select: { roadmapFreezeDate: true },
-  });
-  if (academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now()) {
+function requireCurrentRoadmap(roadmap: { closedAt: Date | null }) {
+  if (roadmap.closedAt) {
     throw new ApplicationError(403, 'ROADMAP_FROZEN', 'Este roadmap histórico es de sólo lectura.');
   }
 }
@@ -176,7 +167,7 @@ function withTeacherRoadmapTransaction<Result>(
           { userId, identifier },
           'TEACHER',
         );
-        await requireCurrentRoadmap(transaction, roadmap.courseOffering);
+        requireCurrentRoadmap(roadmap.roadmap);
         return operation(transaction, roadmap);
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -188,13 +179,13 @@ async function completeNodeUnsafe({ userId, identifier, nodeId }: CompleteNodeIn
   return withSerializableRetry(() =>
     prisma.$transaction(
       async (transaction) => {
-        const { courseOffering, roadmap } = await requireParticipantRoadmap(
+        const { roadmap } = await requireParticipantRoadmap(
           transaction,
           { userId, identifier },
           'STUDENT',
         );
         await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
-        await requireCurrentRoadmap(transaction, courseOffering);
+        requireCurrentRoadmap(roadmap);
         await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
         await lockRecipientRoadmap(transaction, userId, roadmap.id);
         const before = await captureAccessSnapshot(transaction, roadmap.id, userId);

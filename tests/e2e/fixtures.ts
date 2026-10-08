@@ -1,7 +1,7 @@
 import { reportUcampusPosition, forgetUcampusUser } from './ucampus';
 import type { MufasaInstitutionalCoursePosition } from '@/integrations/ucampus/server';
 import { randomUUID } from 'node:crypto';
-import { test as base, type APIRequestContext } from '@playwright/test';
+import { test as base, expect, type APIRequestContext } from '@playwright/test';
 import {
   copyFixtureRoadmap,
   developmentFixtureIds,
@@ -16,6 +16,9 @@ import { fixtureRoadmapPath, sessionCookie } from './helpers';
 import {
   courseCodePrefix,
   noticeRejectionPrefix,
+  syntheticTermYearStart,
+  syntheticTermYearEnd,
+  closureRejectionPrefix,
   removeTestData,
   userEmailDomain,
 } from './test-data';
@@ -192,13 +195,31 @@ function courseOfferingScript(options: CourseOfferingOptions, workerIndex: numbe
   return { offering, script, roadmap };
 }
 
-type OwnedTestData = { courseCodes: string[]; userIds: string[]; noticeRejections: string[] };
+export type E2EAcademicTerm = {
+  year: number;
+  semester: number;
+  setFreezeDate(day: string | null): Promise<void>;
+};
+
+type OwnedTestData = {
+  courseCodes: string[];
+  userIds: string[];
+  noticeRejections: string[];
+  termYears: number[];
+  closureRejections: string[];
+};
+let termSerial = 0;
 
 export const test = base.extend<{
   ownedTestData: OwnedTestData;
   course: E2EPrimaryCourseOffering;
   createCourse: (options?: CourseOfferingOptions) => Promise<E2ECourseOffering>;
   createUser: () => Promise<E2EUser>;
+  createTerm: (semester?: 1 | 2) => Promise<E2EAcademicTerm>;
+  waitForClosure: (course: E2ECourseOffering) => Promise<string>;
+  rejectClosure: (
+    course: E2ECourseOffering,
+  ) => Promise<{ resume: () => Promise<void>; wasAttempted: () => Promise<boolean> }>;
   /**
    * Makes PostgreSQL reject inserts of notices for one Roadmap, or for the
    * Roadmap of a Course offering when the test has yet to create it.
@@ -216,7 +237,13 @@ export const test = base.extend<{
 }>({
   // Everything a test creates; removed even when the test fails.
   ownedTestData: async ({}, provide) => {
-    const owned: OwnedTestData = { courseCodes: [], userIds: [], noticeRejections: [] };
+    const owned: OwnedTestData = {
+      courseCodes: [],
+      userIds: [],
+      noticeRejections: [],
+      termYears: [],
+      closureRejections: [],
+    };
     await provide(owned);
     await removeTestData(owned);
   },
@@ -277,6 +304,87 @@ export const test = base.extend<{
         }
       }
       return offering;
+    });
+  },
+
+  createTerm: async ({ ownedTestData }, provide, testInfo) => {
+    await provide(async (semester = 1) => {
+      // Worker indexes are not reused. Reserve 100 terms per worker, outside real years.
+      termSerial += 1;
+      const year = syntheticTermYearStart + testInfo.workerIndex * 100 + termSerial;
+      if (termSerial >= 100 || year > syntheticTermYearEnd)
+        throw new Error('Synthetic term space exhausted.');
+      ownedTestData.termYears.push(year);
+      const term = {
+        year,
+        semester,
+        async setFreezeDate(day: string | null) {
+          await sql(
+            `DELETE FROM "AcademicTerm" WHERE year = ${year} AND semester = ${semester};` +
+              (day === null
+                ? ''
+                : insert('AcademicTerm', [
+                    {
+                      year,
+                      semester,
+                      lastClassDay: day,
+                      examStartDay: day,
+                      examEndDay: day,
+                      roadmapFreezeDate: day,
+                      sourcePageUrl: 'https://e2e.test/calendar',
+                      sourcePdfUrl: 'https://e2e.test/calendar.pdf',
+                      syncedAt: new Date(),
+                    },
+                  ])),
+          );
+        },
+      };
+      // Hold the old synthetic term open until the test makes it due.
+      await term.setFreezeDate('9999-12-30');
+      return term;
+    });
+  },
+
+  rejectClosure: async ({ ownedTestData }, provide, testInfo) => {
+    await provide(async (course) => {
+      const name = `${closureRejectionPrefix}${nextSerial(testInfo.workerIndex).token}`;
+      ownedTestData.closureRejections.push(name);
+      await sql(`CREATE SEQUENCE ${name}_attempts;
+      CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+        IF NEW.id = ${literal(course.roadmapId)}::uuid AND NEW."closedAt" IS NOT NULL THEN
+          PERFORM nextval('${name}_attempts');
+          RAISE EXCEPTION 'E2E closure failure';
+        END IF;
+        RETURN NEW;
+      END; $$;
+      CREATE TRIGGER ${name} BEFORE UPDATE OF "closedAt" ON "Roadmap"
+        FOR EACH ROW EXECUTE FUNCTION ${name}();`);
+      return {
+        resume: async () => {
+          await sql(
+            `DROP TRIGGER IF EXISTS ${name} ON "Roadmap"; DROP FUNCTION IF EXISTS ${name}(); DROP SEQUENCE IF EXISTS ${name}_attempts;`,
+          );
+        },
+        wasAttempted: () => queryJson<boolean>(`SELECT to_json(is_called) FROM ${name}_attempts;`),
+      };
+    });
+  },
+
+  waitForClosure: async ({}, provide) => {
+    await provide(async (course) => {
+      let closedAt: string | null = null;
+      await expect
+        .poll(
+          async () => {
+            closedAt = await queryJson<string | null>(
+              `SELECT to_json("closedAt") FROM "Roadmap" WHERE id = ${literal(course.roadmapId)};`,
+            );
+            return closedAt;
+          },
+          { timeout: 15_000 },
+        )
+        .not.toBeNull();
+      return closedAt!;
     });
   },
 

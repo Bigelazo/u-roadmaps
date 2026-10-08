@@ -1,0 +1,1 @@
+ALTER TABLE "Roadmap" ADD COLUMN "closedAt" TIMESTAMPTZ(3);

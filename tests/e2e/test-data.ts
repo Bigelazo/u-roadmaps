@@ -3,8 +3,11 @@ import { join } from 'node:path';
 import { literal, literalList, queryJson, sql } from './database';
 
 // Test-owned rows are recognizable without IDs, so orphans can be removed safely.
+export const syntheticTermYearStart = 1000;
+export const syntheticTermYearEnd = 1999;
 export const courseCodePrefix = 'E2E-';
 export const userEmailDomain = 'e2e.u-roadmaps.test';
+export const closureRejectionPrefix = 'e2e_reject_closure_';
 export const noticeRejectionPrefix = 'e2e_reject_notices_';
 
 /** What one test created, or every test-owned leftover of an interrupted run. */
@@ -13,6 +16,8 @@ export type TestDataScope =
       courseCodes: readonly string[];
       userIds: readonly string[];
       noticeRejections: readonly string[];
+      termYears: readonly number[];
+      closureRejections: readonly string[];
     }
   | 'orphans';
 
@@ -24,23 +29,44 @@ const uploadsDirectory = () => join(process.cwd(), process.env.UPLOADS_DIRECTORY
  */
 export async function removeTestData(scope: TestDataScope) {
   try {
-    await dropNoticeRejections(scope);
+    await dropRejections(
+      scope,
+      'RoadmapNotice',
+      noticeRejectionPrefix,
+      scope === 'orphans' ? [] : scope.noticeRejections,
+    );
+    await dropRejections(
+      scope,
+      'Roadmap',
+      closureRejectionPrefix,
+      scope === 'orphans' ? [] : scope.closureRejections,
+    );
   } finally {
     await deleteCoursesAndUsers(scope);
+    const condition =
+      scope === 'orphans'
+        ? `year BETWEEN ${syntheticTermYearStart} AND ${syntheticTermYearEnd}`
+        : `year IN (${scope.termYears.map(literal).join(', ') || 'NULL'})`;
+    await sql(`DELETE FROM "AcademicTerm" WHERE ${condition};`);
   }
 }
 
-function dropNoticeRejections(scope: TestDataScope) {
+function dropRejections(
+  scope: TestDataScope,
+  table: string,
+  prefix: string,
+  names: readonly string[],
+) {
   const condition =
     scope === 'orphans'
-      ? `starts_with(tgname, ${literal(noticeRejectionPrefix)})`
-      : `tgname IN (${literalList(scope.noticeRejections)})`;
+      ? `starts_with(tgname, ${literal(prefix)})`
+      : `tgname IN (${literalList(names)})`;
   return sql(`
     DO $$ DECLARE name text; BEGIN
       FOR name IN SELECT tgname FROM pg_trigger
-        WHERE tgrelid = '"RoadmapNotice"'::regclass AND NOT tgisinternal AND ${condition}
+        WHERE tgrelid = '"${table}"'::regclass AND NOT tgisinternal AND ${condition}
       LOOP
-        EXECUTE format('DROP TRIGGER %I ON "RoadmapNotice"', name);
+        EXECUTE format('DROP TRIGGER %I ON "${table}"', name);
         EXECUTE format('DROP FUNCTION IF EXISTS %I()', name);
         EXECUTE format('DROP SEQUENCE IF EXISTS %I', name || '_attempts');
       END LOOP;

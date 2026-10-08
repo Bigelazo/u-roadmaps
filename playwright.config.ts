@@ -23,6 +23,7 @@ Object.assign(process.env, {
   PGOPTIONS: '-c statement_timeout=10000 -c lock_timeout=5000',
   // Scheduled unlock specs wait for the in-process release instead of the default 5 minutes.
   SCHEDULED_UNLOCK_INTERVAL_MS: '1000',
+  ROADMAP_CLOSURE_INTERVAL_MS: '1000',
 });
 export default defineConfig({
   testDir: './tests/e2e',

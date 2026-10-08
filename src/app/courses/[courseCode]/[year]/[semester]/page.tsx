@@ -41,7 +41,7 @@ export default async function CoursePage(
     where: { courseCode_year_semester: identifier },
     select: {
       course: { select: { name: true } },
-      roadmap: { select: { id: true } },
+      roadmap: { select: { id: true, closedAt: true } },
       participants: {
         where: { userId: user.id, isActive: true },
         select: { role: true },
@@ -56,20 +56,12 @@ export default async function CoursePage(
     }
     notFound();
   }
-  const academicTerm = await prisma.academicTerm.findUnique({
-    where: { year_semester: { year: identifier.year, semester: identifier.semester } },
-    select: { roadmapFreezeDate: true },
-  });
   // Refresh stored roles on entry; an unavailable source preserves local access.
   const participation =
     (await synchronizeParticipation(user, identifier)) ?? courseOffering.participants[0];
   redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
   const isTeaching = participation?.role === 'TEACHER';
-  const isHistorical = Boolean(
-    // This async Server Component evaluates the calendar for the current request.
-    // eslint-disable-next-line react-hooks/purity
-    academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now(),
-  );
+  const isHistorical = Boolean(courseOffering.roadmap?.closedAt);
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;

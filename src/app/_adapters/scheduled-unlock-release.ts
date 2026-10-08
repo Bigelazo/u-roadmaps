@@ -1,17 +1,12 @@
 import 'server-only';
 
+import { startPeriodicPass } from './periodic-pass';
+
 import { deliverRoadmapNodeNotifications } from '@/app/_adapters/roadmap-node-notifications';
 import {
   releaseScheduledTeacherUnlocks,
   SCHEDULED_UNLOCK_ACTOR_ID,
 } from '@/features/roadmap/server';
-
-const DEFAULT_INTERVAL_MS = 5 * 60_000;
-
-function intervalMs() {
-  const configured = Number(process.env.SCHEDULED_UNLOCK_INTERVAL_MS);
-  return Number.isFinite(configured) && configured >= 1_000 ? configured : DEFAULT_INTERVAL_MS;
-}
 
 async function releaseDueScheduledUnlocks() {
   const released = await releaseScheduledTeacherUnlocks().match(
@@ -38,16 +33,9 @@ async function releaseDueScheduledUnlocks() {
  * Each pass is idempotent, so a late or repeated pass only releases what is due.
  */
 export function startScheduledUnlockRelease() {
-  let running = false;
-  const run = () => {
-    if (running) return;
-    running = true;
-    void releaseDueScheduledUnlocks()
-      .catch(() => console.warn('Scheduled unlock release failed'))
-      .finally(() => {
-        running = false;
-      });
-  };
-  run();
-  setInterval(run, intervalMs()).unref();
+  startPeriodicPass({
+    run: releaseDueScheduledUnlocks,
+    intervalMs: process.env.SCHEDULED_UNLOCK_INTERVAL_MS,
+    onError: () => console.warn('Scheduled unlock release failed'),
+  });
 }

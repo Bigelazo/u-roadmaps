@@ -29,6 +29,7 @@ model CourseOffering {
 
 model Roadmap {
   id                     String                   @id @default(uuid()) @db.Uuid
+  closedAt               DateTime?                @db.Timestamptz(3)
   courseOfferingId       String                   @unique @db.Uuid
   courseOffering         CourseOffering           @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   nodeTypes              NodeType[]

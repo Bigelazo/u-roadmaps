@@ -29,7 +29,7 @@ type RoadmapDependency = { id: string; sourceNodeId: string; targetNodeId: strin
 type RoadmapProjectionData = {
   course: RoadmapCourse;
   courseOffering: RoadmapCourseOffering;
-  roadmap: { id: string };
+  roadmap: { id: string; closedAt?: Date | null };
   nodeTypes: Array<{
     id: string;
     name: string;
@@ -69,7 +69,7 @@ export async function loadRoadmapProjectionData(
     roadmap,
   }: {
     courseOffering: RoadmapCourseOffering & { course: RoadmapCourse };
-    roadmap: { id: string };
+    roadmap: { id: string; closedAt?: Date | null };
   },
 ): Promise<RoadmapProjectionData> {
   const [predefinedNodeTypes, customNodeTypes, nodes, dependencies] = await Promise.all([
@@ -93,7 +93,7 @@ export async function loadRoadmapProjectionData(
       year: courseOffering.year,
       semester: courseOffering.semester,
     },
-    roadmap: { id: roadmap.id },
+    roadmap: { id: roadmap.id, closedAt: roadmap.closedAt },
     nodeTypes: [...predefinedNodeTypes, ...customNodeTypes].map((type) => ({
       id: type.id,
       name: type.name,
@@ -198,7 +198,7 @@ export function projectStudentRoadmap(
         ...projectAccessibleNode(node, identifier),
         access,
         isCompleted,
-        canComplete: !isCompleted,
+        canComplete: !data.roadmap.closedAt && !isCompleted,
         resources: node.resources.map((resource) => resourceDto(resource, identifier)),
       };
     }),

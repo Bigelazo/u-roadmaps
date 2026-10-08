@@ -1023,6 +1023,7 @@ async function scheduleTeacherUnlockUnsafe({ id, unlockOn, ...editor }: WithTeac
 async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) {
   const roadmaps = await prisma.roadmap.findMany({
     where: {
+      closedAt: null,
       roadmapNodes: {
         some: { isTeacherBlocked: true, teacherUnlockOn: { lte: calendarDayDate(today) } },
       },
@@ -1034,19 +1035,14 @@ async function releaseScheduledTeacherUnlocksUnsafe(today = chileCalendarDay()) 
   });
   const released = [];
   for (const roadmap of roadmaps) {
-    const { year, semester } = roadmap.courseOffering;
-    const academicTerm = await prisma.academicTerm.findUnique({
-      where: { year_semester: { year, semester } },
-      select: { roadmapFreezeDate: true },
-    });
-    // A frozen Roadmap is read-only, so its pending schedules never fire.
-    if (academicTerm && academicTerm.roadmapFreezeDate.getTime() <= Date.now()) continue;
     // A node waiting for blocked prerequisites stays due on every pass; checking outside a
     // transaction keeps those passes from contending with teaching edits on its Roadmap.
     if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
     const result = await withSerializableTransaction(
       async (transaction) => {
         await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
+        const current = await transaction.roadmap.findUnique({ where: { id: roadmap.id } });
+        if (!current || current.closedAt) return { releasedNodeIds: [], notifications: [] };
         const before = await captureAccessSnapshot(transaction, roadmap.id);
         const releasedNodeIds = await releaseDueScheduledUnlocks(transaction, roadmap.id, today);
         const after = await captureAccessSnapshot(transaction, roadmap.id);

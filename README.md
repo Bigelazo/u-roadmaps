@@ -242,6 +242,8 @@ Los avisos requieren un único proceso Node persistente, con conexión directa a
 
 Ese mismo proceso libera los desbloqueos programados: revisa cada cinco minutos los nodos cuya fecha ya llegó (00:00, hora de Chile) y avisa a sus estudiantes. `SCHEDULED_UNLOCK_INTERVAL_MS` ajusta ese intervalo.
 
+El proceso también revisa cada cinco minutos los Roadmaps pendientes de cierre. El último día editable es la fecha final de exámenes sincronizada, o el 20 de julio (semestre 1) / 20 de enero del año siguiente (semestre 2) si no hay calendario. El cierre vence al comenzar el día siguiente en `America/Santiago`; el primer pase posterior quita los bloqueos docentes y las fechas de desbloqueo, y registra `closedAt` en una transacción por Roadmap. No crea ni modifica avisos. La página del Curso, las Completions y la previsualización leen ese cierre registrado. `ROADMAP_CLOSURE_INTERVAL_MS` ajusta el intervalo (mínimo 1000 ms). Los errores de un Roadmap se registran y se reintentan en el siguiente pase. La protección de todas las mutaciones docentes se implementa por separado en #193.
+
 ## Arquitectura y estructura
 
 El código se organiza por funcionalidades. Las páginas y rutas HTTP componen los módulos mediante sus entradas públicas; dentro de cada funcionalidad se separan reglas de dominio, operaciones de aplicación, infraestructura y componentes.
