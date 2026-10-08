@@ -1,6 +1,4 @@
 import { lockNoticeParticipation } from './participation-lock';
-import { routeEffect } from '../application/route-effect';
-import { reconcileStoredRoute } from './route-notice';
 import 'server-only';
 import { prisma, type Prisma } from '@/shared/server/db';
 import type { NoticeEffect } from '../application/notice-effect';
@@ -65,11 +63,6 @@ export async function deliverNotice(effect: NoticeEffect) {
     )
       return false;
     if (await reconcileStoredAbsorption(transaction, effect)) return true;
-    const route = routeEffect(effect);
-    if (route) {
-      await reconcileStoredRoute(transaction, route);
-      return true;
-    }
     const resource = resourceEffect(effect);
     if (resource) {
       await reconcileStoredResource(transaction, resource);

@@ -1,17 +1,11 @@
 import { lockNoticeParticipation } from './participation-lock';
 import { visibleOwnNotices } from './notice-visibility';
-import { routeOpeningSnapshots, recognizeRouteSnapshots } from './route-notice';
 import 'server-only';
 import { after } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
-import {
-  nodeMessage,
-  resourceMessage,
-  roadmapClassificationChangeMessage,
-  roadmapPathChangeMessage,
-} from '../application/messages';
+import { nodeMessage, resourceMessage } from '../application/messages';
 import {
   queryInboxPage,
   queryInboxCounts,
@@ -30,18 +24,11 @@ import { contentOpeningSnapshots, recognizeContentSnapshots } from './node-conte
 import { absorptionOpeningSnapshots, recognizeAbsorptionSnapshots } from './absorption-recognition';
 import type {
   NodeChangeNotice,
-  RoadmapClassificationChangeNotice,
   RoadmapAvailabilityNotice,
-  RoadmapPathChangeNotice,
   ResourceChangeNotice,
 } from '../contracts';
 
-type Notice =
-  | RoadmapAvailabilityNotice
-  | NodeChangeNotice
-  | ResourceChangeNotice
-  | RoadmapPathChangeNotice
-  | RoadmapClassificationChangeNotice;
+type Notice = RoadmapAvailabilityNotice | NodeChangeNotice | ResourceChangeNotice;
 
 const deliveryFailureMessage: Record<NoticeClass, string> = {
   'roadmap-available': 'Roadmap availability delivery failed',
@@ -129,37 +116,6 @@ export function storeRoadmapAvailability(
     {
       targetKind: 'roadmap',
       changeKind: 'roadmap-available',
-    },
-    scheduleDelivery,
-  );
-}
-
-export function storeRoadmapPathChange(
-  notice: RoadmapPathChangeNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-path-changed',
-    {
-      ...roadmapPathChangeMessage(notice),
-      targetKind: 'roadmap',
-    },
-    scheduleDelivery,
-  );
-}
-
-export function storeRoadmapClassificationChange(
-  notice: RoadmapClassificationChangeNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-classification-changed',
-    {
-      ...roadmapClassificationChangeMessage(notice),
-      targetKind: 'roadmap',
-      changeKind: 'classification-updated',
     },
     scheduleDelivery,
   );
@@ -387,7 +343,6 @@ export async function prepareOwnNoticeOpening(
         snapshots: targetOpeningSnapshots(notices),
         contentSnapshots: contentOpeningSnapshots(notices),
         resourceSnapshots: resourceOpeningSnapshots(notices),
-        routeSnapshots: routeOpeningSnapshots(notices),
         absorptionSnapshots: await absorptionOpeningSnapshots(
           transaction,
           userId,
@@ -456,12 +411,6 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       },
       data: { acknowledgedAt: new Date() },
     });
-    const routeCount = await recognizeRouteSnapshots(transaction, {
-      recipientId: userId,
-      roadmapId,
-      operationId,
-      snapshots: retained.routeSnapshots,
-    });
     const resourceCount = await recognizeResourceSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
@@ -487,8 +436,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       snapshots: retained.absorptionSnapshots,
     });
     const summary =
-      visited &&
-      result.count + absorptionCount + targetCount + contentCount + resourceCount + routeCount > 0
+      visited && result.count + absorptionCount + targetCount + contentCount + resourceCount > 0
         ? (retained.summary as ChangeSummary | null)
         : null;
     await transaction.noticeAcknowledgement.update({
@@ -496,8 +444,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
     return {
-      count:
-        result.count + absorptionCount + targetCount + contentCount + resourceCount + routeCount,
+      count: result.count + absorptionCount + targetCount + contentCount + resourceCount,
       summary,
     };
   });

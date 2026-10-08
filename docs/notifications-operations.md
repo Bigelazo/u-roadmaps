@@ -161,18 +161,24 @@ sin reconocerlos en reintentos. La migración de #181 agrega las tablas y snapsh
 sin borrar Avisos existentes.
 
 Las Dependencias usan el Objeto `dependency:<origen>:<destino>`, independiente del
-id de la arista. `RouteNoticeKnowledge` conserva si el destinatario conocía ese
-par, o el nombre conocido de cada Tipo de nodo (`node-type:<id>:name`). La
-transacción docente captura el valor anterior antes de la entrega diferida, que
-consulta el estado actual. Quitar y volver a agregar un par, o renombrar un Tipo
+id de la arista. Desde #205 ambos Objetos pertenecen al módulo de ciclo de vida
+de avisos: `NoticeKnownValue` conserva si el destinatario conocía ese par
+(`'true'`/`'false'`), o el nombre conocido de cada Tipo de nodo
+(`node-type:<id>:name`). El adapter del port de cambios del Roadmap registra el
+valor anterior en la transacción docente, antes de la entrega diferida, que
+consulta el estado actual; el roadmap ya no escribe tablas de avisos para estos
+Objetos y `RouteNoticeKnowledge` ya no se lee ni se escribe. Eliminar un Nodo
+borra los valores conocidos de los pares que lo incluían. Quitar y volver a agregar un par, o renombrar un Tipo
 hasta volver al nombre conocido, retira el Aviso. Invertir una Dependencia crea
 dos Objetos distintos. Solo reciben Avisos los participantes activos distintos
 del autor: para Dependencias ambos Nodos deben ser visibles; para nombres de
 Tipos debe existir al menos un Nodo visible, incluso bloqueado. Ícono y color
 no generan Avisos. Ocultar o eliminar un Nodo no genera Avisos de ruta por sus
-Dependencias eliminadas en cascada. Apertura y reconocimiento conservan snapshots
-de ambos Objetos y rebasan ediciones posteriores sin reconocerlas. La migración
-de #182 agrega conocimientos y snapshots sin borrar Avisos existentes.
+Dependencias eliminadas en cascada. Apertura y reconocimiento capturan ambos
+Objetos en la colección única `snapshots` y rebasan ediciones posteriores sin
+reconocerlas. El texto se proyecta al leer desde `knownValue`, `currentValue` y
+el contexto guardado (títulos de los Nodos del par e id de la última arista). La
+migración de #205 reinicia estos Avisos, sus snapshots y sus valores conocidos.
 
 Todas las clases reconcilian su Objeto del aviso sin ventanas de tiempo y se
 reconocen únicamente al entrar al Roadmap.
@@ -193,7 +199,8 @@ Avisos permanecen pendientes y no se muestra el Resumen de cambios. Una nueva
 entrada prepara una operación nueva. El contrato HTTP permite reintentar la
 operación original dentro de la retención, reutilizando el mismo
 `operationId` y el mismo conjunto, sin ampliar `noticeIds`. Los Objetos del
-módulo de ciclo de vida (hoy, el título) se capturan en la colección única
+módulo de ciclo de vida (hoy, el título, el par de Dependencia y el nombre de
+Tipo de nodo) se capturan en la colección única
 `snapshots`; descripción, tipo y acceso conservan `contentSnapshots`,
 con los valores y nombres capturados al abrir. Si el Aviso cambió
 en el intervalo, el reconocimiento avanza al valor capturado y reconcilia el

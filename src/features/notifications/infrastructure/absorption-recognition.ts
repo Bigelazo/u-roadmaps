@@ -6,8 +6,8 @@ import { recognizeKnownValue, lazyRoadmapEnvelope } from './notice-lifecycle';
 import { nodeTitleTarget } from '../application/notice-targets/node-title';
 import { recognizeNodeContentValue } from './node-content-notice';
 import { recognizeResourceValue } from './resource-notice';
-import { recognizeRouteValue } from './route-notice';
-import type { RoutePayload } from '../application/route-effect';
+import { dependencyPairTarget } from '../application/notice-targets/dependency-pair';
+import { typeNameTarget } from '../application/notice-targets/node-type-name';
 import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
 import { reconcileStoredAbsorption } from './absorption-notice';
 import { projectDigestNotification } from '../digest-projection';
@@ -28,9 +28,28 @@ type AbsorptionSnapshot = {
   noticeId: string | null;
   payload: Record<string, unknown>;
   nodes: CapturedNode[];
-  routes: RoutePayload[];
+  routes: CapturedRoute[];
   deletedNodeIds?: string[];
 };
+/** A route target's value as entry exposed it (older openings carry extra fields). */
+type CapturedRoute = {
+  routeTarget: 'dependency' | 'type';
+  routeTargetKey: string;
+  previousValue: string;
+};
+
+/** Pairs the recipient has a Known value for, including pairs that no longer exist. */
+async function knownDependencyPairs(
+  transaction: Prisma.TransactionClient,
+  recipientId: string,
+  roadmapId: string,
+) {
+  const known = await transaction.noticeKnownValue.findMany({
+    where: { recipientId, roadmapId, targetKey: { startsWith: 'dependency:' } },
+    select: { targetKey: true },
+  });
+  return known.map(({ targetKey }) => targetKey);
+}
 
 function capturesRoadmapState(payload: Record<string, unknown>) {
   return payload.changeKind === 'roadmap-available' || payload.snapshotKind === 'roadmap-entry';
@@ -145,14 +164,12 @@ export async function absorptionOpeningSnapshots(
   const deletedNodeIds = knownNodes
     .map(({ nodeId }) => nodeId)
     .filter((nodeId) => !currentNodeIds.has(nodeId));
-  const routes: RoutePayload[] = [];
+  const routes: CapturedRoute[] = [];
   if (broad.some(({ data }) => capturesRoadmapState(data as Prisma.JsonObject))) {
-    const [dependencies, types, knowledge] = await Promise.all([
+    const [dependencies, types, knownPairs] = await Promise.all([
       transaction.dependency.findMany({ where: { sourceNode: { roadmapId } } }),
       transaction.nodeType.findMany({ where: { roadmapId } }),
-      transaction.routeNoticeKnowledge.findMany({
-        where: { recipientId, roadmapId, targetKey: { startsWith: 'dependency:' } },
-      }),
+      knownDependencyPairs(transaction, recipientId, roadmapId),
     ]);
     const pairs = new Map(
       dependencies.map((dependency) => [
@@ -160,26 +177,18 @@ export async function absorptionOpeningSnapshots(
         true,
       ]),
     );
-    for (const item of knowledge) if (!pairs.has(item.targetKey)) pairs.set(item.targetKey, false);
-    for (const [key, exists] of pairs) {
-      const [, sourceNodeId, targetNodeId] = key.split(':');
+    for (const key of knownPairs) if (!pairs.has(key)) pairs.set(key, false);
+    for (const [key, exists] of pairs)
       routes.push({
         routeTarget: 'dependency',
         routeTargetKey: key,
-        sourceNodeId,
-        targetNodeId,
         previousValue: String(exists),
-        occurredAt: new Date().toISOString(),
       });
-    }
     for (const type of types)
       routes.push({
         routeTarget: 'type',
         routeTargetKey: nodeTypeNameTarget(type.id),
-        nodeTypeId: type.id,
         previousValue: type.name,
-        previousTypeName: type.name,
-        occurredAt: new Date().toISOString(),
       });
   }
   return broad.map(({ id, data }) => {
@@ -433,64 +442,32 @@ export async function recognizeAbsorptionSnapshots(
     if (capturesRoadmapState(snapshot.payload)) {
       // A pair absent on entry is known to be absent, even if its first-ever
       // insertion was absorbed before acknowledgement.
-      const [dependencies, knowledge] = await Promise.all([
+      const [dependencies, knownPairs] = await Promise.all([
         transaction.dependency.findMany({
           where: { sourceNode: { roadmapId: identity.roadmapId } },
         }),
-        transaction.routeNoticeKnowledge.findMany({
-          where: {
-            recipientId: identity.recipientId,
-            roadmapId: identity.roadmapId,
-            targetKey: { startsWith: 'dependency:' },
-          },
-        }),
+        knownDependencyPairs(transaction, identity.recipientId, identity.roadmapId),
       ]);
       const pairs = new Set([
         ...dependencies.map(({ sourceNodeId, targetNodeId }) =>
           dependencyTarget(sourceNodeId, targetNodeId),
         ),
-        ...knowledge.map(({ targetKey }) => targetKey),
+        ...knownPairs,
       ]);
       for (const key of pairs)
-        if (!routes.some(({ routeTargetKey }) => routeTargetKey === key)) {
-          const [, sourceNodeId, targetNodeId] = key.split(':');
-          routes.push({
-            routeTarget: 'dependency',
-            routeTargetKey: key,
-            sourceNodeId,
-            targetNodeId,
-            previousValue: 'false',
-            occurredAt: new Date().toISOString(),
-          });
-        }
+        if (!routes.some(({ routeTargetKey }) => routeTargetKey === key))
+          routes.push({ routeTarget: 'dependency', routeTargetKey: key, previousValue: 'false' });
     }
-    for (const route of routes) {
-      await recognizeRouteValue(
-        transaction,
-        {
-          eventId: `recognition:${identity.operationId}:${route.routeTargetKey}`,
-          recipientId: identity.recipientId,
-          roadmapId: identity.roadmapId,
-          courseOfferingId: String(snapshot.payload.courseOfferingId),
-          noticeClass:
-            route.routeTarget === 'dependency'
-              ? 'roadmap-path-changed'
-              : 'roadmap-classification-changed',
-          payload: {
-            ...deliveryPayload,
-            ...route,
-            changeKind:
-              route.routeTarget === 'dependency'
-                ? route.previousValue === 'true'
-                  ? 'dependency-added'
-                  : 'dependency-removed'
-                : 'classification-updated',
-          },
-        },
-        route.previousValue,
-        reconcileOnlyPending,
-      );
-    }
+    for (const route of routes)
+      await recognizeKnownValue(transaction, {
+        identity: { recipientId: identity.recipientId, roadmapId: identity.roadmapId },
+        descriptor: route.routeTarget === 'dependency' ? dependencyPairTarget : typeNameTarget,
+        target: { targetKey: route.routeTargetKey, nodeId: null },
+        knownValue: route.previousValue,
+        eventId: `recognition:${identity.operationId}:${route.routeTargetKey}`,
+        envelope,
+        onlyPending: reconcileOnlyPending,
+      });
     if (capturesRoadmapState(snapshot.payload)) {
       const unrecognized = await transaction.nodeLifecycleKnowledge.findMany({
         where: {

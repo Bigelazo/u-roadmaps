@@ -10,9 +10,12 @@ import {
   type NoticeDelivery,
 } from '@/features/notifications/server';
 import {
+  createRoadmapDependency,
   createRoadmapNode,
+  deleteRoadmapDependency,
   deleteRoadmapNode,
   updateRoadmapNode,
+  updateRoadmapNodeType,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import type { IntegrationCourse } from './fixtures';
@@ -48,6 +51,16 @@ export function teacherEdits(
     update: (nodeId: string, input: Record<string, unknown>) =>
       confirmed(updateRoadmapNode({ ...editor, id: nodeId, input }, port)),
     remove: (nodeId: string) => confirmed(deleteRoadmapNode({ ...editor, id: nodeId }, port)),
+    connect: async (sourceNodeId: string, targetNodeId: string) =>
+      (
+        await confirmed(
+          createRoadmapDependency({ ...editor, input: { sourceNodeId, targetNodeId } }, port),
+        )
+      ).dependency.id,
+    disconnect: (dependencyId: string) =>
+      confirmed(deleteRoadmapDependency({ ...editor, id: dependencyId }, port)),
+    updateType: (nodeTypeId: string, input: Record<string, unknown>) =>
+      confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input }, port)),
   };
 }
 

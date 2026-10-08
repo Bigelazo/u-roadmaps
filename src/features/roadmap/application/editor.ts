@@ -1,8 +1,6 @@
 import type { RoadmapChangePort, RoadmapChangeFact } from './change-port';
 import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-transaction';
 import { accessChanges } from './access-changes';
-import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
-import { captureRouteNoticeKnowledge } from './route-notice-knowledge';
 import { captureAccessSnapshot } from './access-snapshot';
 import 'server-only';
 
@@ -44,7 +42,6 @@ import {
   type EditorInput,
 } from '@/features/roadmap/application/editor-access';
 import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
-import { nodeTypeClassificationNotification } from '@/features/roadmap/application/node-type-classification-notifications';
 
 type JsonObject = Record<string, unknown>;
 
@@ -555,35 +552,6 @@ async function updateRoadmapNodeTypeUnsafe(
         'Debe indicar nombre, ícono o color para actualizar.',
       );
     const updated = await transaction.nodeType.update({ where: { id: nodeType.id }, data });
-    let notification: ReturnType<typeof nodeTypeClassificationNotification> | undefined;
-    if (data.name !== undefined && data.name !== nodeType.name) {
-      const visibleNodeCount = await transaction.roadmapNode.count({
-        where: { roadmapId: roadmap.id, nodeTypeId: nodeType.id, isVisible: true },
-      });
-      if (visibleNodeCount > 0) {
-        const participants = await transaction.participation.findMany({
-          where: { courseOfferingId: roadmap.courseOfferingId, isActive: true },
-          select: { userId: true, isActive: true },
-        });
-        notification = nodeTypeClassificationNotification({
-          nodeTypeId: nodeType.id,
-          roadmapId: roadmap.id,
-          previousTypeName: nodeType.name,
-          nextTypeName: updated.name,
-          visibleNodeCount,
-          actorId: editor.userId,
-          participants,
-        });
-      }
-    }
-    if (notification)
-      await captureRouteNoticeKnowledge(
-        transaction,
-        roadmap.id,
-        notification.recipientIds,
-        nodeTypeNameTarget(nodeType.id),
-        nodeType.name,
-      );
     if (data.name !== undefined && data.name !== nodeType.name)
       await report({
         actorId: editor.userId,
@@ -750,15 +718,6 @@ async function createRoadmapDependencyUnsafe(
         });
       }
       const after = await captureAccessSnapshot(transaction, prepared.roadmapId);
-      await captureRouteNoticeKnowledge(
-        transaction,
-        prepared.roadmapId,
-        after.participants
-          .filter(({ userId }) => userId !== editor.userId)
-          .map(({ userId }) => userId),
-        dependencyTarget(prepared.sourceNodeId, prepared.targetNodeId),
-        'false',
-      );
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -834,16 +793,6 @@ async function deleteRoadmapDependencyUnsafe(
       const before = await captureAccessSnapshot(transaction, roadmap.id);
       await transaction.dependency.delete({ where: { id: dependency.id } });
       const after = await captureAccessSnapshot(transaction, roadmap.id);
-      if (dependency.sourceNode.isVisible && dependency.targetNode.isVisible)
-        await captureRouteNoticeKnowledge(
-          transaction,
-          roadmap.id,
-          after.participants
-            .filter(({ userId }) => userId !== editor.userId)
-            .map(({ userId }) => userId),
-          dependencyTarget(dependency.sourceNodeId, dependency.targetNodeId),
-          'true',
-        );
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,

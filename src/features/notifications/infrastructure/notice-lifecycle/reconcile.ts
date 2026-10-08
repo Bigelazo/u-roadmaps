@@ -28,6 +28,8 @@ export type TargetReconciliationInput = Readonly<{
   /** Known value to record when the recipient has no baseline for the target yet. */
   fallbackKnown: string;
   roadmap: RoadmapView;
+  /** Context the change itself reported (see `NoticeTargetDescriptor.factContext`). */
+  context?: Readonly<Record<string, unknown>>;
   /** Loaded only when a notice is written. */
   envelope: () => Promise<NoticeEnvelope>;
   eventId: string;
@@ -52,7 +54,11 @@ export async function reconcileNoticeTarget(
   });
   // A pending row without stored values can only be replaced in place.
   const pendingValues = pending
-    ? (storedTargetValues(pending.data)?.values ?? { knownValue: '', currentValue: '' })
+    ? (storedTargetValues(pending.data)?.values ?? {
+        knownValue: '',
+        currentValue: '',
+        context: {},
+      })
     : null;
   const result = reconcileTarget({
     knownValue,
@@ -68,7 +74,12 @@ export async function reconcileNoticeTarget(
   const occurredAt = new Date(
     Math.max(input.occurredAt.getTime(), pending?.occurredAt.getTime() ?? 0),
   );
-  const values = { knownValue: result.knownValue, currentValue: result.currentValue, context: {} };
+  const values = {
+    knownValue: result.knownValue,
+    currentValue: result.currentValue,
+    // Live context wins over the change's, which wins over what the pending notice kept.
+    context: { ...pendingValues?.context, ...input.context, ...current.context },
+  };
   const wording = descriptor.wording(values);
   const envelope = await input.envelope();
   const row = {
@@ -82,6 +93,7 @@ export async function reconcileNoticeTarget(
       noticeClass: descriptor.noticeClass,
       noticeTarget: descriptor.noticeTarget,
       ...descriptor.readSide,
+      ...descriptor.storedData?.(target, values),
       ...values,
       occurredAt: occurredAt.toISOString(),
       eventCount: 1,

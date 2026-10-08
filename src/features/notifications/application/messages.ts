@@ -1,9 +1,4 @@
-import type {
-  NodeChangeNotice,
-  ResourceChangeNotice,
-  RoadmapPathChangeNotice,
-  RoadmapClassificationChangeNotice,
-} from '../contracts';
+import type { NodeChangeNotice, ResourceChangeNotice } from '../contracts';
 
 export function nodeMessage(notice: NodeChangeNotice) {
   const label =
@@ -32,20 +27,4 @@ export function resourceMessage(notice: ResourceChangeNotice) {
   const noticeTitle = `Cambio de recurso: ${notice.resourceTitle}`;
   const noticeBody = `${notice.actorName} modificó un recurso en un Nodo del Roadmap de ${notice.courseCode}.`;
   return { noticeTitle, noticeBody };
-}
-
-export function roadmapPathChangeMessage(notice: RoadmapPathChangeNotice) {
-  const requirement =
-    notice.changeKind === 'dependency-added' ? 'ahora requiere' : 'ya no requiere';
-  return {
-    noticeTitle: 'Ruta actualizada',
-    noticeBody: `${notice.actorName} actualizó la ruta de ${notice.courseCode}: «${notice.dependentNodeTitle}» ${requirement} «${notice.prerequisiteNodeTitle}».`,
-  };
-}
-
-export function roadmapClassificationChangeMessage(notice: RoadmapClassificationChangeNotice) {
-  return {
-    noticeTitle: `Tipo «${notice.previousTypeName}» → «${notice.nextTypeName}»`,
-    noticeBody: `${notice.actorName} actualizó la clasificación del Roadmap de ${notice.courseCode}.`,
-  };
 }
