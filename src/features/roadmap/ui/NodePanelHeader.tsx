@@ -38,7 +38,9 @@ export function NodePanelHeader({
       )}
     >
       <div className="min-w-0 pr-20">
-        <p className="text-xs font-bold tracking-[1.2px] text-primary uppercase">Nodo seleccionado</p>
+        <p className="text-xs font-bold tracking-[1.2px] text-primary uppercase">
+          Nodo seleccionado
+        </p>
         <div className="mt-1 flex min-w-0 items-start gap-3">
           {nodeType ? (
             <NodeTypeIcon

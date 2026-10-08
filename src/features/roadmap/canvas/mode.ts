@@ -21,7 +21,10 @@ export type CanvasMode = {
   capabilities: CanvasCapabilities;
 };
 
-export function deriveCanvasMode({ experience, isCanvasPreview = false }: CanvasModeInput): CanvasMode {
+export function deriveCanvasMode({
+  experience,
+  isCanvasPreview = false,
+}: CanvasModeInput): CanvasMode {
   const isTeaching = experience.kind === 'teaching';
   const isHistorical = experience.term === 'historical';
   const canEdit = isTeaching && !isHistorical;

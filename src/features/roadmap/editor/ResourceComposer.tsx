@@ -36,8 +36,8 @@ function canSaveResource(
   return mode === 'file' && !isEditingResource
     ? Boolean(selectedFile)
     : hasChanges &&
-      Boolean(resourceValue.title.trim()) &&
-      (mode !== 'link' || hasRequiredLinkFields);
+        Boolean(resourceValue.title.trim()) &&
+        (mode !== 'link' || hasRequiredLinkFields);
 }
 
 function resourceSubmitLabel(mode: Props['mode'], isEditingResource: boolean) {
