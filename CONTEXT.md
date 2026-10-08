@@ -67,6 +67,26 @@ _Avoid_: Curriculum, course version
 The ordered succession of roadmap versions for the same course across academic terms. Each version can identify the version from which it was copied so their evolution can be observed.
 _Avoid_: Course offering, edit history
 
+**Roadmap closure (Cierre del roadmap)**:
+The one-time, irreversible event, at 00:00 America/Santiago on the day after the Roadmap freeze date, that removes every Teacher block, discards every Scheduled unlock, and freezes the Roadmap. It is silent: it produces no Roadmap notices and leaves notices already pending untouched. Once closed, a Roadmap is a frozen version of its lineage that no participant can modify; its frozen state is a recorded fact, not re-evaluated from the calendar.
+_Avoid_: Freeze check, archive, deactivation
+
+**Roadmap freeze date (Fecha de congelamiento)**:
+The last editable day of every Roadmap in an Academic term: the final exam day published in the official academic calendar, or 20 July for the first semester and 20 January of the following year for the second when that day cannot be determined.
+_Avoid_: Last class day, term end
+
+**Roadmap version history (Historial de versiones del roadmap)**:
+The frozen Roadmaps of a Course that a teaching-staff member can consult at any time, limited to Academic terms up to the latest one in which that person holds an active teaching-staff Participation in the Course. It exposes pedagogical content, origin, and authorship (the Roadmap creator and the teaching staff active at Roadmap closure, with their Institutional course positions) only, never the participants' progress, Completions, or student Participations of those offerings.
+_Avoid_: Academic history, archive, roadmap backups
+
+**Roadmap copy (Copia de roadmap)**:
+The creation of a Course offering's Roadmap from a frozen version of the same Course, chosen by the course professor only at the moment of creating the Roadmap as an alternative to starting an empty one. A copied Roadmap records the version it succeeds; an empty Roadmap has no predecessor. Every visible Node of the copy starts with a Teacher block, hidden Nodes remain hidden, and no Scheduled unlock is carried over.
+_Avoid_: Import, clone, template application
+
+**Roadmap creator (Creador del roadmap)**:
+The course professor who created a Roadmap, empty or by Roadmap copy. The attribution is permanent, even if that person later leaves the Course offering.
+_Avoid_: Owner, author, coordinator
+
 **Roadmap change (Cambio del roadmap)**:
 A teaching-staff modification that meaningfully changes a participant's Roadmap content or access. It retains enough context to explain what changed even when the affected element no longer exists.
 _Avoid_: Canvas movement, visual-only edit, notification
