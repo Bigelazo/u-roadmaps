@@ -151,7 +151,7 @@ Use the `cn()` utility from the project for conditional or merged class names. D
 **Correct:**
 
 ```tsx
-import { cn } from "@/lib/utils"
+import { cn } from "cn"
 
 <div className={cn("flex items-center", isActive ? "bg-primary text-primary-foreground" : "bg-muted")}>
 ```
@@ -160,7 +160,7 @@ import { cn } from "@/lib/utils"
 
 ## No manual z-index on overlay components
 
-`Dialog`, `Sheet`, `Drawer`, `AlertDialog`, `DropdownMenu`, `Popover`, `Tooltip`, `HoverCard` handle their own stacking. Never add `z-50` or `z-999`.
+`Dialog`, `Sheet`, `Drawer`, `AlertDialog`, `DropdownMenu`, `Popover`, `Tooltip`, `HoverCard` handle their own stacking. Never add `z-50` or `z-[999]`.
 
 ---
 
@@ -173,7 +173,7 @@ For scroll-aware edge fading on a scroll container, use `scroll-fade` (and the a
 **Incorrect:**
 
 ```tsx
-<span className="animate-pulse bg-linear-to-r from-muted-foreground/40 via-foreground/70 to-muted-foreground/40 bg-clip-text text-transparent animate-[shimmer_1.6s_infinite]">
+<span className="animate-pulse bg-gradient-to-r from-muted-foreground/40 via-foreground/70 to-muted-foreground/40 bg-clip-text text-transparent [animation:shimmer_1.6s_infinite]">
   Thinking…
 </span>
 ```
