@@ -21,10 +21,26 @@ export type AcademicOverviewCourse = Readonly<{
   role: AcademicOverviewRole;
   institutionalPosition: AcademicOverviewInstitutionalPosition | null;
   hasRoadmap: boolean;
+  /** Past its Roadmap closure instant: no Roadmap can be created for it any longer. */
+  isPastClosure: boolean;
   canCreateRoadmap: boolean;
 }>;
 
-export type AcademicOverviewApiOffering = Omit<AcademicOverviewCourse, 'canCreateRoadmap'>;
+export type AcademicOverviewApiOffering = Omit<
+  AcademicOverviewCourse,
+  'canCreateRoadmap' | 'isPastClosure'
+>;
+
+/** Whether Course offerings of an Academic term are past their Roadmap closure instant. */
+export type RoadmapClosureCalendar = (
+  term: Readonly<{ year: number; semester: number }>,
+) => boolean;
+
+export type AcademicOverviewSources = Readonly<{
+  /** The person's U-Campus courses when already read; otherwise they are read here. */
+  source?: import('@/integrations/ucampus/server').MufasaEnrolledCoursesResult;
+  isPastClosure: RoadmapClosureCalendar;
+}>;
 
 export type AcademicOverviewApiResponse = Readonly<{
   source: AcademicOverviewSource;

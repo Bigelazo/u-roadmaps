@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest';
-import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '@/features/roadmap/domain/closure';
+import {
+  isPastRoadmapClosure,
+  resolveRoadmapFreezeDate,
+  roadmapClosureInstant,
+} from '@/features/roadmap/domain/closure';
 
 test.each([
   [2026, 1, '2026-07-10', '2026-07-10'],
@@ -20,3 +24,18 @@ test.each([
 ])('closes after the whole freeze day %s, across daylight-saving transitions', (day, expected) => {
   expect(roadmapClosureInstant(day).toISOString()).toBe(expected);
 });
+
+test.each([
+  ['2026-07-10', '2026-07-11T03:59:59.999Z', false],
+  ['2026-07-10', '2026-07-11T04:00:00.000Z', true],
+  // Without a synchronized date, the first-semester fallback is 20 July.
+  [null, '2026-07-21T03:59:59.999Z', false],
+  [null, '2026-07-21T04:00:00.000Z', true],
+])(
+  'a 2026-1 offering with freeze date %s is past closure at %s: %s',
+  (synchronizedDate, now, expected) => {
+    expect(isPastRoadmapClosure({ year: 2026, semester: 1 }, synchronizedDate, new Date(now))).toBe(
+      expected,
+    );
+  },
+);

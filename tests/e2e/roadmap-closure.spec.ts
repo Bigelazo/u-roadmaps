@@ -334,6 +334,47 @@ test('Roadmap creation remains allowed through the freeze day and refuses past t
   expect((await teacher.post(offering.apiPath(), { data: {} })).status()).toBe(201);
 });
 
+test('the Academic overview offers Roadmap creation only before the offering closes', async ({
+  createCourse,
+  createTerm,
+  createUser,
+  page,
+}) => {
+  const closedTerm = await createTerm();
+  const openTerm = await createTerm();
+  const professor = await createUser();
+  const asProfessor = [
+    {
+      user: professor,
+      role: 'TEACHER' as const,
+      institutionalPosition: 'COURSE_PROFESSOR' as const,
+    },
+  ];
+  const closed = await createCourse({ ...closedTerm, roadmap: false, participants: asProfessor });
+  await closedTerm.setFreezeDate(dayOffset(-1));
+  const onlyProfessor = 'Solo el profesor de cátedra puede crear el roadmap.';
+  const createButton = (courseName: string) =>
+    page.getByRole('button', { name: `Crear roadmap de ${courseName}` });
+  const historyLink = (courseName: string) =>
+    page.getByRole('link', { name: `Historial de versiones de ${courseName}` });
+
+  // A closed offering listed as the latest term offers its history, not creation.
+  await authenticateAs(page.context(), professor.id);
+  await page.goto('/academic-overview');
+  await expect(historyLink(closed.courseName)).toBeVisible();
+  await expect(createButton(closed.courseName)).toHaveCount(0);
+  await expect(page.getByText(onlyProfessor)).toHaveCount(0);
+
+  // Among previous terms, the closed offering still offers no creation.
+  const open = await createCourse({ ...openTerm, roadmap: false, participants: asProfessor });
+  await page.goto('/academic-overview');
+  await expect(createButton(open.courseName)).toBeVisible();
+  await page.getByRole('button', { name: /Semestres anteriores/ }).click();
+  await page.getByRole('button', { name: `Otoño ${closedTerm.year}` }).click();
+  await expect(historyLink(closed.courseName)).toBeVisible();
+  await expect(createButton(closed.courseName)).toHaveCount(0);
+});
+
 for (const semester of [1, 2] as const)
   test(`creation refuses a missing calendar through the semester-${semester} fallback`, async ({
     course,

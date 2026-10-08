@@ -1,6 +1,6 @@
 import 'server-only';
 
-export { closeDueRoadmaps } from './application/closure';
+export { closeDueRoadmaps, readRoadmapClosureCalendar } from './application/closure';
 
 export {
   changeTeacherBlock,

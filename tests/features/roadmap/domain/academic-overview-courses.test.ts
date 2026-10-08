@@ -25,6 +25,7 @@ it.each(priorities.slice(0, -1))('prefers %s to every lower institutional positi
     institutionalPosition,
     role: institutionalPosition && institutionalPosition !== 'OBSERVER' ? 'TEACHER' : 'STUDENT',
     hasRoadmap: true,
+    isPastClosure: false,
     canCreateRoadmap: institutionalPosition === 'COURSE_PROFESSOR',
   });
   for (const other of lower) {

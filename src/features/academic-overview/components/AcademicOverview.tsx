@@ -77,7 +77,12 @@ function CourseRow({
       : { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' };
   // Teaching staff who cannot create the Roadmap still reach the version history.
   const awaitsCreation =
-    course.role === 'TEACHER' && !course.hasRoadmap && !course.canCreateRoadmap && !isPastTerm;
+    course.role === 'TEACHER' &&
+    !course.hasRoadmap &&
+    !course.canCreateRoadmap &&
+    !course.isPastClosure;
+  // A listed current term can already be past its closure instant.
+  const isPastOffering = isPastTerm || course.isPastClosure;
 
   return (
     <li className={`min-w-0 border-l-4 ${position.accentClass}`}>
@@ -147,7 +152,7 @@ function CourseRow({
               Solo el profesor de cátedra puede crear el roadmap.
             </p>
           ) : null}
-          {(isPastTerm && course.role === 'TEACHER') || awaitsCreation ? (
+          {(isPastOffering && course.role === 'TEACHER') || awaitsCreation ? (
             <Link
               aria-label={`Historial de versiones de ${course.name}`}
               className={buttonVariants({ variant: 'outline', className: 'min-h-11' })}

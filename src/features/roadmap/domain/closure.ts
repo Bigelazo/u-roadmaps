@@ -9,6 +9,15 @@ export function resolveRoadmapFreezeDate(
   );
 }
 
+/** Whether Course offerings of the term are past their Roadmap closure instant at `now`. */
+export function isPastRoadmapClosure(
+  term: { year: number; semester: number },
+  synchronizedDate: CalendarDay | null,
+  now: Date,
+) {
+  return roadmapClosureInstant(resolveRoadmapFreezeDate(term, synchronizedDate)) <= now;
+}
+
 /** First instant after the last editable Chilean day, including skipped midnights. */
 export function roadmapClosureInstant(freezeDate: CalendarDay): Date {
   const midnightUtc = new Date(`${freezeDate}T00:00:00.000Z`).getTime();

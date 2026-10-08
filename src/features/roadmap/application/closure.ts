@@ -2,14 +2,13 @@ import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
 import { readCourseOfferingTeachingStaff } from './teaching-staff';
-import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '../domain/closure';
+import { isPastRoadmapClosure } from '../domain/closure';
 
-/** Silent, atomic and irreversible. A later pass retries any transaction that failed. */
-export async function closeDueRoadmaps(now = new Date()) {
-  const roadmaps = await prisma.roadmap.findMany({
-    where: { closedAt: null },
-    select: { id: true, courseOffering: { select: { year: true, semester: true } } },
-  });
+/**
+ * Whether each Academic term's Course offerings are past their Roadmap closure
+ * instant at `now`, from one read of the synchronized calendar.
+ */
+export async function readRoadmapClosureCalendar(now = new Date()) {
   const terms = await prisma.academicTerm.findMany({
     select: {
       year: true,
@@ -23,14 +22,20 @@ export async function closeDueRoadmaps(now = new Date()) {
       term.roadmapFreezeDate.toISOString().slice(0, 10),
     ]),
   );
+  return (term: { year: number; semester: number }) =>
+    isPastRoadmapClosure(term, freezeDates.get(`${term.year}-${term.semester}`) ?? null, now);
+}
+
+/** Silent, atomic and irreversible. A later pass retries any transaction that failed. */
+export async function closeDueRoadmaps(now = new Date()) {
+  const roadmaps = await prisma.roadmap.findMany({
+    where: { closedAt: null },
+    select: { id: true, courseOffering: { select: { year: true, semester: true } } },
+  });
+  const isPastClosure = await readRoadmapClosureCalendar(now);
   for (const { id, courseOffering } of roadmaps) {
     // An offering can be deleted between Prisma's candidate and relation reads.
-    if (!courseOffering) continue;
-    const day = resolveRoadmapFreezeDate(
-      courseOffering,
-      freezeDates.get(`${courseOffering.year}-${courseOffering.semester}`) ?? null,
-    );
-    if (roadmapClosureInstant(day) > now) continue;
+    if (!courseOffering || !isPastClosure(courseOffering)) continue;
     try {
       await prisma.$transaction(
         async (transaction) => {

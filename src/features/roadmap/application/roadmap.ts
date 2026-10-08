@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
-import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '../domain/closure';
+import { isPastRoadmapClosure } from '../domain/closure';
 import {
   planRoadmapCopy,
   resourcesWithStoredFiles,
@@ -480,11 +480,13 @@ async function createRoadmapUnsafe(
         const term = await transaction.academicTerm.findUnique({
           where: { year_semester: { year: identifier.year, semester: identifier.semester } },
         });
-        const freezeDate = resolveRoadmapFreezeDate(
-          identifier,
-          term?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
-        );
-        if (roadmapClosureInstant(freezeDate) <= new Date()) {
+        if (
+          isPastRoadmapClosure(
+            identifier,
+            term?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
+            new Date(),
+          )
+        ) {
           throw new ApplicationError(
             409,
             'ROADMAP_CLOSED',

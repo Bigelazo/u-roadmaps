@@ -18,18 +18,20 @@ import type {
   AcademicOverviewApiResponse,
   AcademicOverviewCourse,
   AcademicOverviewPage,
+  AcademicOverviewSources,
+  RoadmapClosureCalendar,
 } from '../types';
 
 async function getAcademicOverview(
   actor: AcademicOverviewActor,
-  source?: MufasaEnrolledCoursesResult,
+  { source, isPastClosure }: AcademicOverviewSources,
 ) {
   const [mufasa, localCourses] = await Promise.all([
     source ??
       getMufasaAcademicCourses(actor.rut, {
         useLocalFixtureData: actor.useLocalFixtureData === true,
       }),
-    readLocalAcademicOverview(actor),
+    readLocalAcademicOverview(actor, isPastClosure),
   ]);
   return { mufasa, localCourses };
 }
@@ -38,7 +40,9 @@ function courseFromMufasa(
   course: Awaited<ReturnType<typeof getMufasaAcademicCourses>>['courses'][number],
   localCourse: AcademicOverviewCourse | undefined,
   isComplete: boolean,
+  isPastClosure: RoadmapClosureCalendar,
 ): AcademicOverviewCourse {
+  const pastClosure = isPastClosure(course);
   return {
     courseCode: course.courseCode,
     name: course.name,
@@ -55,15 +59,17 @@ function courseFromMufasa(
       ? localCourse.institutionalPosition
       : course.institutionalPosition,
     hasRoadmap: localCourse?.hasRoadmap ?? false,
+    isPastClosure: pastClosure,
     canCreateRoadmap: localCourse
       ? localCourse.canCreateRoadmap
-      : isComplete && isCourseLeadPosition(course.institutionalPosition),
+      : isComplete && isCourseLeadPosition(course.institutionalPosition) && !pastClosure,
   };
 }
 
 function projectOverviewCourses(
   mufasa: MufasaEnrolledCoursesResult,
   localCourses: AcademicOverviewCourse[],
+  isPastClosure: RoadmapClosureCalendar,
 ) {
   if (mufasa.source === 'LOCAL') return localCourses;
   const localCoursesByKey = new Map(
@@ -74,6 +80,7 @@ function projectOverviewCourses(
       course,
       localCoursesByKey.get(academicOverviewCourseKey(course)),
       mufasa.isComplete !== false,
+      isPastClosure,
     ),
   );
   if (mufasa.isComplete === false) {
@@ -101,10 +108,10 @@ function apiOffering(course: AcademicOverviewCourse): AcademicOverviewApiOfferin
 
 export async function getAcademicOverviewPage(
   actor: AcademicOverviewActor,
-  source?: MufasaEnrolledCoursesResult,
+  sources: AcademicOverviewSources,
 ): Promise<AcademicOverviewPage> {
-  const { mufasa, localCourses } = await getAcademicOverview(actor, source);
-  const courses = projectOverviewCourses(mufasa, localCourses);
+  const { mufasa, localCourses } = await getAcademicOverview(actor, sources);
+  const courses = projectOverviewCourses(mufasa, localCourses, sources.isPastClosure);
 
   return {
     source: mufasa.source,
@@ -114,10 +121,12 @@ export async function getAcademicOverviewPage(
 
 export async function getAcademicOverviewApi(
   actor: AcademicOverviewActor,
-  source?: MufasaEnrolledCoursesResult,
+  sources: AcademicOverviewSources,
 ): Promise<AcademicOverviewApiResponse> {
-  const { mufasa, localCourses } = await getAcademicOverview(actor, source);
-  const offerings = projectOverviewCourses(mufasa, localCourses).map(apiOffering);
+  const { mufasa, localCourses } = await getAcademicOverview(actor, sources);
+  const offerings = projectOverviewCourses(mufasa, localCourses, sources.isPastClosure).map(
+    apiOffering,
+  );
 
   return { source: mufasa.source, offerings };
 }
