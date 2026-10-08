@@ -606,3 +606,40 @@ el código modificado, Prettier y `git diff --check`. `graphify update .` actual
 el grafo AST sin llamadas externas.
 La auditoría posterior encontró **0 Cursos E2E, 0 Usuarios E2E, 0 términos
 sintéticos y 0 triggers de rechazo**.
+
+## Harness de notificaciones con PostgreSQL real (#199)
+
+`pnpm test:integration` ejecuta Vitest en Node contra la base local dedicada
+`roadmap_notifications_test_db`. Configurar `NOTIFICATIONS_DATABASE_URL` en `.env`
+(ver `.env.example`) con un rol PostgreSQL local que tenga permiso `CREATEDB`.
+Se usa el servicio existente; no se inicia ni reinicia PostgreSQL.
+El harness crea la base si falta, aplica `prisma migrate deploy` una sola vez por
+invocación y elimina datos huérfanos antes de arrancar los workers. Rechaza URLs
+no PostgreSQL, hosts no locales, nombres de base distintos y parámetros de conexión
+que puedan sobrescribir el destino. Nunca usa las bases de desarrollo o E2E.
+
+Cada test posee su Ramo, Curso, Roadmap, Nodo, Tipo de nodo, Participations y Usuarios
+con identidades nuevas. La fixture limpia en `finally`, también ante fallos de
+preparación o aserciones. Los datos huérfanos se identifican por el prefijo `NT-`
+y el dominio `notifications.u-roadmaps.test`, reservados para este harness.
+No ejecutar dos invocaciones simultáneas: la limpieza inicial es global para este
+harness. Dentro de una invocación se usan hasta tres workers con datos independientes.
+
+```sh
+pnpm test:integration
+pnpm test:integration tests/notifications-integration/participation-loss.test.ts
+pnpm test:integration --maxWorkers=1 --sequence.shuffle --sequence.seed=199
+```
+
+Las caracterizaciones llaman a `deliverNodeChange` con su scheduler público de
+entrega inmediata y observan `listOwnNotices`; no simulan Prisma ni inspeccionan
+filas de avisos. La pérdida de Participation se provoca mediante una actualización
+real y se observa tras reactivarla, para distinguir retirada de filtrado por acceso.
+La concurrencia incluye entregas repetidas del mismo evento y eventos distintos
+para el mismo Notice target. `pnpm test:unit` excluye este directorio y conserva su
+configuración sin base de datos. `pnpm test` incluye tipos, unitarios, integración
+y E2E, en ese orden.
+
+Límites del harness: conexión PostgreSQL 5 s, sentencia SQL 10 s, espera de lock
+5 s y consulta del cliente 15 s; migraciones 60 s, test y hooks 15 s. Los clientes
+de setup y limpieza se cierran incluso si falla la conexión.

@@ -412,6 +412,10 @@ export default defineConfig([
     },
   },
   {
+    files: ['tests/notifications-integration/**/*.test.ts'],
+    settings: { vitest: { vitestImports: ['./fixtures'] } },
+  },
+  {
     files: ['tests/**/*.test.tsx'],
     ...testingLibrary.configs['flat/react'],
   },

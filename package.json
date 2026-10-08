@@ -12,7 +12,7 @@
     "format:check": "prettier . --check --ignore-unknown",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run",
-    "test": "pnpm run typecheck && pnpm run test:unit && pnpm run test:e2e",
+    "test": "pnpm run typecheck && pnpm run test:unit && pnpm run test:integration && pnpm run test:e2e",
     "test:e2e": "playwright test",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate deploy",
@@ -21,7 +21,8 @@
     "prisma:prepare": "prisma generate && prisma migrate deploy && prisma db seed",
     "dev:data:reset": "dotenv -o -e .env -- sh -c 'tsx --conditions react-server scripts/reset-development-data.ts --assert-environment && prisma migrate deploy && tsx --conditions react-server scripts/reset-development-data.ts'",
     "sync:academic-calendar": "tsx --conditions react-server scripts/sync-academic-calendar.ts",
-    "check:notification-bundle": "node scripts/check-notification-bundle.mjs"
+    "check:notification-bundle": "node scripts/check-notification-bundle.mjs",
+    "test:integration": "vitest run --config vitest.notifications.config.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
