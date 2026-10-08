@@ -2,7 +2,8 @@ import 'server-only';
 import { resourceContentState } from '@/shared/server/resource-content-state';
 import type { ResourceNoticeState } from '../contracts/resource-state';
 import { Prisma } from '@/shared/server/db';
-import { recognizeTitleValue } from './title-notice';
+import { recognizeKnownValue, lazyRoadmapEnvelope } from './notice-lifecycle';
+import { nodeTitleTarget } from '../application/notice-targets/node-title';
 import { recognizeNodeContentValue } from './node-content-notice';
 import { recognizeResourceValue } from './resource-notice';
 import { recognizeRouteValue } from './route-notice';
@@ -222,6 +223,7 @@ export async function recognizeAbsorptionSnapshots(
   },
 ) {
   if (!Array.isArray(identity.snapshots)) throw new Error('Invalid absorption snapshots.');
+  const envelope = lazyRoadmapEnvelope(transaction, identity.roadmapId);
   let acknowledged = 0;
   for (const value of identity.snapshots) {
     if (
@@ -365,15 +367,15 @@ export async function recognizeAbsorptionSnapshots(
         });
         continue;
       }
-      await recognizeTitleValue(
-        transaction,
-        {
-          ...effect,
-          payload: { ...payload, previousTitle: node.title },
-        },
-        node.title,
-        reconcileOnlyPending,
-      );
+      await recognizeKnownValue(transaction, {
+        identity: { recipientId: identity.recipientId, roadmapId: identity.roadmapId },
+        descriptor: nodeTitleTarget,
+        target: { targetKey: `node:${node.id}:title`, nodeId: node.id },
+        knownValue: node.title,
+        eventId: `${effect.eventId}:title`,
+        envelope,
+        onlyPending: reconcileOnlyPending,
+      });
       for (const target of [
         'access',
         'nodeType',

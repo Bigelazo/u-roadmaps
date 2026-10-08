@@ -184,16 +184,23 @@ test('dependencies report the pair and distinct access for each recipient; Compl
       current: true,
     }),
   );
-  expect(recording.facts()).toContainEqual(
-    expect.objectContaining({
-      kind: 'node-access',
-      nodeId: target.id,
-      recipientId: course.studentId,
-      previous: 'Disponible',
-      current: 'Bloqueado',
-    }),
-  );
-  expect(recording.facts().filter((fact) => fact.kind === 'node-access')).toHaveLength(1);
+  expect(
+    recording
+      .facts()
+      .filter((fact) => fact.kind === 'node-access')
+      .map((fact) => fact.kind === 'node-access' && fact.recipientId)
+      .sort(),
+  ).toEqual([course.studentId, course.classmateId].sort());
+  for (const recipientId of [course.studentId, course.classmateId])
+    expect(recording.facts()).toContainEqual(
+      expect.objectContaining({
+        kind: 'node-access',
+        nodeId: target.id,
+        recipientId,
+        previous: 'Disponible',
+        current: 'Bloqueado',
+      }),
+    );
   expect(result).not.toHaveProperty('notifications');
   recording.changes.length = 0;
   await confirmed(
@@ -215,7 +222,11 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   ]);
   recording.changes.length = 0;
   await confirmed(deleteRoadmapDependency({ ...input, id: result.dependency.id }, recording.port));
-  expect(recording.facts()).toMatchObject([{ kind: 'dependency', previous: true, current: false }]);
+  // Only the classmate, who has not completed the prerequisite, regains access.
+  expect(recording.facts()).toMatchObject([
+    { kind: 'dependency', previous: true, current: false },
+    { kind: 'node-access', recipientId: course.classmateId, previous: 'Bloqueado' },
+  ]);
 });
 
 test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(

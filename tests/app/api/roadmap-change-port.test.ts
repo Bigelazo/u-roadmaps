@@ -18,6 +18,7 @@ const {
 }));
 vi.mock('next/server', () => ({ after: (task: () => Promise<void>) => afterTasks.push(task) }));
 vi.mock('@/features/notifications/server', () => ({
+  recordRoadmapNotices: async () => undefined,
   deliverNodeChange,
   deliverResourceChange,
   deliverRoadmapAvailability,

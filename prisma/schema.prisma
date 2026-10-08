@@ -49,6 +49,7 @@ model Roadmap {
   visits                 RoadmapVisit[]
   routeKnowledge         RouteNoticeKnowledge[]
   nodeLifecycleKnowledge NodeLifecycleKnowledge[]
+  noticeKnownValues      NoticeKnownValue[]
 
   @@unique([id, courseOfferingId])
   @@index([sourceRoadmapId])
@@ -170,6 +171,7 @@ model User {
   resourceKnowledge      ResourceNoticeKnowledge[]
   routeKnowledge         RouteNoticeKnowledge[]
   nodeLifecycleKnowledge NodeLifecycleKnowledge[]
+  noticeKnownValues      NoticeKnownValue[]
   nodeChangeReviews      NodeChangeReview[]
   participations         Participation[]
   completions            Completion[]
@@ -296,6 +298,8 @@ model NoticeAcknowledgement {
   resourceSnapshots   Json      @default("[]")
   routeSnapshots      Json      @default("[]")
   absorptionSnapshots Json      @default("[]")
+  // ADR-0024: pending notices of every moved Notice target kind captured on entry.
+  snapshots           Json      @default("[]")
   summary             Json      @default("null")
   recognizedAt        DateTime? @db.Timestamptz(3)
 
@@ -313,7 +317,25 @@ model NoticeDeliveryEffect {
   @@id([eventId, recipientId])
 }
 
-// One durable last-known title per recipient and Node, independent of Inbox rows.
+// ADR-0024: the single Known value store of the notice lifecycle module. One row per
+// recipient, Roadmap and Notice target key; values are encoded by the target descriptor.
+// nodeId places the target in the hierarchy; it has no FK so the module can clean it up.
+model NoticeKnownValue {
+  recipientId  String  @db.Uuid
+  roadmapId    String  @db.Uuid
+  targetKey    String
+  nodeId       String? @db.Uuid
+  knownValue   String
+  currentValue String?
+  context      Json    @default("{}")
+  recipient    User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmap      Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  @@id([recipientId, roadmapId, targetKey])
+  @@index([roadmapId, nodeId])
+}
+
+// Retired by ADR-0024 (#201): no longer read or written; dropped in the contract ticket.
 model NodeTitleKnowledge {
   recipientId String      @db.Uuid
   nodeId      String      @db.Uuid

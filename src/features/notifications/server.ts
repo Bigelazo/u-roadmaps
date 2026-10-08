@@ -27,7 +27,21 @@ import {
   prepareOwnNoticeOpening as prepareNoticeOpening,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
+import type { RoadmapChanges } from '@/shared/roadmap-changes';
+import { recordNoticeTargets, type NoticeDelivery } from './infrastructure/notice-lifecycle';
 export { acknowledgeOwnNotices, reviewOwnNode } from './infrastructure/own-inbox';
+export type { NoticeDelivery } from './infrastructure/notice-lifecycle';
+
+/**
+ * Notice lifecycle module (ADR-0024): record Known values inside the roadmap
+ * transaction and return the deferred delivery of the change's notices.
+ */
+export function recordRoadmapNotices(
+  transaction: Prisma.TransactionClient,
+  changes: RoadmapChanges,
+): Promise<NoticeDelivery | undefined> {
+  return recordNoticeTargets(transaction, changes, accessibleNodes);
+}
 
 export function listOwnNotices(userId: string, params: URLSearchParams) {
   return listNotices(userId, params);
@@ -142,7 +156,6 @@ export async function deliverNodeChange(
     changeKind: NodeChangeNotice['changeKind'];
     changedFields: NodeChangeNotice['changedFields'];
     nodeTitle?: string;
-    previousTitle?: string;
     previousAccess?: NodeChangeNotice['previousAccess'];
     previousDescription?: string | null;
     previousTypeId?: string;
@@ -212,8 +225,8 @@ export async function deliverNodeChange(
       : [];
   const visibleRecipients =
     node?.isVisible &&
-    ((input.changedFields.includes('title') && input.previousTitle !== undefined) ||
-      (input.changedFields.includes('nodeType') && input.previousTypeId !== undefined))
+    input.changedFields.includes('nodeType') &&
+    input.previousTypeId !== undefined
       ? await prisma.participation
           .findMany({
             where: {
@@ -263,7 +276,7 @@ export async function deliverNodeChange(
           : JSON.stringify(input.previousDescription)
         : field === 'nodeType'
           ? input.previousTypeId
-          : input.previousTitle;
+          : undefined;
     if (previousValue === undefined) continue;
     handledFields.add(field);
     if (!audience.length) continue;
@@ -272,18 +285,14 @@ export async function deliverNodeChange(
         ...notice,
         eventId: `${notice.eventId}:${field}`,
         changedFields: [field],
-        ...(field === 'title'
-          ? { previousTitle: previousValue }
-          : {
-              contentTarget: field,
-              previousValue,
-              ...(field === 'nodeType'
-                ? {
-                    previousTypeName: input.previousTypeName,
-                    currentTypeName: input.currentTypeName,
-                  }
-                : {}),
-            }),
+        contentTarget: field as 'description' | 'nodeType',
+        previousValue,
+        ...(field === 'nodeType'
+          ? {
+              previousTypeName: input.previousTypeName,
+              currentTypeName: input.currentTypeName,
+            }
+          : {}),
         recipients: audience,
       },
       scheduleDelivery,

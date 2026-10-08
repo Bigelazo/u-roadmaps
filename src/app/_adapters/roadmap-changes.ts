@@ -13,6 +13,7 @@ import {
   deliverRoadmapPathChange,
   deliverRoadmapClassificationChange,
   deliverRoadmapAvailability,
+  recordRoadmapNotices,
   type NoticeDeliveryScheduler,
 } from '@/features/notifications/server';
 
@@ -60,7 +61,10 @@ async function prepareDeliveryContext(
   );
 }
 
-/** Transitional translation; baseline writes still belong to roadmap until each target moves. */
+/**
+ * Transitional translation for kinds the notice lifecycle module does not own yet;
+ * their baseline writes still belong to roadmap until each target moves.
+ */
 async function deliver(
   changes: RoadmapChanges,
   prepared: readonly PreparedFact[],
@@ -103,7 +107,6 @@ async function deliver(
           );
           break;
         }
-        case 'node-title':
         case 'node-description':
         case 'node-type': {
           // Content edited while revealing a hidden Node was silent before this prefactor.
@@ -116,12 +119,7 @@ async function deliver(
             )
           )
             break;
-          const field =
-            fact.kind === 'node-title'
-              ? 'title'
-              : fact.kind === 'node-description'
-                ? 'description'
-                : 'nodeType';
+          const field = fact.kind === 'node-description' ? 'description' : 'nodeType';
           await deliverNodeChange(
             {
               userId: actorId,
@@ -130,15 +128,13 @@ async function deliver(
               nodeId: fact.nodeId,
               changeKind: 'node-updated',
               changedFields: [field],
-              ...(fact.kind === 'node-title'
-                ? { previousTitle: fact.previous }
-                : fact.kind === 'node-description'
-                  ? { previousDescription: fact.previous }
-                  : {
-                      previousTypeId: fact.previous.id,
-                      previousTypeName: fact.previous.name,
-                      currentTypeName: fact.current.name,
-                    }),
+              ...(fact.kind === 'node-description'
+                ? { previousDescription: fact.previous }
+                : {
+                    previousTypeId: fact.previous.id,
+                    previousTypeName: fact.previous.name,
+                    currentTypeName: fact.current.name,
+                  }),
             },
             scheduleDelivery,
           );
@@ -230,6 +226,9 @@ async function deliver(
             scheduleDelivery,
           );
           break;
+        // Owned by the notice lifecycle module.
+        case 'node-title':
+          break;
         // Completion and promotion already reconcile inside their transactions in this prefactor.
         case 'node-visibility':
         case 'participation-role':
@@ -242,17 +241,21 @@ async function deliver(
 }
 
 /** One composition for HTTP, pages, and the scheduled pass; no global registration. */
-export const roadmapChangePort: RoadmapChangePort = {
-  async report(transaction, changes) {
-    if (!changes.facts.length) return;
-    const prepared = await prepareDeliveryContext(transaction, changes);
-    return () => deliver(changes, prepared, after);
-  },
-};
+function noticesPort(scheduleDelivery: NoticeDeliveryScheduler): RoadmapChangePort {
+  return {
+    async report(transaction, changes) {
+      if (!changes.facts.length) return;
+      const lifecycle = await recordRoadmapNotices(transaction, changes);
+      const prepared = await prepareDeliveryContext(transaction, changes);
+      return async () => {
+        await lifecycle?.(scheduleDelivery);
+        await deliver(changes, prepared, scheduleDelivery);
+      };
+    },
+  };
+}
 
-export const scheduledRoadmapChangePort: RoadmapChangePort = {
-  async report(transaction, changes) {
-    const prepared = await prepareDeliveryContext(transaction, changes);
-    return () => deliver(changes, prepared, (persist) => persist());
-  },
-};
+export const roadmapChangePort = noticesPort(after);
+
+/** The Scheduled unlock pass has no request: it delivers immediately. */
+export const scheduledRoadmapChangePort = noticesPort((persist) => persist());

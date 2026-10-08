@@ -22,11 +22,9 @@ import { changeSummary } from '../application/change-summary';
 import type { ChangeSummary } from '../contracts/change-summary';
 import type { NoticeClass } from '../application/notice-effect';
 import { deliverNotice } from './notice-delivery';
-import {
-  lockRecipientRoadmap,
-  titleOpeningSnapshots,
-  recognizeTitleSnapshots,
-} from './title-notice';
+import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
+import { targetOpeningSnapshots, recognizeTargetSnapshots } from './notice-lifecycle';
+import { projectTargetNotice } from '../application/notice-targets';
 import { resourceOpeningSnapshots, recognizeResourceSnapshots } from './resource-notice';
 import { contentOpeningSnapshots, recognizeContentSnapshots } from './node-content-notice';
 import { absorptionOpeningSnapshots, recognizeAbsorptionSnapshots } from './absorption-recognition';
@@ -212,13 +210,15 @@ export function noticeRecord(notice: {
   availableAt: Date;
   acknowledgedAt: Date | null;
 }) {
+  // Lifecycle notices are worded at read time; other rows keep their stored text.
+  const projected = projectTargetNotice(notice.data);
   return {
     id: notice.id,
     // Rows are titled by the Course so the reader knows which Roadmap changed.
     ...(notice.courseName ? { courseName: notice.courseName } : {}),
-    subject: notice.subject,
-    body: notice.body,
-    data: notice.data,
+    subject: projected?.wording.subject ?? notice.subject,
+    body: projected?.wording.body ?? notice.body,
+    data: projected?.data ?? notice.data,
     createdAt: notice.availableAt.toISOString(),
     read: notice.acknowledgedAt !== null,
   };
@@ -384,7 +384,7 @@ export async function prepareOwnNoticeOpening(
         roadmapId,
         openedAt,
         noticeIds: notices.map(({ id }) => id),
-        titleSnapshots: titleOpeningSnapshots(notices),
+        snapshots: targetOpeningSnapshots(notices),
         contentSnapshots: contentOpeningSnapshots(notices),
         resourceSnapshots: resourceOpeningSnapshots(notices),
         routeSnapshots: routeOpeningSnapshots(notices),
@@ -474,11 +474,11 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       operationId,
       snapshots: retained.contentSnapshots,
     });
-    const titleCount = await recognizeTitleSnapshots(transaction, {
+    const targetCount = await recognizeTargetSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
       operationId,
-      snapshots: retained.titleSnapshots,
+      snapshots: retained.snapshots,
     });
     const absorptionCount = await recognizeAbsorptionSnapshots(transaction, {
       recipientId: userId,
@@ -488,7 +488,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
     });
     const summary =
       visited &&
-      result.count + absorptionCount + titleCount + contentCount + resourceCount + routeCount > 0
+      result.count + absorptionCount + targetCount + contentCount + resourceCount + routeCount > 0
         ? (retained.summary as ChangeSummary | null)
         : null;
     await transaction.noticeAcknowledgement.update({
@@ -497,7 +497,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
     });
     return {
       count:
-        result.count + absorptionCount + titleCount + contentCount + resourceCount + routeCount,
+        result.count + absorptionCount + targetCount + contentCount + resourceCount + routeCount,
       summary,
     };
   });

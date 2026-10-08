@@ -11,7 +11,7 @@ import {
   type NodeContentEffect,
 } from '../application/node-content-effect';
 import { reconcileNodeContentNotice } from '../application/reconcile-node-content';
-import { lockRecipientRoadmap } from './title-notice';
+import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 
 export async function reconcileStoredNodeContent(
   transaction: Prisma.TransactionClient,

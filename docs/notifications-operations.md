@@ -104,10 +104,15 @@ y de los resets aislados de pruebas; no es una tarea periódica de producción.
 Las migraciones posteriores conservan los Avisos del modelo nuevo.
 No hay caducidad ni tarea de eliminación por antigüedad para `RoadmapNotice`.
 
-El título usa `NodeTitleKnowledge` para conservar el último valor conocido por
-Usuario y Nodo. Un trigger captura el valor anterior en la transacción de edición;
-la entrega diferida consulta el título actual y reconcilia mediante una función
-pura. Una clave única parcial impide dos Avisos pendientes del mismo Objeto.
+El título es el primer Objeto del módulo de ciclo de vida de avisos (ADR-0024,
+#201): `NoticeKnownValue` conserva el último valor conocido por Usuario, Roadmap y
+clave de Objeto (`node:<id>:title`). El adapter del port de cambios del Roadmap
+registra el valor anterior en la transacción de edición (sin trigger); la entrega
+diferida consulta el título actual y reconcilia con la ruta genérica del módulo.
+El Aviso guarda `knownValue` y `currentValue`; su texto se proyecta al leer, por
+lo que cambiar la redacción no requiere migración. Eliminar un Nodo borra sus
+filas de `NoticeKnownValue`. `NodeTitleKnowledge` ya no se lee ni se escribe.
+Una clave única parcial impide dos Avisos pendientes del mismo Objeto.
 Reconocimiento y entrega usan un lock transaccional por Usuario y Roadmap. Las
 actualizaciones y retiros emiten la misma invalidación SSE del Inbox. Los recibos
 persisten tras actualizar o retirar un Aviso, por lo que un reintento no lo recrea.
@@ -187,8 +192,9 @@ muestra un banner ni un botón para reintentar el reconocimiento fallido: los
 Avisos permanecen pendientes y no se muestra el Resumen de cambios. Una nueva
 entrada prepara una operación nueva. El contrato HTTP permite reintentar la
 operación original dentro de la retención, reutilizando el mismo
-`operationId` y el mismo conjunto, sin ampliar `noticeIds`. Para títulos también
-conserva `titleSnapshots`; descripción, tipo y acceso conservan `contentSnapshots`,
+`operationId` y el mismo conjunto, sin ampliar `noticeIds`. Los Objetos del
+módulo de ciclo de vida (hoy, el título) se capturan en la colección única
+`snapshots`; descripción, tipo y acceso conservan `contentSnapshots`,
 con los valores y nombres capturados al abrir. Si el Aviso cambió
 en el intervalo, el reconocimiento avanza al valor capturado y reconcilia el
 valor posterior como pendiente; `recognizedAt` impide repetir ese avance en un

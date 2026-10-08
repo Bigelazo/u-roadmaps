@@ -1,6 +1,7 @@
 import { nodeAccessChangeText } from '@/shared/node-access';
 import { isNoticeVisible } from './notice-visibility';
 import type { ChangeSummary } from '../contracts/change-summary';
+import { projectTargetNotice } from './notice-targets';
 
 type SummaryNotice = { data: unknown };
 type SummaryNode = { id: string; title: string; isVisible: boolean; nodeTypeId?: string };
@@ -23,7 +24,12 @@ export function changeSummary(
     if (!isNoticeVisible(data, nodes, accessible)) continue;
     const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
     const items: string[] = [];
-    if (data.noticeTarget === 'node-access') {
+    // Lifecycle notices share their read-time wording with the Inbox.
+    const projected = projectTargetNotice(data);
+    if (projected) {
+      if (projected.wording.summaryGroup === 'node') items.push(projected.wording.body);
+      else general.push(projected.wording.body);
+    } else if (data.noticeTarget === 'node-access') {
       items.push(
         nodeAccessChangeText(
           node?.title ?? String(data.nodeTitle),
@@ -34,9 +40,7 @@ export function changeSummary(
     } else
       switch (kind) {
         case 'node-updated':
-          if (data.noticeTarget === 'node-title')
-            items.push(`«${data.knownTitle}» pasó a llamarse «${data.currentTitle}».`);
-          else if (fields.includes('title')) items.push('Se actualizó el título.');
+          if (fields.includes('title')) items.push('Se actualizó el título.');
           if (fields.includes('description') && nodeId && accessible.has(nodeId))
             items.push('Se actualizó la descripción.');
           if (fields.includes('nodeType'))
