@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
+import { readCourseOfferingTeachingStaff } from './teaching-staff';
 import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '../domain/closure';
 
 /** Silent, atomic and irreversible. A later pass retries any transaction that failed. */
@@ -37,6 +38,18 @@ export async function closeDueRoadmaps(now = new Date()) {
           await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${id}::uuid FOR UPDATE`;
           const roadmap = await transaction.roadmap.findUnique({ where: { id } });
           if (!roadmap || roadmap.closedAt) return;
+          // Authorship is the staff active at this instant; later Participation changes keep it.
+          const teachingStaff = await readCourseOfferingTeachingStaff(
+            transaction,
+            roadmap.courseOfferingId,
+          );
+          await transaction.roadmapClosureTeachingStaff.createMany({
+            data: teachingStaff.map(({ userId, institutionalPosition }) => ({
+              roadmapId: id,
+              userId,
+              institutionalPosition,
+            })),
+          });
           await transaction.roadmapNode.updateMany({
             where: { roadmapId: id },
             data: { isTeacherBlocked: false, teacherUnlockOn: null },

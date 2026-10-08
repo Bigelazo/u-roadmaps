@@ -12,7 +12,9 @@ import {
   type CSSProperties,
 } from 'react';
 import dynamic from 'next/dynamic';
-import { CircleAlert, Eye, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import Link from 'next/link';
+import { CircleAlert, Eye, History, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
@@ -52,7 +54,7 @@ import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
 import { Badge } from '@/shared/ui/badge';
-import { Button } from '@/shared/ui/button';
+import { Button, buttonVariants } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
@@ -1167,6 +1169,15 @@ function RoadmapCanvasGraph({
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
               <>
+                {canPreviewCanvas ? (
+                  <Link
+                    className={buttonVariants({ variant: 'outline' })}
+                    href={versionHistoryUrl(courseCode)}
+                  >
+                    <History data-icon="inline-start" />
+                    Historial de versiones
+                  </Link>
+                ) : null}
                 {canEnterCanvasPreview ? (
                   <Button
                     ref={canvasPreviewWorkflow.entryButtonRef}

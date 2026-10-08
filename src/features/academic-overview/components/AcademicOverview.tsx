@@ -1,5 +1,13 @@
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpRight, BookOpen, ChevronDown, MapPinned, Route } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  BookOpen,
+  ChevronDown,
+  History,
+  MapPinned,
+  Route,
+} from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import {
   Accordion,
@@ -16,6 +24,8 @@ import type {
   AcademicOverviewTerm,
 } from '../types';
 import { NotificationCountButton } from '@/features/notifications/client';
+import { versionHistoryUrl } from '@/shared/version-history-url';
+import { buttonVariants } from '@/shared/ui/button';
 
 const institutionalPositionDetails: Record<
   AcademicOverviewInstitutionalPosition,
@@ -51,10 +61,12 @@ type RoadmapCreationAction = (props: {
 
 function CourseRow({
   course,
+  isPastTerm,
   renderRoadmapCreation,
   notificationsEnabled,
 }: Readonly<{
   course: AcademicOverviewCourse;
+  isPastTerm: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
 }>) {
@@ -128,6 +140,16 @@ function CourseRow({
               year: course.year,
             })
           ) : null}
+          {isPastTerm && course.role === 'TEACHER' ? (
+            <Link
+              aria-label={`Historial de versiones de ${course.name}`}
+              className={buttonVariants({ variant: 'outline', className: 'min-h-11' })}
+              href={versionHistoryUrl(course.courseCode)}
+            >
+              <History aria-hidden="true" size={16} />
+              Historial de versiones
+            </Link>
+          ) : null}
         </div>
       </div>
     </li>
@@ -136,10 +158,12 @@ function CourseRow({
 
 function CourseList({
   term,
+  isPastTerm = false,
   renderRoadmapCreation,
   notificationsEnabled,
 }: Readonly<{
   term: AcademicOverviewTerm;
+  isPastTerm?: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
 }>) {
@@ -148,6 +172,7 @@ function CourseList({
       {term.courses.map((course) => (
         <CourseRow
           course={course}
+          isPastTerm={isPastTerm}
           key={`${course.courseCode}:${course.year}:${course.semester}`}
           renderRoadmapCreation={renderRoadmapCreation}
           notificationsEnabled={notificationsEnabled}
@@ -288,6 +313,7 @@ export function AcademicOverview({
                             </div>
                             <AccordionContent className="pb-4">
                               <CourseList
+                                isPastTerm
                                 notificationsEnabled={notificationsEnabled}
                                 renderRoadmapCreation={renderRoadmapCreation}
                                 term={term}

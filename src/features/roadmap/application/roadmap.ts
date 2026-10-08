@@ -335,7 +335,7 @@ async function createRoadmapUnsafe(
         }));
       const [roadmap, recipients] = await Promise.all([
         transaction.roadmap.create({
-          data: { courseOfferingId: materializedCourseOffering.id },
+          data: { courseOfferingId: materializedCourseOffering.id, creatorId: actor.id },
         }),
         transaction.participation.findMany({
           where: { courseOfferingId: materializedCourseOffering.id, isActive: true },

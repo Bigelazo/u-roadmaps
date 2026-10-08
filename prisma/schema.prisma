@@ -28,10 +28,14 @@ model CourseOffering {
 }
 
 model Roadmap {
-  id                     String                   @id @default(uuid()) @db.Uuid
-  closedAt               DateTime?                @db.Timestamptz(3)
-  courseOfferingId       String                   @unique @db.Uuid
-  courseOffering         CourseOffering           @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  id                     String                        @id @default(uuid()) @db.Uuid
+  closedAt               DateTime?                     @db.Timestamptz(3)
+  // Permanent attribution; absent only for Roadmaps created before it was recorded.
+  creatorId              String?                       @db.Uuid
+  creator                User?                         @relation("RoadmapCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  closureTeachingStaff   RoadmapClosureTeachingStaff[]
+  courseOfferingId       String                        @unique @db.Uuid
+  courseOffering         CourseOffering                @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   nodeTypes              NodeType[]
   roadmapNodes           RoadmapNode[]
   simulatedCompletions   SimulatedCompletion[]
@@ -40,6 +44,20 @@ model Roadmap {
   nodeLifecycleKnowledge NodeLifecycleKnowledge[]
 
   @@unique([id, courseOfferingId])
+}
+
+// Teaching staff with an active Participation when the Roadmap closed, recorded
+// once by the closure transaction and never updated afterwards. Deleting a User
+// still cascades: development resets delete fixture Users that may appear here.
+model RoadmapClosureTeachingStaff {
+  roadmapId             String                       @db.Uuid
+  userId                String                       @db.Uuid
+  institutionalPosition InstitutionalCoursePosition?
+  roadmap               Roadmap                      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roadmapId, userId])
+  @@index([userId])
 }
 
 // The official dates that make a Course offering read-only are published once
@@ -132,10 +150,10 @@ model Resource {
 }
 
 model User {
-  id                     String                    @id @default(uuid()) @db.Uuid
-  name                   String                    @db.VarChar(200)
-  institutionalEmail     String                    @unique @db.VarChar(320)
-  rut                    String?                   @unique @db.VarChar(20)
+  id                     String                        @id @default(uuid()) @db.Uuid
+  name                   String                        @db.VarChar(200)
+  institutionalEmail     String                        @unique @db.VarChar(320)
+  rut                    String?                       @unique @db.VarChar(20)
   notices                RoadmapNotice[]
   noticeEffects          NoticeDeliveryEffect[]
   roadmapVisits          RoadmapVisit[]
@@ -147,6 +165,8 @@ model User {
   nodeChangeReviews      NodeChangeReview[]
   participations         Participation[]
   completions            Completion[]
+  createdRoadmaps        Roadmap[]                     @relation("RoadmapCreator")
+  closureTeachingStaff   RoadmapClosureTeachingStaff[]
 }
 
 model VtiLoginTransaction {

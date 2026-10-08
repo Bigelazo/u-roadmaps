@@ -53,4 +53,7 @@ export {
 } from '@/features/roadmap/application/participation';
 
 export { synchronizeAcademicParticipations } from './application/academic-participation';
-export { readCourseOfferingTeachingStaff } from './application/teaching-staff';
+export {
+  readRoadmapVersionHistory,
+  type RoadmapVersionHistory,
+} from './application/version-history';
