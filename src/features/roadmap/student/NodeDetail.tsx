@@ -30,14 +30,11 @@ import {
 } from '@/shared/ui/item';
 import { Separator } from '@/shared/ui/separator';
 import { Sheet, SheetContent } from '@/shared/ui/sheet';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarProvider,
-  SidebarRail,
-} from '@/shared/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarProvider, SidebarRail } from '@/shared/ui/sidebar';
 import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
+import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
+import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 
 function resourceIcon(type: Resource['type']) {
   return type === 'VIDEO' ? <FileCode2 size={20} /> : <FileText size={20} />;
@@ -89,27 +86,31 @@ function StudentNodeDetailContent({
         actions={
           <>
             {status === 'completed' ? (
-              <Button
-                aria-label="Completado"
-                title="Completado"
-                disabled
-                size="icon"
-                variant="outline"
-              >
-                <Check />
+              <Button disabled variant="outline">
+                <Check data-icon="inline-start" />
+                Completado
               </Button>
             ) : (
               <Button
-                aria-label={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
-                title={status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
                 className="bg-emerald-600 text-white hover:bg-emerald-700"
                 disabled={status === 'locked' || isReadOnly}
                 onClick={() => onComplete(node)}
-                size="icon"
               >
-                {status === 'locked' ? <LockKeyhole /> : <CircleCheckBig />}
+                {status === 'locked' ? (
+                  <LockKeyhole data-icon="inline-start" />
+                ) : (
+                  <CircleCheckBig data-icon="inline-start" />
+                )}
+                {status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
               </Button>
             )}
+            {!isStudentBlockedNode(node) ? (
+              <NodeFullscreenDialog
+                key={node.id}
+                title={node.title}
+                description={node.description}
+              />
+            ) : null}
             <Button aria-label="Cerrar detalle" onClick={onClose} variant="ghost" size="icon">
               <X size={18} />
             </Button>
@@ -130,9 +131,9 @@ function StudentNodeDetailContent({
           <h3 className="flex items-center gap-2 font-semibold">
             <FileText size={18} /> Descripción
           </h3>
-          <p className="mt-5 leading-[1.62] whitespace-pre-line text-muted-foreground">
-            {node.description || 'Este nodo no tiene una descripción disponible.'}
-          </p>
+          <div className="mt-5">
+            <NodeDescription description={node.description} />
+          </div>
           <Separator className="my-6" />
           <h3 className="flex items-center gap-2 font-semibold">
             <Download size={18} /> Recursos

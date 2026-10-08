@@ -74,6 +74,32 @@ const nodeTypes: NodeType[] = [
   },
 ];
 
+test('fullscreen shows node content and Escape returns to the selected node', async () => {
+  const user = userEvent.setup();
+  const onClose = vi.fn();
+  render(
+    <StudentNodeDetail node={node} status="available" onClose={onClose} onComplete={vi.fn()} />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Ver nodo en pantalla completa' }));
+  const dialog = screen.getByRole('dialog', { name: node.title });
+  expect(within(dialog).getByRole('button', { name: 'Cerrar pantalla completa' })).toBeTruthy();
+  expect(within(dialog).getByText(node.title)).toBeTruthy();
+  expect(within(dialog).getByText(node.description!)).toBeTruthy();
+
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('button', { name: 'Cerrar pantalla completa' })).toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog', { name: node.title })).toBeTruthy();
+});
+
+test('restricted student nodes do not offer fullscreen content', () => {
+  render(
+    <StudentNodeDetail node={blockedNode} status="locked" onClose={vi.fn()} onComplete={vi.fn()} />,
+  );
+  expect(screen.queryByRole('button', { name: 'Ver nodo en pantalla completa' })).toBeNull();
+});
+
 test('student can close a named mobile node-detail dialog with Escape or its close control', async () => {
   const user = userEvent.setup();
   const onClose = vi.fn();
@@ -207,8 +233,8 @@ test('uses the selected-node header and keeps completion next to the close actio
   expect(
     within(actions)
       .getAllByRole('button')
-      .map((button) => button.getAttribute('aria-label')),
-  ).toEqual(['Completar', 'Cerrar detalle']);
+      .map((button) => button.getAttribute('aria-label') ?? button.textContent),
+  ).toEqual(['Completar', 'Ver nodo en pantalla completa', 'Cerrar detalle']);
   expect(screen.getByRole('button', { name: 'Completar' }).className).toContain('bg-emerald-600');
   const panel = screen.getByLabelText(node.title);
   expect(panel.className).toContain('shadow-(--shadow-roadmap-panel)');

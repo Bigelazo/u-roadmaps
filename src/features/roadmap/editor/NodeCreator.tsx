@@ -15,9 +15,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
-import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
-import { Textarea } from '@/shared/ui/textarea';
+import { MarkdownEditor } from './MarkdownEditor';
 import styles from './NodeCreator.module.css';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeTypesEditor } from './NodeTypesEditor';
@@ -141,14 +141,19 @@ export function NodeCreator({
                 <FieldLabel htmlFor="new-node-description">
                   Descripción <span className="font-normal text-muted-foreground">(opcional)</span>
                 </FieldLabel>
-                <Textarea
+                <MarkdownEditor
                   id="new-node-description"
+                  aria-describedby="new-node-description-help"
                   placeholder="Qué debe lograr el estudiante en este hito"
                   value={value.description}
-                  onChange={(event) =>
-                    setValue((current) => ({ ...current, description: event.target.value }))
+                  onValueChange={(description) =>
+                    setValue((current) => ({ ...current, description }))
                   }
                 />
+                <FieldDescription id="new-node-description-help">
+                  Admite Markdown: **negrita**, *cursiva*, listas y [enlaces](https://ejemplo.cl).{' '}
+                  Puedes arrastrar un archivo .md para reemplazar el texto, previa confirmación.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="new-node-type">Tipo</FieldLabel>

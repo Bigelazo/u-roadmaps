@@ -962,9 +962,10 @@ test('guards Node replacement and deselection without losing the editor session'
 test('teacher can save consecutive changes to the same Node', async ({ page, course, apiAs }) => {
   const initialTitle = uniqueName('Nodo de guardados consecutivos');
   const firstTitle = uniqueName('Primera modificación');
-  const firstDescription = 'Descripción guardada inicialmente';
+  const firstDescription =
+    '# Objetivo\n\n**Conceptos** y *ejercicios*.\n\n- [Guía](https://example.test/guia)';
   const secondTitle = uniqueName('Segunda modificación');
-  const secondDescription = 'Descripción guardada después';
+  const secondDescription = '## Repaso\n\nPractica con `algoritmos`.\n\n> Resuelve los ejercicios.';
   const controlTypeName = uniqueName('Control');
   const api = await apiAs(course.users.teacher);
 
@@ -990,12 +991,18 @@ test('teacher can save consecutive changes to the same Node', async ({ page, cou
   await panRoadmapNodeIntoView(page, createdNodeId);
   await page.locator(`.react-flow__node[data-id="${createdNodeId}"]`).click();
 
-  const title = page.getByLabel('Título', { exact: true });
-  const description = page.getByLabel(/Descripción/);
-  const type = page.getByRole('combobox', { name: 'Tipo' });
-  const save = page.getByRole('button', { name: 'Guardar cambios' });
+  await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
+  const fullscreen = page.getByRole('dialog', { name: 'Editar nodo', exact: true });
+  const title = fullscreen.getByLabel('Título', { exact: true });
+  const description = fullscreen.getByLabel(/Descripción/);
+  const type = fullscreen.getByRole('combobox', { name: 'Tipo' });
+  const save = fullscreen.getByRole('button', { name: 'Guardar cambios' });
   await title.fill(firstTitle);
   await description.fill(firstDescription);
+  const highlightedDescription = fullscreen.locator('.markdown-editor pre');
+  await expect(highlightedDescription.locator('.token.title')).toHaveText('# Objetivo');
+  await expect(highlightedDescription.locator('.token.bold')).toHaveText('**Conceptos**');
+  await expect(highlightedDescription.locator('.token.italic')).toHaveText('*ejercicios*');
   await type.click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
   await expect(save).toBeEnabled();
@@ -1007,8 +1014,17 @@ test('teacher can save consecutive changes to the same Node', async ({ page, cou
   expect((await firstSave).status()).toBe(200);
   await expect(save).toBeDisabled();
 
+  await fullscreen.getByRole('button', { name: 'Cerrar pantalla completa' }).click();
+  await expect(fullscreen).toBeHidden();
+  const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
+  await expect(editor.getByLabel('Título', { exact: true })).toHaveValue(firstTitle);
+  await expect(editor.getByLabel(/Descripción/)).toHaveValue(firstDescription);
+  await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
+
   await title.fill(secondTitle);
   await description.fill(secondDescription);
+  await expect(highlightedDescription.locator('.token.title')).toHaveText('## Repaso');
+  await expect(description).toHaveValue(secondDescription);
   await type.click();
   await page.getByRole('option', { name: controlTypeName }).click();
   await expect(save).toBeEnabled();

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { cn } from 'cn';
 import {
   CalendarClock,
   Eye,
@@ -22,11 +23,12 @@ import {
 import { Input } from '@/shared/ui/input';
 import { Separator } from '@/shared/ui/separator';
 import { Switch } from '@/shared/ui/switch';
-import { Textarea } from '@/shared/ui/textarea';
+import { MarkdownEditor } from './MarkdownEditor';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
+import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 
 function NodeHeader() {
   const { node, nodeTypes, closeNode } = useNodeEditorContext();
@@ -39,22 +41,31 @@ function NodeHeader() {
       iconTestId="node-type-icon"
       isSidebar
       actions={
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          aria-label="Deseleccionar nodo"
-          title="Deseleccionar nodo"
-          onClick={closeNode}
-        >
-          <X />
-        </Button>
+        <>
+          <NodeFullscreenDialog
+            key={node.id}
+            title="Editar nodo"
+            triggerLabel="Editar nodo en pantalla completa"
+          >
+            <NodeForm isFullscreen />
+          </NodeFullscreenDialog>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label="Deseleccionar nodo"
+            title="Deseleccionar nodo"
+            onClick={closeNode}
+          >
+            <X />
+          </Button>
+        </>
       }
     />
   );
 }
 
-function NodeForm() {
+function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
   const {
     nodeTypes,
     nodeDraft,
@@ -65,10 +76,14 @@ function NodeForm() {
     previewNodeInformation,
     previewButtonRef,
   } = useNodeEditorContext();
+  const fieldPrefix = isFullscreen ? 'fullscreen-node' : 'edit-node';
 
   return (
     <form
-      className="flex flex-col gap-4 py-5"
+      className={cn(
+        'flex flex-col gap-4 py-5',
+        isFullscreen && 'py-0 [&_.markdown-editor_pre]:min-h-[50dvh]',
+      )}
       onSubmit={(event) => {
         event.preventDefault();
         if (canSaveNode) saveNode();
@@ -76,9 +91,9 @@ function NodeForm() {
     >
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="edit-node-title">Título</FieldLabel>
+          <FieldLabel htmlFor={`${fieldPrefix}-title`}>Título</FieldLabel>
           <Input
-            id="edit-node-title"
+            id={`${fieldPrefix}-title`}
             className={inputClassName}
             value={nodeDraft.title}
             onChange={(event) => changeNodeDraft({ ...nodeDraft, title: event.target.value })}
@@ -86,39 +101,46 @@ function NodeForm() {
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="edit-node-description">
+          <FieldLabel htmlFor={`${fieldPrefix}-description`}>
             Descripción <span className="font-normal text-muted-foreground">(opcional)</span>
           </FieldLabel>
-          <Textarea
-            id="edit-node-description"
+          <MarkdownEditor
+            id={`${fieldPrefix}-description`}
+            aria-describedby={`${fieldPrefix}-description-help`}
             value={nodeDraft.description}
-            onChange={(event) => changeNodeDraft({ ...nodeDraft, description: event.target.value })}
+            onValueChange={(description) => changeNodeDraft({ ...nodeDraft, description })}
           />
+          <FieldDescription id={`${fieldPrefix}-description-help`}>
+            Admite Markdown: **negrita**, *cursiva*, listas y [enlaces](https://ejemplo.cl). Puedes
+            arrastrar un archivo .md para reemplazar el texto, previa confirmación.
+          </FieldDescription>
         </Field>
         <Field>
-          <FieldLabel htmlFor="edit-node-type">Tipo</FieldLabel>
+          <FieldLabel htmlFor={`${fieldPrefix}-type`}>Tipo</FieldLabel>
           <NodeTypeSelect
-            id="edit-node-type"
+            id={`${fieldPrefix}-type`}
             nodeTypes={nodeTypes}
             value={nodeDraft.nodeTypeId}
             onValueChange={(nodeTypeId) => changeNodeDraft({ ...nodeDraft, nodeTypeId })}
           />
         </Field>
       </FieldGroup>
-      <div className="grid grid-cols-2 gap-2">
+      <div className={cn('grid gap-2', !isFullscreen && 'grid-cols-2')}>
         <Button type="submit" disabled={!canSaveNode}>
           <Save data-icon="inline-start" />
           Guardar cambios
         </Button>
-        <Button
-          ref={previewButtonRef}
-          type="button"
-          variant="outline"
-          onClick={previewNodeInformation}
-        >
-          <Eye data-icon="inline-start" />
-          {isDirty ? 'Previsualizar cambios' : 'Previsualizar'}
-        </Button>
+        {!isFullscreen ? (
+          <Button
+            ref={previewButtonRef}
+            type="button"
+            variant="outline"
+            onClick={previewNodeInformation}
+          >
+            <Eye data-icon="inline-start" />
+            {isDirty ? 'Previsualizar cambios' : 'Previsualizar'}
+          </Button>
+        ) : null}
       </div>
     </form>
   );

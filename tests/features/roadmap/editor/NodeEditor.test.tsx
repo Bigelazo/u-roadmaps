@@ -200,6 +200,35 @@ test('saves Node information through one perform effect and preserves rejected i
   unmount();
 });
 
+test('fullscreen edits the shared Node draft, retains it on close, and saves it', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor();
+  const description = '# Objetivo\n\n**Practicar límites**';
+
+  await user.click(screen.getByRole('button', { name: 'Editar nodo en pantalla completa' }));
+  const dialog = within(screen.getByRole('dialog', { name: 'Editar nodo' }));
+  expect(dialog.queryByRole('button', { name: /Previsualizar/ })).toBeNull();
+  await user.clear(dialog.getByLabelText('Título'));
+  await user.type(dialog.getByLabelText('Título'), 'Límites y continuidad');
+  fireEvent.change(dialog.getByLabelText(/Descripción/), { target: { value: description } });
+  await user.keyboard('{Escape}');
+
+  expect(perform).not.toHaveBeenCalled();
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Límites y continuidad');
+  expect((screen.getByLabelText(/Descripción/) as HTMLTextAreaElement).value).toBe(description);
+
+  await user.click(screen.getByRole('button', { name: 'Editar nodo en pantalla completa' }));
+  const reopened = within(screen.getByRole('dialog', { name: 'Editar nodo' }));
+  expect((reopened.getByLabelText(/Descripción/) as HTMLTextAreaElement).value).toBe(description);
+  await user.click(reopened.getByRole('button', { name: 'Guardar cambios' }));
+
+  expect(perform).toHaveBeenCalledWith({
+    kind: 'update-node',
+    nodeId: node.id,
+    value: { title: 'Límites y continuidad', description, nodeTypeId: node.nodeTypeId },
+  });
+});
+
 test('normalizes a thrown Node save failure and keeps the retryable draft', async () => {
   const user = userEvent.setup();
   const perform = vi.fn().mockRejectedValue(new Error('network failure'));
