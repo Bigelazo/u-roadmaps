@@ -225,10 +225,7 @@ export function useNodeDeletionWorkflow({
       ? state
       : null;
   const confirmation = confirmationState
-    ? nodeDeletionConfirmation({
-        nodeId: confirmationState.nodeId,
-        ...confirmationState.impact,
-      })
+    ? nodeDeletionConfirmation(confirmationState.impact)
     : null;
   const pendingActionId =
     state.kind === 'revalidating' || state.kind === 'mutating'

@@ -867,8 +867,10 @@ describe('RoadmapCanvasSession', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Eliminar nodo' }));
-    const deletionDialog = await screen.findByRole('alertdialog', { name: 'Eliminar Nodo' });
-    await user.click(within(deletionDialog).getByRole('button', { name: 'Eliminar Nodo' }));
+    const deletionDialog = await screen.findByRole('alertdialog', {
+      name: 'Eliminar nodo: Límites',
+    });
+    await user.click(within(deletionDialog).getByRole('button', { name: 'Eliminar' }));
     await waitFor(async () => expect((await persistence.load(teachingInput)).nodes).toEqual([]));
   });
 

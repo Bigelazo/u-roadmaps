@@ -347,7 +347,7 @@ test('teacher API manages a node type, resources, and dependencies through their
   expect((await api.delete(course.apiPath(`/resources/${resourceId}`))).status()).toBe(204);
 });
 
-test('teacher deletes a Canvas node after reviewing its authoritative impact', async ({
+test('teacher deletes a Canvas node with a concise confirmation and revalidated impact', async ({
   page,
   course,
   apiAs,
@@ -415,17 +415,16 @@ test('teacher deletes a Canvas node after reviewing its authoritative impact', a
   const initialPreview = await initialPreviewPromise;
   expect(initialPreview.status()).toBe(200);
 
-  const dialog = page.getByRole('alertdialog', { name: 'Eliminar Nodo' });
+  const dialog = page.getByRole('alertdialog', { name: `Eliminar nodo: ${sourceTitle}` });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('list', { name: 'Nodo que se eliminará' })).toContainText(
-    sourceTitle,
+  await expect(
+    dialog.getByRole('heading', { name: `Eliminar nodo: ${sourceTitle}` }),
+  ).toBeVisible();
+  await expect(dialog.getByRole('heading').locator('svg')).toHaveCSS('color', 'rgb(2, 74, 216)');
+  await expect(dialog).toContainText(
+    'Eliminarás este nodo, junto con todos sus recursos y dependencias relacionadas. Esta acción no se puede deshacer.',
   );
-  const dependencyList = dialog.getByRole('list', { name: 'Dependencias relacionadas' });
-  await expect(dependencyList).toContainText(sourceTitle);
-  await expect(dependencyList).toContainText(targetTitle);
-  await expect(dialog.getByRole('list', { name: 'Recursos que se eliminarán' })).toContainText(
-    resourceTitle,
-  );
+  await expect(dialog.getByRole('list')).toHaveCount(0);
 
   const latestPreviewPromise = page.waitForResponse(
     (response) =>
@@ -438,7 +437,7 @@ test('teacher deletes a Canvas node after reviewing its authoritative impact', a
     (response) =>
       response.request().method() === 'DELETE' && response.url().includes(`/nodes/${sourceNodeId}`),
   );
-  await dialog.getByRole('button', { name: 'Eliminar Nodo' }).click();
+  await dialog.getByRole('button', { name: 'Eliminar', exact: true }).click();
   const [latestPreview, deletionRequest, deletionResponse] = await Promise.all([
     latestPreviewPromise,
     deletionRequestPromise,

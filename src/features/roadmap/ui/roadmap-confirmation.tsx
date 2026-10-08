@@ -21,18 +21,11 @@ type DependencyPresentation = {
   targetTitle: string;
 };
 
-type NodeDeletionResource = Pick<Resource, 'id' | 'title'> & {
-  type?: Resource['type'];
-};
-
 type NodeDeletionConfirmationInput = {
-  nodeId: string;
   node: {
     title: string;
     nodeType: NodeTypePresentation;
   };
-  dependencies: DependencyPresentation[];
-  resources: NodeDeletionResource[];
 };
 
 type NodeVisibilityConfirmationInput = {
@@ -409,37 +402,25 @@ export function roadmapTeacherBlockConfirmation({
 }
 
 export function nodeDeletionConfirmation({
-  nodeId,
   node,
-  dependencies,
-  resources,
 }: NodeDeletionConfirmationInput): ConfirmationPresentation {
   return {
-    title: 'Eliminar Nodo',
-    description: `Eliminarás ${node.title} y sus elementos relacionados. Esta acción no se puede deshacer.`,
+    title: (
+      <span className="wrap-break-word">
+        Eliminar nodo:{' '}
+        <NodeTypeIcon
+          icon={node.nodeType.icon}
+          style={{ color: node.nodeType.color }}
+          aria-hidden="true"
+          className="inline-block size-5 align-text-bottom"
+        />{' '}
+        {node.title}
+      </span>
+    ),
+    description:
+      'Eliminarás este nodo, junto con todos sus recursos y dependencias relacionadas. Esta acción no se puede deshacer.',
     intent: 'destructive',
-    sections: [
-      {
-        title: 'Nodo que se eliminará',
-        items: [nodeItem(nodeId, node)],
-      },
-      {
-        title: 'Dependencias relacionadas',
-        items: dependencyItems(dependencies),
-        emptyMessage: 'No hay Dependencias relacionadas.',
-      },
-      {
-        title: 'Recursos que se eliminarán',
-        items: resources.map((resource) => ({
-          kind: 'item' as const,
-          id: resource.id,
-          title: resource.title,
-          description: resource.type ? resourceTypeLabel(resource.type) : undefined,
-        })),
-        emptyMessage: 'No hay Recursos relacionados.',
-      },
-    ],
-    actions: [{ id: roadmapConfirmationActionIds.deleteNode, label: 'Eliminar Nodo' }],
+    actions: [{ id: roadmapConfirmationActionIds.deleteNode, label: 'Eliminar' }],
   };
 }
 
@@ -481,24 +462,11 @@ export function nodeVisibilityConfirmation({
 }
 
 export function roadmapNodeDeletionConfirmation(
-  roadmap: Pick<RoadmapDto, 'nodes' | 'dependencies' | 'nodeTypes'>,
+  roadmap: Pick<RoadmapDto, 'nodeTypes'>,
   node: RoadmapNode,
 ): ConfirmationPresentation {
-  const nodeTitles = new Map(roadmap.nodes.map((candidate) => [candidate.id, candidate.title]));
-
   return nodeDeletionConfirmation({
-    nodeId: node.id,
     node: { title: node.title, nodeType: nodeTypeFor(roadmap, node.nodeTypeId) },
-    dependencies: roadmap.dependencies
-      .filter(
-        (dependency) => dependency.sourceNodeId === node.id || dependency.targetNodeId === node.id,
-      )
-      .map((dependency) => ({
-        id: dependency.id,
-        sourceTitle: nodeTitles.get(dependency.sourceNodeId) ?? dependency.sourceNodeId,
-        targetTitle: nodeTitles.get(dependency.targetNodeId) ?? dependency.targetNodeId,
-      })),
-    resources: node.resources,
   });
 }
 

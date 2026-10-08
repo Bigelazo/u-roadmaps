@@ -61,7 +61,7 @@ type ConfirmationActions =
   readonly [ConfirmationAction] | readonly [ConfirmationAction, ConfirmationAction];
 
 type ConfirmationPresentation = {
-  title: string;
+  title: React.ReactNode;
   description: string;
   intent: ConfirmationIntent;
   cancelLabel?: string;
@@ -145,11 +145,7 @@ function ConfirmationDetails({ sections }: { sections: ConfirmationSection[] }) 
         const headingId = `${id}-section-${index}`;
 
         return (
-          <section
-            key={section.title}
-            aria-labelledby={headingId}
-            className="grid gap-2.5"
-          >
+          <section key={section.title} aria-labelledby={headingId} className="grid gap-2.5">
             <h3 id={headingId} className="text-sm font-bold">
               {section.title}
             </h3>
