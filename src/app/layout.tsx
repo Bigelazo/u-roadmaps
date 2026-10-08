@@ -35,9 +35,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             isAuthenticated={Boolean(session)}
             userName={user?.name ?? null}
             inboxIdentity={inboxIdentity}
+            developmentTools={
+              developmentEnvironmentEnabled() ? (
+                <DevelopmentBar personas={developmentPersonas} />
+              ) : null
+            }
           />
           <AuthenticationAlert />
-          {developmentEnvironmentEnabled() && <DevelopmentBar personas={developmentPersonas} />}
           {children}
         </NotificationsProvider>
       </body>

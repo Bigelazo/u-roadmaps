@@ -28,12 +28,12 @@ test('developer can open the persona menu and select a persona', async () => {
   );
 
   await user.click(screen.getByRole('button', { name: 'Cambiar perfil de desarrollo' }));
-  expect(screen.getByRole('menu')).not.toBeNull();
+  expect(await screen.findByRole('menu')).not.toBeNull();
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('menu')).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Cambiar perfil de desarrollo' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Docente: Ana Pérez' }));
+  await user.click(await screen.findByRole('menuitem', { name: 'Docente: Ana Pérez' }));
 
   expect(fetch).toHaveBeenCalledWith('/api/development/session', {
     method: 'POST',
@@ -42,4 +42,18 @@ test('developer can open the persona menu and select a persona', async () => {
   });
   expect(replace).toHaveBeenCalledWith('/academic-overview');
   expect(refresh).toHaveBeenCalledOnce();
+});
+
+test('persona menu stays open after pressing and releasing the trigger separately', async () => {
+  const user = userEvent.setup();
+  render(<DevelopmentBar personas={[{ id: 'teacher', label: 'Docente: Ana Pérez' }]} />);
+  const trigger = screen.getByRole('button', { name: 'Cambiar perfil de desarrollo' });
+
+  await user.pointer({ target: trigger, keys: '[MouseLeft>]' });
+  await screen.findByRole('menu');
+  await user.pointer({ target: trigger, keys: '[/MouseLeft]' });
+
+  expect(screen.getByRole('menu')).not.toBeNull();
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('menu')).toBeNull();
 });
