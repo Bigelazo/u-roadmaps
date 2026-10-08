@@ -96,6 +96,15 @@ Suite completa:
 pnpm test:e2e
 ```
 
+La salida habitual conserva el listado de tests y el resumen final, y oculta
+stdout del servidor (preparación, build y avisos guardados). stderr permanece
+visible para advertencias y errores, incluidos los fallos de entrega provocados
+deliberadamente por algunos tests. Para ver también stdout al diagnosticar:
+
+```sh
+DEBUG=pw:webserver pnpm test:e2e
+```
+
 Antecedente del 2026-10-02, conservado solo como historial (no es la
 verificación vigente y referencia un archivo Cloud retirado):
 

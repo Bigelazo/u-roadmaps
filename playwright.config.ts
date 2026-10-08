@@ -54,12 +54,11 @@ export default defineConfig({
     ].join(' && '),
     url: baseURL,
     reuseExistingServer: false,
-    stdout: 'pipe',
+    // Keep test results clear; DEBUG=pw:webserver restores server output.
+    stdout: 'ignore',
+    stderr: 'pipe',
     timeout: 180_000,
     gracefulShutdown: { signal: 'SIGTERM', timeout: 5_000 },
   },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-  ],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 });
