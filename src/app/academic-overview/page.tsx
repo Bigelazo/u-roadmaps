@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import CreateRoadmapButton from '@/app/_components/CreateRoadmapButton';
+import { CreateRoadmapDialog } from '@/features/roadmap';
 import { AcademicOverview } from '@/features/academic-overview';
 import { getAcademicOverviewPage } from '@/app/_adapters/academic-overview';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
@@ -30,7 +30,7 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
       <AcademicOverview
         overview={await getAcademicOverviewPage(user)}
         notificationsEnabled={Boolean(getInboxIdentity(user.id))}
-        renderRoadmapCreation={(course) => <CreateRoadmapButton {...course} />}
+        renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}
       />
     </>
   );

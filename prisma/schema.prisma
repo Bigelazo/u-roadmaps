@@ -34,6 +34,10 @@ model Roadmap {
   creatorId              String?                       @db.Uuid
   creator                User?                         @relation("RoadmapCreator", fields: [creatorId], references: [id], onDelete: SetNull)
   closureTeachingStaff   RoadmapClosureTeachingStaff[]
+  // The closed version this Roadmap was copied from; absent for empty Roadmaps.
+  sourceRoadmapId        String?                       @db.Uuid
+  sourceRoadmap          Roadmap?                      @relation("RoadmapCopies", fields: [sourceRoadmapId], references: [id], onDelete: SetNull)
+  copies                 Roadmap[]                     @relation("RoadmapCopies")
   courseOfferingId       String                        @unique @db.Uuid
   courseOffering         CourseOffering                @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
   nodeTypes              NodeType[]
@@ -44,6 +48,7 @@ model Roadmap {
   nodeLifecycleKnowledge NodeLifecycleKnowledge[]
 
   @@unique([id, courseOfferingId])
+  @@index([sourceRoadmapId])
 }
 
 // Teaching staff with an active Participation when the Roadmap closed, recorded

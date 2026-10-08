@@ -1,6 +1,9 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '../domain/closure';
+import { planRoadmapCopy, type RoadmapCopySource } from '../domain/roadmap-copy';
+import type { VersionIdentifier } from '@/shared/version-history-url';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import {
@@ -15,9 +18,7 @@ export { wouldCreateDependencyCycle as findCycle } from '@/features/roadmap/doma
 
 type JsonObject = Record<string, unknown>;
 
-export function normalizeName(name: string): string {
-  return name.trim().toLocaleLowerCase('es-CL');
-}
+export { normalizeName } from '../domain/roadmap-copy';
 
 export function requireString(value: unknown, field: string, maxLength?: number): string {
   if (
@@ -272,6 +273,96 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
   };
 }
 
+/** The optional frozen version to copy, as `{ courseCode, year, semester }`. */
+function parseCopySource(value: unknown): VersionIdentifier | undefined {
+  if (value === undefined || value === null) return undefined;
+  const source = value as JsonObject;
+  if (
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    typeof source.courseCode !== 'string' ||
+    !Number.isInteger(source.year) ||
+    !Number.isInteger(source.semester)
+  )
+    throw new ApplicationError(
+      400,
+      'INVALID_REQUEST',
+      'source debe identificar una versión con courseCode, year y semester.',
+    );
+  return {
+    courseCode: source.courseCode.trim(),
+    year: source.year as number,
+    semester: source.semester as number,
+  };
+}
+
+/** Writes a frozen version's content into the new Roadmap, recording it as the source. */
+async function persistRoadmapCopy(
+  transaction: Prisma.TransactionClient,
+  roadmapId: string,
+  sourceRoadmapId: string,
+  source: RoadmapCopySource,
+) {
+  const plan = planRoadmapCopy(source, roadmapId, randomUUID);
+  await transaction.roadmap.update({ where: { id: roadmapId }, data: { sourceRoadmapId } });
+  await transaction.nodeType.createMany({ data: plan.nodeTypes });
+  await transaction.roadmapNode.createMany({ data: plan.nodes });
+  await transaction.dependency.createMany({ data: plan.dependencies });
+  await transaction.resource.createMany({ data: plan.resources });
+}
+
+/** Copies a frozen version of the same Course into the new Roadmap. */
+async function copyFrozenVersion(
+  transaction: Prisma.TransactionClient,
+  identifier: CourseOfferingIdentifier,
+  source: VersionIdentifier,
+  roadmapId: string,
+) {
+  const missing = new ApplicationError(
+    404,
+    'VERSION_NOT_FOUND',
+    'La versión solicitada no existe.',
+  );
+  if (source.courseCode !== identifier.courseCode) throw missing;
+  const sourceRoadmap = await transaction.roadmap.findFirst({
+    where: { courseOffering: source },
+    select: {
+      id: true,
+      closedAt: true,
+      nodeTypes: { select: { id: true, name: true, icon: true, color: true } },
+      roadmapNodes: {
+        select: {
+          id: true,
+          nodeTypeId: true,
+          title: true,
+          description: true,
+          positionX: true,
+          positionY: true,
+          isVisible: true,
+          resources: { select: { roadmapNodeId: true, title: true, url: true, type: true } },
+        },
+      },
+    },
+  });
+  if (!sourceRoadmap) throw missing;
+  if (!sourceRoadmap.closedAt)
+    throw new ApplicationError(
+      409,
+      'VERSION_NOT_CLOSED',
+      'Solo se puede copiar una versión cerrada.',
+    );
+  const dependencies = await transaction.dependency.findMany({
+    where: { sourceNode: { roadmapId: sourceRoadmap.id } },
+    select: { sourceNodeId: true, targetNodeId: true, sourceHandle: true, targetHandle: true },
+  });
+  await persistRoadmapCopy(transaction, roadmapId, sourceRoadmap.id, {
+    customNodeTypes: sourceRoadmap.nodeTypes,
+    nodes: sourceRoadmap.roadmapNodes,
+    dependencies,
+    resources: sourceRoadmap.roadmapNodes.flatMap(({ resources }) => resources),
+  });
+}
+
 // El curso puede llegar sin descripción cuando ya está materializado desde
 // U-Campus. En ese caso conserva el nombre y el departamento registrados.
 async function createRoadmapUnsafe(
@@ -283,6 +374,7 @@ async function createRoadmapUnsafe(
     body.course && typeof body.course === 'object' && !Array.isArray(body.course)
       ? (body.course as JsonObject)
       : undefined;
+  const source = parseCopySource(body.source);
 
   try {
     const creation = await prisma.$transaction(async (transaction) => {
@@ -342,6 +434,7 @@ async function createRoadmapUnsafe(
           select: { userId: true, user: { select: { name: true } } },
         }),
       ]);
+      if (source) await copyFrozenVersion(transaction, identifier, source, roadmap.id);
       return {
         roadmap,
         courseOfferingId: materializedCourseOffering.id,

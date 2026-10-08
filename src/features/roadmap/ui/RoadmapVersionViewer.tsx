@@ -6,7 +6,7 @@ import { ArrowLeft, Download, ExternalLink, FileText, X } from 'lucide-react';
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
-import { originLabels, positionLabels } from '@/features/roadmap/ui/version-labels';
+import { originLabel, positionLabels } from '@/features/roadmap/ui/version-labels';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import type { RoadmapVersion } from '@/features/roadmap/server';
@@ -44,7 +44,7 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
           </div>
           <dl className="grid gap-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
             <dt className="font-semibold">Origen</dt>
-            <dd>{originLabels[authorship.origin.kind]}</dd>
+            <dd>{originLabel(authorship.origin)}</dd>
             <dt className="font-semibold">Creada por</dt>
             <dd>{authorship.creator?.name ?? 'Sin registro'}</dd>
             <dt className="font-semibold">Equipo docente</dt>

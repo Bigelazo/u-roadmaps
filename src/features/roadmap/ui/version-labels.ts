@@ -10,9 +10,13 @@ export const positionLabels: Record<InstitutionalCoursePosition, string> = {
   OBSERVER: 'Oyente',
 };
 
-export const originLabels: Record<
-  RoadmapVersionHistory['versions'][number]['origin']['kind'],
-  string
-> = {
-  EMPTY: 'Creada desde cero',
-};
+type VersionOrigin = RoadmapVersionHistory['versions'][number]['origin'];
+
+export function originLabel(origin: VersionOrigin): string {
+  switch (origin.kind) {
+    case 'COPY':
+      return `Copiada de la edición ${origin.year}-${origin.semester}`;
+    case 'EMPTY':
+      return 'Creada desde cero';
+  }
+}

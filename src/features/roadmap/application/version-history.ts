@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  type AcademicTermKey,
   compareEditionsNewestFirst,
   compareRecordedStaff,
   editionLabel,
@@ -25,7 +26,9 @@ import { ApplicationError, applicationResult } from '@/shared/errors/server';
 
 const recordedVersionSelect = {
   closedAt: true,
+  sourceRoadmapId: true,
   creator: { select: { id: true, name: true } },
+  sourceRoadmap: { select: { courseOffering: { select: { year: true, semester: true } } } },
   closureTeachingStaff: {
     select: {
       institutionalPosition: true,
@@ -73,6 +76,7 @@ async function requireCourseWithHorizon(actor: RoadmapActor, courseCode: string)
 
 function recordedAuthorship(roadmap: {
   creator: { id: string; name: string } | null;
+  sourceRoadmap: { courseOffering: AcademicTermKey } | null;
   closureTeachingStaff: {
     institutionalPosition: InstitutionalCoursePosition | null;
     user: { id: string; name: string };
@@ -83,8 +87,13 @@ function recordedAuthorship(roadmap: {
     teachingStaff: roadmap.closureTeachingStaff
       .map(({ user, institutionalPosition }) => ({ ...user, institutionalPosition }))
       .sort(compareRecordedStaff),
-    // Copies do not exist yet, so every version starts empty.
-    origin: { kind: 'EMPTY' as const },
+    origin: roadmap.sourceRoadmap
+      ? {
+          kind: 'COPY' as const,
+          ...roadmap.sourceRoadmap.courseOffering,
+          edition: editionLabel(roadmap.sourceRoadmap.courseOffering),
+        }
+      : { kind: 'EMPTY' as const },
   };
 }
 
@@ -157,8 +166,21 @@ async function readRoadmapVersionUnsafe(actor: RoadmapActor, identifier: CourseO
     getAvailableTypes(roadmap.id),
   ]);
   const term = { year: offering.year, semester: offering.semester };
-  // Oldest first, ending at this version; without copies it is the version alone.
-  const lineage = [term]
+  // Oldest first, ending at this version, following each copy to its source.
+  const ancestry: AcademicTermKey[] = [term];
+  let ancestorId = roadmap.sourceRoadmapId;
+  const visited = new Set([roadmap.id]);
+  // The guard stops on a corrupt cyclic lineage instead of looping forever.
+  while (ancestorId && !visited.has(ancestorId)) {
+    visited.add(ancestorId);
+    const ancestor = await prisma.roadmap.findUniqueOrThrow({
+      where: { id: ancestorId },
+      select: { sourceRoadmapId: true, courseOffering: { select: { year: true, semester: true } } },
+    });
+    ancestry.unshift(ancestor.courseOffering);
+    ancestorId = ancestor.sourceRoadmapId;
+  }
+  const lineage = ancestry
     .filter((ancestor) => isWithinVersionHorizon(ancestor, horizon))
     .map((ancestor) => ({ ...ancestor, edition: editionLabel(ancestor) }));
   const roadmapDto = {
