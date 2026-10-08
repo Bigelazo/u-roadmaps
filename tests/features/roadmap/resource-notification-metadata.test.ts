@@ -4,6 +4,7 @@ const { prisma, transaction, deleteUploadedFile, saveUploadedFile, validateUploa
   vi.hoisted(() => {
     const transaction = {
       $queryRaw: vi.fn().mockResolvedValue([]),
+      roadmap: { findUniqueOrThrow: vi.fn() },
       courseOffering: { findUnique: vi.fn() },
       participation: { findUnique: vi.fn(), findMany: vi.fn() },
       dependency: { findMany: vi.fn() },
@@ -58,6 +59,11 @@ beforeEach(() => {
     Promise.resolve(operation(transaction)),
   );
   transaction.courseOffering.findUnique.mockResolvedValue({ roadmap: { id: 'roadmap-id' } });
+  transaction.roadmap.findUniqueOrThrow.mockResolvedValue({
+    id: 'roadmap-id',
+    courseOfferingId: 'offering-id',
+    closedAt: null,
+  });
   transaction.participation.findUnique.mockResolvedValue({ isActive: true, role: 'TEACHER' });
   transaction.participation.findMany.mockResolvedValue([]);
   transaction.roadmapNode.findMany.mockResolvedValue([]);

@@ -42,7 +42,7 @@ import {
   subscribeToRoadmapRecovery,
 } from '@/features/roadmap/session/change-signal';
 
-import { RoadmapAccessLostError } from './access-lost';
+import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 
 const persistenceContext = createContext<RoadmapCanvasSessionPersistence>(
   httpRoadmapCanvasSessionPersistence,
@@ -63,6 +63,7 @@ type InjectedSessionResult = {
   dismissError: () => void;
   retryRefresh: () => void;
   accessLost: boolean;
+  isClosed: boolean;
   loadSimulation: () => Promise<boolean>;
   addNode: (
     node: NewRoadmapNode,
@@ -168,6 +169,7 @@ function useInjectedSession(
   const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(initialRoadmapKey);
   const [simulationKey, setSimulationKey] = useState<string | null>(null);
+  const [closedKey, setClosedKey] = useState<string | null>(null);
   const [accessLost, setAccessLost] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<string | null>(null);
@@ -321,6 +323,22 @@ function useInjectedSession(
     setErrorKey(null);
   }, []);
 
+  const reportFailure = useCallback(
+    async (cause: unknown, fallback: string, requestKey: string) => {
+      if (activeKeyRef.current !== requestKey) return;
+      if (cause instanceof RoadmapClosedError) {
+        setClosedKey(requestKey);
+        // Keep the refusal visible even if the recovery read fails.
+        await refresh().catch(() => false);
+      }
+      // Recovery may finish after the participant changes Course offering.
+      if (activeKeyRef.current !== requestKey) return;
+      setError(messageFor(cause, fallback));
+      setErrorKey(requestKey);
+    },
+    [refresh],
+  );
+
   const mutate = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string, reload = true) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
@@ -334,14 +352,11 @@ function useInjectedSession(
         }
         return { success: true, result };
       } catch (cause) {
-        if (activeKeyRef.current === requestKey) {
-          setError(messageFor(cause, fallback));
-          setErrorKey(requestKey);
-        }
+        await reportFailure(cause, fallback, requestKey);
         return { success: false, result: undefined };
       }
     },
-    [refresh, stableInput],
+    [refresh, reportFailure, stableInput],
   );
 
   const preview = useCallback(
@@ -351,14 +366,11 @@ function useInjectedSession(
         const result = await operation();
         return activeKeyRef.current === requestKey ? result : null;
       } catch (cause) {
-        if (activeKeyRef.current === requestKey) {
-          setError(messageFor(cause, fallback));
-          setErrorKey(requestKey);
-        }
+        await reportFailure(cause, fallback, requestKey);
         return null;
       }
     },
-    [stableInput],
+    [reportFailure, stableInput],
   );
 
   const loadSimulation = useCallback(async () => {
@@ -706,6 +718,10 @@ function useInjectedSession(
     dismissError,
     retryRefresh,
     accessLost,
+    isClosed:
+      input.experience.term === 'historical' ||
+      closedKey === key ||
+      (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
     loadSimulation,
     addNode,
     updateNode,
@@ -743,7 +759,7 @@ export function useRoadmapCanvasSession(
   const guardDraft = options.guardDraft ?? allowAnyDraft;
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
     currentView: options.canvasPreview?.currentView ?? initialCanvasPreviewView,
-    isHistorical: input.experience.term === 'historical',
+    isHistorical: active.isClosed,
     guardDraft: () => guardDraft({ kind: 'enter-canvas-preview' }),
     loadSimulation: active.loadSimulation,
     completeSimulatedNode: active.completeSimulatedNode,

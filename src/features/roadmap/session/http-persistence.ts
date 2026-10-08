@@ -1,4 +1,4 @@
-import { RoadmapAccessLostError } from './access-lost';
+import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { roadmapUrl } from '@/features/roadmap/client';
 import type { Point } from '@/features/roadmap/graph/geometry';
 import type { NodeUpdate } from '@/features/roadmap/editor/types';
@@ -18,7 +18,7 @@ import type {
   RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
 
-async function failureMessage(response: Response, fallback: string) {
+async function failureError(response: Response, fallback: string) {
   try {
     const body: unknown = await response.json();
     if (
@@ -30,12 +30,14 @@ async function failureMessage(response: Response, fallback: string) {
       'message' in body.error &&
       typeof body.error.message === 'string'
     ) {
-      return body.error.message;
+      return 'code' in body.error && body.error.code === 'ROADMAP_CLOSED'
+        ? new RoadmapClosedError(body.error.message)
+        : new Error(body.error.message);
     }
   } catch {
     // Keep the user-facing fallback when an existing route has no JSON error body.
   }
-  return fallback;
+  return new Error(fallback);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -146,10 +148,10 @@ async function request(
     headers === undefined ? init : { ...init, headers },
   );
   if (!response.ok) {
-    const message = await failureMessage(response, fallback);
+    const error = await failureError(response, fallback);
     if (!suffix && [401, 403, 404].includes(response.status))
-      throw new RoadmapAccessLostError(message);
-    throw new Error(message);
+      throw new RoadmapAccessLostError(error.message);
+    throw error;
   }
   if (response.status === 204) return undefined;
   return response.json();

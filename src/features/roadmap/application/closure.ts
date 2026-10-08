@@ -23,6 +23,8 @@ export async function closeDueRoadmaps(now = new Date()) {
     ]),
   );
   for (const { id, courseOffering } of roadmaps) {
+    // An offering can be deleted between Prisma's candidate and relation reads.
+    if (!courseOffering) continue;
     const day = resolveRoadmapFreezeDate(
       courseOffering,
       freezeDates.get(`${courseOffering.year}-${courseOffering.semester}`) ?? null,

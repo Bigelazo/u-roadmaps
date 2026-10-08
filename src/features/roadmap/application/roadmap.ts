@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { resolveRoadmapFreezeDate, roadmapClosureInstant } from '../domain/closure';
+
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import {
   isNodeTypeColor,
@@ -260,7 +262,7 @@ async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, include
       year: roadmap.courseOffering.year,
       semester: roadmap.courseOffering.semester,
     },
-    roadmap: { id: roadmap.id },
+    roadmap: { id: roadmap.id, closedAt: roadmap.closedAt },
     nodeTypes: await getAvailableTypes(roadmap.id),
     nodes: nodes.map((node) => ({
       ...nodeDto(node),
@@ -299,6 +301,20 @@ async function createRoadmapUnsafe(
           'ROADMAP_CONFLICT',
           'Ya existe un roadmap para este curso.',
         );
+      const term = await transaction.academicTerm.findUnique({
+        where: { year_semester: { year: identifier.year, semester: identifier.semester } },
+      });
+      const freezeDate = resolveRoadmapFreezeDate(
+        identifier,
+        term?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
+      );
+      if (roadmapClosureInstant(freezeDate) <= new Date()) {
+        throw new ApplicationError(
+          409,
+          'ROADMAP_CLOSED',
+          'El período de este curso terminó. No se puede crear un roadmap.',
+        );
+      }
       const name =
         courseBody?.name === undefined && existingCourse
           ? existingCourse.name

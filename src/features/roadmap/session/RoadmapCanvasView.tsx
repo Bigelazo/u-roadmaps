@@ -215,6 +215,7 @@ function useRoadmapCanvasController({ input }: Props) {
     completeNode,
     simulationRoadmap,
     canvasPreviewWorkflow,
+    isClosed,
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
     closeEditor: closeEditorAfterNodeDeletion,
@@ -347,7 +348,7 @@ function useRoadmapCanvasController({ input }: Props) {
   }, [exclusiveConfirmationSource, exclusiveSourceIsBusy]);
 
   const canvasMode = deriveCanvasMode({
-    experience: input.experience,
+    experience: { ...input.experience, term: isClosed ? 'historical' : 'current' },
     isCanvasPreview: canvasPreviewWorkflow.isActive,
   });
   const { isHistorical: isHistoricalRoadmap, isCanvasPreview, isStudentExperience } = canvasMode;

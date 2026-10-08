@@ -44,7 +44,17 @@ export async function requireEditorRoadmap(
   // Serialize edits here, before baseline capture and Node deletion can invert
   // that order through foreign-key locks.
   await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${courseOffering.roadmap.id}::uuid FOR UPDATE`;
-  return courseOffering.roadmap;
+  const roadmap = await transaction.roadmap.findUniqueOrThrow({
+    where: { id: courseOffering.roadmap.id },
+  });
+  if (roadmap.closedAt) {
+    throw new ApplicationError(
+      409,
+      'ROADMAP_CLOSED',
+      'Este roadmap está cerrado y es de sólo lectura.',
+    );
+  }
+  return roadmap;
 }
 
 export async function requireNode(

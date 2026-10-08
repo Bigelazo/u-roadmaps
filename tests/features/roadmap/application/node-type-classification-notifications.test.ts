@@ -18,6 +18,7 @@ const { prisma, transaction, state } = vi.hoisted(() => {
   };
   const transaction = {
     $queryRaw: vi.fn().mockResolvedValue([]),
+    roadmap: { findUniqueOrThrow: vi.fn() },
     courseOffering: { findUnique: vi.fn() },
     participation: { findUnique: vi.fn(), findMany: vi.fn() },
     routeNoticeKnowledge: { createMany: vi.fn() },
@@ -62,6 +63,11 @@ beforeEach(() => {
   transaction.courseOffering.findUnique.mockResolvedValue({
     id: 'offering-id',
     roadmap: { id: 'roadmap-id', courseOfferingId: 'offering-id' },
+  });
+  transaction.roadmap.findUniqueOrThrow.mockResolvedValue({
+    id: 'roadmap-id',
+    courseOfferingId: 'offering-id',
+    closedAt: null,
   });
   transaction.participation.findUnique.mockResolvedValue({ isActive: true, role: 'TEACHER' });
   transaction.participation.findMany.mockImplementation(async () =>
