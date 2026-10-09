@@ -10,6 +10,7 @@ import {
   type TargetContext,
 } from '../../application/notice-targets';
 import { acceptDelivery } from '../notice-delivery';
+import { nodeCreationRef } from '../../application/absorption';
 import { forgetDeletedNode, recordCurrentValues, recordKnownValues } from './known-values';
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget } from './reconcile';
@@ -29,6 +30,8 @@ type RecordedTarget = Readonly<{
   previousContext?: TargetContext;
   context?: Readonly<Record<string, unknown>>;
   recipientIds: readonly string[];
+  /** A deleted Node's recipients who never recognized it: their creation notice is withdrawn. */
+  unawareRecipientIds?: readonly string[];
 }>;
 
 const DELIVERY_CONCURRENCY = 5;
@@ -73,16 +76,19 @@ export async function recordNoticeTargets(
     if (audience.includes(changes.actorId))
       ownTargets.push({ descriptor, fact, target, previousValue });
     let recipientIds = audience.filter((recipientId) => recipientId !== changes.actorId);
+    let unawareRecipientIds: string[] = [];
     if (fact.kind === 'node-deleted') {
-      // Settled here, not at delivery, so a delivery that never runs leaves nothing behind.
-      recipientIds = await forgetDeletedNode(
+      // Settled here, not at delivery, so a delivery that never runs leaves no Known value.
+      const settled = await forgetDeletedNode(
         transaction,
         changes.roadmapId,
         fact.nodeId,
         recipientIds,
       );
+      recipientIds = settled.aware;
+      unawareRecipientIds = settled.unaware;
     }
-    if (recipientIds.length)
+    if (recipientIds.length || unawareRecipientIds.length)
       targets.push({
         descriptor,
         target,
@@ -90,6 +96,7 @@ export async function recordNoticeTargets(
         previousContext,
         context: descriptor.factContext?.(fact, changes),
         recipientIds,
+        unawareRecipientIds,
       });
   }
   await recordOwnChanges(transaction, changes, roadmap, ownTargets);
@@ -117,17 +124,19 @@ type RecordedChange = Readonly<{
 }>;
 
 async function deliverTargets(targets: readonly RecordedTarget[], change: RecordedChange) {
-  const deliveries = targets.flatMap((target) =>
-    target.recipientIds.map((recipientId) => () => deliverTarget(target, recipientId, change)),
-  );
+  const deliveries = targets.flatMap((target) => [
+    ...target.recipientIds.map((recipientId) => () => deliverTarget(target, recipientId, change)),
+    ...(target.unawareRecipientIds ?? []).map(
+      (recipientId) => () => withdrawCreation(target, recipientId, change),
+    ),
+  ]);
   let failed = false;
   // Bound recipient transactions without dropping later recipients on failure.
   for (let offset = 0; offset < deliveries.length; offset += DELIVERY_CONCURRENCY) {
     const results = await Promise.allSettled(
       deliveries.slice(offset, offset + DELIVERY_CONCURRENCY).map((deliver) => deliver()),
     );
-    failed ||= results.some((result) => result.status === 'rejected');
-  }
+    failed ||= results.some((result) => result.status === 'rejected');  }
   if (failed)
     console.warn('Roadmap notice delivery failed', { roadmapId: change.courseContext.roadmapId });
 }
@@ -151,10 +160,6 @@ async function deliverTarget(
     )
       return;
     await lockRecipientRoadmap(transaction, recipientId, roadmapId);
-    // A concurrent deletion of the target's Node settles it in the roadmap transaction
-    // (see `forgetDeletedNode`): wait for that transaction so this delivery sees the outcome.
-    if (target.nodeId)
-      await transaction.$queryRaw`SELECT 1 FROM "RoadmapNode" WHERE id = ${target.nodeId}::uuid FOR SHARE`;
     await reconcileNoticeTarget(transaction, {
       descriptor,
       identity: { recipientId, roadmapId },
@@ -166,6 +171,30 @@ async function deliverTarget(
       courseContext: async () => courseContext,
       eventId: targetEventId,
       occurredAt,
+    });
+  });
+}
+
+/**
+ * A deleted Node's recipient who never recognized it: withdraw a creation notice that a
+ * delivery committed while the roadmap transaction was running (idempotent).
+ */
+async function withdrawCreation(
+  { target }: RecordedTarget,
+  recipientId: string,
+  { courseContext }: RecordedChange,
+) {
+  if (!target.nodeId) return;
+  const { roadmapId } = courseContext;
+  await prisma.$transaction(async (transaction) => {
+    await lockRecipientRoadmap(transaction, recipientId, roadmapId);
+    await transaction.roadmapNotice.deleteMany({
+      where: {
+        recipientId,
+        roadmapId,
+        targetKey: nodeCreationRef(target.nodeId!).targetKey,
+        acknowledgedAt: null,
+      },
     });
   });
 }

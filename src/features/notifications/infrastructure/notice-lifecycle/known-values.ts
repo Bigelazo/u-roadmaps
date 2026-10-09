@@ -101,14 +101,16 @@ export async function setKnownValue(
  * A deleted Node's targets, and the Dependency pairs it was part of, have nothing left to
  * compare. A recipient who never recognized the Node's creation is not told of its
  * deletion: the creation absorbs it, so its pending creation notice is withdrawn here.
- * Returns the deletion's recipients who knew the Node.
+ * Returns the deletion's recipients who knew the Node (`aware`) and those who did not
+ * (`unaware`): a creation notice delivered concurrently may be invisible to this
+ * transaction's snapshot, so delivery withdraws it again for them.
  */
 export async function forgetDeletedNode(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   nodeId: string,
   deletionRecipientIds: readonly string[],
-): Promise<string[]> {
+): Promise<{ aware: string[]; unaware: string[] }> {
   const creation = nodeCreationRef(nodeId).targetKey;
   const unaware = new Set(
     (
@@ -136,5 +138,8 @@ export async function forgetDeletedNode(
       ],
     },
   });
-  return deletionRecipientIds.filter((recipientId) => !unaware.has(recipientId));
+  return {
+    aware: deletionRecipientIds.filter((recipientId) => !unaware.has(recipientId)),
+    unaware: [...unaware],
+  };
 }
