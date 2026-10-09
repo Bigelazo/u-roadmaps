@@ -1,0 +1,101 @@
+<title>Crecimiento de u-roadmaps</title>
+<style>
+/* Layout: una columna; resumen por módulo, selector de alcance, área apilada a todo el ancho, tabla plegable */
+:root{--bg:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#4a3aa7;--s8:#e34948;
+--font:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--s7:#9085e9;--s8:#e66767;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--s7:#9085e9;--s8:#e66767;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);padding-block:24px;padding-inline:16px}
+main{max-width:1040px;margin:0 auto;display:grid;gap:20px}
+h1{font-size:1.5rem;margin:0;text-wrap:balance;font-weight:600}
+.sub{color:var(--ink2);margin:4px 0 0}
+.bar{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between}
+.total .v{font-family:var(--mono);font-size:2rem;font-variant-numeric:tabular-nums}
+.total .l{color:var(--ink2);font-size:.8rem;letter-spacing:.02em}
+.seg{display:inline-flex;border:1px solid var(--axis);border-radius:6px;overflow:hidden}
+.seg button{font:inherit;font-size:.85rem;background:transparent;color:var(--ink2);border:0;padding:6px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--axis)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button:focus-visible{outline:2px solid var(--s1);outline-offset:-2px}
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 20px;margin:0;padding:0;list-style:none}
+.legend li{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center;font-size:.85rem;color:var(--ink2)}
+.legend b{font-family:var(--mono);font-weight:400;color:var(--ink);font-variant-numeric:tabular-nums}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.card{background:var(--surface);border:1px solid var(--grid);border-radius:8px;padding:16px;position:relative}
+svg{display:block;width:100%;height:auto;overflow:visible}
+svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
+#tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--axis);border-radius:6px;padding:8px 10px;font-size:12px;width:250px;box-shadow:0 4px 14px rgb(0 0 0/.12)}
+#tip .h{font-family:var(--mono);color:var(--muted)}#tip .m{margin:2px 0 6px;color:var(--ink)}
+#tip .r{display:flex;justify-content:space-between;gap:16px;font-variant-numeric:tabular-nums;color:var(--ink2)}
+#tip .r b{color:var(--ink);font-weight:600}#tip .t{border-top:1px solid var(--grid);margin-top:4px;padding-top:4px}
+details summary{cursor:pointer;color:var(--ink2)}
+.tw{overflow-x:auto;max-height:420px;overflow-y:auto;margin-top:8px}
+table{border-collapse:collapse;font-size:12px;width:100%}
+th,td{padding:4px 8px;border-bottom:1px solid var(--grid);text-align:left;white-space:nowrap}
+th{position:sticky;top:0;background:var(--bg)}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.note{color:var(--muted);font-size:12px;margin:0;max-width:75ch}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<main>
+<header><h1>Líneas de código por módulo</h1><p class="sub">u-roadmaps · rama main · __LOC_COMMITS__ commits (first-parent) · generado __LOC_DATE__ · total acumulado tras cada commit</p></header>
+<div class="bar"><div class="total"><div class="v" id="tv"></div><div class="l" id="tl"></div></div>
+<div class="seg" role="group" aria-label="Alcance"><button id="m-all" data-m="all" aria-pressed="true">Todo</button><button id="m-code" data-m="code" aria-pressed="false">Solo código</button><button id="m-test" data-m="test" aria-pressed="false">Solo tests</button></div></div>
+<ul class="legend" id="lg"></ul>
+<div class="card"><svg id="c" viewBox="0 0 1000 440" role="img" aria-label="Área apilada de líneas por módulo y commit"></svg><div id="tip" hidden></div></div>
+<p class="note">Cada módulo agrupa su código y sus tests (unitarios y e2e). Roadmap: src/features/roadmap y archivos de rutas, API, tests o código legado cuyo nombre trata de roadmap, nodos, canvas o cursos. Notificaciones: src/features/notifications, novu/ y archivos con «notif». Otras features: academic-overview e institutional-access. Shared: src/shared y el legado src/components, src/lib, src/hooks. App: el resto de src/app. Dev e integraciones: src/development y src/integrations (ucampus, vti, calendario). Infra: prisma, configuración, scripts y helpers de tests. Docs: archivos .md. Se excluyen lockfiles, graphify-out/, .agents/ y .claude/. Los archivos movidos cuentan en su carpeta nueva.</p>
+<details><summary>Ver tabla de datos</summary><div class="tw"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div></details>
+</main>
+<script>(()=>{
+const D=__LOC_DATA__;
+const G=[["Roadmap","--s1"],["Notificaciones","--s2"],["Shared","--s3"],["App","--s4"],["Otras features","--s5"],["Dev e integraciones","--s6"],["Infra y config","--s7"],["Docs","--s8"]];
+const fmt=n=>n.toLocaleString("es-CL");
+let mode="all";
+const val=(r,g)=>{const c=r[3+g];return mode==="all"?c[0]+c[1]:mode==="code"?c[0]:c[1]};
+const tot=r=>G.reduce((s,_,g)=>s+val(r,g),0);
+const W=1000,H=440,m={l:56,r:16,t:12,b:36},iw=W-m.l-m.r,ih=H-m.t-m.b;
+const NS="http://www.w3.org/2000/svg",svg=document.getElementById("c");
+const x=i=>m.l+i/(D.length-1)*iw;
+const tip=document.getElementById("tip"),card=tip.parentElement;
+const MO=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+function draw(){
+ svg.replaceChildren();
+ const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e};
+ const maxY=Math.max(...D.map(tot)),step=maxY>20000?10000:5000,yMax=Math.ceil(maxY/step)*step;
+ const y=v=>m.t+ih-v/yMax*ih;
+ for(let v=0;v<=yMax;v+=step){el("line",{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),stroke:v?"var(--grid)":"var(--axis)","stroke-width":1});el("text",{x:m.l-8,y:y(v)+4,"text-anchor":"end"}).textContent=v?(v/1000)+"k":"0"}
+ let pm="";D.forEach((r,i)=>{const mo=r[1].slice(0,7);if(mo!==pm){pm=mo;const[yy,mm]=mo.split("-");el("line",{x1:x(i),x2:x(i),y1:m.t+ih,y2:m.t+ih+5,stroke:"var(--axis)"});el("text",{x:x(i)+3,y:H-12}).textContent=MO[+mm-1]+" "+yy.slice(2)}});
+ let base=D.map(()=>0);
+ G.forEach(([n,c],g)=>{const tv=D.map((r,i)=>base[i]+Math.max(0,val(r,g)));
+  if(tv.every((v,i)=>v===base[i])){return}
+  const d="M"+D.map((r,i)=>x(i)+","+y(tv[i])).join("L")+"L"+D.map((r,i)=>i).reverse().map(i=>x(i)+","+y(base[i])).join("L")+"Z";
+  el("path",{d,fill:`var(${c})`,"fill-opacity":.88,stroke:"var(--surface)","stroke-width":1.25});base=tv});
+ const cross=el("line",{y1:m.t,y2:m.t+ih,stroke:"var(--ink2)","stroke-width":1,visibility:"hidden"});
+ const dot=el("circle",{r:4,fill:"var(--ink)",stroke:"var(--surface)","stroke-width":2,visibility:"hidden"});
+ const hit=el("rect",{x:m.l,y:m.t,width:iw,height:ih,fill:"transparent"});
+ hit.addEventListener("pointermove",ev=>{const pt=svg.getBoundingClientRect(),sx=(ev.clientX-pt.left)/pt.width*W;
+  const i=Math.max(0,Math.min(D.length-1,Math.round((sx-m.l)/iw*(D.length-1)))),r=D[i],p=i?D[i-1]:null;
+  cross.setAttribute("x1",x(i));cross.setAttribute("x2",x(i));cross.setAttribute("visibility","visible");
+  dot.setAttribute("cx",x(i));dot.setAttribute("cy",y(tot(r)));dot.setAttribute("visibility","visible");
+  const dl=tot(r)-(p?tot(p):0);
+  tip.innerHTML=`<div class="h">#${i+1} · ${r[0]} · ${r[1]}</div><div class="m"></div>`+G.map(([n,c],g)=>val(r,g)?`<div class="r"><span><span class="sw" style="background:var(${c})"></span> ${n}</span><b>${fmt(val(r,g))}</b></div>`:"").join("")+`<div class="r t"><span>Total</span><b>${fmt(tot(r))}</b></div><div class="r"><span>Δ commit</span><b>${dl>=0?"+":""}${fmt(dl)}</b></div>`;
+  tip.querySelector(".m").textContent=r[2];tip.hidden=false;
+  const cr=card.getBoundingClientRect(),px=ev.clientX-cr.left,py=ev.clientY-cr.top;
+  tip.style.left=Math.max(4,px+tip.offsetWidth+20>cr.width?px-tip.offsetWidth-12:px+12)+"px";
+  tip.style.top=Math.max(8,Math.min(cr.height-tip.offsetHeight-8,py-tip.offsetHeight/2))+"px"});
+ hit.addEventListener("pointerleave",()=>{tip.hidden=true;cross.setAttribute("visibility","hidden");dot.setAttribute("visibility","hidden")});
+ const last=D[D.length-1];
+ document.getElementById("tv").textContent=fmt(tot(last));
+ document.getElementById("tl").textContent={all:"líneas hoy (código + tests + docs)",code:"líneas de código hoy, sin tests",test:"líneas de tests hoy"}[mode];
+ document.getElementById("lg").innerHTML=G.map(([n,c],g)=>`<li><span class="sw" style="background:var(${c})"></span><span>${n}</span><b>${fmt(val(last,g))}</b></li>`).join("");
+ document.getElementById("th").innerHTML="<tr><th>#</th><th>Commit</th><th>Fecha</th>"+G.map(([n])=>`<th class="n">${n}</th>`).join("")+'<th class="n">Total</th><th>Mensaje</th></tr>';
+ const tb=document.getElementById("tb");tb.replaceChildren();
+ D.slice().reverse().forEach((r,j)=>{const tr=document.createElement("tr");
+  [D.length-j,r[0],r[1]].forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td)});
+  [...G.map((_,g)=>val(r,g)),tot(r)].forEach(v=>{const td=document.createElement("td");td.className="n";td.textContent=fmt(v);tr.appendChild(td)});
+  const td=document.createElement("td");td.textContent=r[2];tr.appendChild(td);tb.appendChild(tr)});
+}
+document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{mode=b.dataset.m;document.querySelectorAll(".seg button").forEach(o=>o.setAttribute("aria-pressed",o===b));draw()}));
+draw();
+})();</script>
