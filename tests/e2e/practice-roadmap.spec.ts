@@ -49,10 +49,10 @@ async function openPractice(page: Page, experience: 'student' | 'teaching', orig
   await page.goto(`/practice-roadmap/${experience}${query}`);
   await expect(page.locator('.react-flow')).toBeVisible();
   await expect(practiceNode(page, titles.a)).toBeVisible();
-  if (experience === 'student') await leaveTutorial(page);
+  await leaveTutorial(page);
 }
 
-/** The student tutorial starts on opening; leave it to explore freely. */
+/** The Roadmap tutorial starts on opening; leave it to explore freely. */
 async function leaveTutorial(page: Page) {
   await expect(page.locator('.driver-popover')).toBeVisible();
   await page.keyboard.press('Escape');

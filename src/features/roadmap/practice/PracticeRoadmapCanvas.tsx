@@ -18,7 +18,14 @@ import {
   type PracticeExperience,
 } from '@/features/roadmap/practice/practice-roadmap';
 import { studentTutorialSteps } from '@/features/roadmap/practice/student-tutorial';
-import { markTutorialClosingPopover, RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
+import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
+import { reportingPracticeActions } from '@/features/roadmap/practice/practice-actions';
+import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
+import {
+  createTutorialActions,
+  markTutorialClosingPopover,
+  RoadmapTutorial,
+} from '@/shared/client/tutorial/tutorial';
 
 /**
  * The real Roadmap canvas over a fresh in-memory copy of the Practice roadmap.
@@ -35,10 +42,17 @@ export function PracticeRoadmapCanvas({
   today: string;
   origin: string | null;
 }) {
+  const [actions] = useState(() => createTutorialActions<PracticeCanvasAction>());
+  const [teachingSteps] = useState(() =>
+    experience === 'teaching' ? teachingTutorialSteps() : [],
+  );
   const [persistence] = useState(() =>
-    createInMemoryRoadmapSessionPersistence(
-      practiceRoadmap(term, today),
-      experience === 'student' ? { studentProgress: practiceStudentProgress } : {},
+    reportingPracticeActions(
+      createInMemoryRoadmapSessionPersistence(
+        practiceRoadmap(term, today),
+        experience === 'student' ? { studentProgress: practiceStudentProgress } : {},
+      ),
+      actions.report,
     ),
   );
   return (
@@ -66,11 +80,16 @@ export function PracticeRoadmapCanvas({
             experience={{ kind: experience, term: 'current' }}
             practice={{
               nodeChangeCounts: experience === 'student' ? practiceNodeChangeCounts : {},
+              onAction: actions.report,
             }}
           />
         </RoadmapCanvasSessionPersistenceProvider>
       </main>
-      {experience === 'student' ? <RoadmapTutorial steps={studentTutorialSteps} /> : null}
+      {experience === 'student' ? (
+        <RoadmapTutorial steps={studentTutorialSteps} />
+      ) : (
+        <RoadmapTutorial steps={teachingSteps} actions={actions} />
+      )}
     </div>
   );
 }

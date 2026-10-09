@@ -1154,6 +1154,7 @@ function RoadmapCanvasGraph({
         if (isStudentExperience && isStudentBlockedNode(node)) return;
         const select = () => {
           dismissSelectionNotice();
+          input.practice?.onAction?.({ type: 'selectNode', nodeId });
           dispatchCanvas({
             type: 'selectNode',
             nodeId,
@@ -1171,6 +1172,7 @@ function RoadmapCanvasGraph({
       selectedNodeId={selectedNodeId}
       focusReturnRequest={focusReturnRequest}
       onClearSelectedNode={closeSelectedNode}
+      onFitView={() => input.practice?.onAction?.({ type: 'fitView' })}
       onViewportChange={canvasPreviewWorkflow.onViewportChange}
       viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
       confirmedAutomaticLayout={confirmedAutomaticLayout}
@@ -1239,7 +1241,7 @@ function RoadmapCanvasGraph({
           />
         ) : null,
         topRight:
-          isCanvasPreview || input.practice || input.experience.kind !== 'student' ? null : (
+          isCanvasPreview || input.practice ? null : (
             <RoadmapTutorialLink
               experience={input.experience.kind}
               origin={roadmapPath(input.courseOffering.identifier)}

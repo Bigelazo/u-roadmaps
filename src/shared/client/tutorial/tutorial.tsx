@@ -21,14 +21,37 @@ export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
 
 const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
 
-/** One step of a Roadmap tutorial; `prepare` runs before the step is shown. */
-export type TutorialStep = Readonly<{
+/**
+ * One step of a Roadmap tutorial; `prepare` runs before the step is shown. An action
+ * step has `advanceWhen`: its control stays usable and the step advances only when an
+ * action reported by the page matches. Any other action keeps the step and highlights
+ * the expected control again; so does `element` resolving to a different control.
+ */
+export type TutorialStep<Action = never> = Readonly<{
   element: string | (() => Element | null);
   title: string;
   description: string;
   side?: 'top' | 'right' | 'bottom' | 'left';
   prepare?: () => Promise<void> | void;
+  advanceWhen?: (action: Action) => boolean;
 }>;
+
+/** Where a page reports the actions that took effect, for action steps to follow. */
+export type TutorialActions<Action> = Readonly<{
+  report: (action: Action) => void;
+  subscribe: (listener: (action: Action) => void) => () => void;
+}>;
+
+export function createTutorialActions<Action>(): TutorialActions<Action> {
+  const listeners = new Set<(action: Action) => void>();
+  return {
+    report: (action) => listeners.forEach((listener) => listener(action)),
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
 
 /** Shared driver.js look and Spanish labels. Animations stay on (ADR-0022). */
 const baseConfig: Config = {
@@ -66,7 +89,13 @@ export function clickElement(selector: string) {
  * Runs a Roadmap tutorial as soon as its first element exists. It advances only through
  * its own controls; Esc, the close control and overlay clicks ask before leaving.
  */
-export function RoadmapTutorial({ steps }: { steps: readonly TutorialStep[] }) {
+export function RoadmapTutorial<Action = never>({
+  steps,
+  actions,
+}: {
+  steps: readonly TutorialStep<Action>[];
+  actions?: TutorialActions<Action>;
+}) {
   const [isConfirmingExit, setIsConfirmingExit] = useState(false);
   const confirmingRef = useRef(false);
   const driverRef = useRef<Driver | null>(null);
@@ -79,8 +108,11 @@ export function RoadmapTutorial({ steps }: { steps: readonly TutorialStep[] }) {
       confirmingRef.current = true;
       setIsConfirmingExit(true);
     };
-    const move = async (tour: Driver, offset: 1 | -1) => {
+    const isActionStep = (index: number | undefined) =>
+      index !== undefined && steps[index]?.advanceWhen !== undefined;
+    const move = async (tour: Driver, offset: 1 | -1, byAction = false) => {
       if (confirmingRef.current || moving) return;
+      if (offset === 1 && !byAction && isActionStep(tour.getActiveIndex())) return;
       const index = (tour.getActiveIndex() ?? 0) + offset;
       if (index < 0) return;
       if (index >= steps.length) {
@@ -103,7 +135,13 @@ export function RoadmapTutorial({ steps }: { steps: readonly TutorialStep[] }) {
       disableActiveInteraction: true,
       steps: steps.map((step): DriveStep => ({
         element: () => resolveElement(step.element) ?? document.body,
-        popover: { title: step.title, description: step.description, side: step.side },
+        disableActiveInteraction: !step.advanceWhen,
+        popover: {
+          title: step.title,
+          description: step.description,
+          side: step.side,
+          ...(step.advanceWhen ? { showButtons: ['close' as const] } : {}),
+        },
       })),
       onNextClick: () => void move(tour, 1),
       onPrevClick: () => void move(tour, -1),
@@ -114,8 +152,37 @@ export function RoadmapTutorial({ steps }: { steps: readonly TutorialStep[] }) {
     });
     driverRef.current = tour;
 
+    const highlightAgain = () => {
+      const index = tour.getActiveIndex();
+      if (!tour.isActive() || index === undefined || moving) return;
+      tour.moveTo(index);
+    };
+    const unsubscribe = actions?.subscribe((action) => {
+      const index = tour.getActiveIndex();
+      const step = index === undefined ? undefined : steps[index];
+      if (!tour.isActive() || !step?.advanceWhen) return;
+      if (step.advanceWhen(action)) void move(tour, 1, true);
+      else if (!confirmingRef.current) highlightAgain();
+    });
+    // An action step follows its control as it changes, for instance into a dialog and back.
+    const following = setInterval(() => {
+      const index = tour.getActiveIndex();
+      if (confirmingRef.current || !isActionStep(index)) return;
+      const element = resolveElement(steps[index!].element);
+      if (element && element !== tour.getActiveElement()) highlightAgain();
+      // Keeps the highlight on a control that is still moving, like an opening menu.
+      else tour.refresh();
+    }, 150);
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (confirmingRef.current || !tour.isActive()) return;
+      // Within a page dialog or menu, Esc belongs to it: an action step then follows back.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"], [role="menu"]') &&
+        !event.target.closest('.driver-popover')
+      )
+        return;
       // Deferred, so the confirmation opened here does not also receive this Esc.
       if (event.key === 'Escape') setTimeout(askExit, 0);
       else if (event.key === 'ArrowRight') void move(tour, 1);
@@ -131,11 +198,13 @@ export function RoadmapTutorial({ steps }: { steps: readonly TutorialStep[] }) {
     })();
     return () => {
       cancelled = true;
+      unsubscribe?.();
+      clearInterval(following);
       window.removeEventListener('keydown', onKeyDown, true);
       tour.destroy();
       driverRef.current = null;
     };
-  }, [steps]);
+  }, [steps, actions]);
 
   const resume = () => {
     setIsConfirmingExit(false);

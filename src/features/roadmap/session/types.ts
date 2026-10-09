@@ -124,5 +124,14 @@ export type RoadmapCanvasSessionInput = {
   /** Present on the Practice roadmap, which belongs to no Course offering. */
   readonly practice?: {
     readonly nodeChangeCounts: Readonly<Record<string, number>>;
+    /** Told about canvas actions that took effect, for the teaching Roadmap tutorial. */
+    readonly onAction?: (action: PracticeCanvasAction) => void;
   };
 };
+
+/** A canvas action that took effect on the Practice roadmap. */
+export type PracticeCanvasAction =
+  | { readonly type: 'fitView' }
+  | { readonly type: 'selectNode'; readonly nodeId: string }
+  | { readonly type: 'addNode'; readonly nodeId: string }
+  | { readonly type: 'connectNodes'; readonly sourceNodeId: string; readonly targetNodeId: string };

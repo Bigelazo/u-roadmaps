@@ -123,15 +123,3 @@ test('leaving the tutorial asks for confirmation first', async ({ page, createUs
   await expect(page).toHaveURL(/\/practice-roadmap\/student/);
   await expect(practiceNode(page, 'Introducción')).toBeVisible();
 });
-
-test('the canvas tutorial icon is absent for teaching staff until their tutorial exists, and in Canvas preview', async ({
-  page,
-  course,
-}) => {
-  await enterRoadmap(page, course.pagePath(), course.users.teacher.id);
-  await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Vista estudiante' }).click();
-  await expect(page.getByText('Previsualización del canvas')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
-});
