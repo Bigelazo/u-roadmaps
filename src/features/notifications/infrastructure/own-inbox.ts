@@ -54,17 +54,10 @@ export function noticeRecord(notice: {
     ...(notice.courseName ? { courseName: notice.courseName } : {}),
     subject: projected?.wording.subject ?? notice.subject,
     body: projected?.wording.body ?? notice.body,
-    data: withActorLabel(projected?.data ?? notice.data),
+    data: projected?.data ?? notice.data,
     createdAt: notice.availableAt.toISOString(),
     read: notice.acknowledgedAt !== null,
   };
-}
-
-/** Read-time label of a change's actor; notices store a null name when there is none to show. */
-function withActorLabel(data: Prisma.JsonValue) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
-  if (typeof data.actorId !== 'string' || typeof data.actorName === 'string') return data;
-  return { ...data, actorName: 'Equipo docente' };
 }
 
 export function noticeFilter(params: URLSearchParams): Prisma.RoadmapNoticeWhereInput {
