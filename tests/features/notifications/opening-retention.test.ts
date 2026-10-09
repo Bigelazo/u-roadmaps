@@ -15,7 +15,8 @@ const { transaction, prisma } = vi.hoisted(() => {
     noticeKnownValue: { findMany: vi.fn() },
     dependency: { findMany: vi.fn() },
     nodeType: { findMany: vi.fn() },
-    roadmap: { findUniqueOrThrow: vi.fn() },
+    resource: { findMany: vi.fn() },
+    roadmap: { findUniqueOrThrow: vi.fn(), findUnique: vi.fn() },
   };
   return { transaction, prisma: { ...transaction, $transaction: vi.fn() } };
 });
@@ -44,6 +45,8 @@ beforeEach(() => {
   transaction.noticeKnownValue.findMany.mockResolvedValue([]);
   transaction.dependency.findMany.mockResolvedValue([]);
   transaction.nodeType.findMany.mockResolvedValue([]);
+  transaction.resource.findMany.mockResolvedValue([]);
+  transaction.roadmap.findUnique.mockResolvedValue(null);
   transaction.roadmap.findUniqueOrThrow.mockResolvedValue({
     courseOfferingId: 'course-offering',
     courseOffering: { courseCode: 'CC1002', year: 2026, semester: 2 },
