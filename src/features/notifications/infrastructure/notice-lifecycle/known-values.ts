@@ -92,23 +92,36 @@ export async function setKnownValue(
 
 /**
  * A deleted Node's targets, and the Dependency pairs it was part of, have nothing left to
- * compare. An unrecognized creation stays only for the deletion's recipients: delivery
- * absorbs the deletion into it and then forgets it.
+ * compare. A recipient who never recognized the Node's creation is not told of its
+ * deletion: the creation absorbs it, so its pending creation notice is withdrawn here.
+ * Returns the deletion's recipients who knew the Node.
  */
-export async function forgetNodeKnownValues(
+export async function forgetDeletedNode(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   nodeId: string,
   deletionRecipientIds: readonly string[],
-) {
+): Promise<string[]> {
+  const creation = nodeCreationRef(nodeId).targetKey;
+  const unaware = new Set(
+    (
+      await transaction.noticeKnownValue.findMany({
+        where: { roadmapId, targetKey: creation, knownValue: ABSENT },
+        select: { recipientId: true },
+      })
+    ).map(({ recipientId }) => recipientId),
+  );
+  await transaction.roadmapNotice.deleteMany({
+    where: {
+      roadmapId,
+      targetKey: creation,
+      acknowledgedAt: null,
+      recipientId: { in: [...unaware] },
+    },
+  });
   await transaction.noticeKnownValue.deleteMany({
     where: {
       roadmapId,
-      NOT: {
-        targetKey: nodeCreationRef(nodeId).targetKey,
-        knownValue: ABSENT,
-        recipientId: { in: [...deletionRecipientIds] },
-      },
       OR: [
         { nodeId },
         { targetKey: { startsWith: `dependency:${nodeId}:` } },
@@ -116,4 +129,5 @@ export async function forgetNodeKnownValues(
       ],
     },
   });
+  return deletionRecipientIds.filter((recipientId) => !unaware.has(recipientId));
 }

@@ -149,6 +149,16 @@ test('entry knows a new Node whose creation notice was never delivered', async (
   ]);
 });
 
+test('deleting a new Node forgets its unrecognized creation even if the deletion is never delivered', async ({
+  course,
+}) => {
+  const node = await teacherEdits(course).create('Colas');
+  const deferred = deferredNoticePort();
+  await teacherEdits(course, deferred.port).remove(node.id);
+  expect(await prisma.noticeKnownValue.findMany({ where: { nodeId: node.id } })).toEqual([]);
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
+});
+
 /** A new Course offering of the same Course with this course's people, and its Roadmap. */
 async function newRoadmap(course: IntegrationCourse, copy: boolean) {
   await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });

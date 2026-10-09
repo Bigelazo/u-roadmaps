@@ -11,7 +11,7 @@ import {
 } from '../../application/notice-targets';
 import { acceptDelivery } from '../notice-delivery';
 import type { NoticeDeliveryScheduler } from '../own-inbox';
-import { forgetNodeKnownValues, recordCurrentValues, recordKnownValues } from './known-values';
+import { forgetDeletedNode, recordCurrentValues, recordKnownValues } from './known-values';
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
 import { roadmapEnvelope } from './envelope';
@@ -70,9 +70,16 @@ export async function recordNoticeTargets(
     const audience = await descriptor.audience(fact, changes, roadmap);
     if (audience.includes(changes.actorId))
       ownTargets.push({ descriptor, fact, target, previousValue });
-    const recipientIds = audience.filter((recipientId) => recipientId !== changes.actorId);
-    if (fact.kind === 'node-deleted')
-      await forgetNodeKnownValues(transaction, changes.roadmapId, fact.nodeId, recipientIds);
+    let recipientIds = audience.filter((recipientId) => recipientId !== changes.actorId);
+    if (fact.kind === 'node-deleted') {
+      // Settled here, not at delivery, so a delivery that never runs leaves nothing behind.
+      recipientIds = await forgetDeletedNode(
+        transaction,
+        changes.roadmapId,
+        fact.nodeId,
+        recipientIds,
+      );
+    }
     if (recipientIds.length)
       targets.push({
         descriptor,
