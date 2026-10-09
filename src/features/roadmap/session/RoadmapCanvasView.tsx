@@ -1239,7 +1239,7 @@ function RoadmapCanvasGraph({
           />
         ) : null,
         topRight:
-          isCanvasPreview || input.practice ? null : (
+          isCanvasPreview || input.practice || input.experience.kind !== 'student' ? null : (
             <RoadmapTutorialLink
               experience={input.experience.kind}
               origin={roadmapPath(input.courseOffering.identifier)}

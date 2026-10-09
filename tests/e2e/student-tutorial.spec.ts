@@ -70,6 +70,9 @@ test('a student walks through the tutorial from their Roadmap and is pointed bac
   await expect(detail).toHaveClass(/driver-active-element/);
   await expect(detail.getByRole('heading', { name: 'Conceptos básicos' })).toBeVisible();
   await expect(tourPopover(page)).toContainText('no se puede deshacer');
+  await tourPopover(page).getByRole('button', { name: 'Anterior' }).click();
+  await expectStep(page, 8);
+  await expect(page.locator('#student-node-detail-panel')).toHaveCount(0);
   await advanceTo(page, 10);
   await expect(page.getByRole('button', { name: /^Avisos/ })).toHaveClass(/driver-active-element/);
 
@@ -121,9 +124,13 @@ test('leaving the tutorial asks for confirmation first', async ({ page, createUs
   await expect(practiceNode(page, 'Introducción')).toBeVisible();
 });
 
-test('the canvas tutorial icon is absent in Canvas preview', async ({ page, course }) => {
+test('the canvas tutorial icon is absent for teaching staff until their tutorial exists, and in Canvas preview', async ({
+  page,
+  course,
+}) => {
   await enterRoadmap(page, course.pagePath(), course.users.teacher.id);
-  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
   await expect(page.getByText('Previsualización del canvas')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
