@@ -1,19 +1,26 @@
 import 'server-only';
 
 import { prisma } from '@/shared/server/db';
+import type { PostCreationInvitationWording } from '../types';
 
 /** The teaching tutorial invitation shown after a first Roadmap creation. */
-export type PostCreationInvitation = Readonly<{ wording: 'hacer' | 'repetir' }>;
+export type PostCreationInvitation = Readonly<{ wording: PostCreationInvitationWording }>;
 
 /**
- * Claims the invitation for a User whose only created Roadmap is the one just created.
+ * Claims the invitation when `roadmapId` is the only Roadmap the User has created.
  * It is recorded as shown here, once, so later Roadmap creations never show it.
  */
 export async function claimPostCreationInvitation(
   userId: string,
+  roadmapId: string,
   now = new Date(),
 ): Promise<PostCreationInvitation | null> {
-  if ((await prisma.roadmap.count({ where: { creatorId: userId } })) !== 1) return null;
+  const created = await prisma.roadmap.findMany({
+    where: { creatorId: userId },
+    select: { id: true },
+    take: 2,
+  });
+  if (created.length !== 1 || created[0].id !== roadmapId) return null;
   const { count } = await prisma.user.updateMany({
     where: { id: userId, postCreationInvitationShownAt: null },
     data: { postCreationInvitationShownAt: now },

@@ -74,7 +74,7 @@ export default async function CoursePage(
   // Landing here from Roadmap creation may claim the one-time teaching tutorial invitation.
   const invitation =
     isTeaching && courseOffering.roadmap && searchParams.created === '1'
-      ? await claimPostCreationInvitation(user.id)
+      ? await claimPostCreationInvitation(user.id, courseOffering.roadmap.id)
       : null;
 
   return (

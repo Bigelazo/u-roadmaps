@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
+import type { PostCreationInvitationWording } from '../types';
 
 /**
  * Invites a course professor, on the Roadmap canvas they just created, to the teaching
@@ -21,7 +22,7 @@ export function PostCreationInvitationDialog({
   wording,
   origin,
 }: {
-  wording: 'hacer' | 'repetir';
+  wording: PostCreationInvitationWording;
   origin: string;
 }) {
   const [open, setOpen] = useState(true);
