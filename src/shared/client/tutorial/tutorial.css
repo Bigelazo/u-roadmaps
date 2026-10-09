@@ -104,3 +104,12 @@
 .driver-active .driver-active-element .react-flow__edgelabel-renderer {
   pointer-events: none;
 }
+
+/* "Salir" leaves the tutorial at any moment: its bar sits above the overlay. */
+.driver-active [data-tutorial-exit] {
+  z-index: 10001;
+}
+.driver-active [data-tutorial-exit],
+.driver-active [data-tutorial-exit] * {
+  pointer-events: auto;
+}
