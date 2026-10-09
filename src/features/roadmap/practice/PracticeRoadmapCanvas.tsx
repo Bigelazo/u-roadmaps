@@ -17,6 +17,8 @@ import {
   type PracticeAcademicTerm,
   type PracticeExperience,
 } from '@/features/roadmap/practice/practice-roadmap';
+import { studentTutorialSteps } from '@/features/roadmap/practice/student-tutorial';
+import { markTutorialClosingPopover, RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
 
 /**
  * The real Roadmap canvas over a fresh in-memory copy of the Practice roadmap.
@@ -43,14 +45,18 @@ export function PracticeRoadmapCanvas({
     <div data-practice-roadmap>
       <nav
         aria-label="Mapa de práctica"
-        className="sticky top-0 z-20 flex h-16 items-center justify-end border-b bg-background px-4 sm:px-6"
+        className="sticky top-16 z-20 flex h-14 items-center justify-end border-b bg-background px-4 sm:px-6"
       >
-        <Link className={buttonVariants({ variant: 'outline' })} href={practiceExitHref(origin)}>
+        <Link
+          className={buttonVariants({ variant: 'outline' })}
+          href={practiceExitHref(origin)}
+          onClick={markTutorialClosingPopover}
+        >
           <LogOut data-icon="inline-start" />
           Salir
         </Link>
       </nav>
-      <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
+      <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-30 lg:bottom-0">
         <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
           <RoadmapCanvasSession
             courseOffering={{
@@ -64,6 +70,7 @@ export function PracticeRoadmapCanvas({
           />
         </RoadmapCanvasSessionPersistenceProvider>
       </main>
+      {experience === 'student' ? <RoadmapTutorial steps={studentTutorialSteps} /> : null}
     </div>
   );
 }

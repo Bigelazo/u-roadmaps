@@ -398,6 +398,7 @@ export type RoadmapGraphProps = {
 export type RoadmapGraphOverlaySlots = {
   topLeft?: ReactNode;
   topCenter?: ReactNode;
+  topRight?: ReactNode;
   bottomRight?: ReactNode;
 };
 
@@ -415,6 +416,11 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
       {slots?.topCenter ? (
         <Panel position="top-center" className="mt-3! w-[calc(100%-2rem)] max-w-xl sm:w-auto">
           {slots.topCenter}
+        </Panel>
+      ) : null}
+      {slots?.topRight ? (
+        <Panel position="top-right" className="m-4! sm:m-6!">
+          {slots.topRight}
         </Panel>
       ) : null}
       {slots?.bottomRight ? (

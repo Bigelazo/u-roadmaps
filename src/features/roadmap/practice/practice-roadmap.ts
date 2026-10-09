@@ -12,7 +12,7 @@ const nodeTypes = {
   supplementary: 'practice-node-type-supplementary',
 } as const;
 
-const ids = {
+export const practiceNodeIds = {
   a: 'practice-node-a',
   b: 'practice-node-b',
   c: 'practice-node-c',
@@ -24,9 +24,11 @@ const ids = {
 } as const;
 
 /** The simulated progress shown in the student experience. */
-export const practiceStudentProgress = { completedNodeIds: [ids.a] } as const;
+export const practiceStudentProgress = { completedNodeIds: [practiceNodeIds.a] } as const;
 /** The Node change marks shown on the Practice roadmap. */
-export const practiceNodeChangeCounts: Readonly<Record<string, number>> = { [ids.c]: 1 };
+export const practiceNodeChangeCounts: Readonly<Record<string, number>> = {
+  [practiceNodeIds.c]: 1,
+};
 
 function node(
   id: string,
@@ -96,16 +98,22 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
       },
     ],
     nodes: [
-      node(ids.a, 'Introducción', nodeTypes.content, [0, 160], 'Punto de partida del curso.'),
       node(
-        ids.b,
+        practiceNodeIds.a,
+        'Introducción',
+        nodeTypes.content,
+        [0, 160],
+        'Punto de partida del curso.',
+      ),
+      node(
+        practiceNodeIds.b,
         'Conceptos básicos',
         nodeTypes.content,
         [320, 40],
         'Las ideas que usarás en el resto del curso.',
       ),
       node(
-        ids.c,
+        practiceNodeIds.c,
         'Lectura complementaria',
         nodeTypes.supplementary,
         [320, 280],
@@ -128,15 +136,21 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
         },
       ),
       node(
-        ids.d,
+        practiceNodeIds.d,
         'Ejercicios guiados',
         nodeTypes.content,
         [640, 40],
         'Ejercicios para aplicar los conceptos básicos.',
       ),
-      node(ids.e, 'Control 1', nodeTypes.assessment, [960, 160], 'Primera evaluación del curso.'),
       node(
-        ids.f,
+        practiceNodeIds.e,
+        'Control 1',
+        nodeTypes.assessment,
+        [960, 160],
+        'Primera evaluación del curso.',
+      ),
+      node(
+        practiceNodeIds.f,
         'Proyecto final',
         nodeTypes.assessment,
         [1280, 40],
@@ -144,14 +158,14 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
         { isTeacherBlocked: true, teacherUnlockOn: addDays(today, 14) },
       ),
       node(
-        ids.g,
+        practiceNodeIds.g,
         'Retroalimentación del control',
         nodeTypes.supplementary,
         [1280, 280],
         'Comentarios sobre el Control 1.',
       ),
       node(
-        ids.h,
+        practiceNodeIds.h,
         'Material de apoyo',
         nodeTypes.supplementary,
         [640, 400],
@@ -160,14 +174,14 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
       ),
     ],
     dependencies: [
-      dependency(1, ids.a, ids.b),
-      dependency(2, ids.a, ids.c),
-      dependency(3, ids.b, ids.d),
-      dependency(4, ids.b, ids.e),
-      dependency(5, ids.c, ids.e),
-      dependency(6, ids.d, ids.e),
-      dependency(7, ids.e, ids.f),
-      dependency(8, ids.e, ids.g),
+      dependency(1, practiceNodeIds.a, practiceNodeIds.b),
+      dependency(2, practiceNodeIds.a, practiceNodeIds.c),
+      dependency(3, practiceNodeIds.b, practiceNodeIds.d),
+      dependency(4, practiceNodeIds.b, practiceNodeIds.e),
+      dependency(5, practiceNodeIds.c, practiceNodeIds.e),
+      dependency(6, practiceNodeIds.d, practiceNodeIds.e),
+      dependency(7, practiceNodeIds.e, practiceNodeIds.f),
+      dependency(8, practiceNodeIds.e, practiceNodeIds.g),
     ],
   };
 }

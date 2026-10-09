@@ -49,6 +49,18 @@ async function openPractice(page: Page, experience: 'student' | 'teaching', orig
   await page.goto(`/practice-roadmap/${experience}${query}`);
   await expect(page.locator('.react-flow')).toBeVisible();
   await expect(practiceNode(page, titles.a)).toBeVisible();
+  if (experience === 'student') await leaveTutorial(page);
+}
+
+/** The student tutorial starts on opening; leave it to explore freely. */
+async function leaveTutorial(page: Page) {
+  await expect(page.locator('.driver-popover')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('alertdialog', { name: '¿Salir del tutorial?' })
+    .getByRole('button', { name: 'Salir' })
+    .click();
+  await expect(page.locator('.driver-popover')).toHaveCount(0);
 }
 
 test('a User without Participations sees the simulated student progress', async ({
