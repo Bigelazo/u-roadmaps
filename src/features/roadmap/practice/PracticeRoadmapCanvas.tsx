@@ -23,6 +23,7 @@ import { reportingPracticeActions } from '@/features/roadmap/practice/practice-a
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 import {
   createTutorialActions,
+  TUTORIAL_EXIT_ATTRIBUTE,
   markTutorialClosingPopover,
   RoadmapTutorial,
 } from '@/shared/client/tutorial/tutorial';
@@ -59,6 +60,7 @@ export function PracticeRoadmapCanvas({
     <div data-practice-roadmap>
       <nav
         aria-label="Mapa de práctica"
+        {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
         className="sticky top-16 z-20 flex h-14 items-center justify-end border-b bg-background px-4 sm:px-6"
       >
         <Link
