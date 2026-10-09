@@ -123,3 +123,18 @@ test('leaving the tutorial asks for confirmation first', async ({ page, createUs
   await expect(page).toHaveURL(/\/practice-roadmap\/student/);
   await expect(practiceNode(page, 'Introducción')).toBeVisible();
 });
+
+test('"Salir" leaves in the middle of the tutorial without confirmation', async ({
+  page,
+  createUser,
+}) => {
+  const user = await createUser();
+  await authenticateAs(page.context(), user.id);
+  await page.goto('/practice-roadmap/student?origin=%2Facademic-overview');
+  await expectStep(page, 0);
+  await advanceTo(page, 2);
+
+  await page.getByRole('link', { name: 'Salir' }).click();
+  await expect(page).toHaveURL(/\/academic-overview$/);
+  await expect(page.getByRole('alertdialog', { name: '¿Salir del tutorial?' })).toHaveCount(0);
+});
