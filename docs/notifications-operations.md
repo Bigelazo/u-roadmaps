@@ -114,7 +114,9 @@ reporta hechos por el port de cambios del Roadmap
 1. **Registrar** (dentro de la transacción de la edición): fija el Known value
    anterior de cada destinatario que todavía no tiene uno, decide la audiencia y
    aplica la regla del actor. Eliminar un Nodo borra en ese momento los Known
-   values de sus Objetos y de los pares de Dependencia que lo incluían.
+   values de sus Objetos y de los pares de Dependencia que lo incluían, salvo la
+   creación no reconocida (`absent`) de los destinatarios de la eliminación, que
+   su entrega absorbe y borra.
 2. **Entregar** (después del commit, una transacción por destinatario): acepta el
    efecto en `NoticeDeliveryEffect`, toma el lock por destinatario y Roadmap y
    reconcilia el Objeto contra su valor actual con una única ruta genérica:

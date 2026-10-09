@@ -19,3 +19,9 @@ DROP TABLE "RouteNoticeKnowledge";
 DELETE FROM "NoticeKnownValue" k
 WHERE k."nodeId" IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM "RoadmapNode" n WHERE n.id = k."nodeId");
+DELETE FROM "NoticeKnownValue" k
+WHERE k."targetKey" LIKE 'dependency:%'
+  AND (
+    NOT EXISTS (SELECT 1 FROM "RoadmapNode" n WHERE n.id::text = split_part(k."targetKey", ':', 2))
+    OR NOT EXISTS (SELECT 1 FROM "RoadmapNode" n WHERE n.id::text = split_part(k."targetKey", ':', 3))
+  );

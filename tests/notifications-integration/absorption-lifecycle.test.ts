@@ -99,7 +99,7 @@ test('deleting a Node absorbs its pending title, access and Resource notices and
   expect(await prisma.noticeKnownValue.count({ where: { nodeId } })).toBe(0);
 });
 
-test('deleting a Node nobody is told about forgets every Known value of it, unknown creations included', async ({
+test('deleting a Node with no recipient forgets every Known value of it, unrecognized creations included', async ({
   course,
 }) => {
   const edits = teacherEdits(course);
