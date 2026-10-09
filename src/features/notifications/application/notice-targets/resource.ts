@@ -100,15 +100,18 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   },
   wording(values) {
     const { changeKind, resourceTitle, titleChange, nodeTitle } = lifecycle(values);
+    // The Inbox names the Node; the Change summary groups items under it already.
+    const sentence = (node: string) =>
+      changeKind === 'resource-added'
+        ? `Nuevo recurso «${resourceTitle}»${node && ` en ${node}`}.`
+        : changeKind === 'resource-removed'
+          ? `Se eliminó el recurso «${resourceTitle}»${node && ` de ${node}`}.`
+          : `Se actualizó el recurso «${resourceTitle}»${node && ` en ${node}`}.${titleChange ? ` ${titleChange}` : ''}`;
     return {
       subject: resourceTitle,
-      body:
-        changeKind === 'resource-added'
-          ? `Nuevo recurso «${resourceTitle}» en «${nodeTitle}».`
-          : changeKind === 'resource-removed'
-            ? `Se eliminó el recurso «${resourceTitle}» de «${nodeTitle}».`
-            : `Se actualizó el recurso «${resourceTitle}» en «${nodeTitle}».${titleChange ? ` ${titleChange}` : ''}`,
+      body: sentence(`«${nodeTitle}»`),
       summaryGroup: 'node',
+      summary: sentence(''),
     };
   },
   apiData(values) {

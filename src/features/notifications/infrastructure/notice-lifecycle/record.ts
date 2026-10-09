@@ -136,7 +136,8 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
     const results = await Promise.allSettled(
       deliveries.slice(offset, offset + DELIVERY_CONCURRENCY).map((deliver) => deliver()),
     );
-    failed ||= results.some((result) => result.status === 'rejected');  }
+    failed ||= results.some((result) => result.status === 'rejected');
+  }
   if (failed)
     console.warn('Roadmap notice delivery failed', { roadmapId: change.courseContext.roadmapId });
 }

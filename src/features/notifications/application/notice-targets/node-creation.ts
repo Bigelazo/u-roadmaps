@@ -14,7 +14,7 @@ function presented({ context }: TargetValues) {
 function text(values: TargetValues) {
   const { nodeTitle, blocked } = presented(values);
   const subject = `Nuevo Nodo «${nodeTitle}»`;
-  return { subject, body: `${subject}${blocked ? ' (Bloqueado)' : ''}.` };
+  return { subject, body: `${subject}${blocked ? ' (bloqueado)' : ''}.` };
 }
 
 /**

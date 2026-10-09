@@ -182,19 +182,6 @@ test('creation, deletion and availability absorb Resource targets', async ({ cou
   ]);
 });
 
-test('the Inbox and the Change summary describe a Resource notice in the same words', async ({
-  course,
-}) => {
-  await enterRoadmap(course.studentId, course.roadmapId);
-  await teacherEdits(course).addResource(course.change.nodeId, 'Guía 3');
-  const [notice] = await pendingResources(course.studentId, course);
-  const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
-  expect(summary).toEqual({
-    courseCode: course.identifier.courseCode,
-    groups: [{ title: 'Recursividad', items: [notice.body] }],
-  });
-});
-
 test('concurrent and retried Resource deliveries leave one pending notice', async ({ course }) => {
   const deferred = deferredNoticePort();
   const edits = teacherEdits(course, deferred.port);

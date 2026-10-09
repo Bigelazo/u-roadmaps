@@ -50,11 +50,7 @@ export function changeSummary(
             general.push(`Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`);
           break;
         case 'node-available':
-          items.push(
-            data.noticeTarget === 'node-creation'
-              ? `Nuevo Nodo «${node?.title ?? data.nodeTitle}»${data.nodeAccess === 'Bloqueado' ? ' (Bloqueado)' : ''}.`
-              : 'Nodo disponible.',
-          );
+          items.push('Nodo disponible.');
           break;
         case 'node-retired':
           items.push('Nodo retirado.');

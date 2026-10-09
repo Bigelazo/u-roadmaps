@@ -55,7 +55,7 @@ test('a pending Node creation then blocked is a blocked new Node', async ({ cour
   expect(notices).toHaveLength(1);
   expect(notices[0]).toMatchObject({
     subject: 'Nuevo Nodo «Pilas»',
-    body: 'Nuevo Nodo «Pilas» (Bloqueado).',
+    body: 'Nuevo Nodo «Pilas» (bloqueado).',
     data: { noticeTarget: 'node-creation', nodeAccess: 'Bloqueado', nodeDescription: null },
   });
 });
