@@ -13,7 +13,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, Eye, History, X } from 'lucide-react';
+import { CircleAlert, CircleHelp, Eye, History, X } from 'lucide-react';
 import { versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -57,6 +57,10 @@ import { Badge } from '@/shared/ui/badge';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
+import {
+  TUTORIAL_TRIGGER_ATTRIBUTE,
+  TutorialClosingPopover,
+} from '@/shared/client/tutorial/tutorial';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
 import {
   nodeTypeDeletionConfirmation,
@@ -1234,8 +1238,47 @@ function RoadmapCanvasGraph({
             onExit={canvasPreviewWorkflow.exit}
           />
         ) : null,
+        topRight:
+          isCanvasPreview || input.practice ? null : (
+            <RoadmapTutorialLink
+              experience={input.experience.kind}
+              origin={roadmapPath(input.courseOffering.identifier)}
+            />
+          ),
       }}
     />
+  );
+}
+
+function roadmapPath({
+  courseCode,
+  year,
+  semester,
+}: RoadmapCanvasSessionInput['courseOffering']['identifier']) {
+  return `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}`;
+}
+
+/** The question-mark icon that opens the Roadmap tutorial of this experience. */
+function RoadmapTutorialLink({
+  experience,
+  origin,
+}: {
+  experience: RoadmapCanvasSessionInput['experience']['kind'];
+  origin: string;
+}) {
+  return (
+    <>
+      <Link
+        {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
+        aria-label="Abrir tutorial"
+        title="Abrir tutorial"
+        className={buttonVariants({ variant: 'outline', size: 'icon' })}
+        href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
+      >
+        <CircleHelp />
+      </Link>
+      <TutorialClosingPopover />
+    </>
   );
 }
 
