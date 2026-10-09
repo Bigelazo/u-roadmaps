@@ -197,6 +197,10 @@ function useRoadmapCanvasController({ input }: Props) {
       nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
     [],
   );
+  const reportPracticeAction = input.practice?.onAction;
+  useEffect(() => {
+    if (selectedNodeId) reportPracticeAction?.({ type: 'selectNode', nodeId: selectedNodeId });
+  }, [selectedNodeId, reportPracticeAction]);
   const closeEditorAfterNodeDeletion = useCallback(() => {
     dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
     requestNodeFocusReturn();
@@ -1171,6 +1175,7 @@ function RoadmapCanvasGraph({
       selectedNodeId={selectedNodeId}
       focusReturnRequest={focusReturnRequest}
       onClearSelectedNode={closeSelectedNode}
+      onFitView={() => input.practice?.onAction?.({ type: 'fitView' })}
       onViewportChange={canvasPreviewWorkflow.onViewportChange}
       viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
       confirmedAutomaticLayout={confirmedAutomaticLayout}
@@ -1239,7 +1244,7 @@ function RoadmapCanvasGraph({
           />
         ) : null,
         topRight:
-          isCanvasPreview || input.practice || input.experience.kind !== 'student' ? null : (
+          isCanvasPreview || input.practice ? null : (
             <RoadmapTutorialLink
               experience={input.experience.kind}
               origin={roadmapPath(input.courseOffering.identifier)}
