@@ -248,13 +248,17 @@ export function nodeEditorReducer(
             previous.isVisible !== action.node.isVisible ||
             previous.isTeacherBlocked !== action.node.isTeacherBlocked ||
             JSON.stringify(previous.resources) !== JSON.stringify(action.node.resources));
+        const isPendingEffectResult = refreshMatchesPendingEffect(state, action.node);
         return {
           ...state,
-          epoch: state.epoch + 1,
+          // The result of the pending effect, arriving before it resolves, keeps that
+          // effect current so it can still close its Resource form.
+          epoch:
+            changed && state.pendingEditorEffect && isPendingEffectResult
+              ? state.epoch
+              : state.epoch + 1,
           canonicalNode: action.node,
-          remoteConflict:
-            state.remoteConflict ||
-            Boolean(changed && !refreshMatchesPendingEffect(state, action.node)),
+          remoteConflict: state.remoteConflict || Boolean(changed && !isPendingEffectResult),
           remoteDeleted: false,
           confirmedEditorEffect: null,
         };
@@ -341,7 +345,7 @@ export function nodeEditorReducer(
           state.resourceSession.kind === 'closed'
             ? action.command.mode === 'file'
               ? { kind: 'adding-file', value: emptyResourceInput, selectedFile: null }
-              : { kind: 'adding-link', value: emptyResourceInput }
+              : { kind: 'adding-link', value: action.command.value ?? emptyResourceInput }
             : state.resourceSession,
       };
     case 'request-resource-deletion':

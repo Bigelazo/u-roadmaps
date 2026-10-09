@@ -23,6 +23,8 @@ export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
 export const TUTORIAL_EXIT_ATTRIBUTE = 'data-tutorial-exit';
 
 const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
+/** Set on the body during an action step, so portaled menus, dialogs and popups stay usable. */
+const actingClass = 'u-roadmaps-tour-acting';
 
 /**
  * One step of a Roadmap tutorial; `prepare` runs before the step is shown. An action
@@ -106,6 +108,7 @@ export function RoadmapTutorial<Action = never>({
   useEffect(() => {
     let cancelled = false;
     let moving = false;
+    let following = false;
     const askExit = () => {
       if (confirmingRef.current) return;
       confirmingRef.current = true;
@@ -123,9 +126,11 @@ export function RoadmapTutorial<Action = never>({
         return;
       }
       moving = true;
+      following = false;
       try {
         await steps[index].prepare?.();
         await waitForElement(steps[index].element);
+        document.body.classList.toggle(actingClass, isActionStep(index));
         tour.moveTo(index);
       } finally {
         moving = false;
@@ -150,6 +155,20 @@ export function RoadmapTutorial<Action = never>({
       onPrevClick: () => void move(tour, -1),
       onDoneClick: () => void move(tour, 1),
       onCloseClick: askExit,
+      // driver.js focuses its popover right after rendering it. When an action step only
+      // follows its control, focus stays where the user is working, like an open Select.
+      onPopoverRender: () => {
+        if (!following) return;
+        following = false;
+        // driver.js calls focus() synchronously right after this hook, so only that one
+        // call is skipped; the microtask restores focus() if driver made none.
+        const focus = HTMLElement.prototype.focus;
+        const restore = () => {
+          HTMLElement.prototype.focus = focus;
+        };
+        HTMLElement.prototype.focus = restore;
+        queueMicrotask(restore);
+      },
       onDestroyStarted: askExit,
       overlayClickBehavior: askExit,
     });
@@ -158,6 +177,8 @@ export function RoadmapTutorial<Action = never>({
     const highlightAgain = () => {
       const index = tour.getActiveIndex();
       if (!tour.isActive() || index === undefined || moving) return;
+      const active = document.activeElement;
+      following = Boolean(active && active !== document.body && !active.closest('.driver-popover'));
       tour.moveTo(index);
     };
     const unsubscribe = actions?.subscribe((action) => {
@@ -168,8 +189,9 @@ export function RoadmapTutorial<Action = never>({
       else if (!confirmingRef.current) highlightAgain();
     });
     // An action step follows its control as it changes, for instance into a dialog and back.
-    const following = setInterval(() => {
+    const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
+      document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
       if (confirmingRef.current || !isActionStep(index)) return;
       const element = resolveElement(steps[index!].element);
       if (element && element !== tour.getActiveElement()) highlightAgain();
@@ -182,7 +204,9 @@ export function RoadmapTutorial<Action = never>({
       // Within a page dialog or menu, Esc belongs to it: an action step then follows back.
       if (
         event.target instanceof Element &&
-        event.target.closest('[role="dialog"], [role="menu"]') &&
+        event.target.closest(
+          '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]',
+        ) &&
         !event.target.closest('.driver-popover')
       )
         return;
@@ -202,7 +226,8 @@ export function RoadmapTutorial<Action = never>({
     return () => {
       cancelled = true;
       unsubscribe?.();
-      clearInterval(following);
+      clearInterval(followTimer);
+      document.body.classList.remove(actingClass);
       window.removeEventListener('keydown', onKeyDown, true);
       tour.destroy();
       driverRef.current = null;

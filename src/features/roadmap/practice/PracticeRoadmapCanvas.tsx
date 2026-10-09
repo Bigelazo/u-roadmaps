@@ -14,6 +14,7 @@ import {
   practiceNodeChangeCounts,
   practiceRoadmap,
   practiceStudentProgress,
+  practiceSuggestedResource,
   type PracticeAcademicTerm,
   type PracticeExperience,
 } from '@/features/roadmap/practice/practice-roadmap';
@@ -43,9 +44,19 @@ export function PracticeRoadmapCanvas({
   today: string;
   origin: string | null;
 }) {
+  // Prefills the Resource form only during the tutorial's "Agrega un recurso" step.
+  const [resourceSuggestion] = useState(() => {
+    let isSuggesting = false;
+    return {
+      set: (value: boolean) => {
+        isSuggesting = value;
+      },
+      get: () => (isSuggesting ? practiceSuggestedResource : undefined),
+    };
+  });
   const [actions] = useState(() => createTutorialActions<PracticeCanvasAction>());
   const [teachingSteps] = useState(() =>
-    experience === 'teaching' ? teachingTutorialSteps() : [],
+    experience === 'teaching' ? teachingTutorialSteps(resourceSuggestion) : [],
   );
   const [persistence] = useState(() =>
     reportingPracticeActions(
@@ -83,6 +94,7 @@ export function PracticeRoadmapCanvas({
             practice={{
               nodeChangeCounts: experience === 'student' ? practiceNodeChangeCounts : {},
               onAction: actions.report,
+              suggestedResource: resourceSuggestion.get,
             }}
           />
         </RoadmapCanvasSessionPersistenceProvider>
