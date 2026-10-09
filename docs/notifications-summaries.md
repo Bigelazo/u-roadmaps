@@ -23,6 +23,15 @@ cambios de contenido, acceso y Recursos; ocultarlo o eliminarlo retira su creaci
 Eliminar un Nodo conocido absorbe sus Objetos pendientes. Un Aviso pendiente de
 Roadmap disponible absorbe los demás cambios de ese Roadmap.
 
+El módulo de ciclo de vida de avisos (ADR-0024) guarda el último valor conocido de
+cada Objeto en un único almacén, `NoticeKnownValue`, y el Aviso pendiente guarda
+solo datos: valor conocido, valor actual y contexto. El texto del Aviso, de la
+fila del Inbox y de cada línea del Resumen de cambios se proyecta al leer con la
+redacción del descriptor del Objeto, nombrando los Nodos por su título actual.
+Una apertura captura sus Objetos en la colección única
+`NoticeAcknowledgement.snapshots`. Véase
+[operaciones](notifications-operations.md#módulo-de-ciclo-de-vida-de-avisos).
+
 Solo se muestran y cuentan Objetos visibles para el destinatario. Contenido y
 Recursos de Nodos bloqueados se ocultan; título y tipo siguen visibles mientras
 el Nodo sea visible. Los Avisos ocultos permanecen pendientes y pueden reaparecer.

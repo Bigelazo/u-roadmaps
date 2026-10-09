@@ -46,4 +46,5 @@ worst P1. Code-review was not invoked again.
 The current local Playwright configuration selects Chromium only. Unrelated
 local documentation and Playwright changes were excluded from the commit. The
 existing access-migration reorder was included because its old timestamp altered
-`NodeContentKnowledge` before the migration that created that table.
+the Node content Known value table (dropped since #209) before the migration that
+created it.

@@ -99,6 +99,28 @@ test('deleting a Node absorbs its pending title, access and Resource notices and
   expect(await prisma.noticeKnownValue.count({ where: { nodeId } })).toBe(0);
 });
 
+test('deleting a Node nobody is told about forgets every Known value of it, unknown creations included', async ({
+  course,
+}) => {
+  const edits = teacherEdits(course);
+  const hidden = await edits.create('Borrador');
+  await edits.update(hidden.id, { isVisible: false });
+  expect(await prisma.noticeKnownValue.count({ where: { nodeId: hidden.id } })).toBeGreaterThan(0);
+  await edits.remove(hidden.id);
+  expect(await prisma.noticeKnownValue.findMany({ where: { nodeId: hidden.id } })).toEqual([]);
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
+});
+
+test('deleting a new Node leaves no Known value once its deletion is delivered', async ({
+  course,
+}) => {
+  const edits = teacherEdits(course);
+  const node = await edits.create('Colas');
+  await edits.remove(node.id);
+  expect(await prisma.noticeKnownValue.findMany({ where: { nodeId: node.id } })).toEqual([]);
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
+});
+
 test('a Node deleted after entry captured its creation is a pending deletion once recognized', async ({
   course,
 }) => {

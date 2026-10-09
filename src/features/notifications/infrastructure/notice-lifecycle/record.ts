@@ -45,8 +45,6 @@ export async function recordNoticeTargets(
   const targets: RecordedTarget[] = [];
   const ownTargets: OwnTarget[] = [];
   for (const fact of changes.facts) {
-    if (fact.kind === 'node-deleted')
-      await forgetNodeKnownValues(transaction, changes.roadmapId, fact.nodeId);
     const descriptor = descriptorForFact(fact);
     if (!descriptor) continue;
     const target = descriptor.target(fact, changes);
@@ -73,6 +71,8 @@ export async function recordNoticeTargets(
     if (audience.includes(changes.actorId))
       ownTargets.push({ descriptor, fact, target, previousValue });
     const recipientIds = audience.filter((recipientId) => recipientId !== changes.actorId);
+    if (fact.kind === 'node-deleted')
+      await forgetNodeKnownValues(transaction, changes.roadmapId, fact.nodeId, recipientIds);
     if (recipientIds.length)
       targets.push({
         descriptor,

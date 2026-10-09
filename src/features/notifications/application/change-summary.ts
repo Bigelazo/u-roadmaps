@@ -74,15 +74,6 @@ export function changeSummary(
         case 'resource-removed':
           items.push(`Se eliminó el recurso «${data.resourceTitle}».`);
           break;
-        case 'dependency-added':
-        case 'dependency-removed':
-          general.push(
-            `«${data.dependentNodeTitle}» ${kind === 'dependency-added' ? 'ahora requiere' : 'ya no requiere'} «${data.prerequisiteNodeTitle}».`,
-          );
-          break;
-        case 'classification-updated':
-          general.push(`El tipo «${data.previousTypeName}» ahora se llama «${data.nextTypeName}».`);
-          break;
         case 'roadmap-available':
           general.push('Roadmap disponible.');
           break;
