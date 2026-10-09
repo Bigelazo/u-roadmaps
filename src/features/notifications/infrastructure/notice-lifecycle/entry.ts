@@ -4,6 +4,7 @@ import { nodeAccessState } from '@/shared/node-access';
 import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
 import { resourceContentState } from '@/shared/server/resource-content-state';
 import { ABSENT, PRESENT, availabilityRef, nodeCreationRef } from '../../application/absorption';
+import { descriptorForNoticeTarget } from '../../application/notice-targets';
 import { resourceValue } from '../../application/notice-targets/resource';
 import { pendingTargetSnapshots, type TargetSnapshot } from './recognize';
 
@@ -80,8 +81,8 @@ export async function entryTargetSnapshots(
         context: { nodeTitle: node.title },
       });
   }
-  const broad = [...pending, ...unannounced].filter(({ noticeTarget }) =>
-    ['roadmap-availability', 'node-creation', 'node-deletion'].includes(noticeTarget),
+  const broad = [...pending, ...unannounced].filter(
+    ({ noticeTarget }) => descriptorForNoticeTarget(noticeTarget)?.scope,
   );
   const roadmapRecognized = broad.some(
     ({ noticeTarget }) => noticeTarget === 'roadmap-availability',
