@@ -1,5 +1,6 @@
 import { clickElement, type TutorialStep } from '@/shared/client/tutorial/tutorial';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
+import { NODE_TYPES_MENU_ITEM_LABEL } from '@/features/roadmap/editor/types';
 import { practiceNodeIds } from './practice-roadmap';
 
 const canvas = '.react-flow';
@@ -77,7 +78,7 @@ export function teachingTutorialSteps(
     {
       // The "Tipos de nodo" item while its menu is open, otherwise "Crear en el mapa".
       element: () =>
-        document.querySelector('[aria-label="Gestionar tipos de nodo"]') ??
+        document.querySelector(`[aria-label="${NODE_TYPES_MENU_ITEM_LABEL}"]`) ??
         document.querySelector('button[aria-label="Crear en el mapa"]'),
       title: 'Tipos de nodo',
       description:

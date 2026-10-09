@@ -65,7 +65,11 @@ export {
   claimTutorialInvitation,
   readPostCreationInvitation,
   recordPracticeRoadmapOpened,
-  type TutorialInvitation,
 } from './application/tutorial-invitation';
 export { isFirstVisitInvitationDue } from './application/first-visit-invitation';
-export { isPracticeExperience, type PracticeExperience } from './types';
+export {
+  isPracticeExperience,
+  isTutorialInvitation,
+  type PracticeExperience,
+  type TutorialInvitation,
+} from './types';

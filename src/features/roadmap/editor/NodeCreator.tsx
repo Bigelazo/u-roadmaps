@@ -21,7 +21,7 @@ import { MarkdownEditor } from './MarkdownEditor';
 import styles from './NodeCreator.module.css';
 import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeTypesEditor } from './NodeTypesEditor';
-import type { NodeInput, NodeTypeInput } from './types';
+import { NODE_TYPES_MENU_ITEM_LABEL, type NodeInput, type NodeTypeInput } from './types';
 
 type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];
@@ -91,7 +91,7 @@ export function NodeCreator({
               </Menu.Item>
               <Menu.Item
                 className={styles.menuItem}
-                aria-label="Gestionar tipos de nodo"
+                aria-label={NODE_TYPES_MENU_ITEM_LABEL}
                 onClick={() => {
                   setIsMenuOpen(false);
                   setIsNodeTypesDialogOpen(true);

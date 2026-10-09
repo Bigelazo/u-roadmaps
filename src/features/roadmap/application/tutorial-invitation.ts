@@ -1,14 +1,15 @@
 import 'server-only';
 
 import { prisma } from '@/shared/server/db';
-import type { PostCreationInvitationWording, PracticeExperience } from '../types';
+import type {
+  PostCreationInvitationWording,
+  PracticeExperience,
+  TutorialInvitation,
+} from '../types';
 import { claimUserMilestone } from './user-milestone';
 
 /** The teaching tutorial invitation shown after a first Roadmap creation. */
 export type PostCreationInvitation = Readonly<{ wording: PostCreationInvitationWording }>;
-
-/** A tutorial invitation shown once per User. */
-export type TutorialInvitation = 'first-visit' | 'post-creation';
 
 /**
  * The invitation due when `roadmapId` is the only Roadmap the User has created and it

@@ -96,3 +96,6 @@ export type NodeTypeDraft = {
   icon?: NodeTypeIconId;
   color?: NodeTypeColor;
 };
+
+/** The accessible name of the "Tipos de nodo" item, also found by the teaching Roadmap tutorial. */
+export const NODE_TYPES_MENU_ITEM_LABEL = 'Gestionar tipos de nodo';
