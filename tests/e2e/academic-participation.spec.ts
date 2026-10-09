@@ -160,14 +160,23 @@ test('promotion withdraws student access leftovers and retains colleague content
   expect(
     pending.map((notice: { data: { noticeTarget: string } }) => notice.data.noticeTarget),
   ).toEqual(['node-title']);
+  const knownTitle = pending[0].data.knownTitle;
+  expect(knownTitle).not.toBe('Cambio de colega');
   // Staff keep colleague changes; their own edit is absorbed by the pending notice
   // (ADR-0024 actor rule) instead of producing a notice of its own.
   expect((await assistant.patch(nodePath, { data: { title: 'Cambio propio' } })).status()).toBe(
     200,
   );
-  expect(
-    (await notices()).map((notice: { data: { noticeTarget: string } }) => notice.data.noticeTarget),
-  ).toEqual(['node-title']);
+  expect(await notices()).toEqual([
+    expect.objectContaining({
+      id: pending[0].id,
+      data: expect.objectContaining({
+        noticeTarget: 'node-title',
+        knownTitle,
+        currentTitle: 'Cambio propio',
+      }),
+    }),
+  ]);
 });
 
 test('an observer reported among taught courses keeps student capabilities', async ({
