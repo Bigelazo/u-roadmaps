@@ -13,13 +13,15 @@ function dependencyPair({ targetKey }: NoticeTargetRef) {
 const changeKind = (currentValue: string) =>
   currentValue === 'true' ? 'dependency-added' : 'dependency-removed';
 
-/** Everyone but the actor, when the Dependency joins two visible Nodes. */
-async function pairRecipients(fact: DependencyFact, changes: RoadmapChanges, roadmap: RoadmapView) {
+/** Everyone, when the Dependency joins two visible Nodes. */
+async function pairRecipients(
+  fact: DependencyFact,
+  _changes: RoadmapChanges,
+  roadmap: RoadmapView,
+) {
   // Removals caused by hiding or deleting a Node are not reported as Dependency facts.
   if (!fact.sourceNode.isVisible || !fact.targetNode.isVisible) return [];
-  return (await roadmap.participants())
-    .map(({ userId }) => userId)
-    .filter((userId) => userId !== changes.actorId);
+  return (await roadmap.participants()).map(({ userId }) => userId);
 }
 
 /**

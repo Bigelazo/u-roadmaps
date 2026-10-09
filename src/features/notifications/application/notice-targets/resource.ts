@@ -23,11 +23,10 @@ function decode(value: string): ResourceState | null {
 }
 
 /** Description and Resources reach only who has the Node accessible (ADR-0014 decision 10). */
-async function accessibleRecipients(nodeId: string, actorId: string, roadmap: RoadmapView) {
+async function accessibleRecipients(nodeId: string, roadmap: RoadmapView) {
   const recipients: string[] = [];
   for (const { userId } of await roadmap.participants())
-    if (userId !== actorId && (await roadmap.accessibleNodeIds(userId)).has(nodeId))
-      recipients.push(userId);
+    if ((await roadmap.accessibleNodeIds(userId)).has(nodeId)) recipients.push(userId);
   return recipients;
 }
 
@@ -57,8 +56,8 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   matches: (fact): fact is ResourceFact => fact.kind === 'resource',
   target: (fact) => ({ targetKey: `resource:${fact.resourceId}`, nodeId: fact.nodeId }),
   previousValue: (fact) => resourceValue(fact.previous),
-  knowers: (fact, changes, roadmap) => accessibleRecipients(fact.nodeId, changes.actorId, roadmap),
-  audience: (fact, changes, roadmap) => accessibleRecipients(fact.nodeId, changes.actorId, roadmap),
+  knowers: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
+  audience: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
   async current(target, roadmap) {
     const node = target.nodeId ? await roadmap.node(target.nodeId) : null;
     if (!node) return null;

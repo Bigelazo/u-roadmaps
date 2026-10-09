@@ -3,12 +3,15 @@ import { test as base } from 'vitest';
 import { prisma } from '@/shared/server/db';
 import { cleanTestData, integrationDatabaseUrl } from './database';
 
-async function createCourse(code: string, [teacherId, studentId, classmateId]: string[]) {
+async function createCourse(
+  code: string,
+  [teacherId, studentId, classmateId, colleagueId]: string[],
+) {
   return prisma.$transaction(async (tx) => {
     await tx.user.createMany({
-      data: [teacherId, studentId, classmateId].map((id) => ({
+      data: [teacherId, studentId, classmateId, colleagueId].map((id) => ({
         id,
-        name: id === teacherId ? 'Docente' : 'Estudiante',
+        name: id === teacherId || id === colleagueId ? 'Docente' : 'Estudiante',
         institutionalEmail: `${id}@notifications.u-roadmaps.test`,
         rut: id.slice(0, 20),
       })),
@@ -27,6 +30,7 @@ async function createCourse(code: string, [teacherId, studentId, classmateId]: s
                 { userId: teacherId, role: 'TEACHER' },
                 { userId: studentId, role: 'STUDENT' },
                 { userId: classmateId, role: 'STUDENT' },
+                { userId: colleagueId, role: 'TEACHER' },
               ],
             },
             roadmap: { create: {} },
@@ -48,6 +52,7 @@ async function createCourse(code: string, [teacherId, studentId, classmateId]: s
       studentId,
       classmateId,
       teacherId,
+      colleagueId,
       roadmapId,
       nodeTypeId: type.id,
       identifier,
@@ -63,7 +68,7 @@ export const test = base.extend<{ course: IntegrationCourse }>({
   course: async ({ task }, provide) => {
     void task;
     const code = `NT-${randomUUID().replaceAll('-', '').slice(0, 16)}`;
-    const users = [randomUUID(), randomUUID(), randomUUID()];
+    const users = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     try {
       await provide(await createCourse(code, users));
     } finally {

@@ -24,9 +24,7 @@ export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   matches: (fact): fact is NodeAccessFact => fact.kind === 'node-access',
   target: (fact) => nodeAccessRef(fact.nodeId),
   previousValue: (fact) => fact.previous,
-  // The actor's own baseline is not fixed by its change (Completion advances it itself).
-  knowers: async (fact, changes) =>
-    fact.recipientId === changes.actorId ? [] : [fact.recipientId],
+  knowers: async (fact) => [fact.recipientId],
   audience: async (fact) => [fact.recipientId],
   currentAtEdit: (fact) => ({ recipientIds: [fact.recipientId], value: fact.current }),
   async current(target, roadmap) {

@@ -1,70 +1,72 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@/shared/server/db';
-import type { RoadmapChanges } from '@/shared/roadmap-changes';
+import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { nodeAccessState } from '@/shared/node-access';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
-import type { RoadmapView } from '../../application/notice-targets';
+import {
+  descriptorForFact,
+  type NoticeTargetDescriptor,
+  type NoticeTargetRef,
+  type RoadmapView,
+} from '../../application/notice-targets';
 import { nodeAccessRef, nodeAccessTarget } from '../../application/notice-targets/node-access';
 import { reconcileNoticeTarget } from './reconcile';
 import { lazyRoadmapEnvelope } from './recognize';
-import type { RecipientRoadmap } from './known-values';
+import { setKnownValue, type RecipientRoadmap } from './known-values';
 
-/**
- * Non-teaching events (ADR-0024), recorded inside the roadmap transaction:
- * - Completion: the student's own access transitions advance that student's Known
- *   values and update or withdraw their pending access notices; never a new notice.
- * - Promotion to teaching staff: re-baseline access to the staff view, withdraw access notices.
- * The actor rule for teaching staff (#208) is not applied here.
- */
-function ownChanges({ actorId, facts }: RoadmapChanges) {
-  return {
-    promoted: facts.some(
-      (fact) => fact.kind === 'participation-role' && fact.recipientId === actorId,
-    ),
-    completions: facts
-      .filter(nodeAccessTarget.matches)
-      .filter((fact) => fact.recipientId === actorId),
-  };
-}
+/** A target the actor's change touched and the actor sees (the actor is in its audience). */
+export type OwnTarget = Readonly<{
+  descriptor: NoticeTargetDescriptor;
+  fact: RoadmapChangeFact;
+  target: NoticeTargetRef;
+  previousValue: string;
+}>;
+
+const promoted = ({ actorId, facts }: RoadmapChanges) =>
+  facts.some((fact) => fact.kind === 'participation-role' && fact.recipientId === actorId);
 
 /** Take the actor's recipient/Roadmap lock before any Known value of theirs is written. */
 export async function lockOwnChanges(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
 ) {
-  const { promoted, completions } = ownChanges(changes);
-  if (promoted || completions.length)
+  if (promoted(changes) || changes.facts.some((fact) => descriptorForFact(fact)))
     await lockRecipientRoadmap(transaction, changes.actorId, changes.roadmapId);
 }
 
-/** Callers hold the lock from `lockOwnChanges`. */
+/**
+ * The actor rule (ADR-0024), recorded inside the roadmap transaction after every
+ * target's Known values: the actor's own change advances the actor's Known value; a
+ * pending notice of the actor's for that target absorbs the change instead (withdrawn
+ * on a return to the Known value). The actor never gets a new notice for it. Completion
+ * is the case of a student's own access transition.
+ * Promotion to teaching staff re-baselines access to the staff view instead.
+ * Callers hold the lock from `lockOwnChanges`.
+ */
 export async function recordOwnChanges(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
   roadmap: RoadmapView,
+  ownTargets: readonly OwnTarget[],
 ) {
-  const { actorId, roadmapId } = changes;
-  const identity = { recipientId: actorId, roadmapId };
-  const { promoted, completions } = ownChanges(changes);
-  if (promoted) return rebaselineStaffAccess(transaction, identity);
-  const role = (await roadmap.participants()).find(({ userId }) => userId === actorId)?.role;
-  if (role !== 'STUDENT' || !completions.length) return;
-  const envelope = lazyRoadmapEnvelope(transaction, roadmapId);
+  const identity = { recipientId: changes.actorId, roadmapId: changes.roadmapId };
+  if (promoted(changes)) return rebaselineStaffAccess(transaction, identity);
+  const envelope = lazyRoadmapEnvelope(transaction, changes.roadmapId);
   const occurredAt = new Date();
-  for (const fact of completions) {
-    const target = nodeAccessTarget.target(fact, changes);
+  for (const { descriptor, fact, target, previousValue } of ownTargets) {
+    if (descriptor.keepsKnownValue === false) continue;
     const pending = await transaction.roadmapNotice.findFirst({
       where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
       select: { id: true },
     });
     if (pending) {
-      // `currentAtEdit` already recorded the new state as the current value.
       await reconcileNoticeTarget(transaction, {
-        descriptor: nodeAccessTarget,
+        descriptor,
         identity,
         target,
-        fallbackKnown: fact.previous,
+        fallbackKnown: previousValue,
+        fallbackContext: descriptor.previousContext?.(fact),
         roadmap,
         envelope,
         eventId: randomUUID(),
@@ -72,11 +74,11 @@ export async function recordOwnChanges(
       });
       continue;
     }
-    // A deferred difference (Known value other than `previous`) stays to be told.
-    await transaction.noticeKnownValue.updateMany({
-      where: { ...identity, targetKey: target.targetKey, knownValue: fact.previous },
-      data: { knownValue: fact.current, currentValue: fact.current },
-    });
+    const current = await descriptor.current(target, roadmap, identity.recipientId);
+    if (!current) continue;
+    // Targets recorded at edit time (Node access) take the value the change reported.
+    const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
+    await setKnownValue(transaction, identity, target, value, current.context);
   }
 }
 

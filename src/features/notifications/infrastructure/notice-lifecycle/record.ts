@@ -15,7 +15,7 @@ import { forgetNodeKnownValues, recordCurrentValues, recordKnownValues } from '.
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
 import { roadmapEnvelope } from './envelope';
-import { lockOwnChanges, recordOwnChanges } from './own-changes';
+import { lockOwnChanges, recordOwnChanges, type OwnTarget } from './own-changes';
 
 /** Deferred delivery of one recorded Roadmap change; safe to retry. */
 export type NoticeDelivery = (schedule: NoticeDeliveryScheduler) => Promise<void>;
@@ -43,6 +43,7 @@ export async function recordNoticeTargets(
   const roadmap = roadmapView(transaction, changes.roadmapId, accessibleNodes);
   await lockOwnChanges(transaction, changes);
   const targets: RecordedTarget[] = [];
+  const ownTargets: OwnTarget[] = [];
   for (const fact of changes.facts) {
     if (fact.kind === 'node-deleted')
       await forgetNodeKnownValues(transaction, changes.roadmapId, fact.nodeId);
@@ -68,9 +69,10 @@ export async function recordNoticeTargets(
         atEdit.recipientIds,
         atEdit.value,
       );
-    const recipientIds = (await descriptor.audience(fact, changes, roadmap)).filter(
-      (recipientId) => recipientId !== changes.actorId,
-    );
+    const audience = await descriptor.audience(fact, changes, roadmap);
+    if (audience.includes(changes.actorId))
+      ownTargets.push({ descriptor, fact, target, previousValue });
+    const recipientIds = audience.filter((recipientId) => recipientId !== changes.actorId);
     if (recipientIds.length)
       targets.push({
         descriptor,
@@ -81,7 +83,7 @@ export async function recordNoticeTargets(
         recipientIds,
       });
   }
-  await recordOwnChanges(transaction, changes, roadmap);
+  await recordOwnChanges(transaction, changes, roadmap, ownTargets);
   if (!targets.length) return undefined;
   const eventId = randomUUID();
   const occurredAt = new Date();

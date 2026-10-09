@@ -106,7 +106,10 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   previousContext?(fact: F): TargetContext;
   /** Recipients whose Known value is recorded as the previous value (first baseline wins). */
   knowers(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
-  /** Recipients told about the change; the module never tells the actor. */
+  /**
+   * Recipients told about the change. The module never tells the actor: an actor in the
+   * audience gets the actor rule instead (see `own-changes.ts`).
+   */
   audience(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
   /**
    * For per-recipient targets whose live value the module cannot read (Node access):

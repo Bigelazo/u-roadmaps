@@ -7,16 +7,14 @@ type NodeTypeNameFact = Extract<RoadmapChangeFact, { kind: 'node-type-name' }>;
 /** The Node type a `node-type:<id>:name` key names. */
 const nodeTypeId = ({ targetKey }: NoticeTargetRef) => targetKey.split(':')[1];
 
-/** Everyone but the actor, when the type has at least one visible Node. */
+/** Everyone, when the type has at least one visible Node. */
 async function typeRecipients(
   fact: NodeTypeNameFact,
-  changes: RoadmapChanges,
+  _changes: RoadmapChanges,
   roadmap: RoadmapView,
 ) {
   if (!(await roadmap.nodeType(fact.nodeTypeId))?.hasVisibleNode) return [];
-  return (await roadmap.participants())
-    .map(({ userId }) => userId)
-    .filter((userId) => userId !== changes.actorId);
+  return (await roadmap.participants()).map(({ userId }) => userId);
 }
 
 /**
