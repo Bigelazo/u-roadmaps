@@ -26,6 +26,7 @@ import type {
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
+import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
 const institutionalPositionDetails: Record<
   AcademicOverviewInstitutionalPosition,
@@ -242,10 +243,11 @@ export function AcademicOverview({
     <main className="min-h-screen bg-cloud py-10 text-foreground md:py-16">
       <div className="mx-auto max-w-[1440px] px-6">
         <div className="flex flex-col gap-10 md:gap-16">
-          <header className="max-w-3xl">
+          <header className="flex max-w-3xl items-center gap-3">
             <h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
               Resumen académico
             </h1>
+            <AcademicOverviewTutorialButton />
           </header>
 
           {overview.source === 'LOCAL' ? (
