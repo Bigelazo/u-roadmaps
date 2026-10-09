@@ -1,3 +1,4 @@
+import { NOTICE_TARGET } from './notice-targets/kinds';
 import { nodeAccessChangeText } from '@/shared/node-access';
 import { isNoticeVisible } from './notice-visibility';
 import type { ChangeSummary } from '../contracts/change-summary';
@@ -32,7 +33,7 @@ export function changeSummary(
       const item = projected.wording.summary ?? projected.wording.body;
       if (projected.wording.summaryGroup === 'node') items.push(item);
       else general.push(item);
-    } else if (data.noticeTarget === 'node-access') {
+    } else if (data.noticeTarget === NOTICE_TARGET.nodeAccess) {
       items.push(
         nodeAccessChangeText(
           node?.title ?? String(data.nodeTitle),

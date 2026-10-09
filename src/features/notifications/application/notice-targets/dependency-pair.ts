@@ -1,9 +1,10 @@
+import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { dependencyTarget } from '@/shared/route-notice-target';
 import type { NoticeTargetDescriptor, NoticeTargetRef, RoadmapView } from './descriptor';
 
 export const dependencyPairRef = (sourceNodeId: string, targetNodeId: string) => ({
-  noticeTarget: 'dependency',
+  noticeTarget: NOTICE_TARGET.dependency,
   targetKey: dependencyTarget(sourceNodeId, targetNodeId),
   nodeId: null,
 });
@@ -36,7 +37,7 @@ async function pairRecipients(
  * Everyone is told, whatever their own Completions (ADR-0014 decision 10).
  */
 export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
-  noticeTarget: 'dependency',
+  noticeTarget: NOTICE_TARGET.dependency,
   noticeClass: 'roadmap-path-changed',
   readSide: { changeKind: 'dependency-added', changedFields: [], targetKind: 'roadmap' },
   matches: (fact): fact is DependencyFact => fact.kind === 'dependency',

@@ -1,9 +1,10 @@
+import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { nodeTypeNameTarget } from '@/shared/route-notice-target';
 import type { NoticeTargetDescriptor, NoticeTargetRef, RoadmapView } from './descriptor';
 
 export const typeNameRef = (nodeTypeId: string) => ({
-  noticeTarget: 'node-type-name',
+  noticeTarget: NOTICE_TARGET.nodeTypeName,
   targetKey: nodeTypeNameTarget(nodeTypeId),
   nodeId: null,
 });
@@ -28,7 +29,7 @@ async function typeRecipients(
  * report nothing. Compared from the known name (ADR-0014 decision 1).
  */
 export const typeNameTarget: NoticeTargetDescriptor<NodeTypeNameFact> = {
-  noticeTarget: 'node-type-name',
+  noticeTarget: NOTICE_TARGET.nodeTypeName,
   noticeClass: 'roadmap-classification-changed',
   readSide: { changeKind: 'classification-updated', changedFields: [], targetKind: 'roadmap' },
   matches: (fact): fact is NodeTypeNameFact => fact.kind === 'node-type-name',

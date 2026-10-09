@@ -1,8 +1,9 @@
+import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import type { NoticeTargetDescriptor, RoadmapView, TargetValues } from './descriptor';
 
 export const resourceRef = (resourceId: string, nodeId: string) => ({
-  noticeTarget: 'resource',
+  noticeTarget: NOTICE_TARGET.resource,
   targetKey: `resource:${resourceId}`,
   nodeId,
 });
@@ -55,7 +56,7 @@ function lifecycle({ knownValue, currentValue, context }: TargetValues) {
 }
 
 export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
-  noticeTarget: 'resource',
+  noticeTarget: NOTICE_TARGET.resource,
   noticeClass: 'roadmap-resource-changed',
   readSide: { changeKind: 'resource-updated', changedFields: [], targetKind: 'node' },
   valueReadSide: (values) => ({ changeKind: lifecycle(values).changeKind }),

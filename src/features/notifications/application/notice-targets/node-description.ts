@@ -1,3 +1,4 @@
+import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import {
   nodeVisibleBefore,
@@ -7,7 +8,7 @@ import {
 } from './descriptor';
 
 export const nodeDescriptionRef = (nodeId: string) => ({
-  noticeTarget: 'node-description',
+  noticeTarget: NOTICE_TARGET.nodeDescription,
   targetKey: `node:${nodeId}:description`,
   nodeId,
 });
@@ -34,7 +35,7 @@ function nodeTitle({ context }: TargetValues) {
  * accessible know it or are told (ADR-0014 decision 10).
  */
 export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> = {
-  noticeTarget: 'node-description',
+  noticeTarget: NOTICE_TARGET.nodeDescription,
   noticeClass: 'roadmap-node-changed',
   readSide: { changeKind: 'node-updated', changedFields: ['description'], targetKind: 'node' },
   matches: (fact): fact is NodeDescriptionFact => fact.kind === 'node-description',
