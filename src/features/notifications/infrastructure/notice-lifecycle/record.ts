@@ -15,7 +15,7 @@ import { forgetNodeKnownValues, recordCurrentValues, recordKnownValues } from '.
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
 import { roadmapEnvelope } from './envelope';
-import { recordOwnChanges } from './own-changes';
+import { lockOwnChanges, recordOwnChanges } from './own-changes';
 
 /** Deferred delivery of one recorded Roadmap change; safe to retry. */
 export type NoticeDelivery = (schedule: NoticeDeliveryScheduler) => Promise<void>;
@@ -41,6 +41,7 @@ export async function recordNoticeTargets(
   accessibleNodes?: NodeAccessReader,
 ): Promise<NoticeDelivery | undefined> {
   const roadmap = roadmapView(transaction, changes.roadmapId, accessibleNodes);
+  await lockOwnChanges(transaction, changes);
   const targets: RecordedTarget[] = [];
   for (const fact of changes.facts) {
     if (fact.kind === 'node-deleted')
