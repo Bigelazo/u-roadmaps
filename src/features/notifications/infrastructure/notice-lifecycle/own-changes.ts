@@ -9,6 +9,7 @@ import {
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
   type RoadmapView,
+  type TargetContext,
 } from '../../application/notice-targets';
 import { nodeAccessRef, nodeAccessTarget } from '../../application/notice-targets/node-access';
 import { reconcileNoticeTarget } from './reconcile';
@@ -43,8 +44,9 @@ export async function lockOwnChanges(
 /**
  * The actor rule (ADR-0024), recorded inside the roadmap transaction after every
  * target's Known values: the actor's own change advances the actor's Known value; a
- * pending notice of the actor's for that target absorbs the change instead (withdrawn
- * on a return to the Known value). The actor never gets a new notice for it. Completion
+ * pending notice of the actor's for that target, or a colleague's difference not yet
+ * delivered to the actor, absorbs the change instead (withdrawn on a return to the
+ * Known value). The actor never gets a notice for a purely own change. Completion
  * is the case of a student's own access transition.
  * Promotion to teaching staff re-baselines access to the staff view instead.
  * Callers hold the lock from `lockOwnChanges`.
@@ -65,13 +67,26 @@ export async function recordOwnChanges(
       where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
       select: { id: true },
     });
-    if (pending) {
+    const known = pending
+      ? null
+      : await transaction.noticeKnownValue.findUnique({
+          where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
+          select: { knownValue: true, context: true },
+        });
+    // A pending notice absorbs the own change. A Known value behind the value the change
+    // started from means a colleague's difference is still untold (its delivery has not
+    // run): reconcile as if that notice already existed and absorbed the own change, so
+    // the result does not depend on delivery order.
+    const untold = known && known.knownValue !== previousValue;
+    if (pending || untold) {
       await reconcileNoticeTarget(transaction, {
         descriptor,
         identity,
         target,
-        fallbackKnown: previousValue,
-        fallbackContext: descriptor.previousContext?.(fact),
+        fallbackKnown: untold ? known.knownValue : previousValue,
+        fallbackContext: untold
+          ? (known.context as TargetContext)
+          : descriptor.previousContext?.(fact),
         roadmap,
         courseContext,
         eventId: randomUUID(),
@@ -81,9 +96,9 @@ export async function recordOwnChanges(
     }
     const current = await descriptor.current(target, roadmap, identity.recipientId);
     if (!current) continue;
-    // The actor now knows the value they produced, so an untold earlier difference is
-    // superseded (Known value includes "the one they produced themselves").
-    // Targets recorded at edit time (Node access) take the value the change reported.
+    // The actor now knows the value they produced (Known value includes "the one they
+    // produced themselves"). Targets recorded at edit time (Node access) take the value
+    // the change reported.
     const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
     await setKnownValue(transaction, identity, target, value, current.context);
   }

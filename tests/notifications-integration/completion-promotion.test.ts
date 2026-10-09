@@ -4,7 +4,14 @@ import { prisma } from '@/shared/server/db';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { completeNode } from '@/features/roadmap/server';
 import { materializeParticipation } from '@/features/roadmap/application/academic-participation';
-import { addNode, confirmed, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
+import {
+  addNode,
+  confirmed,
+  deferredNoticePort,
+  enterRoadmap,
+  pendingNotices,
+  teacherEdits,
+} from './roadmap';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
 
@@ -100,3 +107,35 @@ test('regaining a Participation starts from zero, with no stale Known values', a
     { body: '«Recursión simple» pasó a llamarse «Recursividad».' },
   ]);
 });
+
+for (const order of ['after', 'before'] as const)
+  test(`Completion reconciles a colleague’s untold show (delivered ${order} the Completion)`, async ({
+    course,
+  }) => {
+    const prerequisite = await addNode(course, 'Pilas');
+    const dependent = await addNode(course, 'Colas');
+    await teacherEdits(course).update(dependent.id, { isVisible: false });
+    // Recognized: the student's Known access of Colas is Retirado.
+    await enterRoadmap(course.studentId, course.roadmapId);
+    expect(accessBodies(await pendingNotices(course.studentId, course.roadmapId))).toEqual([]);
+    // The teacher shows Colas behind Pilas (Retirado → Bloqueado); delivery is deferred.
+    const deferred = deferredNoticePort();
+    const shows = teacherEdits(course, deferred.port);
+    await shows.update(dependent.id, { isVisible: true });
+    await shows.connect(prerequisite.id, dependent.id);
+    const deliverAll = async () => {
+      for (const delivery of deferred.deliveries) await deferred.deliver(delivery);
+    };
+    if (order === 'before') await deliverAll();
+    await complete(course, prerequisite.id);
+    if (order === 'after') await deliverAll();
+    const access = (await pendingNotices(course.studentId, course.roadmapId)).filter(
+      ({ data }) => (data as { noticeTarget?: string }).noticeTarget === 'node-access',
+    );
+    expect(access).toMatchObject([
+      {
+        body: '«Colas» volvió a mostrarse en el Roadmap.',
+        data: { knownValue: 'Retirado', currentValue: 'Disponible' },
+      },
+    ]);
+  });
