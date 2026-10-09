@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { queryJson } from './database';
+import { literal, queryJson } from './database';
 import { enterRoadmap } from './enter-roadmap';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
@@ -47,7 +47,9 @@ async function advanceTo(page: Page, index: number) {
 }
 
 async function completionsOf(userId: string) {
-  return queryJson<number>(`SELECT count(*)::int FROM "Completion" WHERE "userId" = '${userId}';`);
+  return queryJson<number>(
+    `SELECT count(*)::int FROM "Completion" WHERE "userId" = ${literal(userId)};`,
+  );
 }
 
 test('a student walks through the tutorial from their Roadmap and is pointed back to it', async ({

@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 
 type StoredUser = {
   id: string;
+  tutorialInvitationShownAt?: Date | null;
   postCreationInvitationShownAt: Date | null;
   teachingTutorialOpenedAt: Date | null;
 };
@@ -42,8 +43,9 @@ vi.mock('@/shared/server/db', () => {
 });
 
 import {
-  claimPostCreationInvitation,
-  recordTeachingTutorialOpened,
+  claimTutorialInvitation,
+  readPostCreationInvitation,
+  recordPracticeRoadmapOpened,
 } from '@/features/roadmap/application/tutorial-invitation';
 
 const professor = '11111111-1111-4111-8111-111111111111';
@@ -62,40 +64,56 @@ beforeEach(() => {
 
 it('invites to do the teaching tutorial after the first Roadmap creation', async () => {
   store.createdRoadmaps.set(professor, [firstRoadmap]);
-  await expect(claimPostCreationInvitation(professor, firstRoadmap)).resolves.toEqual({
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toEqual({
+    wording: 'hacer',
+  });
+});
+
+it('keeps inviting until the invitation is shown', async () => {
+  store.createdRoadmaps.set(professor, [firstRoadmap]);
+  await readPostCreationInvitation(professor, firstRoadmap);
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toEqual({
     wording: 'hacer',
   });
 });
 
 it('never invites again after the invitation was shown', async () => {
   store.createdRoadmaps.set(professor, [firstRoadmap]);
-  await claimPostCreationInvitation(professor, firstRoadmap);
-  store.createdRoadmaps.set(professor, [firstRoadmap, secondRoadmap]);
-  await expect(claimPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
+  await expect(claimTutorialInvitation(professor, 'post-creation')).resolves.toBe(true);
+  await expect(claimTutorialInvitation(professor, 'post-creation')).resolves.toBe(false);
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
 });
 
 it('invites to repeat the teaching tutorial when it was opened before', async () => {
   store.createdRoadmaps.set(professor, [firstRoadmap]);
-  await recordTeachingTutorialOpened(professor);
-  await expect(claimPostCreationInvitation(professor, firstRoadmap)).resolves.toEqual({
+  await recordPracticeRoadmapOpened(professor, 'teaching');
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toEqual({
     wording: 'repetir',
   });
 });
 
+it('keeps inviting to do the teaching tutorial after only the student tutorial', async () => {
+  store.createdRoadmaps.set(professor, [firstRoadmap]);
+  await recordPracticeRoadmapOpened(professor, 'student');
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toEqual({
+    wording: 'hacer',
+  });
+});
+
 it('does not invite a User who created no Roadmap or several before', async () => {
-  await expect(claimPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
   store.createdRoadmaps.set(professor, [firstRoadmap, secondRoadmap]);
-  await expect(claimPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
 });
 
 it('does not invite on a Roadmap the User did not create', async () => {
   store.createdRoadmaps.set(professor, [secondRoadmap]);
-  await expect(claimPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
+  await expect(readPostCreationInvitation(professor, firstRoadmap)).resolves.toBeNull();
 });
 
 it('keeps the first teaching tutorial opening', async () => {
-  await recordTeachingTutorialOpened(professor);
+  await recordPracticeRoadmapOpened(professor, 'teaching');
   const first = store.users.get(professor)!.teachingTutorialOpenedAt;
-  await recordTeachingTutorialOpened(professor);
+  await recordPracticeRoadmapOpened(professor, 'teaching');
   expect(store.users.get(professor)!.teachingTutorialOpenedAt).toBe(first);
 });

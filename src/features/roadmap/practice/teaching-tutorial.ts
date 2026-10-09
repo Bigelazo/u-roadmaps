@@ -66,13 +66,23 @@ export function teachingTutorialSteps(
       element: nodeCreator,
       title: 'Crea un nodo',
       description:
-        'Presiona "Crear en el mapa" y elige "Crear nodo". Escribe un título, elige su tipo y deja marcado "Visible para estudiantes". En la descripción puedes escribir Markdown o arrastrar un archivo .md para reemplazar el texto. Desde "Gestionar tipos de nodo" puedes crear tus propios tipos.',
+        'Presiona "Crear en el mapa" y elige "Crear nodo". Escribe un título, elige su tipo y deja marcado "Visible para estudiantes". En la descripción puedes escribir Markdown o arrastrar un archivo .md para reemplazar el texto.',
       side: 'top',
       advanceWhen: (action) => {
         if (action.type !== 'addNode') return false;
         createdNodeId = action.nodeId;
         return true;
       },
+    },
+    {
+      // The "Tipos de nodo" item while its menu is open, otherwise "Crear en el mapa".
+      element: () =>
+        document.querySelector('[aria-label="Gestionar tipos de nodo"]') ??
+        document.querySelector('button[aria-label="Crear en el mapa"]'),
+      title: 'Tipos de nodo',
+      description:
+        'En el menú de "Crear en el mapa", la opción "Tipos de nodo" te permite crear tus propios tipos, con su nombre, ícono y color.',
+      side: 'top',
     },
     {
       element: '.react-flow',

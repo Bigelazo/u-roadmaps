@@ -471,8 +471,9 @@ function useRoadmapCanvasController({ input }: Props) {
     setDismissedInvalidTargetId(invalidTargetId);
     setSyncedSelectionNotice(null);
   }, [invalidTargetId]);
+  const acknowledgesRoadmap = fetchesRoadmapNotices(input);
   useEffect(() => {
-    if (!input.notificationsEnabled || !roadmap || isCanvasPreview) return;
+    if (!acknowledgesRoadmap || !roadmap || isCanvasPreview) return;
     const roadmapId = roadmap.roadmap.id;
     if (acknowledgedRoadmapRef.current === roadmapId) return;
     acknowledgedRoadmapRef.current = roadmapId;
@@ -481,7 +482,7 @@ function useRoadmapCanvasController({ input }: Props) {
   }, [
     acknowledge,
     accessibleNodeIds,
-    input.notificationsEnabled,
+    acknowledgesRoadmap,
     input.roadmapEntryKey,
     isCanvasPreview,
     roadmap,
@@ -765,6 +766,19 @@ function useRoadmapCanvasController({ input }: Props) {
   };
 }
 
+/**
+ * Real Roadmap notices are fetched and acknowledged only outside the Practice roadmap,
+ * which belongs to no Course offering and only shows its fixed change marks.
+ */
+function fetchesRoadmapNotices(input: RoadmapCanvasSessionInput) {
+  return Boolean(input.notificationsEnabled) && !input.practice;
+}
+
+/** Node change marks show the server's counts, or the Practice roadmap's fixed ones. */
+function showsNodeChangeMarks(input: RoadmapCanvasSessionInput) {
+  return fetchesRoadmapNotices(input) || Boolean(input.practice);
+}
+
 export function RoadmapCanvasView({ input }: Props) {
   const model = useRoadmapCanvasController({ input });
   const {
@@ -842,7 +856,7 @@ export function RoadmapCanvasView({ input }: Props) {
           <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
             openedNodeId={isSidePanelOpen ? selectedNodeId : null}
-            enabled={Boolean(input.notificationsEnabled) && !model.isCanvasPreview}
+            enabled={fetchesRoadmapNotices(input) && !model.isCanvasPreview}
             simulatedCounts={model.isCanvasPreview ? undefined : input.practice?.nodeChangeCounts}
           >
             <RoadmapCanvasGraph
@@ -1150,7 +1164,7 @@ function RoadmapCanvasGraph({
   return (
     <RoadmapGraph
       projection={graphProjection}
-      notificationsEnabled={Boolean(input.notificationsEnabled || input.practice)}
+      notificationsEnabled={showsNodeChangeMarks(input)}
       onSelectNode={(nodeId) => {
         const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
         if (isStudentExperience && isStudentBlockedNode(node)) return;

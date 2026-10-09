@@ -5,7 +5,7 @@ import {
   PostCreationInvitationDialog,
   RoadmapCanvasSession,
 } from '@/features/roadmap';
-import { claimPostCreationInvitation, synchronizeParticipation } from '@/features/roadmap/server';
+import { readPostCreationInvitation, synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
@@ -71,10 +71,10 @@ export default async function CoursePage(
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
-  // Landing here from Roadmap creation may claim the one-time teaching tutorial invitation.
+  // Landing here from Roadmap creation may show the one-time teaching tutorial invitation.
   const invitation =
     isTeaching && courseOffering.roadmap && searchParams.created === '1'
-      ? await claimPostCreationInvitation(user.id, courseOffering.roadmap.id)
+      ? await readPostCreationInvitation(user.id, courseOffering.roadmap.id)
       : null;
 
   return (

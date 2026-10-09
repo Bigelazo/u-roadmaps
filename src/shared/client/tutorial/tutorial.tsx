@@ -74,6 +74,21 @@ const baseConfig: Config = {
   progressText: '{{current}} de {{total}}',
 };
 
+/**
+ * Keeps focus where it is when driver.js renders its popover. driver.js 1.9.0 offers no
+ * option for this: it calls `focus()` on the popover synchronously right after
+ * `onPopoverRender`. So `HTMLElement.prototype.focus` is patched for that one call only,
+ * and a microtask restores it if driver.js made no call. Check this on upgrading driver.js.
+ */
+function skipDriverPopoverFocus() {
+  const focus = HTMLElement.prototype.focus;
+  const restore = () => {
+    HTMLElement.prototype.focus = focus;
+  };
+  HTMLElement.prototype.focus = restore;
+  queueMicrotask(restore);
+}
+
 function resolveElement(element: TutorialStep['element']) {
   return typeof element === 'string' ? document.querySelector(element) : element();
 }
@@ -114,7 +129,7 @@ export function RoadmapTutorial<Action = never>({
       confirmingRef.current = true;
       setIsConfirmingExit(true);
     };
-    const isActionStep = (index: number | undefined) =>
+    const isActionStep = (index: number | undefined): index is number =>
       index !== undefined && steps[index]?.advanceWhen !== undefined;
     const move = async (tour: Driver, offset: 1 | -1, byAction = false) => {
       if (confirmingRef.current || moving) return;
@@ -160,14 +175,7 @@ export function RoadmapTutorial<Action = never>({
       onPopoverRender: () => {
         if (!following) return;
         following = false;
-        // driver.js calls focus() synchronously right after this hook, so only that one
-        // call is skipped; the microtask restores focus() if driver made none.
-        const focus = HTMLElement.prototype.focus;
-        const restore = () => {
-          HTMLElement.prototype.focus = focus;
-        };
-        HTMLElement.prototype.focus = restore;
-        queueMicrotask(restore);
+        skipDriverPopoverFocus();
       },
       onDestroyStarted: askExit,
       overlayClickBehavior: askExit,
@@ -189,11 +197,14 @@ export function RoadmapTutorial<Action = never>({
       else if (!confirmingRef.current) highlightAgain();
     });
     // An action step follows its control as it changes, for instance into a dialog and back.
+    // A poll, not observers: a MutationObserver misses a control that only moves (a menu
+    // or dialog animating into place through transforms), and a ResizeObserver misses
+    // moves that keep its size, so the highlight would lag behind or stay on a stale spot.
     const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
       document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
       if (confirmingRef.current || !isActionStep(index)) return;
-      const element = resolveElement(steps[index!].element);
+      const element = resolveElement(steps[index].element);
       if (element && element !== tour.getActiveElement()) highlightAgain();
       // Keeps the highlight on a control that is still moving, like an opening menu.
       else tour.refresh();
@@ -248,7 +259,7 @@ export function RoadmapTutorial<Action = never>({
 
   return (
     <AlertDialog open={isConfirmingExit} onOpenChange={(open) => (open ? undefined : resume())}>
-      <AlertDialogContent className="u-roadmaps-tour-exit z-[1000000001]">
+      <AlertDialogContent className="u-roadmaps-tour-exit z-(--tutorial-z-exit-confirmation)">
         <AlertDialogHeader>
           <AlertDialogTitle>¿Salir del tutorial?</AlertDialogTitle>
           <AlertDialogDescription>

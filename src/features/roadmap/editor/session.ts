@@ -249,14 +249,14 @@ export function nodeEditorReducer(
             previous.isTeacherBlocked !== action.node.isTeacherBlocked ||
             JSON.stringify(previous.resources) !== JSON.stringify(action.node.resources));
         const isPendingEffectResult = refreshMatchesPendingEffect(state, action.node);
+        // The result of the pending effect, arriving before it resolves, keeps that
+        // effect current so it can still close its Resource form.
+        const keepsPendingEffectCurrent = Boolean(
+          changed && state.pendingEditorEffect && isPendingEffectResult,
+        );
         return {
           ...state,
-          // The result of the pending effect, arriving before it resolves, keeps that
-          // effect current so it can still close its Resource form.
-          epoch:
-            changed && state.pendingEditorEffect && isPendingEffectResult
-              ? state.epoch
-              : state.epoch + 1,
+          epoch: keepsPendingEffectCurrent ? state.epoch : state.epoch + 1,
           canonicalNode: action.node,
           remoteConflict: state.remoteConflict || Boolean(changed && !isPendingEffectResult),
           remoteDeleted: false,
