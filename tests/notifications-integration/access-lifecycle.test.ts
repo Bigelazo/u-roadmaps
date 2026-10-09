@@ -194,4 +194,9 @@ test('a Scheduled unlock release notifies like a manual unlock, from teaching st
       data: { changeKind: 'node-available', actorName: 'Equipo docente' },
     },
   ]);
+  // The label is projected at read time; the stored attribution has no name.
+  const [stored] = await prisma.roadmapNotice.findMany({
+    where: { recipientId: course.studentId, roadmapId: course.roadmapId, acknowledgedAt: null },
+  });
+  expect((stored.data as { actorName?: unknown }).actorName).toBeNull();
 });

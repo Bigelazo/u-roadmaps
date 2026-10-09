@@ -88,6 +88,14 @@ export function targetContext(value: unknown): TargetContext {
     : {};
 }
 
+/** Attribution label of a stored notice: an attributed actor without a name is teaching staff. */
+export function noticeActorLabel(data: unknown): { actorName?: string } {
+  if (!data || typeof data !== 'object') return {};
+  const { actorId, actorName } = data as { actorId?: unknown; actorName?: unknown };
+  if (typeof actorName === 'string') return { actorName };
+  return typeof actorId === 'string' ? { actorName: 'Equipo docente' } : {};
+}
+
 /**
  * Read-time projection of a lifecycle notice: its text and API data come from the
  * descriptor, so wording changes need no migration. Other rows keep their stored text.
@@ -101,7 +109,11 @@ export function projectTargetNotice<D>(
   if (!stored) return null;
   const values = { ...stored.values, context: { ...stored.values.context, ...live } };
   return {
-    data: { ...(data as object), ...stored.descriptor.apiData(values) } as D,
+    data: {
+      ...(data as object),
+      ...noticeActorLabel(data),
+      ...stored.descriptor.apiData(values),
+    } as D,
     wording: stored.descriptor.wording(values),
   };
 }

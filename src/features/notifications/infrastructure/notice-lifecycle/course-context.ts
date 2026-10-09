@@ -4,8 +4,8 @@ import type { CourseOfferingIdentifier } from '@/shared/course-offering';
 
 /**
  * The Course offering every stored notice belongs to, for navigation and the read side
- * (stored flat in `data`). `actorName` is a stored attribution label read directly by the
- * database read side, so an unnamed actor is stored as «Equipo docente».
+ * (stored flat in `data`). An actor without a name (the Scheduled unlock) is stored as
+ * `actorName: null`; the read side projects its label (`noticeActorLabel`).
  */
 export type NoticeCourseContext = Readonly<
   CourseOfferingIdentifier & {
@@ -13,7 +13,7 @@ export type NoticeCourseContext = Readonly<
     courseOfferingId: string;
     courseName: string;
     actorId?: string;
-    actorName?: string;
+    actorName?: string | null;
   }
 >;
 
@@ -41,7 +41,7 @@ export async function noticeCourseContext(
     year: offering.year,
     semester: offering.semester,
     courseName: offering.course.name,
-    ...(actorId ? { actorId, actorName: actor?.name ?? 'Equipo docente' } : {}),
+    ...(actorId ? { actorId, actorName: actor?.name ?? null } : {}),
   };
 }
 
