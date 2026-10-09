@@ -151,6 +151,10 @@ async function deliverTarget(
     )
       return;
     await lockRecipientRoadmap(transaction, recipientId, roadmapId);
+    // A concurrent deletion of the target's Node settles it in the roadmap transaction
+    // (see `forgetDeletedNode`): wait for that transaction so this delivery sees the outcome.
+    if (target.nodeId)
+      await transaction.$queryRaw`SELECT 1 FROM "RoadmapNode" WHERE id = ${target.nodeId}::uuid FOR SHARE`;
     await reconcileNoticeTarget(transaction, {
       descriptor,
       identity: { recipientId, roadmapId },

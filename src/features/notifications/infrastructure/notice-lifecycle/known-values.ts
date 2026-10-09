@@ -1,5 +1,4 @@
 import 'server-only';
-import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import { ABSENT, nodeCreationRef } from '../../application/absorption';
 import type { Prisma } from '@/shared/server/db';
 import {
@@ -111,19 +110,14 @@ export async function forgetDeletedNode(
   deletionRecipientIds: readonly string[],
 ): Promise<string[]> {
   const creation = nodeCreationRef(nodeId).targetKey;
-  const unawareRecipients = async () =>
+  const unaware = new Set(
     (
       await transaction.noticeKnownValue.findMany({
         where: { roadmapId, targetKey: creation, knownValue: ABSENT },
         select: { recipientId: true },
-        orderBy: { recipientId: 'asc' },
       })
-    ).map(({ recipientId }) => recipientId);
-  // Wait for any of their in-flight deliveries or recognitions (e.g. the creation's own
-  // delivery), in a stable order, then read again under the locks.
-  for (const recipientId of await unawareRecipients())
-    await lockRecipientRoadmap(transaction, recipientId, roadmapId);
-  const unaware = new Set(await unawareRecipients());
+    ).map(({ recipientId }) => recipientId),
+  );
   await transaction.roadmapNotice.deleteMany({
     where: {
       roadmapId,
