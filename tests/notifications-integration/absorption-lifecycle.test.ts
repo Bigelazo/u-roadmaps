@@ -6,6 +6,7 @@ import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { createRoadmap } from '@/features/roadmap/application/roadmap';
 import {
   acknowledgeOwnNotices,
+  countOwnNodeChangeTargets,
   countOwnNotices,
   prepareOwnRoadmapOpening,
 } from '@/features/notifications/server';
@@ -90,6 +91,9 @@ test('a pending creation notice whose Node no longer exists is not shown or coun
   const params = new URLSearchParams({ roadmapId: course.roadmapId });
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
   expect(await countOwnNotices(course.studentId, params)).toEqual({ count: 0 });
+  expect(
+    (await countOwnNodeChangeTargets(course.studentId, params)).byNode[node.id],
+  ).toBeUndefined();
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
   expect(summary?.groups ?? []).toEqual([]);
 });

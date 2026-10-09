@@ -9,12 +9,11 @@ import {
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
   type RoadmapView,
-  type TargetContext,
 } from '../../application/notice-targets';
 import { nodeAccessRef, nodeAccessTarget } from '../../application/notice-targets/node-access';
 import { reconcileNoticeTarget } from './reconcile';
 import { lazyNoticeCourseContext } from './course-context';
-import { setKnownValue, type RecipientRoadmap } from './known-values';
+import { advanceKnownValue, type RecipientRoadmap } from './known-values';
 
 /** A target the actor's change touched and the actor sees (the actor is in its audience). */
 export type OwnTarget = Readonly<{
@@ -67,31 +66,20 @@ export async function recordOwnChanges(
       where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
       select: { id: true },
     });
-    const known = pending
-      ? null
-      : await transaction.noticeKnownValue.findUnique({
-          where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
-          select: { knownValue: true, context: true },
-        });
-    // A pending notice absorbs the own change. A Known value behind the value the change
-    // started from means a colleague's difference is still untold (its delivery has not
-    // run): reconcile as if that notice already existed and absorbed the own change, so
-    // the result does not depend on delivery order.
-    const untold = known && known.knownValue !== previousValue;
-    if (pending || untold) {
-      await reconcileNoticeTarget(transaction, {
+    const reconcile = () =>
+      reconcileNoticeTarget(transaction, {
         descriptor,
         identity,
         target,
-        fallbackKnown: untold ? known.knownValue : previousValue,
-        fallbackContext: untold
-          ? (known.context as TargetContext)
-          : descriptor.previousContext?.(fact),
+        fallbackKnown: previousValue,
+        fallbackContext: descriptor.previousContext?.(fact),
         roadmap,
         courseContext,
         eventId: randomUUID(),
         occurredAt,
       });
+    if (pending) {
+      await reconcile();
       continue;
     }
     const current = await descriptor.current(target, roadmap, identity.recipientId);
@@ -100,7 +88,18 @@ export async function recordOwnChanges(
     // produced themselves"). Targets recorded at edit time (Node access) take the value
     // the change reported.
     const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
-    await setKnownValue(transaction, identity, target, value, current.context);
+    // A Known value behind the value the change started from means a colleague's
+    // difference is still untold (its delivery has not run): reconcile as if that notice
+    // already existed and absorbed the own change, so delivery order does not matter.
+    const advanced = await advanceKnownValue(
+      transaction,
+      identity,
+      target,
+      previousValue,
+      value,
+      current.context,
+    );
+    if (!advanced) await reconcile();
   }
 }
 

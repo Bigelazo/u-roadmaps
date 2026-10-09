@@ -75,6 +75,35 @@ export async function ensureKnownValue(
   };
 }
 
+/**
+ * The actor's own change: advance the Known value to `knownValue` unless it differs from
+ * the value the change started from (`previousValue`), i.e. a colleague's difference is
+ * still untold. Returns false then (the Known value is left as it is).
+ */
+export async function advanceKnownValue(
+  transaction: Prisma.TransactionClient,
+  identity: RecipientRoadmap,
+  target: NoticeTargetRef,
+  previousValue: string,
+  knownValue: string,
+  context: TargetContext = {},
+) {
+  const where = { ...identity, targetKey: target.targetKey };
+  const data = { knownValue, context: context as Prisma.InputJsonObject };
+  const { count } = await transaction.noticeKnownValue.updateMany({
+    where: { ...where, knownValue: previousValue },
+    data,
+  });
+  if (count) return true;
+  const known = await transaction.noticeKnownValue.findUnique({
+    where: { recipientId_roadmapId_targetKey: where },
+    select: { knownValue: true },
+  });
+  if (known) return false;
+  await setKnownValue(transaction, identity, target, knownValue, context);
+  return true;
+}
+
 /** Recognition: the recipient now knows `knownValue`. */
 export async function setKnownValue(
   transaction: Prisma.TransactionClient,
