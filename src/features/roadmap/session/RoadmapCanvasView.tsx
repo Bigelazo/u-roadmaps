@@ -411,6 +411,7 @@ function useRoadmapCanvasController({ input }: Props) {
     requestAnimationFrame(() => focusReturn?.());
   }, [teacherPreviewFocusReturn]);
 
+  const suggestedResource = input.practice?.suggestedResource;
   const openResourceComposer = useCallback(
     (nodeId: string) => {
       if (!canEditRoadmap || isCanvasPreview) return;
@@ -422,12 +423,12 @@ function useRoadmapCanvasController({ input }: Props) {
             id: crypto.randomUUID(),
             kind: 'open-resource',
             nodeId,
-            mode: 'file',
+            ...(suggestedResource ? { mode: 'link', value: suggestedResource } : { mode: 'file' }),
           },
         });
       });
     },
-    [canEditRoadmap, guardEditorDraft, isCanvasPreview],
+    [canEditRoadmap, guardEditorDraft, isCanvasPreview, suggestedResource],
   );
 
   useEffect(() => {
@@ -1237,7 +1238,10 @@ function RoadmapCanvasGraph({
             onRequestReset={() =>
               requestExclusiveConfirmation('canvas-preview', canvasPreviewWorkflow.requestReset)
             }
-            onExit={canvasPreviewWorkflow.exit}
+            onExit={() => {
+              canvasPreviewWorkflow.exit();
+              input.practice?.onAction?.({ type: 'exitCanvasPreview' });
+            }}
           />
         ) : null,
         topRight:

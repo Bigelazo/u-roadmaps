@@ -104,3 +104,16 @@
 .driver-active .driver-active-element .react-flow__edgelabel-renderer {
   pointer-events: none;
 }
+
+/*
+ * During an action step, portaled layers (menus, dialogs, Select popups) sit above the
+ * overlay and take clicks, so the expected interaction is fully usable. The exit
+ * confirmation keeps its own, higher layer.
+ */
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) > * {
+  z-index: 100000 !important;
+}
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)),
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) * {
+  pointer-events: auto;
+}

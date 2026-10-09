@@ -14,6 +14,7 @@ import {
   practiceNodeChangeCounts,
   practiceRoadmap,
   practiceStudentProgress,
+  practiceSuggestedResource,
   type PracticeAcademicTerm,
   type PracticeExperience,
 } from '@/features/roadmap/practice/practice-roadmap';
@@ -81,6 +82,7 @@ export function PracticeRoadmapCanvas({
             practice={{
               nodeChangeCounts: experience === 'student' ? practiceNodeChangeCounts : {},
               onAction: actions.report,
+              suggestedResource: experience === 'teaching' ? practiceSuggestedResource : undefined,
             }}
           />
         </RoadmapCanvasSessionPersistenceProvider>

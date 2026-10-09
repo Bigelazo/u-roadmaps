@@ -48,6 +48,8 @@ export type NodeEditorCommand = {
   kind: 'open-resource';
   nodeId: string;
   mode: 'file' | 'link';
+  /** A prefilled link, for instance suggested by the teaching Roadmap tutorial. */
+  value?: ResourceInput;
 };
 
 export type NodeEditorGuardReason =

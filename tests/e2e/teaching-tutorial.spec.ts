@@ -14,6 +14,18 @@ const steps = [
   'Dependencias',
   'Selecciona tu nodo',
   'Editor de nodo',
+  'Bloquea una rama',
+  'Bloqueo propagado',
+  'Desbloquea la rama',
+  'Desbloqueo programado',
+  'Oculta un nodo',
+  'Agrega un recurso',
+  'Elimina tu nodo',
+  'Vista estudiante',
+  'Completa un nodo',
+  'Nodos liberados',
+  'Vuelve al editor',
+  'Tutorial completado',
 ];
 
 function tourPopover(page: Page) {
@@ -34,6 +46,17 @@ async function expectStep(page: Page, title: string) {
 async function next(page: Page, title: string) {
   await tourPopover(page).getByRole('button', { name: 'Siguiente' }).click();
   await expectStep(page, title);
+}
+
+async function openNodeMenu(page: Page, title: string, item: string) {
+  const node = practiceNode(page, title);
+  await node.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).click();
+  await node.getByRole('button', { name: item, exact: true }).click();
+}
+
+function blockedByTeacher(page: Page, title: string) {
+  // While editing, a Teacher block shows as the lock on the Node's menu trigger.
+  return practiceNode(page, title).locator('svg.lucide-lock-keyhole');
 }
 
 async function connect(page: Page, sourceTitle: string, targetTitle: string) {
@@ -86,6 +109,10 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await creator.click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
   await dialog.getByLabel('Título').fill('Nodo de práctica');
+  // Portaled popups, like the Node type options, stay usable during an action step.
+  await dialog.getByLabel('Tipo').click();
+  await page.getByRole('option', { name: 'Evaluación' }).click();
+  await expect(dialog.getByLabel('Tipo')).toContainText('Evaluación');
   await expect(dialog.getByRole('checkbox', { name: 'Visible para estudiantes' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
   await expectStep(page, 'Conecta tu nodo');
@@ -104,6 +131,66 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await practiceNode(page, 'Nodo de práctica').click();
   await expectStep(page, 'Editor de nodo');
   await expect(page.locator('[aria-label="Editor de nodo"]')).toHaveClass(/driver-active-element/);
+
+  await next(page, 'Bloquea una rama');
+
+  // The confirmation is portaled, and stays usable.
+  await openNodeMenu(page, 'Conceptos básicos', 'Bloquear rama');
+  const confirmation = page.getByRole('alertdialog');
+  await confirmation.getByRole('button', { name: 'Bloquear rama' }).click();
+  await expectStep(page, 'Bloqueo propagado');
+  for (const title of [
+    'Conceptos básicos',
+    'Ejercicios guiados',
+    'Control 1',
+    'Proyecto final',
+    'Retroalimentación del control',
+  ])
+    await expect(blockedByTeacher(page, title)).toBeVisible();
+  await next(page, 'Desbloquea la rama');
+
+  await openNodeMenu(page, 'Conceptos básicos', 'Desbloquear');
+  await expect(confirmation.getByRole('button', { name: 'Desbloquear este Nodo' })).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Desbloquear la rama' }).click();
+  await expectStep(page, 'Desbloqueo programado');
+  await expect(blockedByTeacher(page, 'Ejercicios guiados')).toHaveCount(0);
+  await next(page, 'Oculta un nodo');
+
+  // Cancelling the confirmation keeps the step.
+  await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
+  await expect(confirmation).toContainText('Dependencias que se eliminarán');
+  await confirmation.getByRole('button', { name: 'Cancelar' }).click();
+  await expectStep(page, 'Oculta un nodo');
+  await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
+  await confirmation.getByRole('button', { name: 'Ocultar' }).click();
+  await expectStep(page, 'Agrega un recurso');
+
+  await openNodeMenu(page, 'Nodo de práctica', 'Agregar recurso');
+  const composer = page.locator('[aria-label="Editor de recurso"]');
+  await expect(composer.getByLabel('Enlace')).toHaveValue(/wikipedia\.org/);
+  await composer.getByRole('button', { name: 'Agregar enlace' }).click();
+  await expectStep(page, 'Elimina tu nodo');
+
+  await openNodeMenu(page, 'Nodo de práctica', 'Eliminar nodo');
+  await confirmation.getByRole('button', { name: 'Cancelar' }).click();
+  await expectStep(page, 'Elimina tu nodo');
+  await openNodeMenu(page, 'Nodo de práctica', 'Eliminar nodo');
+  await confirmation.getByRole('button', { name: 'Eliminar' }).click();
+  await expectStep(page, 'Vista estudiante');
+  await expect(practiceNode(page, 'Nodo de práctica')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Vista estudiante' }).click();
+  await expectStep(page, 'Completa un nodo');
+  await practiceNode(page, 'Introducción').click();
+  await page.getByRole('button', { name: 'Completar' }).click();
+  await expectStep(page, 'Nodos liberados');
+  await expect(practiceNode(page, 'Conceptos básicos')).not.toContainText(
+    'Completa prerrequisitos',
+  );
+  await next(page, 'Vuelve al editor');
+  await page.getByRole('button', { name: 'Ir al editor' }).click();
+  await expectStep(page, 'Tutorial completado');
+  await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeVisible();
 
   await tourPopover(page).getByRole('button', { name: 'Finalizar' }).click();
   await expect(tourPopover(page)).toHaveCount(0);
