@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { fileDrop } from './file-drop';
 import { authenticateAs } from './helpers';
 
 test('Markdown drops require confirmation and update the Node draft before saving', async ({
@@ -23,11 +24,7 @@ test('Markdown drops require confirmation and update the Node draft before savin
   await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
 
   const content = '# Guía de estudio\n\n**Descripción** con ñ y acentos.\n\n- Primer paso\n';
-  const transfer = await page.evaluateHandle((text) => {
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(new File([text], 'guia.md', { type: 'text/markdown' }));
-    return dataTransfer;
-  }, content);
+  const transfer = await fileDrop(page, 'guia.md', content);
   const editor = page.getByRole('group', {
     name: 'Editor de nodo',
     exact: true,
@@ -90,21 +87,13 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
   // The confirmation makes the creation dialog inert, so locate the field by its id.
   const description = page.locator('#new-node-description');
 
-  const invalid = await page.evaluateHandle(() => {
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(new File(['texto'], 'notas.txt', { type: 'text/plain' }));
-    return dataTransfer;
-  });
+  const invalid = await fileDrop(page, 'notas.txt', 'texto', 'text/plain');
   await description.dispatchEvent('drop', { dataTransfer: invalid });
   await expect(dialog).toContainText('Arrastra un solo archivo Markdown (.md o .markdown).');
   await invalid.dispose();
 
   const content = '# Guía de creación\n\n- Primer paso\n';
-  const transfer = await page.evaluateHandle((text) => {
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(new File([text], 'guia.md', { type: 'text/markdown' }));
-    return dataTransfer;
-  }, content);
+  const transfer = await fileDrop(page, 'guia.md', content);
   await description.fill('Borrador previo');
   await description.dispatchEvent('drop', { dataTransfer: transfer });
   const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
@@ -126,4 +115,25 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
       expect.objectContaining({ title: 'Nodo con Markdown', description: content }),
     ]),
   );
+
+  await page.locator('.react-flow__node').filter({ hasText: 'Nodo con Markdown' }).click();
+  const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
+  await expect(editor.getByLabel(/Descripción/)).toHaveValue(content);
+});
+
+test('teaching staff create a Node without a description', async ({ page, course, apiAs }) => {
+  const api = await apiAs(course.users.teacher);
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.getByRole('button', { name: 'Crear en el mapa' }).click();
+  await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  await dialog.getByLabel('Título').fill('Nodo sin descripción');
+  await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await expect(dialog).toHaveCount(0);
+  const roadmap = await api.get(course.apiPath());
+  const created = (await roadmap.json()).nodes.find(
+    (node: { title: string }) => node.title === 'Nodo sin descripción',
+  );
+  expect(created?.description ?? '').toBe('');
 });

@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { queryJson } from './database';
 import { enterRoadmap } from './enter-roadmap';
+import { fileDrop } from './file-drop';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
@@ -88,11 +89,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
   await dialog.getByLabel('Título').fill('Nodo de práctica');
   const markdown = '# Guía del nodo\n\nRepasa **límites**.\n';
-  const transfer = await page.evaluateHandle((text) => {
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(new File([text], 'guia.md', { type: 'text/markdown' }));
-    return dataTransfer;
-  }, markdown);
+  const transfer = await fileDrop(page, 'guia.md', markdown);
   const description = dialog.getByLabel(/Descripción/);
   await description.dispatchEvent('drop', { dataTransfer: transfer });
   const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
