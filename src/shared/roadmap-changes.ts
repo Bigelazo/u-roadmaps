@@ -1,3 +1,4 @@
+import type { CourseOfferingIdentifier } from './course-offering';
 import type { NodeAccessState } from './node-access';
 import type { resourceContentState } from './server/resource-content-state';
 
@@ -76,6 +77,6 @@ export type RoadmapChangeFact =
 export type RoadmapChanges = Readonly<{
   actorId: string;
   roadmapId: string;
-  identifier: Readonly<{ courseCode: string; year: number; semester: number }>;
+  identifier: Readonly<CourseOfferingIdentifier>;
   facts: readonly RoadmapChangeFact[];
 }>;

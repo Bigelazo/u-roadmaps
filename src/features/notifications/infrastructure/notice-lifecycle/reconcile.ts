@@ -6,22 +6,11 @@ import type {
   RoadmapView,
   TargetContext,
 } from '../../application/notice-targets';
-import { descriptorForTargetKey, storedTargetValues } from '../../application/notice-targets';
+import { descriptorForNoticeTarget, storedTargetValues } from '../../application/notice-targets';
 import { reconcileTarget } from '../../application/reconcile-target';
 import { absorbs, containingTargets } from '../../application/absorption';
 import { ensureKnownValue, type RecipientRoadmap } from './known-values';
-
-/** Course context every stored notice carries for navigation and the read side. */
-export type NoticeEnvelope = Readonly<{
-  roadmapId: string;
-  courseOfferingId: string;
-  courseCode: string;
-  year: number;
-  semester: number;
-  courseName: string;
-  actorId?: string;
-  actorName?: string;
-}>;
+import type { NoticeCourseContext } from './course-context';
 
 export type TargetReconciliationInput = Readonly<{
   descriptor: NoticeTargetDescriptor;
@@ -34,7 +23,7 @@ export type TargetReconciliationInput = Readonly<{
   /** Context the change itself reported (see `NoticeTargetDescriptor.factContext`). */
   context?: Readonly<Record<string, unknown>>;
   /** Loaded only when a notice is written. */
-  envelope: () => Promise<NoticeEnvelope>;
+  courseContext: () => Promise<NoticeCourseContext>;
   eventId: string;
   occurredAt: Date;
   /** A change inside this broad target: rewrite its pending notice even if its values held. */
@@ -58,10 +47,11 @@ export async function reconcileNoticeTarget(
       },
       select: { knownValue: true },
     });
-    if (!absorbs(known?.knownValue)) continue;
+    const descriptor = descriptorForNoticeTarget(broad.noticeTarget);
+    if (!descriptor || !absorbs(known?.knownValue)) continue;
     await reconcileInScope(transaction, {
       ...input,
-      descriptor: descriptorForTargetKey(broad.targetKey)!,
+      descriptor,
       target: broad,
       fallbackKnown: known!.knownValue,
       fallbackContext: undefined,
@@ -160,13 +150,13 @@ async function reconcileOne(
     knownContext: known.context,
   };
   const wording = descriptor.wording(values);
-  const envelope = await input.envelope();
+  const courseContext = await input.courseContext();
   const row = {
     // Text is projected at read time; the columns keep a cache of it.
     subject: wording.subject,
     body: wording.body,
     data: {
-      ...envelope,
+      ...courseContext,
       ...(target.nodeId ? { nodeId: target.nodeId } : {}),
       targetKey: target.targetKey,
       noticeClass: descriptor.noticeClass,
@@ -192,7 +182,7 @@ async function reconcileOne(
       ...identity,
       targetKey: target.targetKey,
       eventId: input.eventId,
-      courseOfferingId: envelope.courseOfferingId,
+      courseOfferingId: courseContext.courseOfferingId,
     },
     select: { id: true },
   });

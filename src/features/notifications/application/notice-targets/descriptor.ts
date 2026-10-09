@@ -1,8 +1,15 @@
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import type { NoticeClass } from '../notice-effect';
 
-/** A Notice target and its place in the hierarchy Roadmap ⊃ Node ⊃ aspect/Resource. */
-export type NoticeTargetRef = Readonly<{ targetKey: string; nodeId: string | null }>;
+/**
+ * A Notice target, the descriptor kind that owns it (`noticeTarget`), and its place in the
+ * hierarchy Roadmap ⊃ Node ⊃ aspect/Resource.
+ */
+export type NoticeTargetRef = Readonly<{
+  noticeTarget: string;
+  targetKey: string;
+  nodeId: string | null;
+}>;
 
 export type RoadmapViewNode = Readonly<{
   id: string;
@@ -22,12 +29,30 @@ export type RoadmapViewResource = Readonly<{
   revision: string;
 }>;
 
+export type RoadmapViewDependency = Readonly<{
+  id: string;
+  sourceNodeId: string;
+  targetNodeId: string;
+}>;
+
+export type RoadmapViewNodeType = Readonly<{ id: string; name: string; hasVisibleNode: boolean }>;
+
 /** What a descriptor may read about one Roadmap; the module implements it over a transaction. */
 export interface RoadmapView {
   readonly roadmapId: string;
   /** Active Participations, including the actor of the change. */
   participants(): Promise<readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[]>;
   node(nodeId: string): Promise<RoadmapViewNode | null>;
+  /** Every Node of the Roadmap; once loaded, `node` answers from it. */
+  nodes(): Promise<readonly RoadmapViewNode[]>;
+  /** Every Resource of the Roadmap, oldest first; once loaded, Resource lookups answer from it. */
+  resources(): Promise<readonly RoadmapViewResource[]>;
+  /** Every Dependency of the Roadmap; once loaded, `dependency` answers from it. */
+  dependencies(): Promise<readonly RoadmapViewDependency[]>;
+  /** Every Node type of the Roadmap; once loaded, `nodeType` answers from it. */
+  nodeTypes(): Promise<readonly RoadmapViewNodeType[]>;
+  /** Load the whole Roadmap at once, so later lookups need no further query. */
+  preload(): Promise<void>;
   resource(resourceId: string): Promise<RoadmapViewResource | null>;
   /** The Node's current Resources, oldest first. */
   nodeResources(nodeId: string): Promise<readonly RoadmapViewResource[]>;
@@ -35,9 +60,7 @@ export interface RoadmapView {
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
   /** The Dependency between an ordered pair of this Roadmap's Nodes, if any. */
   dependency(sourceNodeId: string, targetNodeId: string): Promise<{ id: string } | null>;
-  nodeType(
-    nodeTypeId: string,
-  ): Promise<{ id: string; name: string; hasVisibleNode: boolean } | null>;
+  nodeType(nodeTypeId: string): Promise<RoadmapViewNodeType | null>;
   /** The Course the Roadmap belongs to. */
   course(): Promise<{ courseCode: string } | null>;
 }
@@ -59,6 +82,17 @@ export type TargetValues = Readonly<{
   context: TargetContext;
   /** Presentation context of the Known value, from the Known value store. */
   knownContext?: TargetContext;
+}>;
+
+/** A recipient's Known value of a target, as entry reads it. */
+export type KnownTarget = NoticeTargetRef & Readonly<{ knownValue: string }>;
+
+/** A target as entering the Roadmap shows it to the recipient. */
+export type EntryValue = Readonly<{
+  target: NoticeTargetRef;
+  currentValue: string;
+  /** Presentation context of the shown value, recognized with it. */
+  context?: TargetContext;
 }>;
 
 /** Read-time text, shared by the Inbox and the Change summary. */
@@ -126,6 +160,18 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
     roadmap: RoadmapView,
     recipientId: string,
   ): Promise<TargetCurrent | null>;
+  /**
+   * (C) The targets of this kind that entering the Roadmap shows `recipientId`, with the
+   * values shown, including targets the recipient knew that are now gone (their absent
+   * value). `known` are the recipient's Known values of this kind. The descriptor applies
+   * its own audience and visibility gates; the module applies the hierarchy (a target
+   * inside a hidden, never-recognized Node stays unknown). Omitted when entry shows none.
+   */
+  entryValues?(
+    roadmap: RoadmapView,
+    recipientId: string,
+    known: readonly KnownTarget[],
+  ): Promise<readonly EntryValue[]>;
   /** Presentation context only the change itself knows (e.g. a removed Dependency's id). */
   factContext?(fact: F, changes: RoadmapChanges): Readonly<Record<string, unknown>>;
   /** Target identity the read side (Inbox SQL and TS visibility) reads from stored `data`. */

@@ -23,6 +23,7 @@ export async function recordKnownValues(
     data: recipientIds.map((recipientId) => ({
       recipientId,
       roadmapId,
+      noticeTarget: target.noticeTarget,
       targetKey: target.targetKey,
       nodeId: target.nodeId,
       knownValue,
@@ -85,7 +86,13 @@ export async function setKnownValue(
   const known = { knownValue, context: context as Prisma.InputJsonObject };
   await transaction.noticeKnownValue.upsert({
     where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
-    create: { ...identity, targetKey: target.targetKey, nodeId: target.nodeId, ...known },
+    create: {
+      ...identity,
+      noticeTarget: target.noticeTarget,
+      targetKey: target.targetKey,
+      nodeId: target.nodeId,
+      ...known,
+    },
     update: known,
   });
 }

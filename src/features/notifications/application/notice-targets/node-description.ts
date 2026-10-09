@@ -6,6 +6,12 @@ import {
   type TargetValues,
 } from './descriptor';
 
+export const nodeDescriptionRef = (nodeId: string) => ({
+  noticeTarget: 'node-description',
+  targetKey: `node:${nodeId}:description`,
+  nodeId,
+});
+
 type NodeDescriptionFact = Extract<RoadmapChangeFact, { kind: 'node-description' }>;
 
 /** Participants who can open the Node now; nobody when it was revealed or hidden by this change. */
@@ -32,7 +38,7 @@ export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> 
   noticeClass: 'roadmap-node-changed',
   readSide: { changeKind: 'node-updated', changedFields: ['description'], targetKind: 'node' },
   matches: (fact): fact is NodeDescriptionFact => fact.kind === 'node-description',
-  target: (fact) => ({ targetKey: `node:${fact.nodeId}:description`, nodeId: fact.nodeId }),
+  target: (fact) => nodeDescriptionRef(fact.nodeId),
   previousValue: (fact) => JSON.stringify(fact.previous),
   knowers: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   audience: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
@@ -45,6 +51,22 @@ export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> 
           context: { nodeTitle: node.title },
         }
       : null;
+  },
+  async entryValues(roadmap, recipientId, known) {
+    const accessible = await roadmap.accessibleNodeIds(recipientId);
+    const knownKeys = new Set(known.map(({ targetKey }) => targetKey));
+    return (await roadmap.nodes()).flatMap((node) => {
+      const target = nodeDescriptionRef(node.id);
+      // A blocked recipient never saw the description, unless it already knew one.
+      if (!accessible.has(node.id) && !knownKeys.has(target.targetKey)) return [];
+      return [
+        {
+          target,
+          currentValue: JSON.stringify(node.description),
+          context: { nodeTitle: node.title },
+        },
+      ];
+    });
   },
   wording: (values) => ({
     subject: nodeTitle(values),

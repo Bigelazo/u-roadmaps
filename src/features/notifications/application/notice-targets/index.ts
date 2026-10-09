@@ -17,11 +17,15 @@ import { nodeDeletionTarget } from './node-deletion';
 import { roadmapAvailabilityTarget } from './roadmap-availability';
 
 export type {
+  EntryValue,
+  KnownTarget,
   NoticeReadSide,
   NoticeTargetDescriptor,
   NoticeTargetRef,
   RoadmapView,
+  RoadmapViewDependency,
   RoadmapViewNode,
+  RoadmapViewNodeType,
   RoadmapViewResource,
   TargetContext,
   TargetCurrent,
@@ -47,26 +51,7 @@ export function descriptorForFact(fact: RoadmapChangeFact) {
   return noticeTargetDescriptors.find((descriptor) => descriptor.matches(fact)) ?? null;
 }
 
-/** The descriptor that owns a target key, by the key's shape. */
-export function descriptorForTargetKey(targetKey: string): NoticeTargetDescriptor | null {
-  const [head, , aspect] = targetKey.split(':');
-  if (head === 'roadmap') return roadmapAvailabilityTarget;
-  if (head === 'resource') return resourceTarget;
-  if (head === 'dependency') return dependencyPairTarget;
-  if (head === 'node-type') return typeNameTarget;
-  if (head !== 'node') return null;
-  return (
-    {
-      title: nodeTitleTarget,
-      description: nodeDescriptionTarget,
-      nodeType: nodeTypeTarget,
-      access: nodeAccessTarget,
-      creation: nodeCreationTarget,
-      deletion: nodeDeletionTarget,
-    }[aspect] ?? null
-  );
-}
-
+/** The descriptor of a Notice target kind; null for a kind no descriptor owns. */
 export function descriptorForNoticeTarget(noticeTarget: unknown) {
   return (
     noticeTargetDescriptors.find((descriptor) => descriptor.noticeTarget === noticeTarget) ?? null

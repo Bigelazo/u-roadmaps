@@ -13,14 +13,20 @@ import {
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
 import type { RoadmapChanges } from '@/shared/roadmap-changes';
-import { recordNoticeTargets, type NoticeDelivery } from './infrastructure/notice-lifecycle';
+import {
+  recordNoticeTargets,
+  type NoticeDelivery,
+  type NoticeDeliveryScheduler,
+} from './infrastructure/notice-lifecycle';
 import { acknowledgeOwnNotices as acknowledgeNotices } from './infrastructure/own-inbox';
 export { reviewOwnNode } from './infrastructure/own-inbox';
+
+/** Public types of the notice lifecycle module: a recorded change's deferred delivery and its scheduler. */
+export type { NoticeDelivery, NoticeDeliveryScheduler };
 
 export function acknowledgeOwnNotices(userId: string, input: Record<string, unknown>) {
   return acknowledgeNotices(userId, input, accessibleNodes);
 }
-export type { NoticeDelivery } from './infrastructure/notice-lifecycle';
 
 /**
  * Notice lifecycle module (ADR-0024): record Known values inside the roadmap
@@ -36,7 +42,6 @@ export function recordRoadmapNotices(
 export function listOwnNotices(userId: string, params: URLSearchParams) {
   return listNotices(userId, params);
 }
-export type { NoticeDeliveryScheduler } from './infrastructure/own-inbox';
 export type InboxIdentity = Readonly<{ userId: string }>;
 
 export function getInboxIdentity(userId: string): InboxIdentity {

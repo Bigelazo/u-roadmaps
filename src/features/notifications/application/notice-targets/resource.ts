@@ -1,6 +1,12 @@
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import type { NoticeTargetDescriptor, RoadmapView, TargetValues } from './descriptor';
 
+export const resourceRef = (resourceId: string, nodeId: string) => ({
+  noticeTarget: 'resource',
+  targetKey: `resource:${resourceId}`,
+  nodeId,
+});
+
 type ResourceFact = Extract<RoadmapChangeFact, { kind: 'resource' }>;
 type ResourceState = Readonly<{ title: string; revision: string }>;
 
@@ -54,7 +60,7 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   readSide: { changeKind: 'resource-updated', changedFields: [], targetKind: 'node' },
   valueReadSide: (values) => ({ changeKind: lifecycle(values).changeKind }),
   matches: (fact): fact is ResourceFact => fact.kind === 'resource',
-  target: (fact) => ({ targetKey: `resource:${fact.resourceId}`, nodeId: fact.nodeId }),
+  target: (fact) => resourceRef(fact.resourceId, fact.nodeId),
   previousValue: (fact) => resourceValue(fact.previous),
   knowers: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
   audience: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
@@ -68,6 +74,29 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
       visible: node.isVisible,
       context: { resourceId, nodeTitle: node.title },
     };
+  },
+  async entryValues(roadmap, recipientId, known) {
+    const [accessible, nodes, resources] = await Promise.all([
+      roadmap.accessibleNodeIds(recipientId),
+      roadmap.nodes(),
+      roadmap.resources(),
+    ]);
+    const nodeIds = new Set(nodes.map(({ id }) => id));
+    const knownKeys = new Set(known.map(({ targetKey }) => targetKey));
+    const shown = resources.flatMap((resource) => {
+      const target = resourceRef(resource.id, resource.nodeId);
+      // A blocked recipient never saw the Node's Resources, unless it already knew this one.
+      if (!accessible.has(resource.nodeId) && !knownKeys.has(target.targetKey)) return [];
+      return [{ target, currentValue: resourceValue(resource) }];
+    });
+    const present = new Set(
+      resources.map((resource) => resourceRef(resource.id, resource.nodeId).targetKey),
+    );
+    // A known Resource of a remaining Node that is gone is shown as removed.
+    const removed = known
+      .filter(({ targetKey, nodeId }) => nodeId && nodeIds.has(nodeId) && !present.has(targetKey))
+      .map((target) => ({ target, currentValue: resourceValue(null) }));
+    return [...shown, ...removed];
   },
   wording(values) {
     const { changeKind, resourceTitle, titleChange, nodeTitle } = lifecycle(values);

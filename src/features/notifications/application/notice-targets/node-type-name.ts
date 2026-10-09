@@ -2,6 +2,12 @@ import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes
 import { nodeTypeNameTarget } from '@/shared/route-notice-target';
 import type { NoticeTargetDescriptor, NoticeTargetRef, RoadmapView } from './descriptor';
 
+export const typeNameRef = (nodeTypeId: string) => ({
+  noticeTarget: 'node-type-name',
+  targetKey: nodeTypeNameTarget(nodeTypeId),
+  nodeId: null,
+});
+
 type NodeTypeNameFact = Extract<RoadmapChangeFact, { kind: 'node-type-name' }>;
 
 /** The Node type a `node-type:<id>:name` key names. */
@@ -26,7 +32,7 @@ export const typeNameTarget: NoticeTargetDescriptor<NodeTypeNameFact> = {
   noticeClass: 'roadmap-classification-changed',
   readSide: { changeKind: 'classification-updated', changedFields: [], targetKind: 'roadmap' },
   matches: (fact): fact is NodeTypeNameFact => fact.kind === 'node-type-name',
-  target: (fact) => ({ targetKey: nodeTypeNameTarget(fact.nodeTypeId), nodeId: null }),
+  target: (fact) => typeNameRef(fact.nodeTypeId),
   previousValue: (fact) => fact.previous,
   knowers: typeRecipients,
   audience: typeRecipients,
@@ -34,6 +40,11 @@ export const typeNameTarget: NoticeTargetDescriptor<NodeTypeNameFact> = {
     const type = await roadmap.nodeType(nodeTypeId(target));
     return type ? { value: type.name, visible: type.hasVisibleNode } : null;
   },
+  entryValues: async (roadmap) =>
+    (await roadmap.nodeTypes()).map((type) => ({
+      target: typeNameRef(type.id),
+      currentValue: type.name,
+    })),
   storedData: (target) => ({ nodeTypeId: nodeTypeId(target) }),
   wording: ({ knownValue, currentValue }) => ({
     subject: `Tipo «${knownValue}» → «${currentValue}»`,

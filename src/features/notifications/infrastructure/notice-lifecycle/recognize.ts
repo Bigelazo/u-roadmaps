@@ -2,35 +2,33 @@ import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 import {
   descriptorForNoticeTarget,
-  descriptorForTargetKey,
   storedTargetValues,
   targetContext,
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
+  type RoadmapView,
   type TargetContext,
 } from '../../application/notice-targets';
 import { PRESENT, nodeCreationRef, nodeDeletionRef } from '../../application/absorption';
 import { acknowledgeCapturedNotice } from '../recognition-snapshot';
 import { setKnownValue, type RecipientRoadmap } from './known-values';
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
-import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
-import { roadmapEnvelope } from './envelope';
+import { reconcileNoticeTarget } from './reconcile';
+import { lazyNoticeCourseContext, type NoticeCourseContext } from './course-context';
 
 /**
  * One target as entry exposed it: a pending notice (`id`), or a value the recipient saw
  * without one (`id` null). `onlyPending` values advance the Known value but only rebase a
  * pending notice; values inside a recognized broad target reconcile fully.
  */
-export type TargetSnapshot = Readonly<{
-  id: string | null;
-  noticeTarget: string;
-  targetKey: string;
-  nodeId: string | null;
-  currentValue: string;
-  /** Presentation context of the captured value, recognized with it. */
-  context?: TargetContext;
-  onlyPending?: boolean;
-}>;
+export type TargetSnapshot = NoticeTargetRef &
+  Readonly<{
+    id: string | null;
+    currentValue: string;
+    /** Presentation context of the captured value, recognized with it. */
+    context?: TargetContext;
+    onlyPending?: boolean;
+  }>;
 
 /** (C) Capture: the pending lifecycle notices of an opening record. */
 export function pendingTargetSnapshots(
@@ -66,7 +64,13 @@ function targetSnapshot(value: Prisma.JsonValue) {
     throw new Error('Invalid notice opening snapshot.');
   const descriptor = descriptorForNoticeTarget(value.noticeTarget);
   if (!descriptor) throw new Error('Unknown Notice target in opening snapshot.');
-  return { snapshot: value as unknown as TargetSnapshot, descriptor };
+  const snapshot = value as unknown as TargetSnapshot;
+  const target = {
+    noticeTarget: descriptor.noticeTarget,
+    targetKey: snapshot.targetKey,
+    nodeId: snapshot.nodeId,
+  };
+  return { snapshot, target, descriptor };
 }
 
 /** (C) Recognize captured values once, rebasing any later delivery onto them. */
@@ -88,10 +92,13 @@ export async function recognizeTargetSnapshots(
 ) {
   if (!Array.isArray(snapshots)) throw new Error('Invalid notice opening snapshots.');
   const identity = { recipientId, roadmapId };
-  const envelope = lazyRoadmapEnvelope(transaction, roadmapId);
+  const courseContext = lazyNoticeCourseContext(transaction, roadmapId);
   const recognized = snapshots.map(targetSnapshot);
+  // Recognition never edits the Roadmap: one view, loaded at once, serves every target.
+  const roadmap = roadmapView(transaction, roadmapId, accessibleNodes);
+  if (recognized.length) await roadmap.preload();
   let acknowledged = 0;
-  for (const { snapshot, descriptor } of recognized) {
+  for (const { snapshot, target, descriptor } of recognized) {
     if (snapshot.id)
       acknowledged += await acknowledgeCapturedNotice(
         transaction,
@@ -101,34 +108,34 @@ export async function recognizeTargetSnapshots(
     await recognizeKnownValue(transaction, {
       identity,
       descriptor,
-      target: { targetKey: snapshot.targetKey, nodeId: snapshot.nodeId },
+      target,
       knownValue: snapshot.currentValue,
       context: targetContext(snapshot.context),
       eventId: `recognition:${operationId}:${snapshot.targetKey}`,
-      envelope,
+      courseContext,
       onlyPending: snapshot.onlyPending,
-      accessibleNodes,
+      roadmap,
     });
   }
   const broad = recognized.filter(({ descriptor }) => descriptor.scope);
-  for (const { snapshot, descriptor } of broad) {
+  for (const { snapshot, target, descriptor } of broad) {
     if (descriptor.scope !== 'node' || !snapshot.nodeId) continue;
-    const roadmap = roadmapView(transaction, roadmapId, accessibleNodes);
-    const target = { targetKey: snapshot.targetKey, nodeId: snapshot.nodeId };
     if (await descriptor.current(target, roadmap, recipientId)) continue;
     // The Node entry showed is gone: the recipient knew it, so its deletion is news.
     await transaction.noticeKnownValue.deleteMany({
       where: { ...identity, targetKey: nodeCreationRef(snapshot.nodeId).targetKey },
     });
     const deletion = nodeDeletionRef(snapshot.nodeId);
+    const deletionDescriptor = descriptorForNoticeTarget(deletion.noticeTarget);
+    if (!deletionDescriptor) continue;
     await reconcileNoticeTarget(transaction, {
-      descriptor: descriptorForTargetKey(deletion.targetKey)!,
+      descriptor: deletionDescriptor,
       identity,
       target: deletion,
       fallbackKnown: PRESENT,
       context: { nodeTitle: targetContext(snapshot.context).nodeTitle },
       roadmap,
-      envelope,
+      courseContext,
       eventId: `recognition:${operationId}:${deletion.targetKey}`,
       occurredAt: new Date(),
     });
@@ -137,39 +144,78 @@ export async function recognizeTargetSnapshots(
   const captured = new Set(recognized.map(({ snapshot }) => snapshot.targetKey));
   for (const { snapshot, descriptor } of broad) {
     if (snapshot.onlyPending) continue;
-    const later = await transaction.noticeKnownValue.findMany({
-      where: {
-        ...identity,
-        ...(descriptor.scope === 'node' ? { nodeId: snapshot.nodeId } : {}),
-      },
+    await reconcileUncaptured(transaction, {
+      identity,
+      scope: descriptor.scope === 'node' ? { nodeId: snapshot.nodeId } : {},
+      captured,
+      roadmap,
+      courseContext,
+      operationId,
     });
-    for (const known of later) {
-      const owner = descriptorForTargetKey(known.targetKey);
-      if (!owner || captured.has(known.targetKey)) continue;
-      captured.add(known.targetKey);
-      await reconcileNoticeTarget(transaction, {
-        descriptor: owner,
-        identity,
-        target: { targetKey: known.targetKey, nodeId: known.nodeId },
-        fallbackKnown: known.knownValue,
-        roadmap: roadmapView(transaction, roadmapId, accessibleNodes),
-        envelope,
-        eventId: `recognition:${operationId}:${known.targetKey}`,
-        occurredAt: new Date(),
-      });
-    }
   }
   return acknowledged;
 }
 
-/** Course context loaded at most once, and only if a recognition writes a notice. */
-export function lazyRoadmapEnvelope(transaction: Prisma.TransactionClient, roadmapId: string) {
-  let envelope: Promise<NoticeEnvelope> | undefined;
-  return () =>
-    (envelope ??= roadmapEnvelope(transaction, roadmapId).then((loaded) => {
-      if (!loaded) throw new Error('Roadmap not found.');
-      return loaded;
-    }));
+/**
+ * Reconcile, in one pass, the recipient's Known values in a recognized broad target that
+ * entry did not capture: only targets with a pending notice or a changed value are
+ * reconciled one by one; the rest are compared against the already loaded view.
+ */
+async function reconcileUncaptured(
+  transaction: Prisma.TransactionClient,
+  input: {
+    identity: RecipientRoadmap;
+    scope: { nodeId?: string | null };
+    captured: Set<string>;
+    roadmap: RoadmapView;
+    courseContext: () => Promise<NoticeCourseContext>;
+    operationId: string;
+  },
+) {
+  const { identity, captured, roadmap } = input;
+  const later = (
+    await transaction.noticeKnownValue.findMany({ where: { ...identity, ...input.scope } })
+  ).filter(({ targetKey }) => !captured.has(targetKey));
+  if (!later.length) return;
+  const pending = new Set(
+    (
+      await transaction.roadmapNotice.findMany({
+        where: {
+          ...identity,
+          acknowledgedAt: null,
+          targetKey: { in: later.map(({ targetKey }) => targetKey) },
+        },
+        select: { targetKey: true },
+      })
+    ).map(({ targetKey }) => targetKey),
+  );
+  for (const known of later) {
+    const descriptor = descriptorForNoticeTarget(known.noticeTarget);
+    if (!descriptor || captured.has(known.targetKey)) continue;
+    captured.add(known.targetKey);
+    const target = {
+      noticeTarget: known.noticeTarget,
+      targetKey: known.targetKey,
+      nodeId: known.nodeId,
+    };
+    if (!pending.has(known.targetKey)) {
+      const current = await descriptor.current(target, roadmap, identity.recipientId);
+      const value = descriptor.currentAtEdit
+        ? (known.currentValue ?? known.knownValue)
+        : current?.value;
+      if (current && value === known.knownValue) continue;
+    }
+    await reconcileNoticeTarget(transaction, {
+      descriptor,
+      identity,
+      target,
+      fallbackKnown: known.knownValue,
+      roadmap,
+      courseContext: input.courseContext,
+      eventId: `recognition:${input.operationId}:${known.targetKey}`,
+      occurredAt: new Date(),
+    });
+  }
 }
 
 /**
@@ -186,13 +232,12 @@ export async function recognizeKnownValue(
     /** Presentation context of the recognized value. */
     context?: TargetContext;
     eventId: string;
-    envelope: () => Promise<NoticeEnvelope>;
+    courseContext: () => Promise<NoticeCourseContext>;
     onlyPending?: boolean;
-    accessibleNodes?: NodeAccessReader;
+    roadmap: RoadmapView;
   },
 ) {
-  const { identity, target } = input;
-  const roadmap = roadmapView(transaction, identity.roadmapId, input.accessibleNodes);
+  const { identity, target, roadmap } = input;
   if (!(await input.descriptor.current(target, roadmap, identity.recipientId))) return;
   if (input.descriptor.keepsKnownValue !== false)
     await setKnownValue(transaction, identity, target, input.knownValue, input.context);
@@ -211,7 +256,7 @@ export async function recognizeKnownValue(
     fallbackKnown: input.knownValue,
     fallbackContext: input.context,
     roadmap,
-    envelope: input.envelope,
+    courseContext: input.courseContext,
     eventId: input.eventId,
     occurredAt: new Date(),
   });

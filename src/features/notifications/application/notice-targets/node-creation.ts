@@ -1,6 +1,6 @@
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import { ABSENT, PRESENT, nodeCreationRef } from '../absorption';
-import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
+import { ABSENT, PRESENT, absorbs, nodeCreationRef } from '../absorption';
+import type { EntryValue, NoticeTargetDescriptor, TargetValues } from './descriptor';
 
 type NodeCreatedFact = Extract<RoadmapChangeFact, { kind: 'node-created' }>;
 
@@ -57,6 +57,20 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
         resources: resources.map(({ id, title }) => ({ id, title })),
       },
     };
+  },
+  async entryValues(roadmap, _recipientId, known) {
+    // A visible new Node the recipient has not recognized (even if its notice is on its way).
+    const shown: EntryValue[] = [];
+    for (const { nodeId, knownValue } of known) {
+      const node = nodeId && absorbs(knownValue) ? await roadmap.node(nodeId) : null;
+      if (node?.isVisible)
+        shown.push({
+          target: nodeCreationRef(node.id),
+          currentValue: PRESENT,
+          context: { nodeTitle: node.title },
+        });
+    }
+    return shown;
   },
   wording: (values) => ({ ...text(values), summaryGroup: 'node', summary: text(values).body }),
   apiData: ({ context }) => ({

@@ -10,12 +10,14 @@ import {
   type TargetContext,
 } from '../../application/notice-targets';
 import { acceptDelivery } from '../notice-delivery';
-import type { NoticeDeliveryScheduler } from '../own-inbox';
 import { forgetDeletedNode, recordCurrentValues, recordKnownValues } from './known-values';
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
-import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
-import { roadmapEnvelope } from './envelope';
+import { reconcileNoticeTarget } from './reconcile';
+import { noticeCourseContext, type NoticeCourseContext } from './course-context';
 import { lockOwnChanges, recordOwnChanges, type OwnTarget } from './own-changes';
+
+/** Runs a recorded change's delivery work once the roadmap transaction has committed. */
+export type NoticeDeliveryScheduler = (task: () => Promise<void>) => void | Promise<void>;
 
 /** Deferred delivery of one recorded Roadmap change; safe to retry. */
 export type NoticeDelivery = (schedule: NoticeDeliveryScheduler) => Promise<void>;
@@ -96,10 +98,10 @@ export async function recordNoticeTargets(
   const occurredAt = new Date();
   return async (schedule) => {
     try {
-      const envelope = await roadmapEnvelope(prisma, changes.roadmapId, changes.actorId);
-      if (!envelope) return;
+      const courseContext = await noticeCourseContext(prisma, changes.roadmapId, changes.actorId);
+      if (!courseContext) return;
       await schedule(() =>
-        deliverTargets(targets, { eventId, occurredAt, envelope, accessibleNodes }),
+        deliverTargets(targets, { eventId, occurredAt, courseContext, accessibleNodes }),
       );
     } catch {
       console.warn('Roadmap notice delivery failed', { roadmapId: changes.roadmapId });
@@ -110,7 +112,7 @@ export async function recordNoticeTargets(
 type RecordedChange = Readonly<{
   eventId: string;
   occurredAt: Date;
-  envelope: NoticeEnvelope;
+  courseContext: NoticeCourseContext;
   accessibleNodes?: NodeAccessReader;
 }>;
 
@@ -127,16 +129,16 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
     failed ||= results.some((result) => result.status === 'rejected');
   }
   if (failed)
-    console.warn('Roadmap notice delivery failed', { roadmapId: change.envelope.roadmapId });
+    console.warn('Roadmap notice delivery failed', { roadmapId: change.courseContext.roadmapId });
 }
 
 /** (B) Deliver to one recipient in its own transaction, in the shared lock order. */
 async function deliverTarget(
   { descriptor, target, previousValue, previousContext, context }: RecordedTarget,
   recipientId: string,
-  { eventId, occurredAt, envelope, accessibleNodes }: RecordedChange,
+  { eventId, occurredAt, courseContext, accessibleNodes }: RecordedChange,
 ) {
-  const { roadmapId } = envelope;
+  const { roadmapId } = courseContext;
   const targetEventId = `${eventId}:${target.targetKey}`;
   await prisma.$transaction(async (transaction) => {
     if (
@@ -157,7 +159,7 @@ async function deliverTarget(
       fallbackContext: previousContext,
       context,
       roadmap: roadmapView(transaction, roadmapId, accessibleNodes),
-      envelope: async () => envelope,
+      courseContext: async () => courseContext,
       eventId: targetEventId,
       occurredAt,
     });

@@ -1,5 +1,5 @@
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import { ABSENT, PRESENT, availabilityRef } from '../absorption';
+import { ABSENT, PRESENT, absorbs, availabilityRef } from '../absorption';
 import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
 
 type RoadmapCreatedFact = Extract<RoadmapChangeFact, { kind: 'roadmap-created' }>;
@@ -34,6 +34,11 @@ export const roadmapAvailabilityTarget: NoticeTargetDescriptor<RoadmapCreatedFac
     const course = await roadmap.course();
     return course ? { value: PRESENT, visible: true, context: course } : null;
   },
+  // A Roadmap the recipient has not recognized (even if its notice is on its way).
+  entryValues: async (roadmap, _recipientId, known) =>
+    known.some(({ knownValue }) => absorbs(knownValue))
+      ? [{ target: availabilityRef(roadmap.roadmapId), currentValue: PRESENT }]
+      : [],
   factContext: (fact) => ({ actorName: fact.current.actorName }),
   wording: (values) => ({
     ...text(values),

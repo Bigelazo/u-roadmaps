@@ -12,7 +12,7 @@ import {
 } from '../../application/notice-targets';
 import { nodeAccessRef, nodeAccessTarget } from '../../application/notice-targets/node-access';
 import { reconcileNoticeTarget } from './reconcile';
-import { lazyRoadmapEnvelope } from './recognize';
+import { lazyNoticeCourseContext } from './course-context';
 import { setKnownValue, type RecipientRoadmap } from './known-values';
 
 /** A target the actor's change touched and the actor sees (the actor is in its audience). */
@@ -57,7 +57,7 @@ export async function recordOwnChanges(
 ) {
   const identity = { recipientId: changes.actorId, roadmapId: changes.roadmapId };
   if (promoted(changes)) return rebaselineStaffAccess(transaction, identity);
-  const envelope = lazyRoadmapEnvelope(transaction, changes.roadmapId);
+  const courseContext = lazyNoticeCourseContext(transaction, changes.roadmapId);
   const occurredAt = new Date();
   for (const { descriptor, fact, target, previousValue } of ownTargets) {
     if (descriptor.keepsKnownValue === false) continue;
@@ -73,7 +73,7 @@ export async function recordOwnChanges(
         fallbackKnown: previousValue,
         fallbackContext: descriptor.previousContext?.(fact),
         roadmap,
-        envelope,
+        courseContext,
         eventId: randomUUID(),
         occurredAt,
       });
@@ -97,8 +97,9 @@ async function rebaselineStaffAccess(
     where: { roadmapId: identity.roadmapId },
     select: { id: true, isVisible: true, isTeacherBlocked: true },
   });
-  const accessKeys = { startsWith: 'node:', endsWith: ':access' };
-  await transaction.noticeKnownValue.deleteMany({ where: { ...identity, targetKey: accessKeys } });
+  await transaction.noticeKnownValue.deleteMany({
+    where: { ...identity, noticeTarget: nodeAccessTarget.noticeTarget },
+  });
   await transaction.noticeKnownValue.createMany({
     data: nodes.map((node) => {
       const state = nodeAccessState(node.isVisible, !node.isTeacherBlocked);

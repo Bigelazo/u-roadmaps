@@ -309,6 +309,8 @@ model NoticeKnownValue {
   recipientId  String  @db.Uuid
   roadmapId    String  @db.Uuid
   targetKey    String
+  /// The Notice target kind (descriptor) that owns `targetKey`.
+  noticeTarget String
   nodeId       String? @db.Uuid
   knownValue   String
   currentValue String?

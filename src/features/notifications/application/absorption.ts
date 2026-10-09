@@ -12,15 +12,19 @@ export const ABSENT = 'absent';
 export const PRESENT = 'present';
 
 export function availabilityRef(roadmapId: string): NoticeTargetRef {
-  return { targetKey: `roadmap:${roadmapId}:availability`, nodeId: null };
+  return {
+    noticeTarget: 'roadmap-availability',
+    targetKey: `roadmap:${roadmapId}:availability`,
+    nodeId: null,
+  };
 }
 
 export function nodeCreationRef(nodeId: string): NoticeTargetRef {
-  return { targetKey: `node:${nodeId}:creation`, nodeId };
+  return { noticeTarget: 'node-creation', targetKey: `node:${nodeId}:creation`, nodeId };
 }
 
 export function nodeDeletionRef(nodeId: string): NoticeTargetRef {
-  return { targetKey: `node:${nodeId}:deletion`, nodeId };
+  return { noticeTarget: 'node-deletion', targetKey: `node:${nodeId}:deletion`, nodeId };
 }
 
 /** Broad targets that contain `target`, broadest first (never the target itself). */
