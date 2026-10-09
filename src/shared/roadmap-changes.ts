@@ -60,6 +60,7 @@ export type RoadmapChangeFact =
       targetNode: { title: string; isVisible: boolean };
     }
   | { kind: 'node-type-name'; nodeTypeId: string; previous: string; current: string }
+  /** The Roadmap became available (empty or copied); its audience is the notifications module's. */
   | {
       kind: 'roadmap-created';
       previous: null;
@@ -68,7 +69,6 @@ export type RoadmapChangeFact =
         courseName: string;
         actorName: string;
         occurredAt: Date;
-        recipients: readonly { userId: string; name: string }[];
       };
     }
   | { kind: 'participation-role'; recipientId: string; previous: 'STUDENT'; current: 'TEACHER' };

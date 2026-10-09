@@ -144,3 +144,30 @@ export function deferredNoticePort() {
     deliver: (delivery: NoticeDelivery) => delivery((persist) => persist()),
   };
 }
+
+/** The Roadmap became available: recorded and delivered through the notice lifecycle module. */
+export async function announceRoadmap(course: IntegrationCourse) {
+  const offering = await prisma.courseOffering.findFirstOrThrow({
+    where: { roadmap: { id: course.roadmapId } },
+  });
+  const delivery = await prisma.$transaction((transaction) =>
+    recordRoadmapNotices(transaction, {
+      actorId: course.teacherId,
+      roadmapId: course.roadmapId,
+      identifier: course.identifier,
+      facts: [
+        {
+          kind: 'roadmap-created',
+          previous: null,
+          current: {
+            courseOfferingId: offering.id,
+            courseName: 'Curso de prueba',
+            actorName: 'Docente',
+            occurredAt: new Date(),
+          },
+        },
+      ],
+    }),
+  );
+  await delivery?.((persist) => persist());
+}

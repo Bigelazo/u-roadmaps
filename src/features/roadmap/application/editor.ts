@@ -215,23 +215,6 @@ async function createRoadmapNodeUnsafe(
         isVisible,
       },
     });
-    const recipients = await transaction.participation.findMany({
-      where: {
-        courseOfferingId: roadmap.courseOfferingId,
-        isActive: true,
-        userId: { not: editor.userId },
-      },
-      select: { userId: true },
-    });
-    await transaction.nodeLifecycleKnowledge.createMany({
-      data: recipients.map(({ userId }) => ({
-        recipientId: userId,
-        roadmapId: roadmap.id,
-        nodeId: node.id,
-        isKnown: false,
-      })),
-      skipDuplicates: true,
-    });
     await report({
       actorId: editor.userId,
       identifier: editor.identifier,

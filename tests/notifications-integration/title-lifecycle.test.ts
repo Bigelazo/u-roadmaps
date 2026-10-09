@@ -1,11 +1,9 @@
 import { expect } from 'vitest';
 import { test } from './fixtures';
-import { addNode, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
-import { prisma } from '@/shared/server/db';
+import { addNode, enterRoadmap, pendingNotices, teacherEdits, announceRoadmap } from './roadmap';
 import {
   countOwnNodeChangeTargets,
   countOwnNotices,
-  deliverRoadmapAvailability,
   listOwnNotices,
 } from '@/features/notifications/server';
 
@@ -97,21 +95,7 @@ test('a pending Node creation absorbs title changes and deletion absorbs a pendi
 });
 
 test('a pending Roadmap availability notice absorbs title changes', async ({ course }) => {
-  const roadmap = await prisma.roadmap.findUniqueOrThrow({ where: { id: course.roadmapId } });
-  await deliverRoadmapAvailability(
-    {
-      eventId: course.roadmapId,
-      roadmapId: course.roadmapId,
-      courseOfferingId: roadmap.courseOfferingId,
-      ...course.identifier,
-      courseName: 'Curso de prueba',
-      actorId: course.teacherId,
-      actorName: 'Docente',
-      occurredAt: new Date(),
-      recipients: [{ userId: course.studentId, name: 'Estudiante' }],
-    },
-    (deliver) => deliver(),
-  );
+  await announceRoadmap(course);
   await teacherEdits(course).rename(course.change.nodeId, 'Recursión');
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
     { data: { changeKind: 'roadmap-available' } },

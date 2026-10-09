@@ -24,6 +24,8 @@ export function roadmapView(
   const resources = new Map<string, Promise<RoadmapViewResource | null>>();
   const accessible = new Map<string, Promise<ReadonlySet<string>>>();
   const nodeTypes = new Map<string, ReturnType<RoadmapView['nodeType']>>();
+  const nodeResources = new Map<string, ReturnType<RoadmapView['nodeResources']>>();
+  let course: ReturnType<RoadmapView['course']> | undefined;
   return {
     roadmapId,
     participants() {
@@ -70,6 +72,34 @@ export function roadmapView(
         resources.set(resourceId, resource);
       }
       return resource;
+    },
+    nodeResources(nodeId) {
+      let found = nodeResources.get(nodeId);
+      if (!found) {
+        found = transaction.resource
+          .findMany({
+            where: { roadmapNodeId: nodeId, roadmapNode: { roadmapId } },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          })
+          .then((rows) =>
+            rows.map((row) => ({
+              id: row.id,
+              nodeId: row.roadmapNodeId,
+              ...resourceContentState(row),
+            })),
+          );
+        nodeResources.set(nodeId, found);
+      }
+      return found;
+    },
+    course() {
+      course ??= transaction.roadmap
+        .findUnique({
+          where: { id: roadmapId },
+          select: { courseOffering: { select: { courseCode: true } } },
+        })
+        .then((roadmap) => (roadmap ? { courseCode: roadmap.courseOffering.courseCode } : null));
+      return course;
     },
     accessibleNodeIds(userId) {
       if (!accessibleNodes) throw new Error('Node access is not available in this view.');

@@ -1,8 +1,14 @@
 import { expect } from 'vitest';
 import { test, type IntegrationCourse } from './fixtures';
-import { addNode, deferredNoticePort, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
+import {
+  addNode,
+  deferredNoticePort,
+  enterRoadmap,
+  pendingNotices,
+  teacherEdits,
+  announceRoadmap,
+} from './roadmap';
 import { prisma } from '@/shared/server/db';
-import { deliverRoadmapAvailability } from '@/features/notifications/server';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
 
@@ -169,21 +175,7 @@ test('creation, deletion and availability absorb Resource targets', async ({ cou
     (await pendingNotices(course.studentId, course.roadmapId)).map(({ data }) => data),
   ).toMatchObject([{ changeKind: 'node-deleted', nodeId: created.id }]);
 
-  const roadmap = await prisma.roadmap.findUniqueOrThrow({ where: { id: course.roadmapId } });
-  await deliverRoadmapAvailability(
-    {
-      eventId: course.roadmapId,
-      roadmapId: course.roadmapId,
-      courseOfferingId: roadmap.courseOfferingId,
-      ...course.identifier,
-      courseName: 'Curso de prueba',
-      actorId: course.teacherId,
-      actorName: 'Docente',
-      occurredAt: new Date(),
-      recipients: [{ userId: course.classmateId, name: 'Estudiante' }],
-    },
-    (deliver) => deliver(),
-  );
+  await announceRoadmap(course);
   await edits.addResource(course.change.nodeId, 'Guía 3');
   expect(await pendingNotices(course.classmateId, course.roadmapId)).toMatchObject([
     { data: { changeKind: 'roadmap-available' } },

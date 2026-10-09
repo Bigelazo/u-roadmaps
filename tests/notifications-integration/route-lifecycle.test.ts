@@ -3,7 +3,6 @@ import { test } from './fixtures';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { completeNode } from '@/features/roadmap/server';
 import { prisma } from '@/shared/server/db';
-import { deliverRoadmapAvailability } from '@/features/notifications/server';
 import {
   addNode,
   confirmed,
@@ -11,6 +10,7 @@ import {
   enterRoadmap,
   pendingNotices,
   teacherEdits,
+  announceRoadmap,
 } from './roadmap';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
@@ -236,21 +236,7 @@ test('a pending Roadmap availability absorbs route changes; entry recognizes the
 }) => {
   const prerequisite = await addNode(course, 'Pilas');
   const dependent = await addNode(course, 'Colas');
-  const roadmap = await prisma.roadmap.findUniqueOrThrow({ where: { id: course.roadmapId } });
-  await deliverRoadmapAvailability(
-    {
-      eventId: course.roadmapId,
-      roadmapId: course.roadmapId,
-      courseOfferingId: roadmap.courseOfferingId,
-      ...course.identifier,
-      courseName: 'Curso de prueba',
-      actorId: course.teacherId,
-      actorName: 'Docente',
-      occurredAt: new Date(),
-      recipients: [{ userId: course.studentId, name: 'Estudiante' }],
-    },
-    (deliver) => deliver(),
-  );
+  await announceRoadmap(course);
   const edits = teacherEdits(course);
   const dependencyId = await edits.connect(prerequisite.id, dependent.id);
   await edits.updateType(course.nodeTypeId, { name: 'Lectura' });

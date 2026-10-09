@@ -1,4 +1,5 @@
 import 'server-only';
+import { ABSENT, nodeCreationRef } from '../../application/absorption';
 import type { Prisma } from '@/shared/server/db';
 import {
   targetContext,
@@ -89,7 +90,10 @@ export async function setKnownValue(
   });
 }
 
-/** A deleted Node's targets, and the Dependency pairs it was part of, have nothing left to compare. */
+/**
+ * A deleted Node's targets, and the Dependency pairs it was part of, have nothing left to
+ * compare. An unrecognized creation stays until delivery: it absorbs the deletion.
+ */
 export async function forgetNodeKnownValues(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -98,6 +102,7 @@ export async function forgetNodeKnownValues(
   await transaction.noticeKnownValue.deleteMany({
     where: {
       roadmapId,
+      NOT: { targetKey: nodeCreationRef(nodeId).targetKey, knownValue: ABSENT },
       OR: [
         { nodeId },
         { targetKey: { startsWith: `dependency:${nodeId}:` } },

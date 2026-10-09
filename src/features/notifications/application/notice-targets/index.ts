@@ -12,6 +12,9 @@ import { resourceTarget } from './resource';
 import { dependencyPairTarget } from './dependency-pair';
 import { typeNameTarget } from './node-type-name';
 import { nodeAccessTarget } from './node-access';
+import { nodeCreationTarget } from './node-creation';
+import { nodeDeletionTarget } from './node-deletion';
+import { roadmapAvailabilityTarget } from './roadmap-availability';
 
 export type {
   NoticeReadSide,
@@ -35,10 +38,33 @@ export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [
   dependencyPairTarget,
   typeNameTarget,
   nodeAccessTarget,
+  nodeCreationTarget,
+  nodeDeletionTarget,
+  roadmapAvailabilityTarget,
 ];
 
 export function descriptorForFact(fact: RoadmapChangeFact) {
   return noticeTargetDescriptors.find((descriptor) => descriptor.matches(fact)) ?? null;
+}
+
+/** The descriptor that owns a target key, by the key's shape. */
+export function descriptorForTargetKey(targetKey: string): NoticeTargetDescriptor | null {
+  const [head, , aspect] = targetKey.split(':');
+  if (head === 'roadmap') return roadmapAvailabilityTarget;
+  if (head === 'resource') return resourceTarget;
+  if (head === 'dependency') return dependencyPairTarget;
+  if (head === 'node-type') return typeNameTarget;
+  if (head !== 'node') return null;
+  return (
+    {
+      title: nodeTitleTarget,
+      description: nodeDescriptionTarget,
+      nodeType: nodeTypeTarget,
+      access: nodeAccessTarget,
+      creation: nodeCreationTarget,
+      deletion: nodeDeletionTarget,
+    }[aspect] ?? null
+  );
 }
 
 export function descriptorForNoticeTarget(noticeTarget: unknown) {

@@ -29,6 +29,8 @@ export interface RoadmapView {
   participants(): Promise<readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[]>;
   node(nodeId: string): Promise<RoadmapViewNode | null>;
   resource(resourceId: string): Promise<RoadmapViewResource | null>;
+  /** The Node's current Resources, oldest first. */
+  nodeResources(nodeId: string): Promise<readonly RoadmapViewResource[]>;
   /** Nodes accessible to the participant (ADR-0014 decision 10 "accessible"). */
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
   /** The Dependency between an ordered pair of this Roadmap's Nodes, if any. */
@@ -36,6 +38,8 @@ export interface RoadmapView {
   nodeType(
     nodeTypeId: string,
   ): Promise<{ id: string; name: string; hasVisibleNode: boolean } | null>;
+  /** The Course the Roadmap belongs to. */
+  course(): Promise<{ courseCode: string } | null>;
 }
 
 export type TargetContext = Readonly<Record<string, unknown>>;
@@ -86,8 +90,16 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   readonly readSide: NoticeReadSide;
   /** Read-side discriminators that depend on the stored values (stored over `readSide`). */
   valueReadSide?(values: TargetValues): Partial<NoticeReadSide>;
+  /**
+   * Broad targets only: the part of the hierarchy Roadmap ⊃ Node ⊃ aspect/Resource the
+   * target stands for. A recipient who has not recognized it learns later changes inside
+   * it through it (see `application/absorption.ts`).
+   */
+  readonly scope?: 'roadmap' | 'node';
+  /** False when the target never changes after its notice (a deleted Node): no Known value is kept. */
+  readonly keepsKnownValue?: false;
   matches(fact: RoadmapChangeFact): fact is F;
-  target(fact: F): NoticeTargetRef;
+  target(fact: F, changes: RoadmapChanges): NoticeTargetRef;
   /** The value recipients knew before the change. */
   previousValue(fact: F): string;
   /** Presentation context of the previous value, recorded with the Known value. */
@@ -102,10 +114,17 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
    * recipients. Reconciliation then compares against it and ignores `current().value`.
    */
   currentAtEdit?(fact: F): Readonly<{ recipientIds: readonly string[]; value: string }>;
-  /** The target's live value, or null when it no longer exists. */
-  current(target: NoticeTargetRef, roadmap: RoadmapView): Promise<TargetCurrent | null>;
+  /**
+   * The target's live value (as `recipientId` sees it, for targets whose value depends on
+   * the recipient), or null when it no longer exists.
+   */
+  current(
+    target: NoticeTargetRef,
+    roadmap: RoadmapView,
+    recipientId: string,
+  ): Promise<TargetCurrent | null>;
   /** Presentation context only the change itself knows (e.g. a removed Dependency's id). */
-  factContext?(fact: F): Readonly<Record<string, unknown>>;
+  factContext?(fact: F, changes: RoadmapChanges): Readonly<Record<string, unknown>>;
   /** Target identity the read side (Inbox SQL and TS visibility) reads from stored `data`. */
   storedData?(target: NoticeTargetRef): Readonly<Record<string, unknown>>;
   wording(values: TargetValues): TargetWording;

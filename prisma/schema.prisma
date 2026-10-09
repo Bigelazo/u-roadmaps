@@ -363,7 +363,7 @@ model NodeContentKnowledge {
   @@id([recipientId, nodeId, target])
 }
 
-// Recipient knowledge survives hiding and deletion until the Roadmap is removed.
+// Retired by ADR-0024 (#206): no longer read or written; dropped in the contract ticket.
 model NodeLifecycleKnowledge {
   recipientId String  @db.Uuid
   roadmapId   String  @db.Uuid

@@ -2,46 +2,54 @@ import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 import {
   descriptorForNoticeTarget,
+  descriptorForTargetKey,
   storedTargetValues,
   targetContext,
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
   type TargetContext,
 } from '../../application/notice-targets';
+import { PRESENT, nodeCreationRef, nodeDeletionRef } from '../../application/absorption';
 import { acknowledgeCapturedNotice } from '../recognition-snapshot';
 import { setKnownValue, type RecipientRoadmap } from './known-values';
-import { roadmapView } from './roadmap-view';
+import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
 import { roadmapEnvelope } from './envelope';
 
-/** One pending notice captured when the Roadmap was entered. */
-type TargetSnapshot = Readonly<{
-  id: string;
+/**
+ * One target as entry exposed it: a pending notice (`id`), or a value the recipient saw
+ * without one (`id` null). `onlyPending` values advance the Known value but only rebase a
+ * pending notice; values inside a recognized broad target reconcile fully.
+ */
+export type TargetSnapshot = Readonly<{
+  id: string | null;
   noticeTarget: string;
   targetKey: string;
   nodeId: string | null;
   currentValue: string;
   /** Presentation context of the captured value, recognized with it. */
   context?: TargetContext;
+  onlyPending?: boolean;
 }>;
 
-/** (C) Capture: the single snapshot collection of an opening record. */
-export function targetOpeningSnapshots(
+/** (C) Capture: the pending lifecycle notices of an opening record. */
+export function pendingTargetSnapshots(
   notices: readonly { id: string; data: Prisma.JsonValue }[],
-): Prisma.InputJsonArray {
+): TargetSnapshot[] {
   return notices.flatMap((notice) => {
     const stored = storedTargetValues(notice.data);
     const data = notice.data as Record<string, unknown>;
     if (!stored || typeof data.targetKey !== 'string') return [];
-    const snapshot: TargetSnapshot = {
-      id: notice.id,
-      noticeTarget: stored.descriptor.noticeTarget,
-      targetKey: data.targetKey,
-      nodeId: typeof data.nodeId === 'string' ? data.nodeId : null,
-      currentValue: stored.values.currentValue,
-      context: stored.values.context,
-    };
-    return [snapshot as Prisma.InputJsonObject];
+    return [
+      {
+        id: notice.id,
+        noticeTarget: stored.descriptor.noticeTarget,
+        targetKey: data.targetKey,
+        nodeId: typeof data.nodeId === 'string' ? data.nodeId : null,
+        currentValue: stored.values.currentValue,
+        context: stored.values.context,
+      },
+    ];
   });
 }
 
@@ -50,7 +58,7 @@ function targetSnapshot(value: Prisma.JsonValue) {
     !value ||
     typeof value !== 'object' ||
     Array.isArray(value) ||
-    typeof value.id !== 'string' ||
+    (value.id !== null && typeof value.id !== 'string') ||
     typeof value.targetKey !== 'string' ||
     typeof value.currentValue !== 'string' ||
     (value.nodeId !== null && typeof value.nodeId !== 'string')
@@ -69,19 +77,27 @@ export async function recognizeTargetSnapshots(
     roadmapId,
     operationId,
     snapshots,
-  }: { recipientId: string; roadmapId: string; operationId: string; snapshots: Prisma.JsonValue },
+    accessibleNodes,
+  }: {
+    recipientId: string;
+    roadmapId: string;
+    operationId: string;
+    snapshots: Prisma.JsonValue;
+    accessibleNodes?: NodeAccessReader;
+  },
 ) {
   if (!Array.isArray(snapshots)) throw new Error('Invalid notice opening snapshots.');
   const identity = { recipientId, roadmapId };
   const envelope = lazyRoadmapEnvelope(transaction, roadmapId);
+  const recognized = snapshots.map(targetSnapshot);
   let acknowledged = 0;
-  for (const value of snapshots) {
-    const { snapshot, descriptor } = targetSnapshot(value);
-    acknowledged += await acknowledgeCapturedNotice(
-      transaction,
-      { id: snapshot.id, ...identity },
-      (data) => storedTargetValues(data)?.values.currentValue === snapshot.currentValue,
-    );
+  for (const { snapshot, descriptor } of recognized) {
+    if (snapshot.id)
+      acknowledged += await acknowledgeCapturedNotice(
+        transaction,
+        { id: snapshot.id, ...identity },
+        (data) => storedTargetValues(data)?.values.currentValue === snapshot.currentValue,
+      );
     await recognizeKnownValue(transaction, {
       identity,
       descriptor,
@@ -90,7 +106,58 @@ export async function recognizeTargetSnapshots(
       context: targetContext(snapshot.context),
       eventId: `recognition:${operationId}:${snapshot.targetKey}`,
       envelope,
+      onlyPending: snapshot.onlyPending,
+      accessibleNodes,
     });
+  }
+  const broad = recognized.filter(({ descriptor }) => descriptor.scope);
+  for (const { snapshot, descriptor } of broad) {
+    if (descriptor.scope !== 'node' || !snapshot.nodeId) continue;
+    const roadmap = roadmapView(transaction, roadmapId, accessibleNodes);
+    const target = { targetKey: snapshot.targetKey, nodeId: snapshot.nodeId };
+    if (await descriptor.current(target, roadmap, recipientId)) continue;
+    // The Node entry showed is gone: the recipient knew it, so its deletion is news.
+    await transaction.noticeKnownValue.deleteMany({
+      where: { ...identity, targetKey: nodeCreationRef(snapshot.nodeId).targetKey },
+    });
+    const deletion = nodeDeletionRef(snapshot.nodeId);
+    await reconcileNoticeTarget(transaction, {
+      descriptor: descriptorForTargetKey(deletion.targetKey)!,
+      identity,
+      target: deletion,
+      fallbackKnown: PRESENT,
+      context: { nodeTitle: targetContext(snapshot.context).nodeTitle },
+      roadmap,
+      envelope,
+      eventId: `recognition:${operationId}:${deletion.targetKey}`,
+      occurredAt: new Date(),
+    });
+  }
+  // Changes inside a recognized broad target that entry did not show are news now.
+  const captured = new Set(recognized.map(({ snapshot }) => snapshot.targetKey));
+  for (const { snapshot, descriptor } of broad) {
+    if (snapshot.onlyPending) continue;
+    const later = await transaction.noticeKnownValue.findMany({
+      where: {
+        ...identity,
+        ...(descriptor.scope === 'node' ? { nodeId: snapshot.nodeId } : {}),
+      },
+    });
+    for (const known of later) {
+      const owner = descriptorForTargetKey(known.targetKey);
+      if (!owner || captured.has(known.targetKey)) continue;
+      captured.add(known.targetKey);
+      await reconcileNoticeTarget(transaction, {
+        descriptor: owner,
+        identity,
+        target: { targetKey: known.targetKey, nodeId: known.nodeId },
+        fallbackKnown: known.knownValue,
+        roadmap: roadmapView(transaction, roadmapId, accessibleNodes),
+        envelope,
+        eventId: `recognition:${operationId}:${known.targetKey}`,
+        occurredAt: new Date(),
+      });
+    }
   }
   return acknowledged;
 }
@@ -121,12 +188,14 @@ export async function recognizeKnownValue(
     eventId: string;
     envelope: () => Promise<NoticeEnvelope>;
     onlyPending?: boolean;
+    accessibleNodes?: NodeAccessReader;
   },
 ) {
   const { identity, target } = input;
-  const roadmap = roadmapView(transaction, identity.roadmapId);
-  if (!(await input.descriptor.current(target, roadmap))) return;
-  await setKnownValue(transaction, identity, target, input.knownValue, input.context);
+  const roadmap = roadmapView(transaction, identity.roadmapId, input.accessibleNodes);
+  if (!(await input.descriptor.current(target, roadmap, identity.recipientId))) return;
+  if (input.descriptor.keepsKnownValue !== false)
+    await setKnownValue(transaction, identity, target, input.knownValue, input.context);
   if (
     input.onlyPending &&
     !(await transaction.roadmapNotice.findFirst({

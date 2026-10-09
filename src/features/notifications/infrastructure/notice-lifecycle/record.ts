@@ -10,7 +10,6 @@ import {
   type TargetContext,
 } from '../../application/notice-targets';
 import { acceptDelivery } from '../notice-delivery';
-import { reconcileStoredAbsorption } from '../absorption-notice';
 import type { NoticeDeliveryScheduler } from '../own-inbox';
 import { forgetNodeKnownValues, recordCurrentValues, recordKnownValues } from './known-values';
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
@@ -47,7 +46,7 @@ export async function recordNoticeTargets(
       await forgetNodeKnownValues(transaction, changes.roadmapId, fact.nodeId);
     const descriptor = descriptorForFact(fact);
     if (!descriptor) continue;
-    const target = descriptor.target(fact);
+    const target = descriptor.target(fact, changes);
     const previousValue = descriptor.previousValue(fact);
     const previousContext = descriptor.previousContext?.(fact);
     await recordKnownValues(
@@ -76,7 +75,7 @@ export async function recordNoticeTargets(
         target,
         previousValue,
         previousContext,
-        context: descriptor.factContext?.(fact),
+        context: descriptor.factContext?.(fact, changes),
         recipientIds,
       });
   }
@@ -138,26 +137,6 @@ async function deliverTarget(
     )
       return;
     await lockRecipientRoadmap(transaction, recipientId, roadmapId);
-    // Until absorption moves into the module, broad notices absorb through the old stack.
-    if (
-      await reconcileStoredAbsorption(transaction, {
-        eventId: targetEventId,
-        recipientId,
-        roadmapId,
-        courseOfferingId: envelope.courseOfferingId,
-        noticeClass: descriptor.noticeClass,
-        payload: {
-          ...envelope,
-          ...(target.nodeId ? { nodeId: target.nodeId } : {}),
-          noticeTarget: descriptor.noticeTarget,
-          ...descriptor.readSide,
-          occurredAt: occurredAt.toISOString(),
-          eventCount: 1,
-          digestKey: targetEventId,
-        },
-      })
-    )
-      return;
     await reconcileNoticeTarget(transaction, {
       descriptor,
       identity: { recipientId, roadmapId },
