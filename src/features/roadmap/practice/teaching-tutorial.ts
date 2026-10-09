@@ -32,7 +32,9 @@ function nodeDetailOr(nodeId: string) {
  * The teaching Roadmap tutorial on the Practice roadmap. Action steps advance only when
  * the canvas reports their action took effect. Built per run: it remembers the new Node.
  */
-export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAction>[] {
+export function teachingTutorialSteps(
+  resourceSuggestion: { set: (isSuggesting: boolean) => void } = { set: () => undefined },
+): readonly TutorialStep<PracticeCanvasAction>[] {
   let createdNodeId: string | null = null;
   return [
     {
@@ -146,6 +148,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: resourceComposerOrCanvas,
       title: 'Agrega un recurso',
+      prepare: () => resourceSuggestion.set(true),
       description:
         'Abre el menú de tu nodo y elige "Agregar recurso". Dejamos un enlace listo: solo presiona "Agregar enlace".',
       advanceWhen: (action) => action.type === 'addResource' && action.nodeId === createdNodeId,
@@ -153,6 +156,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: canvas,
       title: 'Elimina tu nodo',
+      prepare: () => resourceSuggestion.set(false),
       description:
         'Abre el menú de tu nodo y elige "Eliminar nodo". Antes de eliminar verás qué recursos y dependencias se pierden.',
       advanceWhen: (action) => action.type === 'deleteNode' && action.nodeId === createdNodeId,

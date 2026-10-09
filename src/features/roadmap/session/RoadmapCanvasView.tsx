@@ -417,13 +417,14 @@ function useRoadmapCanvasController({ input }: Props) {
       if (!canEditRoadmap || isCanvasPreview) return;
       void guardEditorDraft({ kind: 'open-resource', nodeId }).then((proceed) => {
         if (!proceed) return;
+        const suggested = suggestedResource?.();
         dispatchCanvas({
           type: 'openResourceComposer',
           command: {
             id: crypto.randomUUID(),
             kind: 'open-resource',
             nodeId,
-            ...(suggestedResource ? { mode: 'link', value: suggestedResource } : { mode: 'file' }),
+            ...(suggested ? { mode: 'link', value: suggested } : { mode: 'file' }),
           },
         });
       });
@@ -1239,6 +1240,7 @@ function RoadmapCanvasGraph({
               requestExclusiveConfirmation('canvas-preview', canvasPreviewWorkflow.requestReset)
             }
             onExit={() => {
+              if (!canvasPreviewWorkflow.isActive) return;
               canvasPreviewWorkflow.exit();
               input.practice?.onAction?.({ type: 'exitCanvasPreview' });
             }}

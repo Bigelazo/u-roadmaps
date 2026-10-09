@@ -126,9 +126,11 @@ export function RoadmapTutorial<Action = never>({
         return;
       }
       moving = true;
+      following = false;
       try {
         await steps[index].prepare?.();
         await waitForElement(steps[index].element);
+        document.body.classList.toggle(actingClass, isActionStep(index));
         tour.moveTo(index);
       } finally {
         moving = false;
@@ -158,11 +160,14 @@ export function RoadmapTutorial<Action = never>({
       onPopoverRender: () => {
         if (!following) return;
         following = false;
+        // driver.js calls focus() synchronously right after this hook, so only that one
+        // call is skipped; the microtask restores focus() if driver made none.
         const focus = HTMLElement.prototype.focus;
-        HTMLElement.prototype.focus = function () {};
-        queueMicrotask(() => {
+        const restore = () => {
           HTMLElement.prototype.focus = focus;
-        });
+        };
+        HTMLElement.prototype.focus = restore;
+        queueMicrotask(restore);
       },
       onDestroyStarted: askExit,
       overlayClickBehavior: askExit,

@@ -130,8 +130,11 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expectStep(page, 'Conecta tu nodo');
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
 
-  await connect(page, 'Nodo de práctica', 'Control 1');
-  await expect(page.locator('.react-flow__edge')).toHaveCount(9);
+  // The new Node may still be settling into place, so the drag is retried until it connects.
+  await expect(async () => {
+    await connect(page, 'Nodo de práctica', 'Control 1');
+    await expect(page.locator('.react-flow__edge')).toHaveCount(9, { timeout: 1000 });
+  }).toPass();
   await expectStep(page, 'Dependencias');
   await expect(tourPopover(page)).toContainText('ciclos');
   await next(page, 'Selecciona tu nodo');
@@ -196,12 +199,18 @@ test('teaching staff perform each action step of the teaching tutorial', async (
 
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
   await expectStep(page, 'Completa un nodo');
+  await expect(
+    practiceNode(page, 'Conceptos básicos').getByRole('img', { name: 'Bloqueado' }),
+  ).toBeVisible();
   await practiceNode(page, 'Introducción').click();
   await page.getByRole('button', { name: 'Completar' }).click();
   await expectStep(page, 'Nodos liberados');
-  await expect(practiceNode(page, 'Conceptos básicos')).not.toContainText(
-    'Completa prerrequisitos',
-  );
+  await expect(
+    practiceNode(page, 'Conceptos básicos').getByRole('img', { name: 'Pendiente' }),
+  ).toBeVisible();
+  await expect(
+    practiceNode(page, 'Lectura complementaria').getByRole('img', { name: 'Pendiente' }),
+  ).toBeVisible();
   await next(page, 'Vuelve al editor');
   await page.getByRole('button', { name: 'Ir al editor' }).click();
   await expectStep(page, 'Tutorial completado');

@@ -126,8 +126,8 @@ export type RoadmapCanvasSessionInput = {
     readonly nodeChangeCounts: Readonly<Record<string, number>>;
     /** Told about canvas actions that took effect, for the teaching Roadmap tutorial. */
     readonly onAction?: (action: PracticeCanvasAction) => void;
-    /** Prefills the link of a new Resource, so the tutorial only asks to confirm it. */
-    readonly suggestedResource?: ResourceInput;
+    /** The link a new Resource starts with, if any: the tutorial then only asks to confirm it. */
+    readonly suggestedResource?: () => ResourceInput | undefined;
   };
 };
 
