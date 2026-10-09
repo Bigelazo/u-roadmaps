@@ -17,16 +17,17 @@ export function changeSummary(
   const groups = new Map<string, { title: string; items: string[] }>();
   const general: string[] = [];
   for (const notice of notices) {
-    const data = notice.data as Record<string, unknown>;
-    const nodeId = typeof data.nodeId === 'string' ? data.nodeId : null;
+    const stored = notice.data as Record<string, unknown>;
+    const nodeId = typeof stored.nodeId === 'string' ? stored.nodeId : null;
     const node = nodeId ? currentNodes.get(nodeId) : undefined;
+    if (!isNoticeVisible(stored, nodes, accessible)) continue;
+    // Lifecycle notices share their read-time wording with the Inbox, naming Nodes by
+    // their current title (a deleted Node by the title it had).
+    const projected = projectTargetNotice(stored, node ? { nodeTitle: node.title } : {});
+    const data = (projected?.data ?? stored) as Record<string, unknown>;
     const kind = data.changeKind;
-    if (!isNoticeVisible(data, nodes, accessible)) continue;
     const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
     const items: string[] = [];
-    // Lifecycle notices share their read-time wording with the Inbox, naming Nodes by
-    // their current title.
-    const projected = projectTargetNotice(data, node ? { nodeTitle: node.title } : {});
     if (projected) {
       const item = projected.wording.summary ?? projected.wording.body;
       if (projected.wording.summaryGroup === 'node') items.push(item);
