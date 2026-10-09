@@ -54,7 +54,8 @@ Los cambios de visibilidad y Completación invalidan también el Inbox por SSE.
 #184 activa las absorciones de ADR-0014. Mientras un Nodo sea nuevo para un
 destinatario, todas sus ediciones de título, descripción, tipo, acceso y Recursos
 actualizan un único Aviso «Nuevo Nodo», con su estado actual. Un Bloqueo se indica
-en ese Aviso. Ocultarlo o eliminarlo antes del reconocimiento retira el Aviso;
+en ese Aviso («Nuevo Nodo «Pilas» (bloqueado).»). Si el Nodo ya no existe, el Aviso
+pendiente deja de mostrarse y contarse (Inbox, Resumen de cambios y marca por Nodo). Ocultarlo o eliminarlo antes del reconocimiento retira el Aviso;
 volver a mostrarlo produce de nuevo un Aviso de Nodo nuevo. Eliminar un Nodo
 conocido sustituye todos sus Avisos pendientes por el Aviso de eliminación.
 «Roadmap disponible» pendiente absorbe todos los demás Avisos de ese Roadmap.
@@ -180,9 +181,15 @@ reconoce y aparece en el Resumen de cambios cuando el estado actual es Retirado.
 El autor de un cambio nunca recibe Aviso por él: su propio cambio avanza su Known
 value. Si tenía un Aviso pendiente de ese Objeto, el Aviso lo absorbe y se retira
 si vuelve a lo conocido; así un docente se entera cuando otro revierte su cambio.
+Si su Known value no coincide con el valor del que partió su cambio, la diferencia
+de un colega aún no le fue entregada: se reconcilia como si ese Aviso ya existiera
+y absorbiera el cambio propio (crea un Aviso conocido→actual, o nada si coinciden),
+así el resultado no depende del orden de entrega.
 La Completación es el mismo caso para el estudiante, y la promoción a equipo
 docente reinicia sus Known values de acceso y retira sus Avisos de acceso
-pendientes. El Desbloqueo programado conserva la atribución a Equipo docente.
+pendientes. El Desbloqueo programado conserva la atribución a Equipo docente: se
+guarda `actorName: null` y la lectura proyecta «Equipo docente». El candado por
+destinatario y Roadmap serializa entrega, reconocimiento y los cambios propios.
 
 Comportamientos que se deducen de los valores: volver al valor conocido retira el
 Aviso; un Recurso agregado y luego editado sigue siendo nuevo, y agregado y

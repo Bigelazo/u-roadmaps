@@ -35,6 +35,7 @@ Una apertura captura sus Objetos en la colección única
 Solo se muestran y cuentan Objetos visibles para el destinatario. Contenido y
 Recursos de Nodos bloqueados se ocultan; título y tipo siguen visibles mientras
 el Nodo sea visible. Los Avisos ocultos permanecen pendientes y pueden reaparecer.
+Un Aviso de Nodo nuevo cuyo Nodo ya no existe no se muestra ni se cuenta.
 La pérdida de Participación los retira definitivamente, incluidas las aperturas
 pendientes de reconocimiento.
 
@@ -56,7 +57,10 @@ Entrar al Roadmap captura y reconoce todos sus Avisos pendientes, incluidos los
 que no son visibles, sin exponer su contenido oculto. En la primera entrada no se
 muestra Resumen de cambios. En entradas posteriores con cambios visibles se muestra
 un único dialog: Nodos agrupados bajo su título actual, ordenados por el cambio más
-reciente, con Ruta y clasificación al final. No muestra autores, fechas ni enlaces;
+reciente, con Ruta y clasificación al final. Las líneas no repiten el Nodo que
+titula su grupo: «Nuevo recurso «Guía 3».», mientras el Inbox dice «Nuevo recurso
+«Guía 3» en «Pilas».». Un Nodo nuevo bloqueado se lee «Nuevo Nodo «Pilas»
+(bloqueado).» en ambos. No muestra autores, fechas ni enlaces;
 Entendido solo cierra el dialog. Sin cambios pendientes no aparece.
 
 Abrir el Inbox o un Nodo no reconoce nada; no existe estado «visto». Abrir un
