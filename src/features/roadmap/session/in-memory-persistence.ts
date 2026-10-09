@@ -1,5 +1,6 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
 import {
+  studentNodeAccessById,
   transitiveDependentNodeIds,
   wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
@@ -9,6 +10,7 @@ import type {
   NodeDeletionImpact,
   Resource,
   RoadmapDependency,
+  RoadmapDto,
   RoadmapNode,
   StudentRoadmapDto,
   StudentRoadmapNode,
@@ -43,44 +45,58 @@ function nodeResources(node: AnyRoadmapDto['nodes'][number]): Resource[] {
   return 'resources' in node ? node.resources : [];
 }
 
-function asSimulation(roadmap: AnyRoadmapDto): StudentRoadmapDto {
+/** Projects a teaching Roadmap for a student with the given Completions, as the server does. */
+function asStudentRoadmap(
+  roadmap: AnyRoadmapDto,
+  completedNodeIds: ReadonlySet<string>,
+): StudentRoadmapDto {
   if (roadmap.nodes.every((node) => 'access' in node)) return copy(roadmap as StudentRoadmapDto);
-  const nodes = roadmap.nodes.reduce<StudentRoadmapNode[]>((result, node) => {
-    if (!('isVisible' in node) || !node.isVisible) return result;
-    if (node.isTeacherBlocked) {
-      result.push({
-        id: node.id,
-        title: node.title,
-        nodeTypeId: node.nodeTypeId,
-        positionX: node.positionX,
-        positionY: node.positionY,
-        access: { status: 'BLOCKED', reason: 'TEACHER_BLOCK' },
-      });
-      return result;
-    }
-    result.push({
+  const visibleNodes = (roadmap as RoadmapDto).nodes.filter((node) => node.isVisible);
+  const visibleNodeIds = new Set(visibleNodes.map(({ id }) => id));
+  const dependencies = roadmap.dependencies.filter(
+    ({ sourceNodeId, targetNodeId }) =>
+      visibleNodeIds.has(sourceNodeId) && visibleNodeIds.has(targetNodeId),
+  );
+  const accessByNodeId = studentNodeAccessById({
+    nodes: visibleNodes,
+    dependencies,
+    completedNodeIds,
+  });
+  const nodes = visibleNodes.map<StudentRoadmapNode>((node) => {
+    const summary = {
       id: node.id,
       title: node.title,
       nodeTypeId: node.nodeTypeId,
       positionX: node.positionX,
       positionY: node.positionY,
+    };
+    const access = accessByNodeId.get(node.id) ?? { status: 'ACCESSIBLE' };
+    if (access.status === 'BLOCKED') return { ...summary, access };
+    const isCompleted = completedNodeIds.has(node.id);
+    return {
+      ...summary,
       isVisible: true,
-      access: { status: 'ACCESSIBLE' },
+      access,
       description: node.description,
-      isCompleted: false,
-      canComplete: true,
+      isCompleted,
+      canComplete: !isCompleted,
       resources: copy(node.resources),
-    });
-    return result;
-  }, []);
+    };
+  });
   return {
     course: copy(roadmap.course),
     courseOffering: copy(roadmap.courseOffering),
     roadmap: copy(roadmap.roadmap),
     nodeTypes: copy(roadmap.nodeTypes),
     nodes,
-    dependencies: copy(roadmap.dependencies),
+    dependencies: copy(dependencies),
   };
+}
+
+function incidentDependencies(roadmap: AnyRoadmapDto, nodeId: string) {
+  return roadmap.dependencies.filter(
+    ({ sourceNodeId, targetNodeId }) => sourceNodeId === nodeId || targetNodeId === nodeId,
+  );
 }
 
 function resourceUpdate(
@@ -190,16 +206,27 @@ function teacherBlockPreview(
   return { ...decision, version: 'in-memory-preview' };
 }
 
-/** Test adapter for the public Roadmap canvas session seam. */
+export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
+
+/**
+ * A Roadmap canvas persistence held in memory that follows the server's Roadmap rules.
+ * Seeded with a teaching Roadmap and `studentProgress`, it serves that student's view
+ * of the Roadmap and records their Completions locally.
+ */
 export function createInMemoryRoadmapSessionPersistence(
   initialRoadmap: AnyRoadmapDto,
+  options: { studentProgress?: InMemoryStudentProgress } = {},
 ): RoadmapCanvasSessionPersistence {
   let roadmap = copy(initialRoadmap);
+  const studentCompletions = options.studentProgress
+    ? new Set(options.studentProgress.completedNodeIds)
+    : null;
+  let simulatedCompletions = new Set<string>();
   let simulation: StudentRoadmapDto | null = null;
   let nextNodeNumber = roadmap.nodes.length + 1;
 
   const refreshSimulation = () => {
-    simulation = asSimulation(roadmap);
+    simulation = asStudentRoadmap(roadmap, simulatedCompletions);
   };
 
   const mutateNode = (
@@ -212,17 +239,21 @@ export function createInMemoryRoadmapSessionPersistence(
 
   return {
     async load() {
-      return copy(roadmap);
+      return studentCompletions ? asStudentRoadmap(roadmap, studentCompletions) : copy(roadmap);
     },
 
     async complete(_input: RoadmapCanvasSessionInput, nodeId: string) {
+      if (studentCompletions) {
+        studentCompletions.add(nodeId);
+        return;
+      }
       roadmap = replaceRoadmapNode(roadmap, nodeId, (node) =>
         'isCompleted' in node ? { ...node, isCompleted: true, canComplete: false } : node,
       );
     },
 
     async loadSimulation() {
-      if (!simulation) refreshSimulation();
+      refreshSimulation();
       return copy(simulation!);
     },
 
@@ -355,23 +386,47 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async toggleVisibility(_input: RoadmapCanvasSessionInput, nodeId: string, isVisible: boolean) {
+      // `isVisible` is the current visibility; hiding removes the Node's Dependencies.
       mutateNode(nodeId, (node) =>
         'isVisible' in node
-          ? ({ ...node, isVisible: !isVisible } as AnyRoadmapDto['nodes'][number])
+          ? ({
+              ...node,
+              isVisible: !isVisible,
+              ...(isVisible ? { isTeacherBlocked: false, teacherUnlockOn: undefined } : {}),
+            } as AnyRoadmapDto['nodes'][number])
           : node,
       );
+      if (isVisible) {
+        const removed = new Set(incidentDependencies(roadmap, nodeId).map(({ id }) => id));
+        roadmap = {
+          ...roadmap,
+          dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
+        };
+      }
     },
 
-    async previewNodeVisibility() {
-      return [];
+    async previewNodeVisibility(_input: RoadmapCanvasSessionInput, nodeId: string) {
+      return incidentDependencies(roadmap, nodeId).map(({ id, sourceNodeId, targetNodeId }) => ({
+        id,
+        sourceNodeId,
+        targetNodeId,
+      }));
     },
 
     async previewNodeDeletion(_input: RoadmapCanvasSessionInput, nodeId: string) {
       const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
       const nodeType = nodeTypeFor(roadmap, nodeId);
+      const titleOf = (id: string) =>
+        roadmap.nodes.find((candidate) => candidate.id === id)?.title ?? '';
       return {
         node: { title: node?.title ?? '', nodeType },
-        dependencies: [],
+        dependencies: incidentDependencies(roadmap, nodeId).map(
+          ({ id, sourceNodeId, targetNodeId }) => ({
+            id,
+            sourceTitle: titleOf(sourceNodeId),
+            targetTitle: titleOf(targetNodeId),
+          }),
+        ),
         resources: (node ? nodeResources(node) : []).map(({ id, title }) => ({ id, title })),
         version: 'in-memory-preview',
       } satisfies NodeDeletionImpact;
@@ -454,18 +509,12 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async completeSimulatedNode(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      if (!simulation) refreshSimulation();
-      simulation = {
-        ...simulation!,
-        nodes: simulation!.nodes.map((node) =>
-          node.id === nodeId && 'isCompleted' in node
-            ? { ...node, isCompleted: true, canComplete: false }
-            : node,
-        ),
-      };
+      simulatedCompletions = new Set([...simulatedCompletions, nodeId]);
+      refreshSimulation();
     },
 
     async resetSimulation() {
+      simulatedCompletions = new Set();
       refreshSimulation();
     },
   };

@@ -60,3 +60,4 @@ export type {
   RoadmapChanges,
   RoadmapChangeFact,
 } from './application/change-port';
+export { readPracticeRoadmapCalendar } from './application/practice';

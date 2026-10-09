@@ -25,7 +25,7 @@ export default function GlobalNavigation({
   developmentTools,
 }: GlobalNavigationProps) {
   return (
-    <header className="sticky top-0 z-20 box-border min-h-16 border-b bg-background">
+    <header className="sticky top-0 z-20 box-border min-h-16 border-b bg-background [body:has([data-practice-roadmap])_&]:hidden">
       <div className="mx-auto flex min-h-16 max-w-360 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6 [body:has([data-page-width=full])_&]:max-w-none">
         <Link
           href="/"
