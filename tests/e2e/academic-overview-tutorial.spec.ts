@@ -19,6 +19,9 @@ for (const { option, experience } of choices) {
     const icon = page.getByRole('button', { name: 'Abrir tutorial' });
     await expect(icon).toBeVisible();
     await expect(icon).toHaveText('');
+    await expect(
+      icon.locator('svg.lucide-circle-question-mark, svg.lucide-circle-help'),
+    ).toHaveCount(1);
     await icon.click();
 
     const choice = page.getByRole('dialog', { name: '¿Cómo deseas realizar el tutorial?' });
