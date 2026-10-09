@@ -28,6 +28,7 @@ import {
   markTutorialClosingPopover,
   RoadmapTutorial,
 } from '@/shared/client/tutorial/tutorial';
+import { useRecordTutorialOpening } from '@/shared/client/tutorial/tutorial-records';
 
 /**
  * The real Roadmap canvas over a fresh in-memory copy of the Practice roadmap.
@@ -54,6 +55,7 @@ export function PracticeRoadmapCanvas({
       get: () => (isSuggesting ? practiceSuggestedResource : undefined),
     };
   });
+  useRecordTutorialOpening(experience);
   const [actions] = useState(() => createTutorialActions<PracticeCanvasAction>());
   const [teachingSteps] = useState(() =>
     experience === 'teaching' ? teachingTutorialSteps(resourceSuggestion) : [],
@@ -68,11 +70,14 @@ export function PracticeRoadmapCanvas({
     ),
   );
   return (
-    <div data-practice-roadmap>
+    // Below the global navigation, the bar takes the height its content needs, wrapped
+    // or not, and the canvas fills the rest. The column stays unpositioned: a stacking
+    // context here would keep the "Salir" bar below the tutorial overlay.
+    <div data-practice-roadmap className="flex flex-col lg:h-[calc(100dvh-4rem)]">
       <nav
         aria-label="Mapa de práctica"
         {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
-        className="sticky top-16 z-20 flex h-14 items-center justify-end border-b bg-background px-4 sm:px-6"
+        className="sticky top-16 z-20 flex shrink-0 flex-wrap items-center justify-end gap-2 border-b bg-background px-4 py-2 sm:px-6"
       >
         <Link
           className={buttonVariants({ variant: 'outline' })}
@@ -83,7 +88,7 @@ export function PracticeRoadmapCanvas({
           Salir
         </Link>
       </nav>
-      <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-30 lg:bottom-0">
+      <main className="min-h-0 flex-1 bg-cloud">
         <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
           <RoadmapCanvasSession
             courseOffering={{

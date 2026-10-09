@@ -7,6 +7,7 @@ import {
   TutorialClosingPopover,
 } from '@/shared/client/tutorial/tutorial';
 import { TutorialChoiceDialog } from '@/shared/client/tutorial/tutorial-choice-dialog';
+import { useClaimTutorialInvitation } from '@/shared/client/tutorial/tutorial-records';
 import { Button } from '@/shared/ui/button';
 
 /**
@@ -17,6 +18,7 @@ export function AcademicOverviewTutorialButton({
   invited = false,
 }: Readonly<{ invited?: boolean }>) {
   const [open, setOpen] = useState(invited);
+  useClaimTutorialInvitation('first-visit', invited);
   return (
     <>
       <Button

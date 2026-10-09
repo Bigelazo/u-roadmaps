@@ -1,3 +1,17 @@
+/*
+ * The tutorial's layers, around driver.js 1.9.0's own: its overlay sits at 10000 and its
+ * popover at 1000000000 (driver.css).
+ * - exit bar: the "Salir" bar, just above the overlay.
+ * - acting layer: portaled menus, dialogs and popups during an action step, above the
+ *   overlay and highlighted element but below the tour popover.
+ * - exit confirmation: "¿Salir del tutorial?", above the tour popover.
+ */
+:root {
+  --tutorial-z-exit-bar: 10001;
+  --tutorial-z-acting-layer: 100000;
+  --tutorial-z-exit-confirmation: 1000000001;
+}
+
 /* driver.js popovers in the U-Roadmaps visual language; tokens follow the active theme. */
 .driver-popover.u-roadmaps-tour {
   font-family: var(--font-sans, inherit);
@@ -107,7 +121,7 @@
 
 /* "Salir" leaves the tutorial at any moment: its bar sits above the overlay. */
 .driver-active [data-tutorial-exit] {
-  z-index: 10001;
+  z-index: var(--tutorial-z-exit-bar);
 }
 .driver-active [data-tutorial-exit],
 .driver-active [data-tutorial-exit] * {
@@ -118,9 +132,14 @@
  * During an action step, portaled layers (menus, dialogs, Select popups) sit above the
  * overlay and take clicks, so the expected interaction is fully usable. The exit
  * confirmation keeps its own, higher layer.
+ *
+ * Base UI dependency: Base UI 1.7.0 marks each portal container with the internal
+ * `data-base-ui-portal` attribute, which is not public API. It is the only Base UI
+ * internal the tutorial relies on, and only these two rules use it: check them when
+ * upgrading @base-ui/react.
  */
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) > * {
-  z-index: 100000 !important;
+  z-index: var(--tutorial-z-acting-layer) !important;
 }
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)),
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) * {

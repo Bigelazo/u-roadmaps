@@ -1,6 +1,6 @@
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 
-export type PracticeExperience = 'student' | 'teaching';
+export type { PracticeExperience } from '@/features/roadmap/types';
 export type PracticeAcademicTerm = Readonly<{ year: number; semester: number }>;
 
 export const PRACTICE_ROADMAP_TITLE = 'Tutorial';
@@ -166,7 +166,7 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
       node(
         practiceNodeIds.g,
         'Retroalimentación del control',
-        nodeTypes.supplementary,
+        nodeTypes.content,
         [1280, 280],
         'Comentarios sobre el Control 1.',
       ),

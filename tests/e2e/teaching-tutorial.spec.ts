@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { queryJson } from './database';
+import { literal, queryJson } from './database';
 import { enterRoadmap } from './enter-roadmap';
 import { fileDrop } from './file-drop';
 import { expect, test } from './fixtures';
@@ -11,6 +11,7 @@ const steps = [
   'Nodo oculto',
   'Bloqueo docente',
   'Crea un nodo',
+  'Tipos de nodo',
   'Conecta tu nodo',
   'Dependencias',
   'Selecciona tu nodo',
@@ -92,7 +93,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(practiceNode(page, 'Material de apoyo')).toHaveClass(/driver-active-element/);
   await next(page, 'Bloqueo docente');
   await next(page, 'Crea un nodo');
-  await expect(tourPopover(page)).toContainText('Gestionar tipos de nodo');
   await expect(tourPopover(page)).toContainText('archivo .md');
 
   // Cancelling the creation dialog keeps the step and highlights "Crear en el mapa" again.
@@ -127,7 +127,10 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(dialog.getByLabel('Tipo')).toContainText('Evaluación');
   await expect(dialog.getByRole('checkbox', { name: 'Visible para estudiantes' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
-  await expectStep(page, 'Conecta tu nodo');
+  // "Tipos de nodo" is explained on its own, without creating a Custom node type.
+  await expectStep(page, 'Tipos de nodo');
+  await expect(creator).toHaveClass(/driver-active-element/);
+  await next(page, 'Conecta tu nodo');
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
 
   // The new Node may still be settling into place, so the drag is retried until it connects.
@@ -220,7 +223,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(tourPopover(page)).toHaveCount(0);
   expect(
     await queryJson<number>(
-      `SELECT count(*)::int FROM "RoadmapNotice" WHERE "recipientId" = '${user.id}';`,
+      `SELECT count(*)::int FROM "RoadmapNotice" WHERE "recipientId" = ${literal(user.id)};`,
     ),
   ).toBe(0);
 });
@@ -251,7 +254,7 @@ test('the canvas question-mark icon opens the teaching tutorial and points back 
   expect(await roadmapShape(course.roadmapId)).toEqual(before);
   expect(
     await queryJson<number>(
-      `SELECT count(*)::int FROM "RoadmapNotice" WHERE "roadmapId" = '${course.roadmapId}';`,
+      `SELECT count(*)::int FROM "RoadmapNotice" WHERE "roadmapId" = ${literal(course.roadmapId)};`,
     ),
   ).toBe(0);
 });
@@ -259,11 +262,11 @@ test('the canvas question-mark icon opens the teaching tutorial and points back 
 async function roadmapShape(roadmapId: string) {
   return queryJson<unknown>(`
     SELECT json_build_object(
-      'nodes', (SELECT count(*) FROM "RoadmapNode" WHERE "roadmapId" = '${roadmapId}'),
+      'nodes', (SELECT count(*) FROM "RoadmapNode" WHERE "roadmapId" = ${literal(roadmapId)}),
       'dependencies', (
         SELECT count(*) FROM "Dependency" d
         JOIN "RoadmapNode" n ON n.id = d."sourceNodeId"
-        WHERE n."roadmapId" = '${roadmapId}'
+        WHERE n."roadmapId" = ${literal(roadmapId)}
       )
     );
   `);

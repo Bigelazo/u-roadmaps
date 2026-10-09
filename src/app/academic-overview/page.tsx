@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { CreateRoadmapDialog } from '@/features/roadmap';
-import { claimFirstVisitInvitation } from '@/features/roadmap/server';
+import { isFirstVisitInvitationDue } from '@/features/roadmap/server';
 import { AcademicOverview } from '@/features/academic-overview';
 import { getAcademicOverviewPage } from '@/app/_adapters/academic-overview';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
@@ -32,7 +32,7 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
         overview={await getAcademicOverviewPage(user)}
         notificationsEnabled={Boolean(getInboxIdentity(user.id))}
         renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}
-        tutorialInvitation={await claimFirstVisitInvitation(user.id)}
+        tutorialInvitation={await isFirstVisitInvitationDue(user.id)}
       />
     </>
   );

@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
+import { useClaimTutorialInvitation } from '@/shared/client/tutorial/tutorial-records';
 import type { PostCreationInvitationWording } from '../types';
 
 /**
@@ -26,6 +27,7 @@ export function PostCreationInvitationDialog({
   origin: string;
 }) {
   const [open, setOpen] = useState(true);
+  useClaimTutorialInvitation('post-creation', true);
   const router = useRouter();
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>

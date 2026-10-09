@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { queryJson } from './database';
+import { literal, queryJson } from './database';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
@@ -25,7 +25,7 @@ async function isOpenAcademicTerm(label: string) {
   return queryJson<boolean>(`
     SELECT to_json(EXISTS (
       SELECT 1 FROM "AcademicTerm"
-      WHERE year = ${Number(year)} AND semester = ${semester}
+      WHERE year = ${literal(Number(year))} AND semester = ${literal(semester)}
         AND "roadmapFreezeDate" >= (now() AT TIME ZONE 'America/Santiago')::date
     ) OR NOT EXISTS (
       SELECT 1 FROM "AcademicTerm"
@@ -37,9 +37,9 @@ async function isOpenAcademicTerm(label: string) {
 async function rowsOwnedBy(userId: string) {
   return queryJson<number>(`
     SELECT (
-      (SELECT count(*) FROM "Participation" WHERE "userId" = '${userId}') +
-      (SELECT count(*) FROM "Completion" WHERE "userId" = '${userId}') +
-      (SELECT count(*) FROM "RoadmapNotice" WHERE "recipientId" = '${userId}')
+      (SELECT count(*) FROM "Participation" WHERE "userId" = ${literal(userId)}) +
+      (SELECT count(*) FROM "Completion" WHERE "userId" = ${literal(userId)}) +
+      (SELECT count(*) FROM "RoadmapNotice" WHERE "recipientId" = ${literal(userId)})
     )::int;
   `);
 }
@@ -225,4 +225,25 @@ test('"Salir" returns to an allow-listed origin or to the home page', async ({
   await openPractice(page, 'teaching', '/academic-overview');
   await page.getByRole('link', { name: 'Salir' }).click();
   await expect(page).toHaveURL(/\/academic-overview$/);
+});
+
+test('the Practice roadmap never fetches or acknowledges real Roadmap notices', async ({
+  page,
+  createUser,
+}) => {
+  const user = await createUser();
+  await authenticateAs(page.context(), user.id);
+  const roadmapNoticeRequests: string[] = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (/^\/api\/notifications\/(acknowledge|node-changes|openings)/.test(pathname))
+      roadmapNoticeRequests.push(pathname);
+  });
+  await openPractice(page, 'student');
+  await expect(
+    practiceNode(page, titles.c).getByRole('img', { name: '1 cambio sin revisar' }),
+  ).toBeVisible();
+  await practiceNode(page, titles.c).click();
+  await expect(page.getByRole('heading', { name: titles.c })).toBeVisible();
+  expect(roadmapNoticeRequests).toEqual([]);
 });

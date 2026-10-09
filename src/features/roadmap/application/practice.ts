@@ -19,5 +19,12 @@ export async function readPracticeRoadmapCalendar(now = new Date()) {
   );
   if (current) return { term: { year: current.year, semester: current.semester }, today };
   const [year, month] = today.split('-').map(Number);
-  return { term: { year, semester: month <= 7 ? 1 : 2 }, today };
+  return { term: { year, semester: semesterOfMonth(month) }, today };
+}
+
+const LAST_MONTH_OF_FIRST_SEMESTER = 7;
+
+/** Without a configured Academic term: January–July is the first semester, the rest the second. */
+function semesterOfMonth(month: number) {
+  return month <= LAST_MONTH_OF_FIRST_SEMESTER ? 1 : 2;
 }

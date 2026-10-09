@@ -131,3 +131,17 @@ export type AnyRoadmapDto = RoadmapDto | StudentRoadmapDto;
 
 /** Whether the post-creation invitation offers to do or to repeat the teaching tutorial. */
 export type PostCreationInvitationWording = 'hacer' | 'repetir';
+
+/** The Roadmap tutorial and canvas experience offered on the Practice roadmap. */
+export type PracticeExperience = 'student' | 'teaching';
+
+/** A tutorial invitation shown once per User. */
+export type TutorialInvitation = 'first-visit' | 'post-creation';
+
+export function isTutorialInvitation(value: unknown): value is TutorialInvitation {
+  return value === 'first-visit' || value === 'post-creation';
+}
+
+export function isPracticeExperience(value: unknown): value is PracticeExperience {
+  return value === 'student' || value === 'teaching';
+}

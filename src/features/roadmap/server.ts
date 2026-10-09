@@ -62,10 +62,14 @@ export type {
 } from './application/change-port';
 export { readPracticeRoadmapCalendar } from './application/practice';
 export {
-  claimPostCreationInvitation,
-  recordTeachingTutorialOpened,
+  claimTutorialInvitation,
+  readPostCreationInvitation,
+  recordPracticeRoadmapOpened,
 } from './application/tutorial-invitation';
+export { isFirstVisitInvitationDue } from './application/first-visit-invitation';
 export {
-  claimFirstVisitInvitation,
-  recordTutorialOpened,
-} from './application/first-visit-invitation';
+  isPracticeExperience,
+  isTutorialInvitation,
+  type PracticeExperience,
+  type TutorialInvitation,
+} from './types';

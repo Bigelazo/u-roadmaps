@@ -1,23 +1,17 @@
 import { notFound, redirect } from 'next/navigation';
 import { PracticeRoadmapCanvas } from '@/features/roadmap';
-import {
-  readPracticeRoadmapCalendar,
-  recordTeachingTutorialOpened,
-  recordTutorialOpened,
-} from '@/features/roadmap/server';
+import { isPracticeExperience, readPracticeRoadmapCalendar } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 
 export default async function PracticeRoadmapPage(
   props: PageProps<'/practice-roadmap/[experience]'>,
 ) {
   const { experience } = await props.params;
-  if (experience !== 'student' && experience !== 'teaching') notFound();
+  if (!isPracticeExperience(experience)) notFound();
   const { origin } = await props.searchParams;
 
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
-  if (experience === 'teaching') await recordTeachingTutorialOpened(user.id);
-  await recordTutorialOpened(user.id);
   const { term, today } = await readPracticeRoadmapCalendar();
 
   return (
