@@ -1,7 +1,7 @@
 import type { RoadmapChangePort } from './change-port';
 import { roadmapChangeTransaction } from './change-transaction';
 import { accessChanges } from './access-changes';
-import { captureAccessSnapshot } from './access-snapshot';
+import { readAccessSnapshot } from './access-snapshot';
 import {
   nodeAccessState,
   accessNoticeDestination,
@@ -195,13 +195,13 @@ async function completeNodeUnsafe(
         requireCurrentRoadmap(roadmap);
         await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
         await lockRecipientRoadmap(transaction, userId, roadmap.id);
-        const before = await captureAccessSnapshot(transaction, roadmap.id, userId);
+        const before = await readAccessSnapshot(transaction, roadmap.id, userId);
         const completion = await transaction.completion.upsert({
           where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
           update: {},
           create: { userId, roadmapNodeId: nodeId },
         });
-        const after = await captureAccessSnapshot(transaction, roadmap.id, userId);
+        const after = await readAccessSnapshot(transaction, roadmap.id, userId);
         const pending = await transaction.roadmapNotice.findMany({
           where: {
             recipientId: userId,
@@ -247,8 +247,14 @@ async function completeNodeUnsafe(
           }
           // Completion immediately exposes newly available Nodes to this student.
           // Preserve pending/deferred differences rather than recognizing them here.
-          await transaction.nodeContentKnowledge.updateMany({
-            where: { recipientId: userId, nodeId: node.id, target: 'access', knownValue: previous },
+          // Completion's own rule stays here until it moves into the module (#207).
+          await transaction.noticeKnownValue.updateMany({
+            where: {
+              recipientId: userId,
+              roadmapId: roadmap.id,
+              targetKey: `node:${node.id}:access`,
+              knownValue: previous,
+            },
             data: { knownValue: current },
           });
         }

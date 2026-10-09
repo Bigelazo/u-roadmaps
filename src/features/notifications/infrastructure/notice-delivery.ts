@@ -3,8 +3,6 @@ import 'server-only';
 import { prisma, type Prisma } from '@/shared/server/db';
 import type { NoticeEffect } from '../application/notice-effect';
 import { projectDigestNotification } from '../digest-projection';
-import { reconcileStoredNodeContent } from './node-content-notice';
-import { nodeContentEffect } from '../application/node-content-effect';
 import { reconcileStoredAbsorption } from './absorption-notice';
 
 function noticeRow(effect: NoticeEffect, projection: ReturnType<typeof projectDigestNotification>) {
@@ -61,11 +59,6 @@ export async function deliverNotice(effect: NoticeEffect) {
     )
       return false;
     if (await reconcileStoredAbsorption(transaction, effect)) return true;
-    const content = nodeContentEffect(effect);
-    if (content) {
-      await reconcileStoredNodeContent(transaction, content);
-      return true;
-    }
     await transaction.roadmapNotice.createMany({
       data: [noticeRow(effect, projectDigestNotification(effect.payload, []))],
       skipDuplicates: true,

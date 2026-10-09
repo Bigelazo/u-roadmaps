@@ -7,7 +7,7 @@ import {
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
 import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
-import { NODE_ACCESS_STATES, nodeAccessState } from '@/shared/node-access';
+import { nodeAccessState } from '@/shared/node-access';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import { type Prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
@@ -200,26 +200,23 @@ async function resetStudentAccessNotices(
     where: { roadmapId },
     select: { id: true, isVisible: true, isTeacherBlocked: true },
   });
-  for (const state of NODE_ACCESS_STATES) {
-    const ids = nodes
-      .filter((node) => nodeAccessState(node.isVisible, !node.isTeacherBlocked) === state)
-      .map(({ id }) => id);
-    if (!ids.length) continue;
-    await transaction.nodeContentKnowledge.createMany({
-      data: ids.map((nodeId) => ({
+  // Promotion's own rule stays here until it moves into the module (#207).
+  await transaction.noticeKnownValue.deleteMany({
+    where: { recipientId, roadmapId, targetKey: { startsWith: 'node:', endsWith: ':access' } },
+  });
+  await transaction.noticeKnownValue.createMany({
+    data: nodes.map((node) => {
+      const state = nodeAccessState(node.isVisible, !node.isTeacherBlocked);
+      return {
         recipientId,
-        nodeId,
-        target: 'access',
+        roadmapId,
+        targetKey: `node:${node.id}:access`,
+        nodeId: node.id,
         knownValue: state,
         currentValue: state,
-      })),
-      skipDuplicates: true,
-    });
-    await transaction.nodeContentKnowledge.updateMany({
-      where: { recipientId, nodeId: { in: ids }, target: 'access' },
-      data: { knownValue: state, currentValue: state },
-    });
-  }
+      };
+    }),
+  });
   await transaction.roadmapNotice.deleteMany({
     where: {
       recipientId,

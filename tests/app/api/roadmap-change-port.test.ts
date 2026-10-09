@@ -27,13 +27,16 @@ const changes: RoadmapChanges = {
   identifier: { courseCode: 'CC1002', year: 2026, semester: 2 },
   facts: [
     {
-      kind: 'node-access',
+      kind: 'node-created',
       nodeId: 'node',
-      recipientId: 'student',
-      previous: 'Bloqueado',
-      current: 'Disponible',
-      nodeTitle: 'Pilas',
-      nodeTypeName: 'Tema',
+      previous: null,
+      current: {
+        id: 'node',
+        title: 'Pilas',
+        description: null,
+        nodeTypeId: 'type',
+        isVisible: true,
+      },
     },
   ],
 };
@@ -42,7 +45,7 @@ beforeEach(() => {
   afterTasks.length = 0;
 });
 
-test('HTTP delivery waits for commit and the response, preserving recipient transitions', async () => {
+test('HTTP delivery waits for commit and the response', async () => {
   const commit = await roadmapChangePort.report(tx, changes);
   expect(afterTasks).toHaveLength(0);
   expect(deliverNodeChange).not.toHaveBeenCalled();
@@ -60,9 +63,7 @@ test('HTTP delivery waits for commit and the response, preserving recipient tran
     expect.objectContaining({
       userId: 'teacher',
       nodeId: 'node',
-      previousAccess: 'Bloqueado',
       changeKind: 'node-available',
-      recipientIds: ['student'],
     }),
     expect.any(Function),
   );
@@ -81,12 +82,11 @@ test('the scheduled pass delivers immediately after commit without a request con
   expect(persist).toHaveBeenCalledOnce();
 });
 
-test('Completion and promotion stay silent in the transitional delivery adapter', async () => {
+test('access, Completion and promotion facts bypass the transitional delivery adapter', async () => {
   const commit = await scheduledRoadmapChangePort.report(tx, {
     ...changes,
     facts: [
       {
-        ...changes.facts[0],
         kind: 'node-access',
         nodeId: 'node',
         recipientId: 'teacher',

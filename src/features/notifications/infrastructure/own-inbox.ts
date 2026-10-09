@@ -19,7 +19,6 @@ import { deliverNotice } from './notice-delivery';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import { targetOpeningSnapshots, recognizeTargetSnapshots } from './notice-lifecycle';
 import { projectTargetNotice } from '../application/notice-targets';
-import { contentOpeningSnapshots, recognizeContentSnapshots } from './node-content-notice';
 import { absorptionOpeningSnapshots, recognizeAbsorptionSnapshots } from './absorption-recognition';
 import type { NodeChangeNotice, RoadmapAvailabilityNotice } from '../contracts';
 
@@ -321,7 +320,6 @@ export async function prepareOwnNoticeOpening(
         openedAt,
         noticeIds: notices.map(({ id }) => id),
         snapshots: targetOpeningSnapshots(notices),
-        contentSnapshots: contentOpeningSnapshots(notices),
         absorptionSnapshots: await absorptionOpeningSnapshots(
           transaction,
           userId,
@@ -390,12 +388,6 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       },
       data: { acknowledgedAt: new Date() },
     });
-    const contentCount = await recognizeContentSnapshots(transaction, {
-      recipientId: userId,
-      roadmapId,
-      operationId,
-      snapshots: retained.contentSnapshots,
-    });
     const targetCount = await recognizeTargetSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
@@ -409,7 +401,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       snapshots: retained.absorptionSnapshots,
     });
     const summary =
-      visited && result.count + absorptionCount + targetCount + contentCount > 0
+      visited && result.count + absorptionCount + targetCount > 0
         ? (retained.summary as ChangeSummary | null)
         : null;
     await transaction.noticeAcknowledgement.update({
@@ -417,7 +409,7 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
     return {
-      count: result.count + absorptionCount + targetCount + contentCount,
+      count: result.count + absorptionCount + targetCount,
       summary,
     };
   });

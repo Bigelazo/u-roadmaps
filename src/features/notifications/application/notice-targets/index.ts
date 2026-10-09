@@ -11,6 +11,7 @@ import { nodeTypeTarget } from './node-type';
 import { resourceTarget } from './resource';
 import { dependencyPairTarget } from './dependency-pair';
 import { typeNameTarget } from './node-type-name';
+import { nodeAccessTarget } from './node-access';
 
 export type {
   NoticeReadSide,
@@ -33,6 +34,7 @@ export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [
   resourceTarget,
   dependencyPairTarget,
   typeNameTarget,
+  nodeAccessTarget,
 ];
 
 export function descriptorForFact(fact: RoadmapChangeFact) {

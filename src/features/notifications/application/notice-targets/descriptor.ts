@@ -96,6 +96,12 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   knowers(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
   /** Recipients told about the change; the module never tells the actor. */
   audience(fact: F, changes: RoadmapChanges, roadmap: RoadmapView): Promise<readonly string[]>;
+  /**
+   * For per-recipient targets whose live value the module cannot read (Node access):
+   * the value at edit time, recorded as the Known value store's current value for these
+   * recipients. Reconciliation then compares against it and ignores `current().value`.
+   */
+  currentAtEdit?(fact: F): Readonly<{ recipientIds: readonly string[]; value: string }>;
   /** The target's live value, or null when it no longer exists. */
   current(target: NoticeTargetRef, roadmap: RoadmapView): Promise<TargetCurrent | null>;
   /** Presentation context only the change itself knows (e.g. a removed Dependency's id). */

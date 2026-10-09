@@ -8,7 +8,7 @@ const { prisma } = vi.hoisted(() => ({
     $executeRaw: vi.fn(),
     $queryRaw: vi.fn().mockResolvedValue([{ isActive: true, noticeResetAt: null }]),
     nodeLifecycleKnowledge: { findUnique: vi.fn() },
-    nodeContentKnowledge: { findUnique: vi.fn() },
+    noticeKnownValue: { findUnique: vi.fn() },
     $transaction: vi.fn(),
     courseOffering: { findUnique: vi.fn() },
     participation: { findMany: vi.fn(), findFirst: vi.fn() },
@@ -184,29 +184,5 @@ test('accessible Node notices persist without external notification configuratio
         }),
       }),
     ],
-  });
-});
-
-test('scheduled unlocks persist outside an HTTP request using the background scheduler', async () => {
-  prisma.roadmapNode.findUnique.mockResolvedValueOnce(null).mockResolvedValue({ isVisible: true });
-  await deliverNodeChange(
-    {
-      userId: 'author-id',
-      courseCode: 'CC3002',
-      year: 2026,
-      semester: 2,
-      nodeId: 'unlocked-node-id',
-      roadmapId: 'roadmap-id',
-      nodeTitle: 'Nodo disponible',
-      changeKind: 'node-available',
-      changedFields: [],
-      recipientIds: ['student-id'],
-    },
-    (persist) => persist(),
-  );
-  expect(afterTasks).toHaveLength(0);
-  expect(prisma.roadmapNotice.createMany).toHaveBeenCalledWith({
-    skipDuplicates: true,
-    data: [expect.objectContaining({ recipientId: 'student-id', subject: 'Nodo disponible' })],
   });
 });

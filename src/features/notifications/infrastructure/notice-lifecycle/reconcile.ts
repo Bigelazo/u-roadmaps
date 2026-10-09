@@ -71,7 +71,11 @@ export async function reconcileNoticeTarget(
   const result = reconcileTarget({
     knownValue: known.knownValue,
     pending: pendingValues,
-    currentValue: current.value,
+    // Targets recorded at edit time reconcile against that state (it may be newer than
+    // this delivery, never older than the recorded change).
+    currentValue: input.descriptor.currentAtEdit
+      ? (known.currentValue ?? known.knownValue)
+      : current.value,
   });
   if (result.action === 'no-op') return;
   if (result.action === 'withdraw') {

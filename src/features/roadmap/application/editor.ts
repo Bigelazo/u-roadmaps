@@ -1,7 +1,7 @@
 import type { RoadmapChangePort, RoadmapChangeFact } from './change-port';
 import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-transaction';
 import { accessChanges } from './access-changes';
-import { captureAccessSnapshot } from './access-snapshot';
+import { readAccessSnapshot } from './access-snapshot';
 import 'server-only';
 
 import { createHash } from 'node:crypto';
@@ -255,7 +255,7 @@ async function updateRoadmapNodeUnsafe(
       const beforeVisibility =
         requestedVisibility === undefined
           ? null
-          : await captureAccessSnapshot(transaction, roadmap.id);
+          : await readAccessSnapshot(transaction, roadmap.id);
       const data: {
         title?: string;
         description?: string | null;
@@ -351,7 +351,7 @@ async function updateRoadmapNodeUnsafe(
           current: updated.isVisible,
         });
         facts.push(
-          ...accessChanges(beforeVisibility, await captureAccessSnapshot(transaction, roadmap.id)),
+          ...accessChanges(beforeVisibility, await readAccessSnapshot(transaction, roadmap.id)),
         );
       }
       if (facts.length)
@@ -449,11 +449,11 @@ async function deleteRoadmapNodeUnsafe(
         }),
         requireEditorRoadmap(transaction, editor),
       ]);
-      const before = await captureAccessSnapshot(transaction, roadmap.id);
+      const before = await readAccessSnapshot(transaction, roadmap.id);
       const node = await requireNode(transaction, id, roadmap.id);
       const nodeType = await requireType(transaction, node.nodeTypeId, roadmap.id);
       await transaction.roadmapNode.delete({ where: { id: requireUuid(id, 'nodeId') } });
-      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      const after = await readAccessSnapshot(transaction, roadmap.id);
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -674,7 +674,7 @@ async function createRoadmapDependencyUnsafe(
           ],
         }),
         (async () => {
-          const before = await captureAccessSnapshot(transaction, prepared.roadmapId);
+          const before = await readAccessSnapshot(transaction, prepared.roadmapId);
           return {
             before,
             dependency: await transaction.dependency.create({
@@ -694,7 +694,7 @@ async function createRoadmapDependencyUnsafe(
           data: { isTeacherBlocked: true },
         });
       }
-      const after = await captureAccessSnapshot(transaction, prepared.roadmapId);
+      const after = await readAccessSnapshot(transaction, prepared.roadmapId);
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -767,9 +767,9 @@ async function deleteRoadmapDependencyUnsafe(
           'DEPENDENCY_NOT_FOUND',
           'La dependencia no existe en este roadmap.',
         );
-      const before = await captureAccessSnapshot(transaction, roadmap.id);
+      const before = await readAccessSnapshot(transaction, roadmap.id);
       await transaction.dependency.delete({ where: { id: dependency.id } });
-      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      const after = await readAccessSnapshot(transaction, roadmap.id);
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -897,7 +897,7 @@ async function changeTeacherBlockUnsafe(
           'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
         );
       }
-      const before = await captureAccessSnapshot(transaction, roadmap.id);
+      const before = await readAccessSnapshot(transaction, roadmap.id);
       if (preview.nodes.length > 0) {
         await transaction.roadmapNode.updateMany({
           where: { id: { in: preview.nodes.map((node) => node.id) } },
@@ -909,7 +909,7 @@ async function changeTeacherBlockUnsafe(
       }
       // Unlocking a prerequisite can release dependents whose scheduled day already arrived.
       if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(transaction, roadmap.id);
-      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      const after = await readAccessSnapshot(transaction, roadmap.id);
       await report({
         actorId: input.userId,
         identifier: input.identifier,
@@ -1039,9 +1039,9 @@ async function releaseScheduledTeacherUnlocksUnsafe(
         await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
         const current = await transaction.roadmap.findUnique({ where: { id: roadmap.id } });
         if (!current || current.closedAt) return { releasedNodeIds: [] };
-        const before = await captureAccessSnapshot(transaction, roadmap.id);
+        const before = await readAccessSnapshot(transaction, roadmap.id);
         const releasedNodeIds = await releaseDueScheduledUnlocks(transaction, roadmap.id, today);
-        const after = await captureAccessSnapshot(transaction, roadmap.id);
+        const after = await readAccessSnapshot(transaction, roadmap.id);
         await report({
           actorId: SCHEDULED_UNLOCK_ACTOR_ID,
           identifier: roadmap.courseOffering,

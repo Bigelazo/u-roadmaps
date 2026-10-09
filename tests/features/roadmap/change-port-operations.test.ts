@@ -193,6 +193,9 @@ test('visibility and deletion report their facts and recipient access transition
       current: 'Retirado',
     }),
   );
+  // Access baselines are recorded by the notice lifecycle module through the port.
+  expect(await prisma.nodeContentKnowledge.count({ where: { nodeId } })).toBe(0);
+  expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
   recording.changes.length = 0;
   await confirmed(deleteRoadmapNode({ ...input, id: nodeId }, recording.port));
   expect(recording.facts()).toMatchObject([

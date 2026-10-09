@@ -31,6 +31,21 @@ export async function recordKnownValues(
   });
 }
 
+/** The target's value at edit time for recipients that have a Known value (see `currentAtEdit`). */
+export async function recordCurrentValues(
+  transaction: Prisma.TransactionClient,
+  roadmapId: string,
+  target: NoticeTargetRef,
+  recipientIds: readonly string[],
+  currentValue: string,
+) {
+  if (!recipientIds.length) return;
+  await transaction.noticeKnownValue.updateMany({
+    where: { roadmapId, targetKey: target.targetKey, recipientId: { in: [...recipientIds] } },
+    data: { currentValue },
+  });
+}
+
 /** The recipient's Known value and its context, recording `fallback` when the target has no baseline yet. */
 export async function ensureKnownValue(
   transaction: Prisma.TransactionClient,
@@ -49,9 +64,13 @@ export async function ensureKnownValue(
   );
   const row = await transaction.noticeKnownValue.findUniqueOrThrow({
     where: { recipientId_roadmapId_targetKey: { ...identity, targetKey: target.targetKey } },
-    select: { knownValue: true, context: true },
+    select: { knownValue: true, currentValue: true, context: true },
   });
-  return { knownValue: row.knownValue, context: targetContext(row.context) };
+  return {
+    knownValue: row.knownValue,
+    currentValue: row.currentValue,
+    context: targetContext(row.context),
+  };
 }
 
 /** Recognition: the recipient now knows `knownValue`. */

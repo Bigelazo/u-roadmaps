@@ -1,7 +1,6 @@
 import 'server-only';
 import { after } from 'next/server';
 import type { Prisma } from '@/shared/server/db';
-import { accessNoticeDestination } from '@/shared/node-access';
 import type {
   RoadmapChangePort,
   RoadmapChanges,
@@ -92,24 +91,6 @@ async function deliver(
           );
           break;
         }
-        case 'node-access':
-          if (fact.recipientId !== actorId)
-            await deliverNodeChange(
-              {
-                userId: actorId,
-                ...identifier,
-                roadmapId,
-                nodeId: fact.nodeId,
-                ...accessNoticeDestination(fact.current),
-                changedFields: [],
-                previousAccess: fact.previous,
-                nodeTitle: fact.nodeTitle,
-                nodeTypeName: fact.nodeTypeName,
-                recipientIds: [fact.recipientId],
-              },
-              scheduleDelivery,
-            );
-          break;
         case 'roadmap-created':
           await deliverRoadmapAvailability(
             {
@@ -130,6 +111,7 @@ async function deliver(
         case 'resource':
         case 'dependency':
         case 'node-type-name':
+        case 'node-access':
           break;
         // Completion and promotion already reconcile inside their transactions in this prefactor.
         case 'node-visibility':

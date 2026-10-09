@@ -12,7 +12,7 @@ import {
 import { acceptDelivery } from '../notice-delivery';
 import { reconcileStoredAbsorption } from '../absorption-notice';
 import type { NoticeDeliveryScheduler } from '../own-inbox';
-import { forgetNodeKnownValues, recordKnownValues } from './known-values';
+import { forgetNodeKnownValues, recordCurrentValues, recordKnownValues } from './known-values';
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
 import { roadmapEnvelope } from './envelope';
@@ -58,6 +58,15 @@ export async function recordNoticeTargets(
       previousValue,
       previousContext,
     );
+    const atEdit = descriptor.currentAtEdit?.(fact);
+    if (atEdit)
+      await recordCurrentValues(
+        transaction,
+        changes.roadmapId,
+        target,
+        atEdit.recipientIds,
+        atEdit.value,
+      );
     const recipientIds = (await descriptor.audience(fact, changes, roadmap)).filter(
       (recipientId) => recipientId !== changes.actorId,
     );
@@ -140,6 +149,7 @@ async function deliverTarget(
         payload: {
           ...envelope,
           ...(target.nodeId ? { nodeId: target.nodeId } : {}),
+          noticeTarget: descriptor.noticeTarget,
           ...descriptor.readSide,
           occurredAt: occurredAt.toISOString(),
           eventCount: 1,

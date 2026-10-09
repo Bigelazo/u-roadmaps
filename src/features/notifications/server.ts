@@ -146,7 +146,6 @@ export async function deliverNodeChange(
     changeKind: NodeChangeNotice['changeKind'];
     changedFields: NodeChangeNotice['changedFields'];
     nodeTitle?: string;
-    previousAccess?: NodeChangeNotice['previousAccess'];
     nodeTypeName?: string;
     roadmapId?: string;
     recipientIds?: readonly string[];
@@ -223,9 +222,6 @@ export async function deliverNodeChange(
     nodeTitle: input.nodeTitle ?? node!.title,
     changeKind: input.changeKind,
     changedFields: input.changedFields,
-    ...(input.previousAccess
-      ? { contentTarget: 'access' as const, previousValue: input.previousAccess }
-      : {}),
     ...(input.nodeTypeName ? { nodeTypeName: input.nodeTypeName } : {}),
     ...(input.targetKind ? { targetKind: input.targetKind } : {}),
     actorId: input.userId,

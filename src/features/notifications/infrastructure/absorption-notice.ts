@@ -61,9 +61,13 @@ export async function reconcileStoredAbsorption(
     include: { nodeType: true, resources: true },
   });
   const access = node
-    ? await transaction.nodeContentKnowledge.findUnique({
+    ? await transaction.noticeKnownValue.findUnique({
         where: {
-          recipientId_nodeId_target: { recipientId: effect.recipientId, nodeId, target: 'access' },
+          recipientId_roadmapId_targetKey: {
+            recipientId: effect.recipientId,
+            roadmapId: effect.roadmapId,
+            targetKey: `node:${nodeId}:access`,
+          },
         },
       })
     : null;
@@ -83,7 +87,7 @@ export async function reconcileStoredAbsorption(
   if (
     lifecycle?.isKnown === true &&
     effect.payload.changeKind === 'node-available' &&
-    effect.payload.contentTarget === undefined
+    effect.payload.noticeTarget !== 'node-access'
   )
     return true;
   if (action === 'independent') return false;

@@ -6,7 +6,7 @@ import { nodeTitleTarget } from '../application/notice-targets/node-title';
 import { nodeDescriptionTarget } from '../application/notice-targets/node-description';
 import { nodeTypeTarget } from '../application/notice-targets/node-type';
 import { resourceTarget, resourceValue } from '../application/notice-targets/resource';
-import { recognizeNodeContentValue } from './node-content-notice';
+import { nodeAccessTarget } from '../application/notice-targets/node-access';
 import { dependencyPairTarget } from '../application/notice-targets/dependency-pair';
 import { typeNameTarget } from '../application/notice-targets/node-type-name';
 import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
@@ -390,16 +390,15 @@ export async function recognizeAbsorptionSnapshots(
         envelope,
         onlyPending: reconcileOnlyPending,
       });
-      await recognizeNodeContentValue(
-        transaction,
-        {
-          ...effect,
-          eventId: `${effect.eventId}:access`,
-          payload: { ...payload, contentTarget: 'access', previousValue: node.access },
-        },
-        node.access,
-        reconcileOnlyPending,
-      );
+      await recognizeKnownValue(transaction, {
+        identity: { recipientId: identity.recipientId, roadmapId: identity.roadmapId },
+        descriptor: nodeAccessTarget,
+        target: { targetKey: `node:${node.id}:access`, nodeId: node.id },
+        knownValue: node.access,
+        eventId: `${effect.eventId}:access`,
+        envelope,
+        onlyPending: reconcileOnlyPending,
+      });
       await recognizeKnownValue(transaction, {
         identity: { recipientId: identity.recipientId, roadmapId: identity.roadmapId },
         descriptor: nodeTypeTarget,
