@@ -19,6 +19,9 @@ import {
 /** Marks the question-mark icon that opens a Roadmap tutorial on its origin page. */
 export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
 
+/** Marks the bar holding "Salir", which stays usable above the tour at any moment. */
+export const TUTORIAL_EXIT_ATTRIBUTE = 'data-tutorial-exit';
+
 const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
 
 /**
