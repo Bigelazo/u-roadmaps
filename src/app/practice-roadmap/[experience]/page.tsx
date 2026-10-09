@@ -1,6 +1,9 @@
 import { notFound, redirect } from 'next/navigation';
 import { PracticeRoadmapCanvas } from '@/features/roadmap';
-import { readPracticeRoadmapCalendar } from '@/features/roadmap/server';
+import {
+  readPracticeRoadmapCalendar,
+  recordTeachingTutorialOpened,
+} from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 
 export default async function PracticeRoadmapPage(
@@ -12,6 +15,7 @@ export default async function PracticeRoadmapPage(
 
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
+  if (experience === 'teaching') await recordTeachingTutorialOpened(user.id);
   const { term, today } = await readPracticeRoadmapCalendar();
 
   return (

@@ -158,23 +158,27 @@ model Resource {
 }
 
 model User {
-  id                     String                        @id @default(uuid()) @db.Uuid
-  name                   String                        @db.VarChar(200)
-  institutionalEmail     String                        @unique @db.VarChar(320)
-  rut                    String?                       @unique @db.VarChar(20)
-  notices                RoadmapNotice[]
-  noticeEffects          NoticeDeliveryEffect[]
-  roadmapVisits          RoadmapVisit[]
-  contentKnowledge       NodeContentKnowledge[]
-  titleKnowledge         NodeTitleKnowledge[]
-  resourceKnowledge      ResourceNoticeKnowledge[]
-  routeKnowledge         RouteNoticeKnowledge[]
-  nodeLifecycleKnowledge NodeLifecycleKnowledge[]
-  nodeChangeReviews      NodeChangeReview[]
-  participations         Participation[]
-  completions            Completion[]
-  createdRoadmaps        Roadmap[]                     @relation("RoadmapCreator")
-  closureTeachingStaff   RoadmapClosureTeachingStaff[]
+  id                            String                        @id @default(uuid()) @db.Uuid
+  name                          String                        @db.VarChar(200)
+  institutionalEmail            String                        @unique @db.VarChar(320)
+  rut                           String?                       @unique @db.VarChar(20)
+  // When the teaching tutorial invitation after a first Roadmap creation was shown.
+  postCreationInvitationShownAt DateTime?                     @db.Timestamptz(3)
+  // When the User first opened the teaching tutorial, from any entry point.
+  teachingTutorialOpenedAt      DateTime?                     @db.Timestamptz(3)
+  notices                       RoadmapNotice[]
+  noticeEffects                 NoticeDeliveryEffect[]
+  roadmapVisits                 RoadmapVisit[]
+  contentKnowledge              NodeContentKnowledge[]
+  titleKnowledge                NodeTitleKnowledge[]
+  resourceKnowledge             ResourceNoticeKnowledge[]
+  routeKnowledge                RouteNoticeKnowledge[]
+  nodeLifecycleKnowledge        NodeLifecycleKnowledge[]
+  nodeChangeReviews             NodeChangeReview[]
+  participations                Participation[]
+  completions                   Completion[]
+  createdRoadmaps               Roadmap[]                     @relation("RoadmapCreator")
+  closureTeachingStaff          RoadmapClosureTeachingStaff[]
 }
 
 model VtiLoginTransaction {

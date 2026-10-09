@@ -61,3 +61,7 @@ export type {
   RoadmapChangeFact,
 } from './application/change-port';
 export { readPracticeRoadmapCalendar } from './application/practice';
+export {
+  claimPostCreationInvitation,
+  recordTeachingTutorialOpened,
+} from './application/tutorial-invitation';

@@ -128,3 +128,6 @@ type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
 export type RoadmapDto = RoadmapDtoBase<RoadmapNode>;
 export type StudentRoadmapDto = RoadmapDtoBase<StudentRoadmapNode>;
 export type AnyRoadmapDto = RoadmapDto | StudentRoadmapDto;
+
+/** Whether the post-creation invitation offers to do or to repeat the teaching tutorial. */
+export type PostCreationInvitationWording = 'hacer' | 'repetir';

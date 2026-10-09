@@ -1282,6 +1282,8 @@ function RoadmapTutorialLink({
         title="Abrir tutorial"
         className={buttonVariants({ variant: 'outline', size: 'icon' })}
         href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
+        // Rendering the Practice roadmap records a teaching tutorial opening.
+        prefetch={false}
       >
         <CircleHelp />
       </Link>
