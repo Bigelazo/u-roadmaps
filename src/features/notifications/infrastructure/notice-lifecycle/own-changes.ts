@@ -26,7 +26,12 @@ export type OwnTarget = Readonly<{
 const promoted = ({ actorId, facts }: RoadmapChanges) =>
   facts.some((fact) => fact.kind === 'participation-role' && fact.recipientId === actorId);
 
-/** Take the actor's recipient/Roadmap lock before any Known value of theirs is written. */
+/**
+ * Take the actor's recipient/Roadmap lock before any Known value of theirs may be written
+ * (whether the actor is in a target's audience is only known later, so any notice-bearing
+ * change takes it). Other recipients' locks are taken only at delivery, in their own
+ * transactions, so this is the only advisory lock the roadmap transaction holds.
+ */
 export async function lockOwnChanges(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
@@ -76,6 +81,8 @@ export async function recordOwnChanges(
     }
     const current = await descriptor.current(target, roadmap, identity.recipientId);
     if (!current) continue;
+    // The actor now knows the value they produced, so an untold earlier difference is
+    // superseded (Known value includes "the one they produced themselves").
     // Targets recorded at edit time (Node access) take the value the change reported.
     const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
     await setKnownValue(transaction, identity, target, value, current.context);

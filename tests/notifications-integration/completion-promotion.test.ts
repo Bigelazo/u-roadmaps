@@ -47,7 +47,9 @@ test('completing the prerequisite withdraws the student’s own «fue bloqueado�
   ]);
 });
 
-test('Completion creates no notice and advances the student’s Known access', async ({ course }) => {
+test('Completion creates no notice and advances the student’s Known access', async ({
+  course,
+}) => {
   const prerequisite = await addNode(course, 'Pilas');
   const dependent = await addNode(course, 'Colas');
   const edits = teacherEdits(course);
