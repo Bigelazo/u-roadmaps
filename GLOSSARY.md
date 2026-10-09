@@ -236,7 +236,7 @@ A URL reference with a title and file, link, or video type to pedagogical materi
 _Avoid_: File, global material
 
 **Roadmap tutorial (Tutorial del roadmap)**:
-A guided, repeatable walkthrough of the Roadmap canvas on the Practice roadmap for one experience: explanatory for students and observers, interactive for teaching staff, who perform each action themselves. Each User is invited once, on their first Academic overview visit, to choose either tutorial or decline; it can be repeated from the Academic overview or from the Roadmap canvas for the current experience, never inside Canvas preview.
+A guided, repeatable walkthrough of the Roadmap canvas on the Practice roadmap for one experience: explanatory for students and observers, interactive for teaching staff, who perform each action themselves. Each User is invited once, on their first Academic overview visit, to choose either tutorial or decline, and a course professor is invited once more to the teaching tutorial after their first Roadmap creation; it can be repeated from the Academic overview or from the Roadmap canvas for the current experience, never inside Canvas preview.
 _Avoid_: Onboarding, tour, help, Canvas preview
 
 **Practice roadmap (Mapa de práctica)**:
