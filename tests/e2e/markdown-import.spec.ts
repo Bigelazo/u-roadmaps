@@ -74,3 +74,56 @@ test('Markdown drops require confirmation and update the Node draft before savin
   );
   await transfer.dispose();
 });
+
+test('teaching staff create a Node whose description comes from a dropped Markdown file', async ({
+  page,
+  course,
+  apiAs,
+}) => {
+  const api = await apiAs(course.users.teacher);
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.getByRole('button', { name: 'Crear en el mapa' }).click();
+  await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  await dialog.getByLabel('Título').fill('Nodo con Markdown');
+  // The confirmation makes the creation dialog inert, so locate the field by its id.
+  const description = page.locator('#new-node-description');
+
+  const invalid = await page.evaluateHandle(() => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(new File(['texto'], 'notas.txt', { type: 'text/plain' }));
+    return dataTransfer;
+  });
+  await description.dispatchEvent('drop', { dataTransfer: invalid });
+  await expect(dialog).toContainText('Arrastra un solo archivo Markdown (.md o .markdown).');
+  await invalid.dispose();
+
+  const content = '# Guía de creación\n\n- Primer paso\n';
+  const transfer = await page.evaluateHandle((text) => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(new File([text], 'guia.md', { type: 'text/markdown' }));
+    return dataTransfer;
+  }, content);
+  await description.fill('Borrador previo');
+  await description.dispatchEvent('drop', { dataTransfer: transfer });
+  const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
+  await expect(confirmation).toContainText('guia.md');
+  await expect(description).toHaveValue('Borrador previo');
+  await confirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
+  await expect(description).toHaveValue(content);
+  await transfer.dispose();
+
+  const created = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && response.url().endsWith(course.apiPath('/nodes')),
+  );
+  await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  expect((await created).status()).toBe(201);
+  const roadmap = await api.get(course.apiPath());
+  expect((await roadmap.json()).nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ title: 'Nodo con Markdown', description: content }),
+    ]),
+  );
+});
