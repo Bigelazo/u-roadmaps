@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { queryJson } from './database';
 import { enterRoadmap } from './enter-roadmap';
+import { fileDrop } from './file-drop';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
@@ -69,6 +70,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await next(page, 'Bloqueo docente');
   await next(page, 'Crea un nodo');
   await expect(tourPopover(page)).toContainText('Gestionar tipos de nodo');
+  await expect(tourPopover(page)).toContainText('archivo .md');
 
   // Cancelling the creation dialog keeps the step and highlights "Crear en el mapa" again.
   const creator = page.getByRole('button', { name: 'Crear en el mapa' });
@@ -86,6 +88,15 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await creator.click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
   await dialog.getByLabel('Título').fill('Nodo de práctica');
+  const markdown = '# Guía del nodo\n\nRepasa **límites**.\n';
+  const transfer = await fileDrop(page, 'guia.md', markdown);
+  const description = dialog.getByLabel(/Descripción/);
+  await description.dispatchEvent('drop', { dataTransfer: transfer });
+  const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
+  // A real click is blocked by the highlighted dialog until #214 lets portaled UI through.
+  await confirmation.getByRole('button', { name: 'Reemplazar texto' }).dispatchEvent('click');
+  await expect(description).toHaveValue(markdown);
+  await transfer.dispose();
   await expect(dialog.getByRole('checkbox', { name: 'Visible para estudiantes' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
   await expectStep(page, 'Conecta tu nodo');
@@ -104,6 +115,9 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await practiceNode(page, 'Nodo de práctica').click();
   await expectStep(page, 'Editor de nodo');
   await expect(page.locator('[aria-label="Editor de nodo"]')).toHaveClass(/driver-active-element/);
+  await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/Descripción/)).toHaveValue(
+    markdown,
+  );
 
   await tourPopover(page).getByRole('button', { name: 'Finalizar' }).click();
   await expect(tourPopover(page)).toHaveCount(0);
