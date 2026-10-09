@@ -65,3 +65,7 @@ export {
   claimPostCreationInvitation,
   recordTeachingTutorialOpened,
 } from './application/tutorial-invitation';
+export {
+  claimFirstVisitInvitation,
+  recordTutorialOpened,
+} from './application/first-visit-invitation';

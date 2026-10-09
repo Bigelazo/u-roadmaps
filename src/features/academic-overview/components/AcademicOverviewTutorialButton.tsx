@@ -9,9 +9,14 @@ import {
 import { TutorialChoiceDialog } from '@/shared/client/tutorial/tutorial-choice-dialog';
 import { Button } from '@/shared/ui/button';
 
-/** The Academic overview question-mark icon that lets any User pick a Roadmap tutorial. */
-export function AcademicOverviewTutorialButton() {
-  const [open, setOpen] = useState(false);
+/**
+ * The Academic overview question-mark icon that lets any User pick a Roadmap tutorial.
+ * When `invited`, the same choice opens by itself as the first-visit invitation.
+ */
+export function AcademicOverviewTutorialButton({
+  invited = false,
+}: Readonly<{ invited?: boolean }>) {
+  const [open, setOpen] = useState(invited);
   return (
     <>
       <Button
@@ -24,7 +29,12 @@ export function AcademicOverviewTutorialButton() {
       >
         <CircleHelp />
       </Button>
-      <TutorialChoiceDialog open={open} onOpenChange={setOpen} origin="/academic-overview" />
+      <TutorialChoiceDialog
+        open={open}
+        onOpenChange={setOpen}
+        origin="/academic-overview"
+        declinable={invited}
+      />
       <TutorialClosingPopover />
     </>
   );

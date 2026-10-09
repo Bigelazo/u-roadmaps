@@ -232,10 +232,13 @@ export function AcademicOverview({
   overview,
   renderRoadmapCreation,
   notificationsEnabled,
+  tutorialInvitation = false,
 }: Readonly<{
   overview: AcademicOverviewPage;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
+  /** Whether this visit shows the first-visit tutorial invitation. */
+  tutorialInvitation?: boolean;
 }>) {
   const [currentTerm, ...previousTerms] = overview.terms;
 
@@ -247,7 +250,7 @@ export function AcademicOverview({
             <h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
               Resumen académico
             </h1>
-            <AcademicOverviewTutorialButton />
+            <AcademicOverviewTutorialButton invited={tutorialInvitation} />
           </header>
 
           {overview.source === 'LOCAL' ? (
