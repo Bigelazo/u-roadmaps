@@ -91,7 +91,7 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
       return;
     }
     startNavigation(() => {
-      router.push(`/courses/${encodeURIComponent(courseCode)}/${year}/${semester}`);
+      router.push(`/courses/${encodeURIComponent(courseCode)}/${year}/${semester}?created=1`);
     });
   }
 

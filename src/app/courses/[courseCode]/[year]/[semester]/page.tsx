@@ -1,7 +1,11 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { randomUUID } from 'node:crypto';
-import { parseCourseOfferingIdentifier, RoadmapCanvasSession } from '@/features/roadmap';
-import { synchronizeParticipation } from '@/features/roadmap/server';
+import {
+  parseCourseOfferingIdentifier,
+  PostCreationInvitationDialog,
+  RoadmapCanvasSession,
+} from '@/features/roadmap';
+import { claimPostCreationInvitation, synchronizeParticipation } from '@/features/roadmap/server';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
@@ -67,6 +71,11 @@ export default async function CoursePage(
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
+  // Landing here from Roadmap creation may claim the one-time teaching tutorial invitation.
+  const invitation =
+    isTeaching && courseOffering.roadmap && searchParams.created === '1'
+      ? await claimPostCreationInvitation(user.id)
+      : null;
 
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
@@ -84,6 +93,12 @@ export default async function CoursePage(
           }}
         />
       </RoadmapEntryNotifications>
+      {invitation ? (
+        <PostCreationInvitationDialog
+          wording={invitation.wording}
+          origin={`/courses/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}`}
+        />
+      ) : null}
     </main>
   );
 }
