@@ -28,7 +28,7 @@ test('removing and re-adding a Dependency with a new id withdraws the same pair 
   await expect
     .poll(notices)
     .toMatchObject([
-      { data: { changeKind: 'dependency-removed', knownValue: 'true', currentValue: 'false' } },
+      { data: { changeKind: 'dependency-removed', knownValue: 'present', currentValue: 'absent' } },
     ]);
   const readded = await author.post(course.apiPath('/dependencies'), { data: pair });
   expect(readded.status()).toBe(201);
@@ -54,7 +54,7 @@ test('removing and re-adding a Dependency with a new id withdraws the same pair 
   await expect
     .poll(notices)
     .toMatchObject([
-      { data: { changeKind: 'dependency-added', knownValue: 'false', currentValue: 'true' } },
+      { data: { changeKind: 'dependency-added', knownValue: 'absent', currentValue: 'present' } },
     ]);
 });
 
