@@ -105,6 +105,15 @@
   pointer-events: none;
 }
 
+/* "Salir" leaves the tutorial at any moment: its bar sits above the overlay. */
+.driver-active [data-tutorial-exit] {
+  z-index: 10001;
+}
+.driver-active [data-tutorial-exit],
+.driver-active [data-tutorial-exit] * {
+  pointer-events: auto;
+}
+
 /*
  * During an action step, portaled layers (menus, dialogs, Select popups) sit above the
  * overlay and take clicks, so the expected interaction is fully usable. The exit

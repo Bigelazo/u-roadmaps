@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { queryJson } from './database';
 import { enterRoadmap } from './enter-roadmap';
+import { fileDrop } from './file-drop';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
@@ -92,6 +93,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await next(page, 'Bloqueo docente');
   await next(page, 'Crea un nodo');
   await expect(tourPopover(page)).toContainText('Gestionar tipos de nodo');
+  await expect(tourPopover(page)).toContainText('archivo .md');
 
   // Cancelling the creation dialog keeps the step and highlights "Crear en el mapa" again.
   const creator = page.getByRole('button', { name: 'Crear en el mapa' });
@@ -109,6 +111,16 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await creator.click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
   await dialog.getByLabel('Título').fill('Nodo de práctica');
+  const markdown = '# Guía del nodo\n\nRepasa **límites**.\n';
+  const transfer = await fileDrop(page, 'guia.md', markdown);
+  const description = dialog.getByLabel(/Descripción/);
+  await description.dispatchEvent('drop', { dataTransfer: transfer });
+  const markdownConfirmation = page.getByRole('alertdialog', {
+    name: 'Reemplazar texto con Markdown',
+  });
+  await markdownConfirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
+  await expect(description).toHaveValue(markdown);
+  await transfer.dispose();
   // Portaled popups, like the Node type options, stay usable during an action step.
   await dialog.getByLabel('Tipo').click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
@@ -131,6 +143,9 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await practiceNode(page, 'Nodo de práctica').click();
   await expectStep(page, 'Editor de nodo');
   await expect(page.locator('[aria-label="Editor de nodo"]')).toHaveClass(/driver-active-element/);
+  await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/Descripción/)).toHaveValue(
+    markdown,
+  );
 
   await next(page, 'Bloquea una rama');
 

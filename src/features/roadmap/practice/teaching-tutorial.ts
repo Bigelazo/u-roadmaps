@@ -64,7 +64,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       element: nodeCreator,
       title: 'Crea un nodo',
       description:
-        'Presiona "Crear en el mapa" y elige "Crear nodo". Escribe un título, elige su tipo y deja marcado "Visible para estudiantes". Desde "Gestionar tipos de nodo" puedes crear tus propios tipos.',
+        'Presiona "Crear en el mapa" y elige "Crear nodo". Escribe un título, elige su tipo y deja marcado "Visible para estudiantes". En la descripción puedes escribir Markdown o arrastrar un archivo .md para reemplazar el texto. Desde "Gestionar tipos de nodo" puedes crear tus propios tipos.',
       side: 'top',
       advanceWhen: (action) => {
         if (action.type !== 'addNode') return false;
