@@ -428,7 +428,7 @@ test('type rename reports its previous name; appearance edits stay silent', asyn
   expect(recording.facts()).toEqual([]);
 });
 
-test('promotion reports the role change while retaining the existing reset', async ({ course }) => {
+test('promotion reports the role change', async ({ course }) => {
   const recording = recordingChangePort();
   await materializeParticipation(
     { id: course.studentId, rut: null },

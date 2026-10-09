@@ -4,6 +4,8 @@ import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
 
 type NodeAccessFact = Extract<RoadmapChangeFact, { kind: 'node-access' }>;
 
+export const nodeAccessRef = (nodeId: string) => ({ targetKey: `node:${nodeId}:access`, nodeId });
+
 function nodeTitle({ context }: TargetValues) {
   return String(context.nodeTitle ?? '');
 }
@@ -20,7 +22,7 @@ export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   readSide: { changeKind: 'node-available', changedFields: ['access'], targetKind: 'node' },
   valueReadSide: ({ currentValue }) => accessNoticeDestination(currentValue),
   matches: (fact): fact is NodeAccessFact => fact.kind === 'node-access',
-  target: (fact) => ({ targetKey: `node:${fact.nodeId}:access`, nodeId: fact.nodeId }),
+  target: (fact) => nodeAccessRef(fact.nodeId),
   previousValue: (fact) => fact.previous,
   // The actor's own baseline is not fixed by its change (Completion advances it itself).
   knowers: async (fact, changes) =>

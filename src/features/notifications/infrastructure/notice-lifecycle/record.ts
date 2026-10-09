@@ -15,6 +15,7 @@ import { forgetNodeKnownValues, recordCurrentValues, recordKnownValues } from '.
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget, type NoticeEnvelope } from './reconcile';
 import { roadmapEnvelope } from './envelope';
+import { recordOwnChanges } from './own-changes';
 
 /** Deferred delivery of one recorded Roadmap change; safe to retry. */
 export type NoticeDelivery = (schedule: NoticeDeliveryScheduler) => Promise<void>;
@@ -79,6 +80,7 @@ export async function recordNoticeTargets(
         recipientIds,
       });
   }
+  await recordOwnChanges(transaction, changes, roadmap);
   if (!targets.length) return undefined;
   const eventId = randomUUID();
   const occurredAt = new Date();
