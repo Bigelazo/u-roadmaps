@@ -17,6 +17,7 @@ import { nodeDeletionTarget } from './node-deletion';
 import { roadmapAvailabilityTarget } from './roadmap-availability';
 
 export type {
+  BroadScope,
   EntryValue,
   KnownTarget,
   NoticeReadSide,
@@ -32,6 +33,7 @@ export type {
   TargetValues,
   TargetWording,
 } from './descriptor';
+export { SCOPE_DEPTH } from './descriptor';
 
 /** Every Notice target kind handled by the notice lifecycle module (ADR-0024). */
 export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [

@@ -4,6 +4,7 @@ import { absorbs, containingTargets } from '../../application/absorption';
 import {
   descriptorForNoticeTarget,
   noticeTargetDescriptors,
+  SCOPE_DEPTH,
   type KnownTarget,
   type NoticeTargetRef,
   type RoadmapView,
@@ -76,9 +77,9 @@ export async function entryTargetSnapshots(
   return [...broad, ...narrow, ...state] as Prisma.InputJsonArray;
 }
 
-/** Roadmap availability before Node creation. */
+/** Broadest scope first (Roadmap availability before Node creation). */
 function broadness({ noticeTarget }: { noticeTarget: string }) {
-  return descriptorForNoticeTarget(noticeTarget)?.scope === 'roadmap' ? 0 : 1;
+  return SCOPE_DEPTH[descriptorForNoticeTarget(noticeTarget)?.scope ?? 'node'];
 }
 
 /** An unrecognized broad target that no longer exists has nothing left to tell. */
