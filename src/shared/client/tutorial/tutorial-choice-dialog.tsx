@@ -14,12 +14,19 @@ import {
 /**
  * Asks which Roadmap tutorial to run and opens the Practice roadmap in that experience,
  * with `origin` as the page "Salir" returns to. Controlled, so any page can open it.
+ * `declinable` adds an explicit "Ahora no" for invitations the User did not ask for.
  */
 export function TutorialChoiceDialog({
   open,
   onOpenChange,
   origin,
-}: Readonly<{ open: boolean; onOpenChange: (open: boolean) => void; origin: string }>) {
+  declinable = false,
+}: Readonly<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  origin: string;
+  declinable?: boolean;
+}>) {
   const router = useRouter();
   const start = (experience: 'teaching' | 'student') =>
     router.push(`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`);
@@ -34,6 +41,11 @@ export function TutorialChoiceDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
+          {declinable ? (
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Ahora no
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => start('teaching')}>
             Docente
           </Button>
