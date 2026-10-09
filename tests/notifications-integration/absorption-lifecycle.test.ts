@@ -4,7 +4,11 @@ import { test, type IntegrationCourse } from './fixtures';
 import { prisma } from '@/shared/server/db';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { createRoadmap } from '@/features/roadmap/application/roadmap';
-import { acknowledgeOwnNotices, prepareOwnRoadmapOpening } from '@/features/notifications/server';
+import {
+  acknowledgeOwnNotices,
+  countOwnNotices,
+  prepareOwnRoadmapOpening,
+} from '@/features/notifications/server';
 import {
   confirmed,
   deferredNoticePort,
@@ -74,6 +78,20 @@ test('creating then deleting or hiding leaves no notice; showing again is a new 
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
     { subject: 'Nuevo Nodo «Oculto»', data: { noticeTarget: 'node-creation', nodeId: hidden.id } },
   ]);
+});
+
+test('a pending creation notice whose Node no longer exists is not shown or counted', async ({
+  course,
+}) => {
+  const node = await teacherEdits(course).create('Efímero');
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);
+  // A creation notice left behind by a deletion whose withdrawal never ran.
+  await prisma.roadmapNode.delete({ where: { id: node.id } });
+  const params = new URLSearchParams({ roadmapId: course.roadmapId });
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
+  expect(await countOwnNotices(course.studentId, params)).toEqual({ count: 0 });
+  const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
+  expect(summary?.groups ?? []).toEqual([]);
 });
 
 test('deleting a Node absorbs its pending title, access and Resource notices and forgets its Known values', async ({

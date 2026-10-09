@@ -20,7 +20,8 @@ export function isNoticeVisible(
   const node = nodes.find(({ id }) => id === data.nodeId);
   // Access withdrawal and deletion describe a change in the Roadmap itself.
   if (data.noticeTarget === 'node-access' || data.changeKind === 'node-deleted') return true;
-  if (!node) return true;
+  // A new Node that no longer exists has nothing left to show.
+  if (!node) return data.noticeTarget !== 'node-creation';
   if (!node.isVisible) return false;
   const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
   const details =
