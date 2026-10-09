@@ -150,17 +150,14 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
         [1280, 280],
         'Comentarios sobre el Control 1.',
       ),
-      {
-        ...node(
-          ids.h,
-          'Material de apoyo',
-          nodeTypes.supplementary,
-          [640, 400],
-          'Material que aún no se publica.',
-        ),
-        isVisible: false,
-        isTeacherBlocked: false,
-      },
+      node(
+        ids.h,
+        'Material de apoyo',
+        nodeTypes.supplementary,
+        [640, 400],
+        'Material que aún no se publica.',
+        { isVisible: false },
+      ),
     ],
     dependencies: [
       dependency(1, ids.a, ids.b),
@@ -175,7 +172,7 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
   };
 }
 
-const exitOrigins = [/^\/academic-overview$/, /^\/courses\/[A-Za-z0-9]+\/\d{4}\/[12]$/];
+const exitOrigins = [/^\/academic-overview$/, /^\/courses\/[A-Za-z0-9%-]+\/\d{4}\/[12]$/];
 
 /** Where "Salir" returns: an allow-listed origin, or the home page. */
 export function practiceExitHref(origin: string | null | undefined) {
