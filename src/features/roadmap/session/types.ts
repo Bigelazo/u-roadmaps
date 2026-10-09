@@ -121,4 +121,8 @@ export type RoadmapCanvasSessionInput = {
     readonly title: string;
   };
   readonly experience: RoadmapCanvasExperience;
+  /** Present on the Practice roadmap, which belongs to no Course offering. */
+  readonly practice?: {
+    readonly nodeChangeCounts: Readonly<Record<string, number>>;
+  };
 };

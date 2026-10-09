@@ -455,6 +455,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       data-slot="roadmap-card"
       data-testid="roadmap-card"
       data-hidden={hidden || undefined}
+      data-block-reason={data.blockReason}
       aria-label={hidden ? `${data.title}: oculto para estudiantes` : undefined}
       aria-disabled={locked ? true : undefined}
       className={cn(

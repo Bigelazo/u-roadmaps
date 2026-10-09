@@ -236,13 +236,18 @@ export function NodeChangeCountsProvider({
   roadmapId,
   openedNodeId = null,
   enabled,
+  simulatedCounts,
   children,
 }: {
   roadmapId: string;
   openedNodeId?: string | null;
   enabled: boolean;
+  /** Fixed marks shown instead of the server's, as on the Practice roadmap. */
+  simulatedCounts?: Readonly<Record<string, number>>;
   children: ReactNode;
 }) {
+  if (simulatedCounts)
+    return <NodeChangeCountsContext value={simulatedCounts}>{children}</NodeChangeCountsContext>;
   return enabled ? (
     <ActiveNodeChangeCounts key={roadmapId} roadmapId={roadmapId} openedNodeId={openedNodeId}>
       {children}

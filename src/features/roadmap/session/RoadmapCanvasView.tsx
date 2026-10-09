@@ -837,6 +837,7 @@ export function RoadmapCanvasView({ input }: Props) {
             roadmapId={roadmap.roadmap.id}
             openedNodeId={isSidePanelOpen ? selectedNodeId : null}
             enabled={Boolean(input.notificationsEnabled) && !model.isCanvasPreview}
+            simulatedCounts={model.isCanvasPreview ? undefined : input.practice?.nodeChangeCounts}
           >
             <RoadmapCanvasGraph
               model={model}
@@ -1143,7 +1144,7 @@ function RoadmapCanvasGraph({
   return (
     <RoadmapGraph
       projection={graphProjection}
-      notificationsEnabled={Boolean(input.notificationsEnabled)}
+      notificationsEnabled={Boolean(input.notificationsEnabled || input.practice)}
       onSelectNode={(nodeId) => {
         const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
         if (isStudentExperience && isStudentBlockedNode(node)) return;
@@ -1173,7 +1174,7 @@ function RoadmapCanvasGraph({
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
               <>
-                {canPreviewCanvas ? (
+                {canPreviewCanvas && !input.practice ? (
                   <Link
                     className={cn(buttonVariants({ variant: 'outline' }))}
                     href={versionHistoryUrl(courseCode)}
