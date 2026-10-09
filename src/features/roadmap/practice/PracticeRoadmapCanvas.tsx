@@ -43,7 +43,9 @@ export function PracticeRoadmapCanvas({
   origin: string | null;
 }) {
   const [actions] = useState(() => createTutorialActions<PracticeCanvasAction>());
-  const [teachingSteps] = useState(teachingTutorialSteps);
+  const [teachingSteps] = useState(() =>
+    experience === 'teaching' ? teachingTutorialSteps() : [],
+  );
   const [persistence] = useState(() =>
     reportingPracticeActions(
       createInMemoryRoadmapSessionPersistence(

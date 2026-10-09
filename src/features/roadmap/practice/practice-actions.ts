@@ -11,15 +11,17 @@ export function reportingPracticeActions(
   persistence: RoadmapCanvasSessionPersistence,
   report: (action: PracticeCanvasAction) => void,
 ): RoadmapCanvasSessionPersistence {
+  const { addNode, connectNodes } = persistence;
+  if (!addNode || !connectNodes) return persistence;
   return {
     ...persistence,
     async addNode(...args) {
-      const nodeId = await persistence.addNode!(...args);
+      const nodeId = await addNode(...args);
       if (nodeId) report({ type: 'addNode', nodeId });
       return nodeId;
     },
     async connectNodes(input, sourceNodeId, targetNodeId, ...rest) {
-      await persistence.connectNodes!(input, sourceNodeId, targetNodeId, ...rest);
+      await connectNodes(input, sourceNodeId, targetNodeId, ...rest);
       report({ type: 'connectNodes', sourceNodeId, targetNodeId });
     },
   };

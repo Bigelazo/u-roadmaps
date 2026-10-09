@@ -197,10 +197,6 @@ function useRoadmapCanvasController({ input }: Props) {
       nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
     [],
   );
-  const reportPracticeAction = input.practice?.onAction;
-  useEffect(() => {
-    if (selectedNodeId) reportPracticeAction?.({ type: 'selectNode', nodeId: selectedNodeId });
-  }, [selectedNodeId, reportPracticeAction]);
   const closeEditorAfterNodeDeletion = useCallback(() => {
     dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
     requestNodeFocusReturn();
@@ -1158,6 +1154,7 @@ function RoadmapCanvasGraph({
         if (isStudentExperience && isStudentBlockedNode(node)) return;
         const select = () => {
           dismissSelectionNotice();
+          input.practice?.onAction?.({ type: 'selectNode', nodeId });
           dispatchCanvas({
             type: 'selectNode',
             nodeId,
