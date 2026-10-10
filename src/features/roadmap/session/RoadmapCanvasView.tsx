@@ -13,7 +13,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, Eye, History, X } from 'lucide-react';
+import { CircleAlert, CircleHelp, Eye, History, X } from 'lucide-react';
 import { versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -57,6 +57,10 @@ import { Badge } from '@/shared/ui/badge';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
+import {
+  TUTORIAL_TRIGGER_ATTRIBUTE,
+  TutorialClosingPopover,
+} from '@/shared/client/tutorial/tutorial';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
 import {
   nodeTypeDeletionConfirmation,
@@ -407,23 +411,25 @@ function useRoadmapCanvasController({ input }: Props) {
     requestAnimationFrame(() => focusReturn?.());
   }, [teacherPreviewFocusReturn]);
 
+  const suggestedResource = input.practice?.suggestedResource;
   const openResourceComposer = useCallback(
     (nodeId: string) => {
       if (!canEditRoadmap || isCanvasPreview) return;
       void guardEditorDraft({ kind: 'open-resource', nodeId }).then((proceed) => {
         if (!proceed) return;
+        const suggested = suggestedResource?.();
         dispatchCanvas({
           type: 'openResourceComposer',
           command: {
             id: crypto.randomUUID(),
             kind: 'open-resource',
             nodeId,
-            mode: 'file',
+            ...(suggested ? { mode: 'link', value: suggested } : { mode: 'file' }),
           },
         });
       });
     },
-    [canEditRoadmap, guardEditorDraft, isCanvasPreview],
+    [canEditRoadmap, guardEditorDraft, isCanvasPreview, suggestedResource],
   );
 
   useEffect(() => {
@@ -465,8 +471,9 @@ function useRoadmapCanvasController({ input }: Props) {
     setDismissedInvalidTargetId(invalidTargetId);
     setSyncedSelectionNotice(null);
   }, [invalidTargetId]);
+  const acknowledgesRoadmap = fetchesRoadmapNotices(input);
   useEffect(() => {
-    if (!input.notificationsEnabled || !roadmap || isCanvasPreview) return;
+    if (!acknowledgesRoadmap || !roadmap || isCanvasPreview) return;
     const roadmapId = roadmap.roadmap.id;
     if (acknowledgedRoadmapRef.current === roadmapId) return;
     acknowledgedRoadmapRef.current = roadmapId;
@@ -475,7 +482,7 @@ function useRoadmapCanvasController({ input }: Props) {
   }, [
     acknowledge,
     accessibleNodeIds,
-    input.notificationsEnabled,
+    acknowledgesRoadmap,
     input.roadmapEntryKey,
     isCanvasPreview,
     roadmap,
@@ -759,6 +766,19 @@ function useRoadmapCanvasController({ input }: Props) {
   };
 }
 
+/**
+ * Real Roadmap notices are fetched and acknowledged only outside the Practice roadmap,
+ * which belongs to no Course offering and only shows its fixed change marks.
+ */
+function fetchesRoadmapNotices(input: RoadmapCanvasSessionInput) {
+  return Boolean(input.notificationsEnabled) && !input.practice;
+}
+
+/** Node change marks show the server's counts, or the Practice roadmap's fixed ones. */
+function showsNodeChangeMarks(input: RoadmapCanvasSessionInput) {
+  return fetchesRoadmapNotices(input) || Boolean(input.practice);
+}
+
 export function RoadmapCanvasView({ input }: Props) {
   const model = useRoadmapCanvasController({ input });
   const {
@@ -836,7 +856,8 @@ export function RoadmapCanvasView({ input }: Props) {
           <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
             openedNodeId={isSidePanelOpen ? selectedNodeId : null}
-            enabled={Boolean(input.notificationsEnabled) && !model.isCanvasPreview}
+            enabled={fetchesRoadmapNotices(input) && !model.isCanvasPreview}
+            simulatedCounts={model.isCanvasPreview ? undefined : input.practice?.nodeChangeCounts}
           >
             <RoadmapCanvasGraph
               model={model}
@@ -1143,12 +1164,13 @@ function RoadmapCanvasGraph({
   return (
     <RoadmapGraph
       projection={graphProjection}
-      notificationsEnabled={Boolean(input.notificationsEnabled)}
+      notificationsEnabled={showsNodeChangeMarks(input)}
       onSelectNode={(nodeId) => {
         const node = displayedRoadmap.nodes.find((candidate) => candidate.id === nodeId);
         if (isStudentExperience && isStudentBlockedNode(node)) return;
         const select = () => {
           dismissSelectionNotice();
+          input.practice?.onAction?.({ type: 'selectNode', nodeId });
           dispatchCanvas({
             type: 'selectNode',
             nodeId,
@@ -1166,6 +1188,7 @@ function RoadmapCanvasGraph({
       selectedNodeId={selectedNodeId}
       focusReturnRequest={focusReturnRequest}
       onClearSelectedNode={closeSelectedNode}
+      onFitView={() => input.practice?.onAction?.({ type: 'fitView' })}
       onViewportChange={canvasPreviewWorkflow.onViewportChange}
       viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
       confirmedAutomaticLayout={confirmedAutomaticLayout}
@@ -1173,7 +1196,7 @@ function RoadmapCanvasGraph({
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
               <>
-                {canPreviewCanvas ? (
+                {canPreviewCanvas && !input.practice ? (
                   <Link
                     className={cn(buttonVariants({ variant: 'outline' }))}
                     href={versionHistoryUrl(courseCode)}
@@ -1230,11 +1253,56 @@ function RoadmapCanvasGraph({
             onRequestReset={() =>
               requestExclusiveConfirmation('canvas-preview', canvasPreviewWorkflow.requestReset)
             }
-            onExit={canvasPreviewWorkflow.exit}
+            onExit={() => {
+              if (!canvasPreviewWorkflow.isActive) return;
+              canvasPreviewWorkflow.exit();
+              input.practice?.onAction?.({ type: 'exitCanvasPreview' });
+            }}
           />
         ) : null,
+        topRight:
+          isCanvasPreview || input.practice ? null : (
+            <RoadmapTutorialLink
+              experience={input.experience.kind}
+              origin={roadmapPath(input.courseOffering.identifier)}
+            />
+          ),
       }}
     />
+  );
+}
+
+function roadmapPath({
+  courseCode,
+  year,
+  semester,
+}: RoadmapCanvasSessionInput['courseOffering']['identifier']) {
+  return `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}`;
+}
+
+/** The question-mark icon that opens the Roadmap tutorial of this experience. */
+function RoadmapTutorialLink({
+  experience,
+  origin,
+}: {
+  experience: RoadmapCanvasSessionInput['experience']['kind'];
+  origin: string;
+}) {
+  return (
+    <>
+      <Link
+        {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
+        aria-label="Abrir tutorial"
+        title="Abrir tutorial"
+        className={buttonVariants({ variant: 'outline', size: 'icon' })}
+        href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
+        // Rendering the Practice route records tutorial openings.
+        prefetch={false}
+      >
+        <CircleHelp />
+      </Link>
+      <TutorialClosingPopover />
+    </>
   );
 }
 

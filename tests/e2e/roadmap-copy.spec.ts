@@ -345,7 +345,7 @@ copyScenario(
     await dialog.getByRole('radio', { name: new RegExp(edition) }).check();
     await dialog.getByRole('button', { name: 'Crear roadmap' }).click();
     await expect(page).toHaveURL(
-      new RegExp(`/courses/${next.courseCode}/${next.year}/${next.semester}$`),
+      new RegExp(`/courses/${next.courseCode}/${next.year}/${next.semester}\\?created=1$`),
     );
     await expect(page.locator('.react-flow__node')).toHaveCount(source.nodes.length);
   },
@@ -459,6 +459,8 @@ test('without closed versions the dialog only offers an empty Roadmap', async ({
   await expect(dialog.getByRole('radio', { name: 'Roadmap vacío' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Crear roadmap' }).click();
   await expect(page).toHaveURL(
-    new RegExp(`/courses/${offering.courseCode}/${offering.year}/${offering.semester}$`),
+    new RegExp(
+      `/courses/${offering.courseCode}/${offering.year}/${offering.semester}\\?created=1$`,
+    ),
   );
 });

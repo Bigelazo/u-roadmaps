@@ -9,3 +9,5 @@ export type { CourseOfferingIdentifierParams } from '@/features/roadmap/domain/c
 export { RoadmapVersionHistory } from '@/features/roadmap/ui/RoadmapVersionHistory';
 export { RoadmapVersionViewer } from '@/features/roadmap/ui/RoadmapVersionViewer';
 export { CreateRoadmapDialog } from '@/features/roadmap/ui/CreateRoadmapDialog';
+export { PracticeRoadmapCanvas } from '@/features/roadmap/practice/PracticeRoadmapCanvas';
+export { PostCreationInvitationDialog } from '@/features/roadmap/ui/PostCreationInvitationDialog';

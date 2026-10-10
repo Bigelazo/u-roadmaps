@@ -60,3 +60,16 @@ export type {
   RoadmapChanges,
   RoadmapChangeFact,
 } from './application/change-port';
+export { readPracticeRoadmapCalendar } from './application/practice';
+export {
+  claimTutorialInvitation,
+  readPostCreationInvitation,
+  recordPracticeRoadmapOpened,
+} from './application/tutorial-invitation';
+export { isFirstVisitInvitationDue } from './application/first-visit-invitation';
+export {
+  isPracticeExperience,
+  isTutorialInvitation,
+  type PracticeExperience,
+  type TutorialInvitation,
+} from './types';

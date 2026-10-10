@@ -131,6 +131,14 @@ function nextSerial(workerIndex: number) {
   return { token: `w${worker}n${number}`, rut: `3${worker}${number}` };
 }
 
+/**
+ * User rows as stored. Test Users start with the first-visit tutorial invitation already
+ * shown, so it does not cover other specs' Academic overview; specs about it reset it.
+ */
+function userRows(users: readonly E2EUser[]) {
+  return users.map((user) => ({ ...user, tutorialInvitationShownAt: new Date() }));
+}
+
 function newUser(key: CourseUserKey, workerIndex: number): E2EUser {
   const { token, rut } = nextSerial(workerIndex);
   return {
@@ -278,7 +286,7 @@ export const test = base.extend<{
     );
     ownedTestData.userIds.push(...Object.values(users).map(({ id }) => id));
     ownedTestData.courseCodes.push(offering.courseCode);
-    await sql(insert('User', Object.values(users)) + script + insert('Completion', completions));
+    await sql(insert('User', userRows(Object.values(users))) + script + insert('Completion', completions));
     const hidden = template.nodes.find(({ isVisible }) => !isVisible)!;
     await provide({
       ...offering,
@@ -440,7 +448,7 @@ export const test = base.extend<{
     await provide(async () => {
       const user = newUser('studentWithoutProgress', testInfo.workerIndex);
       ownedTestData.userIds.push(user.id);
-      await sql(insert('User', [user]));
+      await sql(insert('User', userRows([user])));
       return user;
     });
   },

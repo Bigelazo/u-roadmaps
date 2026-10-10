@@ -1,0 +1,114 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
+import { LogOut } from 'lucide-react';
+import { buttonVariants } from '@/shared/ui/button';
+import { RoadmapCanvasSession } from '@/features/roadmap/session/RoadmapCanvasSession';
+import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
+import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
+import {
+  PRACTICE_COURSE_CODE,
+  PRACTICE_ROADMAP_TITLE,
+  practiceExitHref,
+  practiceNodeChangeCounts,
+  practiceRoadmap,
+  practiceStudentProgress,
+  practiceSuggestedResource,
+  type PracticeAcademicTerm,
+  type PracticeExperience,
+} from '@/features/roadmap/practice/practice-roadmap';
+import { studentTutorialSteps } from '@/features/roadmap/practice/student-tutorial';
+import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
+import { reportingPracticeActions } from '@/features/roadmap/practice/practice-actions';
+import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
+import {
+  createTutorialActions,
+  TUTORIAL_EXIT_ATTRIBUTE,
+  markTutorialClosingPopover,
+  RoadmapTutorial,
+} from '@/shared/client/tutorial/tutorial';
+import { useRecordTutorialOpening } from '@/shared/client/tutorial/tutorial-records';
+
+/**
+ * The real Roadmap canvas over a fresh in-memory copy of the Practice roadmap.
+ * Nothing done here reaches the server, and every mount starts over.
+ */
+export function PracticeRoadmapCanvas({
+  experience,
+  term,
+  today,
+  origin,
+}: {
+  experience: PracticeExperience;
+  term: PracticeAcademicTerm;
+  today: string;
+  origin: string | null;
+}) {
+  // Prefills the Resource form only during the tutorial's "Agrega un recurso" step.
+  const [resourceSuggestion] = useState(() => {
+    let isSuggesting = false;
+    return {
+      set: (value: boolean) => {
+        isSuggesting = value;
+      },
+      get: () => (isSuggesting ? practiceSuggestedResource : undefined),
+    };
+  });
+  useRecordTutorialOpening(experience);
+  const [actions] = useState(() => createTutorialActions<PracticeCanvasAction>());
+  const [teachingSteps] = useState(() =>
+    experience === 'teaching' ? teachingTutorialSteps(resourceSuggestion) : [],
+  );
+  const [persistence] = useState(() =>
+    reportingPracticeActions(
+      createInMemoryRoadmapSessionPersistence(
+        practiceRoadmap(term, today),
+        experience === 'student' ? { studentProgress: practiceStudentProgress } : {},
+      ),
+      actions.report,
+    ),
+  );
+  return (
+    // Below the global navigation, the bar takes the height its content needs, wrapped
+    // or not, and the canvas fills the rest. The column stays unpositioned: a stacking
+    // context here would keep the "Salir" bar below the tutorial overlay.
+    <div data-practice-roadmap className="flex flex-col lg:h-[calc(100dvh-4rem)]">
+      <nav
+        aria-label="Mapa de práctica"
+        {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
+        className="sticky top-16 z-20 flex shrink-0 flex-wrap items-center justify-end gap-2 border-b bg-background px-4 py-2 sm:px-6"
+      >
+        <Link
+          className={buttonVariants({ variant: 'outline' })}
+          href={practiceExitHref(origin)}
+          onClick={markTutorialClosingPopover}
+        >
+          <LogOut data-icon="inline-start" />
+          Salir
+        </Link>
+      </nav>
+      <main className="min-h-0 flex-1 bg-cloud">
+        <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+          <RoadmapCanvasSession
+            courseOffering={{
+              identifier: { courseCode: PRACTICE_COURSE_CODE, ...term },
+              title: PRACTICE_ROADMAP_TITLE,
+            }}
+            experience={{ kind: experience, term: 'current' }}
+            practice={{
+              nodeChangeCounts: experience === 'student' ? practiceNodeChangeCounts : {},
+              onAction: actions.report,
+              suggestedResource: resourceSuggestion.get,
+            }}
+          />
+        </RoadmapCanvasSessionPersistenceProvider>
+      </main>
+      {experience === 'student' ? (
+        <RoadmapTutorial steps={studentTutorialSteps} />
+      ) : (
+        <RoadmapTutorial steps={teachingSteps} actions={actions} />
+      )}
+    </div>
+  );
+}

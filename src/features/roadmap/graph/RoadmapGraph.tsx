@@ -220,10 +220,12 @@ function RoadmapGraphToolbar({
   showAutoLayout,
   canAutoLayout,
   onAutoLayout,
+  onFitView,
   bottomLeftActions,
   bottomRightActions,
   nodes,
 }: {
+  onFitView?: () => void;
   containerRef: RefObject<HTMLDivElement | null>;
   layoutDirection: RoadmapLayoutDirection;
   showAutoLayout: boolean;
@@ -281,7 +283,7 @@ function RoadmapGraphToolbar({
             variant="outline"
             size="icon"
             className="self-start sm:self-auto"
-            onClick={() => void fitView(roadmapFitViewOptions)}
+            onClick={() => void fitView(roadmapFitViewOptions).then(() => onFitView?.())}
           >
             <Maximize aria-hidden="true" />
           </Button>
@@ -393,11 +395,14 @@ export type RoadmapGraphProps = {
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
   confirmedAutomaticLayout?: { token: string; direction: RoadmapLayoutDirection } | null;
+  /** Called once "Centrar mapa" has fitted the view. */
+  onFitView?: () => void;
 };
 
 export type RoadmapGraphOverlaySlots = {
   topLeft?: ReactNode;
   topCenter?: ReactNode;
+  topRight?: ReactNode;
   bottomRight?: ReactNode;
 };
 
@@ -415,6 +420,11 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
       {slots?.topCenter ? (
         <Panel position="top-center" className="mt-3! w-[calc(100%-2rem)] max-w-xl sm:w-auto">
           {slots.topCenter}
+        </Panel>
+      ) : null}
+      {slots?.topRight ? (
+        <Panel position="top-right" className="m-4! sm:m-6!">
+          {slots.topRight}
         </Panel>
       ) : null}
       {slots?.bottomRight ? (
@@ -440,6 +450,7 @@ function useRoadmapGraphController({
   bottomRightActions,
   overlaySlots,
   onViewportChange,
+  onFitView,
   viewportRestoration,
   confirmedAutomaticLayout,
 }: RoadmapGraphProps) {
@@ -670,6 +681,7 @@ function useRoadmapGraphController({
     onClearSelectedNode,
     onSelectNode,
     onViewportChange,
+    onFitView,
     overlaySlots,
     viewportRestoration,
     bottomLeftActions,
@@ -862,6 +874,7 @@ function RoadmapGraphContents({ model }: { model: ReturnType<typeof useRoadmapGr
         showAutoLayout={canEdit}
         canAutoLayout={canEdit && flow.nodes.length >= 2}
         onAutoLayout={proposeAutoLayout}
+        onFitView={model.onFitView}
         bottomLeftActions={bottomLeftActions}
         bottomRightActions={bottomRightActions}
         nodes={flow.nodes}
