@@ -26,8 +26,8 @@ export async function roadmapChangeTransaction<T>(
   const serializable = options?.serializable;
   const result = serializable
     ? await serializableTransaction(attempt, {
-        timeout: options.timeout,
         ...(serializable === true ? {} : serializable),
+        timeout: options.timeout,
       })
     : await prisma.$transaction(
         attempt,

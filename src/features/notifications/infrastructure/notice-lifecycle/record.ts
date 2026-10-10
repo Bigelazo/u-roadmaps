@@ -67,10 +67,9 @@ export async function recordNoticeTargets(
     const atEdit = descriptor.currentAtEdit?.(fact);
     if (atEdit) {
       // Only knowers have a Known value to hold the value at edit time.
-      if (atEdit.recipientIds.some((recipientId) => !knowers.includes(recipientId)))
-        throw new Error(
-          `${descriptor.noticeTarget}: currentAtEdit names a recipient who is no knower.`,
-        );
+      const knowerIds = new Set(knowers);
+      if (atEdit.recipientIds.some((recipientId) => !knowerIds.has(recipientId)))
+        throw new Error(`${descriptor.noticeTarget}: currentAtEdit names a non-knower.`);
       await recordKnowersValueAtEdit(
         transaction,
         changes.roadmapId,
