@@ -1,6 +1,7 @@
 import 'server-only';
 import { ABSENT, nodeCreationRef } from '../../application/absorption';
 import type { Prisma } from '@/shared/server/db';
+import { NOTICE_TARGET } from '../../application/notice-targets/kinds';
 import {
   targetContext,
   type NoticeTargetRef,
@@ -33,19 +34,30 @@ export async function recordKnownValues(
   });
 }
 
-/** The target's value at edit time for recipients that have a Known value (see `currentAtEdit`). */
+/**
+ * The target's value at edit time (see `currentAtEdit`); a recipient without a Known value
+ * gets the change's `knownValue` as baseline. An upsert, because under SERIALIZABLE it
+ * takes no predicate (SIRead) locks: an UPDATE per recipient would read each row, and
+ * past 32 rows PostgreSQL promotes those locks to the whole table, which then conflicts
+ * with Known value writes of edits on every other Roadmap (#220).
+ */
 export async function recordCurrentValues(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   target: NoticeTargetRef,
   recipientIds: readonly string[],
+  knownValue: string,
   currentValue: string,
 ) {
   if (!recipientIds.length) return;
-  await transaction.noticeKnownValue.updateMany({
-    where: { roadmapId, targetKey: target.targetKey, recipientId: { in: [...recipientIds] } },
-    data: { currentValue },
-  });
+  await transaction.$executeRaw`
+    INSERT INTO "NoticeKnownValue"
+      ("recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue", "currentValue")
+    SELECT recipient, ${roadmapId}::uuid, ${target.targetKey}, ${target.noticeTarget},
+      ${target.nodeId ?? null}::uuid, ${knownValue}, ${currentValue}
+    FROM unnest(${[...recipientIds]}::uuid[]) AS recipient
+    ON CONFLICT ("recipientId", "roadmapId", "targetKey")
+    DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
 }
 
 /** The recipient's Known value and its context, recording `fallback` when the target has no baseline yet. */
@@ -88,20 +100,18 @@ export async function advanceKnownValue(
   knownValue: string,
   context: TargetContext = {},
 ) {
-  const where = { ...identity, targetKey: target.targetKey };
-  const data = { knownValue, context: context as Prisma.InputJsonObject };
-  const { count } = await transaction.noticeKnownValue.updateMany({
-    where: { ...where, knownValue: previousValue },
-    data,
-  });
-  if (count) return true;
-  const known = await transaction.noticeKnownValue.findUnique({
-    where: { recipientId_roadmapId_targetKey: where },
-    select: { knownValue: true },
-  });
-  if (known) return false;
-  await setKnownValue(transaction, identity, target, knownValue, context);
-  return true;
+  // One upsert, not UPDATE-then-SELECT: it takes no predicate (SIRead) lock (#220).
+  const advanced = await transaction.$queryRaw<unknown[]>`
+    INSERT INTO "NoticeKnownValue"
+      ("recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue", "context")
+    VALUES (${identity.recipientId}::uuid, ${identity.roadmapId}::uuid, ${target.targetKey},
+      ${target.noticeTarget}, ${target.nodeId ?? null}::uuid, ${knownValue},
+      ${JSON.stringify(context)}::jsonb)
+    ON CONFLICT ("recipientId", "roadmapId", "targetKey")
+    DO UPDATE SET "knownValue" = EXCLUDED."knownValue", "context" = EXCLUDED."context"
+    WHERE "NoticeKnownValue"."knownValue" = ${previousValue}
+    RETURNING 1`;
+  return advanced.length > 0;
 }
 
 /** Recognition: the recipient now knows `knownValue`. */
@@ -133,6 +143,10 @@ export async function setKnownValue(
  * Returns the deletion's recipients who knew the Node (`aware`) and those who did not
  * (`unaware`): a creation notice delivered concurrently may be invisible to this
  * transaction's snapshot, so delivery withdraws it again for them.
+ *
+ * Runs in the serializable roadmap transaction, so each statement deletes exactly the
+ * rows its index range reads: PostgreSQL then drops the per-row predicate locks instead
+ * of promoting them, past 32 recipients, to a lock on the whole table (#220).
  */
 export async function forgetDeletedNode(
   transaction: Prisma.TransactionClient,
@@ -141,32 +155,29 @@ export async function forgetDeletedNode(
   deletionRecipientIds: readonly string[],
 ): Promise<{ aware: string[]; unaware: string[] }> {
   const creation = nodeCreationRef(nodeId).targetKey;
+  const forgotten = await transaction.$queryRaw<
+    { recipientId: string; targetKey: string; knownValue: string }[]
+  >`
+    DELETE FROM "NoticeKnownValue" WHERE "roadmapId" = ${roadmapId}::uuid AND "nodeId" = ${nodeId}::uuid
+    RETURNING "recipientId"::text, "targetKey", "knownValue"`;
+  // Dependency pairs (`dependency:<source>:<target>`) carry no nodeId.
+  await transaction.$executeRaw`
+    DELETE FROM "NoticeKnownValue"
+    WHERE "roadmapId" = ${roadmapId}::uuid AND "noticeTarget" = ${NOTICE_TARGET.dependency}
+      AND split_part("targetKey", ':', 2) = ${nodeId}`;
+  await transaction.$executeRaw`
+    DELETE FROM "NoticeKnownValue"
+    WHERE "roadmapId" = ${roadmapId}::uuid AND "noticeTarget" = ${NOTICE_TARGET.dependency}
+      AND split_part("targetKey", ':', 3) = ${nodeId}`;
   const unaware = new Set(
-    (
-      await transaction.noticeKnownValue.findMany({
-        where: { roadmapId, targetKey: creation, knownValue: ABSENT },
-        select: { recipientId: true },
-      })
-    ).map(({ recipientId }) => recipientId),
+    forgotten
+      .filter(({ targetKey, knownValue }) => targetKey === creation && knownValue === ABSENT)
+      .map(({ recipientId }) => recipientId),
   );
-  await transaction.roadmapNotice.deleteMany({
-    where: {
-      roadmapId,
-      targetKey: creation,
-      acknowledgedAt: null,
-      recipientId: { in: [...unaware] },
-    },
-  });
-  await transaction.noticeKnownValue.deleteMany({
-    where: {
-      roadmapId,
-      OR: [
-        { nodeId },
-        { targetKey: { startsWith: `dependency:${nodeId}:` } },
-        { targetKey: { startsWith: 'dependency:', endsWith: `:${nodeId}` } },
-      ],
-    },
-  });
+  await transaction.$executeRaw`
+    DELETE FROM "RoadmapNotice"
+    WHERE "roadmapId" = ${roadmapId}::uuid AND "targetKey" = ${creation}
+      AND "acknowledgedAt" IS NULL AND "recipientId"::text = ANY(${[...unaware]}::text[])`;
   return {
     aware: deletionRecipientIds.filter((recipientId) => !unaware.has(recipientId)),
     unaware: [...unaware],

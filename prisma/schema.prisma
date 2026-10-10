@@ -320,7 +320,6 @@ model NoticeKnownValue {
 
   @@id([recipientId, roadmapId, targetKey])
   @@index([roadmapId, nodeId])
-  @@index([roadmapId, targetKey])
 }
 
 enum InstitutionalCoursePosition {

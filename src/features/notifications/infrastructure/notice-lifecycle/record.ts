@@ -70,6 +70,7 @@ export async function recordNoticeTargets(
         changes.roadmapId,
         target,
         atEdit.recipientIds,
+        previousValue,
         atEdit.value,
       );
     const audience = await descriptor.audience(fact, changes, roadmap);
