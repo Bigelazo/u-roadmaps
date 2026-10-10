@@ -12,10 +12,20 @@ export async function preferIndexScans(transaction: Prisma.TransactionClient) {
   await transaction.$executeRaw`SET LOCAL enable_seqscan = off`;
 }
 
-/** A serialization failure, as Prisma or (at COMMIT) the pg adapter reports it. */
-export function isSerializationFailure(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) return error.code === 'P2034';
-  // The pg adapter can expose serialization failures directly when COMMIT fails.
+/**
+ * A serialization failure, as Prisma reports it (P2034), as the pg adapter reports it
+ * at COMMIT, or wrapped in a raw query's failure (P2010).
+ */
+export function isSerializationFailure(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError)
+    return (
+      error.code === 'P2034' ||
+      (error.code === 'P2010' && isAdapterWriteConflict(error.meta?.driverAdapterError))
+    );
+  return isAdapterWriteConflict(error);
+}
+
+function isAdapterWriteConflict(error: unknown) {
   return (
     error instanceof Error &&
     error.name === 'DriverAdapterError' &&
