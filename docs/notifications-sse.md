@@ -93,5 +93,7 @@ complementary coverage for reconciliation and stale responses.
 Notice grouping has no real-time deadline. E2E assertions wait for persisted
 state or authorized HTTP projections, rather than sleeping for grouping windows.
 Unit transport tests use simulated time for debounce/retry behavior. Current
-suite results and configured browser scope belong in `docs/agents/testing.md`;
-historical runs are not evidence for the current implementation.
+configured browser scope belongs in `playwright.config.ts`, operational guidance
+in `docs/agents/testing.md`, and dated suite results in
+`docs/testing-validation-history.md`. Historical runs are not evidence for the
+current implementation.

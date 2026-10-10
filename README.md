@@ -179,7 +179,7 @@ Los avisos no tienen configuración externa. Véase [operación y verificación]
 | `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                           |
 | `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.                      |
 | `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                             |
-| `pnpm test`                                | Ejecuta tipos, Vitest y E2E en secuencia; requiere configurar el entorno de pruebas.                           |
+| `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas.          |
 | `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                            |
 | `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                               |
 | `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                               |
@@ -199,7 +199,7 @@ Sin `--dry-run`, guarda las fechas y sus fuentes en `AcademicTerm`. El script ut
 
 ## Pruebas
 
-La suite de Vitest contiene pruebas de dominio, aplicación, componentes, integraciones, adaptadores HTTP y límites de arquitectura. Algunas pruebas importan el cliente de base de datos y necesitan `DATABASE_URL`. Carga el entorno y retira el origen fijo de NextAuth para los casos que comprueban distintos orígenes:
+La suite de Vitest contiene pruebas de dominio, aplicación, componentes, integraciones, adaptadores HTTP y límites de arquitectura. Algunas pruebas importan el cliente de base de datos y necesitan `DATABASE_URL`; las operaciones del Roadmap también usan PostgreSQL real mediante `NOTIFICATIONS_DATABASE_URL`. La preparación y el aislamiento de ambas suites están en la [guía de pruebas](docs/agents/testing.md). Carga el entorno y retira el origen fijo de NextAuth para los casos que comprueban distintos orígenes:
 
 ```bash
 pnpm exec dotenv -e .env -- env -u NEXTAUTH_URL pnpm test:unit
@@ -215,13 +215,13 @@ CREATE DATABASE roadmap_e2e_db OWNER roadmap_e2e_user;
 Configura `E2E_DATABASE_URL` en `.env`, instala los navegadores y ejecuta:
 
 ```bash
-pnpm exec playwright install
+pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-Playwright prepara los fixtures y ejecuta un build de producción en `localhost:3200`, contra `roadmap_e2e_db`, con `.next-e2e` y `uploads-e2e` separados del desarrollo. Chromium y Firefox usan un worker provisional; la paralelización se abordará en el [ADR-0013](docs/adr/0013-enable-parallel-e2e-tests.md). Cada invocación administra su servidor y finaliza sin abrir el reporte HTML. Ver [instrucciones y resultados](docs/agents/testing.md).
+Playwright prepara los fixtures y ejecuta un build de producción con recursos separados del desarrollo. Los navegadores y workers vigentes se definen en [playwright.config.ts](playwright.config.ts). Cada invocación administra su servidor y finaliza sin abrir el reporte HTML. Ver la [guía de pruebas](docs/agents/testing.md) y el [historial de validación](docs/testing-validation-history.md).
 
-La suite ordinaria verifica SSE propio y resúmenes con su ventana real de 60 segundos, sin activación Cloud ni señales inyectadas como sustituto del transporte.
+La suite ordinaria verifica SSE propio y resúmenes mediante entrega inmediata, sin esperas por una ventana de agrupación, activación Cloud ni señales inyectadas como sustituto del transporte.
 
 ## Despliegue
 
@@ -286,7 +286,7 @@ El contrato de notificaciones propias está en [#152](https://github.com/Bigelaz
 
 ## Documentación
 
-- [Modelo de dominio y vocabulario](CONTEXT.md).
+- [Modelo de dominio y vocabulario](GLOSSARY.md).
 - [Decisiones de arquitectura](docs/adr/).
 - [Criterios visuales](DESIGN.md).
 - [Operación de notificaciones propias](docs/notifications-operations.md).
