@@ -20,7 +20,7 @@ test.for(DEPENDENCY_ENDS)(
       await transaction.$executeRaw`SET LOCAL enable_seqscan = off`;
       const rows = await transaction.$queryRaw<{ 'QUERY PLAN': string }[]>`
         EXPLAIN SELECT 1 FROM "NoticeKnownValue"
-        WHERE "roadmapId" = ${roadmapId}::uuid AND ${dependencyIndexPredicate}
+        WHERE "roadmapId" = ${roadmapId}::uuid AND ${dependencyIndexPredicate()}
           AND ${dependencyKeyNode(end)} = ${end === 'source' ? source : target}`;
       return rows.map((row) => row['QUERY PLAN']).join('\n');
     });

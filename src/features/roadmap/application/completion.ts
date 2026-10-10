@@ -217,19 +217,24 @@ async function completeSimulatedNodeUnsafe({ userId, identifier, nodeId }: Compl
         nodeId,
         completedNodeIds,
       });
-      return transaction.simulatedCompletion.upsert({
+      // ON CONFLICT DO NOTHING, not an upsert: when a concurrent request inserts the same
+      // simulated Completion first, an upsert fails with a unique violation (P2002, a 409),
+      // while this raises a serialization failure that `serializableTransaction` retries.
+      await transaction.simulatedCompletion.createMany({
+        data: {
+          participationId: participation.id,
+          courseOfferingId: courseOffering.id,
+          roadmapId: roadmap.id,
+          roadmapNodeId: nodeId,
+        },
+        skipDuplicates: true,
+      });
+      return transaction.simulatedCompletion.findUniqueOrThrow({
         where: {
           participationId_roadmapNodeId: {
             participationId: participation.id,
             roadmapNodeId: nodeId,
           },
-        },
-        update: {},
-        create: {
-          participationId: participation.id,
-          courseOfferingId: courseOffering.id,
-          roadmapId: roadmap.id,
-          roadmapNodeId: nodeId,
         },
       });
     },

@@ -34,8 +34,10 @@ export async function recordKnownValues(
   });
 }
 
-const KNOWN_VALUE_COLUMNS = Prisma.sql`"recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue"`;
-const ON_KNOWN_VALUE_CONFLICT = Prisma.sql`ON CONFLICT ("recipientId", "roadmapId", "targetKey")`;
+const knownValueColumns = () =>
+  Prisma.sql`"recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue"`;
+const onKnownValueConflict = () =>
+  Prisma.sql`ON CONFLICT ("recipientId", "roadmapId", "targetKey")`;
 
 /**
  * Store the target's value at edit time (see `currentAtEdit`) on the knowers' Known
@@ -55,11 +57,11 @@ export async function recordKnowersValueAtEdit(
 ) {
   if (!knowerIds.length) return;
   await transaction.$executeRaw`
-    INSERT INTO "NoticeKnownValue" (${KNOWN_VALUE_COLUMNS}, "currentValue")
+    INSERT INTO "NoticeKnownValue" (${knownValueColumns()}, "currentValue")
     SELECT recipient, ${roadmapId}::uuid, ${target.targetKey}, ${target.noticeTarget},
       ${target.nodeId ?? null}::uuid, ${knownValue}, ${currentValue}
     FROM unnest(${[...knowerIds]}::uuid[]) AS recipient
-    ${ON_KNOWN_VALUE_CONFLICT} DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
+    ${onKnownValueConflict()} DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
 }
 
 /** The recipient's Known value and its context, recording `fallback` when the target has no baseline yet. */
@@ -104,11 +106,11 @@ export async function advanceKnownValue(
 ) {
   // One upsert, not UPDATE-then-SELECT: it takes no predicate (SIRead) lock (#220).
   const advanced = await transaction.$queryRaw<unknown[]>`
-    INSERT INTO "NoticeKnownValue" (${KNOWN_VALUE_COLUMNS}, "context")
+    INSERT INTO "NoticeKnownValue" (${knownValueColumns()}, "context")
     VALUES (${identity.recipientId}::uuid, ${identity.roadmapId}::uuid, ${target.targetKey},
       ${target.noticeTarget}, ${target.nodeId ?? null}::uuid, ${knownValue},
       ${JSON.stringify(context)}::jsonb)
-    ${ON_KNOWN_VALUE_CONFLICT} DO UPDATE SET "knownValue" = EXCLUDED."knownValue", "context" = EXCLUDED."context"
+    ${onKnownValueConflict()} DO UPDATE SET "knownValue" = EXCLUDED."knownValue", "context" = EXCLUDED."context"
     WHERE "NoticeKnownValue"."knownValue" = ${previousValue}
     RETURNING 1`;
   return advanced.length > 0;
@@ -164,7 +166,7 @@ export async function forgetDeletedNode(
   for (const end of DEPENDENCY_ENDS)
     await transaction.$executeRaw`
       DELETE FROM "NoticeKnownValue"
-      WHERE "roadmapId" = ${roadmapId}::uuid AND ${dependencyIndexPredicate}
+      WHERE "roadmapId" = ${roadmapId}::uuid AND ${dependencyIndexPredicate()}
         AND ${dependencyKeyNode(end)} = ${nodeId}`;
   const unaware = new Set(
     forgotten
@@ -196,6 +198,5 @@ export function dependencyKeyNode(end: (typeof DEPENDENCY_ENDS)[number]) {
   return Prisma.raw(`split_part("targetKey", ':', ${DEPENDENCY_KEY_PART[end]})`);
 }
 
-export const dependencyIndexPredicate = Prisma.raw(
-  `"noticeTarget" = '${NOTICE_TARGET.dependency}'`,
-);
+export const dependencyIndexPredicate = () =>
+  Prisma.raw(`"noticeTarget" = '${NOTICE_TARGET.dependency}'`);
