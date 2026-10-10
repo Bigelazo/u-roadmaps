@@ -1,6 +1,8 @@
+import { NOTICE_TARGET } from './notice-targets/kinds';
 import { nodeAccessChangeText } from '@/shared/node-access';
 import { isNoticeVisible } from './notice-visibility';
 import type { ChangeSummary } from '../contracts/change-summary';
+import { projectTargetNotice } from './notice-targets';
 
 type SummaryNotice = { data: unknown };
 type SummaryNode = { id: string; title: string; isVisible: boolean; nodeTypeId?: string };
@@ -16,14 +18,22 @@ export function changeSummary(
   const groups = new Map<string, { title: string; items: string[] }>();
   const general: string[] = [];
   for (const notice of notices) {
-    const data = notice.data as Record<string, unknown>;
-    const nodeId = typeof data.nodeId === 'string' ? data.nodeId : null;
+    const stored = notice.data as Record<string, unknown>;
+    const nodeId = typeof stored.nodeId === 'string' ? stored.nodeId : null;
     const node = nodeId ? currentNodes.get(nodeId) : undefined;
+    if (!isNoticeVisible(stored, nodes, accessible)) continue;
+    // Lifecycle notices share their read-time wording with the Inbox, naming Nodes by
+    // their current title (a deleted Node by the title it had).
+    const projected = projectTargetNotice(stored, node ? { nodeTitle: node.title } : {});
+    const data = (projected?.data ?? stored) as Record<string, unknown>;
     const kind = data.changeKind;
-    if (!isNoticeVisible(data, nodes, accessible)) continue;
     const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
     const items: string[] = [];
-    if (data.noticeTarget === 'node-access') {
+    if (projected) {
+      const item = projected.wording.summary ?? projected.wording.body;
+      if (projected.wording.summaryGroup === 'node') items.push(item);
+      else general.push(item);
+    } else if (data.noticeTarget === NOTICE_TARGET.nodeAccess) {
       items.push(
         nodeAccessChangeText(
           node?.title ?? String(data.nodeTitle),
@@ -34,24 +44,14 @@ export function changeSummary(
     } else
       switch (kind) {
         case 'node-updated':
-          if (data.noticeTarget === 'node-title')
-            items.push(`«${data.knownTitle}» pasó a llamarse «${data.currentTitle}».`);
-          else if (fields.includes('title')) items.push('Se actualizó el título.');
+          if (fields.includes('title')) items.push('Se actualizó el título.');
           if (fields.includes('description') && nodeId && accessible.has(nodeId))
             items.push('Se actualizó la descripción.');
           if (fields.includes('nodeType'))
-            general.push(
-              data.noticeTarget === 'node-type'
-                ? `«${node?.title ?? data.nodeTitle}» pasó de tipo «${data.knownTypeName}» a tipo «${data.currentTypeName}».`
-                : `Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`,
-            );
+            general.push(`Se actualizó el tipo del Nodo «${node?.title ?? data.nodeTitle}».`);
           break;
         case 'node-available':
-          items.push(
-            data.noticeTarget === 'node-creation'
-              ? `Nuevo Nodo «${node?.title ?? data.nodeTitle}»${data.nodeAccess === 'Bloqueado' ? ' (Bloqueado)' : ''}.`
-              : 'Nodo disponible.',
-          );
+          items.push('Nodo disponible.');
           break;
         case 'node-retired':
           items.push('Nodo retirado.');
@@ -71,15 +71,6 @@ export function changeSummary(
           break;
         case 'resource-removed':
           items.push(`Se eliminó el recurso «${data.resourceTitle}».`);
-          break;
-        case 'dependency-added':
-        case 'dependency-removed':
-          general.push(
-            `«${data.dependentNodeTitle}» ${kind === 'dependency-added' ? 'ahora requiere' : 'ya no requiere'} «${data.prerequisiteNodeTitle}».`,
-          );
-          break;
-        case 'classification-updated':
-          general.push(`El tipo «${data.previousTypeName}» ahora se llama «${data.nextTypeName}».`);
           break;
         case 'roadmap-available':
           general.push('Roadmap disponible.');

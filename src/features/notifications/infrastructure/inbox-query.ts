@@ -98,7 +98,7 @@ function visibleNotices(userId: string, filter: InboxFilter, scope: NoticeScope 
           EXISTS (SELECT 1 FROM nodes typed WHERE typed."nodeTypeId"::text = pending.data->>'nodeTypeId'
             AND typed."roadmapId" = pending."roadmapId" AND typed."isVisible")
         WHEN pending.data->>'noticeTarget' = 'node-access' OR pending.data->>'changeKind' = 'node-deleted' THEN TRUE
-        WHEN node.id IS NULL THEN TRUE
+        WHEN node.id IS NULL THEN pending.data->>'noticeTarget' IS DISTINCT FROM 'node-creation'
         WHEN NOT node."isVisible" THEN FALSE
         WHEN pending.data->>'noticeTarget' = 'node-description'
           OR pending.data->>'changeKind' IN ('resource-added', 'resource-updated', 'resource-removed')

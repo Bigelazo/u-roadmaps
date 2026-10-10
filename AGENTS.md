@@ -4,11 +4,11 @@
 
 ### Issue tracker
 
-GitHub issues on `Bigelazo/u-roadmaps`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub issues on `Bigelazo/u-roadmaps`, accessed via the `gh` CLI. Everything published there (issues, specs, tickets, comments, PRs) is written in English. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 
-Single-context layout — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context layout — one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ### Testing
 
@@ -17,6 +17,8 @@ Run E2E tests against the existing local PostgreSQL service. See `docs/agents/te
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+For Graphify setup or missing SQL extraction, see `docs/agents/graphify.md`.
 
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 

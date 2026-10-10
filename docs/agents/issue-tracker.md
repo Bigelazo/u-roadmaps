@@ -2,6 +2,10 @@
 
 Los issues y PRD de este repositorio viven como issues de GitHub. Usa la CLI `gh` para todas las operaciones.
 
+## Idioma
+
+Escribe en inglés todo lo que publiques en GitHub: títulos y cuerpos de issues, specs, tickets, comentarios y PR, aunque la conversación o los issues anteriores estén en español. Los agentes que implementan los issues trabajan mejor en inglés. Usa los términos del glosario en su forma inglesa (`GLOSSARY.md`).
+
 ## Convenciones
 
 - **Crear un issue**: `gh issue create --title "..." --body "..."`. Usa un heredoc para cuerpos de varias líneas.

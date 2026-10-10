@@ -515,15 +515,9 @@ async function createRoadmapUnsafe(
           (await transaction.courseOffering.create({
             data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
           }));
-        const [roadmap, recipients] = await Promise.all([
-          transaction.roadmap.create({
-            data: { courseOfferingId: materializedCourseOffering.id, creatorId: actor.id },
-          }),
-          transaction.participation.findMany({
-            where: { courseOfferingId: materializedCourseOffering.id, isActive: true },
-            select: { userId: true, user: { select: { name: true } } },
-          }),
-        ]);
+        const roadmap = await transaction.roadmap.create({
+          data: { courseOfferingId: materializedCourseOffering.id, creatorId: actor.id },
+        });
         if (source) await copyFrozenVersion(transaction, identifier, source, roadmap.id, files);
         await report({
           actorId: actor.id,
@@ -538,7 +532,6 @@ async function createRoadmapUnsafe(
                 courseName: course.name,
                 actorName: actor.name ?? actor.id,
                 occurredAt: new Date(),
-                recipients: recipients.map(({ userId, user }) => ({ userId, name: user.name })),
               },
             },
           ],

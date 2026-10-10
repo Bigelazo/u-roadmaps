@@ -1,9 +1,76 @@
 import 'server-only';
-import { NODE_ACCESS_STATES, nodeAccessState } from '@/shared/node-access';
 import type { Prisma } from '@/shared/server/db';
-import { projectAccessSnapshot, type AccessSnapshot } from './node-change-notifications';
+import { studentNodeAccessById } from '@/features/roadmap/domain/access';
 
-export async function captureAccessSnapshot(
+export type AccessSnapshot = Readonly<{
+  nodes: readonly {
+    id: string;
+    title: string;
+    nodeType: { name: string };
+    isVisible: boolean;
+    isTeacherBlocked: boolean;
+  }[];
+  accessibleByUser: ReadonlyMap<string, ReadonlySet<string>>;
+  participants: readonly { userId: string }[];
+}>;
+
+type AccessSnapshotParticipant = Readonly<{
+  userId: string;
+  role: 'STUDENT' | 'TEACHER';
+  isActive: boolean;
+}>;
+
+export function projectAccessSnapshot({
+  nodes,
+  dependencies,
+  participants,
+  completions,
+}: {
+  nodes: AccessSnapshot['nodes'];
+  dependencies: readonly { sourceNodeId: string; targetNodeId: string }[];
+  participants: readonly AccessSnapshotParticipant[];
+  completions: readonly { userId: string; roadmapNodeId: string }[];
+}): AccessSnapshot {
+  const visibleNodes = nodes.filter((node) => node.isVisible);
+  const visibleNodeIds = new Set(visibleNodes.map(({ id }) => id));
+  const visibleDependencies = dependencies.filter(
+    ({ sourceNodeId, targetNodeId }) =>
+      visibleNodeIds.has(sourceNodeId) && visibleNodeIds.has(targetNodeId),
+  );
+  const completionIdsByUser = new Map<string, Set<string>>();
+  for (const completion of completions) {
+    const ids = completionIdsByUser.get(completion.userId) ?? new Set<string>();
+    ids.add(completion.roadmapNodeId);
+    completionIdsByUser.set(completion.userId, ids);
+  }
+
+  const accessibleByUser = new Map<string, ReadonlySet<string>>();
+  const activeParticipants = participants.filter(({ isActive }) => isActive);
+  for (const participant of activeParticipants) {
+    const accessible =
+      participant.role === 'TEACHER'
+        ? visibleNodes.filter(({ isTeacherBlocked }) => !isTeacherBlocked).map(({ id }) => id)
+        : [
+            ...studentNodeAccessById({
+              nodes: visibleNodes,
+              dependencies: visibleDependencies,
+              completedNodeIds: completionIdsByUser.get(participant.userId) ?? new Set(),
+            }),
+          ]
+            .filter(([, access]) => access.status === 'ACCESSIBLE')
+            .map(([id]) => id);
+    accessibleByUser.set(participant.userId, new Set(accessible));
+  }
+
+  return {
+    nodes,
+    accessibleByUser,
+    participants: activeParticipants.map(({ userId }) => ({ userId })),
+  };
+}
+
+/** Every active participant's Node access, read inside the editing transaction. */
+export async function readAccessSnapshot(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   recipientId?: string,
@@ -41,36 +108,5 @@ export async function captureAccessSnapshot(
         select: { userId: true, roadmapNodeId: true },
       })
     : [];
-  const snapshot = projectAccessSnapshot({ nodes, dependencies, participants, completions });
-  // The first capture records the pre-edit baseline; later captures advance only
-  // the current projection. Deferred effects always reconcile committed access.
-  for (const { userId } of snapshot.participants) {
-    for (const state of NODE_ACCESS_STATES) {
-      const ids = nodes
-        .filter(
-          (node) =>
-            nodeAccessState(
-              node.isVisible,
-              snapshot.accessibleByUser.get(userId)?.has(node.id) ?? false,
-            ) === state,
-        )
-        .map(({ id }) => id);
-      if (!ids.length) continue;
-      await transaction.nodeContentKnowledge.createMany({
-        data: ids.map((nodeId) => ({
-          recipientId: userId,
-          nodeId,
-          target: 'access',
-          knownValue: state,
-          currentValue: state,
-        })),
-        skipDuplicates: true,
-      });
-      await transaction.nodeContentKnowledge.updateMany({
-        where: { recipientId: userId, nodeId: { in: ids }, target: 'access' },
-        data: { currentValue: state },
-      });
-    }
-  }
-  return snapshot;
+  return projectAccessSnapshot({ nodes, dependencies, participants, completions });
 }

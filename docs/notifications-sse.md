@@ -17,6 +17,13 @@ projection. Participation and Completion signals are scoped to their User.
 Inactive or removed Participations receive their access invalidation so that the
 subsequent authorized HTTP request can remove protected content.
 
+Only `RoadmapNotice` rows drive Inbox signals. The notice lifecycle module
+([ADR-0024](adr/0024-notice-target-lifecycle-module.md)) also writes Known values
+(`NoticeKnownValue`) and opening snapshots (`NoticeAcknowledgement.snapshots`);
+those writes emit no signal of their own. A delivery that creates, updates or
+withdraws a notice signals through the notice row, and a delivery that only
+advances a Known value changes nothing the Inbox shows.
+
 The payload contains User/Course offering identifiers and an optional access-loss
 flag, never pedagogical content. Every projection/feed/count reload goes through existing authenticated
 HTTP endpoints. A tab coalesces Inbox signals arriving within 100 ms into one
@@ -93,5 +100,7 @@ complementary coverage for reconciliation and stale responses.
 Notice grouping has no real-time deadline. E2E assertions wait for persisted
 state or authorized HTTP projections, rather than sleeping for grouping windows.
 Unit transport tests use simulated time for debounce/retry behavior. Current
-suite results and configured browser scope belong in `docs/agents/testing.md`;
-historical runs are not evidence for the current implementation.
+configured browser scope belongs in `playwright.config.ts`, operational guidance
+in `docs/agents/testing.md`, and dated suite results in
+`docs/testing-validation-history.md`. Historical runs are not evidence for the
+current implementation.

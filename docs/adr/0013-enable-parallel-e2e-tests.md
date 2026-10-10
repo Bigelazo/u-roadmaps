@@ -117,7 +117,7 @@ picos continuos ni mediciones estadísticas de varias repeticiones.
 Todas las invocaciones dejaron cero Ramos y Usuarios E2E y cero triggers de
 rechazo de avisos; conservaron la huella completa de filas de `roadmap_dev_db`.
 El trigger permanente de Inbox de la aplicación se conserva para SSE.
-La [guía de pruebas](../agents/testing.md#paralelismo-y-mediciones-de-168--2026-10-06)
+El [historial de validación](../testing-validation-history.md#paralelismo-y-mediciones-de-168--2026-10-06)
 y los [resúmenes medidos](../measurements/issue-168.json) registran metodología,
 comandos, estado transitorio de avisos y límites de la evidencia.
 

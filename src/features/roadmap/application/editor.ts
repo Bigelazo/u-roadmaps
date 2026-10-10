@@ -1,13 +1,11 @@
 import type { RoadmapChangePort, RoadmapChangeFact } from './change-port';
 import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-transaction';
+import { serializableTransaction } from './serializable';
 import { accessChanges } from './access-changes';
-import { dependencyTarget, nodeTypeNameTarget } from '@/shared/route-notice-target';
-import { captureRouteNoticeKnowledge } from './route-notice-knowledge';
-import { captureAccessSnapshot } from './access-snapshot';
+import { readAccessSnapshot } from './access-snapshot';
 import 'server-only';
 
 import { createHash } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
 import { Prisma, prisma } from '@/shared/server/db';
 import {
   findCycle,
@@ -44,7 +42,6 @@ import {
   type EditorInput,
 } from '@/features/roadmap/application/editor-access';
 import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
-import { nodeTypeClassificationNotification } from '@/features/roadmap/application/node-type-classification-notifications';
 
 type JsonObject = Record<string, unknown>;
 
@@ -122,37 +119,11 @@ async function withSerializableTransaction<T>(
   concurrentModification: () => ApplicationError,
   changePort?: RoadmapChangePort,
 ) {
-  const maxAttempts = 5;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    try {
-      return await (changePort
-        ? roadmapChangeTransaction(changePort, operation, {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          })
-        : prisma.$transaction((transaction) => operation(transaction, async () => undefined), {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          }));
-    } catch (error) {
-      if (!isTransactionWriteConflict(error)) throw error;
-      if (attempt === maxAttempts - 1) throw concurrentModification();
-      // Separate attempts so unrelated concurrent Roadmaps can finish their writes.
-      await delay(50 * 2 ** attempt + Math.random() * 50);
-    }
-  }
-  throw new Error('Serializable transaction retry limit reached.');
-}
-
-function isTransactionWriteConflict(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) return error.code === 'P2034';
-  // The pg adapter can expose serialization failures directly when COMMIT fails.
-  return (
-    error instanceof Error &&
-    error.name === 'DriverAdapterError' &&
-    typeof error.cause === 'object' &&
-    error.cause !== null &&
-    'kind' in error.cause &&
-    error.cause.kind === 'TransactionWriteConflict'
-  );
+  return changePort
+    ? roadmapChangeTransaction(changePort, operation, { serializable: { concurrentModification } })
+    : serializableTransaction((transaction) => operation(transaction, async () => undefined), {
+        concurrentModification,
+      });
 }
 
 async function ensureTypeNameAvailable(
@@ -218,23 +189,6 @@ async function createRoadmapNodeUnsafe(
         isVisible,
       },
     });
-    const recipients = await transaction.participation.findMany({
-      where: {
-        courseOfferingId: roadmap.courseOfferingId,
-        isActive: true,
-        userId: { not: editor.userId },
-      },
-      select: { userId: true },
-    });
-    await transaction.nodeLifecycleKnowledge.createMany({
-      data: recipients.map(({ userId }) => ({
-        recipientId: userId,
-        roadmapId: roadmap.id,
-        nodeId: node.id,
-        isKnown: false,
-      })),
-      skipDuplicates: true,
-    });
     await report({
       actorId: editor.userId,
       identifier: editor.identifier,
@@ -258,7 +212,7 @@ async function updateRoadmapNodeUnsafe(
       const beforeVisibility =
         requestedVisibility === undefined
           ? null
-          : await captureAccessSnapshot(transaction, roadmap.id);
+          : await readAccessSnapshot(transaction, roadmap.id);
       const data: {
         title?: string;
         description?: string | null;
@@ -304,29 +258,6 @@ async function updateRoadmapNodeUnsafe(
             OR: [{ sourceNodeId: node.id }, { targetNodeId: node.id }],
           },
         });
-      }
-      if (
-        node.isVisible &&
-        data.isVisible !== false &&
-        data.description !== undefined &&
-        data.description !== node.description
-      ) {
-        // Capture only descriptions these recipients can see, atomically with
-        // the edit; a blocked recipient has no baseline for this content yet.
-        const access = beforeVisibility ?? (await captureAccessSnapshot(transaction, roadmap.id));
-        const recipients = access.participants.filter(({ userId }) =>
-          access.accessibleByUser.get(userId)?.has(node.id),
-        );
-        if (recipients.length)
-          await transaction.nodeContentKnowledge.createMany({
-            data: recipients.map(({ userId }) => ({
-              recipientId: userId,
-              nodeId: node.id,
-              target: 'description',
-              knownValue: JSON.stringify(node.description),
-            })),
-            skipDuplicates: true,
-          });
       }
       const updated = await transaction.roadmapNode.update({
         where: { id: node.id },
@@ -377,7 +308,7 @@ async function updateRoadmapNodeUnsafe(
           current: updated.isVisible,
         });
         facts.push(
-          ...accessChanges(beforeVisibility, await captureAccessSnapshot(transaction, roadmap.id)),
+          ...accessChanges(beforeVisibility, await readAccessSnapshot(transaction, roadmap.id)),
         );
       }
       if (facts.length)
@@ -475,11 +406,11 @@ async function deleteRoadmapNodeUnsafe(
         }),
         requireEditorRoadmap(transaction, editor),
       ]);
-      const before = await captureAccessSnapshot(transaction, roadmap.id);
+      const before = await readAccessSnapshot(transaction, roadmap.id);
       const node = await requireNode(transaction, id, roadmap.id);
       const nodeType = await requireType(transaction, node.nodeTypeId, roadmap.id);
       await transaction.roadmapNode.delete({ where: { id: requireUuid(id, 'nodeId') } });
-      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      const after = await readAccessSnapshot(transaction, roadmap.id);
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -555,35 +486,6 @@ async function updateRoadmapNodeTypeUnsafe(
         'Debe indicar nombre, ícono o color para actualizar.',
       );
     const updated = await transaction.nodeType.update({ where: { id: nodeType.id }, data });
-    let notification: ReturnType<typeof nodeTypeClassificationNotification> | undefined;
-    if (data.name !== undefined && data.name !== nodeType.name) {
-      const visibleNodeCount = await transaction.roadmapNode.count({
-        where: { roadmapId: roadmap.id, nodeTypeId: nodeType.id, isVisible: true },
-      });
-      if (visibleNodeCount > 0) {
-        const participants = await transaction.participation.findMany({
-          where: { courseOfferingId: roadmap.courseOfferingId, isActive: true },
-          select: { userId: true, isActive: true },
-        });
-        notification = nodeTypeClassificationNotification({
-          nodeTypeId: nodeType.id,
-          roadmapId: roadmap.id,
-          previousTypeName: nodeType.name,
-          nextTypeName: updated.name,
-          visibleNodeCount,
-          actorId: editor.userId,
-          participants,
-        });
-      }
-    }
-    if (notification)
-      await captureRouteNoticeKnowledge(
-        transaction,
-        roadmap.id,
-        notification.recipientIds,
-        nodeTypeNameTarget(nodeType.id),
-        nodeType.name,
-      );
     if (data.name !== undefined && data.name !== nodeType.name)
       await report({
         actorId: editor.userId,
@@ -729,7 +631,7 @@ async function createRoadmapDependencyUnsafe(
           ],
         }),
         (async () => {
-          const before = await captureAccessSnapshot(transaction, prepared.roadmapId);
+          const before = await readAccessSnapshot(transaction, prepared.roadmapId);
           return {
             before,
             dependency: await transaction.dependency.create({
@@ -749,16 +651,7 @@ async function createRoadmapDependencyUnsafe(
           data: { isTeacherBlocked: true },
         });
       }
-      const after = await captureAccessSnapshot(transaction, prepared.roadmapId);
-      await captureRouteNoticeKnowledge(
-        transaction,
-        prepared.roadmapId,
-        after.participants
-          .filter(({ userId }) => userId !== editor.userId)
-          .map(({ userId }) => userId),
-        dependencyTarget(prepared.sourceNodeId, prepared.targetNodeId),
-        'false',
-      );
+      const after = await readAccessSnapshot(transaction, prepared.roadmapId);
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -831,19 +724,9 @@ async function deleteRoadmapDependencyUnsafe(
           'DEPENDENCY_NOT_FOUND',
           'La dependencia no existe en este roadmap.',
         );
-      const before = await captureAccessSnapshot(transaction, roadmap.id);
+      const before = await readAccessSnapshot(transaction, roadmap.id);
       await transaction.dependency.delete({ where: { id: dependency.id } });
-      const after = await captureAccessSnapshot(transaction, roadmap.id);
-      if (dependency.sourceNode.isVisible && dependency.targetNode.isVisible)
-        await captureRouteNoticeKnowledge(
-          transaction,
-          roadmap.id,
-          after.participants
-            .filter(({ userId }) => userId !== editor.userId)
-            .map(({ userId }) => userId),
-          dependencyTarget(dependency.sourceNodeId, dependency.targetNodeId),
-          'true',
-        );
+      const after = await readAccessSnapshot(transaction, roadmap.id);
       await report({
         actorId: editor.userId,
         identifier: editor.identifier,
@@ -971,7 +854,7 @@ async function changeTeacherBlockUnsafe(
           'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
         );
       }
-      const before = await captureAccessSnapshot(transaction, roadmap.id);
+      const before = await readAccessSnapshot(transaction, roadmap.id);
       if (preview.nodes.length > 0) {
         await transaction.roadmapNode.updateMany({
           where: { id: { in: preview.nodes.map((node) => node.id) } },
@@ -983,7 +866,7 @@ async function changeTeacherBlockUnsafe(
       }
       // Unlocking a prerequisite can release dependents whose scheduled day already arrived.
       if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(transaction, roadmap.id);
-      const after = await captureAccessSnapshot(transaction, roadmap.id);
+      const after = await readAccessSnapshot(transaction, roadmap.id);
       await report({
         actorId: input.userId,
         identifier: input.identifier,
@@ -1113,9 +996,9 @@ async function releaseScheduledTeacherUnlocksUnsafe(
         await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
         const current = await transaction.roadmap.findUnique({ where: { id: roadmap.id } });
         if (!current || current.closedAt) return { releasedNodeIds: [] };
-        const before = await captureAccessSnapshot(transaction, roadmap.id);
+        const before = await readAccessSnapshot(transaction, roadmap.id);
         const releasedNodeIds = await releaseDueScheduledUnlocks(transaction, roadmap.id, today);
-        const after = await captureAccessSnapshot(transaction, roadmap.id);
+        const after = await readAccessSnapshot(transaction, roadmap.id);
         await report({
           actorId: SCHEDULED_UNLOCK_ACTOR_ID,
           identifier: roadmap.courseOffering,

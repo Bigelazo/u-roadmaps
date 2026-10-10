@@ -126,6 +126,44 @@ test('node creation and edits report per-object previous values and return plain
   expect(recording.facts()).toEqual([]);
 });
 
+test('description and type edits report previous values and write no notice baselines', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
+  const nextType = await prisma.nodeType.create({
+    data: {
+      roadmapId: course.roadmapId,
+      name: 'Taller',
+      normalizedName: 'taller',
+      icon: 'BookOpen',
+      color: '#024AD8',
+    },
+  });
+  const nodeId = course.change.nodeId;
+  await confirmed(
+    updateRoadmapNode(
+      {
+        ...editor(course),
+        id: nodeId,
+        input: { description: 'Nueva', nodeTypeId: nextType.id },
+      },
+      recording.port,
+    ),
+  );
+  expect(recording.facts()).toEqual([
+    { kind: 'node-description', nodeId, previous: null, current: 'Nueva' },
+    {
+      kind: 'node-type',
+      nodeId,
+      previous: { id: type.id, name: 'Tema' },
+      current: { id: nextType.id, name: 'Taller' },
+    },
+  ]);
+  // Known values are recorded by the notice lifecycle module through the port.
+  expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
+});
+
 test('visibility and deletion report their facts and recipient access transitions', async ({
   course,
 }) => {
@@ -150,6 +188,8 @@ test('visibility and deletion report their facts and recipient access transition
       current: 'Retirado',
     }),
   );
+  // Access baselines are recorded by the notice lifecycle module through the port.
+  expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
   recording.changes.length = 0;
   await confirmed(deleteRoadmapNode({ ...input, id: nodeId }, recording.port));
   expect(recording.facts()).toMatchObject([
@@ -160,6 +200,22 @@ test('visibility and deletion report their facts and recipient access transition
       current: null,
     },
   ]);
+});
+
+test('Dependencies removed by hiding a Node are not reported as Dependency facts', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const input = editor(course);
+  const target = await addNode(course);
+  await prisma.dependency.create({
+    data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
+  });
+  await confirmed(
+    updateRoadmapNode({ ...input, id: target.id, input: { isVisible: false } }, recording.port),
+  );
+  expect(await prisma.dependency.count({ where: { targetNodeId: target.id } })).toBe(0);
+  expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([]);
 });
 
 test('dependencies report the pair and distinct access for each recipient; Completion targets its actor', async ({
@@ -184,16 +240,23 @@ test('dependencies report the pair and distinct access for each recipient; Compl
       current: true,
     }),
   );
-  expect(recording.facts()).toContainEqual(
-    expect.objectContaining({
-      kind: 'node-access',
-      nodeId: target.id,
-      recipientId: course.studentId,
-      previous: 'Disponible',
-      current: 'Bloqueado',
-    }),
-  );
-  expect(recording.facts().filter((fact) => fact.kind === 'node-access')).toHaveLength(1);
+  expect(
+    recording
+      .facts()
+      .filter((fact) => fact.kind === 'node-access')
+      .map((fact) => fact.kind === 'node-access' && fact.recipientId)
+      .sort(),
+  ).toEqual([course.studentId, course.classmateId].sort());
+  for (const recipientId of [course.studentId, course.classmateId])
+    expect(recording.facts()).toContainEqual(
+      expect.objectContaining({
+        kind: 'node-access',
+        nodeId: target.id,
+        recipientId,
+        previous: 'Disponible',
+        current: 'Bloqueado',
+      }),
+    );
   expect(result).not.toHaveProperty('notifications');
   recording.changes.length = 0;
   await confirmed(
@@ -215,7 +278,11 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   ]);
   recording.changes.length = 0;
   await confirmed(deleteRoadmapDependency({ ...input, id: result.dependency.id }, recording.port));
-  expect(recording.facts()).toMatchObject([{ kind: 'dependency', previous: true, current: false }]);
+  // Only the classmate, who has not completed the prerequisite, regains access.
+  expect(recording.facts()).toMatchObject([
+    { kind: 'dependency', previous: true, current: false },
+    { kind: 'node-access', recipientId: course.classmateId, previous: 'Bloqueado' },
+  ]);
 });
 
 test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
@@ -355,7 +422,7 @@ test('type rename reports its previous name; appearance edits stay silent', asyn
   expect(recording.facts()).toEqual([]);
 });
 
-test('promotion reports the role change while retaining the existing reset', async ({ course }) => {
+test('promotion reports the role change', async ({ course }) => {
   const recording = recordingChangePort();
   await materializeParticipation(
     { id: course.studentId, rut: null },
