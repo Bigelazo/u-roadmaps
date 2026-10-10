@@ -1,26 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { Prisma } = vi.hoisted(() => {
-  /** Stands in for Prisma's known request error (its `code` and `meta`). */
+const { Prisma, prisma } = vi.hoisted(() => {
+  /** Stands in for Prisma's known request error (its `code`). */
   class PrismaClientKnownRequestError extends Error {
-    constructor(
-      message: string,
-      readonly fields: { code: string; meta?: Record<string, unknown> },
-    ) {
-      super(message);
-    }
-    get code() {
-      return this.fields.code;
-    }
-    get meta() {
-      return this.fields.meta;
+    constructor(readonly code: string) {
+      super('failed');
     }
   }
-  return { Prisma: { PrismaClientKnownRequestError } };
+  return {
+    Prisma: {
+      PrismaClientKnownRequestError,
+      TransactionIsolationLevel: { Serializable: 'Serializable' },
+    },
+    prisma: { $transaction: vi.fn() },
+  };
 });
-vi.mock('@/shared/server/db', () => ({ Prisma }));
+vi.mock('@/shared/server/db', () => ({ Prisma, prisma }));
 
-import { isSerializationFailure } from '@/features/roadmap/application/serializable';
+import {
+  isSerializationFailure,
+  SERIALIZABLE_MAX_ATTEMPTS,
+  serializableTransaction,
+} from '@/features/roadmap/application/serializable';
+import { ApplicationError } from '@/shared/errors/server';
 
 function adapterConflict() {
   const error = new Error('TransactionWriteConflict');
@@ -28,27 +30,62 @@ function adapterConflict() {
   return Object.assign(error, { cause: { kind: 'TransactionWriteConflict' } });
 }
 
-const known = (code: string, meta?: Record<string, unknown>) =>
-  new Prisma.PrismaClientKnownRequestError('failed', { code, meta });
-
+// A raw query's serialization failure (P2010) is checked against the real error in
+// tests/notifications-integration/serialization-failure.test.ts.
 describe('isSerializationFailure', () => {
   it('recognizes a Prisma write conflict', () => {
-    expect(isSerializationFailure(known('P2034'))).toBe(true);
+    expect(isSerializationFailure(new Prisma.PrismaClientKnownRequestError('P2034'))).toBe(true);
   });
 
   it('recognizes the pg adapter conflict at COMMIT', () => {
     expect(isSerializationFailure(adapterConflict())).toBe(true);
   });
 
-  it('recognizes a conflict raised by a raw query', () => {
-    expect(isSerializationFailure(known('P2010', { driverAdapterError: adapterConflict() }))).toBe(
-      true,
-    );
+  it('leaves other failures alone', () => {
+    expect(isSerializationFailure(new Prisma.PrismaClientKnownRequestError('P2002'))).toBe(false);
+    expect(isSerializationFailure(new Error('boom'))).toBe(false);
+  });
+});
+
+describe('serializableTransaction', () => {
+  const statements: string[] = [];
+  const transaction = {
+    $executeRaw: async (sql: TemplateStringsArray) => statements.push(sql.join('?')),
+  };
+
+  beforeEach(() => {
+    statements.length = 0;
+    prisma.$transaction.mockReset();
   });
 
-  it('leaves other failures alone', () => {
-    expect(isSerializationFailure(known('P2002'))).toBe(false);
-    expect(isSerializationFailure(known('P2010', { code: '23505' }))).toBe(false);
-    expect(isSerializationFailure(new Error('boom'))).toBe(false);
+  it('prefers index scans in a serializable transaction', async () => {
+    prisma.$transaction.mockImplementation(async (operation) => operation(transaction));
+    await expect(serializableTransaction(async () => 'done')).resolves.toBe('done');
+    expect(statements).toEqual(['SET LOCAL enable_seqscan = off']);
+    expect(prisma.$transaction.mock.calls[0][1]).toMatchObject({
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
+  });
+
+  it('retries serialization failures, then answers 409', async () => {
+    prisma.$transaction.mockRejectedValue(adapterConflict());
+    const error = await serializableTransaction(async () => 'never').catch((caught) => caught);
+    expect(error).toBeInstanceOf(ApplicationError);
+    expect(error.status).toBe(409);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(SERIALIZABLE_MAX_ATTEMPTS);
+  });
+
+  it('succeeds on a later attempt', async () => {
+    prisma.$transaction
+      .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('P2034'))
+      .mockImplementation(async (operation) => operation(transaction));
+    await expect(serializableTransaction(async () => 'done')).resolves.toBe('done');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry other failures', async () => {
+    prisma.$transaction.mockRejectedValue(new Error('boom'));
+    await expect(serializableTransaction(async () => 'never')).rejects.toThrow('boom');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });

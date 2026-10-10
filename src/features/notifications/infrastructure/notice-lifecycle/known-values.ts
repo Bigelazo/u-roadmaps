@@ -1,6 +1,6 @@
 import 'server-only';
 import { ABSENT, nodeCreationRef } from '../../application/absorption';
-import type { Prisma } from '@/shared/server/db';
+import { Prisma } from '@/shared/server/db';
 import { NOTICE_TARGET } from '../../application/notice-targets/kinds';
 import {
   targetContext,
@@ -34,30 +34,32 @@ export async function recordKnownValues(
   });
 }
 
+const KNOWN_VALUE_COLUMNS = Prisma.sql`"recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue"`;
+const ON_KNOWN_VALUE_CONFLICT = Prisma.sql`ON CONFLICT ("recipientId", "roadmapId", "targetKey")`;
+
 /**
- * The target's value at edit time (see `currentAtEdit`); a recipient without a Known value
- * gets the change's `knownValue` as baseline. An upsert, because under SERIALIZABLE it
- * takes no predicate (SIRead) locks: an UPDATE per recipient would read each row, and
- * past 32 rows PostgreSQL promotes those locks to the whole table, which then conflicts
- * with Known value writes of edits on every other Roadmap (#220).
+ * Store the target's value at edit time (see `currentAtEdit`) on the knowers' Known
+ * values. Callers pass knowers only (`recordNoticeTargets` checks it), whose baseline
+ * already exists, so the upsert only updates: the insert arm never runs. An upsert, not an
+ * UPDATE, because under SERIALIZABLE it takes no predicate (SIRead) locks: an UPDATE per
+ * recipient reads each row, and past 32 rows PostgreSQL promotes those locks to the whole
+ * table, which then conflicts with Known value writes of edits on every other Roadmap (#220).
  */
-export async function recordCurrentValues(
+export async function recordKnowersValueAtEdit(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   target: NoticeTargetRef,
-  recipientIds: readonly string[],
+  knowerIds: readonly string[],
   knownValue: string,
   currentValue: string,
 ) {
-  if (!recipientIds.length) return;
+  if (!knowerIds.length) return;
   await transaction.$executeRaw`
-    INSERT INTO "NoticeKnownValue"
-      ("recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue", "currentValue")
+    INSERT INTO "NoticeKnownValue" (${KNOWN_VALUE_COLUMNS}, "currentValue")
     SELECT recipient, ${roadmapId}::uuid, ${target.targetKey}, ${target.noticeTarget},
       ${target.nodeId ?? null}::uuid, ${knownValue}, ${currentValue}
-    FROM unnest(${[...recipientIds]}::uuid[]) AS recipient
-    ON CONFLICT ("recipientId", "roadmapId", "targetKey")
-    DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
+    FROM unnest(${[...knowerIds]}::uuid[]) AS recipient
+    ${ON_KNOWN_VALUE_CONFLICT} DO UPDATE SET "currentValue" = EXCLUDED."currentValue"`;
 }
 
 /** The recipient's Known value and its context, recording `fallback` when the target has no baseline yet. */
@@ -102,13 +104,11 @@ export async function advanceKnownValue(
 ) {
   // One upsert, not UPDATE-then-SELECT: it takes no predicate (SIRead) lock (#220).
   const advanced = await transaction.$queryRaw<unknown[]>`
-    INSERT INTO "NoticeKnownValue"
-      ("recipientId", "roadmapId", "targetKey", "noticeTarget", "nodeId", "knownValue", "context")
+    INSERT INTO "NoticeKnownValue" (${KNOWN_VALUE_COLUMNS}, "context")
     VALUES (${identity.recipientId}::uuid, ${identity.roadmapId}::uuid, ${target.targetKey},
       ${target.noticeTarget}, ${target.nodeId ?? null}::uuid, ${knownValue},
       ${JSON.stringify(context)}::jsonb)
-    ON CONFLICT ("recipientId", "roadmapId", "targetKey")
-    DO UPDATE SET "knownValue" = EXCLUDED."knownValue", "context" = EXCLUDED."context"
+    ${ON_KNOWN_VALUE_CONFLICT} DO UPDATE SET "knownValue" = EXCLUDED."knownValue", "context" = EXCLUDED."context"
     WHERE "NoticeKnownValue"."knownValue" = ${previousValue}
     RETURNING 1`;
   return advanced.length > 0;
@@ -160,15 +160,12 @@ export async function forgetDeletedNode(
   >`
     DELETE FROM "NoticeKnownValue" WHERE "roadmapId" = ${roadmapId}::uuid AND "nodeId" = ${nodeId}::uuid
     RETURNING "recipientId"::text, "targetKey", "knownValue"`;
-  // Dependency pairs (`dependency:<source>:<target>`) carry no nodeId.
-  await transaction.$executeRaw`
-    DELETE FROM "NoticeKnownValue"
-    WHERE "roadmapId" = ${roadmapId}::uuid AND "noticeTarget" = ${NOTICE_TARGET.dependency}
-      AND split_part("targetKey", ':', 2) = ${nodeId}`;
-  await transaction.$executeRaw`
-    DELETE FROM "NoticeKnownValue"
-    WHERE "roadmapId" = ${roadmapId}::uuid AND "noticeTarget" = ${NOTICE_TARGET.dependency}
-      AND split_part("targetKey", ':', 3) = ${nodeId}`;
+  // Dependency pairs carry no nodeId: one exact index range per end of the pair.
+  for (const end of DEPENDENCY_ENDS)
+    await transaction.$executeRaw`
+      DELETE FROM "NoticeKnownValue"
+      WHERE "roadmapId" = ${roadmapId}::uuid AND ${dependencyIndexPredicate}
+        AND ${dependencyKeyNode(end)} = ${nodeId}`;
   const unaware = new Set(
     forgotten
       .filter(({ targetKey, knownValue }) => targetKey === creation && knownValue === ABSENT)
@@ -177,9 +174,28 @@ export async function forgetDeletedNode(
   await transaction.$executeRaw`
     DELETE FROM "RoadmapNotice"
     WHERE "roadmapId" = ${roadmapId}::uuid AND "targetKey" = ${creation}
-      AND "acknowledgedAt" IS NULL AND "recipientId"::text = ANY(${[...unaware]}::text[])`;
+      AND "acknowledgedAt" IS NULL AND "recipientId" = ANY(${[...unaware]}::uuid[])`;
   return {
     aware: deletionRecipientIds.filter((recipientId) => !unaware.has(recipientId)),
     unaware: [...unaware],
   };
 }
+
+/** The two ends of a Dependency pair key, `dependency:<source>:<target>` (`dependencyTarget`). */
+export const DEPENDENCY_ENDS = ['source', 'target'] as const;
+const DEPENDENCY_KEY_PART = { source: 2, target: 3 } as const;
+
+/**
+ * SQL for the Node id at one end of a Dependency pair key. The partial expression indexes
+ * `NoticeKnownValue_dependency_{source,target}_idx` (migration
+ * 20261009210000_notice_lifecycle_index_ranges) are built on exactly this expression and on
+ * `dependencyIndexPredicate`, with literals (not parameters) so the planner matches them;
+ * `dependency-key-indexes.test.ts` keeps them in sync.
+ */
+export function dependencyKeyNode(end: (typeof DEPENDENCY_ENDS)[number]) {
+  return Prisma.raw(`split_part("targetKey", ':', ${DEPENDENCY_KEY_PART[end]})`);
+}
+
+export const dependencyIndexPredicate = Prisma.raw(
+  `"noticeTarget" = '${NOTICE_TARGET.dependency}'`,
+);

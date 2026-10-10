@@ -1,12 +1,11 @@
 import type { RoadmapChangePort, RoadmapChangeFact } from './change-port';
 import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-transaction';
-import { isSerializationFailure, preferIndexScans } from './serializable';
+import { serializableTransaction } from './serializable';
 import { accessChanges } from './access-changes';
 import { readAccessSnapshot } from './access-snapshot';
 import 'server-only';
 
 import { createHash } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
 import { Prisma, prisma } from '@/shared/server/db';
 import {
   findCycle,
@@ -120,30 +119,11 @@ async function withSerializableTransaction<T>(
   concurrentModification: () => ApplicationError,
   changePort?: RoadmapChangePort,
 ) {
-  const maxAttempts = 5;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    try {
-      return await (changePort
-        ? roadmapChangeTransaction(changePort, operation, {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          })
-        : prisma.$transaction(
-            async (transaction) => {
-              await preferIndexScans(transaction);
-              return operation(transaction, async () => undefined);
-            },
-            {
-              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-            },
-          ));
-    } catch (error) {
-      if (!isSerializationFailure(error)) throw error;
-      if (attempt === maxAttempts - 1) throw concurrentModification();
-      // Separate attempts so unrelated concurrent Roadmaps can finish their writes.
-      await delay(50 * 2 ** attempt + Math.random() * 50);
-    }
-  }
-  throw new Error('Serializable transaction retry limit reached.');
+  return changePort
+    ? roadmapChangeTransaction(changePort, operation, { serializable: { concurrentModification } })
+    : serializableTransaction((transaction) => operation(transaction, async () => undefined), {
+        concurrentModification,
+      });
 }
 
 async function ensureTypeNameAvailable(

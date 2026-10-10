@@ -233,6 +233,8 @@ enum ParticipationRole {
 }
 
 // Notices retain context even if the Roadmap or Participation later disappears.
+// Partial indexes in raw migration SQL only (Prisma cannot express them):
+// RoadmapNotice_pending_target_key, RoadmapNotice_pending_roadmap_target_idx.
 model RoadmapNotice {
   id               String    @id @default(uuid()) @db.Uuid
   eventId          String
@@ -305,6 +307,8 @@ model NoticeDeliveryEffect {
 // ADR-0024: the single Known value store of the notice lifecycle module. One row per
 // recipient, Roadmap and Notice target key; values are encoded by the target descriptor.
 // nodeId places the target in the hierarchy; it has no FK so the module can clean it up.
+// Partial expression indexes in raw migration SQL only (Prisma cannot express them):
+// NoticeKnownValue_dependency_source_idx, NoticeKnownValue_dependency_target_idx.
 model NoticeKnownValue {
   recipientId  String  @db.Uuid
   roadmapId    String  @db.Uuid

@@ -1,6 +1,6 @@
 import type { RoadmapChangePort } from './change-port';
 import { roadmapChangeTransaction } from './change-transaction';
-import { isSerializationFailure, preferIndexScans } from './serializable';
+import { serializableTransaction } from './serializable';
 import { accessChanges } from './access-changes';
 import { readAccessSnapshot } from './access-snapshot';
 import 'server-only';
@@ -134,74 +134,50 @@ async function readRoadmapForParticipantUnsafe({ userId, identifier }: Participa
   );
 }
 
-async function withSerializableRetry<Result>(operation: () => Promise<Result>) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (attempt < 2 && isSerializationFailure(error)) continue;
-      throw error;
-    }
-  }
-  throw new Error('Completion transaction retry limit reached.');
-}
-
 type TeacherRoadmap = Awaited<ReturnType<typeof requireParticipantRoadmap>>;
 
 function withTeacherRoadmapTransaction<Result>(
   { userId, identifier }: ParticipantRoadmapInput,
   operation: (transaction: Prisma.TransactionClient, roadmap: TeacherRoadmap) => Promise<Result>,
 ) {
-  return withSerializableRetry(() =>
-    prisma.$transaction(
-      async (transaction) => {
-        await preferIndexScans(transaction);
-        const roadmap = await requireParticipantRoadmap(
-          transaction,
-          { userId, identifier },
-          'TEACHER',
-        );
-        requireCurrentRoadmap(roadmap.roadmap);
-        return operation(transaction, roadmap);
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
-  );
+  return serializableTransaction(async (transaction) => {
+    const roadmap = await requireParticipantRoadmap(transaction, { userId, identifier }, 'TEACHER');
+    requireCurrentRoadmap(roadmap.roadmap);
+    return operation(transaction, roadmap);
+  });
 }
 
 async function completeNodeUnsafe(
   { userId, identifier, nodeId }: CompleteNodeInput,
   changePort: RoadmapChangePort,
 ) {
-  return withSerializableRetry(() =>
-    roadmapChangeTransaction(
-      changePort,
-      async (transaction, report) => {
-        const { roadmap } = await requireParticipantRoadmap(
-          transaction,
-          { userId, identifier },
-          'STUDENT',
-        );
-        await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
-        requireCurrentRoadmap(roadmap);
-        await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
-        const before = await readAccessSnapshot(transaction, roadmap.id, userId);
-        const completion = await transaction.completion.upsert({
-          where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
-          update: {},
-          create: { userId, roadmapNodeId: nodeId },
-        });
-        const after = await readAccessSnapshot(transaction, roadmap.id, userId);
-        await report({
-          actorId: userId,
-          identifier,
-          roadmapId: roadmap.id,
-          facts: accessChanges(before, after),
-        });
-        return completion;
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+  return roadmapChangeTransaction(
+    changePort,
+    async (transaction, report) => {
+      const { roadmap } = await requireParticipantRoadmap(
+        transaction,
+        { userId, identifier },
+        'STUDENT',
+      );
+      await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
+      requireCurrentRoadmap(roadmap);
+      await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
+      const before = await readAccessSnapshot(transaction, roadmap.id, userId);
+      const completion = await transaction.completion.upsert({
+        where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
+        update: {},
+        create: { userId, roadmapNodeId: nodeId },
+      });
+      const after = await readAccessSnapshot(transaction, roadmap.id, userId);
+      await report({
+        actorId: userId,
+        identifier,
+        roadmapId: roadmap.id,
+        facts: accessChanges(before, after),
+      });
+      return completion;
+    },
+    { serializable: true },
   );
 }
 

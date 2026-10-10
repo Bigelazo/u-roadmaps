@@ -87,7 +87,7 @@ type Edit = (course: IntegrationCourse, port: RoadmapChangePort) => Promise<unkn
 const fresh = (course: IntegrationCourse) => addNode(course, 'Recursividad');
 const rename: Edit = async (course, port) =>
   teacherEdits(course, port).rename((await fresh(course)).id, 'Recursión');
-const describe: Edit = async (course, port) =>
+const editDescription: Edit = async (course, port) =>
   teacherEdits(course, port).update((await fresh(course)).id, { description: 'Funciones' });
 const block: Edit = async (course, port) =>
   teacherEdits(course, port).block((await fresh(course)).id);
@@ -96,29 +96,24 @@ const remove: Edit = async (course, port) =>
 const connect: Edit = async (course, port) =>
   teacherEdits(course, port).connect(course.change.nodeId, (await fresh(course)).id);
 
-// Before #220 every round conflicted: whole tables were read under relation-level
-// predicate locks. Heap and index pages shared by tiny test tables can still, rarely,
-// tie a round to an unrelated test's transaction, so one repeat round is allowed.
-const ROUNDS = 2;
-
+// Before #220 these edits read whole notice tables under relation-level predicate locks,
+// so every pair conflicted. #220 guarantees no predicate locks on notice tables; attempts
+// are not asserted: both Roadmaps' few Nodes share RoadmapNode heap and index pages in the
+// test database, a page-granularity conflict outside the notice lifecycle that can still
+// retry an edit now and then.
 test.for([
   { names: 'rename / rename', first: rename, second: rename },
-  { names: 'block / description', first: block, second: describe },
+  { names: 'block / description', first: block, second: editDescription },
   { names: 'delete / connect', first: remove, second: connect },
 ])(
-  'concurrent teaching-staff edits on different Roadmaps do not conflict ($names)',
+  'concurrent teaching-staff edits on different Roadmaps lock no notice rows or tables ($names)',
   async ({ first, second }, { course, otherCourse }) => {
-    let attempts: number[] = [];
-    for (let round = 0; round < ROUNDS; round += 1) {
-      const overlapping = overlappingPorts();
-      await Promise.all([
-        first(course, overlapping.ports[0]),
-        second(otherCourse, overlapping.ports[1]),
-      ]);
-      attempts = overlapping.attempts;
-      if (attempts.every((count) => count === 1)) break;
-    }
-    expect(attempts).toEqual([1, 1]);
+    const overlapping = overlappingPorts();
+    await Promise.all([
+      first(course, overlapping.ports[0]),
+      second(otherCourse, overlapping.ports[1]),
+    ]);
+    expect(overlapping.noticeLocks).toEqual([[], []]);
   },
 );
 

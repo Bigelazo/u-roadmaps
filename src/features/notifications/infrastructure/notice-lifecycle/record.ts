@@ -11,7 +11,7 @@ import {
 } from '../../application/notice-targets';
 import { acceptDelivery } from '../notice-delivery';
 import { nodeCreationRef } from '../../application/absorption';
-import { forgetDeletedNode, recordCurrentValues, recordKnownValues } from './known-values';
+import { forgetDeletedNode, recordKnowersValueAtEdit, recordKnownValues } from './known-values';
 import { roadmapView, type NodeAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget } from './reconcile';
 import { noticeCourseContext, type NoticeCourseContext } from './course-context';
@@ -55,17 +55,23 @@ export async function recordNoticeTargets(
     const target = descriptor.target(fact, changes);
     const previousValue = descriptor.previousValue(fact);
     const previousContext = descriptor.previousContext?.(fact);
+    const knowers = await descriptor.knowers(fact, changes, roadmap);
     await recordKnownValues(
       transaction,
       changes.roadmapId,
       target,
-      await descriptor.knowers(fact, changes, roadmap),
+      knowers,
       previousValue,
       previousContext,
     );
     const atEdit = descriptor.currentAtEdit?.(fact);
-    if (atEdit)
-      await recordCurrentValues(
+    if (atEdit) {
+      // Only knowers have a Known value to hold the value at edit time.
+      if (atEdit.recipientIds.some((recipientId) => !knowers.includes(recipientId)))
+        throw new Error(
+          `${descriptor.noticeTarget}: currentAtEdit names a recipient who is no knower.`,
+        );
+      await recordKnowersValueAtEdit(
         transaction,
         changes.roadmapId,
         target,
@@ -73,6 +79,7 @@ export async function recordNoticeTargets(
         previousValue,
         atEdit.value,
       );
+    }
     const audience = await descriptor.audience(fact, changes, roadmap);
     if (audience.includes(changes.actorId))
       ownTargets.push({ descriptor, fact, target, previousValue });

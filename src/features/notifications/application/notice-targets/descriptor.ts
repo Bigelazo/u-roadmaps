@@ -153,7 +153,8 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
   /**
    * For per-recipient targets whose live value the module cannot read (Node access):
    * the value at edit time, recorded as the Known value store's current value for these
-   * recipients. Reconciliation then compares against it and ignores `current().value`.
+   * recipients, who must all be `knowers`. Reconciliation then compares against it and
+   * ignores `current().value`.
    */
   currentAtEdit?(fact: F): Readonly<{ recipientIds: readonly string[]; value: string }>;
   /**
