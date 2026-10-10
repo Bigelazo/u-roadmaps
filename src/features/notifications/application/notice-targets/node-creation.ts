@@ -1,3 +1,4 @@
+import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, absorbs, nodeCreationRef } from '../absorption';
 import type { EntryValue, NoticeTargetDescriptor, TargetValues } from './descriptor';
@@ -23,7 +24,7 @@ function text(values: TargetValues) {
  * hidden or deleted new Node returns to absent.
  */
 export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
-  noticeTarget: 'node-creation',
+  noticeTarget: NOTICE_TARGET.nodeCreation,
   noticeClass: 'roadmap-node-changed',
   readSide: { changeKind: 'node-available', changedFields: [], targetKind: 'node' },
   scope: 'node',

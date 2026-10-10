@@ -1,3 +1,4 @@
+import { NOTICE_TARGET } from './kinds';
 import {
   accessNoticeDestination,
   nodeAccessChangeText,
@@ -9,7 +10,7 @@ import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
 type NodeAccessFact = Extract<RoadmapChangeFact, { kind: 'node-access' }>;
 
 export const nodeAccessRef = (nodeId: string) => ({
-  noticeTarget: 'node-access',
+  noticeTarget: NOTICE_TARGET.nodeAccess,
   targetKey: `node:${nodeId}:access`,
   nodeId,
 });
@@ -25,7 +26,7 @@ function nodeTitle({ context }: TargetValues) {
  * Hidden Nodes still get notices: Retirado is itself the news.
  */
 export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
-  noticeTarget: 'node-access',
+  noticeTarget: NOTICE_TARGET.nodeAccess,
   noticeClass: 'roadmap-node-changed',
   readSide: { changeKind: 'node-available', changedFields: ['access'], targetKind: 'node' },
   valueReadSide: ({ currentValue }) => accessNoticeDestination(currentValue),

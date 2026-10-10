@@ -1,12 +1,17 @@
+import { NOTICE_TARGET } from './kinds';
+import { ABSENT, PRESENT } from '../absorption';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { dependencyTarget } from '@/shared/route-notice-target';
 import type { NoticeTargetDescriptor, NoticeTargetRef, RoadmapView } from './descriptor';
 
 export const dependencyPairRef = (sourceNodeId: string, targetNodeId: string) => ({
-  noticeTarget: 'dependency',
+  noticeTarget: NOTICE_TARGET.dependency,
   targetKey: dependencyTarget(sourceNodeId, targetNodeId),
   nodeId: null,
 });
+
+/** A Dependency pair's value: whether the requirement exists. */
+const pairValue = (exists: boolean) => (exists ? PRESENT : ABSENT);
 
 type DependencyFact = Extract<RoadmapChangeFact, { kind: 'dependency' }>;
 
@@ -17,7 +22,7 @@ function dependencyPair({ targetKey }: NoticeTargetRef) {
 }
 
 const changeKind = (currentValue: string) =>
-  currentValue === 'true' ? 'dependency-added' : 'dependency-removed';
+  currentValue === PRESENT ? 'dependency-added' : 'dependency-removed';
 
 /** Everyone, when the Dependency joins two visible Nodes. */
 async function pairRecipients(
@@ -36,12 +41,12 @@ async function pairRecipients(
  * Everyone is told, whatever their own Completions (ADR-0014 decision 10).
  */
 export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
-  noticeTarget: 'dependency',
+  noticeTarget: NOTICE_TARGET.dependency,
   noticeClass: 'roadmap-path-changed',
   readSide: { changeKind: 'dependency-added', changedFields: [], targetKind: 'roadmap' },
   matches: (fact): fact is DependencyFact => fact.kind === 'dependency',
   target: (fact) => dependencyPairRef(fact.sourceNodeId, fact.targetNodeId),
-  previousValue: (fact) => String(fact.previous),
+  previousValue: (fact) => pairValue(fact.previous),
   knowers: pairRecipients,
   audience: pairRecipients,
   async current(target, roadmap) {
@@ -53,7 +58,7 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
     if (!source || !dependent) return null;
     const dependency = await roadmap.dependency(sourceNodeId, targetNodeId);
     return {
-      value: String(!!dependency),
+      value: pairValue(!!dependency),
       visible: source.isVisible && dependent.isVisible,
       context: {
         prerequisiteNodeTitle: source.title,
@@ -68,11 +73,11 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
     );
     const present = new Set(pairs.map(({ targetKey }) => targetKey));
     return [
-      ...pairs.map((target) => ({ target, currentValue: 'true' })),
+      ...pairs.map((target) => ({ target, currentValue: PRESENT })),
       // A known requirement that is gone is shown as removed.
       ...known
         .filter(({ targetKey }) => !present.has(targetKey))
-        .map((target) => ({ target, currentValue: 'false' })),
+        .map((target) => ({ target, currentValue: ABSENT })),
     ];
   },
   factContext: (fact) => ({ dependencyId: fact.dependencyId }),
@@ -80,7 +85,7 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
   storedData: dependencyPair,
   wording: ({ currentValue, context }) => ({
     subject: 'Ruta actualizada',
-    body: `«${String(context.dependentNodeTitle)}» ${currentValue === 'true' ? 'ahora requiere' : 'ya no requiere'} «${String(context.prerequisiteNodeTitle)}».`,
+    body: `«${String(context.dependentNodeTitle)}» ${currentValue === PRESENT ? 'ahora requiere' : 'ya no requiere'} «${String(context.prerequisiteNodeTitle)}».`,
     summaryGroup: 'general',
   }),
   apiData: ({ currentValue, context }) => ({

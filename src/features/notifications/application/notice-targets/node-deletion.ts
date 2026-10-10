@@ -1,3 +1,4 @@
+import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, nodeDeletionRef } from '../absorption';
 import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
@@ -13,7 +14,7 @@ function nodeTitle({ context }: TargetValues) {
  * deleted Node never changes again, so no Known value is kept: recognizing it is final.
  */
 export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
-  noticeTarget: 'node-deletion',
+  noticeTarget: NOTICE_TARGET.nodeDeletion,
   noticeClass: 'roadmap-node-changed',
   readSide: { changeKind: 'node-deleted', changedFields: [], targetKind: 'roadmap' },
   scope: 'node',

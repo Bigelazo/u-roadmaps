@@ -44,8 +44,8 @@ test('adding a Dependency tells every student that the dependent Node now requir
           targetNodeId: dependent.id,
           prerequisiteNodeTitle: 'Pilas',
           dependentNodeTitle: 'Colas',
-          knownValue: 'false',
-          currentValue: 'true',
+          knownValue: 'absent',
+          currentValue: 'present',
           courseCode: course.identifier.courseCode,
         },
       },
@@ -76,8 +76,8 @@ test('removing a Dependency names the pair; added then removed, or removed then 
     data: {
       changeKind: 'dependency-removed',
       dependencyId: second,
-      knownValue: 'true',
-      currentValue: 'false',
+      knownValue: 'present',
+      currentValue: 'absent',
     },
   });
   // The same pair with a new Dependency id is the same target.

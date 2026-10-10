@@ -1,3 +1,4 @@
+import { NOTICE_TARGET } from './notice-targets/kinds';
 import type { NoticeTargetRef } from './notice-targets/descriptor';
 
 /**
@@ -13,18 +14,18 @@ export const PRESENT = 'present';
 
 export function availabilityRef(roadmapId: string): NoticeTargetRef {
   return {
-    noticeTarget: 'roadmap-availability',
+    noticeTarget: NOTICE_TARGET.roadmapAvailability,
     targetKey: `roadmap:${roadmapId}:availability`,
     nodeId: null,
   };
 }
 
 export function nodeCreationRef(nodeId: string): NoticeTargetRef {
-  return { noticeTarget: 'node-creation', targetKey: `node:${nodeId}:creation`, nodeId };
+  return { noticeTarget: NOTICE_TARGET.nodeCreation, targetKey: `node:${nodeId}:creation`, nodeId };
 }
 
 export function nodeDeletionRef(nodeId: string): NoticeTargetRef {
-  return { noticeTarget: 'node-deletion', targetKey: `node:${nodeId}:deletion`, nodeId };
+  return { noticeTarget: NOTICE_TARGET.nodeDeletion, targetKey: `node:${nodeId}:deletion`, nodeId };
 }
 
 /** Broad targets that contain `target`, broadest first (never the target itself). */

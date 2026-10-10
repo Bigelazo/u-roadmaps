@@ -228,8 +228,8 @@ test('pending Roadmap availability absorbs every later notice and recognition es
       expect.objectContaining({
         data: expect.objectContaining({
           noticeTarget: 'dependency',
-          knownValue: 'false',
-          currentValue: 'true',
+          knownValue: 'absent',
+          currentValue: 'present',
         }),
       }),
       expect.objectContaining({

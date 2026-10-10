@@ -1,3 +1,4 @@
+import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, absorbs, availabilityRef } from '../absorption';
 import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
@@ -17,7 +18,7 @@ function text({ context }: TargetValues) {
  * Roadmap (empty or copied), it is the only notice for that Roadmap.
  */
 export const roadmapAvailabilityTarget: NoticeTargetDescriptor<RoadmapCreatedFact> = {
-  noticeTarget: 'roadmap-availability',
+  noticeTarget: NOTICE_TARGET.roadmapAvailability,
   noticeClass: 'roadmap-available',
   readSide: { changeKind: 'roadmap-available', changedFields: [], targetKind: 'roadmap' },
   scope: 'roadmap',

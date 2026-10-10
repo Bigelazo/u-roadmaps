@@ -11,6 +11,11 @@ export type NoticeTargetRef = Readonly<{
   nodeId: string | null;
 }>;
 
+/** Place of each broad scope in the hierarchy Roadmap ⊃ Node ⊃ aspect/Resource, broadest first. */
+export const SCOPE_DEPTH = { roadmap: 0, node: 1 } as const;
+
+export type BroadScope = keyof typeof SCOPE_DEPTH;
+
 export type RoadmapViewNode = Readonly<{
   id: string;
   title: string;
@@ -129,7 +134,7 @@ export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapCha
    * target stands for. A recipient who has not recognized it learns later changes inside
    * it through it (see `application/absorption.ts`).
    */
-  readonly scope?: 'roadmap' | 'node';
+  readonly scope?: BroadScope;
   /** False when the target never changes after its notice (a deleted Node): no Known value is kept. */
   readonly keepsKnownValue?: false;
   matches(fact: RoadmapChangeFact): fact is F;
