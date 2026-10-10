@@ -1,5 +1,6 @@
 import type { RoadmapChangePort } from './change-port';
 import { roadmapChangeTransaction } from './change-transaction';
+import { isSerializationFailure, preferIndexScans } from './serializable';
 import { accessChanges } from './access-changes';
 import { readAccessSnapshot } from './access-snapshot';
 import 'server-only';
@@ -138,12 +139,7 @@ async function withSerializableRetry<Result>(operation: () => Promise<Result>) {
     try {
       return await operation();
     } catch (error) {
-      if (
-        attempt < 2 &&
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
-      )
-        continue;
+      if (attempt < 2 && isSerializationFailure(error)) continue;
       throw error;
     }
   }
@@ -159,6 +155,7 @@ function withTeacherRoadmapTransaction<Result>(
   return withSerializableRetry(() =>
     prisma.$transaction(
       async (transaction) => {
+        await preferIndexScans(transaction);
         const roadmap = await requireParticipantRoadmap(
           transaction,
           { userId, identifier },

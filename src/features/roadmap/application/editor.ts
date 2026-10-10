@@ -1,5 +1,6 @@
 import type { RoadmapChangePort, RoadmapChangeFact } from './change-port';
 import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-transaction';
+import { isSerializationFailure, preferIndexScans } from './serializable';
 import { accessChanges } from './access-changes';
 import { readAccessSnapshot } from './access-snapshot';
 import 'server-only';
@@ -126,30 +127,23 @@ async function withSerializableTransaction<T>(
         ? roadmapChangeTransaction(changePort, operation, {
             isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
           })
-        : prisma.$transaction((transaction) => operation(transaction, async () => undefined), {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          }));
+        : prisma.$transaction(
+            async (transaction) => {
+              await preferIndexScans(transaction);
+              return operation(transaction, async () => undefined);
+            },
+            {
+              isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            },
+          ));
     } catch (error) {
-      if (!isTransactionWriteConflict(error)) throw error;
+      if (!isSerializationFailure(error)) throw error;
       if (attempt === maxAttempts - 1) throw concurrentModification();
       // Separate attempts so unrelated concurrent Roadmaps can finish their writes.
       await delay(50 * 2 ** attempt + Math.random() * 50);
     }
   }
   throw new Error('Serializable transaction retry limit reached.');
-}
-
-function isTransactionWriteConflict(error: unknown) {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) return error.code === 'P2034';
-  // The pg adapter can expose serialization failures directly when COMMIT fails.
-  return (
-    error instanceof Error &&
-    error.name === 'DriverAdapterError' &&
-    typeof error.cause === 'object' &&
-    error.cause !== null &&
-    'kind' in error.cause &&
-    error.cause.kind === 'TransactionWriteConflict'
-  );
 }
 
 async function ensureTypeNameAvailable(
