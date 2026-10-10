@@ -64,15 +64,24 @@ async function createCourse(
 
 export type IntegrationCourse = Awaited<ReturnType<typeof createCourse>>;
 
-export const test = base.extend<{ course: IntegrationCourse }>({
+async function provideCourse(provide: (course: IntegrationCourse) => Promise<void>) {
+  const code = `NT-${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+  const users = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  try {
+    await provide(await createCourse(code, users));
+  } finally {
+    await cleanTestData(integrationDatabaseUrl(), code, users);
+  }
+}
+
+export const test = base.extend<{ course: IntegrationCourse; otherCourse: IntegrationCourse }>({
   course: async ({ task }, provide) => {
     void task;
-    const code = `NT-${randomUUID().replaceAll('-', '').slice(0, 16)}`;
-    const users = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
-    try {
-      await provide(await createCourse(code, users));
-    } finally {
-      await cleanTestData(integrationDatabaseUrl(), code, users);
-    }
+    await provideCourse(provide);
+  },
+  /** A second Course offering with its own Roadmap and participants. */
+  otherCourse: async ({ task }, provide) => {
+    void task;
+    await provideCourse(provide);
   },
 });
