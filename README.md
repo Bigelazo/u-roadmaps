@@ -273,7 +273,7 @@ Las pantallas principales son `/`, `/academic-overview` y `/courses/[courseCode]
 
 ## Estado y limitaciones
 
-El proyecto está en desarrollo. Esta lista de funcionalidades describe el código presente; [CONTEXT.md](CONTEXT.md) también contiene reglas del producto que todavía requieren implementación.
+El proyecto está en desarrollo. Esta lista de funcionalidades describe el código presente; [GLOSSARY.md](GLOSSARY.md) también contiene reglas del producto que todavía requieren implementación.
 
 - **Cierre de semestres parcial:** hay fechas oficiales, una interfaz histórica sin edición y restricciones servidor para completaciones y simulación. Todavía faltan el retiro automático de todos los bloqueos docentes al cerrar y la protección del cierre en todas las operaciones de edición del servidor.
 - **Evolución del roadmap pendiente:** todavía no existe el flujo para copiar una versión anterior con nuevas identidades, archivos independientes y referencia a su origen.
