@@ -1,17 +1,9 @@
 import { lockNoticeParticipation } from './participation-lock';
 import { visibleOwnNotices } from './notice-visibility';
-import { routeOpeningSnapshots, recognizeRouteSnapshots } from './route-notice';
 import 'server-only';
-import { after } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
-import {
-  nodeMessage,
-  resourceMessage,
-  roadmapClassificationChangeMessage,
-  roadmapPathChangeMessage,
-} from '../application/messages';
 import {
   queryInboxPage,
   queryInboxCounts,
@@ -20,39 +12,10 @@ import {
 } from './inbox-query';
 import { changeSummary } from '../application/change-summary';
 import type { ChangeSummary } from '../contracts/change-summary';
-import type { NoticeClass } from '../application/notice-effect';
-import { deliverNotice } from './notice-delivery';
-import {
-  lockRecipientRoadmap,
-  titleOpeningSnapshots,
-  recognizeTitleSnapshots,
-} from './title-notice';
-import { resourceOpeningSnapshots, recognizeResourceSnapshots } from './resource-notice';
-import { contentOpeningSnapshots, recognizeContentSnapshots } from './node-content-notice';
-import { absorptionOpeningSnapshots, recognizeAbsorptionSnapshots } from './absorption-recognition';
-import type {
-  NodeChangeNotice,
-  RoadmapClassificationChangeNotice,
-  RoadmapAvailabilityNotice,
-  RoadmapPathChangeNotice,
-  ResourceChangeNotice,
-} from '../contracts';
+import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
+import { entryTargetSnapshots, recognizeTargetSnapshots } from './notice-lifecycle';
+import { projectTargetNotice } from '../application/notice-targets';
 
-type Notice =
-  | RoadmapAvailabilityNotice
-  | NodeChangeNotice
-  | ResourceChangeNotice
-  | RoadmapPathChangeNotice
-  | RoadmapClassificationChangeNotice;
-
-const deliveryFailureMessage: Record<NoticeClass, string> = {
-  'roadmap-available': 'Roadmap availability delivery failed',
-  'roadmap-node-changed': 'Node notice delivery failed',
-  'roadmap-resource-changed': 'Resource notice delivery failed',
-  'roadmap-path-changed': 'Roadmap path notice delivery failed',
-  'roadmap-classification-changed': 'Roadmap classification notice delivery failed',
-};
-const DELIVERY_CONCURRENCY = 5;
 const NOTICE_OPENING_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 async function pruneNoticeOpenings(
@@ -66,135 +29,6 @@ async function pruneNoticeOpenings(
       openedAt: { lt: new Date(openedAt.getTime() - NOTICE_OPENING_RETENTION_MS) },
     },
   });
-}
-
-export type NoticeDeliveryScheduler = (task: () => Promise<void>) => void | Promise<void>;
-
-async function storeNotice(
-  notice: Notice,
-  noticeClass: NoticeClass,
-  context: Record<string, unknown>,
-  scheduleDelivery: NoticeDeliveryScheduler = after,
-) {
-  const { recipients, ...descriptor } = notice;
-  const participants = await prisma.participation.findMany({
-    where: {
-      courseOfferingId: notice.courseOfferingId,
-      isActive: true,
-      userId: { in: recipients.map(({ userId }) => userId), not: notice.actorId },
-    },
-    select: { userId: true },
-  });
-  const payload = {
-    ...descriptor,
-    ...context,
-    occurredAt: notice.occurredAt.toISOString(),
-    eventCount: 1,
-    digestKey: notice.eventId,
-  };
-  // Only persistence runs after the response: audience and pedagogical context
-  // above belong to the confirmed change, even if access changes immediately.
-  const { eventId, roadmapId, courseOfferingId } = descriptor;
-  await scheduleDelivery(async () => {
-    try {
-      // Bound recipient transactions without dropping later recipients on failure.
-      let failed = false;
-      for (let offset = 0; offset < participants.length; offset += DELIVERY_CONCURRENCY) {
-        const results = await Promise.allSettled(
-          participants.slice(offset, offset + DELIVERY_CONCURRENCY).map(({ userId }) =>
-            deliverNotice({
-              eventId,
-              recipientId: userId,
-              roadmapId,
-              courseOfferingId,
-              noticeClass,
-              payload,
-            }),
-          ),
-        );
-        failed ||= results.some((result) => result.status === 'rejected');
-      }
-      if (failed) console.warn(deliveryFailureMessage[noticeClass], { eventId });
-    } catch {
-      console.warn(deliveryFailureMessage[noticeClass], { eventId });
-    }
-  });
-}
-
-export function storeRoadmapAvailability(
-  notice: RoadmapAvailabilityNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-available',
-    {
-      targetKind: 'roadmap',
-      changeKind: 'roadmap-available',
-    },
-    scheduleDelivery,
-  );
-}
-
-export function storeRoadmapPathChange(
-  notice: RoadmapPathChangeNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-path-changed',
-    {
-      ...roadmapPathChangeMessage(notice),
-      targetKind: 'roadmap',
-    },
-    scheduleDelivery,
-  );
-}
-
-export function storeRoadmapClassificationChange(
-  notice: RoadmapClassificationChangeNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-classification-changed',
-    {
-      ...roadmapClassificationChangeMessage(notice),
-      targetKind: 'roadmap',
-      changeKind: 'classification-updated',
-    },
-    scheduleDelivery,
-  );
-}
-
-export function storeNodeChange(
-  notice: NodeChangeNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-node-changed',
-    {
-      ...nodeMessage(notice),
-      targetKind: notice.targetKind ?? 'node',
-    },
-    scheduleDelivery,
-  );
-}
-
-export function storeResourceChange(
-  notice: ResourceChangeNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  return storeNotice(
-    notice,
-    'roadmap-resource-changed',
-    {
-      ...resourceMessage(notice),
-      targetKind: 'node',
-    },
-    scheduleDelivery,
-  );
 }
 
 export type NoticeNodeAccess = (
@@ -212,13 +46,15 @@ export function noticeRecord(notice: {
   availableAt: Date;
   acknowledgedAt: Date | null;
 }) {
+  // Lifecycle notices are worded at read time; other rows keep their stored text.
+  const projected = projectTargetNotice(notice.data);
   return {
     id: notice.id,
     // Rows are titled by the Course so the reader knows which Roadmap changed.
     ...(notice.courseName ? { courseName: notice.courseName } : {}),
-    subject: notice.subject,
-    body: notice.body,
-    data: notice.data,
+    subject: projected?.wording.subject ?? notice.subject,
+    body: projected?.wording.body ?? notice.body,
+    data: projected?.data ?? notice.data,
     createdAt: notice.availableAt.toISOString(),
     read: notice.acknowledgedAt !== null,
   };
@@ -384,17 +220,7 @@ export async function prepareOwnNoticeOpening(
         roadmapId,
         openedAt,
         noticeIds: notices.map(({ id }) => id),
-        titleSnapshots: titleOpeningSnapshots(notices),
-        contentSnapshots: contentOpeningSnapshots(notices),
-        resourceSnapshots: resourceOpeningSnapshots(notices),
-        routeSnapshots: routeOpeningSnapshots(notices),
-        absorptionSnapshots: await absorptionOpeningSnapshots(
-          transaction,
-          userId,
-          roadmapId,
-          notices,
-          accessible,
-        ),
+        snapshots: await entryTargetSnapshots(transaction, userId, roadmapId, notices, accessible),
         summary: changeSummary(roadmap.courseOffering.courseCode, notices, nodes, accessible),
       },
     });
@@ -402,7 +228,11 @@ export async function prepareOwnNoticeOpening(
   });
 }
 
-export async function acknowledgeOwnNotices(userId: string, input: Record<string, unknown>) {
+export async function acknowledgeOwnNotices(
+  userId: string,
+  input: Record<string, unknown>,
+  accessibleNodes?: NoticeNodeAccess,
+) {
   const operationId = uuid(input.operationId);
   const roadmapId = uuid(input.roadmapId);
   const operation = await prisma.noticeAcknowledgement.findUnique({
@@ -456,48 +286,21 @@ export async function acknowledgeOwnNotices(userId: string, input: Record<string
       },
       data: { acknowledgedAt: new Date() },
     });
-    const routeCount = await recognizeRouteSnapshots(transaction, {
+    const targetCount = await recognizeTargetSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
       operationId,
-      snapshots: retained.routeSnapshots,
-    });
-    const resourceCount = await recognizeResourceSnapshots(transaction, {
-      recipientId: userId,
-      roadmapId,
-      operationId,
-      snapshots: retained.resourceSnapshots,
-    });
-    const contentCount = await recognizeContentSnapshots(transaction, {
-      recipientId: userId,
-      roadmapId,
-      operationId,
-      snapshots: retained.contentSnapshots,
-    });
-    const titleCount = await recognizeTitleSnapshots(transaction, {
-      recipientId: userId,
-      roadmapId,
-      operationId,
-      snapshots: retained.titleSnapshots,
-    });
-    const absorptionCount = await recognizeAbsorptionSnapshots(transaction, {
-      recipientId: userId,
-      roadmapId,
-      operationId,
-      snapshots: retained.absorptionSnapshots,
+      snapshots: retained.snapshots,
+      accessibleNodes,
     });
     const summary =
-      visited &&
-      result.count + absorptionCount + titleCount + contentCount + resourceCount + routeCount > 0
-        ? (retained.summary as ChangeSummary | null)
-        : null;
+      visited && result.count + targetCount > 0 ? (retained.summary as ChangeSummary | null) : null;
     await transaction.noticeAcknowledgement.update({
       where: { recipientId_operationId: { recipientId: userId, operationId } },
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
     return {
-      count:
-        result.count + absorptionCount + titleCount + contentCount + resourceCount + routeCount,
+      count: result.count + targetCount,
       summary,
     };
   });

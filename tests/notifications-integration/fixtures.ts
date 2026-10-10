@@ -3,12 +3,15 @@ import { test as base } from 'vitest';
 import { prisma } from '@/shared/server/db';
 import { cleanTestData, integrationDatabaseUrl } from './database';
 
-async function createCourse(code: string, teacherId: string, studentId: string) {
+async function createCourse(
+  code: string,
+  [teacherId, studentId, classmateId, colleagueId]: string[],
+) {
   return prisma.$transaction(async (tx) => {
     await tx.user.createMany({
-      data: [teacherId, studentId].map((id) => ({
+      data: [teacherId, studentId, classmateId, colleagueId].map((id) => ({
         id,
-        name: id === teacherId ? 'Docente' : 'Estudiante',
+        name: id === teacherId || id === colleagueId ? 'Docente' : 'Estudiante',
         institutionalEmail: `${id}@notifications.u-roadmaps.test`,
         rut: id.slice(0, 20),
       })),
@@ -26,6 +29,8 @@ async function createCourse(code: string, teacherId: string, studentId: string) 
               create: [
                 { userId: teacherId, role: 'TEACHER' },
                 { userId: studentId, role: 'STUDENT' },
+                { userId: classmateId, role: 'STUDENT' },
+                { userId: colleagueId, role: 'TEACHER' },
               ],
             },
             roadmap: { create: {} },
@@ -42,35 +47,41 @@ async function createCourse(code: string, teacherId: string, studentId: string) 
     const node = await tx.roadmapNode.create({
       data: { title: 'Recursividad', roadmapId, nodeTypeId: type.id, positionX: 0, positionY: 0 },
     });
+    const identifier = { courseCode: code, year: 2026, semester: 2 };
     return {
       studentId,
+      classmateId,
       teacherId,
+      colleagueId,
       roadmapId,
+      nodeTypeId: type.id,
+      identifier,
       participationId: offering.participants.find((p) => p.userId === studentId)!.id,
-      change: {
-        userId: teacherId,
-        courseCode: code,
-        year: 2026,
-        semester: 2,
-        nodeId: node.id,
-        eventId: randomUUID(),
-        changeKind: 'node-updated' as const,
-        changedFields: ['title'] as 'title'[],
-        previousTitle: 'Recursión',
-      },
+      change: { ...identifier, nodeId: node.id },
     };
   });
 }
 
-export const test = base.extend<{ course: Awaited<ReturnType<typeof createCourse>> }>({
+export type IntegrationCourse = Awaited<ReturnType<typeof createCourse>>;
+
+async function provideCourse(provide: (course: IntegrationCourse) => Promise<void>) {
+  const code = `NT-${randomUUID().replaceAll('-', '').slice(0, 16)}`;
+  const users = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  try {
+    await provide(await createCourse(code, users));
+  } finally {
+    await cleanTestData(integrationDatabaseUrl(), code, users);
+  }
+}
+
+export const test = base.extend<{ course: IntegrationCourse; otherCourse: IntegrationCourse }>({
   course: async ({ task }, provide) => {
     void task;
-    const code = `NT-${randomUUID().replaceAll('-', '').slice(0, 16)}`;
-    const users = [randomUUID(), randomUUID()];
-    try {
-      await provide(await createCourse(code, users[0], users[1]));
-    } finally {
-      await cleanTestData(integrationDatabaseUrl(), code, users);
-    }
+    await provideCourse(provide);
+  },
+  /** A second Course offering with its own Roadmap and participants. */
+  otherCourse: async ({ task }, provide) => {
+    void task;
+    await provideCourse(provide);
   },
 });

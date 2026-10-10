@@ -28,27 +28,26 @@ model CourseOffering {
 }
 
 model Roadmap {
-  id                     String                        @id @default(uuid()) @db.Uuid
-  closedAt               DateTime?                     @db.Timestamptz(3)
+  id                   String                        @id @default(uuid()) @db.Uuid
+  closedAt             DateTime?                     @db.Timestamptz(3)
   // Permanent attribution; absent only for Roadmaps created before it was recorded.
-  creatorId              String?                       @db.Uuid
-  creator                User?                         @relation("RoadmapCreator", fields: [creatorId], references: [id], onDelete: SetNull)
-  closureTeachingStaff   RoadmapClosureTeachingStaff[]
+  creatorId            String?                       @db.Uuid
+  creator              User?                         @relation("RoadmapCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  closureTeachingStaff RoadmapClosureTeachingStaff[]
   // The closed version this Roadmap was copied from; absent for empty Roadmaps.
-  sourceRoadmapId        String?                       @db.Uuid
-  sourceRoadmap          Roadmap?                      @relation("RoadmapCopies", fields: [sourceRoadmapId], references: [id], onDelete: SetNull)
+  sourceRoadmapId      String?                       @db.Uuid
+  sourceRoadmap        Roadmap?                      @relation("RoadmapCopies", fields: [sourceRoadmapId], references: [id], onDelete: SetNull)
   // The source version's Academic term, kept when the source Roadmap is later removed.
-  sourceYear             Int?
-  sourceSemester         Int?
-  copies                 Roadmap[]                     @relation("RoadmapCopies")
-  courseOfferingId       String                        @unique @db.Uuid
-  courseOffering         CourseOffering                @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  nodeTypes              NodeType[]
-  roadmapNodes           RoadmapNode[]
-  simulatedCompletions   SimulatedCompletion[]
-  visits                 RoadmapVisit[]
-  routeKnowledge         RouteNoticeKnowledge[]
-  nodeLifecycleKnowledge NodeLifecycleKnowledge[]
+  sourceYear           Int?
+  sourceSemester       Int?
+  copies               Roadmap[]                     @relation("RoadmapCopies")
+  courseOfferingId     String                        @unique @db.Uuid
+  courseOffering       CourseOffering                @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  nodeTypes            NodeType[]
+  roadmapNodes         RoadmapNode[]
+  simulatedCompletions SimulatedCompletion[]
+  visits               RoadmapVisit[]
+  noticeKnownValues    NoticeKnownValue[]
 
   @@unique([id, courseOfferingId])
   @@index([sourceRoadmapId])
@@ -101,24 +100,21 @@ model NodeType {
 }
 
 model RoadmapNode {
-  id                   String                    @id @default(uuid()) @db.Uuid
-  roadmapId            String                    @db.Uuid
-  nodeTypeId           String                    @db.Uuid
-  title                String                    @db.VarChar(240)
+  id                   String                @id @default(uuid()) @db.Uuid
+  roadmapId            String                @db.Uuid
+  nodeTypeId           String                @db.Uuid
+  title                String                @db.VarChar(240)
   description          String?
   positionX            Float
   positionY            Float
-  isVisible            Boolean                   @default(true)
-  isTeacherBlocked     Boolean                   @default(false)
-  teacherUnlockOn      DateTime?                 @db.Date
-  roadmap              Roadmap                   @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  nodeType             NodeType                  @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
-  outgoingDependencies Dependency[]              @relation("OutgoingDependencies")
-  incomingDependencies Dependency[]              @relation("IncomingDependencies")
+  isVisible            Boolean               @default(true)
+  isTeacherBlocked     Boolean               @default(false)
+  teacherUnlockOn      DateTime?             @db.Date
+  roadmap              Roadmap               @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  nodeType             NodeType              @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
+  outgoingDependencies Dependency[]          @relation("OutgoingDependencies")
+  incomingDependencies Dependency[]          @relation("IncomingDependencies")
   resources            Resource[]
-  contentKnowledge     NodeContentKnowledge[]
-  titleKnowledge       NodeTitleKnowledge[]
-  resourceKnowledge    ResourceNoticeKnowledge[]
   completions          Completion[]
   simulatedCompletions SimulatedCompletion[]
   changeReviews        NodeChangeReview[]
@@ -158,23 +154,19 @@ model Resource {
 }
 
 model User {
-  id                     String                        @id @default(uuid()) @db.Uuid
-  name                   String                        @db.VarChar(200)
-  institutionalEmail     String                        @unique @db.VarChar(320)
-  rut                    String?                       @unique @db.VarChar(20)
-  notices                RoadmapNotice[]
-  noticeEffects          NoticeDeliveryEffect[]
-  roadmapVisits          RoadmapVisit[]
-  contentKnowledge       NodeContentKnowledge[]
-  titleKnowledge         NodeTitleKnowledge[]
-  resourceKnowledge      ResourceNoticeKnowledge[]
-  routeKnowledge         RouteNoticeKnowledge[]
-  nodeLifecycleKnowledge NodeLifecycleKnowledge[]
-  nodeChangeReviews      NodeChangeReview[]
-  participations         Participation[]
-  completions            Completion[]
-  createdRoadmaps        Roadmap[]                     @relation("RoadmapCreator")
-  closureTeachingStaff   RoadmapClosureTeachingStaff[]
+  id                   String                        @id @default(uuid()) @db.Uuid
+  name                 String                        @db.VarChar(200)
+  institutionalEmail   String                        @unique @db.VarChar(320)
+  rut                  String?                       @unique @db.VarChar(20)
+  notices              RoadmapNotice[]
+  noticeEffects        NoticeDeliveryEffect[]
+  roadmapVisits        RoadmapVisit[]
+  noticeKnownValues    NoticeKnownValue[]
+  nodeChangeReviews    NodeChangeReview[]
+  participations       Participation[]
+  completions          Completion[]
+  createdRoadmaps      Roadmap[]                     @relation("RoadmapCreator")
+  closureTeachingStaff RoadmapClosureTeachingStaff[]
 }
 
 model VtiLoginTransaction {
@@ -241,6 +233,8 @@ enum ParticipationRole {
 }
 
 // Notices retain context even if the Roadmap or Participation later disappears.
+// Partial indexes in raw migration SQL only (Prisma cannot express them):
+// RoadmapNotice_pending_target_key, RoadmapNotice_pending_roadmap_target_idx.
 model RoadmapNotice {
   id               String    @id @default(uuid()) @db.Uuid
   eventId          String
@@ -285,19 +279,16 @@ model RoadmapVisit {
 }
 
 model NoticeAcknowledgement {
-  openingSequence     BigInt    @default(autoincrement())
-  recipientId         String    @db.Uuid
-  operationId         String    @db.Uuid
-  roadmapId           String    @db.Uuid
-  openedAt            DateTime  @db.Timestamptz(3)
-  noticeIds           String[]  @default([]) @db.Uuid
-  contentSnapshots    Json      @default("[]")
-  titleSnapshots      Json      @default("[]")
-  resourceSnapshots   Json      @default("[]")
-  routeSnapshots      Json      @default("[]")
-  absorptionSnapshots Json      @default("[]")
-  summary             Json      @default("null")
-  recognizedAt        DateTime? @db.Timestamptz(3)
+  openingSequence BigInt    @default(autoincrement())
+  recipientId     String    @db.Uuid
+  operationId     String    @db.Uuid
+  roadmapId       String    @db.Uuid
+  openedAt        DateTime  @db.Timestamptz(3)
+  noticeIds       String[]  @default([]) @db.Uuid
+  // ADR-0024: pending notices of every moved Notice target kind captured on entry.
+  snapshots       Json      @default("[]")
+  summary         Json      @default("null")
+  recognizedAt    DateTime? @db.Timestamptz(3)
 
   @@id([recipientId, operationId])
   @@index([recipientId, openedAt])
@@ -313,67 +304,26 @@ model NoticeDeliveryEffect {
   @@id([eventId, recipientId])
 }
 
-// One durable last-known title per recipient and Node, independent of Inbox rows.
-model NodeTitleKnowledge {
-  recipientId String      @db.Uuid
-  nodeId      String      @db.Uuid
-  knownTitle  String      @db.VarChar(240)
-  recipient   User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  node        RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-
-  @@id([recipientId, nodeId])
-}
-
-// Node target values have independent recipient baselines. Access also tracks
-// the current projection atomically with Roadmap edits for deferred delivery.
-model NodeContentKnowledge {
-  recipientId     String      @db.Uuid
-  nodeId          String      @db.Uuid
-  target          String
-  knownValue      String
-  currentValue    String?
-  knownTypeName   String?
-  currentTypeName String?
-  recipient       User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  node            RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-
-  @@id([recipientId, nodeId, target])
-}
-
-// Recipient knowledge survives hiding and deletion until the Roadmap is removed.
-model NodeLifecycleKnowledge {
-  recipientId String  @db.Uuid
-  roadmapId   String  @db.Uuid
-  nodeId      String  @db.Uuid
-  isKnown     Boolean @default(false)
-  recipient   User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  roadmap     Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-
-  @@id([recipientId, roadmapId, nodeId])
-}
-
-// Resource identities survive removal so the recipient's known title remains available.
-model ResourceNoticeKnowledge {
-  recipientId String      @db.Uuid
-  resourceId  String      @db.Uuid
-  nodeId      String      @db.Uuid
-  knownState  String?
-  recipient   User        @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  node        RoadmapNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-
-  @@id([recipientId, resourceId])
-}
-
-// Route targets survive Dependency replacement and retain recipient baselines.
-model RouteNoticeKnowledge {
-  recipientId String  @db.Uuid
-  roadmapId   String  @db.Uuid
-  targetKey   String
-  knownValue  String
-  recipient   User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
-  roadmap     Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+// ADR-0024: the single Known value store of the notice lifecycle module. One row per
+// recipient, Roadmap and Notice target key; values are encoded by the target descriptor.
+// nodeId places the target in the hierarchy; it has no FK so the module can clean it up.
+// Partial expression indexes in raw migration SQL only (Prisma cannot express them):
+// NoticeKnownValue_dependency_source_idx, NoticeKnownValue_dependency_target_idx.
+model NoticeKnownValue {
+  recipientId  String  @db.Uuid
+  roadmapId    String  @db.Uuid
+  targetKey    String
+  /// The Notice target kind (descriptor) that owns `targetKey`.
+  noticeTarget String
+  nodeId       String? @db.Uuid
+  knownValue   String
+  currentValue String?
+  context      Json    @default("{}")
+  recipient    User    @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  roadmap      Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
 
   @@id([recipientId, roadmapId, targetKey])
+  @@index([roadmapId, nodeId])
 }
 
 enum InstitutionalCoursePosition {

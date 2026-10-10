@@ -1,24 +1,9 @@
 import 'server-only';
 
-import type { ResourceNoticeState } from './contracts/resource-state';
-import { randomUUID } from 'node:crypto';
-import { prisma, type Prisma } from '@/shared/server/db';
+import type { Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
-import type {
-  NodeChangeNotice,
-  RoadmapClassificationChangeNotice,
-  RoadmapAvailabilityNotice,
-  RoadmapPathChangeNotice,
-  ResourceChangeNotice,
-} from './contracts';
 import {
-  type NoticeDeliveryScheduler,
   listOwnNotices as listNotices,
-  storeRoadmapAvailability,
-  storeRoadmapClassificationChange,
-  storeRoadmapPathChange,
-  storeNodeChange,
-  storeResourceChange,
   findOwnNotice,
   noticeRecord,
   countOwnNoticeTargets,
@@ -27,12 +12,36 @@ import {
   prepareOwnNoticeOpening as prepareNoticeOpening,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
-export { acknowledgeOwnNotices, reviewOwnNode } from './infrastructure/own-inbox';
+import type { RoadmapChanges } from '@/shared/roadmap-changes';
+import {
+  recordNoticeTargets,
+  type NoticeDelivery,
+  type NoticeDeliveryScheduler,
+} from './infrastructure/notice-lifecycle';
+import { acknowledgeOwnNotices as acknowledgeNotices } from './infrastructure/own-inbox';
+export { reviewOwnNode } from './infrastructure/own-inbox';
+
+/** Public types of the notice lifecycle module: a recorded change's deferred delivery and its scheduler. */
+export type { NoticeDelivery, NoticeDeliveryScheduler };
+
+export function acknowledgeOwnNotices(userId: string, input: Record<string, unknown>) {
+  return acknowledgeNotices(userId, input, accessibleNodes);
+}
+
+/**
+ * Notice lifecycle module (ADR-0024): record Known values inside the roadmap
+ * transaction and return the deferred delivery of the change's notices.
+ */
+export function recordRoadmapNotices(
+  transaction: Prisma.TransactionClient,
+  changes: RoadmapChanges,
+): Promise<NoticeDelivery | undefined> {
+  return recordNoticeTargets(transaction, changes, accessibleNodes);
+}
 
 export function listOwnNotices(userId: string, params: URLSearchParams) {
   return listNotices(userId, params);
 }
-export type { NoticeDeliveryScheduler } from './infrastructure/own-inbox';
 export type InboxIdentity = Readonly<{ userId: string }>;
 
 export function getInboxIdentity(userId: string): InboxIdentity {
@@ -49,431 +58,6 @@ export function countOwnNotices(userId: string, params: URLSearchParams) {
 
 export function countOwnNodeChangeTargets(userId: string, params: URLSearchParams) {
   return countOwnNodeChanges(userId, params);
-}
-
-type RecipientNode = Readonly<{
-  id: string;
-  roadmapId: string;
-  isVisible: boolean;
-  isTeacherBlocked: boolean;
-}>;
-
-async function eligibleNodeRecipients({
-  node,
-  courseOfferingId,
-  actorId,
-}: {
-  node: RecipientNode;
-  courseOfferingId: string;
-  actorId: string;
-}) {
-  if (!node.isVisible) return [];
-  const [participants, visibleNodes, dependencies] = await Promise.all([
-    prisma.participation.findMany({
-      where: { courseOfferingId, isActive: true, userId: { not: actorId } },
-      include: { user: { select: { id: true, name: true } } },
-    }),
-    prisma.roadmapNode.findMany({
-      where: { roadmapId: node.roadmapId, isVisible: true },
-      select: { id: true, isTeacherBlocked: true },
-    }),
-    prisma.dependency.findMany({
-      where: { sourceNode: { roadmapId: node.roadmapId } },
-      select: { sourceNodeId: true, targetNodeId: true },
-    }),
-  ]);
-  const visibleNodeIds = new Set(visibleNodes.map(({ id }) => id));
-  const visibleDependencies = dependencies.filter(
-    ({ sourceNodeId, targetNodeId }) =>
-      visibleNodeIds.has(sourceNodeId) && visibleNodeIds.has(targetNodeId),
-  );
-  const studentParticipants = participants.filter(({ role }) => role === 'STUDENT');
-  const completions = studentParticipants.length
-    ? await prisma.completion.findMany({
-        where: {
-          userId: { in: studentParticipants.map(({ userId }) => userId) },
-          roadmapNode: { roadmapId: node.roadmapId },
-        },
-        select: { userId: true, roadmapNodeId: true },
-      })
-    : [];
-  const completionIdsByUser = new Map<string, Set<string>>();
-  for (const completion of completions) {
-    const completed = completionIdsByUser.get(completion.userId) ?? new Set<string>();
-    completed.add(completion.roadmapNodeId);
-    completionIdsByUser.set(completion.userId, completed);
-  }
-  return participants.flatMap((participant) => {
-    if (participant.role === 'TEACHER') {
-      return !node.isTeacherBlocked
-        ? [{ userId: participant.user.id, name: participant.user.name }]
-        : [];
-    }
-    const access = studentNodeAccessById({
-      nodes: visibleNodes,
-      dependencies: visibleDependencies,
-      completedNodeIds: completionIdsByUser.get(participant.userId) ?? new Set(),
-    }).get(node.id);
-    return access?.status === 'ACCESSIBLE'
-      ? [{ userId: participant.user.id, name: participant.user.name }]
-      : [];
-  });
-}
-
-export async function deliverRoadmapAvailability(
-  notice: RoadmapAvailabilityNotice,
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  try {
-    await storeRoadmapAvailability(notice, scheduleDelivery);
-  } catch {
-    console.warn('Roadmap availability delivery failed', { eventId: notice.eventId });
-  }
-}
-
-export async function deliverNodeChange(
-  input: {
-    userId: string;
-    courseCode: string;
-    year: number;
-    semester: number;
-    nodeId: string;
-    eventId?: string;
-    changeKind: NodeChangeNotice['changeKind'];
-    changedFields: NodeChangeNotice['changedFields'];
-    nodeTitle?: string;
-    previousTitle?: string;
-    previousAccess?: NodeChangeNotice['previousAccess'];
-    previousDescription?: string | null;
-    previousTypeId?: string;
-    previousTypeName?: string;
-    currentTypeName?: string;
-    nodeTypeName?: string;
-    roadmapId?: string;
-    recipientIds?: readonly string[];
-    targetKind?: 'node' | 'roadmap';
-  },
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  const node = await prisma.roadmapNode.findUnique({
-    where: { id: input.nodeId },
-    include: {
-      nodeType: { select: { name: true } },
-      roadmap: {
-        include: {
-          courseOffering: { include: { course: true } },
-        },
-      },
-    },
-  });
-  const offering = node?.roadmap.courseOffering;
-  if (
-    (offering &&
-      (offering.courseCode !== input.courseCode ||
-        offering.year !== input.year ||
-        offering.semester !== input.semester)) ||
-    (!node && (!input.recipientIds || !input.nodeTitle))
-  )
-    return;
-  const offeringInfo =
-    offering ??
-    (await prisma.courseOffering.findUnique({
-      where: {
-        courseCode_year_semester: {
-          courseCode: input.courseCode,
-          year: input.year,
-          semester: input.semester,
-        },
-      },
-      include: { course: true },
-    }));
-  if (!offeringInfo) return;
-  const roadmapId = input.roadmapId ?? node?.roadmapId;
-  if (!roadmapId) return;
-  const recipients = input.recipientIds
-    ? await prisma.participation
-        .findMany({
-          where: {
-            courseOfferingId: offeringInfo.id,
-            isActive: true,
-            userId: { in: [...input.recipientIds], not: input.userId },
-          },
-          include: { user: { select: { id: true, name: true } } },
-        })
-        .then((participants) =>
-          participants.map(({ user }) => ({ userId: user.id, name: user.name })),
-        )
-    : node?.isVisible
-      ? await eligibleNodeRecipients({
-          node,
-          courseOfferingId: offering!.id,
-          actorId: input.userId,
-        })
-      : [];
-  const visibleRecipients =
-    node?.isVisible &&
-    ((input.changedFields.includes('title') && input.previousTitle !== undefined) ||
-      (input.changedFields.includes('nodeType') && input.previousTypeId !== undefined))
-      ? await prisma.participation
-          .findMany({
-            where: {
-              courseOfferingId: offeringInfo.id,
-              isActive: true,
-              userId: { not: input.userId },
-            },
-            include: { user: { select: { id: true, name: true } } },
-          })
-          .then((rows) => rows.map(({ user }) => ({ userId: user.id, name: user.name })))
-      : [];
-  if (!recipients.length && !visibleRecipients.length) return;
-
-  const notice: NodeChangeNotice = {
-    eventId: input.eventId ?? randomUUID(),
-    roadmapId,
-    courseOfferingId: offeringInfo.id,
-    courseCode: offeringInfo.courseCode,
-    year: offeringInfo.year,
-    semester: offeringInfo.semester,
-    courseName: offeringInfo.course.name,
-    nodeId: input.nodeId,
-    nodeTitle: input.nodeTitle ?? node!.title,
-    changeKind: input.changeKind,
-    changedFields: input.changedFields,
-    ...(input.previousAccess
-      ? { contentTarget: 'access' as const, previousValue: input.previousAccess }
-      : {}),
-    ...(input.nodeTypeName ? { nodeTypeName: input.nodeTypeName } : {}),
-    ...(input.targetKind ? { targetKind: input.targetKind } : {}),
-    actorId: input.userId,
-    actorName:
-      (await prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }))
-        ?.name ?? 'Equipo docente',
-    occurredAt: new Date(),
-    recipients,
-  };
-
-  const handledFields = new Set<string>();
-  for (const field of notice.changedFields) {
-    if (notice.changeKind !== 'node-updated') break;
-    const audience = field === 'description' ? recipients : visibleRecipients;
-    const previousValue =
-      field === 'description'
-        ? input.previousDescription === undefined
-          ? undefined
-          : JSON.stringify(input.previousDescription)
-        : field === 'nodeType'
-          ? input.previousTypeId
-          : input.previousTitle;
-    if (previousValue === undefined) continue;
-    handledFields.add(field);
-    if (!audience.length) continue;
-    await storeNodeChange(
-      {
-        ...notice,
-        eventId: `${notice.eventId}:${field}`,
-        changedFields: [field],
-        ...(field === 'title'
-          ? { previousTitle: previousValue }
-          : {
-              contentTarget: field,
-              previousValue,
-              ...(field === 'nodeType'
-                ? {
-                    previousTypeName: input.previousTypeName,
-                    currentTypeName: input.currentTypeName,
-                  }
-                : {}),
-            }),
-        recipients: audience,
-      },
-      scheduleDelivery,
-    ).catch(() => {
-      console.warn('Node content notice delivery failed', { eventId: notice.eventId });
-    });
-  }
-  const changedFields = notice.changedFields.filter((field) => !handledFields.has(field));
-  if (recipients.length && (notice.changeKind !== 'node-updated' || changedFields.length)) {
-    await storeNodeChange({ ...notice, changedFields }, scheduleDelivery).catch(() => {
-      console.warn('Node notice delivery failed', { eventId: notice.eventId });
-    });
-  }
-}
-
-export async function deliverRoadmapPathChange(
-  input: {
-    eventId: string;
-    dependencyId: string;
-    sourceNodeId: string;
-    targetNodeId: string;
-    userId: string;
-    identifier: { courseCode: string; year: number; semester: number };
-    roadmapId: string;
-    changeKind: RoadmapPathChangeNotice['changeKind'];
-    dependentNodeTitle: string;
-    prerequisiteNodeTitle: string;
-    recipientIds: readonly string[];
-  },
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  if (input.recipientIds.length === 0) return;
-
-  const [offering, actor] = await Promise.all([
-    prisma.courseOffering.findUnique({
-      where: { courseCode_year_semester: input.identifier },
-      include: { roadmap: { select: { id: true } } },
-    }),
-    prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }),
-  ]);
-  if (!offering || offering.roadmap?.id !== input.roadmapId) return;
-
-  const participants = await prisma.participation.findMany({
-    where: {
-      courseOfferingId: offering.id,
-      isActive: true,
-      userId: { in: [...input.recipientIds], not: input.userId },
-    },
-    include: { user: { select: { id: true, name: true } } },
-  });
-  const recipients = participants.map(({ user }) => ({ userId: user.id, name: user.name }));
-  if (!recipients.length) return;
-
-  const notice: RoadmapPathChangeNotice = {
-    eventId: input.eventId,
-    dependencyId: input.dependencyId,
-    sourceNodeId: input.sourceNodeId,
-    targetNodeId: input.targetNodeId,
-    roadmapId: input.roadmapId,
-    courseOfferingId: offering.id,
-    courseCode: offering.courseCode,
-    year: offering.year,
-    semester: offering.semester,
-    changeKind: input.changeKind,
-    dependentNodeTitle: input.dependentNodeTitle,
-    prerequisiteNodeTitle: input.prerequisiteNodeTitle,
-    actorId: input.userId,
-    actorName: actor?.name ?? 'Equipo docente',
-    occurredAt: new Date(),
-    recipients,
-  };
-
-  await storeRoadmapPathChange(notice, scheduleDelivery).catch(() => {
-    console.warn('Roadmap path notice delivery failed', { eventId: notice.eventId });
-  });
-}
-
-export async function deliverRoadmapClassificationChange(
-  input: {
-    userId: string;
-    identifier: { courseCode: string; year: number; semester: number };
-    roadmapId: string;
-    nodeTypeId: string;
-    previousTypeName: string;
-    nextTypeName: string;
-    recipientIds: readonly string[];
-  },
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  try {
-    if (input.recipientIds.length === 0) return;
-
-    const [offering, actor] = await Promise.all([
-      prisma.courseOffering.findUnique({
-        where: { courseCode_year_semester: input.identifier },
-        include: { roadmap: { select: { id: true } } },
-      }),
-      prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }),
-    ]);
-    if (!offering || offering.roadmap?.id !== input.roadmapId) return;
-
-    const participants = await prisma.participation.findMany({
-      where: {
-        courseOfferingId: offering.id,
-        isActive: true,
-        userId: { in: [...input.recipientIds], not: input.userId },
-      },
-      include: { user: { select: { id: true, name: true } } },
-    });
-    const recipients = participants.map(({ user }) => ({ userId: user.id, name: user.name }));
-    if (recipients.length === 0) return;
-
-    const notice: RoadmapClassificationChangeNotice = {
-      eventId: randomUUID(),
-      roadmapId: input.roadmapId,
-      courseOfferingId: offering.id,
-      courseCode: offering.courseCode,
-      year: offering.year,
-      semester: offering.semester,
-      nodeTypeId: input.nodeTypeId,
-      previousTypeName: input.previousTypeName,
-      nextTypeName: input.nextTypeName,
-      actorId: input.userId,
-      actorName: actor?.name ?? 'Equipo docente',
-      occurredAt: new Date(),
-      recipients,
-    };
-
-    await storeRoadmapClassificationChange(notice, scheduleDelivery);
-  } catch {
-    console.warn('Roadmap classification notice delivery failed', { roadmapId: input.roadmapId });
-  }
-}
-
-export async function deliverResourceChange(
-  input: {
-    userId: string;
-    identifier: { courseCode: string; year: number; semester: number };
-    nodeId: string;
-    resourceTitle: string;
-    resourceId?: string;
-    previousResource?: ResourceNoticeState | null;
-    changeKind: ResourceChangeNotice['changeKind'];
-  },
-  scheduleDelivery?: NoticeDeliveryScheduler,
-) {
-  try {
-    const node = await prisma.roadmapNode.findUnique({
-      where: { id: input.nodeId },
-      include: { roadmap: { include: { courseOffering: { include: { course: true } } } } },
-    });
-    if (!node) return;
-    const offering = node.roadmap.courseOffering;
-    if (
-      offering.courseCode !== input.identifier.courseCode ||
-      offering.year !== input.identifier.year ||
-      offering.semester !== input.identifier.semester
-    )
-      return;
-    const recipients = await eligibleNodeRecipients({
-      node,
-      courseOfferingId: offering.id,
-      actorId: input.userId,
-    });
-    if (!recipients.length) return;
-    const notice: ResourceChangeNotice = {
-      eventId: randomUUID(),
-      roadmapId: node.roadmapId,
-      courseOfferingId: offering.id,
-      courseCode: offering.courseCode,
-      year: offering.year,
-      semester: offering.semester,
-      courseName: offering.course.name,
-      nodeId: node.id,
-      nodeTitle: node.title,
-      resourceTitle: input.resourceTitle,
-      resourceId: input.resourceId,
-      previousResource: input.previousResource,
-      changeKind: input.changeKind,
-      actorId: input.userId,
-      actorName:
-        (await prisma.user.findUnique({ where: { id: input.userId }, select: { name: true } }))
-          ?.name ?? 'Equipo docente',
-      occurredAt: new Date(),
-      recipients,
-    };
-    await storeResourceChange(notice, scheduleDelivery);
-  } catch {
-    console.warn('Resource notice delivery failed', { nodeId: input.nodeId });
-  }
 }
 
 async function accessibleNodes(

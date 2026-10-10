@@ -1,10 +1,6 @@
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 
-export type CourseOfferingIdentifier = {
-  courseCode: string;
-  year: number;
-  semester: number;
-};
+export type { CourseOfferingIdentifier } from '@/shared/course-offering';
 
 export type StudentNodeBlockReason = 'TEACHER_BLOCK' | 'PREREQUISITE_BLOCK';
 

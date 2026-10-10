@@ -1,5 +1,5 @@
 import { nodeAccessState } from '@/shared/node-access';
-import type { AccessSnapshot } from './node-change-notifications';
+import type { AccessSnapshot } from './access-snapshot';
 import type { RoadmapChangeFact } from './change-port';
 
 export function accessChanges(before: AccessSnapshot, after: AccessSnapshot): RoadmapChangeFact[] {

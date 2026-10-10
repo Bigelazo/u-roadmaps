@@ -7,9 +7,6 @@ import {
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
 import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
-import { NODE_ACCESS_STATES, nodeAccessState } from '@/shared/node-access';
-import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
-import { type Prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 
 export type AcademicUser = Readonly<{
@@ -118,7 +115,6 @@ export async function materializeParticipation(
       create: { userId: user.id, courseOfferingId: courseOffering.id, role, institutionalPosition },
     });
     if (previous?.role === 'STUDENT' && role === 'TEACHER' && roadmap) {
-      await resetStudentAccessNotices(transaction, user.id, roadmap.id);
       await report({
         actorId: user.id,
         identifier,
@@ -187,45 +183,4 @@ export async function synchronizeAcademicParticipations(
     );
   }
   return source;
-}
-
-/** Promotion establishes staff access without carrying over the student projection. */
-async function resetStudentAccessNotices(
-  transaction: Prisma.TransactionClient,
-  recipientId: string,
-  roadmapId: string,
-) {
-  await lockRecipientRoadmap(transaction, recipientId, roadmapId);
-  const nodes = await transaction.roadmapNode.findMany({
-    where: { roadmapId },
-    select: { id: true, isVisible: true, isTeacherBlocked: true },
-  });
-  for (const state of NODE_ACCESS_STATES) {
-    const ids = nodes
-      .filter((node) => nodeAccessState(node.isVisible, !node.isTeacherBlocked) === state)
-      .map(({ id }) => id);
-    if (!ids.length) continue;
-    await transaction.nodeContentKnowledge.createMany({
-      data: ids.map((nodeId) => ({
-        recipientId,
-        nodeId,
-        target: 'access',
-        knownValue: state,
-        currentValue: state,
-      })),
-      skipDuplicates: true,
-    });
-    await transaction.nodeContentKnowledge.updateMany({
-      where: { recipientId, nodeId: { in: ids }, target: 'access' },
-      data: { knownValue: state, currentValue: state },
-    });
-  }
-  await transaction.roadmapNotice.deleteMany({
-    where: {
-      recipientId,
-      roadmapId,
-      acknowledgedAt: null,
-      data: { path: ['noticeTarget'], equals: 'node-access' },
-    },
-  });
 }

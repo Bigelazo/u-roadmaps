@@ -86,7 +86,7 @@ test('new Node absorbs content, Resources and blocking, withdraws on hiding and 
   expect((await author.post(`${path}/teacher-block`)).status()).toBe(200);
   await expect.poll(async () => (await notices())[0]?.data.nodeAccess).toBe('Bloqueado');
   expect(await notices()).toHaveLength(1);
-  expect((await notices())[0].body).toContain('Bloqueado');
+  expect((await notices())[0].body).toContain('(bloqueado)');
   expect((await author.patch(path, { data: { isVisible: false } })).status()).toBe(200);
   await expect.poll(notices).toHaveLength(0);
   const directlyDeleted = await creator.createNode('Eliminado sin reconocer', 400);
@@ -228,8 +228,8 @@ test('pending Roadmap availability absorbs every later notice and recognition es
       expect.objectContaining({
         data: expect.objectContaining({
           noticeTarget: 'dependency',
-          knownValue: 'false',
-          currentValue: 'true',
+          knownValue: 'absent',
+          currentValue: 'present',
         }),
       }),
       expect.objectContaining({

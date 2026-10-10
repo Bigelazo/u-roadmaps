@@ -5,9 +5,8 @@
 > por Roadmap. No hay ventanas de tiempo ni estado «visto».
 
 U-Roadmaps consulta y guarda sus avisos en PostgreSQL y transmite invalidaciones
-por SSE autenticado. Disponibilidad, Nodos y cambios de acceso, Recursos,
-Dependencias y clasificación usan exclusivamente esta entrega y el mismo
-almacenamiento diferido tras la respuesta HTTP. No hay SDK, configuración de suscriptores, workflows, publicación de
+por SSE autenticado. Todas las clases de Objeto pasan por el mismo módulo de
+ciclo de vida y la misma entrega diferida tras la respuesta HTTP. No hay SDK, configuración de suscriptores, workflows, publicación de
 Code Steps ni conexiones a Novu. No se importan avisos del proveedor anterior.
 El contrato acordado vive en [#152](https://github.com/Bigelazo/u-roadmaps/issues/152);
 [#139](https://github.com/Bigelazo/u-roadmaps/issues/139) y el historial Git conservan
@@ -55,25 +54,26 @@ Los cambios de visibilidad y Completación invalidan también el Inbox por SSE.
 #184 activa las absorciones de ADR-0014. Mientras un Nodo sea nuevo para un
 destinatario, todas sus ediciones de título, descripción, tipo, acceso y Recursos
 actualizan un único Aviso «Nuevo Nodo», con su estado actual. Un Bloqueo se indica
-en ese Aviso. Ocultarlo o eliminarlo antes del reconocimiento retira el Aviso;
+en ese Aviso («Nuevo Nodo «Pilas» (bloqueado).»). Si el Nodo ya no existe, el Aviso
+pendiente deja de mostrarse y contarse (Inbox, Resumen de cambios y marca por Nodo). Ocultarlo o eliminarlo antes del reconocimiento retira el Aviso;
 volver a mostrarlo produce de nuevo un Aviso de Nodo nuevo. Eliminar un Nodo
 conocido sustituye todos sus Avisos pendientes por el Aviso de eliminación.
 «Roadmap disponible» pendiente absorbe todos los demás Avisos de ese Roadmap.
 Cada absorción actualiza la fecha; los contadores cuentan únicamente los Objetos
 resultantes.
 
-`NodeLifecycleKnowledge` captura en la transacción de creación quién todavía
-no conoce el Nodo y conserva ese dato tras ocultarlo o eliminarlo. La relación
-pertenece al Roadmap y al Usuario; no depende de que el Nodo siga existiendo.
-La entrega y el reconocimiento usan el mismo lock por destinatario y Roadmap.
-La apertura captura los valores de los Objetos absorbidos en
-`NoticeAcknowledgement.absorptionSnapshots`; reconocerlos fija esos valores
-como conocidos y reconcilia los cambios posteriores. Reintentar la misma
-apertura no reconoce cambios nuevos. Entrar también fija el conocimiento de
-Nodos cuya entrega de creación aún no llegó al Inbox; una Dependencia creada
-entre apertura y reconocimiento conserva un Aviso posterior. Los estados de
-acceso capturados se validan antes de reconocerlos. Las migraciones agregan conocimiento y
-snapshots sin borrar Avisos existentes.
+La creación es un Objeto amplio del módulo (`node:<id>:creation`): quien todavía
+no conoce el Nodo tiene el Known value `absent`, registrado en la transacción de
+creación, y ese valor absorbe los Objetos del Nodo. La eliminación
+(`node:<id>:deletion`) y la disponibilidad (`roadmap:<id>:availability`) son
+también Objetos amplios. La entrega y el reconocimiento usan el mismo lock por
+destinatario y Roadmap. La apertura captura los Objetos amplios en la colección
+única `NoticeAcknowledgement.snapshots`; reconocerlos fija esos valores como
+conocidos y reconcilia los cambios posteriores. Reintentar la misma apertura no
+reconoce cambios nuevos. Entrar también fija el conocimiento de Nodos cuya
+entrega de creación aún no llegó al Inbox; una Dependencia creada entre apertura
+y reconocimiento conserva un Aviso posterior. Los estados de acceso capturados se
+validan antes de reconocerlos.
 
 ## Instalar y arrancar
 
@@ -104,70 +104,125 @@ y de los resets aislados de pruebas; no es una tarea periódica de producción.
 Las migraciones posteriores conservan los Avisos del modelo nuevo.
 No hay caducidad ni tarea de eliminación por antigüedad para `RoadmapNotice`.
 
-El título usa `NodeTitleKnowledge` para conservar el último valor conocido por
-Usuario y Nodo. Un trigger captura el valor anterior en la transacción de edición;
-la entrega diferida consulta el título actual y reconcilia mediante una función
-pura. Una clave única parcial impide dos Avisos pendientes del mismo Objeto.
-Reconocimiento y entrega usan un lock transaccional por Usuario y Roadmap. Las
-actualizaciones y retiros emiten la misma invalidación SSE del Inbox. Los recibos
-persisten tras actualizar o retirar un Aviso, por lo que un reintento no lo recrea.
+## Módulo de ciclo de vida de avisos
 
-Título y tipo llegan también a quienes ven el Nodo bloqueado; descripción solo
-a quienes pueden acceder al Nodo. Los Objetos son independientes.
-`NodeContentKnowledge` conserva el texto exacto de la descripción (sin recortar
-espacios) y la identidad del Tipo, con nombres capturados en la transacción de
-asignación. La transacción de edición captura la descripción anterior solo para
-participantes con acceso al Nodo; el trigger de tipo incluye también a quienes
-lo ven bloqueado. Repetir ediciones deja un Aviso pendiente por Objeto; volver al
-valor conocido lo retira. Renombrar un Tipo no reescribe los nombres del Aviso
-de asignación pendiente.
+Desde ADR-0024 (#198) un único módulo de notifications
+(`src/features/notifications/infrastructure/notice-lifecycle/`) es dueño de todo
+el ciclo de vida de los Avisos. El Roadmap no lee ni escribe tablas de avisos:
+reporta hechos por el port de cambios del Roadmap
+([roadmap-change-port.md](roadmap-change-port.md)) y el módulo hace el resto.
 
-El acceso usa el Objeto `node-access` por Usuario y Nodo, con estados Disponible,
-Bloqueado y Retirado. La transacción docente captura la proyección anterior y
-actual en `NodeContentKnowledge` (`target = access`), incluyendo Completaciones
-por estudiante. La entrega consulta esa proyección actual, por lo que un efecto
-diferido no restaura un estado intermedio. Bloqueos y desbloqueos de Nodo o rama,
-Desbloqueos programados, cambios de Dependencias y visibilidad reconcilian cada
-Nodo cuyo estado cambió para ese destinatario. Un Aviso muestra el estado conocido
-y el actual, absorbe pasos intermedios y se retira al volver al conocido. También
-se reconoce y aparece en el Resumen de cambios cuando el estado actual es Retirado.
-La Completación actualiza la proyección de acceso de ese estudiante y avanza
-el valor conocido de los Nodos recién disponibles solo si no tienen un Objeto
-de acceso pendiente. Si hay uno, conserva su valor conocido, actualiza el estado
-actual y lo retira solo al volver al conocido; no reconoce otros Avisos. El Desbloqueo programado conserva
-la atribución a Equipo docente. La migración de
-#180 agrega la proyección actual sin borrar Avisos existentes.
+1. **Registrar** (dentro de la transacción de la edición): fija el Known value
+   anterior de cada destinatario que todavía no tiene uno, decide la audiencia y
+   aplica la regla del actor. Eliminar un Nodo borra en ese momento los Known
+   values de sus Objetos y de los pares de Dependencia que lo incluían, salvo la
+   creación no reconocida (`absent`) de los destinatarios de la eliminación, que
+   su entrega absorbe y borra.
+2. **Entregar** (después del commit, una transacción por destinatario): acepta el
+   efecto en `NoticeDeliveryEffect`, toma el lock por destinatario y Roadmap y
+   reconcilia el Objeto contra su valor actual con una única ruta genérica:
+   retirar, conservar, actualizar en el mismo Aviso o crear.
+3. **Capturar y reconocer** (al entrar al Roadmap): la apertura guarda los Objetos
+   pendientes en `NoticeAcknowledgement.snapshots`; reconocer fija esos valores.
 
-Cada Recurso usa un Objeto `resource:<id>` y `ResourceNoticeKnowledge` conserva
-su título y revisión conocidos por destinatario, incluso tras quitar el Recurso.
-La revisión es una huella SHA-256 del contenido significativo (título, URL,
-tipo, identidad del archivo y tipo MIME), independiente de `updatedAt`.
-Restaurar todos esos campos retira el Aviso. La migración convierte las revisiones
-históricas de fecha solo cuando coinciden con la versión actual del Recurso;
-conserva las demás hasta reconocerlas, pues no se puede reconstruir su contenido
-anterior sin inventar un baseline.
-La transacción de creación, edición o eliminación captura el valor anterior solo
-para participantes con acceso al Nodo, excluyendo al autor. La entrega consulta
-la versión actual: agregado → editado sigue siendo nuevo, agregado → eliminado
-retira el Aviso y editado → eliminado conserva el título conocido. Las ediciones
-solo detallan cambios de título; URLs, tipos y archivos no se muestran. Apertura
-y reconocimiento conservan snapshots de Recursos y rebasan los cambios posteriores
-sin reconocerlos en reintentos. La migración de #181 agrega las tablas y snapshots
-sin borrar Avisos existentes.
+Cada clase de Objeto es un descriptor en
+`src/features/notifications/application/notice-targets/` (registro en `index.ts`).
 
-Las Dependencias usan el Objeto `dependency:<origen>:<destino>`, independiente del
-id de la arista. `RouteNoticeKnowledge` conserva si el destinatario conocía ese
-par, o el nombre conocido de cada Tipo de nodo (`node-type:<id>:name`). La
-transacción docente captura el valor anterior antes de la entrega diferida, que
-consulta el estado actual. Quitar y volver a agregar un par, o renombrar un Tipo
-hasta volver al nombre conocido, retira el Aviso. Invertir una Dependencia crea
-dos Objetos distintos. Solo reciben Avisos los participantes activos distintos
-del autor: para Dependencias ambos Nodos deben ser visibles; para nombres de
-Tipos debe existir al menos un Nodo visible, incluso bloqueado. Ícono y color
-no generan Avisos. Ocultar o eliminar un Nodo no genera Avisos de ruta por sus
-Dependencias eliminadas en cascada. Apertura y reconocimiento conservan snapshots
-de ambos Objetos y rebasan ediciones posteriores sin reconocerlas. La migración
-de #182 agrega conocimientos y snapshots sin borrar Avisos existentes.
+| Objeto | Clave (`targetKey`) | Valores |
+| --- | --- | --- |
+| Título | `node:<id>:title` | título |
+| Descripción | `node:<id>:description` | texto exacto (sin recortar) |
+| Tipo del Nodo | `node:<id>:nodeType` | id del Tipo; nombre en `context.typeName` |
+| Acceso | `node:<id>:access` | `Disponible`, `Bloqueado`, `Retirado` |
+| Recurso | `resource:<id>` | JSON `{title, revision}` o `null` si no existe |
+| Par de Dependencia | `dependency:<origen>:<destino>` | `true` / `false` |
+| Nombre de Tipo de nodo | `node-type:<id>:name` | nombre |
+| Creación de Nodo | `node:<id>:creation` | `absent` / `present` |
+| Eliminación de Nodo | `node:<id>:deletion` | sin Known value guardado |
+| Disponibilidad | `roadmap:<id>:availability` | `absent` / `present` |
+
+### Almacenamiento
+
+- `NoticeKnownValue` es el único almacén de Known values: una fila por
+  `(recipientId, roadmapId, targetKey)`, con `knownValue`, `nodeId` (sin FK; ubica el
+  Objeto en el Nodo y permite limpiarlo), `currentValue` (solo acceso: el estado
+  por destinatario al momento de la edición, para que una entrega diferida no
+  restaure un estado intermedio) y `context` (contexto de presentación del valor
+  conocido, p. ej. el nombre del Tipo).
+- `NoticeAcknowledgement.snapshots` es la única colección de capturas de una
+  apertura: entradas `{id, noticeTarget, targetKey, nodeId, currentValue, …}` de
+  todas las clases de Objeto (`id` puede ser `null` para Objetos sin Aviso).
+- `RoadmapNotice.data` guarda datos, no texto: `noticeTarget`, `targetKey`,
+  `knownValue`, `currentValue`, `context` y los campos que lee la proyección
+  (`changeKind`, `nodeId`, `sourceNodeId`/`targetNodeId`, `nodeTypeId`). Asunto y
+  cuerpo se proyectan al leer con el `wording` del descriptor; las columnas
+  `subject`/`body` son una caché. Cambiar la redacción no requiere migración.
+  Una clave única parcial impide dos Avisos pendientes del mismo Objeto.
+- Los recibos de `NoticeDeliveryEffect` persisten tras actualizar o retirar un
+  Aviso, por lo que un reintento no lo recrea.
+
+Los Known values se pierden con la Participación (trigger
+`withdraw_participation_notices`, junto con los Avisos pendientes y las
+aperturas) y con la eliminación del Nodo. Una creación no reconocida (`absent`)
+se conserva solo para los destinatarios de la eliminación, hasta que su entrega
+absorbe la eliminación y la borra.
+
+### Audiencia y regla del actor
+
+Título y tipo llegan a quienes ven el Nodo, aunque esté bloqueado; descripción y
+Recursos solo a quienes pueden acceder al Nodo. Los pares de Dependencia exigen
+ambos Nodos visibles; los nombres de Tipo, al menos un Nodo visible de ese Tipo.
+Ícono y color no generan Avisos; ocultar o eliminar un Nodo no genera Avisos por
+las Dependencias eliminadas en cascada. El acceso se calcula por destinatario en
+el Roadmap (bloqueos de Nodo o rama, Desbloqueos programados, Dependencias y
+visibilidad) y se reconcilia en cada Nodo cuyo estado cambió para él; también se
+reconoce y aparece en el Resumen de cambios cuando el estado actual es Retirado.
+
+El autor de un cambio nunca recibe Aviso por él: su propio cambio avanza su Known
+value. Si tenía un Aviso pendiente de ese Objeto, el Aviso lo absorbe y se retira
+si vuelve a lo conocido; así un docente se entera cuando otro revierte su cambio.
+Si su Known value no coincide con el valor del que partió su cambio, la diferencia
+de un colega aún no le fue entregada: se reconcilia como si ese Aviso ya existiera
+y absorbiera el cambio propio (crea un Aviso conocido→actual, o nada si coinciden),
+así el resultado no depende del orden de entrega.
+La Completación es el mismo caso para el estudiante, y la promoción a equipo
+docente reinicia sus Known values de acceso y retira sus Avisos de acceso
+pendientes. El Desbloqueo programado conserva la atribución a Equipo docente: se
+guarda `actorName: null` y la lectura proyecta «Equipo docente». El candado por
+destinatario y Roadmap serializa entrega, reconocimiento y los cambios propios.
+
+Comportamientos que se deducen de los valores: volver al valor conocido retira el
+Aviso; un Recurso agregado y luego editado sigue siendo nuevo, y agregado y
+eliminado no deja Aviso; invertir una Dependencia afecta dos pares; renombrar un
+Tipo no reescribe el nombre conocido de un Aviso de asignación pendiente. La
+revisión de un Recurso es una huella SHA-256 de título, URL, tipo, identidad del
+archivo y tipo MIME; las ediciones solo detallan cambios de título.
+
+### Inspeccionar y reparar
+
+```sql
+-- Known values de un destinatario en un Roadmap
+SELECT "targetKey", "nodeId", "knownValue", "currentValue", context
+FROM "NoticeKnownValue" WHERE "recipientId" = $1 AND "roadmapId" = $2
+ORDER BY "targetKey";
+
+-- Avisos pendientes con sus valores
+SELECT id, "targetKey", data->>'knownValue' AS known, data->>'currentValue' AS current
+FROM "RoadmapNotice"
+WHERE "recipientId" = $1 AND "roadmapId" = $2 AND "acknowledgedAt" IS NULL;
+
+-- Known values huérfanos (no debería haber; la eliminación del Nodo los borra)
+SELECT * FROM "NoticeKnownValue" k
+WHERE k."nodeId" IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM "RoadmapNode" n WHERE n.id = k."nodeId");
+```
+
+Borrar una fila de `NoticeKnownValue` es seguro: el siguiente cambio del Objeto
+vuelve a fijar el valor anterior como conocido, por lo que se pierde a lo sumo
+ese Aviso, nunca se inventa uno. Para reparar un Aviso pendiente incorrecto,
+borrarlo y fijar el Known value al valor actual; la próxima entrega reconcilia
+desde ahí. La migración `20261009170000_drop_per_kind_notice_storage` eliminó las
+tablas y columnas por clase anteriores y los Known values huérfanos.
 
 Todas las clases reconcilian su Objeto del aviso sin ventanas de tiempo y se
 reconocen únicamente al entrar al Roadmap.
@@ -187,9 +242,9 @@ muestra un banner ni un botón para reintentar el reconocimiento fallido: los
 Avisos permanecen pendientes y no se muestra el Resumen de cambios. Una nueva
 entrada prepara una operación nueva. El contrato HTTP permite reintentar la
 operación original dentro de la retención, reutilizando el mismo
-`operationId` y el mismo conjunto, sin ampliar `noticeIds`. Para títulos también
-conserva `titleSnapshots`; descripción, tipo y acceso conservan `contentSnapshots`,
-con los valores y nombres capturados al abrir. Si el Aviso cambió
+`operationId` y el mismo conjunto, sin ampliar `noticeIds`. Todos los Objetos se
+capturan en la colección única `snapshots`, con los valores y el contexto
+capturados al abrir. Si el Aviso cambió
 en el intervalo, el reconocimiento avanza al valor capturado y reconcilia el
 valor posterior como pendiente; `recognizedAt` impide repetir ese avance en un
 reintento. Nunca se reconoce por accidente una actualización posterior del mismo
@@ -244,9 +299,9 @@ location /api/notifications/stream {
 }
 ```
 
-Antes de responder a una mutación confirmada se capturan los descriptores,
-los destinatarios elegibles (sin la autora ni Participaciones inactivas), títulos
-y contexto. Solo la persistencia por destinatario se difiere mediante `after()`
+Antes de responder a una mutación confirmada, el módulo registra los Known
+values y decide la audiencia (sin la autora) dentro de la transacción de la
+edición. Solo la persistencia por destinatario se difiere mediante `after()`
 de `next/server`, después de enviar la respuesta, en el mismo proceso Node.
 Un cambio posterior de acceso o contenido no recalcula esa audiencia ni contexto.
 Los fallos diferidos se registran sin datos sensibles ni rechazos no manejados;
@@ -304,10 +359,8 @@ presentan como evidencia de transporte.
 
 ## Observabilidad
 
-- `Roadmap notice saved`: un aviso quedó guardado; incluye la clase.
-- `* notice delivery failed` / `Roadmap availability delivery failed`: fallo de
-  notificación posterior al
-  cambio. La edición docente permanece confirmada.
+- `Roadmap notice delivery failed`: fallo de la entrega posterior al cambio
+  (incluye solo el id del Roadmap). La edición docente permanece confirmada.
 - `Roadmap live signal connection/subscription/payload/projection failed`: fallo
   de señal SSE. Los avisos guardados siguen consultables y la reconexión vuelve
   a leer el estado vigente, sin reconocer automáticamente avisos.

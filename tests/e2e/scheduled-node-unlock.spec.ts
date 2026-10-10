@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { prepareNodeCreator } from './create-node';
-import { literal, queryJson, sql } from './database';
+import { literal, sql } from './database';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -111,20 +111,19 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   });
   // The release is stored immediately (no grouping window, see ADR-0014);
   // its latest change is attributed to teaching staff.
+  // The stored attribution has no name; the Inbox projects the teaching staff label.
   await expect
     .poll(
-      () =>
-        queryJson<{ changeKind: string; actorName: string } | null>(
-          `SELECT json_build_object('changeKind', data->>'changeKind', 'actorName', data->>'actorName')
-           FROM "RoadmapNotice"
-           WHERE "recipientId" = ${literal(course.users.studentWithoutProgress.id)}
-             AND data->>'nodeId' = ${literal(standalone.id)}
-           ORDER BY "occurredAt" DESC, id DESC
-           LIMIT 1;`,
-        ),
+      async () =>
+        (
+          await (await student.get(`/api/notifications?nodeId=${standalone.id}`)).json()
+        ).notifications.map(({ data }: { data: { changeKind: string; actorName?: string } }) => ({
+          changeKind: data.changeKind,
+          actorName: data.actorName,
+        })),
       { timeout: 15_000, intervals: [1_000] },
     )
-    .toEqual({ changeKind: 'node-available', actorName: 'Equipo docente' });
+    .toEqual([{ changeKind: 'node-available', actorName: 'Equipo docente' }]);
 
   // Unlocking the prerequisite releases the overdue schedule in the same operation.
   const preview = await (

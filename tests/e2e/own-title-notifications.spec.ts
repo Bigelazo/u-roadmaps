@@ -169,3 +169,31 @@ test('recognition preserves title changes delivered after its opening snapshot, 
     .poll(async () => (await notices())[0]?.body)
     .toBe('«Título reconocido» pasó a llamarse «Título final».');
 });
+
+test('an actor’s own rename advances their Known title, so a colleague’s revert reaches them', async ({
+  course,
+  apiAs,
+}) => {
+  const teacherA = await apiAs(course.users.teacher);
+  const teacherB = await apiAs(course.users.teachingAssistant);
+  const roadmap = await (await teacherA.get(course.apiPath())).json();
+  const node = roadmap.nodes.find((node: { id: string }) => node.id === course.nodes.first);
+  const path = course.apiPath(`/nodes/${node.id}`);
+  const opening = { roadmapId: roadmap.roadmap.id, operationId: crypto.randomUUID() };
+  expect((await teacherA.post('/api/notifications/openings', { data: opening })).status()).toBe(
+    200,
+  );
+  expect((await teacherA.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
+    200,
+  );
+  const notices = async () =>
+    (await (await teacherA.get(`/api/notifications?nodeId=${node.id}&read=false`)).json())
+      .notifications;
+  expect((await teacherA.patch(path, { data: { title: 'Pilas y colas' } })).status()).toBe(200);
+  expect(await notices()).toHaveLength(0);
+  expect((await teacherB.patch(path, { data: { title: node.title } })).status()).toBe(200);
+  await expect
+    .poll(async () => (await notices())[0]?.body)
+    .toBe(`«Pilas y colas» pasó a llamarse «${node.title}».`);
+  expect(await notices()).toHaveLength(1);
+});

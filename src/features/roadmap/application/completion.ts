@@ -1,13 +1,8 @@
 import type { RoadmapChangePort } from './change-port';
 import { roadmapChangeTransaction } from './change-transaction';
+import { serializableTransaction } from './serializable';
 import { accessChanges } from './access-changes';
-import { captureAccessSnapshot } from './access-snapshot';
-import {
-  nodeAccessState,
-  accessNoticeDestination,
-  nodeAccessChangeText,
-} from '@/shared/node-access';
-import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
+import { readAccessSnapshot } from './access-snapshot';
 import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
@@ -139,129 +134,50 @@ async function readRoadmapForParticipantUnsafe({ userId, identifier }: Participa
   );
 }
 
-async function withSerializableRetry<Result>(operation: () => Promise<Result>) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (
-        attempt < 2 &&
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
-      )
-        continue;
-      throw error;
-    }
-  }
-  throw new Error('Completion transaction retry limit reached.');
-}
-
 type TeacherRoadmap = Awaited<ReturnType<typeof requireParticipantRoadmap>>;
 
 function withTeacherRoadmapTransaction<Result>(
   { userId, identifier }: ParticipantRoadmapInput,
   operation: (transaction: Prisma.TransactionClient, roadmap: TeacherRoadmap) => Promise<Result>,
 ) {
-  return withSerializableRetry(() =>
-    prisma.$transaction(
-      async (transaction) => {
-        const roadmap = await requireParticipantRoadmap(
-          transaction,
-          { userId, identifier },
-          'TEACHER',
-        );
-        requireCurrentRoadmap(roadmap.roadmap);
-        return operation(transaction, roadmap);
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
-  );
+  return serializableTransaction(async (transaction) => {
+    const roadmap = await requireParticipantRoadmap(transaction, { userId, identifier }, 'TEACHER');
+    requireCurrentRoadmap(roadmap.roadmap);
+    return operation(transaction, roadmap);
+  });
 }
 
 async function completeNodeUnsafe(
   { userId, identifier, nodeId }: CompleteNodeInput,
   changePort: RoadmapChangePort,
 ) {
-  return withSerializableRetry(() =>
-    roadmapChangeTransaction(
-      changePort,
-      async (transaction, report) => {
-        const { roadmap } = await requireParticipantRoadmap(
-          transaction,
-          { userId, identifier },
-          'STUDENT',
-        );
-        await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
-        requireCurrentRoadmap(roadmap);
-        await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
-        await lockRecipientRoadmap(transaction, userId, roadmap.id);
-        const before = await captureAccessSnapshot(transaction, roadmap.id, userId);
-        const completion = await transaction.completion.upsert({
-          where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
-          update: {},
-          create: { userId, roadmapNodeId: nodeId },
-        });
-        const after = await captureAccessSnapshot(transaction, roadmap.id, userId);
-        const pending = await transaction.roadmapNotice.findMany({
-          where: {
-            recipientId: userId,
-            roadmapId: roadmap.id,
-            acknowledgedAt: null,
-            targetKey: { not: null },
-          },
-        });
-        const pendingTargets = new Map(pending.map((notice) => [notice.targetKey, notice]));
-        for (const node of after.nodes) {
-          const previous = nodeAccessState(
-            node.isVisible,
-            before.accessibleByUser.get(userId)?.has(node.id) ?? false,
-          );
-          const current = nodeAccessState(
-            node.isVisible,
-            after.accessibleByUser.get(userId)?.has(node.id) ?? false,
-          );
-          if (previous === current) continue;
-          const notice = pendingTargets.get(`node:${node.id}:access`);
-          if (notice) {
-            const data = notice.data as Prisma.JsonObject;
-            if (data.knownValue === current) {
-              await transaction.roadmapNotice.delete({ where: { id: notice.id } });
-            } else {
-              const occurredAt = new Date();
-              await transaction.roadmapNotice.update({
-                where: { id: notice.id },
-                data: {
-                  body: nodeAccessChangeText(node.title, String(data.knownValue), current),
-                  data: {
-                    ...data,
-                    ...accessNoticeDestination(current),
-                    currentValue: current,
-                    occurredAt: occurredAt.toISOString(),
-                  },
-                  occurredAt,
-                  availableAt: occurredAt,
-                },
-              });
-            }
-            continue;
-          }
-          // Completion immediately exposes newly available Nodes to this student.
-          // Preserve pending/deferred differences rather than recognizing them here.
-          await transaction.nodeContentKnowledge.updateMany({
-            where: { recipientId: userId, nodeId: node.id, target: 'access', knownValue: previous },
-            data: { knownValue: current },
-          });
-        }
-        await report({
-          actorId: userId,
-          identifier,
-          roadmapId: roadmap.id,
-          facts: accessChanges(before, after),
-        });
-        return completion;
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-    ),
+  return roadmapChangeTransaction(
+    changePort,
+    async (transaction, report) => {
+      const { roadmap } = await requireParticipantRoadmap(
+        transaction,
+        { userId, identifier },
+        'STUDENT',
+      );
+      await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
+      requireCurrentRoadmap(roadmap);
+      await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
+      const before = await readAccessSnapshot(transaction, roadmap.id, userId);
+      const completion = await transaction.completion.upsert({
+        where: { userId_roadmapNodeId: { userId, roadmapNodeId: nodeId } },
+        update: {},
+        create: { userId, roadmapNodeId: nodeId },
+      });
+      const after = await readAccessSnapshot(transaction, roadmap.id, userId);
+      await report({
+        actorId: userId,
+        identifier,
+        roadmapId: roadmap.id,
+        facts: accessChanges(before, after),
+      });
+      return completion;
+    },
+    { serializable: true },
   );
 }
 
@@ -301,19 +217,24 @@ async function completeSimulatedNodeUnsafe({ userId, identifier, nodeId }: Compl
         nodeId,
         completedNodeIds,
       });
-      return transaction.simulatedCompletion.upsert({
+      // ON CONFLICT DO NOTHING, not an upsert: when a concurrent request inserts the same
+      // simulated Completion first, an upsert fails with a unique violation (P2002, a 409),
+      // while this raises a serialization failure that `serializableTransaction` retries.
+      await transaction.simulatedCompletion.createMany({
+        data: {
+          participationId: participation.id,
+          courseOfferingId: courseOffering.id,
+          roadmapId: roadmap.id,
+          roadmapNodeId: nodeId,
+        },
+        skipDuplicates: true,
+      });
+      return transaction.simulatedCompletion.findUniqueOrThrow({
         where: {
           participationId_roadmapNodeId: {
             participationId: participation.id,
             roadmapNodeId: nodeId,
           },
-        },
-        update: {},
-        create: {
-          participationId: participation.id,
-          courseOfferingId: courseOffering.id,
-          roadmapId: roadmap.id,
-          roadmapNodeId: nodeId,
         },
       });
     },
