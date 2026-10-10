@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-GitHub issues on `Bigelazo/u-roadmaps`, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+GitHub issues on `Bigelazo/u-roadmaps`, accessed via the `gh` CLI. Everything published there (issues, specs, tickets, comments, PRs) is written in English. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 
