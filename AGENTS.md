@@ -18,6 +18,8 @@ Run E2E tests against the existing local PostgreSQL service. See `docs/agents/te
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
+For Graphify setup or missing SQL extraction, see `docs/agents/graphify.md`.
+
 When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
 
 Rules:
