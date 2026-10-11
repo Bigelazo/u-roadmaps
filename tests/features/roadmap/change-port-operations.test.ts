@@ -55,6 +55,23 @@ async function addNode(
   });
 }
 
+function addNodeType(course: { roadmapId: string }, name: string) {
+  return prisma.nodeType.create({
+    data: {
+      roadmapId: course.roadmapId,
+      name,
+      normalizedName: name.toLowerCase(),
+      icon: 'BookOpen',
+      color: '#024AD8',
+    },
+  });
+}
+
+/** Matches a recorded `node-access` fact carrying at least `fields`. */
+function access(fields: Record<string, unknown>) {
+  return expect.objectContaining({ kind: 'node-access', ...fields });
+}
+
 test('node creation and edits report per-object previous values and return plain results', async ({
   course,
 }) => {
@@ -85,15 +102,7 @@ test('node creation and edits report per-object previous values and return plain
     },
   ]);
   recording.changes.length = 0;
-  const nextType = await prisma.nodeType.create({
-    data: {
-      roadmapId: course.roadmapId,
-      name: 'Ejercicio',
-      normalizedName: 'ejercicio',
-      icon: 'BookOpen',
-      color: '#024AD8',
-    },
-  });
+  const nextType = await addNodeType(course, 'Ejercicio');
   const updated = await confirmed(
     updateRoadmapNode(
       {
@@ -131,15 +140,7 @@ test('description and type edits report previous values and write no notice base
 }) => {
   const recording = recordingChangePort();
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
-  const nextType = await prisma.nodeType.create({
-    data: {
-      roadmapId: course.roadmapId,
-      name: 'Taller',
-      normalizedName: 'taller',
-      icon: 'BookOpen',
-      color: '#024AD8',
-    },
-  });
+  const nextType = await addNodeType(course, 'Taller');
   const nodeId = course.change.nodeId;
   await confirmed(
     updateRoadmapNode(
@@ -180,8 +181,7 @@ test('visibility and deletion report their facts and recipient access transition
     current: false,
   });
   expect(recording.facts()).toContainEqual(
-    expect.objectContaining({
-      kind: 'node-access',
+    access({
       nodeId,
       recipientId: course.studentId,
       previous: 'Disponible',
@@ -249,8 +249,7 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   ).toEqual([course.studentId, course.classmateId].sort());
   for (const recipientId of [course.studentId, course.classmateId])
     expect(recording.facts()).toContainEqual(
-      expect.objectContaining({
-        kind: 'node-access',
+      access({
         nodeId: target.id,
         recipientId,
         previous: 'Disponible',
@@ -292,8 +291,7 @@ test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
     const input = { ...editor(course), id: course.change.nodeId };
     await confirmed(changeTeacherBlock({ ...input, operation: 'BLOCK' }, recording.port));
     expect(recording.facts()).toContainEqual(
-      expect.objectContaining({
-        kind: 'node-access',
+      access({
         nodeId: input.id,
         recipientId: course.studentId,
         previous: 'Disponible',
@@ -306,8 +304,7 @@ test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
       changeTeacherBlock({ ...input, operation, previewVersion: preview.version }, recording.port),
     );
     expect(recording.facts()).toContainEqual(
-      expect.objectContaining({
-        kind: 'node-access',
+      access({
         recipientId: course.studentId,
         previous: 'Bloqueado',
         current: 'Disponible',
@@ -326,8 +323,7 @@ test('scheduled releases report committed access transitions and are idempotent'
   const recording = recordingChangePort();
   await confirmed(releaseScheduledTeacherUnlocks(recording.port, '2026-10-08'));
   expect(recording.facts()).toContainEqual(
-    expect.objectContaining({
-      kind: 'node-access',
+    access({
       recipientId: course.studentId,
       previous: 'Bloqueado',
       current: 'Disponible',

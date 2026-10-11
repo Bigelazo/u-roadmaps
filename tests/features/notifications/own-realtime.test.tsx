@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, expect, test, vi } from 'vitest';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import {
   NotificationsProvider,
@@ -39,15 +40,31 @@ function InboxProjection() {
 const identity = (subscriber: string) => ({
   userId: subscriber,
 });
+function inbox(children: ReactNode, subscriber: string | null = 'student') {
+  return (
+    <NotificationsProvider identity={subscriber ? identity(subscriber) : null}>
+      {children}
+    </NotificationsProvider>
+  );
+}
+const renderInbox = (children: ReactNode, subscriber?: string | null) =>
+  render(inbox(children, subscriber));
+function stubFetch<T extends (url: string, init?: RequestInit) => Promise<Response>>(handler: T) {
+  const fetch = vi.fn(handler);
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+beforeEach(() => {
+  vi.stubGlobal('EventSource', BrowserStream);
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   BrowserStream.instances = [];
 });
 
 test('one shared stream updates feed and counters without recognizing arrival and discards another User', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
   let delivered = false;
-  const fetch = vi.fn(async (url: string) =>
+  const fetch = stubFetch(async (url: string) =>
     Response.json(
       url.includes('/counts')
         ? { count: delivered ? 1 : 0 }
@@ -59,12 +76,11 @@ test('one shared stream updates feed and counters without recognizing arrival an
           },
     ),
   );
-  vi.stubGlobal('fetch', fetch);
-  const { unmount } = render(
-    <NotificationsProvider identity={identity('student')}>
+  const { unmount } = renderInbox(
+    <>
       <InboxProjection />
       <InboxProjection />
-    </NotificationsProvider>,
+    </>,
   );
   await waitFor(() => expect(screen.getAllByText('0 pending:')).toHaveLength(2));
   expect(BrowserStream.instances).toHaveLength(1);
@@ -79,24 +95,12 @@ test('one shared stream updates feed and counters without recognizing arrival an
 });
 
 test('switching User closes the old stream and ignores its queued events', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => Response.json({ notifications: [], hasMore: false, count: 0 })),
-  );
+  stubFetch(async () => Response.json({ notifications: [], hasMore: false, count: 0 }));
   const changed = vi.fn();
   window.addEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
-  const { rerender, unmount } = render(
-    <NotificationsProvider identity={identity('first')}>
-      <span>Session</span>
-    </NotificationsProvider>,
-  );
+  const { rerender, unmount } = renderInbox(<span>Session</span>, 'first');
   const old = BrowserStream.instances[0];
-  rerender(
-    <NotificationsProvider identity={identity('second')}>
-      <span>Session</span>
-    </NotificationsProvider>,
-  );
+  rerender(inbox(<span>Session</span>, 'second'));
   expect(old.closed).toBe(true);
   const change = { courseCode: 'CC1002', year: 2026, semester: 2 };
   act(() => old.receive('roadmap', { ...change, userId: 'first' }));
@@ -111,39 +115,27 @@ test('switching User closes the old stream and ignores its queued events', async
     }),
   );
   expect(changed.mock.calls[1][0].detail).toEqual({ ...change, accessLost: true });
-  rerender(
-    <NotificationsProvider identity={null}>
-      <span>Logged out</span>
-    </NotificationsProvider>,
-  );
+  rerender(inbox(<span>Logged out</span>, null));
   expect(BrowserStream.instances[1].closed).toBe(true);
   unmount();
   window.removeEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
 });
 
 test('a transient Inbox refresh preserves saved data and retries without another signal', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
   let refreshing = false;
   let failed = false;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (refreshing && !failed && url.includes('/counts')) {
-        failed = true;
-        throw new Error('Temporary network failure');
-      }
-      return Response.json(
-        url.includes('/counts')
-          ? { count: refreshing ? 1 : 0 }
-          : { notifications: [], hasMore: false },
-      );
-    }),
-  );
-  render(
-    <NotificationsProvider identity={identity('student')}>
-      <InboxProjection />
-    </NotificationsProvider>,
-  );
+  stubFetch(async (url: string) => {
+    if (refreshing && !failed && url.includes('/counts')) {
+      failed = true;
+      throw new Error('Temporary network failure');
+    }
+    return Response.json(
+      url.includes('/counts')
+        ? { count: refreshing ? 1 : 0 }
+        : { notifications: [], hasMore: false },
+    );
+  });
+  renderInbox(<InboxProjection />);
   await screen.findByText('0 pending:');
   refreshing = true;
   act(() => BrowserStream.instances[0].receive('inbox', { userId: 'student' }));
@@ -152,25 +144,21 @@ test('a transient Inbox refresh preserves saved data and retries without another
 });
 
 test('foreground recovery retries actual counters after overlapping HTTP failures without another signal', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
   let refreshing = false;
   let available = true;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (!available) throw new Error('Temporary outage');
-      return Response.json(
-        url.includes('/counts')
-          ? { count: refreshing ? 2 : 0 }
-          : { notifications: [], hasMore: false },
-      );
-    }),
-  );
-  render(
-    <NotificationsProvider identity={identity('student')}>
+  stubFetch(async (url: string) => {
+    if (!available) throw new Error('Temporary outage');
+    return Response.json(
+      url.includes('/counts')
+        ? { count: refreshing ? 2 : 0 }
+        : { notifications: [], hasMore: false },
+    );
+  });
+  renderInbox(
+    <>
       <InboxProjection />
       <NotificationCountButton filter={{ roadmapId: 'roadmap' }} label="Roadmap" />
-    </NotificationsProvider>,
+    </>,
   );
   await screen.findByText('0 pending:');
   refreshing = true;
@@ -188,12 +176,7 @@ test('foreground recovery retries actual counters after overlapping HTTP failure
 });
 
 test('a closed SSE connection retries and its retry is cancelled on logout', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
-  const { rerender } = render(
-    <NotificationsProvider identity={identity('student')}>
-      <span>Session</span>
-    </NotificationsProvider>,
-  );
+  const { rerender } = renderInbox(<span>Session</span>);
   const first = BrowserStream.instances[0];
   Object.defineProperty(first, 'readyState', { value: 2 });
   act(() => first.dispatchEvent(new Event('error')));
@@ -202,16 +185,11 @@ test('a closed SSE connection retries and its retry is cancelled on logout', asy
   const second = BrowserStream.instances[1];
   Object.defineProperty(second, 'readyState', { value: 2 });
   act(() => second.dispatchEvent(new Event('error')));
-  rerender(
-    <NotificationsProvider identity={null}>
-      <span>Logged out</span>
-    </NotificationsProvider>,
-  );
+  rerender(inbox(<span>Logged out</span>, null));
   expect(second.closed).toBe(true);
 });
 
 test('an Inbox refresh failure keeps saved notices visible while offering retry', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
   vi.stubGlobal(
     'IntersectionObserver',
     class {
@@ -220,27 +198,20 @@ test('an Inbox refresh failure keeps saved notices visible while offering retry'
     },
   );
   let available = true;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (!available && !url.includes('/counts')) throw new Error('Temporary outage');
-      return Response.json(
-        url.includes('/counts')
-          ? { count: 1 }
-          : {
-              notifications: [
-                { id: 'notice', subject: 'Saved Node change', createdAt: '2026-10-03' },
-              ],
-              hasMore: false,
-            },
-      );
-    }),
-  );
-  render(
-    <NotificationsProvider identity={identity('student')}>
-      <NotificationsInbox identity={identity('student')} />
-    </NotificationsProvider>,
-  );
+  stubFetch(async (url: string) => {
+    if (!available && !url.includes('/counts')) throw new Error('Temporary outage');
+    return Response.json(
+      url.includes('/counts')
+        ? { count: 1 }
+        : {
+            notifications: [
+              { id: 'notice', subject: 'Saved Node change', createdAt: '2026-10-03' },
+            ],
+            hasMore: false,
+          },
+    );
+  });
+  renderInbox(<NotificationsInbox identity={identity('student')} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 1 sin leer' }));
   await screen.findByRole('button', { name: /Saved Node change/ });
   available = false;
@@ -250,12 +221,7 @@ test('an Inbox refresh failure keeps saved notices visible while offering retry'
 });
 
 test('going offline closes the tab stream and returning online opens a real replacement', () => {
-  vi.stubGlobal('EventSource', BrowserStream);
-  render(
-    <NotificationsProvider identity={identity('student')}>
-      <span>Session</span>
-    </NotificationsProvider>,
-  );
+  renderInbox(<span>Session</span>);
   const first = BrowserStream.instances[0];
   act(() => window.dispatchEvent(new Event('offline')));
   expect(first.closed).toBe(true);
@@ -280,31 +246,23 @@ function PagedInboxProjection() {
 }
 
 test('an SSE refresh preserves expanded Inbox pages and updates their saved notices', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
   let refreshed = false;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      const params = new URL(url, 'http://localhost').searchParams;
-      const start = params.get('after') === 'notice-10' ? 10 : 0;
-      return Response.json({
-        notifications: Array.from({ length: 10 }, (_, offset) => ({
-          id: `notice-${start + offset + 1}`,
-          subject:
-            refreshed && start + offset === 0
-              ? 'Updated first notice'
-              : `Notice ${start + offset + 1}`,
-          createdAt: '2026-10-03',
-        })),
-        hasMore: start === 0,
-      });
-    }),
-  );
-  render(
-    <NotificationsProvider identity={identity('student')}>
-      <PagedInboxProjection />
-    </NotificationsProvider>,
-  );
+  stubFetch(async (url: string) => {
+    const params = new URL(url, 'http://localhost').searchParams;
+    const start = params.get('after') === 'notice-10' ? 10 : 0;
+    return Response.json({
+      notifications: Array.from({ length: 10 }, (_, offset) => ({
+        id: `notice-${start + offset + 1}`,
+        subject:
+          refreshed && start + offset === 0
+            ? 'Updated first notice'
+            : `Notice ${start + offset + 1}`,
+        createdAt: '2026-10-03',
+      })),
+      hasMore: start === 0,
+    });
+  });
+  renderInbox(<PagedInboxProjection />);
   await screen.findByText('Notice 10');
   await userEvent.click(screen.getByRole('button', { name: 'Load next page' }));
   await screen.findByText('Notice 20');
@@ -316,8 +274,7 @@ test('an SSE refresh preserves expanded Inbox pages and updates their saved noti
 });
 
 test('a burst of Inbox signals refreshes once without marking shown rows', async () => {
-  vi.stubGlobal('EventSource', BrowserStream);
-  const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
+  const fetch = stubFetch<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
     Response.json(
       url.includes('/counts')
         ? { count: 1 }
@@ -331,12 +288,7 @@ test('a burst of Inbox signals refreshes once without marking shown rows', async
             },
     ),
   );
-  vi.stubGlobal('fetch', fetch);
-  render(
-    <NotificationsProvider identity={identity('student')}>
-      <NotificationsInbox identity={identity('student')} />
-    </NotificationsProvider>,
-  );
+  renderInbox(<NotificationsInbox identity={identity('student')} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 1 sin leer' }));
   await screen.findByRole('button', { name: /Saved Node change/ });
   const mutations = () =>
