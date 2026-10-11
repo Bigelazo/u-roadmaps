@@ -331,6 +331,10 @@ export default defineConfig([
   {
     files: ['tests/e2e/**/*.ts'],
     ...playwright.configs['flat/recommended'],
+    rules: {
+      ...playwright.configs['flat/recommended'].rules,
+      'playwright/expect-expect': ['warn', { assertFunctionNames: ['ok'] }],
+    },
   },
   {
     files: ['**/*.css'],

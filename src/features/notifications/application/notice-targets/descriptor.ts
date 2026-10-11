@@ -204,8 +204,3 @@ export async function nodeVisibleBefore(
 export async function participantIds(roadmap: RoadmapView) {
   return (await roadmap.participants()).map(({ userId }) => userId);
 }
-
-/** The target's Node as it is now, or null when the target has no Node or it is gone. */
-export async function currentTargetNode(target: NoticeTargetRef, roadmap: RoadmapView) {
-  return target.nodeId ? roadmap.node(target.nodeId) : null;
-}

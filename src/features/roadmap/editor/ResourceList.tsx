@@ -1,7 +1,7 @@
 import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import { cn } from 'cn';
-import { Button, buttonVariants } from '@/shared/ui/button';
+import { Button } from '@/shared/ui/button';
 import { Item } from '@/shared/ui/item';
 import { dividedItemClassName } from './primitives';
 
@@ -35,11 +35,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
             target="_blank"
             rel="noreferrer"
             aria-label={`Abrir recurso ${item.title}`}
-            className={buttonVariants({
-              variant: 'ghost',
-              size: 'icon',
-              className: 'text-muted-foreground',
-            })}
+            className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             <ExternalLink className="size-3.5" />
           </a>

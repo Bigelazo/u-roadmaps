@@ -76,7 +76,7 @@ vi.mock('@xyflow/react', () => ({
       return change?.position ? { ...node, position: change.position } : node;
     }),
   useReactFlow: () => ({
-    fitView: vi.fn(),
+    fitView: vi.fn().mockResolvedValue(true),
     screenToFlowPosition: (position: { x: number; y: number }) => position,
     getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
     setViewport: vi.fn(),

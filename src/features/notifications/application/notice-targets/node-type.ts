@@ -3,7 +3,6 @@ import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import {
   nodeVisibleBefore,
   participantIds,
-  currentTargetNode,
   type NoticeTargetDescriptor,
   type TargetValues,
 } from './descriptor';
@@ -48,7 +47,7 @@ export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
     return participantIds(roadmap);
   },
   async current(target, roadmap) {
-    const node = await currentTargetNode(target, roadmap);
+    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     return node
       ? {
           value: node.nodeTypeId,

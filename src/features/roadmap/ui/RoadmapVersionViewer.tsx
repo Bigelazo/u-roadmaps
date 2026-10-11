@@ -8,8 +8,7 @@ import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
 import { Button, buttonVariants } from '@/shared/ui/button';
-import { Item } from '@/shared/ui/item';
-import { PageEyebrow, PageTitle } from '@/shared/ui/page-header';
+import { PageEyebrow, PageTitle } from '@/shared/ui/page-layout';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import type { RoadmapVersion } from '@/features/roadmap/version-types';
 
@@ -104,17 +103,12 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
                 <ul className="mt-3 grid gap-2">
                   {selectedNode.resources.map((resource) => (
                     <li key={resource.id}>
-                      <Item
-                        className="flex-nowrap gap-2 border-fog py-2"
-                        render={
-                          <a
-                            href={resource.url}
-                            {...(resource.type === 'FILE'
-                              ? { download: resource.title }
-                              : { target: '_blank', rel: 'noreferrer' })}
-                          />
-                        }
-                        variant="outline"
+                      <a
+                        className="flex items-center gap-2 rounded-lg border border-fog px-3 py-2 text-sm hover:bg-muted"
+                        href={resource.url}
+                        {...(resource.type === 'FILE'
+                          ? { download: resource.title }
+                          : { target: '_blank', rel: 'noreferrer' })}
                       >
                         {resource.type === 'FILE' ? (
                           <Download size={16} aria-hidden="true" />
@@ -122,7 +116,7 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
                           <ExternalLink size={16} aria-hidden="true" />
                         )}
                         {resource.title}
-                      </Item>
+                      </a>
                     </li>
                   ))}
                 </ul>
