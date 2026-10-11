@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Check, ChevronDown, Plus, Save } from 'lucide-react';
+import { Check, Plus, Save } from 'lucide-react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import {
   nodeTypeColorPalette,
@@ -10,15 +9,9 @@ import {
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from '@/shared/ui/popover';
 import { ScrollArea } from '@/shared/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
+import { TooltipProvider } from '@/shared/ui/tooltip';
+import { PopoverSwatchPicker, Swatch } from './PopoverSwatchPicker';
 import { inputClassName } from './primitives';
 import type { NodeTypeDraft } from './types';
 
@@ -31,34 +24,24 @@ type Props = {
 };
 
 function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
-  const [open, setOpen] = useState(false);
   const selectedIcon = value.icon ? nodeTypeIcons.find(({ id }) => id === value.icon) : undefined;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            id="node-type-icon"
-            type="button"
-            variant="outline"
-            className="w-full justify-between font-normal"
-            aria-label={`Icono: ${selectedIcon?.label ?? 'sin selección'}`}
-          />
-        }
-      >
-        <span className="flex min-w-0 items-center gap-2 truncate">
+    <PopoverSwatchPicker
+      id="node-type-icon"
+      ariaLabel={`Icono: ${selectedIcon?.label ?? 'sin selección'}`}
+      title="Elegir Icono"
+      contentClassName="w-80 p-3"
+      selection={
+        <>
           {value.icon ? (
             <NodeTypeIcon icon={value.icon} data-icon="inline-start" aria-hidden="true" />
           ) : null}
           {selectedIcon?.label ?? 'Elegir Icono'}
-        </span>
-        <ChevronDown data-icon="inline-end" aria-hidden="true" />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-3">
-        <PopoverHeader>
-          <PopoverTitle>Elegir Icono</PopoverTitle>
-        </PopoverHeader>
+        </>
+      }
+    >
+      {(close) => (
         <ScrollArea className="h-80">
           <div className="flex flex-col gap-4 pr-2">
             {teachingIconCatalog.map((category) => (
@@ -67,60 +50,43 @@ function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
                   {category.label}
                 </h3>
                 <div className="grid grid-cols-8 gap-1">
-                  {category.icons.map(([icon, label]) => {
-                    const selected = value.icon === icon;
-                    return (
-                      <Tooltip key={icon}>
-                        <TooltipTrigger
-                          render={
-                            <button
-                              type="button"
-                              aria-label={label}
-                              aria-pressed={selected}
-                              className="flex size-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-                              onClick={() => {
-                                onChange({ ...value, icon });
-                                setOpen(false);
-                              }}
-                            />
-                          }
-                        >
-                          <NodeTypeIcon icon={icon} aria-hidden="true" />
-                        </TooltipTrigger>
-                        <TooltipContent>{label}</TooltipContent>
-                      </Tooltip>
-                    );
-                  })}
+                  {category.icons.map(([icon, label]) => (
+                    <Swatch
+                      key={icon}
+                      label={label}
+                      selected={value.icon === icon}
+                      className="flex size-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+                      onSelect={() => {
+                        onChange({ ...value, icon });
+                        close();
+                      }}
+                    >
+                      <NodeTypeIcon icon={icon} aria-hidden="true" />
+                    </Swatch>
+                  ))}
                 </div>
               </section>
             ))}
           </div>
         </ScrollArea>
-      </PopoverContent>
-    </Popover>
+      )}
+    </PopoverSwatchPicker>
   );
 }
 
 function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
-  const [open, setOpen] = useState(false);
   const selectedColor = value.color
     ? nodeTypeColorPalette.find(({ value: color }) => color === value.color)
     : undefined;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            id="node-type-color"
-            type="button"
-            variant="outline"
-            className="w-full justify-between font-normal"
-            aria-label={`Color: ${selectedColor?.label ?? 'sin selección'}`}
-          />
-        }
-      >
-        <span className="flex min-w-0 items-center gap-2 truncate">
+    <PopoverSwatchPicker
+      id="node-type-color"
+      ariaLabel={`Color: ${selectedColor?.label ?? 'sin selección'}`}
+      title="Elegir color"
+      contentClassName="w-72 p-3"
+      selection={
+        <>
           {selectedColor ? (
             <span
               className="size-4 shrink-0 rounded-full ring-1 ring-foreground/20"
@@ -129,42 +95,32 @@ function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
             />
           ) : null}
           {selectedColor?.label ?? 'Elegir color'}
-        </span>
-        <ChevronDown data-icon="inline-end" aria-hidden="true" />
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-3">
-        <PopoverHeader>
-          <PopoverTitle>Elegir color</PopoverTitle>
-        </PopoverHeader>
+        </>
+      }
+    >
+      {(close) => (
         <div className="grid grid-cols-5 gap-2">
           {nodeTypeColorPalette.map(({ value: color, label }) => {
             const selected = value.color === color;
             return (
-              <Tooltip key={color}>
-                <TooltipTrigger
-                  render={
-                    <button
-                      type="button"
-                      aria-label={label}
-                      aria-pressed={selected}
-                      className="flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground aria-pressed:ring-offset-2"
-                      style={{ backgroundColor: color }}
-                      onClick={() => {
-                        onChange({ ...value, color: color as NodeTypeColor });
-                        setOpen(false);
-                      }}
-                    />
-                  }
-                >
-                  {selected ? <Check className="text-white" aria-hidden="true" /> : null}
-                </TooltipTrigger>
-                <TooltipContent>{label}</TooltipContent>
-              </Tooltip>
+              <Swatch
+                key={color}
+                label={label}
+                selected={selected}
+                className="flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground aria-pressed:ring-offset-2"
+                style={{ backgroundColor: color }}
+                onSelect={() => {
+                  onChange({ ...value, color: color as NodeTypeColor });
+                  close();
+                }}
+              >
+                {selected ? <Check className="text-white" aria-hidden="true" /> : null}
+              </Swatch>
             );
           })}
         </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </PopoverSwatchPicker>
   );
 }
 
