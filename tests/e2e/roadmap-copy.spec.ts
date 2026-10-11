@@ -123,7 +123,7 @@ function sourceOf(offering: E2ECourseOffering) {
 
 copyScenario(
   'copying a closed version reproduces its content under the copy rules',
-  async ({ course, scenario, teacherApi: api, waitForClosure }) => {
+  async ({ scenario, teacherApi: api, waitForClosure }) => {
     const { closed, next, source } = scenario;
     const created = await api.post(next.apiPath(), { data: sourceOf(closed) });
     await ok(created, 201);
@@ -301,7 +301,7 @@ copyScenario(
 
 copyScenario(
   'concurrent copy requests create exactly one Roadmap',
-  async ({ course, scenario, teacherApi: api }) => {
+  async ({ scenario, teacherApi: api }) => {
     const responses = await Promise.all(
       Array.from({ length: 4 }, () =>
         api.post(scenario.next.apiPath(), { data: sourceOf(scenario.closed) }),
@@ -374,7 +374,7 @@ async function storedCopies(content: string) {
 
 copyScenario(
   'copied file Resources own their bytes independently of the version',
-  async ({ course, scenario, teacherApi: api }) => {
+  async ({ scenario, teacherApi: api }) => {
     // A closed version refuses every edit, so independence is checked from the new edition.
     const { closed, next, source, fileContent } = scenario;
     await ok(await api.post(next.apiPath(), { data: sourceOf(closed) }), 201);
@@ -405,7 +405,7 @@ copyScenario(
 
 copyScenario(
   'a file missing from storage is omitted while the rest of the copy succeeds',
-  async ({ course, scenario, teacherApi: api }) => {
+  async ({ scenario, teacherApi: api }) => {
     const { closed, next, source } = scenario;
     const [original] = fileResources(source);
     await rm(join(uploadsDirectory(), await fileKeyOf(original!.id)));
@@ -424,7 +424,7 @@ copyScenario(
 
 copyScenario(
   'a creation that fails after copying bytes leaves no orphaned files',
-  async ({ course, scenario, teacherApi: api, rejectResourceInserts }) => {
+  async ({ scenario, teacherApi: api, rejectResourceInserts }) => {
     const { closed, next, fileContent } = scenario;
     await rejectResourceInserts(next);
     const refused = await api.post(next.apiPath(), { data: sourceOf(closed) });
