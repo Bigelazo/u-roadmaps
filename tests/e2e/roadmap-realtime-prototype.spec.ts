@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test, type E2EPrimaryCourseOffering } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 import { prepareNodeCreator } from './create-node';
 
 async function panNodeIntoView(page: Page, nodeId: string) {
@@ -27,17 +27,15 @@ async function panNodeIntoView(page: Page, nodeId: string) {
 }
 
 async function loadSavedRoadmap(page: Page, course: E2EPrimaryCourseOffering) {
-  const response = await page.request.get(course.apiPath());
-  expect(response.status()).toBe(200);
+  const response = await ok(await page.request.get(course.apiPath()));
   return response.json();
 }
 
 test('teaching sessions reload live and recover transient projection failures through real SSE', async ({
   browser,
   course,
-  apiAs,
+  teacherApi: author,
 }, testInfo) => {
-  const author = await apiAs(course.users.teacher);
   const recipient = await browser.newContext({ baseURL: testInfo.project.use.baseURL as string });
   try {
     await authenticateAs(recipient, course.users.teachingAssistant.id);
@@ -49,13 +47,11 @@ test('teaching sessions reload live and recover transient projection failures th
     const page = await recipient.newPage();
     await page.goto(`${course.pagePath()}?targetNode=${node.id}`);
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue(node.title);
-    expect(
-      (
-        await author.patch(course.apiPath(`/nodes/${node.id}`), {
-          data: { title: 'Nodo sincronizado' },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await author.patch(course.apiPath(`/nodes/${node.id}`), {
+        data: { title: 'Nodo sincronizado' },
+      }),
+    );
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Nodo sincronizado');
 
     const projectionRoute = `**${course.apiPath()}`;
@@ -66,13 +62,11 @@ test('teaching sessions reload live and recover transient projection failures th
         body: JSON.stringify({ error: { message: 'Fallo transitorio de actualización' } }),
       });
     });
-    expect(
-      (
-        await author.patch(course.apiPath(`/nodes/${node.id}`), {
-          data: { description: 'Cambio recuperado sin aviso' },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await author.patch(course.apiPath(`/nodes/${node.id}`), {
+        data: { description: 'Cambio recuperado sin aviso' },
+      }),
+    );
     await expect(page.getByText('Fallo transitorio de actualización')).toBeVisible();
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Nodo sincronizado');
     await page.unroute(projectionRoute);
@@ -81,13 +75,11 @@ test('teaching sessions reload live and recover transient projection failures th
 
     await recipient.setOffline(true);
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-    expect(
-      (
-        await author.patch(course.apiPath(`/nodes/${node.id}`), {
-          data: { title: 'Recuperado al reconectar' },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await author.patch(course.apiPath(`/nodes/${node.id}`), {
+        data: { title: 'Recuperado al reconectar' },
+      }),
+    );
     const reconnected = page.waitForResponse((response) =>
       response.url().endsWith('/api/notifications/stream'),
     );
@@ -122,20 +114,18 @@ test('a teacher keeps a local draft and resolves incompatible remote edits befor
         positionY: 100,
       },
     });
-    expect(response.status()).toBe(201);
+    await ok(response, 201);
     nodeId = (await response.json()).node.id;
     const page = await recipient.newPage();
     await page.goto(course.pagePath());
     await panNodeIntoView(page, nodeId);
     await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
     await page.getByLabel('Título', { exact: true }).fill('Mi borrador local');
-    expect(
-      (
-        await author.request.patch(course.apiPath(`/nodes/${nodeId}`), {
-          data: { title: 'Edición de otra persona' },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await author.request.patch(course.apiPath(`/nodes/${nodeId}`), {
+        data: { title: 'Edición de otra persona' },
+      }),
+    );
     await loadSavedRoadmap(page, course);
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Mi borrador local');
     await expect(page.getByRole('status')).toContainText('cambió mientras editabas');
@@ -148,7 +138,7 @@ test('a teacher keeps a local draft and resolves incompatible remote edits befor
       .getByRole('button', { name: 'Conservar mi borrador sobre la versión actual' })
       .click();
     await expect(page.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled();
-    expect((await author.request.delete(course.apiPath(`/nodes/${nodeId}`))).status()).toBe(204);
+    await ok(await author.request.delete(course.apiPath(`/nodes/${nodeId}`)), 204);
     await loadSavedRoadmap(page, course);
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Mi borrador local');
     await expect(

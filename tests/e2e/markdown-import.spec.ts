@@ -1,13 +1,12 @@
 import { expect, test } from './fixtures';
 import { fileDrop } from './file-drop';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 
 test('Markdown drops require confirmation and update the Node draft before saving', async ({
   page,
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
-  const api = await apiAs(course.users.teacher);
   const created = await api.post(course.apiPath('/nodes'), {
     data: {
       title: 'Nodo para importar Markdown',
@@ -17,7 +16,7 @@ test('Markdown drops require confirmation and update the Node draft before savin
       positionY: 0,
     },
   });
-  expect(created.status()).toBe(201);
+  await ok(created, 201);
   const nodeId: string = (await created.json()).node.id;
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
@@ -75,9 +74,8 @@ test('Markdown drops require confirmation and update the Node draft before savin
 test('teaching staff create a Node whose description comes from a dropped Markdown file', async ({
   page,
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
-  const api = await apiAs(course.users.teacher);
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();

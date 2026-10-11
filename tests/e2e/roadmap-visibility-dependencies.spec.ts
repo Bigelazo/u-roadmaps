@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
-import { prepareNodeCreator } from './create-node';
+import { ok } from './helpers';
+import { createDependency, prepareNodeCreator } from './create-node';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -7,10 +8,9 @@ function uniqueName(prefix: string) {
 
 test('hiding a node previews and removes every incident dependency atomically', async ({
   course,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const dependencyIds: string[] = [];
 
   const { createNode } = await prepareNodeCreator(teacher, course, {
@@ -22,16 +22,17 @@ test('hiding a node previews and removes every incident dependency atomically', 
   const outgoingA = await createNode(uniqueName('Salida A'), 300);
   const outgoingB = await createNode(uniqueName('Salida B'), 400);
 
-  const completion = await student.post(course.apiPath(`/nodes/${selected.id}/completion`));
-  expect(completion.status()).toBe(200);
-  const resource = await teacher.post(course.apiPath(`/nodes/${selected.id}/resources`), {
-    data: {
-      title: 'Recurso conservado',
-      url: 'https://example.test/conservado',
-      type: 'LINK',
-    },
-  });
-  expect(resource.status()).toBe(201);
+  await ok(await student.post(course.apiPath(`/nodes/${selected.id}/completion`)));
+  await ok(
+    await teacher.post(course.apiPath(`/nodes/${selected.id}/resources`), {
+      data: {
+        title: 'Recurso conservado',
+        url: 'https://example.test/conservado',
+        type: 'LINK',
+      },
+    }),
+    201,
+  );
 
   for (const [sourceNodeId, targetNodeId] of [
     [incomingA.id, selected.id],
@@ -39,18 +40,13 @@ test('hiding a node previews and removes every incident dependency atomically', 
     [selected.id, outgoingA.id],
     [selected.id, outgoingB.id],
   ]) {
-    const response = await teacher.post(course.apiPath('/dependencies'), {
-      data: { sourceNodeId, targetNodeId },
-    });
-    expect(response.status()).toBe(201);
-    dependencyIds.push((await response.json()).dependency.id);
+    dependencyIds.push(await createDependency(teacher, course, sourceNodeId, targetNodeId));
   }
 
-  const block = await teacher.post(course.apiPath(`/nodes/${selected.id}/teacher-block`));
-  expect(block.status()).toBe(200);
+  await ok(await teacher.post(course.apiPath(`/nodes/${selected.id}/teacher-block`)));
 
   const preview = await teacher.get(course.apiPath(`/nodes/${selected.id}?operation=HIDE`));
-  expect(preview.status()).toBe(200);
+  await ok(preview);
   expect((await preview.json()).dependencies).toEqual(
     expect.arrayContaining(
       dependencyIds.map((id, index) => ({
@@ -64,7 +60,7 @@ test('hiding a node previews and removes every incident dependency atomically', 
   const hidden = await teacher.patch(course.apiPath(`/nodes/${selected.id}`), {
     data: { isVisible: false },
   });
-  expect(hidden.status()).toBe(200);
+  await ok(hidden);
   const hiddenBody = await hidden.json();
   expect(hiddenBody.node).toMatchObject({
     id: selected.id,
@@ -102,7 +98,7 @@ test('hiding a node previews and removes every incident dependency atomically', 
   const shown = await teacher.patch(course.apiPath(`/nodes/${selected.id}`), {
     data: { isVisible: true },
   });
-  expect(shown.status()).toBe(200);
+  await ok(shown);
   expect((await shown.json()).node).toMatchObject({
     id: selected.id,
     isVisible: true,
@@ -127,10 +123,8 @@ test('hiding a node previews and removes every incident dependency atomically', 
 
 test('connecting from a teacher-blocked branch previews and persists descendant blocks', async ({
   course,
-  apiAs,
+  teacherApi: teacher,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-
   const { createNode } = await prepareNodeCreator(teacher, course);
   const blockedSource = await createNode(uniqueName('Rama bloqueada'), 0);
   const target = await createNode(uniqueName('Destino nuevo'), 120);
@@ -141,19 +135,15 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
     [target.id, descendant.id],
     [descendant.id, finalDescendant.id],
   ]) {
-    const response = await teacher.post(course.apiPath('/dependencies'), {
-      data: { sourceNodeId, targetNodeId },
-    });
-    expect(response.status()).toBe(201);
+    await createDependency(teacher, course, sourceNodeId, targetNodeId);
   }
 
-  const block = await teacher.post(course.apiPath(`/nodes/${blockedSource.id}/teacher-block`));
-  expect(block.status()).toBe(200);
+  await ok(await teacher.post(course.apiPath(`/nodes/${blockedSource.id}/teacher-block`)));
 
   const preview = await teacher.get(
     course.apiPath(`/dependencies?sourceNodeId=${blockedSource.id}&targetNodeId=${target.id}`),
   );
-  expect(preview.status()).toBe(200);
+  await ok(preview);
   expect((await preview.json()).nodes).toEqual(
     expect.arrayContaining([
       { id: target.id, title: target.title },
@@ -165,7 +155,7 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
   const dependency = await teacher.post(course.apiPath('/dependencies'), {
     data: { sourceNodeId: blockedSource.id, targetNodeId: target.id },
   });
-  expect(dependency.status()).toBe(201);
+  await ok(dependency, 201);
   const dependencyBody = await dependency.json();
   expect(dependencyBody.nodes).toEqual(
     expect.arrayContaining([
@@ -187,10 +177,10 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
   expect(blockedByNodeId.get(descendant.id)).toBe(true);
   expect(blockedByNodeId.get(finalDescendant.id)).toBe(true);
 
-  const deleted = await teacher.delete(
-    course.apiPath(`/dependencies/${dependencyBody.dependency.id}`),
+  await ok(
+    await teacher.delete(course.apiPath(`/dependencies/${dependencyBody.dependency.id}`)),
+    204,
   );
-  expect(deleted.status()).toBe(204);
   const afterDelete = await teacher.get(course.apiPath());
   const afterDeleteByNodeId = new Map(
     (await afterDelete.json()).nodes.map((node: { id: string; isTeacherBlocked: boolean }) => [
@@ -205,10 +195,8 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
 
 test('a partially hidden diamond loses only incident edges and never infers a replacement', async ({
   course,
-  apiAs,
+  teacherApi: teacher,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-
   const { createNode } = await prepareNodeCreator(teacher, course);
   const root = await createNode(uniqueName('Diamante raíz'), 0);
   const left = await createNode(uniqueName('Diamante izquierda'), 120);
@@ -221,19 +209,14 @@ test('a partially hidden diamond loses only incident edges and never infers a re
     [left.id, join.id],
     [right.id, join.id],
   ]) {
-    const response = await teacher.post(course.apiPath('/dependencies'), {
-      data: { sourceNodeId, targetNodeId },
-    });
-    expect(response.status()).toBe(201);
+    await createDependency(teacher, course, sourceNodeId, targetNodeId);
   }
 
-  expect((await teacher.post(course.apiPath(`/nodes/${left.id}/teacher-block`))).status()).toBe(
-    200,
-  );
+  await ok(await teacher.post(course.apiPath(`/nodes/${left.id}/teacher-block`)));
   const hidden = await teacher.patch(course.apiPath(`/nodes/${left.id}`), {
     data: { isVisible: false },
   });
-  expect(hidden.status()).toBe(200);
+  await ok(hidden);
   expect((await hidden.json()).node).toMatchObject({
     id: left.id,
     isVisible: false,
@@ -243,12 +226,12 @@ test('a partially hidden diamond loses only incident edges and never infers a re
   const hiddenSourceDependency = await teacher.post(course.apiPath('/dependencies'), {
     data: { sourceNodeId: left.id, targetNodeId: root.id },
   });
-  expect(hiddenSourceDependency.status()).toBe(403);
+  await ok(hiddenSourceDependency, 403);
   expect((await hiddenSourceDependency.json()).error.code).toBe('HIDDEN_NODE_DEPENDENCY_FORBIDDEN');
   const hiddenTargetDependency = await teacher.post(course.apiPath('/dependencies'), {
     data: { sourceNodeId: root.id, targetNodeId: left.id },
   });
-  expect(hiddenTargetDependency.status()).toBe(403);
+  await ok(hiddenTargetDependency, 403);
   expect((await hiddenTargetDependency.json()).error.code).toBe('HIDDEN_NODE_DEPENDENCY_FORBIDDEN');
 
   const afterHide = await teacher.get(course.apiPath());
@@ -271,10 +254,11 @@ test('a partially hidden diamond loses only incident edges and never infers a re
     ]),
   );
 
-  const shown = await teacher.patch(course.apiPath(`/nodes/${left.id}`), {
-    data: { isVisible: true },
-  });
-  expect(shown.status()).toBe(200);
+  await ok(
+    await teacher.patch(course.apiPath(`/nodes/${left.id}`), {
+      data: { isVisible: true },
+    }),
+  );
   const afterShow = await teacher.get(course.apiPath());
   const shownDto = await afterShow.json();
   expect(shownDto.nodes.find((node: { id: string }) => node.id === left.id)).toMatchObject({
@@ -299,9 +283,8 @@ test('a partially hidden diamond loses only incident edges and never infers a re
 test('independent Course offerings retain concurrent Dependency changes', async ({
   course,
   createCourse,
-  apiAs,
+  teacherApi: teacher,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
   const offerings = [
     course,
     ...(await Promise.all(
@@ -330,12 +313,11 @@ test('independent Course offerings retain concurrent Dependency changes', async 
   );
   const changes = [];
   for (const response of responses) {
-    expect(response.status(), await response.text()).toBe(201);
+    await ok(response, 201);
     changes.push((await response.json()).dependency as { id: string });
   }
   for (const [index, { offering, sourceNodeId, targetNodeId }] of branches.entries()) {
-    const saved = await teacher.get(offering.apiPath());
-    expect(saved.status()).toBe(200);
+    const saved = await ok(await teacher.get(offering.apiPath()));
     expect((await saved.json()).dependencies).toContainEqual(
       expect.objectContaining({ id: changes[index].id, sourceNodeId, targetNodeId }),
     );
