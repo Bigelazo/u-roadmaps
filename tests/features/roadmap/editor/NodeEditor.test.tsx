@@ -1,4 +1,4 @@
-import { createRef, type ComponentProps } from 'react';
+import { createRef } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -53,6 +53,8 @@ const nodeTypes: RoadmapDto['nodeTypes'] = [
   },
 ];
 
+type User = ReturnType<typeof userEvent.setup>;
+
 function renderEditor(
   overrides: Partial<NodeEditorProps> = {},
   ref = createRef<NodeEditorHandle>(),
@@ -71,15 +73,48 @@ function renderEditor(
     onIntent,
     ...overrides,
   };
-  const view = render(
+  const ui = (current: NodeEditorProps) => (
     <SidebarProvider>
       <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} ref={ref} />
+        <NodeEditor {...current} ref={ref} />
       </NodeEditorPanel>
-    </SidebarProvider>,
+    </SidebarProvider>
   );
-  return { ...view, props, perform, onIntent, ref };
+  const view = render(ui(props));
+  const rerenderWith = (next: Partial<NodeEditorProps>) => view.rerender(ui({ ...props, ...next }));
+  return { ...view, props, perform, onIntent, ref, rerenderWith };
 }
+
+/** Editor props whose session shows `node` with `overrides`. */
+function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'session'> {
+  return { session: { node: { ...node, ...overrides }, nodeTypes, isVisibilityPending: false } };
+}
+
+/** A perform effect that stays pending until the test resolves its latest call. */
+function deferredPerform() {
+  let resolveLatest!: (result: NodeEditorPerformResult) => void;
+  const perform = vi.fn(
+    () =>
+      new Promise<NodeEditorPerformResult>((resolve) => {
+        resolveLatest = resolve;
+      }),
+  );
+  return { perform, resolve: (result: NodeEditorPerformResult) => resolveLatest(result) };
+}
+
+async function retitle(user: User, title: string) {
+  await user.clear(screen.getByLabelText('Título'));
+  await user.type(screen.getByLabelText('Título'), title);
+}
+
+async function fillLink(user: User, title: string, url: string) {
+  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
+  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), title);
+  await user.type(screen.getByLabelText('Enlace'), url);
+}
+
+const saveButton = () =>
+  screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement;
 
 test('renders the selected Node as one cohesive editing surface', () => {
   renderEditor();
@@ -115,13 +150,7 @@ test('schedules and removes the unlock day of a teacher-blocked Node', async () 
   });
   unmount();
 
-  const view = renderEditor({
-    session: {
-      node: { ...node, isTeacherBlocked: true, teacherUnlockOn: '2099-03-14' },
-      nodeTypes,
-      isVisibilityPending: false,
-    },
-  });
+  const view = renderEditor(withNode({ isTeacherBlocked: true, teacherUnlockOn: '2099-03-14' }));
   expect(screen.getByText(/Se desbloqueará el sábado, 14 de marzo de 2099/)).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Quitar fecha' }));
   expect(view.onIntent).toHaveBeenCalledWith({
@@ -132,13 +161,7 @@ test('schedules and removes the unlock day of a teacher-blocked Node', async () 
 });
 
 test('offers no unlock schedule while a Node has no teacher block', () => {
-  renderEditor({
-    session: {
-      node: { ...node, isTeacherBlocked: false },
-      nodeTypes,
-      isVisibilityPending: false,
-    },
-  });
+  renderEditor(withNode({ isTeacherBlocked: false }));
 
   expect(screen.queryByLabelText('Desbloqueo programado')).toBeNull();
 });
@@ -149,12 +172,10 @@ test('saves Node information through one perform effect and preserves rejected i
   const { perform } = view;
   const title = screen.getByLabelText('Título');
 
-  expect(
-    (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect(saveButton().disabled).toBe(true);
   await user.clear(title);
   await user.type(title, 'Límites y continuidad');
-  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await user.click(saveButton());
 
   expect(perform).toHaveBeenCalledWith({
     kind: 'update-node',
@@ -165,11 +186,7 @@ test('saves Node information through one perform effect and preserves rejected i
       nodeTypeId: node.nodeTypeId,
     },
   });
-  await waitFor(() =>
-    expect(
-      (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
-    ).toBe(true),
-  );
+  await waitFor(() => expect(saveButton().disabled).toBe(true));
 
   view.unmount();
   const rejectedPerform = vi.fn().mockResolvedValue({ status: 'rejected' } as const);
@@ -219,15 +236,12 @@ test('normalizes a thrown Node save failure and keeps the retryable draft', asyn
   const perform = vi.fn().mockRejectedValue(new Error('network failure'));
   renderEditor({ perform });
 
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador recuperable');
-  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await retitle(user, 'Borrador recuperable');
+  await user.click(saveButton());
 
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(1));
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador recuperable');
-  expect(
-    (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
-  ).toBe(false);
+  expect(saveButton().disabled).toBe(false);
 });
 
 test('keeps an empty Resource composer clean and uses the finite link session for additions', async () => {
@@ -236,9 +250,7 @@ test('keeps an empty Resource composer clean and uses the finite link session fo
 
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
   expect(screen.getByRole('button', { name: 'Previsualizar' })).toBeTruthy();
-  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía nueva');
-  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/nueva');
+  await fillLink(user, 'Guía nueva', 'https://example.test/nueva');
   expect(screen.getByRole('button', { name: 'Previsualizar cambios' })).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Agregar enlace' }));
 
@@ -255,8 +267,7 @@ test('does not guard a dirty Node when opening a Resource for that same Node', a
   const ref = createRef<NodeEditorHandle>();
   renderEditor({}, ref);
 
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador');
+  await retitle(user, 'Borrador');
 
   await expect(ref.current!.guardDraft({ kind: 'open-resource', nodeId: node.id })).resolves.toBe(
     true,
@@ -288,19 +299,11 @@ test('uploads a selected file and keeps the resource session on rejection', asyn
 
 test('does not let a late Resource result clear a newer Resource session', async () => {
   const user = userEvent.setup();
-  let resolvePerform!: (result: NodeEditorPerformResult) => void;
-  const perform = vi.fn(
-    () =>
-      new Promise<NodeEditorPerformResult>((resolve) => {
-        resolvePerform = resolve;
-      }),
-  );
+  const { perform, resolve: resolvePerform } = deferredPerform();
   renderEditor({ perform });
 
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
-  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Primera versión');
-  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/primera');
+  await fillLink(user, 'Primera versión', 'https://example.test/primera');
   await user.click(screen.getByRole('button', { name: 'Agregar enlace' }));
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(1));
 
@@ -315,27 +318,17 @@ test('does not let a late Resource result clear a newer Resource session', async
 
 test('does not let a late Resource result clear a reopened session with the same input', async () => {
   const user = userEvent.setup();
-  let resolvePerform!: (result: NodeEditorPerformResult) => void;
-  const perform = vi.fn(
-    () =>
-      new Promise<NodeEditorPerformResult>((resolve) => {
-        resolvePerform = resolve;
-      }),
-  );
+  const { perform, resolve: resolvePerform } = deferredPerform();
   renderEditor({ perform });
 
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
-  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía temporal');
-  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/temporal');
+  await fillLink(user, 'Guía temporal', 'https://example.test/temporal');
   await user.click(screen.getByRole('button', { name: 'Agregar enlace' }));
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(1));
 
   await user.click(screen.getByRole('button', { name: 'Cerrar editor de recurso' }));
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
-  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía temporal');
-  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/temporal');
+  await fillLink(user, 'Guía temporal', 'https://example.test/temporal');
 
   resolvePerform({ status: 'committed' });
   await screen.findByText('Nuevo recurso');
@@ -352,7 +345,7 @@ test('edits an existing Resource and retries a failed deletion through the same 
     .mockResolvedValueOnce({ status: 'rejected' })
     .mockResolvedValueOnce({ status: 'committed' });
   renderEditor({
-    session: { node: { ...node, resources: [resource] }, nodeTypes, isVisibilityPending: false },
+    ...withNode({ resources: [resource] }),
     perform,
   });
 
@@ -384,8 +377,7 @@ test('guards a dirty transition and resets only after confirmed discard', async 
   const user = userEvent.setup();
   const ref = createRef<NodeEditorHandle>();
   renderEditor({}, ref);
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador');
+  await retitle(user, 'Borrador');
 
   const decision = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
   await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
@@ -405,12 +397,9 @@ test('keeps the complete Node and Resource session unchanged when a guard is can
   const ref = createRef<NodeEditorHandle>();
   renderEditor({}, ref);
 
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador del nodo');
+  await retitle(user, 'Borrador del nodo');
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
-  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Borrador del recurso');
-  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/borrador');
+  await fillLink(user, 'Borrador del recurso', 'https://example.test/borrador');
 
   const decision = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
   await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
@@ -434,8 +423,7 @@ test('resets the complete editing session before a guarded caller resumes', asyn
   const ref = createRef<NodeEditorHandle>();
   const { onIntent } = renderEditor({}, ref);
 
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador del nodo');
+  await retitle(user, 'Borrador del nodo');
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
   await user.click(screen.getByRole('tab', { name: 'Enlace' }));
   await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Borrador del recurso');
@@ -461,15 +449,9 @@ test('resets the complete editing session before a guarded caller resumes', asyn
 test('guards Node deletion in the editor and emits its intent only after discard', async () => {
   const user = userEvent.setup();
   const ref = createRef<NodeEditorHandle>();
-  const { onIntent } = renderEditor(
-    {
-      session: { node: { ...node, resources: [resource] }, nodeTypes, isVisibilityPending: false },
-    },
-    ref,
-  );
+  const { onIntent } = renderEditor(withNode({ resources: [resource] }), ref);
 
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador');
+  await retitle(user, 'Borrador');
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
   await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
@@ -491,8 +473,7 @@ test('guards Node deletion in the editor and emits its intent only after discard
 test('projects the current draft through a preview intent and carries an opaque focus callback', async () => {
   const user = userEvent.setup();
   const { onIntent } = renderEditor();
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Límites y continuidad');
+  await retitle(user, 'Límites y continuidad');
   await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
 
   const intent = onIntent.mock.calls.at(-1)?.[0];
@@ -519,9 +500,7 @@ test('projects an unsaved Node type through the public preview intent', async ()
 
 test('projects unsaved Resource sessions through the public preview intent', async () => {
   const user = userEvent.setup();
-  const { onIntent } = renderEditor({
-    session: { node: { ...node, resources: [resource] }, nodeTypes, isVisibilityPending: false },
-  });
+  const { onIntent } = renderEditor(withNode({ resources: [resource] }));
 
   await user.click(screen.getByRole('button', { name: 'Editar recurso Guía de ejercicios' }));
   await user.clear(screen.getByPlaceholderText('Ej. Guía de ejercicios'));
@@ -540,54 +519,42 @@ test('projects unsaved Resource sessions through the public preview intent', asy
   });
 });
 
-test('includes a pending link Resource in the public preview intent', async () => {
+test.each([
+  {
+    name: 'includes a pending link Resource in the public preview intent',
+    compose: (user: User) => fillLink(user, 'Guía nueva', 'https://example.test/nueva'),
+    preview: {
+      id: 'node-information-preview-resource',
+      title: 'Guía nueva',
+      url: 'https://example.test/nueva',
+      type: 'LINK',
+    },
+  },
+  {
+    name: 'includes a selected file Resource in the public preview intent',
+    compose: (user: User) =>
+      user.upload(
+        screen.getByLabelText('Archivo'),
+        new File(['guía'], 'guia-de-limites.pdf', { type: 'application/pdf' }),
+      ),
+    preview: {
+      id: 'node-information-preview-file',
+      title: 'guia-de-limites.pdf',
+      url: '#',
+      type: 'FILE',
+    },
+  },
+])('$name', async ({ compose, preview }) => {
   const user = userEvent.setup();
   const { onIntent } = renderEditor();
 
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
-  await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), 'Guía nueva');
-  await user.type(screen.getByLabelText('Enlace'), 'https://example.test/nueva');
+  await compose(user);
   await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
 
   expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({
     kind: 'preview-node-information',
-    node: {
-      resources: [
-        {
-          id: 'node-information-preview-resource',
-          title: 'Guía nueva',
-          url: 'https://example.test/nueva',
-          type: 'LINK',
-        },
-      ],
-    },
-  });
-});
-
-test('includes a selected file Resource in the public preview intent', async () => {
-  const user = userEvent.setup();
-  const { onIntent } = renderEditor();
-
-  await user.click(screen.getByRole('button', { name: 'Recurso' }));
-  await user.upload(
-    screen.getByLabelText('Archivo'),
-    new File(['guía'], 'guia-de-limites.pdf', { type: 'application/pdf' }),
-  );
-  await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
-
-  expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({
-    kind: 'preview-node-information',
-    node: {
-      resources: [
-        {
-          id: 'node-information-preview-file',
-          title: 'guia-de-limites.pdf',
-          url: '#',
-          type: 'FILE',
-        },
-      ],
-    },
+    node: { resources: [preview] },
   });
 });
 
@@ -613,28 +580,10 @@ test('waits for a typed Resource command target before consuming it', async () =
     nodeId: targetNode.id,
     mode: 'link' as const,
   };
-  const props: ComponentProps<typeof NodeEditor> = {
-    session: { node, nodeTypes, isVisibilityPending: false },
-    command,
-    perform: vi.fn().mockResolvedValue({ status: 'committed' }),
-    onIntent: vi.fn(),
-  };
-  const { rerender } = render(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  const { rerenderWith } = renderEditor({ command });
 
   expect(screen.queryByText('Nuevo recurso')).toBeNull();
-  rerender(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} session={{ ...props.session, node: targetNode }} />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  rerenderWith(withNode(targetNode));
 
   const composer = await screen.findByRole('form', { name: 'Editor de recurso' });
   const title = within(composer).getByLabelText('Título');
@@ -649,30 +598,12 @@ test('does not reopen or reset a Resource session when the same command is redel
     nodeId: node.id,
     mode: 'link' as const,
   };
-  const props: ComponentProps<typeof NodeEditor> = {
-    session: { node, nodeTypes, isVisibilityPending: false },
-    command,
-    perform: vi.fn().mockResolvedValue({ status: 'committed' }),
-    onIntent: vi.fn(),
-  };
-  const { rerender } = render(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  const { rerenderWith } = renderEditor({ command });
   const composer = await screen.findByRole('form', { name: 'Editor de recurso' });
   const title = within(composer).getByLabelText('Título');
   await user.type(title, 'Apuntes');
 
-  rerender(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} command={{ ...command }} />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  rerenderWith({ command: { ...command } });
 
   const redeliveredComposer = screen.getByRole('form', { name: 'Editor de recurso' });
   expect((within(redeliveredComposer).getByLabelText('Título') as HTMLInputElement).value).toBe(
@@ -683,30 +614,9 @@ test('does not reopen or reset a Resource session when the same command is redel
 
 test('preserves a dirty draft while a same-Node canonical refresh updates its baseline', async () => {
   const user = userEvent.setup();
-  const props: ComponentProps<typeof NodeEditor> = {
-    session: { node, nodeTypes, isVisibilityPending: false },
-    perform: vi.fn().mockResolvedValue({ status: 'committed' }),
-    onIntent: vi.fn(),
-  };
-  const { rerender } = render(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador');
-  rerender(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor
-          {...props}
-          session={{ ...props.session, node: { ...node, title: 'Cambio autorizado externamente' } }}
-        />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  const { rerenderWith } = renderEditor();
+  await retitle(user, 'Borrador');
+  rerenderWith(withNode({ title: 'Cambio autorizado externamente' }));
   await waitFor(() =>
     expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador'),
   );
@@ -715,41 +625,14 @@ test('preserves a dirty draft while a same-Node canonical refresh updates its ba
 
 test('does not let a late Node result replace a refreshed same-Node baseline', async () => {
   const user = userEvent.setup();
-  let resolvePerform!: (result: NodeEditorPerformResult) => void;
-  const perform = vi.fn(
-    () =>
-      new Promise<NodeEditorPerformResult>((resolve) => {
-        resolvePerform = resolve;
-      }),
-  );
-  const props: ComponentProps<typeof NodeEditor> = {
-    session: { node, nodeTypes, isVisibilityPending: false },
-    perform,
-    onIntent: vi.fn(),
-  };
-  const { rerender } = render(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...props} />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  const { perform, resolve: resolvePerform } = deferredPerform();
+  const { rerenderWith } = renderEditor({ perform });
 
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador local');
-  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await retitle(user, 'Borrador local');
+  await user.click(saveButton());
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(1));
 
-  rerender(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor
-          {...props}
-          session={{ ...props.session, node: { ...node, title: 'Cambio autorizado externamente' } }}
-        />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  rerenderWith(withNode({ title: 'Cambio autorizado externamente' }));
   await screen.findByRole('heading', { name: 'Cambio autorizado externamente' });
 
   resolvePerform({ status: 'committed' });
@@ -761,69 +644,29 @@ test('a remote title edit during a pending save still requires explicit draft re
   const user = userEvent.setup();
   const perform = vi.fn(() => new Promise<NodeEditorPerformResult>(() => undefined));
   const view = renderEditor({ perform });
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Borrador en vuelo');
-  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
-  view.rerender(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor
-          {...view.props}
-          session={{
-            ...view.props.session,
-            node: { ...node, title: 'Edición remota incompatible' },
-          }}
-        />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
+  await retitle(user, 'Borrador en vuelo');
+  await user.click(saveButton());
+  view.rerenderWith(withNode({ title: 'Edición remota incompatible' }));
   expect(await screen.findByRole('status')).toHaveProperty(
     'textContent',
     expect.stringContaining('cambió mientras editabas'),
   );
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador en vuelo');
-  expect(
-    (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect(saveButton().disabled).toBe(true);
   expect(perform).toHaveBeenCalledOnce();
 });
 
 test('a confirmed save arriving after a second local edit does not become a remote conflict', async () => {
   const user = userEvent.setup();
-  let resolveSave!: (result: NodeEditorPerformResult) => void;
-  const perform = vi.fn(
-    () =>
-      new Promise<NodeEditorPerformResult>((resolve) => {
-        resolveSave = resolve;
-      }),
-  );
+  const { perform, resolve: resolveSave } = deferredPerform();
   const view = renderEditor({ perform });
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Primera edición');
-  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
-  await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), 'Segunda edición');
+  await retitle(user, 'Primera edición');
+  await user.click(saveButton());
+  await retitle(user, 'Segunda edición');
   resolveSave({ status: 'committed' });
-  await waitFor(() =>
-    expect(
-      (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
-    ).toBe(false),
-  );
-  view.rerender(
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor
-          {...view.props}
-          session={{ ...view.props.session, node: { ...node, title: 'Primera edición' } }}
-        />
-      </NodeEditorPanel>
-    </SidebarProvider>,
-  );
-  await waitFor(() =>
-    expect(
-      (screen.getByRole('button', { name: 'Guardar cambios' }) as HTMLButtonElement).disabled,
-    ).toBe(false),
-  );
+  await waitFor(() => expect(saveButton().disabled).toBe(false));
+  view.rerenderWith(withNode({ title: 'Primera edición' }));
+  await waitFor(() => expect(saveButton().disabled).toBe(false));
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Segunda edición');
   expect(screen.queryByText(/cambió mientras editabas/)).toBeNull();
 });
