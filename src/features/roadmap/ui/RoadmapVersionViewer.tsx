@@ -9,7 +9,7 @@ import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { Item } from '@/shared/ui/item';
-import { PageEyebrow, PageTitle } from '@/shared/ui/page-header';
+import { PageEyebrow, PageTitle } from '@/shared/ui/page-layout';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import type { RoadmapVersion } from '@/features/roadmap/version-types';
 

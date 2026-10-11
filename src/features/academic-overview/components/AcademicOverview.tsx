@@ -24,7 +24,7 @@ import type {
   AcademicOverviewTerm,
 } from '../types';
 import { termLabel } from '@/shared/course-offering';
-import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-header';
+import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
