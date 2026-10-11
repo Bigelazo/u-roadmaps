@@ -339,11 +339,7 @@ export const fixtureParticipations: Participation[] = [
   ),
 ];
 
-type NodeBlueprint = {
-  title: string;
-  focus: string;
-  kind: FixtureNodeKind;
-};
+type NodeBlueprint = readonly [title: string, focus: string];
 
 type ResourceBlueprint = {
   node: number;
@@ -353,7 +349,7 @@ type ResourceBlueprint = {
   fileFormat?: FileFormat;
 };
 
-type NodePosition = { x: number; y: number };
+type NodePosition = readonly [x: number, y: number];
 type DependencyBlueprint = {
   source: number;
   target: number;
@@ -373,17 +369,10 @@ type RoadmapBlueprint = {
   resources: readonly ResourceBlueprint[];
 };
 
+// Every fixture Roadmap assigns kinds to its nodes in this order.
 const nodeKinds: readonly FixtureNodeKind[] = [
-  'CONTENT',
-  'CONTENT',
-  'CONTENT',
-  'CONTENT',
-  'CONTENT',
-  'CONTENT',
-  'CONTENT',
-  'SUPPLEMENTARY',
-  'SUPPLEMENTARY',
-  'SUPPLEMENTARY',
+  ...Array<FixtureNodeKind>(7).fill('CONTENT'),
+  ...Array<FixtureNodeKind>(3).fill('SUPPLEMENTARY'),
   'ASSESSMENT',
   'CUSTOM',
   'CUSTOM',
@@ -600,94 +589,44 @@ const roadmapBlueprints: readonly RoadmapBlueprint[] = [
     theme: 'programación funcional e imperativa',
     layout: 'HORIZONTAL',
     nodes: [
-      {
-        title: 'Variables',
-        focus: 'variables, tipos y representaciones de datos simples',
-        kind: nodeKinds[0],
-      },
-      {
-        title: 'Expresiones',
-        focus: 'expresiones, operadores y evaluación controlada',
-        kind: nodeKinds[1],
-      },
-      {
-        title: 'Condiciones',
-        focus: 'decisiones condicionales y casos mutuamente excluyentes',
-        kind: nodeKinds[2],
-      },
-      { title: 'Funciones', focus: 'funciones pequeñas con contratos claros', kind: nodeKinds[3] },
-      {
-        title: 'Listas',
-        focus: 'colecciones, recorridos y transformación de secuencias',
-        kind: nodeKinds[4],
-      },
-      {
-        title: 'Recursión',
-        focus: 'casos base, llamadas recursivas y reducción estructural',
-        kind: nodeKinds[5],
-      },
-      {
-        title: 'Archivos',
-        focus: 'lectura, escritura y validación de datos persistentes',
-        kind: nodeKinds[6],
-      },
-      {
-        title: 'Práctica guiada',
-        focus: 'integración de ramas mediante una actividad acompañada',
-        kind: nodeKinds[7],
-      },
-      {
-        title: 'Depuración',
-        focus: 'observación de fallas, pruebas pequeñas y trazas',
-        kind: nodeKinds[8],
-      },
-      {
-        title: 'Módulos',
-        focus: 'separación de responsabilidades y reutilización de código',
-        kind: nodeKinds[9],
-      },
-      {
-        title: 'Evaluación de programación funcional',
-        focus: 'resolución individual de problemas funcionales',
-        kind: nodeKinds[10],
-      },
-      {
-        title: 'Laboratorio de integración imperativa',
-        focus: 'construcción colaborativa de una solución imperativa',
-        kind: nodeKinds[11],
-      },
-      {
-        title: 'Proyecto de datos con archivos',
-        focus: 'diseño de un programa que procesa datos y archivos',
-        kind: nodeKinds[12],
-      },
-      {
-        title: 'Control de estructuras y pruebas',
-        focus: 'verificación de estructuras, contratos y pruebas',
-        kind: nodeKinds[13],
-      },
-      {
-        title: 'Evaluación final sobre diseño de programas y resolución de problemas',
-        focus: 'síntesis de decisiones de diseño y razonamiento algorítmico',
-        kind: nodeKinds[14],
-      },
+      ['Variables', 'variables, tipos y representaciones de datos simples'],
+      ['Expresiones', 'expresiones, operadores y evaluación controlada'],
+      ['Condiciones', 'decisiones condicionales y casos mutuamente excluyentes'],
+      ['Funciones', 'funciones pequeñas con contratos claros'],
+      ['Listas', 'colecciones, recorridos y transformación de secuencias'],
+      ['Recursión', 'casos base, llamadas recursivas y reducción estructural'],
+      ['Archivos', 'lectura, escritura y validación de datos persistentes'],
+      ['Práctica guiada', 'integración de ramas mediante una actividad acompañada'],
+      ['Depuración', 'observación de fallas, pruebas pequeñas y trazas'],
+      ['Módulos', 'separación de responsabilidades y reutilización de código'],
+      ['Evaluación de programación funcional', 'resolución individual de problemas funcionales'],
+      [
+        'Laboratorio de integración imperativa',
+        'construcción colaborativa de una solución imperativa',
+      ],
+      ['Proyecto de datos con archivos', 'diseño de un programa que procesa datos y archivos'],
+      ['Control de estructuras y pruebas', 'verificación de estructuras, contratos y pruebas'],
+      [
+        'Evaluación final sobre diseño de programas y resolución de problemas',
+        'síntesis de decisiones de diseño y razonamiento algorítmico',
+      ],
     ],
     positions: [
-      { x: 0, y: 360 },
-      { x: 240, y: 360 },
-      { x: 480, y: 360 },
-      { x: 720, y: 240 },
-      { x: 720, y: 480 },
-      { x: 960, y: 240 },
-      { x: 960, y: 480 },
-      { x: 1200, y: 360 },
-      { x: 1440, y: 360 },
-      { x: 1680, y: 360 },
-      { x: 1200, y: 120 },
-      { x: 1920, y: 360 },
-      { x: 2160, y: 360 },
-      { x: 2400, y: 240 },
-      { x: 1920, y: 600 },
+      [0, 360],
+      [240, 360],
+      [480, 360],
+      [720, 240],
+      [720, 480],
+      [960, 240],
+      [960, 480],
+      [1200, 360],
+      [1440, 360],
+      [1680, 360],
+      [1200, 120],
+      [1920, 360],
+      [2160, 360],
+      [2400, 240],
+      [1920, 600],
     ],
     dependencies: commonDependencies,
     resources: cc1002Resources,
@@ -704,90 +643,41 @@ const roadmapBlueprints: readonly RoadmapBlueprint[] = [
     theme: 'fundamentos matemáticos, límites y derivadas',
     layout: 'VERTICAL',
     nodes: [
-      {
-        title: 'Conjuntos',
-        focus: 'conjuntos, intervalos y notación matemática',
-        kind: nodeKinds[0],
-      },
-      {
-        title: 'Funciones',
-        focus: 'dominio, recorrido y composición de funciones',
-        kind: nodeKinds[1],
-      },
-      {
-        title: 'Gráficas',
-        focus: 'lectura de gráficas y transformaciones elementales',
-        kind: nodeKinds[2],
-      },
-      { title: 'Sucesiones', focus: 'patrones, sucesiones y aproximaciones', kind: nodeKinds[3] },
-      { title: 'Tasas', focus: 'tasas de cambio y comparación de variaciones', kind: nodeKinds[4] },
-      {
-        title: 'Límites',
-        focus: 'límites laterales, estimación y comportamiento local',
-        kind: nodeKinds[5],
-      },
-      {
-        title: 'Continuidad',
-        focus: 'continuidad y condiciones de existencia',
-        kind: nodeKinds[6],
-      },
-      {
-        title: 'Ejercicios guiados',
-        focus: 'práctica gradual de argumentos y cálculos',
-        kind: nodeKinds[7],
-      },
-      {
-        title: 'Errores frecuentes',
-        focus: 'diagnóstico de confusiones habituales en límites',
-        kind: nodeKinds[8],
-      },
-      {
-        title: 'Reglas de derivación',
-        focus: 'reglas de derivación y sus supuestos',
-        kind: nodeKinds[9],
-      },
-      {
-        title: 'Evaluación de límites y continuidad',
-        focus: 'aplicación individual de límites y continuidad',
-        kind: nodeKinds[10],
-      },
-      {
-        title: 'Taller de problemas con derivadas',
-        focus: 'discusión colaborativa de problemas de derivadas',
-        kind: nodeKinds[11],
-      },
-      {
-        title: 'Taller de modelamiento de cambios',
-        focus: 'modelamiento de un fenómeno mediante tasas de cambio',
-        kind: nodeKinds[12],
-      },
-      {
-        title: 'Control de reglas y aplicaciones',
-        focus: 'argumentación y cálculo en situaciones de derivación',
-        kind: nodeKinds[13],
-      },
-      {
-        title: 'Evaluación final de funciones límites derivadas y modelamiento matemático',
-        focus: 'síntesis de la progresión matemática del curso',
-        kind: nodeKinds[14],
-      },
+      ['Conjuntos', 'conjuntos, intervalos y notación matemática'],
+      ['Funciones', 'dominio, recorrido y composición de funciones'],
+      ['Gráficas', 'lectura de gráficas y transformaciones elementales'],
+      ['Sucesiones', 'patrones, sucesiones y aproximaciones'],
+      ['Tasas', 'tasas de cambio y comparación de variaciones'],
+      ['Límites', 'límites laterales, estimación y comportamiento local'],
+      ['Continuidad', 'continuidad y condiciones de existencia'],
+      ['Ejercicios guiados', 'práctica gradual de argumentos y cálculos'],
+      ['Errores frecuentes', 'diagnóstico de confusiones habituales en límites'],
+      ['Reglas de derivación', 'reglas de derivación y sus supuestos'],
+      ['Evaluación de límites y continuidad', 'aplicación individual de límites y continuidad'],
+      ['Taller de problemas con derivadas', 'discusión colaborativa de problemas de derivadas'],
+      ['Taller de modelamiento de cambios', 'modelamiento de un fenómeno mediante tasas de cambio'],
+      ['Control de reglas y aplicaciones', 'argumentación y cálculo en situaciones de derivación'],
+      [
+        'Evaluación final de funciones límites derivadas y modelamiento matemático',
+        'síntesis de la progresión matemática del curso',
+      ],
     ],
     positions: [
-      { x: 480, y: 0 },
-      { x: 480, y: 180 },
-      { x: 480, y: 360 },
-      { x: 240, y: 540 },
-      { x: 720, y: 540 },
-      { x: 240, y: 720 },
-      { x: 720, y: 720 },
-      { x: 480, y: 900 },
-      { x: 480, y: 1080 },
-      { x: 480, y: 1260 },
-      { x: 120, y: 900 },
-      { x: 480, y: 1440 },
-      { x: 480, y: 1620 },
-      { x: 180, y: 1620 },
-      { x: 780, y: 1260 },
+      [480, 0],
+      [480, 180],
+      [480, 360],
+      [240, 540],
+      [720, 540],
+      [240, 720],
+      [720, 720],
+      [480, 900],
+      [480, 1080],
+      [480, 1260],
+      [120, 900],
+      [480, 1440],
+      [480, 1620],
+      [180, 1620],
+      [780, 1260],
     ],
     dependencies: commonDependencies.map((dependency) => ({
       ...dependency,
@@ -808,98 +698,44 @@ const roadmapBlueprints: readonly RoadmapBlueprint[] = [
     theme: 'análisis cuantitativo y física newtoniana',
     layout: 'MIXED',
     nodes: [
-      {
-        title: 'Magnitudes',
-        focus: 'magnitudes, unidades y estimación de incertidumbre',
-        kind: nodeKinds[0],
-      },
-      {
-        title: 'Vectores',
-        focus: 'vectores, componentes y operaciones geométricas',
-        kind: nodeKinds[1],
-      },
-      {
-        title: 'Cinemática',
-        focus: 'posición, velocidad y aceleración en una dimensión',
-        kind: nodeKinds[2],
-      },
-      {
-        title: 'Fuerzas',
-        focus: 'fuerzas, diagramas de cuerpo libre y resultantes',
-        kind: nodeKinds[3],
-      },
-      {
-        title: 'Movimiento circular',
-        focus: 'trayectorias circulares y aceleración centrípeta',
-        kind: nodeKinds[4],
-      },
-      {
-        title: 'Leyes de Newton',
-        focus: 'las leyes de Newton como modelo predictivo',
-        kind: nodeKinds[5],
-      },
-      {
-        title: 'Rozamiento',
-        focus: 'rozamiento, tensión y restricciones de movimiento',
-        kind: nodeKinds[6],
-      },
-      {
-        title: 'Experimento guiado',
-        focus: 'diseño y lectura de una medición controlada',
-        kind: nodeKinds[7],
-      },
-      {
-        title: 'Conservación',
-        focus: 'conservación de energía y momentum lineal',
-        kind: nodeKinds[8],
-      },
-      {
-        title: 'Gravitación',
-        focus: 'interacción gravitatoria y escalas de distancia',
-        kind: nodeKinds[9],
-      },
-      {
-        title: 'Evaluación de dinámica y fuerzas',
-        focus: 'resolución individual de situaciones dinámicas',
-        kind: nodeKinds[10],
-      },
-      {
-        title: 'Actividad experimental de energía',
-        focus: 'contraste experimental entre trabajo y energía',
-        kind: nodeKinds[11],
-      },
-      {
-        title: 'Actividad experimental de momentum',
-        focus: 'análisis de momentum a partir de datos medidos',
-        kind: nodeKinds[12],
-      },
-      {
-        title: 'Control de conservación y gravitación',
-        focus: 'justificación de principios de conservación y gravitación',
-        kind: nodeKinds[13],
-      },
-      {
-        title: 'Evaluación final de mecánica energía momentum y gravitación newtoniana',
-        focus: 'integración de modelos newtonianos en problemas cuantitativos',
-        kind: nodeKinds[14],
-      },
+      ['Magnitudes', 'magnitudes, unidades y estimación de incertidumbre'],
+      ['Vectores', 'vectores, componentes y operaciones geométricas'],
+      ['Cinemática', 'posición, velocidad y aceleración en una dimensión'],
+      ['Fuerzas', 'fuerzas, diagramas de cuerpo libre y resultantes'],
+      ['Movimiento circular', 'trayectorias circulares y aceleración centrípeta'],
+      ['Leyes de Newton', 'las leyes de Newton como modelo predictivo'],
+      ['Rozamiento', 'rozamiento, tensión y restricciones de movimiento'],
+      ['Experimento guiado', 'diseño y lectura de una medición controlada'],
+      ['Conservación', 'conservación de energía y momentum lineal'],
+      ['Gravitación', 'interacción gravitatoria y escalas de distancia'],
+      ['Evaluación de dinámica y fuerzas', 'resolución individual de situaciones dinámicas'],
+      ['Actividad experimental de energía', 'contraste experimental entre trabajo y energía'],
+      ['Actividad experimental de momentum', 'análisis de momentum a partir de datos medidos'],
+      [
+        'Control de conservación y gravitación',
+        'justificación de principios de conservación y gravitación',
+      ],
+      [
+        'Evaluación final de mecánica energía momentum y gravitación newtoniana',
+        'integración de modelos newtonianos en problemas cuantitativos',
+      ],
     ],
     positions: [
-      { x: 0, y: 480 },
-      { x: 240, y: 480 },
-      { x: 480, y: 480 },
-      { x: 720, y: 240 },
-      { x: 720, y: 720 },
-      { x: 960, y: 240 },
-      { x: 960, y: 720 },
-      { x: 1200, y: 480 },
-      { x: 1440, y: 480 },
-      { x: 1680, y: 480 },
-      { x: 1200, y: 0 },
-      { x: 1680, y: 720 },
-      { x: 1920, y: 720 },
-      { x: 2160, y: 480 },
-      { x: 1680, y: 960 },
+      [0, 480],
+      [240, 480],
+      [480, 480],
+      [720, 240],
+      [720, 720],
+      [960, 240],
+      [960, 720],
+      [1200, 480],
+      [1440, 480],
+      [1680, 480],
+      [1200, 0],
+      [1680, 720],
+      [1920, 720],
+      [2160, 480],
+      [1680, 960],
     ],
     dependencies: [
       { source: 1, target: 2, sourceHandle: 'right', targetHandle: 'left' },
@@ -958,19 +794,14 @@ type FixtureResource = {
 };
 
 function materializeRoadmap(blueprint: RoadmapBlueprint, roadmapIndex: number) {
-  const nodes = blueprint.nodes.map((node, index) => ({
+  const nodes = blueprint.nodes.map(([title, focus], index) => ({
     id: nodeId(roadmapIndex, index + 1),
     roadmapId: blueprint.id,
-    nodeTypeId: nodeTypeIdFor(node.kind, blueprint.customNodeType.id),
-    title: node.title,
-    description: nodeDescription(
-      blueprint.theme,
-      node.title,
-      node.focus,
-      descriptionLengthForNode(index),
-    ),
-    positionX: blueprint.positions[index].x,
-    positionY: blueprint.positions[index].y,
+    nodeTypeId: nodeTypeIdFor(nodeKinds[index], blueprint.customNodeType.id),
+    title,
+    description: nodeDescription(blueprint.theme, title, focus, descriptionLengthForNode(index)),
+    positionX: blueprint.positions[index][0],
+    positionY: blueprint.positions[index][1],
     isVisible: index !== 12,
   }));
   const resources: FixtureResource[] = blueprint.resources.map((resource, index) => {
