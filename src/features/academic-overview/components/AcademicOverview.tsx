@@ -21,8 +21,11 @@ import type {
   AcademicOverviewCourse,
   AcademicOverviewInstitutionalPosition,
   AcademicOverviewPage,
+  AcademicOverviewRole,
   AcademicOverviewTerm,
 } from '../types';
+import { termLabel } from '@/shared/course-offering';
+import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-header';
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
@@ -49,8 +52,17 @@ const institutionalPositionDetails: Record<
   OBSERVER: { label: 'Oyente', accentClass: 'border-l-[#6f7a8a]' },
 };
 
-function termLabel({ year, semester }: Pick<AcademicOverviewTerm, 'year' | 'semester'>) {
-  return `${semester === 1 ? 'Otoño' : 'Primavera'} ${year}`;
+/** Positions shown when U-Campus reports no institutional position. */
+const roleFallbackDetails: Record<
+  AcademicOverviewRole,
+  Readonly<{ label: string; accentClass: string }>
+> = {
+  TEACHER: { label: 'Equipo docente', accentClass: 'border-l-[#1d3193]' },
+  STUDENT: { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' },
+};
+
+function courseCountLabel(count: number) {
+  return `${count} ${count === 1 ? 'curso' : 'cursos'}`;
 }
 
 type RoadmapCreationAction = (props: {
@@ -73,9 +85,7 @@ function CourseRow({
 }>) {
   const position = course.institutionalPosition
     ? institutionalPositionDetails[course.institutionalPosition]
-    : course.role === 'TEACHER'
-      ? { label: 'Equipo docente', accentClass: 'border-l-[#1d3193]' }
-      : { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' };
+    : roleFallbackDetails[course.role];
   // Teaching staff who cannot create the Roadmap still reach the version history.
   const awaitsCreation =
     course.role === 'TEACHER' &&
@@ -181,7 +191,7 @@ function CourseList({
   notificationsEnabled: boolean;
 }>) {
   return (
-    <ul className="divide-y divide-fog overflow-hidden rounded-xl border border-fog bg-card">
+    <ul className={dividedListClassName}>
       {term.courses.map((course) => (
         <CourseRow
           course={course}
@@ -216,7 +226,7 @@ function AcademicTermSection({
           {termLabel(term)}
         </h3>
         <p className="shrink-0 text-sm text-muted-foreground md:mt-1">
-          {term.courses.length} {term.courses.length === 1 ? 'curso' : 'cursos'}
+          {courseCountLabel(term.courses.length)}
         </p>
       </div>
       <CourseList
@@ -243,110 +253,101 @@ export function AcademicOverview({
   const [currentTerm, ...previousTerms] = overview.terms;
 
   return (
-    <main className="min-h-screen bg-cloud py-10 text-foreground md:py-16">
-      <div className="mx-auto max-w-[1440px] px-6">
-        <div className="flex flex-col gap-10 md:gap-16">
-          <header className="flex max-w-3xl items-center gap-3">
-            <h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
-              Resumen académico
-            </h1>
-            <AcademicOverviewTutorialButton invited={tutorialInvitation} />
-          </header>
+    <PageShell className="mx-auto max-w-[1440px] px-6">
+      <div className="flex flex-col gap-10 md:gap-16">
+        <header className="flex max-w-3xl items-center gap-3">
+          <PageTitle className="md:text-5xl">Resumen académico</PageTitle>
+          <AcademicOverviewTutorialButton invited={tutorialInvitation} />
+        </header>
 
-          {overview.source === 'LOCAL' ? (
-            <div
-              className="flex gap-3 rounded-lg border border-fog bg-card px-4 py-3 text-sm text-muted-foreground"
-              role="status"
-            >
-              <AlertTriangle
-                aria-hidden="true"
-                className="mt-0.5 shrink-0 text-primary"
-                size={18}
+        {overview.source === 'LOCAL' ? (
+          <div
+            className="flex gap-3 rounded-lg border border-fog bg-card px-4 py-3 text-sm text-muted-foreground"
+            role="status"
+          >
+            <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0 text-primary" size={18} />
+            <p>
+              No fue posible actualizar tus cursos desde U-Campus. Mostramos los cursos con
+              participación vigente en U-Roadmaps.
+            </p>
+          </div>
+        ) : null}
+
+        {overview.terms.length === 0 ? (
+          <Empty className="border bg-card py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <MapPinned aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>No hay cursos para mostrar</EmptyTitle>
+              <EmptyDescription>
+                {overview.source === 'LOCAL'
+                  ? 'No tienes participaciones activas en cursos.'
+                  : 'No hay cursos inscritos ni docentes disponibles para este resumen académico.'}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="flex flex-col gap-12 md:gap-16">
+            {currentTerm ? (
+              <AcademicTermSection
+                notificationsEnabled={notificationsEnabled}
+                renderRoadmapCreation={renderRoadmapCreation}
+                term={currentTerm}
               />
-              <p>
-                No fue posible actualizar tus cursos desde U-Campus. Mostramos los cursos con
-                participación vigente en U-Roadmaps.
-              </p>
-            </div>
-          ) : null}
-
-          {overview.terms.length === 0 ? (
-            <Empty className="border bg-card py-10">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <MapPinned aria-hidden="true" />
-                </EmptyMedia>
-                <EmptyTitle>No hay cursos para mostrar</EmptyTitle>
-                <EmptyDescription>
-                  {overview.source === 'LOCAL'
-                    ? 'No tienes participaciones activas en cursos.'
-                    : 'No hay cursos inscritos ni docentes disponibles para este resumen académico.'}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <div className="flex flex-col gap-12 md:gap-16">
-              {currentTerm ? (
-                <AcademicTermSection
-                  notificationsEnabled={notificationsEnabled}
-                  renderRoadmapCreation={renderRoadmapCreation}
-                  term={currentTerm}
-                />
-              ) : null}
-              {previousTerms.length > 0 ? (
-                <Collapsible>
-                  <div className="flex flex-col items-start gap-1">
-                    <CollapsibleTrigger className="group/previous-terms inline-flex cursor-pointer items-center gap-2 text-left font-heading text-3xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
-                      <span>Semestres anteriores</span>
-                      <ChevronDown
-                        aria-hidden="true"
-                        className="shrink-0 transition-transform group-data-panel-open/previous-terms:rotate-180"
-                        size={20}
-                      />
-                    </CollapsibleTrigger>
-                    <span className="text-sm text-muted-foreground">
-                      {previousTerms.length} {previousTerms.length === 1 ? 'semestre' : 'semestres'}
-                    </span>
+            ) : null}
+            {previousTerms.length > 0 ? (
+              <Collapsible>
+                <div className="flex flex-col items-start gap-1">
+                  <CollapsibleTrigger className="group/previous-terms inline-flex cursor-pointer items-center gap-2 text-left font-heading text-3xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+                    <span>Semestres anteriores</span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="shrink-0 transition-transform group-data-panel-open/previous-terms:rotate-180"
+                      size={20}
+                    />
+                  </CollapsibleTrigger>
+                  <span className="text-sm text-muted-foreground">
+                    {previousTerms.length} {previousTerms.length === 1 ? 'semestre' : 'semestres'}
+                  </span>
+                </div>
+                <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+                  <div className="pt-6">
+                    <Separator />
+                    <Accordion className="pt-4" multiple>
+                      {previousTerms.map((term, index) => (
+                        <AccordionItem
+                          className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
+                          key={`${term.year}-${term.semester}`}
+                          value={`${term.year}-${term.semester}`}
+                        >
+                          {index > 0 ? <Separator /> : null}
+                          <div className="flex flex-col items-start gap-1 pb-4">
+                            <AccordionTrigger className="w-fit flex-none cursor-pointer gap-2 py-0 font-heading text-2xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50">
+                              <span>{termLabel(term)}</span>
+                            </AccordionTrigger>
+                            <span className="text-sm text-muted-foreground">
+                              {courseCountLabel(term.courses.length)}
+                            </span>
+                          </div>
+                          <AccordionContent className="pb-4">
+                            <CourseList
+                              isPastTerm
+                              notificationsEnabled={notificationsEnabled}
+                              renderRoadmapCreation={renderRoadmapCreation}
+                              term={term}
+                            />
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
                   </div>
-                  <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
-                    <div className="pt-6">
-                      <Separator />
-                      <Accordion className="pt-4" multiple>
-                        {previousTerms.map((term, index) => (
-                          <AccordionItem
-                            className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
-                            key={`${term.year}-${term.semester}`}
-                            value={`${term.year}-${term.semester}`}
-                          >
-                            {index > 0 ? <Separator /> : null}
-                            <div className="flex flex-col items-start gap-1 pb-4">
-                              <AccordionTrigger className="w-fit flex-none cursor-pointer gap-2 py-0 font-heading text-2xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50">
-                                <span>{termLabel(term)}</span>
-                              </AccordionTrigger>
-                              <span className="text-sm text-muted-foreground">
-                                {term.courses.length}{' '}
-                                {term.courses.length === 1 ? 'curso' : 'cursos'}
-                              </span>
-                            </div>
-                            <AccordionContent className="pb-4">
-                              <CourseList
-                                isPastTerm
-                                notificationsEnabled={notificationsEnabled}
-                                renderRoadmapCreation={renderRoadmapCreation}
-                                term={term}
-                              />
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              ) : null}
-            </div>
-          )}
-        </div>
+                </CollapsibleContent>
+              </Collapsible>
+            ) : null}
+          </div>
+        )}
       </div>
-    </main>
+    </PageShell>
   );
 }

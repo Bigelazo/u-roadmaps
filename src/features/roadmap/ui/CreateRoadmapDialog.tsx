@@ -10,6 +10,7 @@ import { creatorLabel, originLabel } from '@/features/roadmap/ui/version-labels'
 import { versionHistoryApiUrl } from '@/shared/version-history-url';
 import type { RoadmapVersionHistory } from '@/features/roadmap/server';
 import { Button } from '@/shared/ui/button';
+import { FieldLegend, FieldSet } from '@/shared/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -110,8 +111,8 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
             Empieza con un roadmap vacío o copia una versión anterior del ramo.
           </DialogDescription>
         </DialogHeader>
-        <fieldset className="grid max-h-[50vh] gap-2 overflow-y-auto" disabled={busy}>
-          <legend className="sr-only">Origen del roadmap</legend>
+        <FieldSet className="grid max-h-[50vh] gap-2 overflow-y-auto" disabled={busy}>
+          <FieldLegend className="sr-only">Origen del roadmap</FieldLegend>
           <label className="flex items-center gap-3 rounded-lg border border-fog px-3 py-2">
             <input
               checked={source === 'empty'}
@@ -165,7 +166,7 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
               No se pudieron cargar las versiones anteriores. Puedes crear un roadmap vacío.
             </p>
           ) : null}
-        </fieldset>
+        </FieldSet>
         {error ? (
           <p className="text-sm text-destructive" role="alert">
             {error}
