@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from './fixtures';
 import { insert, literal, sql } from './database';
+import { listNotices } from './notices';
 import { studentNodeAccessById } from '../../src/features/roadmap/domain/access';
 import { isNoticeVisible } from '../../src/features/notifications/application/notice-visibility';
 
@@ -8,10 +9,9 @@ import { isNoticeVisible } from '../../src/features/notifications/application/no
 // Fixture SQL sets up the graph; assertions concern only Inbox responses/counts.
 test('database Inbox visibility agrees with domain rules across access and route targets', async ({
   course,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const roadmap = await (await teacher.get(course.apiPath())).json();
   const specialTypeId = randomUUID();
   const nodes = Array.from({ length: 3 }, (_, index) => ({
@@ -147,13 +147,9 @@ test('database Inbox visibility agrees with domain rules across access and route
         )
         .sort();
       const query = `/api/notifications?roadmapId=${course.roadmapId}`;
-      const response = await recipient.get(`${query}&limit=100`);
-      expect(response.status()).toBe(200);
-      const all = await response.json();
-      expect(
-        all.notifications.map((notice: { subject: string }) => notice.subject).sort(),
-        state,
-      ).toEqual(expected);
+      const all = await listNotices(recipient, { roadmapId: course.roadmapId, limit: 100 });
+      expect(all.map((notice) => notice.subject).sort(), state).toEqual(expected);
+
       expect(
         (
           await (

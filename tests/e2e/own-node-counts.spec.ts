@@ -1,18 +1,18 @@
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
+import { findNode } from './notices';
 
 test('Node marks outlive Roadmap recognition and clear only when that Node is opened', async ({
   page,
   course,
   apiAs,
+  teacherApi: author,
   createUser,
 }) => {
   const user = course.users.studentWithProgress;
-  const author = await apiAs(course.users.teacher);
   const api = await apiAs(user);
   const roadmap = await (await author.get(course.apiPath())).json();
-  const titleOf = (id: string) =>
-    roadmap.nodes.find((node: { id: string; title: string }) => node.id === id).title as string;
+  const titleOf = (id: string) => findNode(roadmap, id).title as string;
   const card = (id: string) => page.getByTestId('roadmap-card').filter({ hasText: titleOf(id) });
   const mark = (id: string) => card(id).getByRole('img', { name: /cambios? sin revisar/ });
   const changesUrl = `/api/notifications/node-changes?roadmapId=${course.roadmapId}`;
@@ -31,10 +31,9 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
   expect((await acknowledged).status()).toBe(200);
 
   for (const description of ['Primera revisión', 'Segunda revisión']) {
-    const response = await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-      data: { description },
-    });
-    expect(response.status()).toBe(200);
+    await ok(
+      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), { data: { description } }),
+    );
   }
   // Repeated edits to one object count once, and the mark arrives live.
   await expect(mark(course.nodes.first)).toHaveAccessibleName('1 cambio sin revisar');
@@ -59,23 +58,20 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
   await expect.poll(changes).toEqual({});
 
   // A later change marks the Node again, without reopening the reviewed one.
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { description: 'Tercera revisión' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { description: 'Tercera revisión' },
+    }),
+  );
   await expect.poll(changes).toEqual({ [course.nodes.first]: 1 });
 
   const outsider = await apiAs(await createUser());
   expect(await (await outsider.get(changesUrl)).json()).toEqual({ byNode: {} });
-  expect(
-    (
-      await outsider.post('/api/notifications/node-changes', {
-        data: { roadmapId: course.roadmapId, nodeId: course.nodes.first },
-      })
-    ).status(),
-  ).toBe(403);
-  expect((await api.get('/api/notifications/node-changes?roadmapId=invalid')).status()).toBe(400);
+  await ok(
+    await outsider.post('/api/notifications/node-changes', {
+      data: { roadmapId: course.roadmapId, nodeId: course.nodes.first },
+    }),
+    403,
+  );
+  await ok(await api.get('/api/notifications/node-changes?roadmapId=invalid'), 400);
 });
