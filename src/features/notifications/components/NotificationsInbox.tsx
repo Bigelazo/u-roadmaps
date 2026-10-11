@@ -240,9 +240,15 @@ function InboxBell() {
             : `Avisos${unreadCount > 0 ? `, ${unreadCount} sin leer` : ''}`
         }
         onClick={() => openInbox()}
-        render={<Button className="relative text-foreground" size="icon" variant="ghost" />}
+        render={
+          <Button
+            className="relative shrink border-0 text-foreground"
+            size="icon"
+            variant="ghost"
+          />
+        }
       >
-        <Bell aria-hidden="true" size={20} />
+        <Bell aria-hidden="true" className="size-5" />
         {!countsLoading && unreadCount > 0 ? (
           <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
             {formatBadgeCount(unreadCount)}
