@@ -1,11 +1,6 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import {
-  nodeVisibleBefore,
-  participantIds,
-  currentTargetNode,
-  type NoticeTargetDescriptor,
-} from './descriptor';
+import { nodeVisibleBefore, participantIds, type NoticeTargetDescriptor } from './descriptor';
 
 export const nodeTitleRef = (nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.nodeTitle,
@@ -34,7 +29,7 @@ export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
     return participantIds(roadmap);
   },
   async current(target, roadmap) {
-    const node = await currentTargetNode(target, roadmap);
+    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     return node ? { value: node.title, visible: node.isVisible } : null;
   },
   entryValues: async (roadmap) =>

@@ -3,7 +3,6 @@ import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, absorbs, nodeCreationRef } from '../absorption';
 import {
   participantIds,
-  currentTargetNode,
   type EntryValue,
   type NoticeTargetDescriptor,
   type TargetValues,
@@ -45,7 +44,7 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
     return participantIds(roadmap);
   },
   async current(target, roadmap, recipientId) {
-    const node = await currentTargetNode(target, roadmap);
+    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     if (!node) return null;
     if (!node.isVisible) return { value: ABSENT, visible: false };
     const accessible = (await roadmap.accessibleNodeIds(recipientId)).has(node.id);
