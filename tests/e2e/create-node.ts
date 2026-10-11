@@ -30,3 +30,17 @@ export async function prepareNodeCreator(
     },
   };
 }
+
+/** Create a Dependency through the teaching staff HTTP interface; returns its id. */
+export async function createDependency(
+  api: APIRequestContext,
+  course: E2ECourseOffering,
+  sourceNodeId: string,
+  targetNodeId: string,
+) {
+  const response = await api.post(course.apiPath('/dependencies'), {
+    data: { sourceNodeId, targetNodeId },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).dependency.id as string;
+}

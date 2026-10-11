@@ -2,29 +2,7 @@ import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 import { createExistingNode } from './existing-node';
 import { literal, sql } from './database';
-import type { Page } from '@playwright/test';
-
-type StreamFrame = { kind: string; data: { userId: string; courseCode?: string } };
-type StreamWindow = Window & { notificationFrames: StreamFrame[] };
-
-async function openNativeStream(page: Page) {
-  await page.goto('/api/notifications/counts');
-  await page.evaluate(() => {
-    const frames: StreamFrame[] = [];
-    (window as unknown as StreamWindow).notificationFrames = frames;
-    const source = new EventSource('/api/notifications/stream');
-    for (const kind of ['ready', 'inbox', 'roadmap']) {
-      source.addEventListener(kind, (event) => {
-        frames.push({ kind, data: JSON.parse((event as MessageEvent).data) });
-      });
-    }
-  });
-  await expect
-    .poll(() =>
-      page.evaluate(() => (window as unknown as StreamWindow).notificationFrames[0]?.kind),
-    )
-    .toBe('ready');
-}
+import { openNativeStream, streamFrames, type StreamWindow } from './notices';
 
 test('native SSE isolates Inbox and Roadmap frames from a User outside the Course', async ({
   browser,
@@ -51,15 +29,9 @@ test('native SSE isolates Inbox and Roadmap frames from a User outside the Cours
       ).status(),
     ).toBe(200);
     await expect
-      .poll(() =>
-        recipientPage.evaluate(() =>
-          (window as unknown as StreamWindow).notificationFrames.map((frame) => frame.kind),
-        ),
-      )
+      .poll(async () => (await streamFrames(recipientPage)).map((frame) => frame.kind))
       .toEqual(expect.arrayContaining(['inbox', 'roadmap']));
-    const delivered = await recipientPage.evaluate(
-      () => (window as unknown as StreamWindow).notificationFrames,
-    );
+    const delivered = await streamFrames(recipientPage);
     expect(delivered).toEqual(
       expect.arrayContaining([
         { kind: 'inbox', data: { userId: course.users.studentWithProgress.id } },
@@ -83,9 +55,9 @@ test('native SSE isolates Inbox and Roadmap frames from a User outside the Cours
         { timeout: 2000 },
       ),
     ).rejects.toThrow(/Timeout/);
-    expect(
-      await outsiderPage.evaluate(() => (window as unknown as StreamWindow).notificationFrames),
-    ).toEqual([{ kind: 'ready', data: { userId: outsider.id } }]);
+    expect(await streamFrames(outsiderPage)).toEqual([
+      { kind: 'ready', data: { userId: outsider.id } },
+    ]);
   } finally {
     await recipientContext.close();
     await outsiderContext.close();
