@@ -1,4 +1,5 @@
 import { Client } from 'pg';
+import { isLocalDatabase } from '../support/local-database';
 
 export function integrationDatabaseUrl() {
   const connection = process.env.NOTIFICATIONS_DATABASE_URL;
@@ -6,8 +7,7 @@ export function integrationDatabaseUrl() {
   const url = new URL(connection);
   if (
     !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
-    url.pathname !== '/roadmap_notifications_test_db' ||
+    !isLocalDatabase(url, 'roadmap_notifications_test_db') ||
     url.search ||
     url.hash
   ) {

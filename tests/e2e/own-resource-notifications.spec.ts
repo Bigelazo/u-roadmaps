@@ -1,24 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, test, type E2EPrimaryCourseOffering } from './fixtures';
-
-async function pendingNotices(api: APIRequestContext, nodeId: string) {
-  const response = await api.get(`/api/notifications?nodeId=${nodeId}&read=false`);
-  expect(response.status()).toBe(200);
-  return (await response.json()).notifications;
-}
-
-async function prepareOpening(api: APIRequestContext, roadmapId: string) {
-  const opening = { roadmapId, operationId: crypto.randomUUID() };
-  expect((await api.post('/api/notifications/openings', { data: opening })).status()).toBe(200);
-  return opening;
-}
-
-async function acknowledgeOpening(
-  api: APIRequestContext,
-  opening: Awaited<ReturnType<typeof prepareOpening>>,
-) {
-  expect((await api.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(200);
-}
+import { pendingNotices, prepareOpening, acknowledgeOpening, recognize } from './notices';
 
 async function addResource(
   author: APIRequestContext,
@@ -77,7 +59,7 @@ test('edited then removed retains the recipient-known Resource title', async ({
   const notices = () => pendingNotices(recipient, course.nodes.first);
   const resource = await addResource(author, course);
   await expect.poll(notices).toHaveLength(1);
-  await acknowledgeOpening(recipient, await prepareOpening(recipient, course.roadmapId));
+  await recognize(recipient, course.roadmapId);
   expect(await notices()).toHaveLength(0);
   const path = course.apiPath(`/resources/${resource.id}`);
   const pending = await editResourceTwice(author, path, notices);
@@ -88,7 +70,7 @@ test('edited then removed retains the recipient-known Resource title', async ({
   expect(await notices()).toHaveLength(1);
   expect((await notices())[0]).toMatchObject({ id: pending.id, data: { resourceTitle: 'Guía 3' } });
   expect((await notices())[0].body).toContain('Se eliminó el recurso «Guía 3»');
-  await acknowledgeOpening(recipient, await prepareOpening(recipient, course.roadmapId));
+  await recognize(recipient, course.roadmapId);
   expect(await notices()).toHaveLength(0);
 });
 
@@ -142,7 +124,7 @@ test('restoring Resource title URL and type withdraws the known-content notice',
   const notices = () => pendingNotices(recipient, course.nodes.first);
   const resource = await addResource(author, course);
   await expect.poll(notices).toHaveLength(1);
-  await acknowledgeOpening(recipient, await prepareOpening(recipient, course.roadmapId));
+  await recognize(recipient, course.roadmapId);
   const path = course.apiPath(`/resources/${resource.id}`);
   expect(
     (

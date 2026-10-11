@@ -1,13 +1,11 @@
 import { execFile } from 'node:child_process';
-
-const localHosts = ['localhost', '127.0.0.1', '[::1]'];
+import { isLocalDatabase } from '../support/local-database';
 
 /** The only database E2E code may touch: the local roadmap_e2e_db. */
 export function e2eDatabaseUrl() {
   const connection = process.env.E2E_DATABASE_URL;
   if (!connection) throw new Error('Set E2E_DATABASE_URL in .env.');
-  const database = new URL(connection);
-  if (!localHosts.includes(database.hostname) || database.pathname !== '/roadmap_e2e_db') {
+  if (!isLocalDatabase(new URL(connection), 'roadmap_e2e_db')) {
     throw new Error('E2E requires the local roadmap_e2e_db database.');
   }
   return connection;

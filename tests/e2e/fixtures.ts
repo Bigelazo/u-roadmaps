@@ -243,6 +243,10 @@ export const test = base.extend<{
   ) => Promise<void>;
   /** An API client authenticated as a User; disposed when the test ends. */
   apiAs: (user: E2EUser) => Promise<APIRequestContext>;
+  /** An API client authenticated as the primary Course offering's teacher. */
+  teacherApi: APIRequestContext;
+  /** An API client authenticated as the primary Course offering's student without progress. */
+  studentApi: APIRequestContext;
 }>({
   // Everything a test creates; removed even when the test fails.
   ownedTestData: async ({}, provide) => {
@@ -473,5 +477,13 @@ export const test = base.extend<{
       return client;
     });
     await Promise.all(clients.map((client) => client.dispose()));
+  },
+
+  teacherApi: async ({ course, apiAs }, provide) => {
+    await provide(await apiAs(course.users.teacher));
+  },
+
+  studentApi: async ({ course, apiAs }, provide) => {
+    await provide(await apiAs(course.users.studentWithoutProgress));
   },
 });
