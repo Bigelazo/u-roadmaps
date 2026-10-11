@@ -27,7 +27,8 @@ import type {
 } from '@/features/roadmap/types';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import {
-  transitiveDependentNodeIds,
+  dependencyTeacherBlockImpact,
+  visibleRoadmapGraph,
   wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
 import {
@@ -550,24 +551,11 @@ async function teacherBlockedDependentNodes(
     select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
     orderBy: { title: 'asc' },
   });
-  const visibleNodeIds = nodes.reduce<Set<string>>((ids, node) => {
-    if (node.isVisible) ids.add(node.id);
-    return ids;
-  }, new Set());
-  const visibleDependencies = dependencies.filter(
-    (dependency) =>
-      visibleNodeIds.has(dependency.sourceNodeId) && visibleNodeIds.has(dependency.targetNodeId),
-  );
-  const affectedNodeIds = new Set([
+  return dependencyTeacherBlockImpact(
+    nodes,
+    visibleRoadmapGraph(nodes, dependencies).dependencies,
     targetNodeId,
-    ...transitiveDependentNodeIds(visibleDependencies, targetNodeId),
-  ]);
-  return nodes.reduce<Array<{ id: string; title: string }>>((affectedNodes, node) => {
-    if (node.isVisible && !node.isTeacherBlocked && affectedNodeIds.has(node.id)) {
-      affectedNodes.push({ id: node.id, title: node.title });
-    }
-    return affectedNodes;
-  }, []);
+  );
 }
 
 export const createRoadmapDependency = withApplicationResult(

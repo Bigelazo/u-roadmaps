@@ -1,7 +1,8 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
 import {
+  dependencyTeacherBlockImpact,
   studentNodeAccessById,
-  transitiveDependentNodeIds,
+  visibleRoadmapGraph,
   wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
@@ -30,10 +31,12 @@ function copy<T>(value: T): T {
   return structuredClone(value);
 }
 
+type AnyRoadmapNode = AnyRoadmapDto['nodes'][number];
+
 function replaceRoadmapNode(
   roadmap: AnyRoadmapDto,
   nodeId: string,
-  update: (node: AnyRoadmapDto['nodes'][number]) => AnyRoadmapDto['nodes'][number],
+  update: (node: AnyRoadmapNode) => AnyRoadmapNode,
 ) {
   return {
     ...roadmap,
@@ -41,7 +44,7 @@ function replaceRoadmapNode(
   } as AnyRoadmapDto;
 }
 
-function nodeResources(node: AnyRoadmapDto['nodes'][number]): Resource[] {
+function nodeResources(node: AnyRoadmapNode): Resource[] {
   return 'resources' in node ? node.resources : [];
 }
 
@@ -51,11 +54,9 @@ function asStudentRoadmap(
   completedNodeIds: ReadonlySet<string>,
 ): StudentRoadmapDto {
   if (roadmap.nodes.every((node) => 'access' in node)) return copy(roadmap as StudentRoadmapDto);
-  const visibleNodes = (roadmap as RoadmapDto).nodes.filter((node) => node.isVisible);
-  const visibleNodeIds = new Set(visibleNodes.map(({ id }) => id));
-  const dependencies = roadmap.dependencies.filter(
-    ({ sourceNodeId, targetNodeId }) =>
-      visibleNodeIds.has(sourceNodeId) && visibleNodeIds.has(targetNodeId),
+  const { nodes: visibleNodes, dependencies } = visibleRoadmapGraph(
+    (roadmap as RoadmapDto).nodes,
+    roadmap.dependencies,
   );
   const accessByNodeId = studentNodeAccessById({
     nodes: visibleNodes,
@@ -158,20 +159,11 @@ function dependencyImpact(
     throw new Error('La dependencia formaría un ciclo.');
   if (!sourceNode.isTeacherBlocked) return [];
 
-  const affectedNodeIds = new Set([
+  return dependencyTeacherBlockImpact(
+    roadmap.nodes.filter((node) => 'isTeacherBlocked' in node),
+    roadmap.dependencies,
     targetNodeId,
-    ...transitiveDependentNodeIds(roadmap.dependencies, targetNodeId),
-  ]);
-  return roadmap.nodes
-    .filter(
-      (node) =>
-        'isTeacherBlocked' in node &&
-        node.isVisible &&
-        !node.isTeacherBlocked &&
-        affectedNodeIds.has(node.id),
-    )
-    .map(({ id, title }) => ({ id, title }))
-    .sort((left, right) => left.title.localeCompare(right.title));
+  ).sort((left, right) => left.title.localeCompare(right.title));
 }
 
 function nodeTypeFor(roadmap: AnyRoadmapDto, nodeId: string) {
@@ -222,20 +214,18 @@ export function createInMemoryRoadmapSessionPersistence(
     ? new Set(options.studentProgress.completedNodeIds)
     : null;
   let simulatedCompletions = new Set<string>();
-  let simulation: StudentRoadmapDto | null = null;
   let nextNodeNumber = roadmap.nodes.length + 1;
 
-  const refreshSimulation = () => {
-    simulation = asStudentRoadmap(roadmap, simulatedCompletions);
+  const mutateNode = (nodeId: string, update: (node: AnyRoadmapNode) => AnyRoadmapNode) => {
+    roadmap = replaceRoadmapNode(roadmap, nodeId, update);
   };
 
-  const mutateNode = (
-    nodeId: string,
-    update: (node: AnyRoadmapDto['nodes'][number]) => AnyRoadmapDto['nodes'][number],
-  ) => {
-    roadmap = replaceRoadmapNode(roadmap, nodeId, update);
-    simulation = null;
-  };
+  const appendResource = (nodeId: string, resource: Resource) =>
+    mutateNode(nodeId, (node) =>
+      'resources' in node
+        ? ({ ...node, resources: [...node.resources, resource] } as AnyRoadmapNode)
+        : node,
+    );
 
   return {
     async load() {
@@ -247,14 +237,13 @@ export function createInMemoryRoadmapSessionPersistence(
         studentCompletions.add(nodeId);
         return;
       }
-      roadmap = replaceRoadmapNode(roadmap, nodeId, (node) =>
+      mutateNode(nodeId, (node) =>
         'isCompleted' in node ? { ...node, isCompleted: true, canComplete: false } : node,
       );
     },
 
     async loadSimulation() {
-      refreshSimulation();
-      return copy(simulation!);
+      return asStudentRoadmap(roadmap, simulatedCompletions);
     },
 
     async addNode(_input: RoadmapCanvasSessionInput, node: NewRoadmapNode, position: Point) {
@@ -271,7 +260,6 @@ export function createInMemoryRoadmapSessionPersistence(
         resources: [],
       };
       roadmap = { ...roadmap, nodes: [...roadmap.nodes, created] } as AnyRoadmapDto;
-      simulation = null;
       return id;
     },
 
@@ -284,7 +272,7 @@ export function createInMemoryRoadmapSessionPersistence(
             title: update.title,
             description: update.description || null,
             nodeTypeId: update.nodeTypeId,
-          }) as AnyRoadmapDto['nodes'][number],
+          }) as AnyRoadmapNode,
       );
     },
 
@@ -296,7 +284,7 @@ export function createInMemoryRoadmapSessionPersistence(
             ...node,
             positionX: position.x,
             positionY: position.y,
-          }) as AnyRoadmapDto['nodes'][number],
+          }) as AnyRoadmapNode,
       );
     },
 
@@ -353,11 +341,10 @@ export function createInMemoryRoadmapSessionPersistence(
                 ...node,
                 isTeacherBlocked: operation === 'BLOCK',
                 ...(operation === 'BLOCK' ? {} : { teacherUnlockOn: undefined }),
-              } as AnyRoadmapDto['nodes'][number])
+              } as AnyRoadmapNode)
             : node,
         ),
       } as AnyRoadmapDto;
-      simulation = null;
     },
 
     async scheduleTeacherUnlock(
@@ -372,7 +359,7 @@ export function createInMemoryRoadmapSessionPersistence(
         return {
           ...node,
           teacherUnlockOn: unlockOn ?? undefined,
-        } as AnyRoadmapDto['nodes'][number];
+        } as AnyRoadmapNode;
       });
     },
 
@@ -393,7 +380,7 @@ export function createInMemoryRoadmapSessionPersistence(
               ...node,
               isVisible: !isVisible,
               ...(isVisible ? { isTeacherBlocked: false, teacherUnlockOn: undefined } : {}),
-            } as AnyRoadmapDto['nodes'][number])
+            } as AnyRoadmapNode)
           : node,
       );
       if (isVisible) {
@@ -440,30 +427,19 @@ export function createInMemoryRoadmapSessionPersistence(
           ({ sourceNodeId, targetNodeId }) => sourceNodeId !== nodeId && targetNodeId !== nodeId,
         ),
       } as AnyRoadmapDto;
-      simulation = null;
     },
 
     async addResource(_input: RoadmapCanvasSessionInput, nodeId: string, resource: ResourceInput) {
-      const created: Resource = { ...resource, id: newResourceId(roadmap) };
-      mutateNode(nodeId, (node) =>
-        'resources' in node
-          ? ({ ...node, resources: [...node.resources, created] } as AnyRoadmapDto['nodes'][number])
-          : node,
-      );
+      appendResource(nodeId, { ...resource, id: newResourceId(roadmap) });
     },
 
     async uploadResource(_input: RoadmapCanvasSessionInput, nodeId: string, file: File) {
-      const created: Resource = {
+      appendResource(nodeId, {
         id: newResourceId(roadmap),
         title: file.name,
         url: file.name,
         type: 'FILE',
-      };
-      mutateNode(nodeId, (node) =>
-        'resources' in node
-          ? ({ ...node, resources: [...node.resources, created] } as AnyRoadmapDto['nodes'][number])
-          : node,
-      );
+      });
     },
 
     async updateResource(
@@ -472,12 +448,10 @@ export function createInMemoryRoadmapSessionPersistence(
       resource: ResourceInput,
     ) {
       roadmap = resourceUpdate(roadmap, resourceId, (current) => ({ ...current, ...resource }));
-      simulation = null;
     },
 
     async deleteResource(_input: RoadmapCanvasSessionInput, resourceId: string) {
       roadmap = resourceUpdate(roadmap, resourceId, () => null);
-      simulation = null;
     },
 
     async addNodeType(_input: RoadmapCanvasSessionInput, nodeType: RoadmapNodeTypeInput) {
@@ -510,12 +484,10 @@ export function createInMemoryRoadmapSessionPersistence(
 
     async completeSimulatedNode(_input: RoadmapCanvasSessionInput, nodeId: string) {
       simulatedCompletions = new Set([...simulatedCompletions, nodeId]);
-      refreshSimulation();
     },
 
     async resetSimulation() {
       simulatedCompletions = new Set();
-      refreshSimulation();
     },
   };
 }
