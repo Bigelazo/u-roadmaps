@@ -3,12 +3,42 @@ import { authenticateAs, ok } from './helpers';
 import {
   acknowledgeOpening,
   findNode,
+  listNotices,
   openNativeStream,
   pendingNotices,
   prepareOpening,
   recognize,
   streamFrames,
 } from './notices';
+
+test('title target absorbs renames, withdraws a return to known and restarts after recognition', async ({
+  course,
+  teacherApi: author,
+  studentApi: recipient,
+}) => {
+  const roadmap = await (await author.get(course.apiPath())).json();
+  const node = findNode(roadmap, course.nodes.first);
+  const path = course.apiPath(`/nodes/${node.id}`);
+  const notices = () => pendingNotices(recipient, node.id);
+  const rename = async (title: string) => ok(await author.patch(path, { data: { title } }));
+  await rename('Recursividad');
+  await expect.poll(notices).toHaveLength(1);
+  const firstId = (await notices())[0].id;
+  await rename('Recursividad avanzada');
+  await expect
+    .poll(async () => (await notices())[0]?.body)
+    .toBe(`«${node.title}» pasó a llamarse «Recursividad avanzada».`);
+  expect(await notices()).toMatchObject([{ id: firstId }]);
+  expect(await listNotices(author, { nodeId: node.id })).toHaveLength(0);
+  await rename(node.title);
+  await expect.poll(notices).toHaveLength(0);
+  await rename('Pila');
+  await expect.poll(notices).toHaveLength(1);
+  await recognize(recipient, roadmap.roadmap.id);
+  await rename('Pilas');
+  await expect.poll(notices).toHaveLength(1);
+  expect((await notices())[0].body).toBe('«Pila» pasó a llamarse «Pilas».');
+});
 
 test('concurrent title changes leave one target matching the current Node, and repeated saves do not duplicate it', async ({
   course,
