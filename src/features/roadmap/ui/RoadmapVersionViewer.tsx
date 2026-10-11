@@ -11,7 +11,7 @@ import { Button, buttonVariants } from '@/shared/ui/button';
 import { Item } from '@/shared/ui/item';
 import { PageEyebrow, PageTitle } from '@/shared/ui/page-header';
 import { versionHistoryUrl } from '@/shared/version-history-url';
-import type { RoadmapVersion } from '@/features/roadmap/server';
+import type { RoadmapVersion } from '@/features/roadmap/version-types';
 
 export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVersion }>) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);

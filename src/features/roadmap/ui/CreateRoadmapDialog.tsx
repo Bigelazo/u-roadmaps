@@ -8,7 +8,7 @@ import { ExternalLink, Plus } from 'lucide-react';
 import { roadmapUrl, versionUrl } from '@/features/roadmap/client';
 import { creatorLabel, originLabel } from '@/features/roadmap/ui/version-labels';
 import { versionHistoryApiUrl } from '@/shared/version-history-url';
-import type { RoadmapVersionHistory } from '@/features/roadmap/server';
+import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
 import { Button } from '@/shared/ui/button';
 import { FieldLegend, FieldSet } from '@/shared/ui/field';
 import {

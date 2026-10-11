@@ -12,6 +12,7 @@ import testingLibrary from 'eslint-plugin-testing-library';
 import vitest from '@vitest/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import globals from 'globals';
+import { globSync, readFileSync } from 'node:fs';
 
 const sourceFiles = ['**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'];
 const architecturalFiles = [
@@ -21,29 +22,14 @@ const architecturalFiles = [
   'prisma/seed.ts',
 ];
 
-const clientComponentFiles = [
-  'src/app/_components/AuthenticationAlert.tsx',
-  'src/app/_components/CreateRoadmapButton.tsx',
-  'src/app/_components/SessionButton.tsx',
-  'src/development/components/DevelopmentBar.tsx',
-  'src/features/roadmap/session/RoadmapCanvasView.tsx',
-  'src/features/roadmap/RoadmapErrorToast.tsx',
-  'src/features/roadmap/useRoadmap.ts',
-  'src/features/roadmap/editor/NodeCreator.tsx',
-  'src/features/roadmap/editor/NodeEditor.tsx',
-  'src/features/roadmap/graph/FloatingEdge.tsx',
-  'src/features/roadmap/graph/RoadmapGraph.tsx',
-  'src/features/roadmap/student/NodeDetail.tsx',
-  'src/shared/ui/alert-dialog.tsx',
-  'src/shared/ui/checkbox.tsx',
-  'src/shared/ui/collapsible.tsx',
-  'src/shared/ui/dialog.tsx',
-  'src/shared/ui/field.tsx',
-  'src/shared/ui/label.tsx',
-  'src/shared/ui/select.tsx',
-  'src/shared/ui/separator.tsx',
-  'src/shared/ui/sheet.tsx',
-];
+// Every module that starts with 'use client', so the client import guard cannot drift.
+const clientComponentFiles = globSync('src/**/*.{ts,tsx}').filter((file) =>
+  /^['"]use client['"]/.test(readFileSync(file, 'utf8')),
+);
+
+const publicEntrypoints = ['index.ts', 'server.ts'];
+const featureEntrypoints = { type: 'feature', fileInternalPath: publicEntrypoints };
+const integrationEntrypoint = { type: 'integration', fileInternalPath: 'server.ts' };
 
 const restrictedPrismaImports = [
   {
@@ -119,70 +105,33 @@ export default defineConfig([
           policies: [
             {
               from: { element: { type: 'app' } },
-              allow: {
-                to: {
-                  element: { type: 'app' },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'app' } },
-              allow: {
-                to: {
-                  element: { type: ['shared', 'declaration'] },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'app' } },
-              allow: {
-                to: {
-                  element: { type: 'feature', fileInternalPath: ['index.ts', 'server.ts'] },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'app' } },
-              allow: {
-                to: {
-                  element: { type: 'integration', fileInternalPath: 'server.ts' },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'app' } },
-              allow: {
-                to: {
-                  element: { type: 'development', fileInternalPath: ['index.ts', 'server.ts'] },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'feature' } },
-              allow: {
-                to: {
-                  element: { type: 'shared' },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'feature' } },
-              allow: {
-                to: {
-                  element: { type: 'integration', fileInternalPath: 'server.ts' },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'feature' } },
-              allow: {
-                to: {
-                  element: {
-                    type: 'feature',
-                    captured: { feature: '{{from.element.captured.feature}}' },
+              allow: [
+                { to: { element: { type: ['app', 'shared', 'declaration'] } } },
+                {
+                  to: {
+                    element: {
+                      type: ['feature', 'development'],
+                      fileInternalPath: publicEntrypoints,
+                    },
                   },
                 },
-              },
+                { to: { element: integrationEntrypoint } },
+              ],
+            },
+            {
+              from: { element: { type: 'feature' } },
+              allow: [
+                { to: { element: { type: 'shared' } } },
+                { to: { element: integrationEntrypoint } },
+                {
+                  to: {
+                    element: {
+                      type: 'feature',
+                      captured: { feature: '{{from.element.captured.feature}}' },
+                    },
+                  },
+                },
+              ],
             },
             {
               // Participant-facing features consume only the notification client API.
@@ -222,80 +171,42 @@ export default defineConfig([
             },
             {
               from: { element: { type: 'integration' } },
-              allow: {
-                to: {
-                  element: { type: 'shared' },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'integration' } },
-              allow: {
-                to: {
-                  element: {
-                    type: 'integration',
-                    captured: { integration: '{{from.element.captured.integration}}' },
+              allow: [
+                { to: { element: { type: 'shared' } } },
+                {
+                  to: {
+                    element: {
+                      type: 'integration',
+                      captured: { integration: '{{from.element.captured.integration}}' },
+                    },
                   },
                 },
-              },
+              ],
             },
             {
               from: { element: { type: 'shared' } },
-              allow: {
-                to: {
-                  element: { type: ['shared', 'declaration'] },
-                },
-              },
+              allow: { to: { element: { type: ['shared', 'declaration'] } } },
             },
             {
               from: { element: { type: 'shared', fileInternalPath: 'server/db/**' } },
-              allow: {
-                to: {
-                  element: { type: 'generated' },
-                },
-              },
+              allow: { to: { element: { type: 'generated' } } },
             },
             {
               from: { element: { type: 'development' } },
-              allow: {
-                to: {
-                  element: { type: ['development', 'shared'] },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'development' } },
-              allow: {
-                to: {
-                  element: { type: 'feature', fileInternalPath: ['index.ts', 'server.ts'] },
-                },
-              },
+              allow: [
+                { to: { element: { type: ['development', 'shared'] } } },
+                { to: { element: featureEntrypoints } },
+              ],
             },
             {
               from: { element: { type: 'entrypoint' } },
-              allow: {
-                to: {
-                  element: { type: ['development', 'shared'] },
-                },
-              },
-            },
-            {
-              // Scheduled scripts are the process boundary for integrations
-              // that have no HTTP route, such as the academic-calendar sync.
-              from: { element: { type: 'entrypoint' } },
-              allow: {
-                to: {
-                  element: { type: 'integration', fileInternalPath: 'server.ts' },
-                },
-              },
-            },
-            {
-              from: { element: { type: 'entrypoint' } },
-              allow: {
-                to: {
-                  element: { type: 'feature', fileInternalPath: ['index.ts', 'server.ts'] },
-                },
-              },
+              allow: [
+                { to: { element: { type: ['development', 'shared'] } } },
+                // Scheduled scripts are the process boundary for integrations
+                // that have no HTTP route, such as the academic-calendar sync.
+                { to: { element: integrationEntrypoint } },
+                { to: { element: featureEntrypoints } },
+              ],
             },
             {
               from: { element: { type: 'test' } },
@@ -343,12 +254,6 @@ export default defineConfig([
   },
   {
     // The shared database adapter is the sole permitted generated-Prisma seam.
-    files: ['src/shared/server/db/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': 'off',
-    },
-  },
-  {
     files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}', 'scripts/**/*.ts', 'prisma/seed.ts'],
     ignores: ['src/shared/server/db/**/*.{ts,tsx}'],
     rules: {

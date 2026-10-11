@@ -1,18 +1,11 @@
 import 'dotenv/config';
-import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import unitConfig from './vitest.config.mts';
 import { integrationDatabaseUrl } from './tests/notifications-integration/database';
 
 const connection = integrationDatabaseUrl();
 export default defineConfig({
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      'server-only': fileURLToPath(
-        new URL('./node_modules/next/dist/compiled/server-only/empty.js', import.meta.url),
-      ),
-    },
-  },
+  resolve: unitConfig.resolve,
   test: {
     environment: 'node',
     include: ['tests/notifications-integration/**/*.test.ts'],
