@@ -8,9 +8,12 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/shared/ui/popover';
+import { ScrollArea } from '@/shared/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 
-type Props = {
+type Swatch<T> = { value: T; label: string; style?: CSSProperties; content?: ReactNode };
+
+type Props<T> = {
   id: string;
   /** Accessible name of the trigger, which also announces the current selection. */
   ariaLabel: string;
@@ -18,20 +21,55 @@ type Props = {
   /** Visible trigger content: the current selection or a prompt to choose one. */
   selection: ReactNode;
   contentClassName: string;
-  /** Renders the swatches; `close` dismisses the popover after a selection. */
-  children: (close: () => void) => ReactNode;
+  gridClassName: string;
+  swatchClassName: string;
+  /** Labelled sections render inside a scroll area; a single unlabelled one renders as a grid. */
+  sections: { label?: string; swatches: Swatch<T>[] }[];
+  value: T | undefined;
+  onSelect: (value: T) => void;
 };
 
-/** Outline trigger that opens a titled popover of swatch buttons and closes on selection. */
-export function PopoverSwatchPicker({
+/** Outline trigger that opens a titled popover of toggle swatches and closes on selection. */
+export function PopoverSwatchPicker<T extends string>({
   id,
   ariaLabel,
   title,
   selection,
   contentClassName,
-  children,
-}: Props) {
+  gridClassName,
+  swatchClassName,
+  sections,
+  value,
+  onSelect,
+}: Props<T>) {
   const [open, setOpen] = useState(false);
+
+  const grid = (swatches: Swatch<T>[]) => (
+    <div className={gridClassName}>
+      {swatches.map((swatch) => (
+        <Tooltip key={swatch.value}>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label={swatch.label}
+                aria-pressed={value === swatch.value}
+                className={swatchClassName}
+                style={swatch.style}
+                onClick={() => {
+                  onSelect(swatch.value);
+                  setOpen(false);
+                }}
+              />
+            }
+          >
+            {swatch.content}
+          </TooltipTrigger>
+          <TooltipContent>{swatch.label}</TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -53,45 +91,23 @@ export function PopoverSwatchPicker({
         <PopoverHeader>
           <PopoverTitle>{title}</PopoverTitle>
         </PopoverHeader>
-        {children(() => setOpen(false))}
+        {sections.some((section) => section.label) ? (
+          <ScrollArea className="h-80">
+            <div className="flex flex-col gap-4 pr-2">
+              {sections.map((section) => (
+                <section key={section.label} aria-label={section.label}>
+                  <h3 className="mb-2 text-xs font-semibold text-muted-foreground">
+                    {section.label}
+                  </h3>
+                  {grid(section.swatches)}
+                </section>
+              ))}
+            </div>
+          </ScrollArea>
+        ) : (
+          grid(sections.flatMap((section) => section.swatches))
+        )}
       </PopoverContent>
     </Popover>
-  );
-}
-
-/** Toggle-style swatch with a tooltip; `aria-pressed` marks the current selection. */
-export function Swatch({
-  label,
-  selected,
-  className,
-  style,
-  onSelect,
-  children,
-}: {
-  label: string;
-  selected: boolean;
-  className: string;
-  style?: CSSProperties;
-  onSelect: () => void;
-  children?: ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            aria-label={label}
-            aria-pressed={selected}
-            className={className}
-            style={style}
-            onClick={onSelect}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }

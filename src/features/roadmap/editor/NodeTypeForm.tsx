@@ -9,9 +9,8 @@ import {
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
-import { ScrollArea } from '@/shared/ui/scroll-area';
 import { TooltipProvider } from '@/shared/ui/tooltip';
-import { PopoverSwatchPicker, Swatch } from './PopoverSwatchPicker';
+import { PopoverSwatchPicker } from './PopoverSwatchPicker';
 import { inputClassName } from './primitives';
 import type { NodeTypeDraft } from './types';
 
@@ -31,7 +30,6 @@ function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
       id="node-type-icon"
       ariaLabel={`Icono: ${selectedIcon?.label ?? 'sin selección'}`}
       title="Elegir Icono"
-      contentClassName="w-80 p-3"
       selection={
         <>
           {value.icon ? (
@@ -40,37 +38,20 @@ function IconPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
           {selectedIcon?.label ?? 'Elegir Icono'}
         </>
       }
-    >
-      {(close) => (
-        <ScrollArea className="h-80">
-          <div className="flex flex-col gap-4 pr-2">
-            {teachingIconCatalog.map((category) => (
-              <section key={category.label} aria-label={category.label}>
-                <h3 className="mb-2 text-xs font-semibold text-muted-foreground">
-                  {category.label}
-                </h3>
-                <div className="grid grid-cols-8 gap-1">
-                  {category.icons.map(([icon, label]) => (
-                    <Swatch
-                      key={icon}
-                      label={label}
-                      selected={value.icon === icon}
-                      className="flex size-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-                      onSelect={() => {
-                        onChange({ ...value, icon });
-                        close();
-                      }}
-                    >
-                      <NodeTypeIcon icon={icon} aria-hidden="true" />
-                    </Swatch>
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
-    </PopoverSwatchPicker>
+      contentClassName="w-80 p-3"
+      gridClassName="grid grid-cols-8 gap-1"
+      swatchClassName="flex size-8 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+      sections={teachingIconCatalog.map((category) => ({
+        label: category.label,
+        swatches: category.icons.map(([icon, label]) => ({
+          value: icon,
+          label,
+          content: <NodeTypeIcon icon={icon} aria-hidden="true" />,
+        })),
+      }))}
+      value={value.icon}
+      onSelect={(icon) => onChange({ ...value, icon })}
+    />
   );
 }
 
@@ -84,7 +65,6 @@ function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
       id="node-type-color"
       ariaLabel={`Color: ${selectedColor?.label ?? 'sin selección'}`}
       title="Elegir color"
-      contentClassName="w-72 p-3"
       selection={
         <>
           {selectedColor ? (
@@ -97,30 +77,23 @@ function ColorPicker({ value, onChange }: Pick<Props, 'value' | 'onChange'>) {
           {selectedColor?.label ?? 'Elegir color'}
         </>
       }
-    >
-      {(close) => (
-        <div className="grid grid-cols-5 gap-2">
-          {nodeTypeColorPalette.map(({ value: color, label }) => {
-            const selected = value.color === color;
-            return (
-              <Swatch
-                key={color}
-                label={label}
-                selected={selected}
-                className="flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground aria-pressed:ring-offset-2"
-                style={{ backgroundColor: color }}
-                onSelect={() => {
-                  onChange({ ...value, color: color as NodeTypeColor });
-                  close();
-                }}
-              >
-                {selected ? <Check className="text-white" aria-hidden="true" /> : null}
-              </Swatch>
-            );
-          })}
-        </div>
-      )}
-    </PopoverSwatchPicker>
+      contentClassName="w-72 p-3"
+      gridClassName="grid grid-cols-5 gap-2"
+      swatchClassName="flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground aria-pressed:ring-offset-2"
+      sections={[
+        {
+          swatches: nodeTypeColorPalette.map(({ value: color, label }) => ({
+            value: color as NodeTypeColor,
+            label,
+            style: { backgroundColor: color },
+            content:
+              value.color === color ? <Check className="text-white" aria-hidden="true" /> : null,
+          })),
+        },
+      ]}
+      value={value.color}
+      onSelect={(color) => onChange({ ...value, color })}
+    />
   );
 }
 
