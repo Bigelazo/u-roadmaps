@@ -2,6 +2,5 @@ export {
   NotificationsInbox,
   NotificationsProvider,
   RoadmapEntryNotifications,
-  NotificationCountButton,
-} from './client';
+} from './components/NotificationsInbox';
 export { UnavailableNoticeFallback } from './components/UnavailableNoticeFallback';
