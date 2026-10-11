@@ -293,6 +293,7 @@ function GraphHarness({
 
 beforeEach(() => {
   fitViewMock.mockReset();
+  fitViewMock.mockResolvedValue(true);
   screenToFlowPositionMock.mockReset();
   screenToFlowPositionMock.mockImplementation((position) => position);
   setViewportMock.mockReset();
