@@ -15,11 +15,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
-import { Input } from '@/shared/ui/input';
-import { MarkdownEditor } from './MarkdownEditor';
+import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { NodeContentFields } from './NodeContentFields';
 import styles from './NodeCreator.module.css';
-import { inputClassName, NodeTypeSelect } from './primitives';
 import { NodeTypesEditor } from './NodeTypesEditor';
 import { NODE_TYPES_MENU_ITEM_LABEL, type NodeInput, type NodeTypeInput } from './types';
 
@@ -124,48 +122,14 @@ export function NodeCreator({
             }}
           >
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="new-node-title">Título</FieldLabel>
-                <Input
-                  id="new-node-title"
-                  className={inputClassName}
-                  placeholder="Ej. Repasar límites"
-                  value={value.title}
-                  onChange={(event) =>
-                    setValue((current) => ({ ...current, title: event.target.value }))
-                  }
-                  required
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="new-node-description">
-                  Descripción <span className="font-normal text-muted-foreground">(opcional)</span>
-                </FieldLabel>
-                <MarkdownEditor
-                  id="new-node-description"
-                  aria-describedby="new-node-description-help"
-                  placeholder="Qué debe lograr el estudiante en este hito"
-                  value={value.description}
-                  onValueChange={(description) =>
-                    setValue((current) => ({ ...current, description }))
-                  }
-                />
-                <FieldDescription id="new-node-description-help">
-                  Admite Markdown: **negrita**, *cursiva*, listas y [enlaces](https://ejemplo.cl).{' '}
-                  Puedes arrastrar un archivo .md para reemplazar el texto, previa confirmación.
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="new-node-type">Tipo</FieldLabel>
-                <NodeTypeSelect
-                  id="new-node-type"
-                  nodeTypes={nodeTypes}
-                  value={selectedNodeTypeId}
-                  onValueChange={(nodeTypeId) =>
-                    setValue((current) => ({ ...current, nodeTypeId }))
-                  }
-                />
-              </Field>
+              <NodeContentFields
+                idPrefix="new-node"
+                nodeTypes={nodeTypes}
+                value={{ ...value, nodeTypeId: selectedNodeTypeId }}
+                onChange={(patch) => setValue((current) => ({ ...current, ...patch }))}
+                titlePlaceholder="Ej. Repasar límites"
+                descriptionPlaceholder="Qué debe lograr el estudiante en este hito"
+              />
               <Field orientation="horizontal" className="rounded-lg bg-cloud px-3 py-2.5">
                 <Checkbox
                   id="new-node-visible"

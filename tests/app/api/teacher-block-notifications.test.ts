@@ -6,11 +6,13 @@ const { changeTeacherBlock, previewTeacherBlock } = vi.hoisted(() => ({
   previewTeacherBlock: vi.fn(),
 }));
 
-vi.mock('@/app/_adapters/http', () => ({
-  handleApplicationResult: (operation: () => Promise<Response>) => operation(),
-  throwApplicationError: (error: unknown): never => {
-    throw error;
-  },
+// The route preamble runs for real, but application errors pass through as rejections.
+vi.mock('@/shared/server/db', () => ({ Prisma: {} }));
+vi.mock('@/shared/errors/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/shared/errors/server')>()),
+  applicationResult: (operation: () => Promise<Response>) => ({
+    match: (onSuccess: (response: Response) => Response) => operation().then(onSuccess),
+  }),
 }));
 vi.mock('@/app/_adapters/auth', () => ({
   requireAuthenticatedUser: async () => ({ id: 'teacher-id' }),
