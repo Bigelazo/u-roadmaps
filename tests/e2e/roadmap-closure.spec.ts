@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
-import { prepareNodeCreator } from './create-node';
+import { createDependency, prepareNodeCreator } from './create-node';
 import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 
 function dayOffset(days: number) {
   const day = new Date(`${chileCalendarDay()}T12:00:00Z`);
@@ -13,7 +13,8 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
   waitForClosure,
   page,
 }) => {
@@ -25,31 +26,16 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
       { user: course.users.studentWithoutProgress, role: 'STUDENT' },
     ],
   });
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const { createNode } = await prepareNodeCreator(teacher, offering);
   const first = await createNode('Closure prerequisite', 0);
   const second = await createNode('Closure dependent', 200);
-  expect(
-    (
-      await teacher.post(offering.apiPath('/dependencies'), {
-        data: {
-          sourceNodeId: first.id,
-          targetNodeId: second.id,
-        },
-      })
-    ).status(),
-  ).toBe(201);
-  expect((await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`))).status()).toBe(
-    200,
+  await createDependency(teacher, offering, first.id, second.id);
+  await ok(await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`)));
+  await ok(
+    await teacher.put(offering.apiPath(`/nodes/${second.id}/teacher-block/schedule`), {
+      data: { unlockOn: dayOffset(1) },
+    }),
   );
-  expect(
-    (
-      await teacher.put(offering.apiPath(`/nodes/${second.id}/teacher-block/schedule`), {
-        data: { unlockOn: dayOffset(1) },
-      })
-    ).status(),
-  ).toBe(200);
   await term.setFreezeDate(dayOffset(-1));
   await waitForClosure(offering);
   const nodes = (await (await teacher.get(offering.apiPath())).json()).nodes;
@@ -67,14 +53,14 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
     status: 'BLOCKED',
     reason: 'PREREQUISITE_BLOCK',
   });
-  const completion = await student.post(offering.apiPath(`/nodes/${first.id}/completion`));
-  expect(completion.status()).toBe(403);
+  const completion = await ok(
+    await student.post(offering.apiPath(`/nodes/${first.id}/completion`)),
+    403,
+  );
   expect((await completion.json()).error.code).toBe('ROADMAP_FROZEN');
   expect(studentNodes.find((node: { id: string }) => node.id === first.id).canComplete).toBe(false);
-  expect((await teacher.delete(offering.apiPath('/simulation'))).status()).toBe(403);
-  expect(
-    (await teacher.post(offering.apiPath(`/simulation/nodes/${first.id}/completion`))).status(),
-  ).toBe(403);
+  await ok(await teacher.delete(offering.apiPath('/simulation')), 403);
+  await ok(await teacher.post(offering.apiPath(`/simulation/nodes/${first.id}/completion`)), 403);
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(offering.pagePath());
   await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeVisible();
@@ -94,7 +80,7 @@ for (const semester of [1, 2] as const)
     createCourse,
     createTerm,
     waitForClosure,
-    apiAs,
+    studentApi: student,
   }) => {
     const term = await createTerm(semester);
     await term.setFreezeDate(null);
@@ -104,7 +90,6 @@ for (const semester of [1, 2] as const)
     });
     const closedAt = await waitForClosure(offering);
     expect(closedAt).toBeTruthy();
-    const student = await apiAs(course.users.studentWithoutProgress);
     const nodes = (await (await student.get(offering.apiPath())).json()).nodes;
     expect(
       nodes.some((node: { access: { reason?: string } }) => node.access.reason === 'TEACHER_BLOCK'),
@@ -116,7 +101,8 @@ test('closure leaves pending notices untouched and repeated late passes preserve
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
   waitForClosure,
 }) => {
   const term = await createTerm();
@@ -127,13 +113,9 @@ test('closure leaves pending notices untouched and repeated late passes preserve
       { user: course.users.studentWithoutProgress, role: 'STUDENT' },
     ],
   });
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const { createNode } = await prepareNodeCreator(teacher, offering);
   const node = await createNode('Pending before closure', 0);
-  expect((await teacher.post(offering.apiPath(`/nodes/${node.id}/teacher-block`))).status()).toBe(
-    200,
-  );
+  await ok(await teacher.post(offering.apiPath(`/nodes/${node.id}/teacher-block`)));
   const notices = async () =>
     (await (await student.get(`/api/notifications?roadmapId=${offering.roadmapId}`)).json())
       .notifications;
@@ -162,7 +144,8 @@ test('the freeze date stays editable today and a failed closure is not a frozen 
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
   waitForClosure,
   rejectClosure,
   page,
@@ -177,24 +160,16 @@ test('the freeze date stays editable today and a failed closure is not a frozen 
     ],
   });
   const rejection = await rejectClosure(offering);
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const { createNode } = await prepareNodeCreator(teacher, offering);
   const today = await createNode('Editable through today', 0);
-  expect((await student.post(offering.apiPath(`/nodes/${today.id}/completion`))).status()).toBe(
-    200,
-  );
+  await ok(await student.post(offering.apiPath(`/nodes/${today.id}/completion`)));
   const blocked = await createNode('Atomic closure keeps its blocks on failure', 400);
-  expect(
-    (await teacher.post(offering.apiPath(`/nodes/${blocked.id}/teacher-block`))).status(),
-  ).toBe(200);
-  expect(
-    (
-      await teacher.put(offering.apiPath(`/nodes/${blocked.id}/teacher-block/schedule`), {
-        data: { unlockOn: dayOffset(1) },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(await teacher.post(offering.apiPath(`/nodes/${blocked.id}/teacher-block`)));
+  await ok(
+    await teacher.put(offering.apiPath(`/nodes/${blocked.id}/teacher-block/schedule`), {
+      data: { unlockOn: dayOffset(1) },
+    }),
+  );
   await term.setFreezeDate(dayOffset(-1));
   await expect.poll(rejection.wasAttempted).toBe(true);
   const blockedNode = (await (await teacher.get(offering.apiPath())).json()).nodes.find(
@@ -205,8 +180,8 @@ test('the freeze date stays editable today and a failed closure is not a frozen 
   await page.goto(offering.pagePath());
   await expect(page.getByRole('button', { name: 'Crear en el mapa' })).toBeVisible();
   const past = await createNode('Editable until closure is recorded', 200);
-  expect((await student.post(offering.apiPath(`/nodes/${past.id}/completion`))).status()).toBe(200);
-  expect((await teacher.delete(offering.apiPath('/simulation'))).status()).toBe(200);
+  await ok(await student.post(offering.apiPath(`/nodes/${past.id}/completion`)));
+  await ok(await teacher.delete(offering.apiPath('/simulation')));
   await rejection.resume();
   await waitForClosure(offering);
 });
@@ -215,7 +190,7 @@ test('closed Roadmaps refuse teaching edits with a clear closure error', async (
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
   waitForClosure,
 }) => {
   const term = await createTerm();
@@ -223,32 +198,25 @@ test('closed Roadmaps refuse teaching edits with a clear closure error', async (
     ...term,
     participants: [{ user: course.users.teacher, role: 'TEACHER' }],
   });
-  const teacher = await apiAs(course.users.teacher);
   const { createNode, nodeTypeId } = await prepareNodeCreator(teacher, offering);
   const node = await createNode('Final title', 0);
   const second = await createNode('Final dependent', 200);
-  const dependencyResponse = await teacher.post(offering.apiPath('/dependencies'), {
-    data: { sourceNodeId: node.id, targetNodeId: second.id },
-  });
-  expect(dependencyResponse.status()).toBe(201);
-  const dependency = (await dependencyResponse.json()).dependency;
+  const dependencyId = await createDependency(teacher, offering, node.id, second.id);
   const resourceResponse = await teacher.post(offering.apiPath(`/nodes/${node.id}/resources`), {
     data: { title: 'Final resource', url: 'https://example.com/final', type: 'LINK' },
   });
-  expect(resourceResponse.status()).toBe(201);
-  const resource = (await resourceResponse.json()).resource;
+  const resource = (await (await ok(resourceResponse, 201)).json()).resource;
   const typeResponse = await teacher.post(offering.apiPath('/node-types'), {
     data: { name: 'Final type', icon: 'Shapes', color: '#024AD8' },
   });
-  expect(typeResponse.status()).toBe(201);
-  const customType = (await typeResponse.json()).nodeType;
+  const customType = (await (await ok(typeResponse, 201)).json()).nodeType;
   const before = await (await teacher.get(offering.apiPath())).json();
   await term.setFreezeDate(dayOffset(-1));
   await waitForClosure(offering);
   const response = await teacher.patch(offering.apiPath(`/nodes/${node.id}`), {
     data: { title: 'Forbidden edit' },
   });
-  expect(response.status()).toBe(409);
+  await ok(response, 409);
   expect((await response.json()).error).toEqual({
     code: 'ROADMAP_CLOSED',
     message: 'Este roadmap está cerrado y es de sólo lectura.',
@@ -267,7 +235,7 @@ test('closed Roadmaps refuse teaching edits with a clear closure error', async (
       suffix: '/dependencies',
       data: { sourceNodeId: second.id, targetNodeId: node.id },
     },
-    { method: 'DELETE', suffix: `/dependencies/${dependency.id}` },
+    { method: 'DELETE', suffix: `/dependencies/${dependencyId}` },
     { method: 'POST', suffix: `/nodes/${node.id}/teacher-block` },
     { method: 'DELETE', suffix: `/nodes/${node.id}/teacher-block` },
     { method: 'PATCH', suffix: `/nodes/${node.id}/teacher-block` },
@@ -302,7 +270,7 @@ test('closed Roadmaps refuse teaching edits with a clear closure error', async (
       file: { name: 'late.txt', mimeType: 'text/plain', buffer: Buffer.from('late content') },
     },
   });
-  expect(upload.status()).toBe(409);
+  await ok(upload, 409);
   expect((await upload.json()).error.code).toBe('ROADMAP_CLOSED');
   const after = await (await teacher.get(offering.apiPath())).json();
   expect(after.nodes).toEqual(before.nodes);
@@ -316,22 +284,20 @@ test('Roadmap creation remains allowed through the freeze day and refuses past t
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
 }) => {
   const term = await createTerm();
-  const teacher = await apiAs(course.users.teacher);
   const offering = await createCourse({
     ...term,
     roadmap: false,
     participants: [{ user: course.users.teacher, role: 'TEACHER' }],
   });
   await term.setFreezeDate(dayOffset(-1));
-  const refused = await teacher.post(offering.apiPath(), { data: {} });
-  expect(refused.status()).toBe(409);
+  const refused = await ok(await teacher.post(offering.apiPath(), { data: {} }), 409);
   expect((await refused.json()).error.code).toBe('ROADMAP_CLOSED');
-  expect((await teacher.get(offering.apiPath())).status()).toBe(404);
+  await ok(await teacher.get(offering.apiPath()), 404);
   await term.setFreezeDate(dayOffset(0));
-  expect((await teacher.post(offering.apiPath(), { data: {} })).status()).toBe(201);
+  await ok(await teacher.post(offering.apiPath(), { data: {} }), 201);
 });
 
 test('the Academic overview offers Roadmap creation only before the offering closes', async ({
@@ -380,7 +346,7 @@ for (const semester of [1, 2] as const)
     course,
     createCourse,
     createTerm,
-    apiAs,
+    teacherApi: teacher,
   }) => {
     const term = await createTerm(semester);
     await term.setFreezeDate(null);
@@ -389,9 +355,7 @@ for (const semester of [1, 2] as const)
       roadmap: false,
       participants: [{ user: course.users.teacher, role: 'TEACHER' }],
     });
-    const teacher = await apiAs(course.users.teacher);
-    const refused = await teacher.post(offering.apiPath(), { data: {} });
-    expect(refused.status()).toBe(409);
+    const refused = await ok(await teacher.post(offering.apiPath(), { data: {} }), 409);
     expect((await refused.json()).error.code).toBe('ROADMAP_CLOSED');
   });
 
@@ -399,7 +363,8 @@ test('an open teaching canvas refuses its next save and becomes read-only after 
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
   waitForClosure,
   page,
 }) => {
@@ -411,7 +376,6 @@ test('an open teaching canvas refuses its next save and becomes read-only after 
       { user: course.users.studentWithoutProgress, role: 'STUDENT' },
     ],
   });
-  const teacher = await apiAs(course.users.teacher);
   const { createNode } = await prepareNodeCreator(teacher, offering);
   const node = await createNode('Final canvas content', 0);
   await authenticateAs(page.context(), course.users.teacher.id);
@@ -443,15 +407,14 @@ test('an open teaching canvas refuses its next save and becomes read-only after 
   expect(nodes.find((item: { id: string }) => item.id === node.id).title).toBe(
     'Final canvas content',
   );
-  const student = await apiAs(course.users.studentWithoutProgress);
-  expect((await student.get(offering.apiPath())).status()).toBe(200);
+  await ok(await student.get(offering.apiPath()));
 });
 
 test('an edit racing closure either commits first or receives the closure refusal', async ({
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
   waitForClosure,
 }) => {
   const term = await createTerm();
@@ -459,7 +422,6 @@ test('an edit racing closure either commits first or receives the closure refusa
     ...term,
     participants: [{ user: course.users.teacher, role: 'TEACHER' }],
   });
-  const teacher = await apiAs(course.users.teacher);
   const { createNode } = await prepareNodeCreator(teacher, offering);
   const node = await createNode('Before race', 0);
   await term.setFreezeDate(dayOffset(-1));
@@ -479,11 +441,10 @@ test('an edit racing closure either commits first or receives the closure refusa
       (item: { id: string }) => item.id === node.id,
     ).title;
   expect(await readTitle()).toBe(finalTitle);
-  expect(
-    (
-      await teacher.patch(offering.apiPath(`/nodes/${node.id}`), { data: { title: 'After race' } })
-    ).status(),
-  ).toBe(409);
+  await ok(
+    await teacher.patch(offering.apiPath(`/nodes/${node.id}`), { data: { title: 'After race' } }),
+    409,
+  );
   expect(await readTitle()).toBe(finalTitle);
 });
 
@@ -491,7 +452,7 @@ test('foreground refresh reads recorded closure and removes teaching controls wi
   course,
   createCourse,
   createTerm,
-  apiAs,
+  teacherApi: teacher,
   waitForClosure,
   page,
 }) => {
@@ -500,7 +461,6 @@ test('foreground refresh reads recorded closure and removes teaching controls wi
     ...term,
     participants: [{ user: course.users.teacher, role: 'TEACHER' }],
   });
-  const teacher = await apiAs(course.users.teacher);
   const { createNode } = await prepareNodeCreator(teacher, offering);
   await createNode('Inspect after closure', 0);
   await authenticateAs(page.context(), course.users.teacher.id);
