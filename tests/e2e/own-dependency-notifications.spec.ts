@@ -1,43 +1,34 @@
 import { enterRoadmap } from './enter-roadmap';
 import { insert, literal, sql } from './database';
-import { expect, test } from './fixtures';
+import { expect, test, type E2EUser } from './fixtures';
+import { createDependency, prepareNodeCreator } from './create-node';
 import { createExistingNode } from './existing-node';
-import { sessionCookie, authenticateAs } from './helpers';
-
-type StoredNotice = Readonly<{
-  id: string;
-  subject: string;
-  body: string;
-  read: boolean;
-  data: Record<string, unknown>;
-}>;
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+import { authenticateAs, escapeRegExp, ok } from './helpers';
+import { listNotices, type StoredNotice } from './notices';
 
 test('Dependency notices preserve route and access changes with Roadmap entry recognition', async ({
-  request,
   course,
+  apiAs,
+  teacherApi,
   page,
 }) => {
   const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
-  const studentWithoutPrerequisite = course.users.studentWithoutProgress.id;
-  await enterRoadmap(page, course.pagePath(), studentWithoutPrerequisite);
+  const author = teacherApi;
+  const studentWithoutPrerequisite = course.users.studentWithoutProgress;
+  await enterRoadmap(page, course.pagePath(), studentWithoutPrerequisite.id);
   await page.goto('/academic-overview');
-  const studentWithPrerequisites = course.users.studentWithProgress.id;
-  const inactiveStudent = course.users.withdrawnStudent.id;
-  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
-  const roadmapId = roadmap.roadmap.id as string;
+  const studentWithPrerequisites = course.users.studentWithProgress;
+  const inactiveStudent = course.users.withdrawnStudent;
+  const { nodeTypeId } = await prepareNodeCreator(author, course);
+  const roadmapId = course.roadmapId;
   const nodeIds: string[] = [];
 
   const createNode = async (title: string) => {
     // Existing Nodes start with no delivery window; this journey tests the
     // Dependency's access transition rather than Node creation.
     const id = await createExistingNode({
-      roadmapId: roadmap.roadmap.id,
-      nodeTypeId: roadmap.nodeTypes[0].id,
+      roadmapId,
+      nodeTypeId,
       title,
       positionX: 800 + nodeIds.length * 320,
     });
@@ -45,38 +36,17 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     return id;
   };
 
-  const createDependency = async (sourceNodeId: string, targetNodeId: string) => {
-    const response = await request.post(roadmapPath('/dependencies'), {
-      headers: author,
-      data: { sourceNodeId, targetNodeId },
-    });
-    expect(response.status()).toBe(201);
-    const id = (await response.json()).dependency.id as string;
-    return id;
-  };
+  const noticesFor = async (user: E2EUser) =>
+    listNotices(await apiAs(user), { roadmapId, limit: 100 });
 
-  const noticesFor = async (userId: string) => {
-    const response = await request.get(`/api/notifications?roadmapId=${roadmapId}&limit=100`, {
-      headers: { cookie: await sessionCookie(userId) },
-    });
-    expect(response.status()).toBe(200);
-    return (await response.json()).notifications as StoredNotice[];
-  };
+  const routeNoticesFor = async (user: E2EUser, dependencyId: string) =>
+    (await noticesFor(user)).filter(({ data }) => data.dependencyId === dependencyId);
 
-  const routeNoticesFor = async (userId: string, dependencyId: string) =>
-    (await noticesFor(userId)).filter(({ data }) => data.dependencyId === dependencyId);
+  const nodeNoticesFor = async (user: E2EUser, nodeId: string) =>
+    listNotices(await apiAs(user), { roadmapId, nodeId, limit: 100 });
 
-  const nodeNoticesFor = async (userId: string, nodeId: string) => {
-    const response = await request.get(
-      `/api/notifications?roadmapId=${roadmapId}&nodeId=${nodeId}&limit=100`,
-      { headers: { cookie: await sessionCookie(userId) } },
-    );
-    expect(response.status()).toBe(200);
-    return (await response.json()).notifications as StoredNotice[];
-  };
-
-  const selectRouteNotice = async (userId: string, notice: StoredNotice) => {
-    await authenticateAs(page.context(), userId);
+  const selectRouteNotice = async (user: E2EUser, notice: StoredNotice) => {
+    await authenticateAs(page.context(), user.id);
     await page.goto('/academic-overview');
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     const noticeButton = page.getByRole('list', { name: 'Lista de avisos' }).getByRole('button', {
@@ -100,9 +70,17 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   // completion transactions while other workers prepare their Courses.
   await sql(
     insert('Completion', [
-      { id: crypto.randomUUID(), userId: studentWithoutPrerequisite, roadmapNodeId: dependentId },
-      { id: crypto.randomUUID(), userId: studentWithPrerequisites, roadmapNodeId: prerequisiteId },
-      { id: crypto.randomUUID(), userId: studentWithPrerequisites, roadmapNodeId: dependentId },
+      {
+        id: crypto.randomUUID(),
+        userId: studentWithoutPrerequisite.id,
+        roadmapNodeId: dependentId,
+      },
+      {
+        id: crypto.randomUUID(),
+        userId: studentWithPrerequisites.id,
+        roadmapNodeId: prerequisiteId,
+      },
+      { id: crypto.randomUUID(), userId: studentWithPrerequisites.id, roadmapNodeId: dependentId },
     ]),
   );
 
@@ -112,12 +90,13 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES ('${branchDependencyId}', '${dependentId}', '${transitiveId}');`,
   );
 
-  const dependencyId = await createDependency(prerequisiteId, dependentId);
-  const duplicate = await request.post(roadmapPath('/dependencies'), {
-    headers: author,
-    data: { sourceNodeId: prerequisiteId, targetNodeId: dependentId },
-  });
-  expect(duplicate.status()).toBe(409);
+  const dependencyId = await createDependency(author, course, prerequisiteId, dependentId);
+  await ok(
+    await author.post(roadmapPath('/dependencies'), {
+      data: { sourceNodeId: prerequisiteId, targetNodeId: dependentId },
+    }),
+    409,
+  );
 
   await expect
     .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
@@ -138,13 +117,13 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   await expect
     .poll(async () => routeNoticesFor(studentWithPrerequisites, dependencyId))
     .toHaveLength(1);
-  expect(await routeNoticesFor(course.users.teacher.id, dependencyId)).toHaveLength(0);
+  expect(await routeNoticesFor(course.users.teacher, dependencyId)).toHaveLength(0);
   expect(await routeNoticesFor(inactiveStudent, dependencyId)).toHaveLength(0);
 
-  const blockedForStudent = async (userId: string) =>
+  const blockedForStudent = async (user: E2EUser) =>
     Promise.all(
       [dependentId, transitiveId].map(async (nodeId) =>
-        (await nodeNoticesFor(userId, nodeId))
+        (await nodeNoticesFor(user, nodeId))
           .filter(({ data }) => data.changeKind === 'node-blocked')
           .map(({ data }) => data.nodeId),
       ),
@@ -155,9 +134,9 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   expect(await blockedForStudent(studentWithPrerequisites)).toEqual([[], []]);
   expect(await blockedForStudent(inactiveStudent)).toEqual([[], []]);
 
-  const roadmapCount = await request.get(`/api/notifications/counts?roadmapId=${roadmapId}`, {
-    headers: { cookie: await sessionCookie(studentWithoutPrerequisite) },
-  });
+  const roadmapCount = await (
+    await apiAs(studentWithoutPrerequisite)
+  ).get(`/api/notifications/counts?roadmapId=${roadmapId}`);
   expect((await roadmapCount.json()).count).toBeGreaterThan(0);
 
   const addedRouteNotice = (await routeNoticesFor(studentWithoutPrerequisite, dependencyId))[0];
@@ -174,10 +153,7 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   await expect.poll(() => noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
 
-  const removal = await request.delete(roadmapPath(`/dependencies/${dependencyId}`), {
-    headers: author,
-  });
-  expect(removal.status()).toBe(204);
+  await ok(await author.delete(roadmapPath(`/dependencies/${dependencyId}`)), 204);
   await expect
     .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
     .toHaveLength(1);
@@ -200,7 +176,7 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   // generate seen signals that refresh and disable the pagination button mid-click.
   for (let index = 0; index < 12; index++)
     await sql(
-      `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${studentWithoutPrerequisite}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"${course.courseCode}","year":2026,"semester":2,"targetKind":"roadmap"}', NOW());`,
+      `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${studentWithoutPrerequisite.id}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"${course.courseCode}","year":2026,"semester":2,"targetKind":"roadmap"}', NOW());`,
     );
   await selectRouteNotice(studentWithoutPrerequisite, removedRouteNotice!);
   await expect(page).toHaveURL(course.pagePath());
@@ -217,30 +193,20 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
 });
 
 test('cascade Dependency removals from Node visibility and deletion do not create route notices', async ({
-  request,
   course,
+  teacherApi,
+  studentApi,
 }) => {
   const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
-  const student = course.users.studentWithoutProgress.id;
-  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  const author = teacherApi;
+  const creator = await prepareNodeCreator(author, course);
   const nodeIds: string[] = [];
   const createNode = async (title: string) => {
-    const response = await request.post(roadmapPath('/nodes'), {
-      headers: author,
-      data: {
-        title,
-        nodeTypeId: roadmap.nodeTypes[0].id,
-        positionX: 2400 + nodeIds.length * 320,
-        positionY: 0,
-      },
-    });
-    expect(response.status()).toBe(201);
-    const id = (await response.json()).node.id as string;
+    const { id } = await creator.createNode(title, 2400 + nodeIds.length * 320);
     nodeIds.push(id);
     return id;
   };
-  const createDependency = async (sourceNodeId: string, targetNodeId: string) => {
+  const insertDependency = async (sourceNodeId: string, targetNodeId: string) => {
     // Prepare an existing edge without opening a delivery window: this case
     // tests cascade removal, while explicit edits are covered above.
     const id = crypto.randomUUID();
@@ -249,46 +215,37 @@ test('cascade Dependency removals from Node visibility and deletion do not creat
     );
     return id;
   };
-  const routeNotices = async (dependencyId: string) => {
-    const response = await request.get(
-      `/api/notifications?roadmapId=${roadmap.roadmap.id}&limit=100`,
-      { headers: { cookie: await sessionCookie(student) } },
-    );
-    return ((await response.json()).notifications as StoredNotice[]).filter(
+  const routeNotices = async (dependencyId: string) =>
+    (await listNotices(studentApi, { roadmapId: course.roadmapId, limit: 100 })).filter(
       ({ data }) => data.dependencyId === dependencyId,
     );
-  };
 
   const hiddenSource = await createNode(`Ocultamiento origen ${crypto.randomUUID()}`);
   const hiddenTarget = await createNode(`Ocultamiento destino ${crypto.randomUUID()}`);
-  const hiddenDependency = await createDependency(hiddenSource, hiddenTarget);
-  const hidden = await request.patch(roadmapPath(`/nodes/${hiddenTarget}`), {
-    headers: author,
-    data: { isVisible: false },
-  });
-  expect(hidden.status()).toBe(200);
+  const hiddenDependency = await insertDependency(hiddenSource, hiddenTarget);
+  await ok(
+    await author.patch(roadmapPath(`/nodes/${hiddenTarget}`), { data: { isVisible: false } }),
+  );
   expect(await routeNotices(hiddenDependency)).toHaveLength(0);
 
   const deleteSource = await createNode(`Eliminación origen ${crypto.randomUUID()}`);
   const deleteTarget = await createNode(`Eliminación destino ${crypto.randomUUID()}`);
-  const deleteDependency = await createDependency(deleteSource, deleteTarget);
-  expect(
-    (await request.delete(roadmapPath(`/nodes/${deleteTarget}`), { headers: author })).status(),
-  ).toBe(204);
+  const deleteDependency = await insertDependency(deleteSource, deleteTarget);
+  await ok(await author.delete(roadmapPath(`/nodes/${deleteTarget}`)), 204);
   expect(await routeNotices(deleteDependency)).toHaveLength(0);
   nodeIds.splice(nodeIds.indexOf(deleteTarget), 1);
 });
 
 test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutation', async ({
-  request,
   course,
+  teacherApi,
+  studentApi,
   rejectNoticeInserts,
 }) => {
   test.setTimeout(95_000);
   const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
-  const student = course.users.studentWithoutProgress.id;
-  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  const author = teacherApi;
+  const { nodeTypeId } = await prepareNodeCreator(author, course);
   const nodeIds: string[] = [];
   const dependentTitle = `Fallo de aviso de ruta ${crypto.randomUUID()}`;
 
@@ -296,8 +253,8 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
     // Existing Nodes start with no delivery window; this journey tests the
     // Dependency's access transition rather than Node creation.
     const id = await createExistingNode({
-      roadmapId: roadmap.roadmap.id,
-      nodeTypeId: roadmap.nodeTypes[0].id,
+      roadmapId: course.roadmapId,
+      nodeTypeId,
       title,
       positionX: 800 + nodeIds.length * 320,
     });
@@ -305,14 +262,12 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
     return id;
   };
 
-  const noticesFor = async (nodeId?: string) => {
-    const response = await request.get(
-      `/api/notifications?roadmapId=${roadmap.roadmap.id}${nodeId ? `&nodeId=${nodeId}` : ''}&limit=100`,
-      { headers: { cookie: await sessionCookie(student) } },
-    );
-    expect(response.status()).toBe(200);
-    return (await response.json()).notifications as StoredNotice[];
-  };
+  const noticesFor = (nodeId?: string) =>
+    listNotices(studentApi, {
+      roadmapId: course.roadmapId,
+      ...(nodeId ? { nodeId } : {}),
+      limit: 100,
+    });
 
   const prerequisiteId = await createNode(`Fallo de prerrequisito ${crypto.randomUUID()}`);
   const dependentId = await createNode(dependentTitle);
@@ -321,15 +276,9 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
     noticeClass: 'roadmap-path-changed',
   });
 
-  const response = await request.post(roadmapPath('/dependencies'), {
-    headers: author,
-    data: { sourceNodeId: prerequisiteId, targetNodeId: dependentId },
-  });
-  expect(response.status()).toBe(201);
-  const dependencyId = (await response.json()).dependency.id as string;
+  const dependencyId = await createDependency(author, course, prerequisiteId, dependentId);
 
-  const persisted = await request.get(roadmapPath(), { headers: author });
-  expect(persisted.status()).toBe(200);
+  const persisted = await ok(await author.get(roadmapPath()));
   expect((await persisted.json()).dependencies).toContainEqual(
     expect.objectContaining({ sourceNodeId: prerequisiteId, targetNodeId: dependentId }),
   );

@@ -1,7 +1,8 @@
 import type { Page } from '@playwright/test';
 import { SignJWT } from 'jose';
 import { expect, test, type E2EUser } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
+import { createDependency } from './create-node';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -47,13 +48,12 @@ async function createNodeFromCanvas(page: Page, title: string) {
 test('pages and Roadmap HTTP routes share the normalized Course offering identifier', async ({
   page,
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
   const spacedCode = encodeURIComponent(` ${course.courseCode} `);
-  const api = await apiAs(course.users.teacher);
   const term = `${course.year}/${course.semester}`;
   const roadmap = await api.get(`/api/${spacedCode}/${term}/roadmap`);
-  expect(roadmap.status()).toBe(200);
+  await ok(roadmap);
   expect((await roadmap.json()).course.code).toBe(course.courseCode);
 
   await authenticateAs(page.context(), course.users.teacher.id);
@@ -61,7 +61,7 @@ test('pages and Roadmap HTTP routes share the normalized Course offering identif
   await expect(page.locator('.react-flow__node').first()).toBeVisible();
 
   const invalidApi = await api.get(`/api/%20/${term}/roadmap`);
-  expect(invalidApi.status()).toBe(400);
+  await ok(invalidApi, 400);
   await expect(invalidApi.json()).resolves.toEqual({
     error: {
       code: 'INVALID_ACADEMIC_IDENTITY',
@@ -75,10 +75,9 @@ test('pages and Roadmap HTTP routes share the normalized Course offering identif
 test('teacher creates and edits a custom node type with visual pickers', async ({
   page,
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
   const typeName = uniqueName('Tipo visual E2E');
-  const api = await apiAs(course.users.teacher);
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
@@ -135,14 +134,15 @@ test('teacher creates and edits a custom node type with visual pickers', async (
 test('course participants receive their authorized roadmap representation', async ({
   request,
   course,
+  teacherApi: teacher,
+  studentApi: student,
   apiAs,
 }) => {
   const anonymous = await request.get(course.apiPath());
-  expect(anonymous.status()).toBe(401);
+  await ok(anonymous, 401);
 
-  const teacher = await apiAs(course.users.teacher);
   const teacherRoadmap = await teacher.get(course.apiPath());
-  expect(teacherRoadmap.status()).toBe(200);
+  await ok(teacherRoadmap);
   expect(await teacherRoadmap.json()).toEqual(
     expect.objectContaining({
       course: expect.objectContaining({ code: course.courseCode, name: course.courseName }),
@@ -152,9 +152,8 @@ test('course participants receive their authorized roadmap representation', asyn
     }),
   );
 
-  const student = await apiAs(course.users.studentWithoutProgress);
   const studentRoadmap = await student.get(course.apiPath());
-  expect(studentRoadmap.status()).toBe(200);
+  await ok(studentRoadmap);
   const studentDto = await studentRoadmap.json();
   expect(studentDto.nodes).not.toEqual(
     expect.arrayContaining([expect.objectContaining({ id: course.nodes.hidden })]),
@@ -162,10 +161,10 @@ test('course participants receive their authorized roadmap representation', asyn
   const mutation = await student.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
     data: { title: 'No autorizado' },
   });
-  expect(mutation.status()).toBe(403);
+  await ok(mutation, 403);
 
   const inactive = await apiAs(course.users.withdrawnStudent);
-  expect((await inactive.get(course.apiPath())).status()).toBe(403);
+  await ok(await inactive.get(course.apiPath()), 403);
 });
 
 test('roadmap creation rejects conflicts and preserves authorization and cross-roadmap boundaries', async ({
@@ -173,6 +172,7 @@ test('roadmap creation rejects conflicts and preserves authorization and cross-r
   request,
   course,
   createCourse,
+  teacherApi: teacher,
   apiAs,
 }) => {
   const { teachingAssistant, studentWithoutProgress } = course.users;
@@ -188,53 +188,51 @@ test('roadmap creation rejects conflicts and preserves authorization and cross-r
     participants: [{ user: studentWithoutProgress, role: 'STUDENT' }],
   });
 
-  const teacher = await apiAs(course.users.teacher);
   await reportPosition(course.users.teacher, course, 'COURSE_PROFESSOR');
   const conflict = await teacher.post(course.apiPath(), {
     data: { course: { name: course.courseName, department: 'Departamento E2E' } },
   });
-  expect(conflict.status()).toBe(409);
+  await ok(conflict, 409);
   expect((await conflict.json()).error.code).toBe('ROADMAP_CONFLICT');
 
   const assistant = await apiAs(teachingAssistant);
-  expect((await assistant.post(withoutRoadmap.apiPath())).status()).toBe(403);
+  await ok(await assistant.post(withoutRoadmap.apiPath()), 403);
 
   const student = await apiAs(studentWithoutProgress);
-  expect((await student.get(withoutRoadmap.apiPath())).status()).toBe(404);
-  expect((await student.post(course.apiPath())).status()).toBe(403);
+  await ok(await student.get(withoutRoadmap.apiPath()), 404);
+  await ok(await student.post(course.apiPath()), 403);
   const foreignResource = await student.get(
     otherRoadmap.apiPath(`/nodes/${course.nodes.first}/resources`),
   );
-  expect(foreignResource.status()).toBe(404);
+  await ok(foreignResource, 404);
   expect((await foreignResource.json()).error.code).toBe('NODE_NOT_FOUND');
-  expect((await request.get(course.apiPath())).status()).toBe(401);
+  await ok(await request.get(course.apiPath()), 401);
 });
 
 test('teacher API manages a node type, resources, and dependencies through their lifecycle', async ({
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
-  const api = await apiAs(course.users.teacher);
   const typeName = uniqueName('Laboratorio E2E');
   const nodeTypesBefore = await api.get(course.apiPath('/node-types'));
-  expect(nodeTypesBefore.status()).toBe(200);
+  await ok(nodeTypesBefore);
   const initialNodeTypeIds = (await nodeTypesBefore.json()).nodeTypes.map(
     (nodeType: { id: string }) => nodeType.id,
   );
   const missingIcon = await api.post(course.apiPath('/node-types'), {
     data: { name: uniqueName('Sin ícono'), color: '#024AD8' },
   });
-  expect(missingIcon.status()).toBe(400);
+  await ok(missingIcon, 400);
   expect((await missingIcon.json()).error.code).toBe('INVALID_REQUEST');
   const invalidIcon = await api.post(course.apiPath('/node-types'), {
     data: { name: uniqueName('Ícono inválido'), icon: 'NotAnIcon', color: '#024AD8' },
   });
-  expect(invalidIcon.status()).toBe(400);
+  await ok(invalidIcon, 400);
   expect((await invalidIcon.json()).error.code).toBe('INVALID_REQUEST');
   const invalidColor = await api.post(course.apiPath('/node-types'), {
     data: { name: uniqueName('Color inválido'), icon: 'Shapes', color: '#ABCDEF' },
   });
-  expect(invalidColor.status()).toBe(400);
+  await ok(invalidColor, 400);
   expect((await invalidColor.json()).error.code).toBe('INVALID_REQUEST');
   const nodeTypesAfterInvalidCreation = await api.get(course.apiPath('/node-types'));
   expect(
@@ -246,25 +244,24 @@ test('teacher API manages a node type, resources, and dependencies through their
   const createdType = await api.post(course.apiPath('/node-types'), {
     data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
   });
-  expect(createdType.status()).toBe(201);
+  await ok(createdType, 201);
   const createdNodeType = (await createdType.json()).nodeType;
   expect(createdNodeType).toMatchObject({ name: typeName, icon: 'Shapes', color: '#024AD8' });
   const typeId = createdNodeType.id;
   const repeatedAppearance = await api.post(course.apiPath('/node-types'), {
     data: { name: uniqueName('Laboratorio paralelo'), icon: 'Shapes', color: '#024AD8' },
   });
-  expect(repeatedAppearance.status()).toBe(201);
-  expect(
-    (
-      await api.post(course.apiPath('/node-types'), {
-        data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
-      })
-    ).status(),
-  ).toBe(409);
+  await ok(repeatedAppearance, 201);
+  await ok(
+    await api.post(course.apiPath('/node-types'), {
+      data: { name: typeName, icon: 'Shapes', color: '#024AD8' },
+    }),
+    409,
+  );
   const updatedType = await api.patch(course.apiPath(`/node-types/${typeId}`), {
     data: { icon: 'Calculator' },
   });
-  expect(updatedType.status()).toBe(200);
+  await ok(updatedType);
   expect((await updatedType.json()).nodeType).toMatchObject({
     name: typeName,
     icon: 'Calculator',
@@ -273,12 +270,12 @@ test('teacher API manages a node type, resources, and dependencies through their
   const invalidIconPatch = await api.patch(course.apiPath(`/node-types/${typeId}`), {
     data: { icon: 'NotAnIcon' },
   });
-  expect(invalidIconPatch.status()).toBe(400);
+  await ok(invalidIconPatch, 400);
   expect((await invalidIconPatch.json()).error.code).toBe('INVALID_REQUEST');
   const invalidPatch = await api.patch(course.apiPath(`/node-types/${typeId}`), {
     data: { color: null },
   });
-  expect(invalidPatch.status()).toBe(400);
+  await ok(invalidPatch, 400);
   expect((await invalidPatch.json()).error.code).toBe('INVALID_REQUEST');
   const nodeTypesAfterInvalidPatch = await api.get(course.apiPath('/node-types'));
   expect(
@@ -286,13 +283,12 @@ test('teacher API manages a node type, resources, and dependencies through their
       (nodeType: { id: string }) => nodeType.id === typeId,
     ),
   ).toMatchObject({ name: typeName, icon: 'Calculator', color: '#024AD8' });
-  expect(
-    (
-      await api.patch(course.apiPath('/node-types/00000000-0000-4000-8000-000000000001'), {
-        data: { name: 'No modificable' },
-      })
-    ).status(),
-  ).toBe(409);
+  await ok(
+    await api.patch(course.apiPath('/node-types/00000000-0000-4000-8000-000000000001'), {
+      data: { name: 'No modificable' },
+    }),
+    409,
+  );
 
   const sourceResponse = await api.post(course.apiPath('/nodes'), {
     data: { title: uniqueName('Origen E2E'), nodeTypeId: typeId, positionX: 0, positionY: 0 },
@@ -300,31 +296,28 @@ test('teacher API manages a node type, resources, and dependencies through their
   const targetResponse = await api.post(course.apiPath('/nodes'), {
     data: { title: uniqueName('Destino E2E'), nodeTypeId: typeId, positionX: 120, positionY: 0 },
   });
-  expect(sourceResponse.status()).toBe(201);
-  expect(targetResponse.status()).toBe(201);
+  await ok(sourceResponse, 201);
+  await ok(targetResponse, 201);
   const sourceId = (await sourceResponse.json()).node.id;
   const targetId = (await targetResponse.json()).node.id;
-  expect((await api.delete(course.apiPath(`/node-types/${typeId}`))).status()).toBe(409);
+  await ok(await api.delete(course.apiPath(`/node-types/${typeId}`)), 409);
 
   const resource = await api.post(course.apiPath(`/nodes/${sourceId}/resources`), {
     data: { title: 'Guía E2E', url: 'https://example.test/e2e-guide', type: 'LINK' },
   });
-  expect(resource.status()).toBe(201);
+  await ok(resource, 201);
   const resourceId = (await resource.json()).resource.id;
-  expect(
-    (
-      await api.patch(course.apiPath(`/resources/${resourceId}`), {
-        data: { title: 'Video E2E', type: 'VIDEO' },
-      })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await api.post(course.apiPath(`/nodes/${sourceId}/resources`), {
-        data: { title: 'Unsafe', url: 'javascript:alert(1)', type: 'LINK' },
-      })
-    ).status(),
-  ).toBe(400);
+  await ok(
+    await api.patch(course.apiPath(`/resources/${resourceId}`), {
+      data: { title: 'Video E2E', type: 'VIDEO' },
+    }),
+  );
+  await ok(
+    await api.post(course.apiPath(`/nodes/${sourceId}/resources`), {
+      data: { title: 'Unsafe', url: 'javascript:alert(1)', type: 'LINK' },
+    }),
+    400,
+  );
 
   const dependency = await api.post(course.apiPath('/dependencies'), {
     data: {
@@ -334,28 +327,26 @@ test('teacher API manages a node type, resources, and dependencies through their
       targetHandle: 'top',
     },
   });
-  expect(dependency.status()).toBe(201);
+  await ok(dependency, 201);
   const dependencyId = (await dependency.json()).dependency.id;
-  expect(
-    (
-      await api.post(course.apiPath('/dependencies'), {
-        data: { sourceNodeId: targetId, targetNodeId: sourceId },
-      })
-    ).status(),
-  ).toBe(409);
-  expect((await api.delete(course.apiPath(`/dependencies/${dependencyId}`))).status()).toBe(204);
-  expect((await api.delete(course.apiPath(`/resources/${resourceId}`))).status()).toBe(204);
+  await ok(
+    await api.post(course.apiPath('/dependencies'), {
+      data: { sourceNodeId: targetId, targetNodeId: sourceId },
+    }),
+    409,
+  );
+  await ok(await api.delete(course.apiPath(`/dependencies/${dependencyId}`)), 204);
+  await ok(await api.delete(course.apiPath(`/resources/${resourceId}`)), 204);
 });
 
 test('teacher deletes a Canvas node with a concise confirmation and revalidated impact', async ({
   page,
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
   const sourceTitle = uniqueName('Nodo Canvas para eliminar');
   const targetTitle = uniqueName('Nodo Canvas relacionado');
   const resourceTitle = uniqueName('Recurso Canvas relacionado');
-  const api = await apiAs(course.users.teacher);
 
   const sourceResponse = await api.post(course.apiPath('/nodes'), {
     data: {
@@ -373,8 +364,8 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
       positionY: 0,
     },
   });
-  expect(sourceResponse.status()).toBe(201);
-  expect(targetResponse.status()).toBe(201);
+  await ok(sourceResponse, 201);
+  await ok(targetResponse, 201);
   const sourceNodeId: string = (await sourceResponse.json()).node.id;
   const targetNodeId: string = (await targetResponse.json()).node.id;
 
@@ -385,7 +376,7 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
       type: 'LINK',
     },
   });
-  expect(resourceResponse.status()).toBe(201);
+  await ok(resourceResponse, 201);
 
   const dependencyResponse = await api.post(course.apiPath('/dependencies'), {
     data: {
@@ -395,7 +386,7 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
       targetHandle: 'left',
     },
   });
-  expect(dependencyResponse.status()).toBe(201);
+  await ok(dependencyResponse, 201);
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
@@ -459,9 +450,8 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
 
 test('teacher uploads a file resource through the protected multipart endpoint', async ({
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
-  const api = await apiAs(course.users.teacher);
   const response = await api.post(course.apiPath(`/nodes/${course.nodes.first}/resources`), {
     multipart: {
       file: {
@@ -472,7 +462,7 @@ test('teacher uploads a file resource through the protected multipart endpoint',
     },
   });
 
-  expect(response.status()).toBe(201);
+  await ok(response, 201);
   const body = await response.json();
   expect(body.resource).toMatchObject({
     title: 'guia-e2e.pdf',
@@ -481,12 +471,13 @@ test('teacher uploads a file resource through the protected multipart endpoint',
   });
 });
 
-test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, apiAs }) => {
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
-
+test('teacher blocks and unlocks a roadmap branch atomically', async ({
+  course,
+  teacherApi: teacher,
+  studentApi: student,
+}) => {
   const roadmap = await teacher.get(course.apiPath());
-  expect(roadmap.status()).toBe(200);
+  await ok(roadmap);
   const contentTypeId = (await roadmap.json()).nodeTypes.find(
     (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
   ).id;
@@ -501,7 +492,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
           positionY: 0,
         },
       });
-      expect(response.status()).toBe(201);
+      await ok(response, 201);
       return (await response.json()).node as { id: string; title: string };
     }),
   );
@@ -515,16 +506,13 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
     [external, join],
   ] as const;
   for (const [source, target] of dependencies) {
-    const response = await teacher.post(course.apiPath('/dependencies'), {
-      data: { sourceNodeId: source.id, targetNodeId: target.id },
-    });
-    expect(response.status()).toBe(201);
+    await createDependency(teacher, course, source.id, target.id);
   }
 
   const teacherBlockPath = (nodeId: string) => course.apiPath(`/nodes/${nodeId}/teacher-block`);
-  expect((await student.post(teacherBlockPath(root.id))).status()).toBe(403);
+  await ok(await student.post(teacherBlockPath(root.id)), 403);
   const preview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`);
-  expect(preview.status()).toBe(200);
+  await ok(preview);
   expect((await preview.json()).nodes).toEqual(
     expect.arrayContaining(
       [root, left, right, join, leaf].map(({ id, title }) =>
@@ -542,11 +530,11 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
   const resource = await teacher.post(course.apiPath(`/nodes/${root.id}/resources`), {
     data: { title: 'Recurso que se conserva', url: 'https://example.test/kept', type: 'LINK' },
   });
-  expect(resource.status()).toBe(201);
-  expect((await student.post(course.apiPath(`/nodes/${root.id}/completion`))).status()).toBe(200);
+  await ok(resource, 201);
+  await ok(await student.post(course.apiPath(`/nodes/${root.id}/completion`)));
 
   const block = await teacher.post(teacherBlockPath(root.id));
-  expect(block.status()).toBe(200);
+  await ok(block);
   expect((await block.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
     expect.arrayContaining([root.id, left.id, right.id, join.id, leaf.id]),
   );
@@ -556,7 +544,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
   ).toMatchObject({ isTeacherBlocked: true, resources: [{ title: 'Recurso que se conserva' }] });
 
   const individualPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=UNBLOCK`);
-  expect(individualPreview.status()).toBe(200);
+  await ok(individualPreview);
   const individual = await individualPreview.json();
   expect(individual).toMatchObject({
     mode: 'SINGLE',
@@ -573,7 +561,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
     ],
   });
   const upstreamPreview = await teacher.get(`${teacherBlockPath(left.id)}?operation=UNBLOCK`);
-  expect(upstreamPreview.status()).toBe(200);
+  await ok(upstreamPreview);
   const upstream = await upstreamPreview.json();
   expect(upstream).toMatchObject({
     mode: 'UPSTREAM',
@@ -582,44 +570,40 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
       expect.objectContaining({ id: left.id, relation: 'SELECTED_NODE' }),
     ]),
   });
-  expect(
-    (
-      await teacher.delete(teacherBlockPath(root.id), {
-        headers: { 'x-teacher-block-preview': individual.version },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await teacher.delete(teacherBlockPath(root.id), {
+      headers: { 'x-teacher-block-preview': individual.version },
+    }),
+  );
   const staleUnlock = await teacher.delete(teacherBlockPath(left.id), {
     headers: { 'x-teacher-block-preview': upstream.version },
   });
-  expect(staleUnlock.status()).toBe(409);
+  await ok(staleUnlock, 409);
   expect((await staleUnlock.json()).error.code).toBe('TEACHER_BLOCK_PREVIEW_STALE');
   const afterStaleUnlock = await teacher.get(course.apiPath());
   expect(
     (await afterStaleUnlock.json()).nodes.find((node: { id: string }) => node.id === left.id)
       .isTeacherBlocked,
   ).toBe(true);
-  expect((await teacher.post(teacherBlockPath(root.id))).status()).toBe(200);
+  await ok(await teacher.post(teacherBlockPath(root.id)));
   const refreshedUpstreamPreview = await teacher.get(
     `${teacherBlockPath(left.id)}?operation=UNBLOCK`,
   );
-  expect(refreshedUpstreamPreview.status()).toBe(200);
+  await ok(refreshedUpstreamPreview);
   const refreshedUpstream = await refreshedUpstreamPreview.json();
-  expect(
-    (
-      await teacher.delete(teacherBlockPath(left.id), {
-        headers: { 'x-teacher-block-preview': refreshedUpstream.version },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await teacher.delete(teacherBlockPath(left.id), {
+      headers: { 'x-teacher-block-preview': refreshedUpstream.version },
+    }),
+  );
   const studentRoadmap = await student.get(course.apiPath());
   expect(
     (await studentRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
   ).toMatchObject({ isCompleted: true });
 
-  expect((await teacher.post(teacherBlockPath(external.id))).status()).toBe(200);
+  await ok(await teacher.post(teacherBlockPath(external.id)));
   const branchPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BRANCH_UNLOCK`);
-  expect(branchPreview.status()).toBe(200);
+  await ok(branchPreview);
   const branch = await branchPreview.json();
   expect(branch).toMatchObject({
     mode: 'BRANCH',
@@ -638,7 +622,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
   const branchUnlock = await teacher.patch(teacherBlockPath(root.id), {
     headers: { 'x-teacher-block-preview': branch.version },
   });
-  expect(branchUnlock.status()).toBe(200);
+  await ok(branchUnlock);
   expect((await branchUnlock.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
     expect.arrayContaining([right.id]),
   );
@@ -656,7 +640,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
   expect(teacherBlockByNodeId.get(external.id)).toBe(true);
 
   const hiddenBlock = await teacher.post(teacherBlockPath(course.nodes.hidden));
-  expect(hiddenBlock.status()).toBe(409);
+  await ok(hiddenBlock, 409);
   expect((await hiddenBlock.json()).error.code).toBe('HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN');
 
   const concurrentBlocks = await Promise.all([
@@ -678,12 +662,10 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({ course, 
 test('keeps the two-scope unlock confirmation usable on a narrow viewport', async ({
   page,
   course,
-  apiAs,
+  teacherApi: teacher,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-
   const roadmapResponse = await teacher.get(course.apiPath());
-  expect(roadmapResponse.status()).toBe(200);
+  await ok(roadmapResponse);
   const roadmap = await roadmapResponse.json();
   const contentTypeId = roadmap.nodeTypes.find(
     (nodeType: { isPredefined: boolean }) => nodeType.isPredefined,
@@ -705,18 +687,14 @@ test('keeps the two-scope unlock confirmation usable on a narrow viewport', asyn
       positionY: 720,
     },
   });
-  expect(sourceResponse.status()).toBe(201);
-  expect(targetResponse.status()).toBe(201);
+  await ok(sourceResponse, 201);
+  await ok(targetResponse, 201);
   const source = (await sourceResponse.json()).node as { id: string };
   const target = (await targetResponse.json()).node as { id: string };
 
-  const dependencyResponse = await teacher.post(course.apiPath('/dependencies'), {
-    data: { sourceNodeId: source.id, targetNodeId: target.id },
-  });
-  expect(dependencyResponse.status()).toBe(201);
+  await createDependency(teacher, course, source.id, target.id);
 
-  const blockResponse = await teacher.post(course.apiPath(`/nodes/${source.id}/teacher-block`));
-  expect(blockResponse.status()).toBe(200);
+  await ok(await teacher.post(course.apiPath(`/nodes/${source.id}/teacher-block`)));
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.setViewportSize({ width: 375, height: 812 });
@@ -755,10 +733,10 @@ test('keeps the two-scope unlock confirmation usable on a narrow viewport', asyn
 
 test('hidden dependencies are rejected and completion requires an active student participation', async ({
   course,
+  teacherApi: teacher,
+  studentApi: student,
   apiAs,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const inactive = await apiAs(course.users.withdrawnStudent);
   const hidden = await teacher.post(course.apiPath('/nodes'), {
     data: {
@@ -777,8 +755,8 @@ test('hidden dependencies are rejected and completion requires an active student
       positionY: 0,
     },
   });
-  expect(hidden.status()).toBe(201);
-  expect(target.status()).toBe(201);
+  await ok(hidden, 201);
+  await ok(target, 201);
   const hiddenId = (await hidden.json()).node.id;
   const targetId = (await target.json()).node.id;
   const prerequisite = await teacher.post(course.apiPath('/nodes'), {
@@ -789,39 +767,30 @@ test('hidden dependencies are rejected and completion requires an active student
       positionY: 0,
     },
   });
-  expect(prerequisite.status()).toBe(201);
+  await ok(prerequisite, 201);
   const prerequisiteId = (await prerequisite.json()).node.id;
   const hiddenDependency = await teacher.post(course.apiPath('/dependencies'), {
     data: { sourceNodeId: hiddenId, targetNodeId: targetId },
   });
-  expect(hiddenDependency.status()).toBe(403);
+  await ok(hiddenDependency, 403);
   expect((await hiddenDependency.json()).error.code).toBe('HIDDEN_NODE_DEPENDENCY_FORBIDDEN');
-  const visibleDependency = await teacher.post(course.apiPath('/dependencies'), {
-    data: { sourceNodeId: prerequisiteId, targetNodeId: targetId },
-  });
-  expect(visibleDependency.status()).toBe(201);
-  expect((await student.post(course.apiPath(`/nodes/${hiddenId}/completion`))).status()).toBe(404);
+  await createDependency(teacher, course, prerequisiteId, targetId);
+  await ok(await student.post(course.apiPath(`/nodes/${hiddenId}/completion`)), 404);
   const blockedTarget = await student.post(course.apiPath(`/nodes/${targetId}/completion`));
-  expect(blockedTarget.status()).toBe(403);
+  await ok(blockedTarget, 403);
   expect((await blockedTarget.json()).error.code).toBe('PREREQUISITE_BLOCK');
-  expect((await student.post(course.apiPath(`/nodes/${prerequisiteId}/completion`))).status()).toBe(
-    200,
-  );
-  expect((await student.post(course.apiPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
-  expect((await student.post(course.apiPath(`/nodes/${targetId}/completion`))).status()).toBe(200);
-  expect(
-    (await teacher.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status(),
-  ).toBe(403);
-  expect(
-    (await inactive.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status(),
-  ).toBe(403);
+  await ok(await student.post(course.apiPath(`/nodes/${prerequisiteId}/completion`)));
+  await ok(await student.post(course.apiPath(`/nodes/${targetId}/completion`)));
+  await ok(await student.post(course.apiPath(`/nodes/${targetId}/completion`)));
+  await ok(await teacher.post(course.apiPath(`/nodes/${course.nodes.first}/completion`)), 403);
+  await ok(await inactive.post(course.apiPath(`/nodes/${course.nodes.first}/completion`)), 403);
 });
 
 test('teacher and student workflows render on a test-owned course offering', async ({
   page,
   course,
   createCourse,
-  apiAs,
+  teacherApi: api,
 }) => {
   const { teacher, studentWithoutProgress: student } = course.users;
   // Like the catalog's students: another current Course offering, plus one Course
@@ -842,7 +811,6 @@ test('teacher and student workflows render on a test-owned course offering', asy
   await expect(page.getByRole('button', { name: 'Cerrar sesión' })).toBeVisible();
   await expect(page.getByRole('heading', { name: course.courseName })).toBeVisible();
   const nodeTitle = uniqueName('Nodo creado desde E2E');
-  const api = await apiAs(teacher);
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();
   await expect(page.getByRole('menuitem', { name: 'Crear nodo' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
@@ -960,7 +928,11 @@ test('guards Node replacement and deselection without losing the editor session'
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
 });
 
-test('teacher can save consecutive changes to the same Node', async ({ page, course, apiAs }) => {
+test('teacher can save consecutive changes to the same Node', async ({
+  page,
+  course,
+  teacherApi: api,
+}) => {
   const initialTitle = uniqueName('Nodo de guardados consecutivos');
   const firstTitle = uniqueName('Primera modificación');
   const firstDescription =
@@ -968,12 +940,11 @@ test('teacher can save consecutive changes to the same Node', async ({ page, cou
   const secondTitle = uniqueName('Segunda modificación');
   const secondDescription = '## Repaso\n\nPractica con `algoritmos`.\n\n> Resuelve los ejercicios.';
   const controlTypeName = uniqueName('Control');
-  const api = await apiAs(course.users.teacher);
 
   const createdType = await api.post(course.apiPath('/node-types'), {
     data: { name: controlTypeName, icon: 'Shapes', color: '#024AD8' },
   });
-  expect(createdType.status()).toBe(201);
+  await ok(createdType, 201);
   const createdControlTypeId: string = (await createdType.json()).nodeType.id;
 
   const created = await api.post(course.apiPath('/nodes'), {
@@ -984,7 +955,7 @@ test('teacher can save consecutive changes to the same Node', async ({ page, cou
       positionY: 0,
     },
   });
-  expect(created.status()).toBe(201);
+  await ok(created, 201);
   const createdNodeId: string = (await created.json()).node.id;
 
   await authenticateAs(page.context(), course.users.teacher.id);
@@ -1053,11 +1024,10 @@ test('teacher can save consecutive changes to the same Node', async ({ page, cou
 test('creating consecutive nodes keeps them visible, separated, selected, and persisted', async ({
   page,
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
-  const api = await apiAs(course.users.teacher);
   const titles = [
     uniqueName('Primer nodo consecutivo'),
     uniqueName('Segundo nodo consecutivo'),
@@ -1257,7 +1227,7 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
   const missingState = await request.get(`/api/plogin?jwt=${encodeURIComponent(validToken)}`, {
     maxRedirects: 0,
   });
-  expect(missingState.status()).toBe(307);
+  await ok(missingState, 307);
   expect(missingState.headers().location).toContain('/?error=Authentication');
 
   for (const token of [
@@ -1275,7 +1245,7 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
       maxRedirects: 0,
       headers: { cookie: stateCookie },
     });
-    expect(callback.status()).toBe(303);
+    await ok(callback, 303);
     expect(callback.headers().location).toContain('/?error=Authentication');
   }
 });
@@ -1298,7 +1268,7 @@ test('landing access starts VTI and dismisses authentication failures without re
   ).toHaveCount(0);
 
   const protectedRoute = await request.get('/academic-overview', { maxRedirects: 0 });
-  expect(protectedRoute.status()).toBe(307);
+  await ok(protectedRoute, 307);
   expect(protectedRoute.headers().location).toContain('/api/plogin/start');
 });
 
@@ -1364,7 +1334,7 @@ test('VTI callback issues a session after validating its one-time state', async 
 }, testInfo) => {
   const student = course.users.studentWithoutProgress;
   const start = await request.post('/api/plogin/start', { maxRedirects: 0 });
-  expect(start.status()).toBe(303);
+  await ok(start, 303);
   const state = new URL(start.headers().location).searchParams.get('state');
   expect(state).toBeTruthy();
   const startCookie = start.headers()['set-cookie'];
@@ -1379,7 +1349,7 @@ test('VTI callback issues a session after validating its one-time state', async 
     maxRedirects: 0,
     headers: { cookie: stateCookie },
   });
-  expect(callback.status()).toBe(303);
+  await ok(callback, 303);
   expect(callback.headers().location).toBe(
     new URL('/academic-overview', testInfo.project.use.baseURL as string).toString(),
   );

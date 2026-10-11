@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { forgetUcampusUser, failUcampusEndpoint } from './ucampus';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 
 const forbidden = {
   error: {
@@ -29,25 +29,22 @@ for (const position of [
     await reportPosition(user, offering, position);
     const api = await apiAs(user);
     const response = await api.post(offering.apiPath(), { data: {} });
-    expect(response.status()).toBe(403);
+    await ok(response, 403);
     await expect(response.json()).resolves.toEqual(forbidden);
     const types = await (await api.get(course.apiPath('/node-types'))).json();
-    expect(
-      (
-        await api.post(course.apiPath('/nodes'), {
-          data: {
-            title: 'Trabajo docente',
-            nodeTypeId: types.nodeTypes[0].id,
-            positionX: 0,
-            positionY: 0,
-          },
-        })
-      ).status(),
-    ).toBe(201);
-    expect(
-      (await api.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status(),
-    ).toBe(403);
-    expect((await api.get(course.apiPath('/simulation'))).status()).toBe(200);
+    await ok(
+      await api.post(course.apiPath('/nodes'), {
+        data: {
+          title: 'Trabajo docente',
+          nodeTypeId: types.nodeTypes[0].id,
+          positionX: 0,
+          positionY: 0,
+        },
+      }),
+      201,
+    );
+    await ok(await api.post(course.apiPath(`/nodes/${course.nodes.first}/completion`)), 403);
+    await ok(await api.get(course.apiPath('/simulation')));
   });
 }
 
@@ -66,14 +63,14 @@ test('only a confirmed course professor can create, and an outage never widens a
   // An empty institutional result cannot confirm the professorship in this offering.
   await reportPosition(user, offering, null);
   const refused = await api.post(offering.apiPath(), { data: {} });
-  expect(refused.status()).toBe(403);
+  await ok(refused, 403);
   await expect(refused.json()).resolves.toEqual(forbidden);
   await forgetUcampusUser(user);
   const outage = await api.post(offering.apiPath(), { data: {} });
-  expect(outage.status()).toBe(403);
+  await ok(outage, 403);
   await expect(outage.json()).resolves.toEqual(forbidden);
   await reportPosition(user, offering, 'COURSE_PROFESSOR');
-  expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(201);
+  await ok(await api.post(offering.apiPath(), { data: {} }), 201);
 });
 
 const entries: {
@@ -124,26 +121,22 @@ for (const { name: entry, enter } of entries) {
       expect.arrayContaining([expect.objectContaining({ id: course.nodes.hidden })]),
     );
     expect(after.nodes.some((node: { isCompleted: boolean }) => node.isCompleted)).toBe(false);
-    expect(
-      (await api.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status(),
-    ).toBe(403);
-    expect((await api.get(course.apiPath('/simulation'))).status()).toBe(200);
+    await ok(await api.post(course.apiPath(`/nodes/${course.nodes.first}/completion`)), 403);
+    await ok(await api.get(course.apiPath('/simulation')));
   });
 }
 
 test('promotion withdraws student access leftovers and retains colleague content notices', async ({
   course,
+  teacherApi: teacher,
   apiAs,
   reportPosition,
 }) => {
   const user = course.users.studentWithProgress;
   const assistant = await apiAs(user);
-  const teacher = await apiAs(course.users.teacher);
   const nodePath = course.apiPath(`/nodes/${course.nodes.first}`);
-  expect((await teacher.patch(nodePath, { data: { title: 'Cambio de colega' } })).status()).toBe(
-    200,
-  );
-  expect((await teacher.post(`${nodePath}/teacher-block`)).status()).toBe(200);
+  await ok(await teacher.patch(nodePath, { data: { title: 'Cambio de colega' } }));
+  await ok(await teacher.post(`${nodePath}/teacher-block`));
   const notices = async () =>
     (await (await assistant.get(`/api/notifications?nodeId=${course.nodes.first}`)).json())
       .notifications;
@@ -155,7 +148,7 @@ test('promotion withdraws student access leftovers and retains colleague content
     )
     .toContain('node-access');
   await reportPosition(user, course, 'TEACHING_ASSISTANT');
-  expect((await assistant.get('/api/academic-overview')).status()).toBe(200);
+  await ok(await assistant.get('/api/academic-overview'));
   const pending = await notices();
   expect(
     pending.map((notice: { data: { noticeTarget: string } }) => notice.data.noticeTarget),
@@ -164,9 +157,7 @@ test('promotion withdraws student access leftovers and retains colleague content
   expect(knownTitle).not.toBe('Cambio de colega');
   // Staff keep colleague changes; their own edit is absorbed by the pending notice
   // (ADR-0024 actor rule) instead of producing a notice of its own.
-  expect((await assistant.patch(nodePath, { data: { title: 'Cambio propio' } })).status()).toBe(
-    200,
-  );
+  await ok(await assistant.patch(nodePath, { data: { title: 'Cambio propio' } }));
   expect(await notices()).toEqual([
     expect.objectContaining({
       id: pending[0].id,
@@ -199,17 +190,14 @@ test('an observer reported among taught courses keeps student capabilities', asy
   );
   const roadmap = await (await api.get(course.apiPath())).json();
   expect(roadmap.nodes.some((node: { id: string }) => node.id === course.nodes.hidden)).toBe(false);
-  expect(
-    (
-      await api.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { title: 'Edición no permitida' },
-      })
-    ).status(),
-  ).toBe(403);
-  expect((await api.get(course.apiPath('/simulation'))).status()).toBe(403);
-  expect((await api.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status()).toBe(
-    200,
+  await ok(
+    await api.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { title: 'Edición no permitida' },
+    }),
+    403,
   );
+  await ok(await api.get(course.apiPath('/simulation')), 403);
+  await ok(await api.post(course.apiPath(`/nodes/${course.nodes.first}/completion`)));
 });
 
 test('a partial institutional response preserves a stored teaching Participation', async ({
@@ -227,7 +215,7 @@ test('a partial institutional response preserves a stored teaching Participation
       expect.objectContaining({ courseCode: course.courseCode, role: 'TEACHER' }),
     ]),
   );
-  expect((await api.get(course.apiPath('/simulation'))).status()).toBe(200);
+  await ok(await api.get(course.apiPath('/simulation')));
 });
 
 for (const [position, expected] of [
@@ -269,7 +257,7 @@ test('successful synchronization updates the position; partial and failed respon
   expect(await position()).toBe('AUXILIARY_PROFESSOR');
   await forgetUcampusUser(user);
   expect(await position()).toBe('AUXILIARY_PROFESSOR');
-  expect((await api.get(course.apiPath('/simulation'))).status()).toBe(200);
+  await ok(await api.get(course.apiPath('/simulation')));
 });
 
 test('a legacy Participation acquires its position on successful synchronization', async ({
@@ -295,7 +283,7 @@ test('a legacy Participation acquires its position on successful synchronization
     ]),
   );
   await forgetUcampusUser(user);
-  expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(201);
+  await ok(await api.post(offering.apiPath(), { data: {} }), 201);
 });
 
 test('a denied creation records demotion and stays denied during an outage', async ({
@@ -311,9 +299,9 @@ test('a denied creation records demotion and stays denied during an outage', asy
   });
   const api = await apiAs(user);
   await reportPosition(user, offering, 'COORDINATING_PROFESSOR');
-  expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(403);
+  await ok(await api.post(offering.apiPath(), { data: {} }), 403);
   await forgetUcampusUser(user);
-  expect((await api.post(offering.apiPath(), { data: {} })).status()).toBe(403);
+  await ok(await api.post(offering.apiPath(), { data: {} }), 403);
 });
 
 test('a partial response keeps absent teaching offerings and their stored labels in both views', async ({
@@ -325,7 +313,7 @@ test('a partial response keeps absent teaching offerings and their stored labels
   const user = course.users.teachingAssistant;
   const api = await apiAs(user);
   await reportPosition(user, course, 'AUXILIARY_PROFESSOR');
-  expect((await api.get('/api/academic-overview')).status()).toBe(200);
+  await ok(await api.get('/api/academic-overview'));
   await failUcampusEndpoint(user, 'cursos_dictados');
   const { offerings } = await (await api.get('/api/academic-overview')).json();
   expect(offerings).toEqual(
@@ -350,13 +338,11 @@ test('a stored teaching assistant can edit while U-Campus is unavailable', async
   const user = course.users.teachingAssistant;
   const api = await apiAs(user);
   await reportPosition(user, course, 'TEACHING_ASSISTANT');
-  expect((await api.get('/api/academic-overview')).status()).toBe(200);
+  await ok(await api.get('/api/academic-overview'));
   await forgetUcampusUser(user);
-  expect(
-    (
-      await api.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { title: 'Edición del ayudante sin U-Campus' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await api.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { title: 'Edición del ayudante sin U-Campus' },
+    }),
+  );
 });

@@ -241,7 +241,7 @@ export const test = base.extend<{
     offering: E2ECourseOffering,
     position: MufasaInstitutionalCoursePosition | null,
   ) => Promise<void>;
-  /** An API client authenticated as a User; disposed when the test ends. */
+  /** The test's API client authenticated as a User (one per User); disposed when the test ends. */
   apiAs: (user: Pick<E2EUser, 'id'>) => Promise<APIRequestContext>;
   /** An API client authenticated as the primary Course offering's teacher. */
   teacherApi: APIRequestContext;
@@ -290,7 +290,9 @@ export const test = base.extend<{
     );
     ownedTestData.userIds.push(...Object.values(users).map(({ id }) => id));
     ownedTestData.courseCodes.push(offering.courseCode);
-    await sql(insert('User', userRows(Object.values(users))) + script + insert('Completion', completions));
+    await sql(
+      insert('User', userRows(Object.values(users))) + script + insert('Completion', completions),
+    );
     const hidden = template.nodes.find(({ isVisible }) => !isVisible)!;
     await provide({
       ...offering,
@@ -467,16 +469,17 @@ export const test = base.extend<{
   },
 
   apiAs: async ({ playwright, baseURL }, provide) => {
-    const clients: APIRequestContext[] = [];
-    await provide(async (user) => {
-      const client = await playwright.request.newContext({
-        baseURL,
-        extraHTTPHeaders: { cookie: await sessionCookie(user.id) },
-      });
-      clients.push(client);
+    const clients = new Map<string, Promise<APIRequestContext>>();
+    await provide((user) => {
+      const client =
+        clients.get(user.id) ??
+        sessionCookie(user.id).then((cookie) =>
+          playwright.request.newContext({ baseURL, extraHTTPHeaders: { cookie } }),
+        );
+      clients.set(user.id, client);
       return client;
     });
-    await Promise.all(clients.map((client) => client.dispose()));
+    await Promise.all([...clients.values()].map(async (client) => (await client).dispose()));
   },
 
   teacherApi: async ({ course, apiAs }, provide) => {
