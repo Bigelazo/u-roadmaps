@@ -56,6 +56,15 @@ function missingOperation(name: string): never {
   throw new Error(`La operación de sesión ${name} no está disponible.`);
 }
 
+type OptionalOperation = Exclude<
+  keyof RoadmapCanvasSessionPersistence,
+  'load' | 'complete' | 'loadSimulation' | 'addNode'
+>;
+type Operation<K extends OptionalOperation> = NonNullable<RoadmapCanvasSessionPersistence[K]>;
+type OperationArgs<K extends OptionalOperation> =
+  Parameters<Operation<K>> extends [RoadmapCanvasSessionInput, ...infer Args] ? Args : never;
+type OperationResult<K extends OptionalOperation> = Awaited<ReturnType<Operation<K>>>;
+
 type InjectedSessionResult = {
   roadmap: AnyRoadmapDto | null;
   simulationRoadmap: StudentRoadmapDto | null;
@@ -145,10 +154,6 @@ const initialCanvasPreviewView: CanvasPreviewView = {
   isStudentDetailOpen: false,
 };
 
-type PersistenceSnapshot = RoadmapCanvasSessionPersistence & {
-  initialRoadmap?: AnyRoadmapDto;
-};
-
 export function RoadmapCanvasSessionPersistenceProvider({
   persistence,
   children,
@@ -163,16 +168,14 @@ function useInjectedSession(
   input: RoadmapCanvasSessionInput,
   persistence: RoadmapCanvasSessionPersistence,
 ): InjectedSessionResult {
-  const initialRoadmap = (persistence as PersistenceSnapshot).initialRoadmap ?? null;
-  const initialRoadmapKey = initialRoadmap ? roadmapCanvasSessionKey(input) : null;
-  const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(initialRoadmap);
+  const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
   const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
-  const [roadmapKey, setRoadmapKey] = useState<string | null>(initialRoadmapKey);
+  const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
   const [simulationKey, setSimulationKey] = useState<string | null>(null);
   const [closedKey, setClosedKey] = useState<string | null>(null);
   const [accessLost, setAccessLost] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [errorKey, setErrorKey] = useState<string | null>(null);
+  // The message belongs to the session key it was raised for, so it hides after a key change.
+  const [error, setError] = useState<{ message: string; key: string } | null>(null);
   const key = roadmapCanvasSessionKey(input);
   const activeKeyRef = useRef(key);
   const requestVersionRef = useRef(0);
@@ -183,6 +186,9 @@ function useInjectedSession(
   const title = input.courseOffering.title;
   const experienceKind = input.experience.kind;
   const experienceTerm = input.experience.term;
+  // Persistence only sees the Course offering and experience. The other input fields
+  // (notifications, entry key, target Node, practice callbacks) are read by the view, and
+  // leaving them out keeps every operation's identity stable while they change.
   const stableInput = useMemo<RoadmapCanvasSessionInput>(
     () => ({
       courseOffering: {
@@ -235,7 +241,6 @@ function useInjectedSession(
           if (loaded && active) {
             retryDelay = 1000;
             setError(null);
-            setErrorKey(null);
           }
         },
         (cause: unknown) => {
@@ -244,8 +249,10 @@ function useInjectedSession(
             retry = setTimeout(recover, retryDelay);
             retryDelay = Math.min(retryDelay * 2, 30_000);
           }
-          setError(messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'));
-          setErrorKey(key);
+          setError({
+            message: messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'),
+            key,
+          });
         },
       );
     };
@@ -274,12 +281,11 @@ function useInjectedSession(
     setAccessLost(false);
     const requestVersion = ++requestVersionRef.current;
     const simulationVersion = ++simulationVersionRef.current;
-    if (initialRoadmapKey !== key) setRoadmap(null);
+    setRoadmap(null);
     setSimulationRoadmap(null);
-    if (initialRoadmapKey !== key) setRoadmapKey(null);
+    setRoadmapKey(null);
     setSimulationKey(null);
     setError(null);
-    setErrorKey(null);
     void persistence.load(stableInput).then(
       (loadedRoadmap) => {
         if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== key) return;
@@ -292,8 +298,7 @@ function useInjectedSession(
           setRoadmap(null);
           setAccessLost(true);
         }
-        setError(messageFor(cause, 'No se pudo cargar el roadmap.'));
-        setErrorKey(key);
+        setError({ message: messageFor(cause, 'No se pudo cargar el roadmap.'), key });
       },
     );
     return () => {
@@ -301,26 +306,26 @@ function useInjectedSession(
       requestVersionRef.current += 1;
       simulationVersionRef.current = Math.max(simulationVersionRef.current, simulationVersion + 1);
     };
-  }, [initialRoadmapKey, key, persistence, stableInput]);
+  }, [key, persistence, stableInput]);
 
   const retryRefresh = useCallback(() => {
     void refresh().then(
       (loaded) => {
         if (!loaded) return;
         setError(null);
-        setErrorKey(null);
       },
       (cause: unknown) => {
         if (activeKeyRef.current !== key) return;
-        setError(messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'));
-        setErrorKey(key);
+        setError({
+          message: messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'),
+          key,
+        });
       },
     );
   }, [key, refresh]);
 
   const dismissError = useCallback(() => {
     setError(null);
-    setErrorKey(null);
   }, []);
 
   const reportFailure = useCallback(
@@ -333,8 +338,7 @@ function useInjectedSession(
       }
       // Recovery may finish after the participant changes Course offering.
       if (activeKeyRef.current !== requestKey) return;
-      setError(messageFor(cause, fallback));
-      setErrorKey(requestKey);
+      setError({ message: messageFor(cause, fallback), key: requestKey });
     },
     [refresh],
   );
@@ -346,10 +350,7 @@ function useInjectedSession(
         const result = await operation();
         if (reload) await refresh();
         if (activeKeyRef.current !== requestKey) return { success: false, result };
-        if (activeKeyRef.current === requestKey) {
-          setError(null);
-          setErrorKey(null);
-        }
+        setError(null);
         return { success: true, result };
       } catch (cause) {
         await reportFailure(cause, fallback, requestKey);
@@ -385,12 +386,13 @@ function useInjectedSession(
       setSimulationRoadmap(loadedSimulation);
       setSimulationKey(requestKey);
       setError(null);
-      setErrorKey(null);
       return true;
     } catch (cause) {
       if (activeKeyRef.current === requestKey) {
-        setError(messageFor(cause, 'No se pudo cargar la previsualización.'));
-        setErrorKey(requestKey);
+        setError({
+          message: messageFor(cause, 'No se pudo cargar la previsualización.'),
+          key: requestKey,
+        });
       }
       return false;
     }
@@ -409,270 +411,109 @@ function useInjectedSession(
     [mutate, persistence, stableInput],
   );
 
-  const updateNode = useCallback(
-    async (nodeId: string, node: NodeUpdate) => {
-      if (!persistence?.updateNode) return missingOperation('guardar nodo');
-      return (
-        await mutate(
-          () => persistence.updateNode!(stableInput, nodeId, node),
-          'No se pudo guardar el nodo.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const moveNode = useCallback(
-    async (nodeId: string, position: Point) => {
-      if (!persistence?.moveNode) return missingOperation('mover nodo');
-      return (
-        await mutate(
-          () => persistence.moveNode!(stableInput, nodeId, position),
-          'No se pudo guardar la posición.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const connectNodes = useCallback(
-    async (
-      sourceNodeId: string,
-      targetNodeId: string,
-      sourceHandle?: string,
-      targetHandle?: string,
-    ) => {
-      if (!persistence?.connectNodes) return missingOperation('crear dependencia');
-      return (
-        await mutate(
-          () =>
-            persistence.connectNodes!(
-              stableInput,
-              sourceNodeId,
-              targetNodeId,
-              sourceHandle,
-              targetHandle,
-            ),
-          'No se pudo crear la dependencia.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const previewRoadmapDependency = useCallback(
-    async (
-      sourceNodeId: string,
-      targetNodeId: string,
-      sourceHandle?: string,
-      targetHandle?: string,
-    ) => {
-      if (!persistence?.previewRoadmapDependency)
-        return missingOperation('previsualizar dependencia');
-      return preview(
-        () =>
-          persistence.previewRoadmapDependency!(
-            stableInput,
-            sourceNodeId,
-            targetNodeId,
-            sourceHandle,
-            targetHandle,
-          ),
+  const operations = useMemo(() => {
+    // Persistence methods stay optional: partial doubles and the Practice roadmap wrapper omit
+    // some, so a bound operation rejects only when it is called without its method.
+    const operationFor = <K extends OptionalOperation>(name: K, label: string) => {
+      const operation = persistence?.[name] as
+        ((input: RoadmapCanvasSessionInput, ...args: unknown[]) => Promise<unknown>) | undefined;
+      if (!operation) return missingOperation(label);
+      return (...args: unknown[]) => operation.call(persistence, stableInput, ...args);
+    };
+    const bindMutation =
+      <K extends OptionalOperation>(name: K, label: string, fallback: string) =>
+      async (...args: OperationArgs<K>) => {
+        const operation = operationFor(name, label);
+        return (await mutate(() => operation(...args), fallback)).success;
+      };
+    const bindPreview =
+      <K extends OptionalOperation>(name: K, label: string, fallback: string) =>
+      async (...args: OperationArgs<K>): Promise<OperationResult<K> | null> => {
+        const operation = operationFor(name, label);
+        return preview(() => operation(...args) as Promise<OperationResult<K>>, fallback);
+      };
+    return {
+      updateNode: bindMutation('updateNode', 'guardar nodo', 'No se pudo guardar el nodo.'),
+      moveNode: bindMutation('moveNode', 'mover nodo', 'No se pudo guardar la posición.'),
+      connectNodes: bindMutation(
+        'connectNodes',
+        'crear dependencia',
+        'No se pudo crear la dependencia.',
+      ),
+      previewRoadmapDependency: bindPreview(
+        'previewRoadmapDependency',
+        'previsualizar dependencia',
         'No se pudo calcular el impacto de la dependencia.',
-      );
-    },
-    [persistence, preview, stableInput],
-  );
-
-  const previewTeacherBlock = useCallback(
-    async (nodeId: string, operation: TeacherBlockOperation) => {
-      if (!persistence?.previewTeacherBlock)
-        return missingOperation('previsualizar bloqueo docente');
-      return preview(
-        () => persistence.previewTeacherBlock!(stableInput, nodeId, operation),
+      ),
+      previewTeacherBlock: bindPreview(
+        'previewTeacherBlock',
+        'previsualizar bloqueo docente',
         'No se pudo calcular el impacto del bloqueo docente.',
-      );
-    },
-    [persistence, preview, stableInput],
-  );
-
-  const changeTeacherBlock = useCallback(
-    async (nodeId: string, operation: TeacherBlockOperation, previewVersion?: string) => {
-      if (!persistence?.changeTeacherBlock) return missingOperation('cambiar bloqueo docente');
-      return (
-        await mutate(
-          () => persistence.changeTeacherBlock!(stableInput, nodeId, operation, previewVersion),
-          'No se pudo cambiar el bloqueo docente.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const scheduleTeacherUnlock = useCallback(
-    async (nodeId: string, unlockOn: string | null) => {
-      if (!persistence?.scheduleTeacherUnlock) return missingOperation('programar desbloqueo');
-      return (
-        await mutate(
-          () => persistence.scheduleTeacherUnlock!(stableInput, nodeId, unlockOn),
-          'No se pudo programar el desbloqueo.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const deleteDependency = useCallback(
-    async (dependencyId: string) => {
-      if (!persistence?.deleteDependency) return missingOperation('eliminar dependencia');
-      return (
-        await mutate(
-          () => persistence.deleteDependency!(stableInput, dependencyId),
-          'No se pudo eliminar la dependencia.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const toggleVisibility = useCallback(
-    async (nodeId: string, isVisible: boolean) => {
-      if (!persistence?.toggleVisibility) return missingOperation('cambiar visibilidad');
-      return (
-        await mutate(
-          () => persistence.toggleVisibility!(stableInput, nodeId, isVisible),
-          'No se pudo cambiar la visibilidad.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const previewNodeVisibility = useCallback(
-    async (nodeId: string) => {
-      if (!persistence?.previewNodeVisibility) return missingOperation('previsualizar visibilidad');
-      return preview(
-        () => persistence.previewNodeVisibility!(stableInput, nodeId),
+      ),
+      changeTeacherBlock: bindMutation(
+        'changeTeacherBlock',
+        'cambiar bloqueo docente',
+        'No se pudo cambiar el bloqueo docente.',
+      ),
+      scheduleTeacherUnlock: bindMutation(
+        'scheduleTeacherUnlock',
+        'programar desbloqueo',
+        'No se pudo programar el desbloqueo.',
+      ),
+      deleteDependency: bindMutation(
+        'deleteDependency',
+        'eliminar dependencia',
+        'No se pudo eliminar la dependencia.',
+      ),
+      toggleVisibility: bindMutation(
+        'toggleVisibility',
+        'cambiar visibilidad',
+        'No se pudo cambiar la visibilidad.',
+      ),
+      previewNodeVisibility: bindPreview(
+        'previewNodeVisibility',
+        'previsualizar visibilidad',
         'No se pudo calcular el impacto de ocultar el nodo.',
-      );
-    },
-    [persistence, preview, stableInput],
-  );
-
-  const previewNodeDeletion = useCallback(
-    async (nodeId: string) => {
-      if (!persistence?.previewNodeDeletion) return missingOperation('previsualizar eliminación');
-      return preview(
-        () => persistence.previewNodeDeletion!(stableInput, nodeId),
+      ),
+      previewNodeDeletion: bindPreview(
+        'previewNodeDeletion',
+        'previsualizar eliminación',
         'No se pudo calcular el impacto de eliminar el nodo.',
-      );
-    },
-    [persistence, preview, stableInput],
-  );
-
-  const deleteNode = useCallback(
-    async (nodeId: string, previewVersion?: string) => {
-      if (!persistence?.deleteNode) return missingOperation('eliminar nodo');
-      return (
-        await mutate(
-          () => persistence.deleteNode!(stableInput, nodeId, previewVersion),
-          'No se pudo eliminar el nodo.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const addResource = useCallback(
-    async (nodeId: string, resource: ResourceInput) => {
-      if (!persistence?.addResource) return missingOperation('agregar recurso');
-      return (
-        await mutate(
-          () => persistence.addResource!(stableInput, nodeId, resource),
-          'No se pudo agregar el recurso.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const uploadResource = useCallback(
-    async (nodeId: string, file: File) => {
-      if (!persistence?.uploadResource) return missingOperation('subir archivo');
-      return (
-        await mutate(
-          () => persistence.uploadResource!(stableInput, nodeId, file),
-          'No se pudo subir el archivo.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const updateResource = useCallback(
-    async (resourceId: string, resource: ResourceInput) => {
-      if (!persistence?.updateResource) return missingOperation('guardar recurso');
-      return (
-        await mutate(
-          () => persistence.updateResource!(stableInput, resourceId, resource),
-          'No se pudo guardar el recurso.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const deleteResource = useCallback(
-    async (resourceId: string) => {
-      if (!persistence?.deleteResource) return missingOperation('eliminar recurso');
-      return (
-        await mutate(
-          () => persistence.deleteResource!(stableInput, resourceId),
-          'No se pudo eliminar el recurso.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const addNodeType = useCallback(
-    async (nodeType: RoadmapNodeTypeInput) => {
-      if (!persistence?.addNodeType) return missingOperation('crear tipo de nodo');
-      return (
-        await mutate(
-          () => persistence.addNodeType!(stableInput, nodeType),
-          'No se pudo crear el tipo de nodo.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const updateNodeType = useCallback(
-    async (nodeTypeId: string, nodeType: RoadmapNodeTypeInput) => {
-      if (!persistence?.updateNodeType) return missingOperation('guardar tipo de nodo');
-      return (
-        await mutate(
-          () => persistence.updateNodeType!(stableInput, nodeTypeId, nodeType),
-          'No se pudo guardar el tipo de nodo.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const deleteNodeType = useCallback(
-    async (nodeTypeId: string) => {
-      if (!persistence?.deleteNodeType) return missingOperation('eliminar tipo de nodo');
-      return (
-        await mutate(
-          () => persistence.deleteNodeType!(stableInput, nodeTypeId),
-          'No se pudo eliminar el tipo de nodo.',
-        )
-      ).success;
-    },
-    [mutate, persistence, stableInput],
-  );
+      ),
+      deleteNode: bindMutation('deleteNode', 'eliminar nodo', 'No se pudo eliminar el nodo.'),
+      addResource: bindMutation('addResource', 'agregar recurso', 'No se pudo agregar el recurso.'),
+      uploadResource: bindMutation(
+        'uploadResource',
+        'subir archivo',
+        'No se pudo subir el archivo.',
+      ),
+      updateResource: bindMutation(
+        'updateResource',
+        'guardar recurso',
+        'No se pudo guardar el recurso.',
+      ),
+      deleteResource: bindMutation(
+        'deleteResource',
+        'eliminar recurso',
+        'No se pudo eliminar el recurso.',
+      ),
+      addNodeType: bindMutation(
+        'addNodeType',
+        'crear tipo de nodo',
+        'No se pudo crear el tipo de nodo.',
+      ),
+      updateNodeType: bindMutation(
+        'updateNodeType',
+        'guardar tipo de nodo',
+        'No se pudo guardar el tipo de nodo.',
+      ),
+      deleteNodeType: bindMutation(
+        'deleteNodeType',
+        'eliminar tipo de nodo',
+        'No se pudo eliminar el tipo de nodo.',
+      ),
+    };
+  }, [mutate, persistence, preview, stableInput]);
 
   const completeNode = useCallback(
     async (nodeId: string) =>
@@ -714,7 +555,7 @@ function useInjectedSession(
   return {
     roadmap: roadmapKey === key ? roadmap : null,
     simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
-    error: errorKey === key ? error : null,
+    error: error?.key === key ? error.message : null,
     dismissError,
     retryRefresh,
     accessLost,
@@ -724,25 +565,7 @@ function useInjectedSession(
       (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
     loadSimulation,
     addNode,
-    updateNode,
-    moveNode,
-    connectNodes,
-    previewRoadmapDependency,
-    previewTeacherBlock,
-    changeTeacherBlock,
-    scheduleTeacherUnlock,
-    deleteDependency,
-    toggleVisibility,
-    previewNodeVisibility,
-    previewNodeDeletion,
-    deleteNode,
-    addResource,
-    uploadResource,
-    updateResource,
-    deleteResource,
-    addNodeType,
-    updateNodeType,
-    deleteNodeType,
+    ...operations,
     completeNode,
     completeSimulatedNode,
     resetSimulation,

@@ -1,7 +1,14 @@
 import { act, render } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
-import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
+import { DismissibleAlert } from '@/shared/ui/dismissible-alert';
+
+type ToastProps = { message: string; onDismiss: () => void };
+const RoadmapErrorToast = (props: ToastProps) => (
+  <DismissibleAlert tone="error" closeLabel="Cerrar alerta" {...props} />
+);
+const RoadmapSuccessToast = (props: ToastProps) => (
+  <DismissibleAlert tone="success" closeLabel="Cerrar notificación" {...props} />
+);
 
 afterEach(() => vi.useRealTimers());
 

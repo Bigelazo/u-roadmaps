@@ -37,7 +37,7 @@ function ResizablePanelFixture({ storageKey }: { storageKey: string }) {
       style={{ '--sidebar-width': `${width}px` } as CSSProperties}
     >
       <output aria-label="Ancho del panel">{width}</output>
-      <Sidebar side="right" collapsible="none">
+      <Sidebar side="right">
         <SidebarRail
           ariaLabel="Redimensionar panel de prueba"
           controlsId="test-panel"
