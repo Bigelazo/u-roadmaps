@@ -126,15 +126,16 @@ function CourseRow({
           </p>
           {course.hasRoadmap ? (
             <>
-              <NotificationCountButton
-                enabled={notificationsEnabled}
-                filter={{
-                  courseCode: course.courseCode,
-                  year: course.year,
-                  semester: course.semester,
-                }}
-                label={`el curso ${course.name}`}
-              />
+              {notificationsEnabled ? (
+                <NotificationCountButton
+                  filter={{
+                    courseCode: course.courseCode,
+                    year: course.year,
+                    semester: course.semester,
+                  }}
+                  label={`el curso ${course.name}`}
+                />
+              ) : null}
               <Link
                 aria-label={`Abrir roadmap de ${course.name}`}
                 className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

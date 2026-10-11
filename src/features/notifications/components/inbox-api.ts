@@ -16,16 +16,20 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
+export function postJson<T = unknown>(path: string, body: unknown) {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 export type NoticeAcknowledgementOperation = { roadmapId: string; operationId: string };
 
 export async function acknowledgeOwnInbox(input: NoticeAcknowledgementOperation) {
-  const result = await request<{ acknowledged: number; summary: ChangeSummary | null }>(
+  const result = await postJson<{ acknowledged: number; summary: ChangeSummary | null }>(
     '/acknowledge',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    },
+    input,
   );
   window.dispatchEvent(new Event(refreshEvent));
   return result;
@@ -34,9 +38,5 @@ export async function acknowledgeOwnInbox(input: NoticeAcknowledgementOperation)
 export async function prepareOwnInboxOpening(
   input: NoticeAcknowledgementOperation & { retry: boolean },
 ) {
-  await request('/openings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
+  await postJson('/openings', input);
 }
