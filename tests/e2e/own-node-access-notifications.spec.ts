@@ -1,53 +1,36 @@
 import { enterRoadmap } from './enter-roadmap';
-import { expect, test } from './fixtures';
+import { expect, test, type E2EUser } from './fixtures';
+import { prepareNodeCreator } from './create-node';
 import { sql } from './database';
 import { createExistingNode } from './existing-node';
-import { authenticateAs, sessionCookie } from './helpers';
-
-type StoredNotice = Readonly<{
-  id: string;
-  subject: string;
-  body: string;
-  read: boolean;
-  data: Record<string, unknown>;
-}>;
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+import { authenticateAs, escapeRegExp, ok } from './helpers';
+import { listNotices } from './notices';
 
 test('access notices retain context through blocking, unlocking, hiding and deletion', async ({
-  request,
   course,
+  apiAs,
+  teacherApi: author,
   page,
 }) => {
   const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
-  const student = course.users.studentWithProgress.id;
-  await enterRoadmap(page, course.pagePath(), student);
+  const student = course.users.studentWithProgress;
+  await enterRoadmap(page, course.pagePath(), student.id);
   await page.goto('/academic-overview');
-  const withoutProgress = course.users.studentWithoutProgress.id;
-  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  const withoutProgress = course.users.studentWithoutProgress;
+  const { nodeTypeId } = await prepareNodeCreator(author, course);
   // Existing visible Nodes avoid creation notices during these access changes.
-  const existingNode = async (title: string) => {
-    const id = await createExistingNode({
-      roadmapId: roadmap.roadmap.id,
-      nodeTypeId: roadmap.nodeTypes[0].id,
+  const existingNode = (title: string) =>
+    createExistingNode({
+      roadmapId: course.roadmapId,
+      nodeTypeId,
       title,
       description: 'Detalle privado',
       positionX: 600,
     });
-    return id;
-  };
-  const noticesFor = async (userId: string, nodeId: string) => {
-    const response = await request.get(`/api/notifications?nodeId=${nodeId}&limit=100`, {
-      headers: { cookie: await sessionCookie(userId) },
-    });
-    expect(response.status()).toBe(200);
-    return (await response.json()).notifications as StoredNotice[];
-  };
+  const noticesFor = async (user: E2EUser, nodeId: string) =>
+    listNotices(await apiAs(user), { nodeId, limit: 100 });
   const selectNotice = async (nodeId: string, title: string) => {
-    await authenticateAs(page.context(), student);
+    await authenticateAs(page.context(), student.id);
     await page.goto('/academic-overview');
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     await page
@@ -74,13 +57,9 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   const rootId = await existingNode(rootTitle);
   const dependentId = await existingNode(dependentTitle);
   await sql(
-    `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES ('${crypto.randomUUID()}', '${rootId}', '${dependentId}'); INSERT INTO "Completion" ("id", "userId", "roadmapNodeId") VALUES ('${crypto.randomUUID()}', '${student}', '${rootId}');`,
+    `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES ('${crypto.randomUUID()}', '${rootId}', '${dependentId}'); INSERT INTO "Completion" ("id", "userId", "roadmapNodeId") VALUES ('${crypto.randomUUID()}', '${student.id}', '${rootId}');`,
   );
-  expect(
-    (
-      await request.post(roadmapPath(`/nodes/${rootId}/teacher-block`), { headers: author })
-    ).status(),
-  ).toBe(200);
+  await ok(await author.post(roadmapPath(`/nodes/${rootId}/teacher-block`)));
   await expect
     .poll(async () => (await noticesFor(withoutProgress, rootId))[0])
     .toMatchObject({
@@ -96,58 +75,36 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   const version = async (operation: string) =>
     (
       await (
-        await request.get(roadmapPath(`/nodes/${rootId}/teacher-block?operation=${operation}`), {
-          headers: author,
-        })
+        await author.get(roadmapPath(`/nodes/${rootId}/teacher-block?operation=${operation}`))
       ).json()
     ).version;
-  expect(
-    (
-      await request.delete(roadmapPath(`/nodes/${rootId}/teacher-block`), {
-        headers: { ...author, 'x-teacher-block-preview': await version('UNBLOCK') },
-      })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await request.patch(roadmapPath(`/nodes/${rootId}/teacher-block`), {
-        headers: { ...author, 'x-teacher-block-preview': await version('BRANCH_UNLOCK') },
-      })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await request.post(roadmapPath(`/nodes/${dependentId}/teacher-block`), { headers: author })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await request.patch(roadmapPath(`/nodes/${rootId}`), {
-        headers: author,
-        data: { isVisible: false },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.delete(roadmapPath(`/nodes/${rootId}/teacher-block`), {
+      headers: { 'x-teacher-block-preview': await version('UNBLOCK') },
+    }),
+  );
+  await ok(
+    await author.patch(roadmapPath(`/nodes/${rootId}/teacher-block`), {
+      headers: { 'x-teacher-block-preview': await version('BRANCH_UNLOCK') },
+    }),
+  );
+  await ok(await author.post(roadmapPath(`/nodes/${dependentId}/teacher-block`)));
+  await ok(await author.patch(roadmapPath(`/nodes/${rootId}`), { data: { isVisible: false } }));
 
   const removedTitle = `Eliminación bloqueada ${crypto.randomUUID()}`;
   const removedId = await existingNode(removedTitle);
-  const resource = await request.post(roadmapPath(`/nodes/${removedId}/resources`), {
-    headers: author,
-    data: {
-      title: 'Material previo',
-      url: 'https://example.test/access-notice-resource',
-      type: 'LINK',
-    },
-  });
-  expect(resource.status()).toBe(201);
-  expect(
-    (
-      await request.post(roadmapPath(`/nodes/${removedId}/teacher-block`), { headers: author })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (await request.delete(roadmapPath(`/nodes/${removedId}`), { headers: author })).status(),
-  ).toBe(204);
+  await ok(
+    await author.post(roadmapPath(`/nodes/${removedId}/resources`), {
+      data: {
+        title: 'Material previo',
+        url: 'https://example.test/access-notice-resource',
+        type: 'LINK',
+      },
+    }),
+    201,
+  );
+  await ok(await author.post(roadmapPath(`/nodes/${removedId}/teacher-block`)));
+  await ok(await author.delete(roadmapPath(`/nodes/${removedId}`)), 204);
 
   await expect
     .poll(async () => (await noticesFor(student, removedId))[0]?.data.changeKind)
@@ -171,85 +128,62 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   await expect
     .poll(async () => (await noticesFor(withoutProgress, removedId))[0]?.data.changeKind)
     .toBe('node-deleted');
-  expect(await noticesFor(course.users.withdrawnStudent.id, removedId)).toHaveLength(0);
-  expect(await noticesFor(course.users.teacher.id, removedId)).toHaveLength(0);
+  expect(await noticesFor(course.users.withdrawnStudent, removedId)).toHaveLength(0);
+  expect(await noticesFor(course.users.teacher, removedId)).toHaveLength(0);
   await selectNotice(removedId, removedTitle);
   expect(await noticesFor(student, rootId)).toHaveLength(0);
 });
 
 test('a PostgreSQL access-notice failure leaves the Node visibility change committed', async ({
-  request,
   course,
+  teacherApi: author,
+  studentApi,
   rejectNoticeInserts,
 }) => {
   const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
-  const student = { cookie: await sessionCookie(course.users.studentWithoutProgress.id) };
-  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  const { nodeTypeId } = await prepareNodeCreator(author, course);
   const nodeId = await createExistingNode({
-    roadmapId: roadmap.roadmap.id,
-    nodeTypeId: roadmap.nodeTypes[0].id,
+    roadmapId: course.roadmapId,
+    nodeTypeId,
     title: 'Fallo de aviso',
     positionX: 5600,
   });
   const failure = await rejectNoticeInserts({ roadmapId: course.roadmapId });
 
-  const hidden = await request.patch(roadmapPath(`/nodes/${nodeId}`), {
-    headers: author,
-    data: { isVisible: false },
-  });
-  expect(hidden.status()).toBe(200);
+  const hidden = await ok(
+    await author.patch(roadmapPath(`/nodes/${nodeId}`), { data: { isVisible: false } }),
+  );
   expect((await hidden.json()).node).toMatchObject({ id: nodeId, isVisible: false });
 
-  const persistedNodes = await request.get(roadmapPath('/nodes'), { headers: author });
-  expect(persistedNodes.status()).toBe(200);
+  const persistedNodes = await ok(await author.get(roadmapPath('/nodes')));
   expect(
     (await persistedNodes.json()).nodes.find(({ id }: { id: string }) => id === nodeId),
   ).toMatchObject({ id: nodeId, isVisible: false });
   await expect.poll(() => failure.wasAttempted()).toBe(true);
 
-  const notices = await request.get(
-    `/api/notifications?roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}`,
-    { headers: student },
-  );
-  expect(notices.status()).toBe(200);
-  expect((await notices.json()).notifications).toHaveLength(0);
+  expect(await listNotices(studentApi, { roadmapId: course.roadmapId, nodeId })).toHaveLength(0);
 });
 
-test('lost Course offering access withdraws pending notices', async ({ request, course, page }) => {
-  const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
+test('lost Course offering access withdraws pending notices', async ({
+  course,
+  teacherApi,
+  studentApi,
+  page,
+}) => {
   const userId = course.users.studentWithoutProgress.id;
-  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
-  const nodeIds: string[] = [];
-  const createNode = async (title: string) => {
-    const response = await request.post(roadmapPath('/nodes'), {
-      headers: author,
-      data: {
-        title,
-        nodeTypeId: roadmap.nodeTypes[0].id,
-        positionX: 600 + nodeIds.length * 400,
-        positionY: 0,
-      },
+  const { createNode } = await prepareNodeCreator(teacherApi, course);
+  const allNotices = () =>
+    listNotices(studentApi, {
+      courseCode: course.courseCode,
+      year: course.year,
+      semester: course.semester,
+      limit: 100,
     });
-    expect(response.status()).toBe(201);
-    const id = (await response.json()).node.id as string;
-    nodeIds.push(id);
-    return id;
-  };
-  const allNotices = async () => {
-    const response = await request.get(
-      `/api/notifications?courseCode=${course.courseCode}&year=${course.year}&semester=${course.semester}&limit=100`,
-      { headers: { cookie: await sessionCookie(userId) } },
-    );
-    expect(response.status()).toBe(200);
-    return (await response.json()).notifications as StoredNotice[];
-  };
 
   const firstTitle = `Aviso conservado A ${crypto.randomUUID()}`;
   const secondTitle = `Aviso conservado B ${crypto.randomUUID()}`;
-  await createNode(firstTitle);
-  await createNode(secondTitle);
+  await createNode(firstTitle, 600);
+  await createNode(secondTitle, 1000);
   await expect
     .poll(async () => (await allNotices()).map(({ subject }) => subject))
     .toEqual([`Nuevo Nodo «${secondTitle}»`, `Nuevo Nodo «${firstTitle}»`]);
@@ -257,7 +191,7 @@ test('lost Course offering access withdraws pending notices', async ({ request, 
   await sql(
     `UPDATE "Participation" SET "isActive" = false WHERE "userId" = '${userId}' AND "courseOfferingId" = '${course.id}';`,
   );
-  await createNode(`Aviso posterior ${crypto.randomUUID()}`);
+  await createNode(`Aviso posterior ${crypto.randomUUID()}`, 1400);
   expect(await allNotices()).toHaveLength(0);
 
   await authenticateAs(page.context(), userId);
