@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
@@ -21,6 +21,7 @@ import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
+import { formatBadgeCount } from '@/shared/badge-count';
 import { useNodeChangeCount } from '@/features/notifications/client';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
@@ -58,10 +59,42 @@ function NodeChangeBadge({ nodeId }: { nodeId: string }) {
       role="img"
       className="absolute top-[-10px] left-[-10px] z-10 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-card bg-destructive px-1 text-xs leading-none font-bold text-white tabular-nums shadow-sm"
     >
-      {count > 99 ? '99+' : count}
+      {formatBadgeCount(count)}
     </span>
   );
 }
+
+type TooltipSide = 'top' | 'bottom' | 'left' | 'right';
+
+/** A focusable icon that names itself and shows that name in a tooltip. */
+function StatusIconBadge({
+  label,
+  side,
+  className,
+  children,
+}: {
+  label: string;
+  side?: TooltipSide;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={0}
+        render={<span className={className} role="img" aria-label={label} tabIndex={0} />}
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent side={side}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+const cornerBadgeClassName =
+  'absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm';
+const badgeFocusClassName =
+  'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 function NodeTypeBadge({
   icon,
@@ -73,22 +106,12 @@ function NodeTypeBadge({
   color: RoadmapNodeData['typeColor'];
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        delay={0}
-        render={
-          <span
-            className="shrink-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            role="img"
-            aria-label={name}
-            tabIndex={0}
-          />
-        }
-      >
-        <NodeTypeIcon icon={icon} size={20} color={color} aria-hidden="true" />
-      </TooltipTrigger>
-      <TooltipContent>{name}</TooltipContent>
-    </Tooltip>
+    <StatusIconBadge
+      label={name}
+      className={cn('shrink-0 rounded-sm outline-none', badgeFocusClassName)}
+    >
+      <NodeTypeIcon icon={icon} size={20} color={color} aria-hidden="true" />
+    </StatusIconBadge>
   );
 }
 
@@ -101,68 +124,40 @@ function StudentStatusBadge({ status }: Pick<RoadmapNodeData, 'status'>) {
   const Icon = isLocked ? LockKeyhole : isCompleted ? CircleCheckBig : CircleEllipsis;
 
   return (
-    <Tooltip>
-      <TooltipTrigger
-        delay={0}
-        render={
-          <span
-            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm transition-[transform,box-shadow,background-color] duration-150 ease-out hover:scale-110 hover:bg-muted hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none data-open:scale-110 data-open:bg-muted data-open:shadow-md"
-            role="img"
-            aria-label={label}
-            tabIndex={0}
-          />
-        }
-      >
-        <Icon
-          className="size-5"
-          color={isLocked ? 'var(--graphite)' : isCompleted ? 'var(--progress-deep)' : 'var(--ink)'}
-          aria-hidden="true"
-        />
-      </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
-    </Tooltip>
+    <StatusIconBadge
+      label={label}
+      side="bottom"
+      className={cn(
+        cornerBadgeClassName,
+        'transition-[transform,box-shadow,background-color] duration-150 ease-out hover:scale-110 hover:bg-muted hover:shadow-md',
+        badgeFocusClassName,
+        'motion-reduce:transform-none motion-reduce:transition-none data-open:scale-110 data-open:bg-muted data-open:shadow-md',
+      )}
+    >
+      <Icon
+        className="size-5"
+        color={isLocked ? 'var(--graphite)' : isCompleted ? 'var(--progress-deep)' : 'var(--ink)'}
+        aria-hidden="true"
+      />
+    </StatusIconBadge>
   );
 }
 
-function TeacherBlockBadge() {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        delay={0}
-        render={
-          <span
-            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            role="img"
-            aria-label="Bloqueado por docencia"
-            tabIndex={0}
-          />
-        }
-      >
-        <LockKeyhole className="size-5" color="var(--graphite)" aria-hidden="true" />
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Bloqueado por docencia</TooltipContent>
-    </Tooltip>
-  );
-}
+const staffStateBadges = {
+  teacherBlocked: { label: 'Bloqueado por docencia', Icon: LockKeyhole },
+  hidden: { label: 'Oculto para estudiantes', Icon: EyeOff },
+};
 
-function HiddenBadge() {
+function StaffStateBadge({ state }: { state: keyof typeof staffStateBadges }) {
+  const { label, Icon } = staffStateBadges[state];
   return (
-    <Tooltip>
-      <TooltipTrigger
-        delay={0}
-        render={
-          <span
-            className="absolute right-[-10px] bottom-[-10px] flex size-8 items-center justify-center rounded-full border-2 border-card bg-card shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            role="img"
-            aria-label="Oculto para estudiantes"
-            tabIndex={0}
-          />
-        }
-      >
-        <EyeOff className="size-5" color="var(--graphite)" aria-hidden="true" />
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Oculto para estudiantes</TooltipContent>
-    </Tooltip>
+    <StatusIconBadge
+      label={label}
+      side="bottom"
+      className={cn(cornerBadgeClassName, 'outline-none', badgeFocusClassName)}
+    >
+      <Icon className="size-5" color="var(--graphite)" aria-hidden="true" />
+    </StatusIconBadge>
   );
 }
 
@@ -379,31 +374,24 @@ function NodeResourceSummary({
       )}
     >
       {resourceGroups.map(({ count, Icon, label, className }) => (
-        <Tooltip key={label}>
-          <TooltipTrigger
-            delay={0}
-            render={
-              <span
-                className={cn(
-                  'relative flex size-3 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  className,
-                )}
-                role="img"
-                aria-label={label}
-                tabIndex={0}
-              />
-            }
+        <StatusIconBadge
+          key={label}
+          label={label}
+          side="bottom"
+          className={cn(
+            'relative flex size-3 items-center justify-center rounded-sm outline-none',
+            badgeFocusClassName,
+            className,
+          )}
+        >
+          <Icon className="size-3" aria-hidden="true" />
+          <span
+            aria-hidden="true"
+            className="absolute right-[-3px] bottom-[-3px] rounded-sm bg-card px-0.5 text-[8px] leading-none"
           >
-            <Icon className="size-3" aria-hidden="true" />
-            <span
-              aria-hidden="true"
-              className="absolute right-[-3px] bottom-[-3px] rounded-sm bg-card px-0.5 text-[8px] leading-none"
-            >
-              {count}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{label}</TooltipContent>
-        </Tooltip>
+            {count}
+          </span>
+        </StatusIconBadge>
       ))}
     </div>
   );
@@ -425,9 +413,9 @@ function NodeActionBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | '
           onAction={data.onAction}
         />
       ) : hidden ? (
-        <HiddenBadge />
+        <StaffStateBadge state="hidden" />
       ) : teacherBlocked ? (
-        <TeacherBlockBadge />
+        <StaffStateBadge state="teacherBlocked" />
       ) : (
         <StudentStatusBadge status={data.status} />
       )}
