@@ -160,6 +160,8 @@ function RoadmapCanvasLoading({ isSimulation = false }: { isSimulation?: boolean
   );
 }
 
+type NodeType = RoadmapDto['nodeTypes'][number];
+
 type RequestExclusiveConfirmation = (
   source: ExclusiveConfirmationSource,
   request: () => void,
@@ -174,17 +176,15 @@ function exclusive<Args extends unknown[]>(
   return (...args: Args) => requestExclusiveConfirmation(source, () => void request(...args));
 }
 
-/** Wraps a session mutation so a successful result shows `message`. */
-function withSuccess<Args extends unknown[]>(
+/** Shows `message` when the session mutation succeeds. */
+async function withSuccess(
   feedback: ReturnType<typeof useRoadmapCanvasFeedback>,
-  mutate: (...args: Args) => Promise<boolean>,
+  mutation: Promise<boolean>,
   message: string,
 ) {
-  return async (...args: Args) => {
-    const succeeded = await mutate(...args);
-    if (succeeded) feedback?.showSuccess(message);
-    return succeeded;
-  };
+  const succeeded = await mutation;
+  if (succeeded) feedback?.showSuccess(message);
+  return succeeded;
 }
 
 /** Automatic-layout and Node type deletion confirmation state. */
@@ -194,12 +194,7 @@ function useCanvasConfirmations({
   deleteNodeType,
 }: {
   requestExclusiveConfirmation: RequestExclusiveConfirmation;
-  moveNode: (
-    nodeId: string,
-    position: AutomaticLayoutRequest['positions'][number]['position'],
-  ) => Promise<unknown>;
-  deleteNodeType: (nodeTypeId: string) => Promise<boolean>;
-}) {
+} & Pick<ReturnType<typeof useRoadmapCanvasSession>, 'moveNode' | 'deleteNodeType'>) {
   const [automaticLayout, setAutomaticLayout] = useState<AutomaticLayoutRequest | null>(null);
   const [confirmedAutomaticLayout, setConfirmedAutomaticLayout] = useState<{
     token: string;
@@ -207,7 +202,7 @@ function useCanvasConfirmations({
   } | null>(null);
   const automaticLayoutTokenRef = useRef(0);
   const [nodeTypeDeletion, setNodeTypeDeletion] = useState<{
-    nodeType: RoadmapDto['nodeTypes'][number];
+    nodeType: NodeType;
     isPending: boolean;
   } | null>(null);
   const requestAutomaticLayout = useCallback(
@@ -241,12 +236,11 @@ function useCanvasConfirmations({
     },
     [automaticLayout, moveNode],
   );
-  const requestNodeTypeDeletion = useCallback(
-    (nodeType: RoadmapDto['nodeTypes'][number]) => {
-      requestExclusiveConfirmation('node-type-deletion', () =>
+  const requestNodeTypeDeletion = useMemo(
+    () =>
+      exclusive(requestExclusiveConfirmation, 'node-type-deletion', (nodeType: NodeType) =>
         setNodeTypeDeletion({ nodeType, isPending: false }),
-      );
-    },
+      ),
     [requestExclusiveConfirmation],
   );
   const confirmNodeTypeDeletion = useCallback(
@@ -386,63 +380,38 @@ function useRoadmapCanvasController({ input }: Props) {
     },
     [],
   );
-  const {
-    automaticLayout,
-    setAutomaticLayout,
-    confirmedAutomaticLayout,
-    requestAutomaticLayout,
-    confirmAutomaticLayout,
-    nodeTypeDeletion,
-    setNodeTypeDeletion,
-    requestNodeTypeDeletion,
-    confirmNodeTypeDeletion,
-  } = useCanvasConfirmations({ requestExclusiveConfirmation, moveNode, deleteNodeType });
+  const confirmations = useCanvasConfirmations({
+    requestExclusiveConfirmation,
+    moveNode,
+    deleteNodeType,
+  });
+  const { automaticLayout, nodeTypeDeletion, requestAutomaticLayout } = confirmations;
   useEffect(() => {
     feedback?.reportError(roadmap ? error : null, dismissError);
   }, [dismissError, error, feedback, roadmap]);
 
   const performEditorEffect = useCallback(
     async (effect: NodeEditorEffect): Promise<NodeEditorPerformResult> => {
-      let succeeded = false;
-      switch (effect.kind) {
-        case 'update-node':
-          succeeded = await withSuccess(
-            feedback,
-            updateNode,
-            'Cambios guardados exitosamente.',
-          )(effect.nodeId, effect.value);
-          break;
-        case 'add-resource':
-          succeeded = await withSuccess(
-            feedback,
-            addResource,
-            'Enlace guardado exitosamente.',
-          )(effect.nodeId, effect.resource);
-          break;
-        case 'upload-resource':
-          succeeded = await withSuccess(
-            feedback,
-            uploadResource,
-            'Recurso guardado exitosamente.',
-          )(effect.nodeId, effect.file);
-          break;
-        case 'update-resource':
-          succeeded = await withSuccess(
-            feedback,
-            updateResource,
-            effect.resource.type === 'LINK'
-              ? 'Enlace guardado exitosamente.'
-              : 'Recurso guardado exitosamente.',
-          )(effect.resourceId, effect.resource);
-          break;
-        case 'delete-resource':
-          succeeded = await withSuccess(
-            feedback,
-            deleteResource,
-            'Recurso eliminado exitosamente.',
-          )(effect.resourceId);
-          break;
-      }
+      const [mutation, message] = ((): [Promise<boolean>, string] => {
+        switch (effect.kind) {
+          case 'update-node':
+            return [updateNode(effect.nodeId, effect.value), 'Cambios guardados exitosamente.'];
+          case 'add-resource':
+            return [addResource(effect.nodeId, effect.resource), 'Enlace guardado exitosamente.'];
+          case 'upload-resource':
+            return [uploadResource(effect.nodeId, effect.file), 'Recurso guardado exitosamente.'];
+          case 'update-resource':
+            return [
+              updateResource(effect.resourceId, effect.resource),
+              effect.resource.type === 'LINK'
+                ? 'Enlace guardado exitosamente.'
+                : 'Recurso guardado exitosamente.',
+            ];
+          case 'delete-resource':
+            return [deleteResource(effect.resourceId), 'Recurso eliminado exitosamente.'];
+        }
+      })();
+      const succeeded = await withSuccess(feedback, mutation, message);
       return { status: succeeded ? 'committed' : 'rejected' };
     },
     [addResource, deleteResource, updateNode, updateResource, uploadResource, feedback],
@@ -684,12 +653,11 @@ function useRoadmapCanvasController({ input }: Props) {
           requestTeacherBlockChange(intent.nodeId, intent.operation);
           return;
         case 'schedule-teacher-unlock':
-          void scheduleTeacherUnlock(intent.nodeId, intent.unlockOn).then((succeeded) => {
-            if (succeeded)
-              feedback?.showSuccess(
-                intent.unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
-              );
-          });
+          void withSuccess(
+            feedback,
+            scheduleTeacherUnlock(intent.nodeId, intent.unlockOn),
+            intent.unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
+          );
           return;
         case 'delete-node':
           requestNodeDeletion(intent.nodeId, { draftWasDiscarded: intent.draftWasDiscarded });
@@ -787,11 +755,7 @@ function useRoadmapCanvasController({ input }: Props) {
     canvasPreviewWorkflow,
     feedback,
     exclusiveConfirmation,
-    automaticLayout,
-    setAutomaticLayout,
-    confirmedAutomaticLayout,
-    nodeTypeDeletion,
-    setNodeTypeDeletion,
+    ...confirmations,
     requestExclusiveConfirmation,
     performEditorEffect,
     canvasMode,
@@ -805,9 +769,6 @@ function useRoadmapCanvasController({ input }: Props) {
     closeSelectedNode,
     closeTeacherPreview,
     displayedRoadmap,
-    confirmAutomaticLayout,
-    requestNodeTypeDeletion,
-    confirmNodeTypeDeletion,
     handleNodeEditorIntent,
     graphProjection,
   };
