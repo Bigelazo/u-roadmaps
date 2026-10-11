@@ -22,6 +22,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
+import { formatBadgeCount } from '@/shared/badge-count';
 import type { InboxIdentity } from '../server';
 type NotificationRecord = InboxRecord;
 type NotificationDataFilter = Record<string, string | number>;
@@ -252,7 +253,7 @@ function InboxBell() {
         <Bell aria-hidden="true" size={20} />
         {!countsLoading && unreadCount > 0 ? (
           <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {formatBadgeCount(unreadCount)}
           </span>
         ) : null}
       </PopoverPrimitive.Trigger>

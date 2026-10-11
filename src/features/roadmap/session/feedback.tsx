@@ -9,8 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { RoadmapErrorToast } from '@/features/roadmap/RoadmapErrorToast';
-import { RoadmapSuccessToast } from '@/features/roadmap/RoadmapSuccessToast';
+import { DismissibleAlert } from '@/shared/ui/dismissible-alert';
 
 type ErrorFeedback = {
   message: string;
@@ -75,11 +74,18 @@ export function RoadmapCanvasFeedback() {
   return (
     <div className="pointer-events-none absolute top-5 right-5 z-5 grid w-[min(23rem,calc(100%-2.5rem))] items-start justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
       {feedback.error ? (
-        <RoadmapErrorToast message={feedback.error.message} onDismiss={feedback.error.onDismiss} />
+        <DismissibleAlert
+          tone="error"
+          message={feedback.error.message}
+          closeLabel="Cerrar alerta"
+          onDismiss={feedback.error.onDismiss}
+        />
       ) : null}
       {feedback.success ? (
-        <RoadmapSuccessToast
+        <DismissibleAlert
           key={feedback.success.id}
+          tone="success"
+          closeLabel="Cerrar notificación"
           message={feedback.success.message}
           onDismiss={feedback.dismissSuccess}
         />

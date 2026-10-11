@@ -1,13 +1,7 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult,
-  parseJsonObject as parseJson,
-  throwApplicationError,
-} from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
-import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import { ApplicationError } from '@/shared/errors/types';
+import { courseRoute } from '@/app/_adapters/http';
+import { ApplicationError, unwrap } from '@/shared/errors/server';
 import {
   deleteRoadmapNode,
   previewNodeDeletion,
@@ -21,77 +15,41 @@ function previewOperation(request: Request) {
   throw new ApplicationError(400, 'INVALID_REQUEST', 'operation debe ser HIDE o DELETE.');
 }
 
-async function nodeInput(
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
-) {
-  const [params, user] = await Promise.all([context.params, requireAuthenticatedUser()]);
-  return {
-    userId: user.id,
-    identifier: requireCourseOfferingIdentifier(params),
-    id: params.nodeId,
-  };
-}
-
-async function deletionInput(
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
-  request: Request,
-) {
-  return {
-    ...(await nodeInput(context)),
-    previewVersion: request.headers.get('x-node-delete-preview') ?? undefined,
-  };
-}
-
-export async function GET(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
-) {
-  return handleApplicationResult(async () => {
-    const operation = previewOperation(request);
-    const input = await nodeInput(context);
+export const GET = courseRoute(
+  async ({ identifier, user, params, prepared: operation }) => {
+    const input = { userId: user.id, identifier, id: params.nodeId };
     const preview =
       operation === 'HIDE'
-        ? await previewNodeVisibility(input).match((value) => value, throwApplicationError)
-        : await previewNodeDeletion(input).match((value) => value, throwApplicationError);
+        ? await unwrap(() => previewNodeVisibility(input))
+        : await unwrap(() => previewNodeDeletion(input));
     return NextResponse.json(preview);
-  });
-}
+  },
+  { prepare: previewOperation, authWithParams: true },
+);
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
-) {
-  return handleApplicationResult(async () => {
-    const [params, body, user] = await Promise.all([
-      context.params,
-      parseJson(request),
-      requireAuthenticatedUser(),
-    ]);
-    const identifier = requireCourseOfferingIdentifier(params);
-    const result = await updateRoadmapNode(
-      {
-        userId: user.id,
-        identifier,
-        id: params.nodeId,
-        input: body,
-      },
-      roadmapChangePort,
-    ).match((value) => value, throwApplicationError);
-
-    return NextResponse.json(result);
-  });
-}
-
-export async function DELETE(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]'>,
-) {
-  return handleApplicationResult(async () => {
-    const input = await deletionInput(context, request);
-    await deleteRoadmapNode(input, roadmapChangePort).match(
-      (value) => value,
-      throwApplicationError,
+export const PATCH = courseRoute(
+  async ({ identifier, user, params, body }) => {
+    const result = await unwrap(() =>
+      updateRoadmapNode(
+        { userId: user.id, identifier, id: params.nodeId, input: body },
+        roadmapChangePort,
+      ),
     );
+    return NextResponse.json(result);
+  },
+  { body: true, authWithParams: true },
+);
+
+export const DELETE = courseRoute(
+  async ({ identifier, user, params, request }) => {
+    const input = {
+      userId: user.id,
+      identifier,
+      id: params.nodeId,
+      previewVersion: request.headers.get('x-node-delete-preview') ?? undefined,
+    };
+    await unwrap(() => deleteRoadmapNode(input, roadmapChangePort));
     return new NextResponse(null, { status: 204 });
-  });
-}
+  },
+  { authWithParams: true },
+);

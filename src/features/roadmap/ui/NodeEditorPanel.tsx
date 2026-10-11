@@ -26,7 +26,6 @@ export function NodeEditorPanel({ isOpen, panelWidth, onPanelWidthChange, childr
     <Sidebar
       hidden={!isOpen}
       side="right"
-      collapsible="none"
       id="roadmap-editor-panel"
       aria-label="Panel de edición del roadmap"
       className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"
