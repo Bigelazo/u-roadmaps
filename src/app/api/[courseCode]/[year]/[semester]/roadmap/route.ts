@@ -1,46 +1,16 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult,
-  parseJsonObject as parseJson,
-  throwApplicationError,
-} from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
-import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { courseRoute, parseJsonObject } from '@/app/_adapters/http';
 import { createRoadmapForActor, readRoadmapForParticipant } from '@/features/roadmap/server';
+import { unwrap } from '@/shared/errors/server';
 
-export async function GET(
-  _request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap'>,
-) {
-  return handleApplicationResult(async () => {
-    const identifier = requireCourseOfferingIdentifier(await context.params);
-    const user = await requireAuthenticatedUser();
-    return NextResponse.json(
-      await readRoadmapForParticipant({ userId: user.id, identifier }).match(
-        (value) => value,
-        throwApplicationError,
-      ),
-    );
-  });
-}
+export const GET = courseRoute(async ({ identifier, user }) =>
+  NextResponse.json(await unwrap(() => readRoadmapForParticipant({ userId: user.id, identifier }))),
+);
 
-export async function POST(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap'>,
-) {
-  return handleApplicationResult(async () => {
-    const identifier = requireCourseOfferingIdentifier(await context.params);
-    const actor = await requireAuthenticatedUser();
-    const created = await createRoadmapForActor(
-      actor,
-      identifier,
-      () => parseJson(request),
-      roadmapChangePort,
-    ).match((value) => value, throwApplicationError);
-    return NextResponse.json(
-      { roadmap: { id: created.roadmap.id }, ...identifier },
-      { status: 201 },
-    );
-  });
-}
+export const POST = courseRoute(async ({ identifier, user, request }) => {
+  const created = await unwrap(() =>
+    createRoadmapForActor(user, identifier, () => parseJsonObject(request), roadmapChangePort),
+  );
+  return NextResponse.json({ roadmap: { id: created.roadmap.id }, ...identifier }, { status: 201 });
+});

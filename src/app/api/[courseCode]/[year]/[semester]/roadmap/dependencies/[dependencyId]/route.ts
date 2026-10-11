@@ -1,26 +1,15 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
-import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { courseRoute } from '@/app/_adapters/http';
 import { deleteRoadmapDependency } from '@/features/roadmap/server';
+import { unwrap } from '@/shared/errors/server';
 
-export async function DELETE(
-  _request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/dependencies/[dependencyId]'>,
-) {
-  return handleApplicationResult(async () => {
-    const params = await context.params;
-    const identifier = requireCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser();
-    await deleteRoadmapDependency(
-      {
-        userId: user.id,
-        identifier,
-        id: params.dependencyId,
-      },
+export const DELETE = courseRoute(async ({ identifier, user, params }) => {
+  await unwrap(() =>
+    deleteRoadmapDependency(
+      { userId: user.id, identifier, id: params.dependencyId },
       roadmapChangePort,
-    ).match((value) => value, throwApplicationError);
-    return new NextResponse(null, { status: 204 });
-  });
-}
+    ),
+  );
+  return new NextResponse(null, { status: 204 });
+});
