@@ -1,5 +1,6 @@
 import type { RoadmapChangePort } from './change-port';
 import { roadmapChangeTransaction } from './change-transaction';
+import { concurrentModificationError } from './serializable';
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
@@ -185,13 +186,23 @@ export async function getAvailableTypes(roadmapId: string) {
     prisma.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
     prisma.nodeType.findMany({ where: { roadmapId }, orderBy: { name: 'asc' } }),
   ]);
-  return [...predefined, ...custom].map((type) => ({
-    id: type.id,
-    name: type.name,
-    icon: type.icon as NodeTypeIconId,
-    color: type.color,
-    isPredefined: type.isPredefined,
-  }));
+  return [...predefined, ...custom].map(nodeTypeDto);
+}
+
+export function nodeTypeDto(nodeType: {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  isPredefined: boolean;
+}) {
+  return {
+    id: nodeType.id,
+    name: nodeType.name,
+    icon: nodeType.icon as NodeTypeIconId,
+    color: nodeType.color,
+    isPredefined: nodeType.isPredefined,
+  };
 }
 
 export function handlePrismaError(error: unknown): never {
@@ -204,12 +215,7 @@ export function handlePrismaError(error: unknown): never {
       );
     if (error.code === 'P2025')
       throw new ApplicationError(404, 'NOT_FOUND', 'El recurso solicitado no existe.');
-    if (error.code === 'P2034')
-      throw new ApplicationError(
-        409,
-        'CONFLICT',
-        'La operación entra en conflicto con otra modificación.',
-      );
+    if (error.code === 'P2034') throw concurrentModificationError();
   }
   throw error;
 }
@@ -452,8 +458,8 @@ const copyTransactionOptions = { timeout: 30_000 };
 const roadmapConflict = () =>
   new ApplicationError(409, 'ROADMAP_CONFLICT', 'Ya existe un roadmap para este curso.');
 
-// El curso puede llegar sin descripción cuando ya está materializado desde
-// U-Campus. En ese caso conserva el nombre y el departamento registrados.
+// The course may arrive without a description when it is already materialized from
+// U-Campus. In that case it keeps the registered name and department.
 async function createRoadmapUnsafe(
   identifier: CourseOfferingIdentifier,
   body: JsonObject,
