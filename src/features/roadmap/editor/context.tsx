@@ -7,7 +7,7 @@ import type {
   Resource,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
-import type { PendingEditorEffect } from './session';
+import type { NodeEditorState } from './session';
 import type { NodeUpdate, ResourceInput, ResourceSession } from './types';
 
 type NodeEditorContextValue = {
@@ -16,11 +16,9 @@ type NodeEditorContextValue = {
   nodeDraft: NodeUpdate;
   resourceSession: ResourceSession;
   isDirty: boolean;
-  isNodeDirty: boolean;
   canSaveNode: boolean;
   isVisibilityPending: boolean;
-  pendingEditorEffect: PendingEditorEffect | null;
-  pendingResourceDeletion: Resource | null;
+  pendingEditorEffect: NodeEditorState['pendingEditorEffect'];
   previewButtonRef: RefObject<HTMLButtonElement | null>;
   changeNodeDraft: (value: NodeUpdate) => void;
   changeResource: (value: ResourceInput) => void;
@@ -32,7 +30,6 @@ type NodeEditorContextValue = {
   saveNode: () => void;
   saveResource: () => void;
   requestResourceDeletion: (resource: Resource) => void;
-  cancelResourceDeletion: () => void;
   toggleVisibility: () => void;
   requestTeacherBlock: (operation: TeacherBlockOperation) => void;
   scheduleTeacherUnlock: (unlockOn: string | null) => void;

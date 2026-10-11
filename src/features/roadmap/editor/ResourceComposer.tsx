@@ -14,6 +14,11 @@ type Props = {
   onClose: () => void;
 };
 
+const resourceTabs = [
+  { mode: 'file', label: 'Archivo', Icon: FileUp },
+  { mode: 'link', label: 'Enlace', Icon: Link2 },
+] as const;
+
 function sessionValue(
   session: ReturnType<typeof useNodeEditorContext>['resourceSession'],
 ): ResourceInput {
@@ -85,28 +90,20 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
       </div>
       {!isEditingResource && (
         <div className="grid grid-cols-2 gap-1 rounded-lg bg-cloud p-1" role="tablist">
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'file'}
-            variant={mode === 'file' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => onModeChange('file')}
-          >
-            <FileUp data-icon="inline-start" />
-            Archivo
-          </Button>
-          <Button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'link'}
-            variant={mode === 'link' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => onModeChange('link')}
-          >
-            <Link2 data-icon="inline-start" />
-            Enlace
-          </Button>
+          {resourceTabs.map(({ mode: tabMode, label, Icon }) => (
+            <Button
+              key={tabMode}
+              type="button"
+              role="tab"
+              aria-selected={mode === tabMode}
+              variant={mode === tabMode ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => onModeChange(tabMode)}
+            >
+              <Icon data-icon="inline-start" />
+              {label}
+            </Button>
+          ))}
         </div>
       )}
       {mode === 'file' && !isEditingResource ? (

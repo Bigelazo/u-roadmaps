@@ -8,7 +8,7 @@ import type {
   ResourceSession,
 } from './types';
 
-export type PendingEditorEffect = {
+type PendingEditorEffect = {
   id: number;
   epoch: number;
   effect: NodeEditorEffect;
@@ -54,19 +54,19 @@ export type NodeEditorAction =
       status: 'committed' | 'rejected';
     };
 
-export const emptyNodeUpdate: NodeUpdate = {
+const emptyNodeUpdate: NodeUpdate = {
   title: '',
   description: '',
   nodeTypeId: '',
 };
 
-export const emptyResourceInput: ResourceInput = {
+const emptyResourceInput: ResourceInput = {
   title: '',
   url: '',
   type: 'LINK',
 };
 
-export function nodeUpdateFromNode(node: RoadmapNode | undefined): NodeUpdate {
+function nodeUpdateFromNode(node: RoadmapNode | undefined): NodeUpdate {
   return node
     ? {
         title: node.title,
@@ -76,19 +76,28 @@ export function nodeUpdateFromNode(node: RoadmapNode | undefined): NodeUpdate {
     : emptyNodeUpdate;
 }
 
-export function resourceInputFromResource(resource: Resource): ResourceInput {
+function resourceInputFromResource(resource: Resource): ResourceInput {
   return { title: resource.title, url: resource.url, type: resource.type };
 }
 
-export function emptyResourceSession(): ResourceSession {
-  return { kind: 'closed' };
+const closedResourceSession: ResourceSession = { kind: 'closed' };
+
+function addingResourceSession(mode: 'file' | 'link', value = emptyResourceInput): ResourceSession {
+  return mode === 'file'
+    ? { kind: 'adding-file', value, selectedFile: null }
+    : { kind: 'adding-link', value };
 }
 
 function sameResourceInput(first: ResourceInput, second: ResourceInput) {
   return first.title === second.title && first.url === second.url && first.type === second.type;
 }
 
-function resourceSessionIsDirty(node: RoadmapNode, session: ResourceSession) {
+/** Field-by-field and order-sensitive: the same Resources in the same order. */
+function sameResources(first: readonly Resource[], second: readonly Resource[]) {
+  return JSON.stringify(first) === JSON.stringify(second);
+}
+
+export function resourceSessionIsDirty(node: RoadmapNode, session: ResourceSession) {
   switch (session.kind) {
     case 'closed':
       return false;
@@ -119,10 +128,6 @@ export function nodeEditorStateIsDirty(state: NodeEditorState) {
     (nodeDraftIsDirty(state.canonicalNode, state.nodeDraft) ||
       resourceSessionIsDirty(state.canonicalNode, state.resourceSession)),
   );
-}
-
-export function resourceSessionIsDirtyForNode(node: RoadmapNode, session: ResourceSession) {
-  return resourceSessionIsDirty(node, session);
 }
 
 function resourceSessionMatchesEffect(session: ResourceSession, effect: NodeEditorEffect) {
@@ -164,7 +169,7 @@ function createState(
     nodeId: node?.id ?? null,
     canonicalNode: node ?? null,
     nodeDraft: nodeUpdateFromNode(node),
-    resourceSession: emptyResourceSession(),
+    resourceSession: closedResourceSession,
     pendingEditorEffect: null,
     confirmedEditorEffect: null,
     pendingResourceDeletion: null,
@@ -189,25 +194,22 @@ function refreshMatchesPendingEffect(state: NodeEditorState, next: RoadmapNode) 
     return false;
   if (effect.kind === 'update-node') {
     return (
-      !nodeDraftIsDirty(next, effect.value) &&
-      JSON.stringify(previous.resources) === JSON.stringify(next.resources)
+      !nodeDraftIsDirty(next, effect.value) && sameResources(previous.resources, next.resources)
     );
   }
   if (nodeDraftIsDirty(previous, nodeUpdateFromNode(next))) return false;
   switch (effect.kind) {
     case 'update-resource':
-      return (
-        JSON.stringify(next.resources) ===
-        JSON.stringify(
-          previous.resources.map((resource) =>
-            resource.id === effect.resourceId ? { ...resource, ...effect.resource } : resource,
-          ),
-        )
+      return sameResources(
+        next.resources,
+        previous.resources.map((resource) =>
+          resource.id === effect.resourceId ? { ...resource, ...effect.resource } : resource,
+        ),
       );
     case 'delete-resource':
-      return (
-        JSON.stringify(next.resources) ===
-        JSON.stringify(previous.resources.filter((resource) => resource.id !== effect.resourceId))
+      return sameResources(
+        next.resources,
+        previous.resources.filter((resource) => resource.id !== effect.resourceId),
       );
     case 'add-resource':
     case 'upload-resource': {
@@ -218,7 +220,7 @@ function refreshMatchesPendingEffect(state: NodeEditorState, next: RoadmapNode) 
         previous.resources.some(({ id }) => id === resource.id),
       );
       return (
-        JSON.stringify(retained) === JSON.stringify(previous.resources) &&
+        sameResources(retained, previous.resources) &&
         added.length === 1 &&
         (effect.kind === 'add-resource'
           ? sameResourceInput(added[0], effect.resource)
@@ -247,7 +249,7 @@ export function nodeEditorReducer(
           (nodeDraftIsDirty(previous, nodeUpdateFromNode(action.node)) ||
             previous.isVisible !== action.node.isVisible ||
             previous.isTeacherBlocked !== action.node.isTeacherBlocked ||
-            JSON.stringify(previous.resources) !== JSON.stringify(action.node.resources));
+            !sameResources(previous.resources, action.node.resources));
         const isPendingEffectResult = refreshMatchesPendingEffect(state, action.node);
         // The result of the pending effect, arriving before it resolves, keeps that
         // effect current so it can still close its Resource form.
@@ -268,7 +270,7 @@ export function nodeEditorReducer(
         epoch: state.epoch + 1,
         canonicalNode: action.node,
         nodeDraft: nodeUpdateFromNode(action.node),
-        resourceSession: emptyResourceSession(),
+        resourceSession: closedResourceSession,
         confirmedEditorEffect: null,
       };
     }
@@ -278,10 +280,7 @@ export function nodeEditorReducer(
       return {
         ...state,
         epoch: state.epoch + 1,
-        resourceSession:
-          action.mode === 'file'
-            ? { kind: 'adding-file', value: emptyResourceInput, selectedFile: null }
-            : { kind: 'adding-link', value: emptyResourceInput },
+        resourceSession: addingResourceSession(action.mode),
       };
     case 'edit-resource':
       return {
@@ -300,26 +299,19 @@ export function nodeEditorReducer(
         epoch: state.epoch + 1,
         resourceSession: { ...state.resourceSession, value: action.value },
       };
-    case 'change-resource-mode':
-      if (state.resourceSession.kind === 'adding-file' && action.mode === 'link') {
-        return {
-          ...state,
-          epoch: state.epoch + 1,
-          resourceSession: { kind: 'adding-link', value: state.resourceSession.value },
-        };
-      }
-      if (state.resourceSession.kind === 'adding-link' && action.mode === 'file') {
-        return {
-          ...state,
-          epoch: state.epoch + 1,
-          resourceSession: {
-            kind: 'adding-file',
-            value: state.resourceSession.value,
-            selectedFile: null,
-          },
-        };
-      }
-      return state;
+    case 'change-resource-mode': {
+      const session = state.resourceSession;
+      if (
+        (session.kind !== 'adding-file' && session.kind !== 'adding-link') ||
+        session.kind === `adding-${action.mode}`
+      )
+        return state;
+      return {
+        ...state,
+        epoch: state.epoch + 1,
+        resourceSession: addingResourceSession(action.mode, session.value),
+      };
+    }
     case 'select-resource-file':
       if (state.resourceSession.kind !== 'adding-file') return state;
       if (state.resourceSession.selectedFile === action.file) return state;
@@ -330,7 +322,7 @@ export function nodeEditorReducer(
       };
     case 'close-resource':
       if (state.resourceSession.kind === 'closed') return state;
-      return { ...state, epoch: state.epoch + 1, resourceSession: emptyResourceSession() };
+      return { ...state, epoch: state.epoch + 1, resourceSession: closedResourceSession };
     case 'consume-command':
       if (
         state.consumedCommandIds.includes(action.command.id) ||
@@ -343,9 +335,10 @@ export function nodeEditorReducer(
         consumedCommandIds: [...state.consumedCommandIds, action.command.id],
         resourceSession:
           state.resourceSession.kind === 'closed'
-            ? action.command.mode === 'file'
-              ? { kind: 'adding-file', value: emptyResourceInput, selectedFile: null }
-              : { kind: 'adding-link', value: action.command.value ?? emptyResourceInput }
+            ? addingResourceSession(
+                action.command.mode,
+                action.command.mode === 'file' ? emptyResourceInput : action.command.value,
+              )
             : state.resourceSession,
       };
     case 'request-resource-deletion':
@@ -391,7 +384,7 @@ export function nodeEditorReducer(
         case 'upload-resource':
         case 'update-resource':
           return resourceSessionMatchesEffect(state.resourceSession, pending.effect)
-            ? { ...next, resourceSession: emptyResourceSession() }
+            ? { ...next, resourceSession: closedResourceSession }
             : next;
         case 'delete-resource':
           return state.pendingResourceDeletion?.id === pending.effect.resourceId

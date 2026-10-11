@@ -10,7 +10,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
+import { addCalendarDays, chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { Button } from '@/shared/ui/button';
 import {
   Field,
@@ -116,12 +116,6 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
   );
 }
 
-function nextCalendarDay(day: string) {
-  const date = new Date(`${day}T12:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
-}
-
 function formatCalendarDay(day: string) {
   return new Intl.DateTimeFormat('es-CL', {
     timeZone: 'UTC',
@@ -135,7 +129,7 @@ function formatCalendarDay(day: string) {
 function NodeUnlockSchedule({ scheduledDay }: { scheduledDay: string | null }) {
   const { scheduleTeacherUnlock } = useNodeEditorContext();
   const [draftDay, setDraftDay] = useState(scheduledDay ?? '');
-  const minimumDay = nextCalendarDay(chileCalendarDay());
+  const minimumDay = addCalendarDays(chileCalendarDay(), 1);
   const canSchedule = draftDay >= minimumDay && draftDay !== scheduledDay;
 
   return (
@@ -194,6 +188,12 @@ function NodeStatus() {
   const accessStatus = node.isTeacherBlocked
     ? 'Acceso restringido por docencia'
     : 'Sin restricciones docentes';
+  const AccessIcon = !node.isVisible
+    ? EyeOff
+    : node.isTeacherBlocked
+      ? LockKeyhole
+      : LockKeyholeOpen;
+  const TeacherBlockIcon = node.isTeacherBlocked ? LockKeyholeOpen : LockKeyhole;
 
   return (
     <section className="border-t border-border py-5">
@@ -224,24 +224,10 @@ function NodeStatus() {
           <Separator className="mx-3 w-auto" />
           <div className="flex flex-col gap-3 rounded-lg px-3 py-3">
             <div className="flex items-start gap-2">
-              {node.isVisible ? (
-                node.isTeacherBlocked ? (
-                  <LockKeyhole
-                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <LockKeyholeOpen
-                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                )
-              ) : (
-                <EyeOff
-                  className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-              )}
+              <AccessIcon
+                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
               <div>
                 <FieldTitle>Acceso de estudiantes</FieldTitle>
                 <FieldDescription>
@@ -251,28 +237,17 @@ function NodeStatus() {
                 </FieldDescription>
               </div>
             </div>
-            {node.isVisible &&
-              (node.isTeacherBlocked ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => requestTeacherBlock('UNBLOCK')}
-                >
-                  <LockKeyholeOpen data-icon="inline-start" />
-                  Desbloquear
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => requestTeacherBlock('BLOCK')}
-                >
-                  <LockKeyhole data-icon="inline-start" />
-                  Bloquear rama
-                </Button>
-              ))}
+            {node.isVisible && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => requestTeacherBlock(node.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK')}
+              >
+                <TeacherBlockIcon data-icon="inline-start" />
+                {node.isTeacherBlocked ? 'Desbloquear' : 'Bloquear rama'}
+              </Button>
+            )}
             {node.isVisible && node.isTeacherBlocked && (
               <NodeUnlockSchedule
                 key={`${node.id}:${node.teacherUnlockOn ?? ''}`}
