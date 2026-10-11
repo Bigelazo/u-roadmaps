@@ -12,66 +12,76 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountBlockedNode(blockReason: StudentNodeBlockReason) {
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode
-        {...({
-          id: `node-${blockReason}`,
-          type: 'roadmap',
-          data: {
-            title: 'Contenido bloqueado',
-            typeColor: '#024AD8',
-            typeName: 'Contenido',
-            typeIcon: 'BookOpen',
-            status: 'locked',
-            isTeacherBlocked: false,
-            blockReason,
-            isHidden: false,
-          },
-          selected: false,
-          selectable: false,
-          draggable: false,
-          dragging: false,
-          deletable: false,
-          isConnectable: false,
-          positionAbsoluteX: 0,
-          positionAbsoluteY: 0,
-          zIndex: 0,
-        } as NodeProps<RoadmapFlowNode>)}
-      />
-    </ReactFlowProvider>,
-  );
-}
+type NodePropsOverrides = Partial<Omit<NodeProps<RoadmapFlowNode>, 'data'>> & {
+  data?: Partial<RoadmapFlowNode['data']>;
+};
 
-test('marks hidden teacher nodes with a distinct visual treatment and no visibility action', () => {
-  const props = {
-    id: 'hidden-node',
+/** Roadmap Node props for an available, connectable, draggable card. */
+function nodeProps({ data, ...props }: NodePropsOverrides = {}) {
+  return {
+    id: 'node',
     type: 'roadmap',
-    data: {
-      title: 'Material de coordinación',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'editing',
-      isTeacherBlocked: false,
-      isHidden: true,
-    },
     selected: false,
     selectable: true,
     draggable: true,
     dragging: false,
     deletable: false,
-    isConnectable: false,
+    isConnectable: true,
     positionAbsoluteX: 0,
     positionAbsoluteY: 0,
     zIndex: 0,
+    ...props,
+    data: {
+      title: 'Introducción a funciones',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'available',
+      isTeacherBlocked: false,
+      isHidden: false,
+      ...data,
+    },
   } as NodeProps<RoadmapFlowNode>;
+}
 
-  render(
+/** Inert student-view props: not draggable and not connectable. */
+const studentNodeProps = (overrides: NodePropsOverrides) =>
+  nodeProps({ draggable: false, isConnectable: false, ...overrides });
+
+/** Renders a Roadmap Node whose rerenders stay inside the React Flow provider. */
+function renderNode(props: NodeProps<RoadmapFlowNode>) {
+  const { rerender } = render(
     <ReactFlowProvider>
       <RoadmapNode {...props} />
     </ReactFlowProvider>,
+  );
+  return {
+    rerenderWith: (next: NodeProps<RoadmapFlowNode>) =>
+      rerender(
+        <ReactFlowProvider>
+          <RoadmapNode {...next} />
+        </ReactFlowProvider>,
+      ),
+  };
+}
+
+function mountBlockedNode(blockReason: StudentNodeBlockReason) {
+  renderNode(
+    studentNodeProps({
+      id: `node-${blockReason}`,
+      selectable: false,
+      data: { title: 'Contenido bloqueado', status: 'locked', blockReason },
+    }),
+  );
+}
+
+test('marks hidden teacher nodes with a distinct visual treatment and no visibility action', () => {
+  renderNode(
+    nodeProps({
+      id: 'hidden-node',
+      isConnectable: false,
+      data: { title: 'Material de coordinación', status: 'editing', isHidden: true },
+    }),
   );
 
   expect(screen.queryAllByTestId('roadmap-node-handle')).toHaveLength(0);
@@ -90,46 +100,24 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
   const user = userEvent.setup();
   const onToggleActionMenu = vi.fn();
   const onAction = vi.fn();
-  const props = {
-    id: 'teacher-node',
-    type: 'roadmap',
-    data: {
-      title: 'Límites',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'editing' as const,
-      isTeacherBlocked: false,
-      isHidden: false,
-      canManageActions: true,
-      isActionMenuOpen: false,
-      onToggleActionMenu,
-      onAction,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-  const { rerender } = render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  const menuProps = (isActionMenuOpen: boolean) =>
+    nodeProps({
+      id: 'teacher-node',
+      data: {
+        title: 'Límites',
+        status: 'editing',
+        canManageActions: true,
+        isActionMenuOpen,
+        onToggleActionMenu,
+        onAction,
+      },
+    });
+  const { rerenderWith } = renderNode(menuProps(false));
 
   await user.click(screen.getByRole('button', { name: 'Abrir menú de acciones del nodo' }));
   expect(onToggleActionMenu).toHaveBeenCalledWith('teacher-node', expect.any(HTMLButtonElement));
 
-  rerender(
-    <ReactFlowProvider>
-      <RoadmapNode {...{ ...props, data: { ...props.data, isActionMenuOpen: true } }} />
-    </ReactFlowProvider>,
-  );
+  rerenderWith(menuProps(true));
   expect(screen.queryByTestId('node-action-focus')).toBeNull();
   expect(screen.getByRole('group', { name: 'Menú de acciones del nodo' })).toBeTruthy();
 
@@ -167,46 +155,25 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
 test('offers showing a hidden node without an access action', async () => {
   const user = userEvent.setup();
   const onAction = vi.fn();
-  const props = {
-    id: 'hidden-teacher-node',
-    type: 'roadmap',
-    data: {
-      title: 'Material de coordinación',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'editing' as const,
-      isTeacherBlocked: false,
-      isHidden: true,
-      canManageActions: true,
-      isActionMenuOpen: false,
-      onAction,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: false,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  const { rerender } = render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  const menuProps = (isActionMenuOpen: boolean) =>
+    nodeProps({
+      id: 'hidden-teacher-node',
+      isConnectable: false,
+      data: {
+        title: 'Material de coordinación',
+        status: 'editing',
+        isHidden: true,
+        canManageActions: true,
+        isActionMenuOpen,
+        onAction,
+      },
+    });
+  const { rerenderWith } = renderNode(menuProps(false));
 
   expect(screen.getByTestId('node-action-trigger-hidden')).toBeTruthy();
   expect(screen.queryByTestId('node-action-trigger-close')).toBeNull();
 
-  rerender(
-    <ReactFlowProvider>
-      <RoadmapNode {...{ ...props, data: { ...props.data, isActionMenuOpen: true } }} />
-    </ReactFlowProvider>,
-  );
+  rerenderWith(menuProps(true));
 
   expect(screen.getByTestId('node-action-trigger-close')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Bloquear rama' })).toBeNull();
@@ -234,36 +201,18 @@ test('offers showing a hidden node without an access action', async () => {
 test('offers the contextual unblock action for a visible teacher-blocked node', async () => {
   const user = userEvent.setup();
   const onAction = vi.fn();
-  const props = {
-    id: 'blocked-teacher-node',
-    type: 'roadmap',
-    data: {
-      title: 'Material bloqueado',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'editing' as const,
-      isTeacherBlocked: true,
-      isHidden: false,
-      canManageActions: true,
-      isActionMenuOpen: true,
-      onAction,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
+  renderNode(
+    nodeProps({
+      id: 'blocked-teacher-node',
+      data: {
+        title: 'Material bloqueado',
+        status: 'editing',
+        isTeacherBlocked: true,
+        canManageActions: true,
+        isActionMenuOpen: true,
+        onAction,
+      },
+    }),
   );
 
   await user.click(screen.getByRole('button', { name: 'Desbloquear' }));
@@ -275,34 +224,7 @@ test('offers the contextual unblock action for a visible teacher-blocked node', 
 });
 
 test('keeps dependency handles mounted, but inert, for student nodes', () => {
-  const props = {
-    id: 'student-node',
-    type: 'roadmap',
-    data: {
-      title: 'Funciones',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available',
-      isTeacherBlocked: false,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: false,
-    dragging: false,
-    deletable: false,
-    isConnectable: false,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  renderNode(studentNodeProps({ id: 'student-node', data: { title: 'Funciones' } }));
 
   expect(screen.getAllByTestId('roadmap-node-handle')).toHaveLength(4);
   for (const handle of screen.getAllByTestId('roadmap-node-handle')) {
@@ -312,138 +234,34 @@ test('keeps dependency handles mounted, but inert, for student nodes', () => {
 });
 
 test('shows the node-type icon with an accessible label, rather than persistent status text', () => {
-  const props = {
-    id: 'node-2',
-    type: 'roadmap',
-    data: {
-      title: 'Introducción a funciones',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available',
-      isTeacherBlocked: false,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  renderNode(nodeProps({ id: 'node-2' }));
 
   expect(screen.getByRole('img', { name: 'Contenido' })).toBeTruthy();
   expect(screen.queryByText('Pendiente')).toBeNull();
 });
 
-test('summarizes files and web resources separately with accessible icons', () => {
-  const props = {
+test.each([
+  {
+    name: 'summarizes files and web resources separately with accessible icons',
     id: 'node-resources',
-    type: 'roadmap',
-    data: {
-      title: 'Material de estudio',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available' as const,
-      isTeacherBlocked: false,
-      isHidden: false,
-      fileCount: 2,
-      linkCount: 3,
-    },
-    selected: false,
-    selectable: true,
-    draggable: false,
-    dragging: false,
-    deletable: false,
-    isConnectable: false,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
-
-  expect(screen.getByTestId('roadmap-node-resources')).toBeTruthy();
-  expect(screen.getByRole('img', { name: '2 archivos' })).toBeTruthy();
-  expect(screen.getByRole('img', { name: '3 enlaces' })).toBeTruthy();
-});
-
-test('does not reserve a resource summary when the node has no resources', () => {
-  const props = {
+    resources: { fileCount: 2, linkCount: 3 },
+    labels: ['2 archivos', '3 enlaces'],
+  },
+  {
+    name: 'does not reserve a resource summary when the node has no resources',
     id: 'node-without-resources',
-    type: 'roadmap',
-    data: {
-      title: 'Material de estudio',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available' as const,
-      isTeacherBlocked: false,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: false,
-    dragging: false,
-    deletable: false,
-    isConnectable: false,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
+    resources: {},
+    labels: [],
+  },
+])('$name', ({ id, resources, labels }) => {
+  renderNode(studentNodeProps({ id, data: { title: 'Material de estudio', ...resources } }));
 
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
-
-  expect(screen.queryByTestId('roadmap-node-resources')).toBeNull();
+  expect(screen.queryByTestId('roadmap-node-resources') !== null).toBe(labels.length > 0);
+  for (const name of labels) expect(screen.getByRole('img', { name })).toBeTruthy();
 });
 
 test('does not lift a roadmap node on hover', () => {
-  const props = {
-    id: 'node-without-hover-lift',
-    type: 'roadmap',
-    data: {
-      title: 'Introducción a funciones',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available' as const,
-      isTeacherBlocked: false,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  renderNode(nodeProps({ id: 'node-without-hover-lift' }));
 
   const card = screen.getByTestId('roadmap-card');
   expect(card.className).not.toContain('hover:translate-y');
@@ -451,81 +269,15 @@ test('does not lift a roadmap node on hover', () => {
 });
 
 test('labels completed and pending status badges for assistive technology', () => {
-  const sharedProps = {
-    id: 'node-3',
-    type: 'roadmap' as const,
-    data: {
-      title: 'Introducción a funciones',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      isHidden: false,
-      isTeacherBlocked: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  };
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode
-        {...({
-          ...sharedProps,
-          data: { ...sharedProps.data, status: 'completed' },
-        } as NodeProps<RoadmapFlowNode>)}
-      />
-    </ReactFlowProvider>,
-  );
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode
-        {...({
-          ...sharedProps,
-          data: { ...sharedProps.data, status: 'available' },
-        } as NodeProps<RoadmapFlowNode>)}
-      />
-    </ReactFlowProvider>,
-  );
+  renderNode(nodeProps({ id: 'node-3', data: { status: 'completed' } }));
+  renderNode(nodeProps({ id: 'node-3', data: { status: 'available' } }));
 
   expect(screen.getByRole('img', { name: 'Completado' })).toBeTruthy();
   expect(screen.getByRole('img', { name: 'Pendiente' })).toBeTruthy();
 });
 
 test('gives the node status badge a visual hover affordance', () => {
-  const props = {
-    id: 'node-status-hover',
-    type: 'roadmap',
-    data: {
-      title: 'Introducción a funciones',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available' as const,
-      isTeacherBlocked: false,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  renderNode(nodeProps({ id: 'node-status-hover' }));
 
   const statusBadge = screen.getByRole('img', { name: 'Pendiente' });
   expect(statusBadge.className).toContain('hover:scale-110');
@@ -536,34 +288,7 @@ test('gives the node status badge a visual hover affordance', () => {
 
 test('opens node icon and status tooltips immediately, with the status below its badge', async () => {
   vi.useFakeTimers();
-  const props = {
-    id: 'node-tooltip',
-    type: 'roadmap',
-    data: {
-      title: 'Introducción a funciones',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available' as const,
-      isTeacherBlocked: false,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  renderNode(nodeProps({ id: 'node-tooltip' }));
 
   fireEvent.mouseEnter(screen.getByRole('img', { name: 'Contenido' }));
   await act(async () => {
@@ -599,33 +324,15 @@ test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(
 );
 
 test('shows teacher blocks like student blocks without disabling editing', () => {
-  const props = {
-    id: 'teacher-blocked-node',
-    type: 'roadmap',
-    data: {
-      title: 'Contenido bloqueado por docencia',
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'editing',
-      isTeacherBlocked: true,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: true,
-    dragging: false,
-    deletable: false,
-    isConnectable: true,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
+  renderNode(
+    nodeProps({
+      id: 'teacher-blocked-node',
+      data: {
+        title: 'Contenido bloqueado por docencia',
+        status: 'editing',
+        isTeacherBlocked: true,
+      },
+    }),
   );
 
   const card = screen.getByTestId('roadmap-card');
@@ -638,67 +345,23 @@ test('shows teacher blocks like student blocks without disabling editing', () =>
 });
 
 test('sizes cards from their titles in grid-aligned dimensions', () => {
-  const nodeProps = (data: RoadmapFlowNode['data']) =>
-    ({
-      id: crypto.randomUUID(),
-      type: 'roadmap',
-      data,
-      selected: false,
-      selectable: true,
-      draggable: false,
-      dragging: false,
-      deletable: false,
-      isConnectable: false,
-      positionAbsoluteX: 0,
-      positionAbsoluteY: 0,
-      zIndex: 0,
-    }) as NodeProps<RoadmapFlowNode>;
+  const sizedProps = (data: Partial<RoadmapFlowNode['data']>) =>
+    studentNodeProps({ id: crypto.randomUUID(), data });
 
   render(
     <ReactFlowProvider>
+      <RoadmapNode {...sizedProps({ title: 'Breve' })} />
       <RoadmapNode
-        {...nodeProps({
-          title: 'Breve',
-          typeColor: '#024AD8',
-          typeName: 'Contenido',
-          typeIcon: 'BookOpen',
-          status: 'available',
-          isTeacherBlocked: false,
-          isHidden: false,
-        })}
-      />
-      <RoadmapNode
-        {...nodeProps({
+        {...sizedProps({
           title:
             'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse',
-          typeColor: '#024AD8',
-          typeName: 'Contenido',
-          typeIcon: 'BookOpen',
-          status: 'available',
-          isTeacherBlocked: false,
-          isHidden: false,
         })}
       />
+      <RoadmapNode {...sizedProps({ title: 'Oculto', status: 'editing', isHidden: true })} />
       <RoadmapNode
-        {...nodeProps({
-          title: 'Oculto',
-          typeColor: '#024AD8',
-          typeName: 'Contenido',
-          typeIcon: 'BookOpen',
-          status: 'editing',
-          isTeacherBlocked: false,
-          isHidden: true,
-        })}
-      />
-      <RoadmapNode
-        {...nodeProps({
+        {...sizedProps({
           title: 'Bloqueado',
-          typeColor: '#024AD8',
-          typeName: 'Contenido',
-          typeIcon: 'BookOpen',
           status: 'locked',
-          isTeacherBlocked: false,
-          isHidden: false,
           blockReason: 'PREREQUISITE_BLOCK',
         })}
       />
@@ -724,34 +387,7 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
 
 test('clamps long card titles to two lines while preserving the full title as a tooltip', () => {
   const title = 'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse';
-  const props = {
-    id: 'long-title',
-    type: 'roadmap',
-    data: {
-      title,
-      typeColor: '#024AD8',
-      typeName: 'Contenido',
-      typeIcon: 'BookOpen',
-      status: 'available',
-      isTeacherBlocked: false,
-      isHidden: false,
-    },
-    selected: false,
-    selectable: true,
-    draggable: false,
-    dragging: false,
-    deletable: false,
-    isConnectable: false,
-    positionAbsoluteX: 0,
-    positionAbsoluteY: 0,
-    zIndex: 0,
-  } as NodeProps<RoadmapFlowNode>;
-
-  render(
-    <ReactFlowProvider>
-      <RoadmapNode {...props} />
-    </ReactFlowProvider>,
-  );
+  renderNode(studentNodeProps({ id: 'long-title', data: { title } }));
 
   const heading = screen.getByText(title);
   const content = screen.getByTestId('roadmap-node-content');
@@ -771,32 +407,17 @@ function mountChangedNode(data: Partial<RoadmapFlowNode['data']>) {
     <NodeChangeCountsProvider roadmapId="roadmap" enabled>
       <ReactFlowProvider>
         <RoadmapNode
-          {...({
+          {...studentNodeProps({
             id: 'changed-node',
-            type: 'roadmap',
             data: {
               title: 'Variables',
               roadmapId: 'roadmap',
               notificationsEnabled: true,
-              typeColor: '#024AD8',
-              typeName: 'Contenido',
-              typeIcon: 'BookOpen',
               status: 'editing',
-              isTeacherBlocked: false,
-              isHidden: false,
               linkCount: 1,
               ...data,
             },
-            selected: false,
-            selectable: true,
-            draggable: false,
-            dragging: false,
-            deletable: false,
-            isConnectable: false,
-            positionAbsoluteX: 0,
-            positionAbsoluteY: 0,
-            zIndex: 0,
-          } as NodeProps<RoadmapFlowNode>)}
+          })}
         />
       </ReactFlowProvider>
     </NodeChangeCountsProvider>,
