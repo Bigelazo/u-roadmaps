@@ -1,5 +1,5 @@
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
-import type { RoadmapVersionHistory } from '@/features/roadmap/server';
+import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
 
 const positionLabels: Record<InstitutionalCoursePosition, string> = {
   COURSE_PROFESSOR: 'Profesor de cátedra',

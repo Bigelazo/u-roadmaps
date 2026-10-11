@@ -5,7 +5,7 @@ import { buttonVariants } from '@/shared/ui/button';
 import { dividedListClassName, PageEyebrow, PageShell, PageTitle } from '@/shared/ui/page-header';
 import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
 import { versionUrl } from '@/shared/version-history-url';
-import type { RoadmapVersionHistory as VersionHistory } from '@/features/roadmap/server';
+import type { RoadmapVersionHistory as VersionHistory } from '@/features/roadmap/version-types';
 
 export function RoadmapVersionHistory({ history }: Readonly<{ history: VersionHistory }>) {
   return (
