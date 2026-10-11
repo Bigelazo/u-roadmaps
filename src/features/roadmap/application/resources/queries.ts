@@ -11,7 +11,7 @@ import { requireStudentNodeAccess } from '@/features/roadmap/application/complet
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import { readUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
 import { requireUuid } from '@/shared/validation';
-import { ApplicationError, applicationResult } from '@/shared/errors/server';
+import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
 
 type NodeResourcesInput = {
   actor: RoadmapActor;
@@ -73,7 +73,7 @@ async function requireStudentResourceAccess(
   }
 }
 
-async function getRoadmapNodeResourcesUnsafe(
+export const getRoadmapNodeResources = withApplicationResult(async function getRoadmapNodeResources(
   { actor, identifier, nodeId }: NodeResourcesInput,
   changePort: RoadmapChangePort,
 ) {
@@ -90,9 +90,9 @@ async function getRoadmapNodeResourcesUnsafe(
     orderBy: { title: 'asc' },
   });
   return resources.map((resource) => resourceDto(resource, identifier));
-}
+});
 
-async function downloadRoadmapResourceUnsafe(
+export const downloadRoadmapResource = withApplicationResult(async function downloadRoadmapResource(
   { actor, identifier, resourceId }: ResourceDownloadInput,
   changePort: RoadmapChangePort,
 ) {
@@ -120,15 +120,4 @@ async function downloadRoadmapResourceUnsafe(
   } catch {
     throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
   }
-}
-
-export function getRoadmapNodeResources(input: NodeResourcesInput, changePort: RoadmapChangePort) {
-  return applicationResult(() => getRoadmapNodeResourcesUnsafe(input, changePort));
-}
-
-export function downloadRoadmapResource(
-  input: ResourceDownloadInput,
-  changePort: RoadmapChangePort,
-) {
-  return applicationResult(() => downloadRoadmapResourceUnsafe(input, changePort));
-}
+});

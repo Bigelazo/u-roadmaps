@@ -17,104 +17,12 @@ import {
 } from '@/features/roadmap/infrastructure/resources/filesystem';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import {
-  isNodeTypeColor,
-  isNodeTypeIconId,
-  type NodeTypeColor,
-  type NodeTypeIconId,
-} from '@/features/roadmap/node-type-appearance';
+import type { NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
+import { requireString } from './validation';
 import { Prisma, prisma } from '@/shared/server/db';
-import { ApplicationError, applicationResult } from '@/shared/errors/server';
-export { wouldCreateDependencyCycle as findCycle } from '@/features/roadmap/domain/access';
+import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
 
 type JsonObject = Record<string, unknown>;
-
-export { normalizeName } from '../domain/roadmap-copy';
-
-export function requireString(value: unknown, field: string, maxLength?: number): string {
-  if (
-    typeof value !== 'string' ||
-    !value.trim() ||
-    (maxLength !== undefined && value.trim().length > maxLength)
-  ) {
-    throw new ApplicationError(400, 'INVALID_REQUEST', `${field} debe ser un texto no vacío.`);
-  }
-  return value.trim();
-}
-
-export function optionalString(
-  value: unknown,
-  field: string,
-  maxLength?: number,
-): string | null | undefined {
-  if (value === undefined || value === null) return value === null ? null : undefined;
-  return requireString(value, field, maxLength);
-}
-
-/** Validate optional Node description text without changing its exact content. */
-export function nodeDescription(value: unknown): string | null | undefined {
-  if (value === undefined || value === null) return value;
-  if (typeof value !== 'string' || !value.trim())
-    throw new ApplicationError(400, 'INVALID_REQUEST', 'description debe ser un texto no vacío.');
-  return value;
-}
-
-export function requireFiniteNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new ApplicationError(400, 'INVALID_REQUEST', `${field} debe ser un número finito.`);
-  }
-  return value;
-}
-
-export function requireBoolean(value: unknown, field: string): boolean {
-  if (typeof value !== 'boolean') {
-    throw new ApplicationError(400, 'INVALID_REQUEST', `${field} debe ser booleano.`);
-  }
-  return value;
-}
-
-export function requireNodeTypeColor(value: unknown): NodeTypeColor {
-  const color = requireString(value, 'color');
-  if (!isNodeTypeColor(color)) {
-    throw new ApplicationError(
-      400,
-      'INVALID_REQUEST',
-      'color debe pertenecer a la paleta de tipos de nodo.',
-    );
-  }
-  return color.toUpperCase() as NodeTypeColor;
-}
-
-export function requireNodeTypeIcon(value: unknown): NodeTypeIconId {
-  const icon = requireString(value, 'icon');
-  if (!isNodeTypeIconId(icon)) {
-    throw new ApplicationError(
-      400,
-      'INVALID_REQUEST',
-      'icon debe pertenecer al catálogo de íconos docentes.',
-    );
-  }
-  return icon;
-}
-
-export function requireResourceType(value: unknown): 'FILE' | 'LINK' | 'VIDEO' {
-  if (value !== 'FILE' && value !== 'LINK' && value !== 'VIDEO') {
-    throw new ApplicationError(400, 'INVALID_RESOURCE_TYPE', 'type debe ser FILE, LINK o VIDEO.');
-  }
-  return value;
-}
-
-export function requireUrl(value: unknown): string {
-  const url = requireString(value, 'url');
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-      throw new Error('Unsupported URL scheme');
-  } catch {
-    throw new ApplicationError(400, 'INVALID_URL', 'url debe ser una URL válida.');
-  }
-  return url;
-}
 
 export function resourceDownloadUrl(identifier: CourseOfferingIdentifier, resourceId: string) {
   return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap/resources/${resourceId}/file`;
@@ -139,21 +47,20 @@ export function resourceDto(
   };
 }
 
-async function requireRoadmapUnsafe(identifier: CourseOfferingIdentifier) {
-  const roadmap = await prisma.roadmap.findFirst({
-    where: {
-      courseOffering: identifier,
-    },
-  });
-  if (!roadmap) {
-    throw new ApplicationError(
-      404,
-      'ROADMAP_NOT_FOUND',
-      'El profesor todavía no ha creado un roadmap para este curso.',
-    );
-  }
-  return roadmap;
-}
+const roadmapNotFound = () =>
+  new ApplicationError(
+    404,
+    'ROADMAP_NOT_FOUND',
+    'El profesor todavía no ha creado un roadmap para este curso.',
+  );
+
+export const requireRoadmap = withApplicationResult(
+  async (identifier: CourseOfferingIdentifier) => {
+    const roadmap = await prisma.roadmap.findFirst({ where: { courseOffering: identifier } });
+    if (!roadmap) throw roadmapNotFound();
+    return roadmap;
+  },
+);
 
 export function nodeDto(node: {
   id: string;
@@ -205,7 +112,7 @@ export function nodeTypeDto(nodeType: {
   };
 }
 
-export function handlePrismaError(error: unknown): never {
+function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002')
       throw new ApplicationError(
@@ -220,74 +127,64 @@ export function handlePrismaError(error: unknown): never {
   throw error;
 }
 
-async function getRoadmapDtoUnsafe(identifier: CourseOfferingIdentifier, includeHidden = true) {
-  const roadmap = await prisma.roadmap.findFirst({
-    where: { courseOffering: identifier },
-    include: {
-      courseOffering: { include: { course: true } },
-      roadmapNodes: {
-        orderBy: { title: 'asc' },
-        include: { resources: { orderBy: { title: 'asc' } } },
+export const getRoadmapDto = withApplicationResult(
+  async (identifier: CourseOfferingIdentifier, includeHidden = true) => {
+    const roadmap = await prisma.roadmap.findFirst({
+      where: { courseOffering: identifier },
+      include: {
+        courseOffering: {
+          select: {
+            id: true,
+            year: true,
+            semester: true,
+            course: { select: { code: true, name: true, department: true } },
+          },
+        },
+        roadmapNodes: {
+          orderBy: { title: 'asc' },
+          include: { resources: { orderBy: { title: 'asc' } } },
+        },
       },
-    },
-  });
+    });
 
-  if (!roadmap)
-    throw new ApplicationError(
-      404,
-      'ROADMAP_NOT_FOUND',
-      'El profesor todavía no ha creado un roadmap para este curso.',
-    );
-  const dependencies = await prisma.dependency.findMany({
-    where: { sourceNode: { roadmapId: roadmap.id } },
-    orderBy: { id: 'asc' },
-  });
+    if (!roadmap) throw roadmapNotFound();
+    const dependencies = await prisma.dependency.findMany({
+      where: { sourceNode: { roadmapId: roadmap.id } },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        sourceNodeId: true,
+        targetNodeId: true,
+        sourceHandle: true,
+        targetHandle: true,
+      },
+    });
 
-  const nodes = includeHidden
-    ? roadmap.roadmapNodes
-    : roadmap.roadmapNodes.filter((node) => node.isVisible);
-  const visibleNodeIds = new Set(nodes.map((node) => node.id));
-  const visibleDependencies: {
-    id: string;
-    sourceNodeId: string;
-    targetNodeId: string;
-    sourceHandle: string;
-    targetHandle: string;
-  }[] = [];
-  for (const dependency of dependencies) {
-    if (
-      includeHidden ||
-      (visibleNodeIds.has(dependency.sourceNodeId) && visibleNodeIds.has(dependency.targetNodeId))
-    ) {
-      visibleDependencies.push({
-        id: dependency.id,
-        sourceNodeId: dependency.sourceNodeId,
-        targetNodeId: dependency.targetNodeId,
-        sourceHandle: dependency.sourceHandle,
-        targetHandle: dependency.targetHandle,
-      });
-    }
-  }
-  return {
-    course: {
-      code: roadmap.courseOffering.course.code,
-      name: roadmap.courseOffering.course.name,
-      department: roadmap.courseOffering.course.department,
-    },
-    courseOffering: {
-      id: roadmap.courseOffering.id,
-      year: roadmap.courseOffering.year,
-      semester: roadmap.courseOffering.semester,
-    },
-    roadmap: { id: roadmap.id, closedAt: roadmap.closedAt },
-    nodeTypes: await getAvailableTypes(roadmap.id),
-    nodes: nodes.map((node) => ({
-      ...nodeDto(node),
-      resources: node.resources.map((resource) => resourceDto(resource, identifier)),
-    })),
-    dependencies: visibleDependencies,
-  };
-}
+    const nodes = includeHidden
+      ? roadmap.roadmapNodes
+      : roadmap.roadmapNodes.filter((node) => node.isVisible);
+    const visibleNodeIds = new Set(nodes.map((node) => node.id));
+    const visibleDependencies = includeHidden
+      ? dependencies
+      : dependencies.filter(
+          (dependency) =>
+            visibleNodeIds.has(dependency.sourceNodeId) &&
+            visibleNodeIds.has(dependency.targetNodeId),
+        );
+    const { course, ...courseOffering } = roadmap.courseOffering;
+    return {
+      course,
+      courseOffering,
+      roadmap: { id: roadmap.id, closedAt: roadmap.closedAt },
+      nodeTypes: await getAvailableTypes(roadmap.id),
+      nodes: nodes.map((node) => ({
+        ...nodeDto(node),
+        resources: node.resources.map((resource) => resourceDto(resource, identifier)),
+      })),
+      dependencies: visibleDependencies,
+    };
+  },
+);
 
 /**
  * The optional frozen version to copy, identified by its Academic term as
@@ -460,7 +357,7 @@ const roadmapConflict = () =>
 
 // The course may arrive without a description when it is already materialized from
 // U-Campus. In that case it keeps the registered name and department.
-async function createRoadmapUnsafe(
+export const createRoadmap = withApplicationResult(async function createRoadmap(
   identifier: CourseOfferingIdentifier,
   body: JsonObject,
   actor: { id: string; name?: string },
@@ -557,21 +454,4 @@ async function createRoadmapUnsafe(
       throw roadmapConflict();
     handlePrismaError(error);
   }
-}
-
-export function requireRoadmap(identifier: CourseOfferingIdentifier) {
-  return applicationResult(() => requireRoadmapUnsafe(identifier));
-}
-
-export function getRoadmapDto(identifier: CourseOfferingIdentifier, includeHidden = true) {
-  return applicationResult(() => getRoadmapDtoUnsafe(identifier, includeHidden));
-}
-
-export function createRoadmap(
-  identifier: CourseOfferingIdentifier,
-  body: JsonObject,
-  actor: { id: string; name?: string },
-  changePort: RoadmapChangePort,
-) {
-  return applicationResult(() => createRoadmapUnsafe(identifier, body, actor, changePort));
-}
+});
