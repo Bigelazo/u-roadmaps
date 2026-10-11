@@ -2,9 +2,7 @@ import { clickElement, type TutorialStep } from '@/shared/client/tutorial/tutori
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 import { NODE_TYPES_MENU_ITEM_LABEL } from '@/features/roadmap/editor/types';
 import { practiceNodeIds } from './practice-roadmap';
-
-const canvas = '.react-flow';
-const nodeSelector = (id: string) => `.react-flow__node[data-id="${id}"]`;
+import { canvas, nodeSelector, nodeTypeAndResourcesStep } from './student-tutorial';
 
 /** "Crear en el mapa", its menu while open, or the creation dialog while open. */
 function nodeCreator() {
@@ -45,12 +43,7 @@ export function teachingTutorialSteps(
         'Arrastra el fondo para desplazarte y usa la rueda del mouse para acercar o alejar. Presiona este botón para volver a ver el mapa completo.',
       advanceWhen: (action) => action.type === 'fitView',
     },
-    {
-      element: nodeSelector(practiceNodeIds.c),
-      title: 'Tipo de nodo y recursos',
-      description:
-        'El ícono y su nombre indican el tipo de nodo, como Material extra. Los contadores muestran cuántos enlaces y archivos contiene.',
-    },
+    nodeTypeAndResourcesStep,
     {
       element: nodeSelector(practiceNodeIds.h),
       title: 'Nodo oculto',
@@ -86,7 +79,7 @@ export function teachingTutorialSteps(
       side: 'top',
     },
     {
-      element: '.react-flow',
+      element: canvas,
       title: 'Conecta tu nodo',
       description:
         'Arrastra desde el borde de tu nuevo nodo hasta Control 1 para crear una dependencia.',
@@ -102,7 +95,7 @@ export function teachingTutorialSteps(
         'Tu nodo ahora es prerrequisito de Control 1: un nodo queda bloqueado hasta completar sus prerrequisitos. No se permiten ciclos. Para borrar una dependencia, selecciona su flecha y presiona "Eliminar dependencia".',
     },
     {
-      element: '.react-flow',
+      element: canvas,
       title: 'Selecciona tu nodo',
       description: 'Haz clic en el nodo que creaste para editarlo.',
       advanceWhen: (action) => action.type === 'selectNode' && action.nodeId === createdNodeId,

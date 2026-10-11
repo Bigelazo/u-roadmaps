@@ -30,8 +30,8 @@ import {
 } from '@/shared/ui/item';
 import { Separator } from '@/shared/ui/separator';
 import { Sheet, SheetContent } from '@/shared/ui/sheet';
-import { Sidebar, SidebarContent, SidebarProvider, SidebarRail } from '@/shared/ui/sidebar';
-import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
+import { SidebarContent, SidebarProvider } from '@/shared/ui/sidebar';
+import { RoadmapSidePanel } from '@/features/roadmap/ui/RoadmapSidePanel';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
@@ -104,7 +104,7 @@ function StudentNodeDetailContent({
                 {status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
               </Button>
             )}
-            {!isStudentBlockedNode(node) ? (
+            {!blocked ? (
               <NodeFullscreenDialog
                 key={node.id}
                 title={node.title}
@@ -226,7 +226,14 @@ export function StudentNodeDetail({
 }: Props) {
   const isMobile = useMobileLayout();
   if (!node || !status || isStudentBlockedNode(node)) return null;
-  const nodeType = nodeTypes?.find((type) => type.id === node.nodeTypeId);
+  const contentProps = {
+    node,
+    status,
+    onClose,
+    onComplete,
+    isReadOnly,
+    nodeType: nodeTypes?.find((type) => type.id === node.nodeTypeId),
+  };
   if (isMobile) {
     return (
       <Sheet open onOpenChange={(open) => !open && onClose()}>
@@ -236,15 +243,7 @@ export function StudentNodeDetail({
           aria-modal="true"
           className="gap-0 overflow-y-auto border-0 bg-card shadow-none data-[side=bottom]:h-dvh! data-[side=bottom]:max-h-dvh!"
         >
-          <StudentNodeDetailContent
-            node={node}
-            status={status}
-            onClose={onClose}
-            onComplete={onComplete}
-            isReadOnly={isReadOnly}
-            isModal
-            nodeType={nodeType}
-          />
+          <StudentNodeDetailContent {...contentProps} isModal />
         </SheetContent>
       </Sheet>
     );
@@ -255,33 +254,15 @@ export function StudentNodeDetail({
       className="contents"
       style={{ '--sidebar-width': `${panelWidth}px` } as CSSProperties}
     >
-      <Sidebar
-        side="right"
+      <RoadmapSidePanel
         id="student-node-detail-panel"
         aria-labelledby="student-node-detail-title"
-        className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"
+        railLabel="Redimensionar detalle del nodo"
+        panelWidth={panelWidth}
+        onPanelWidthChange={onPanelWidthChange}
       >
-        {onPanelWidthChange ? (
-          <SidebarRail
-            ariaLabel="Redimensionar detalle del nodo"
-            controlsId="student-node-detail-panel"
-            value={panelWidth}
-            min={panelWidthLimits.min}
-            max={panelWidthLimits.max}
-            onValueChange={onPanelWidthChange}
-            className="sm:hidden lg:flex"
-          />
-        ) : null}
-        <StudentNodeDetailContent
-          node={node}
-          status={status}
-          onClose={onClose}
-          onComplete={onComplete}
-          isReadOnly={isReadOnly}
-          isSidebar
-          nodeType={nodeType}
-        />
-      </Sidebar>
+        <StudentNodeDetailContent {...contentProps} isSidebar />
+      </RoadmapSidePanel>
     </SidebarProvider>
   );
 }

@@ -1,12 +1,21 @@
 import { clickElement, type TutorialStep } from '@/shared/client/tutorial/tutorial';
 import { practiceNodeIds } from './practice-roadmap';
 
-const nodeSelector = (id: string) => `.react-flow__node[data-id="${id}"]`;
+export const canvas = '.react-flow';
+export const nodeSelector = (id: string) => `.react-flow__node[data-id="${id}"]`;
+
+/** Shared by the student and teaching Roadmap tutorials. */
+export const nodeTypeAndResourcesStep = {
+  element: nodeSelector(practiceNodeIds.c),
+  title: 'Tipo de nodo y recursos',
+  description:
+    'El ícono y su nombre indican el tipo de nodo, como Material extra. Los contadores muestran cuántos enlaces y archivos contiene.',
+};
 
 /** The student Roadmap tutorial on the Practice roadmap: explanatory, advanced with "Siguiente". */
 export const studentTutorialSteps: readonly TutorialStep[] = [
   {
-    element: '.react-flow',
+    element: canvas,
     title: 'Muévete por el mapa',
     description:
       'Arrastra el fondo para desplazarte y usa la rueda del mouse o el gesto de pellizcar para acercar o alejar el mapa.',
@@ -16,12 +25,7 @@ export const studentTutorialSteps: readonly TutorialStep[] = [
     title: 'Centrar mapa',
     description: 'Si te pierdes, este botón vuelve a mostrar el mapa completo.',
   },
-  {
-    element: nodeSelector(practiceNodeIds.c),
-    title: 'Tipo de nodo y recursos',
-    description:
-      'El ícono y su nombre indican el tipo de nodo, como Material extra. Los contadores muestran cuántos enlaces y archivos contiene.',
-  },
+  nodeTypeAndResourcesStep,
   {
     element: nodeSelector(practiceNodeIds.a),
     title: 'Nodo completado',
