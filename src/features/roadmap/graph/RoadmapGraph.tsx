@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type KeyboardEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -68,6 +69,8 @@ const selectedEdgeColor = 'var(--primary)';
 const roadmapFitViewOptions = { padding: 0.28 };
 const roadmapDependencyHandles = ['top', 'right', 'bottom', 'left'] as const;
 const studentEdgeStroke = 'var(--ink)';
+const bottomRightPanelClassName =
+  'pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1';
 
 type RoadmapGraphActionMenu = NodeActionCallbacks & {
   openNodeId: string | null;
@@ -91,6 +94,9 @@ function mapProjectionToFlow(
     const isHidden = 'isVisible' in node && !node.isVisible;
     const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
     const resources = 'resources' in node ? node.resources : [];
+    const nodeType = nodeTypesById.get(node.nodeTypeId);
+    const isActionMenuOpen =
+      actionMenu.openNodeId === node.id || actionMenu.closingNodeId === node.id;
     return {
       id: node.id,
       type: 'roadmap',
@@ -98,9 +104,9 @@ function mapProjectionToFlow(
         roadmapId: roadmap.roadmap.id,
         notificationsEnabled,
         title: node.title,
-        typeColor: nodeTypesById.get(node.nodeTypeId)?.color ?? 'var(--primary)',
-        typeName: nodeTypesById.get(node.nodeTypeId)?.name ?? 'Sin tipo',
-        typeIcon: nodeTypesById.get(node.nodeTypeId)?.icon ?? 'Shapes',
+        typeColor: nodeType?.color ?? 'var(--primary)',
+        typeName: nodeType?.name ?? 'Sin tipo',
+        typeIcon: nodeType?.icon ?? 'Shapes',
         status: isTeacherView ? 'editing' : studentNodeStatus(node),
         isHidden,
         isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
@@ -108,7 +114,7 @@ function mapProjectionToFlow(
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
         blockReason,
         canManageActions: canEdit,
-        isActionMenuOpen: actionMenu.openNodeId === node.id || actionMenu.closingNodeId === node.id,
+        isActionMenuOpen,
         isActionMenuClosing: actionMenu.closingNodeId === node.id,
         onToggleActionMenu: actionMenu.onToggle,
         onAction: actionMenu.onAction,
@@ -120,7 +126,7 @@ function mapProjectionToFlow(
       deletable: false,
       selectable: canEdit || !blockReason,
       focusable: true,
-      zIndex: actionMenu.openNodeId === node.id || actionMenu.closingNodeId === node.id ? 20 : 0,
+      zIndex: isActionMenuOpen ? 20 : 0,
       ariaRole: blockReason ? 'button' : undefined,
       domAttributes: blockReason ? { 'aria-disabled': true } : undefined,
     };
@@ -306,10 +312,7 @@ function RoadmapGraphToolbar({
         </div>
       </Panel>
       {bottomRightActions ? (
-        <Panel
-          position="bottom-right"
-          className="pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1"
-        >
+        <Panel position="bottom-right" className={bottomRightPanelClassName}>
           <div className="pointer-events-auto">{bottomRightActions(findOpenPosition)}</div>
         </Panel>
       ) : null}
@@ -428,10 +431,7 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
         </Panel>
       ) : null}
       {slots?.bottomRight ? (
-        <Panel
-          position="bottom-right"
-          className="pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1"
-        >
+        <Panel position="bottom-right" className={bottomRightPanelClassName}>
           {slots.bottomRight}
         </Panel>
       ) : null}
@@ -439,19 +439,89 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   );
 }
 
+type NodeActionMenuState = {
+  editing: RoadmapGraphEditing;
+  selectedNodeId: string | null | undefined;
+  nodeId: string;
+} | null;
+
+/** A menu state applies only while its editing session and Node selection are current. */
+function activeMenuNodeId(
+  state: NodeActionMenuState,
+  editing: RoadmapGraphEditing | undefined,
+  selectedNodeId: string | null | undefined,
+) {
+  return editing && state?.editing === editing && state.selectedNodeId === selectedNodeId
+    ? state.nodeId
+    : null;
+}
+
+function useNodeActionMenu({
+  editing,
+  selectedNodeId,
+  selectedNodeIdRef,
+  emitEditingIntent,
+}: {
+  editing: RoadmapGraphEditing | undefined;
+  selectedNodeId: string | null | undefined;
+  selectedNodeIdRef: RefObject<string | null | undefined>;
+  emitEditingIntent: (intent: RoadmapGraphEditingIntent) => void;
+}) {
+  const [openMenu, setOpenMenu] = useState<NodeActionMenuState>(null);
+  const [closingMenu, setClosingMenu] = useState<NodeActionMenuState>(null);
+  const openNodeId = activeMenuNodeId(openMenu, editing, selectedNodeId);
+  const closingNodeId = activeMenuNodeId(closingMenu, editing, selectedNodeId);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const beginClosing = useCallback(
+    (nodeId: string) => {
+      if (!editing) return;
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+      setClosingMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
+      closeTimerRef.current = setTimeout(() => setClosingMenu(null), 400);
+    },
+    [editing, selectedNodeIdRef],
+  );
+  const closeActionMenu = useCallback(
+    (restoreFocus = true) => {
+      if (openNodeId) beginClosing(openNodeId);
+      setOpenMenu(null);
+      if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+    },
+    [beginClosing, openNodeId],
+  );
+  const onToggle = useCallback(
+    (nodeId: string, trigger: HTMLButtonElement) => {
+      if (!editing) return;
+      triggerRef.current = trigger;
+      if (openNodeId === nodeId) {
+        closeActionMenu();
+        return;
+      }
+      if (openNodeId) beginClosing(openNodeId);
+      setOpenMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
+    },
+    [beginClosing, closeActionMenu, editing, openNodeId, selectedNodeIdRef],
+  );
+  const onAction = useCallback(
+    (intent: NodeActionIntent) => {
+      closeActionMenu(false);
+      emitEditingIntent(intent);
+    },
+    [closeActionMenu, emitEditingIntent],
+  );
+  const actionMenu = useMemo<RoadmapGraphActionMenu>(
+    () => ({ openNodeId, closingNodeId, onToggle, onAction }),
+    [closingNodeId, onAction, onToggle, openNodeId],
+  );
+  return { actionMenu, closeActionMenu };
+}
+
 function useRoadmapGraphController({
   projection,
   notificationsEnabled,
-  onSelectNode,
-  onClearSelectedNode,
   selectedNodeId,
   focusReturnRequest,
-  bottomLeftActions,
-  bottomRightActions,
-  overlaySlots,
-  onViewportChange,
-  onFitView,
-  viewportRestoration,
   confirmedAutomaticLayout,
 }: RoadmapGraphProps) {
   const editing: RoadmapGraphEditing | undefined =
@@ -466,34 +536,10 @@ function useRoadmapGraphController({
     return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
   }, [editing, projectionKind, projectionRoadmap]);
   const layoutDirection = confirmedAutomaticLayout?.direction ?? 'TB';
-  const [openActionMenu, setOpenActionMenu] = useState<{
-    editing: RoadmapGraphEditing;
-    selectedNodeId: string | null | undefined;
-    nodeId: string;
-  } | null>(null);
-  const [closingActionMenu, setClosingActionMenu] = useState<{
-    editing: RoadmapGraphEditing;
-    selectedNodeId: string | null | undefined;
-    nodeId: string;
-  } | null>(null);
-  const openActionMenuNodeId =
-    editing &&
-    openActionMenu?.editing === editing &&
-    openActionMenu.selectedNodeId === selectedNodeId
-      ? openActionMenu.nodeId
-      : null;
-  const closingActionMenuNodeId =
-    editing &&
-    closingActionMenu?.editing === editing &&
-    closingActionMenu.selectedNodeId === selectedNodeId
-      ? closingActionMenu.nodeId
-      : null;
-  const actionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const actionMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onEditingIntent = editing?.onEditingIntent;
-  // El lienzo guarda las posiciones que el arrastre todavía no ha recargado, de
-  // modo que solo un roadmap nuevo puede reemplazarlas. Las devoluciones viven
-  // en una referencia para que un render del contenedor no rehaga el grafo.
+  // The canvas keeps positions that a drag has not reloaded yet, so only a new
+  // roadmap can replace them. The callbacks live in a ref so that a container
+  // render does not rebuild the graph.
   const handlers = useRef<{ onEditingIntent?: (intent: RoadmapGraphEditingIntent) => void }>({
     onEditingIntent,
   });
@@ -524,52 +570,12 @@ function useRoadmapGraphController({
     (dependencyId: string) => deleteDependencies([dependencyId]),
     [deleteDependencies],
   );
-  const beginClosingActionMenu = useCallback(
-    (nodeId: string) => {
-      if (!editing) return;
-      if (actionMenuCloseTimerRef.current) clearTimeout(actionMenuCloseTimerRef.current);
-      setClosingActionMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
-      actionMenuCloseTimerRef.current = setTimeout(() => setClosingActionMenu(null), 400);
-    },
-    [editing],
-  );
-  const closeActionMenu = useCallback(
-    (restoreFocus = true) => {
-      if (openActionMenuNodeId) beginClosingActionMenu(openActionMenuNodeId);
-      setOpenActionMenu(null);
-      if (restoreFocus) requestAnimationFrame(() => actionMenuTriggerRef.current?.focus());
-    },
-    [beginClosingActionMenu, openActionMenuNodeId],
-  );
-  const toggleActionMenu = useCallback(
-    (nodeId: string, trigger: HTMLButtonElement) => {
-      if (!editing) return;
-      actionMenuTriggerRef.current = trigger;
-      if (openActionMenuNodeId === nodeId) {
-        closeActionMenu();
-        return;
-      }
-      if (openActionMenuNodeId) beginClosingActionMenu(openActionMenuNodeId);
-      setOpenActionMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
-    },
-    [beginClosingActionMenu, closeActionMenu, editing, openActionMenuNodeId],
-  );
-  const requestNodeAction = useCallback(
-    (intent: NodeActionIntent) => {
-      closeActionMenu(false);
-      emitEditingIntent(intent);
-    },
-    [closeActionMenu, emitEditingIntent],
-  );
-  const actionMenu = useMemo(
-    () => ({
-      openNodeId: canEdit ? openActionMenuNodeId : null,
-      closingNodeId: canEdit ? closingActionMenuNodeId : null,
-      onToggle: toggleActionMenu,
-      onAction: requestNodeAction,
-    }),
-    [canEdit, closingActionMenuNodeId, openActionMenuNodeId, requestNodeAction, toggleActionMenu],
-  );
+  const { actionMenu, closeActionMenu } = useNodeActionMenu({
+    editing,
+    selectedNodeId,
+    selectedNodeIdRef,
+    emitEditingIntent,
+  });
   const [flow, setFlow] = useState(() =>
     mapProjectionToFlow(
       stableProjection,
@@ -666,8 +672,8 @@ function useRoadmapGraphController({
   return {
     canEdit,
     layoutDirection,
-    openActionMenuNodeId,
-    closingActionMenuNodeId,
+    openActionMenuNodeId: actionMenu.openNodeId,
+    closingActionMenuNodeId: actionMenu.closingNodeId,
     selectedNodeIdRef,
     keyboardMovePendingRef,
     deleteDependencies,
@@ -678,18 +684,11 @@ function useRoadmapGraphController({
     connectNodes,
     proposeAutoLayout,
     containerRef,
-    onClearSelectedNode,
-    onSelectNode,
-    onViewportChange,
-    onFitView,
-    overlaySlots,
-    viewportRestoration,
-    bottomLeftActions,
-    bottomRightActions,
   };
 }
 
 export function RoadmapGraph(props: RoadmapGraphProps) {
+  const { onClearSelectedNode, onSelectNode, onViewportChange } = props;
   const model = useRoadmapGraphController(props);
   const {
     canEdit,
@@ -704,39 +703,69 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     applyNodePositions,
     connectNodes,
     containerRef,
-    onClearSelectedNode,
-    onSelectNode,
-    onViewportChange,
   } = model;
 
-  const isNavigationEnabled = !openActionMenuNodeId && !closingActionMenuNodeId;
+  const isActionMenuActive = Boolean(openActionMenuNodeId || closingActionMenuNodeId);
+  const isNavigationEnabled = !isActionMenuActive;
   const canInteract = canEdit && isNavigationEnabled;
 
+  const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' && isActionMenuActive) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeActionMenu();
+      return;
+    }
+    const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
+    if (!node) return;
+    if (event.key === 'Escape' && node.dataset.id === selectedNodeIdRef.current) {
+      onClearSelectedNode?.();
+      return;
+    }
+    if (
+      canEdit &&
+      !openActionMenuNodeId &&
+      ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+    )
+      keyboardMovePendingRef.current = true;
+  };
+
+  const handleNodesChange = (changes: NodeChange<RoadmapFlowNode>[]) => {
+    const movedWithKeyboard = keyboardMovePendingRef.current;
+    keyboardMovePendingRef.current = false;
+    const positions = changes.flatMap((change) =>
+      change.type === 'position' && change.position
+        ? [{ nodeId: change.id, position: change.position }]
+        : [],
+    );
+    const normalizedChanges = changes.map((change) =>
+      change.type === 'position' && change.position
+        ? { ...change, position: snapToRoadmapGrid(change.position) }
+        : change,
+    );
+    setFlow((current) => ({
+      ...current,
+      nodes: applyNodeChanges(
+        normalizedChanges.filter(
+          (change) =>
+            change.type !== 'remove' && (!movedWithKeyboard || change.type !== 'position'),
+        ),
+        current.nodes,
+      ),
+    }));
+    if (movedWithKeyboard) applyNodePositions('keyboard', snappedNodePositions(positions));
+  };
+
+  const setEdgeHover = (edgeId: string, isHovered: boolean) =>
+    setFlow((current) => ({
+      ...current,
+      edges: current.edges.map((edge) =>
+        edge.id === edgeId ? updateEdgeAppearance(edge, isHovered) : edge,
+      ),
+    }));
+
   return (
-    <div
-      ref={containerRef}
-      className="relative h-full"
-      onKeyDownCapture={(event) => {
-        if (event.key === 'Escape' && (openActionMenuNodeId || closingActionMenuNodeId)) {
-          event.preventDefault();
-          event.stopPropagation();
-          closeActionMenu();
-          return;
-        }
-        const node = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
-        if (!node) return;
-        if (event.key === 'Escape' && node.dataset.id === selectedNodeIdRef.current) {
-          onClearSelectedNode?.();
-          return;
-        }
-        if (
-          canEdit &&
-          !openActionMenuNodeId &&
-          ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
-        )
-          keyboardMovePendingRef.current = true;
-      }}
-    >
+    <div ref={containerRef} className="relative h-full" onKeyDownCapture={handleKeyDownCapture}>
       <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
         className="h-full"
         nodes={flow.nodes}
@@ -756,31 +785,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         zoomOnScroll={isNavigationEnabled}
         zoomOnPinch={isNavigationEnabled}
         zoomOnDoubleClick={isNavigationEnabled}
-        onNodesChange={(changes: NodeChange<RoadmapFlowNode>[]) => {
-          const movedWithKeyboard = keyboardMovePendingRef.current;
-          keyboardMovePendingRef.current = false;
-          const positions = changes.flatMap((change) =>
-            change.type === 'position' && change.position
-              ? [{ nodeId: change.id, position: change.position }]
-              : [],
-          );
-          const normalizedChanges = changes.map((change) =>
-            change.type === 'position' && change.position
-              ? { ...change, position: snapToRoadmapGrid(change.position) }
-              : change,
-          );
-          setFlow((current) => ({
-            ...current,
-            nodes: applyNodeChanges(
-              normalizedChanges.filter(
-                (change) =>
-                  change.type !== 'remove' && (!movedWithKeyboard || change.type !== 'position'),
-              ),
-              current.nodes,
-            ),
-          }));
-          if (movedWithKeyboard) applyNodePositions('keyboard', snappedNodePositions(positions));
-        }}
+        onNodesChange={handleNodesChange}
         onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
           setFlow((current) => ({
             ...current,
@@ -795,32 +800,10 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
           onSelectNode(node.id);
         }}
         onPaneClick={() => {
-          if (openActionMenuNodeId || closingActionMenuNodeId) closeActionMenu(false);
+          if (isActionMenuActive) closeActionMenu(false);
         }}
-        onEdgeMouseEnter={
-          canEdit
-            ? (_event, edge) =>
-                setFlow((current) => ({
-                  ...current,
-                  edges: current.edges.map((currentEdge) =>
-                    currentEdge.id === edge.id
-                      ? updateEdgeAppearance(currentEdge, true)
-                      : currentEdge,
-                  ),
-                }))
-            : undefined
-        }
-        onEdgeMouseLeave={
-          canEdit
-            ? (_event, edge) =>
-                setFlow((current) => ({
-                  ...current,
-                  edges: current.edges.map((currentEdge) =>
-                    currentEdge.id === edge.id ? updateEdgeAppearance(currentEdge) : currentEdge,
-                  ),
-                }))
-            : undefined
-        }
+        onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
+        onEdgeMouseLeave={canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined}
         onNodeDragStop={
           canInteract
             ? (_event, node) => {
@@ -840,41 +823,36 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         fitViewOptions={roadmapFitViewOptions}
         proOptions={{ hideAttribution: true }}
       >
-        <RoadmapGraphContents model={model} />
+        <RoadmapGraphContents props={props} model={model} />
       </ReactFlow>
     </div>
   );
 }
 
-function RoadmapGraphContents({ model }: { model: ReturnType<typeof useRoadmapGraphController> }) {
-  const {
-    overlaySlots,
-    viewportRestoration,
-    canEdit,
-    openActionMenuNodeId,
-    containerRef,
-    bottomLeftActions,
-    layoutDirection,
-    flow,
-    proposeAutoLayout,
-    bottomRightActions,
-  } = model;
+function RoadmapGraphContents({
+  props,
+  model,
+}: {
+  props: RoadmapGraphProps;
+  model: ReturnType<typeof useRoadmapGraphController>;
+}) {
+  const { overlaySlots, viewportRestoration, bottomLeftActions, bottomRightActions, onFitView } =
+    props;
+  const { canEdit, openActionMenuNodeId, containerRef, layoutDirection, flow, proposeAutoLayout } =
+    model;
   return (
     <>
       {' '}
       <RoadmapGraphOverlays slots={overlaySlots} />
       <RoadmapViewportRestorer restoration={viewportRestoration} />
-      <ActionMenuViewportAdjustment
-        nodeId={canEdit ? openActionMenuNodeId : null}
-        containerRef={containerRef}
-      />
+      <ActionMenuViewportAdjustment nodeId={openActionMenuNodeId} containerRef={containerRef} />
       <RoadmapGraphToolbar
         containerRef={containerRef}
         layoutDirection={layoutDirection}
         showAutoLayout={canEdit}
         canAutoLayout={canEdit && flow.nodes.length >= 2}
         onAutoLayout={proposeAutoLayout}
-        onFitView={model.onFitView}
+        onFitView={onFitView}
         bottomLeftActions={bottomLeftActions}
         bottomRightActions={bottomRightActions}
         nodes={flow.nodes}
