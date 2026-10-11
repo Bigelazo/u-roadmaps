@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 const { fitViewMock, screenToFlowPositionMock, setViewportMock, reactFlowHandlers } = vi.hoisted(
   () => ({
@@ -208,6 +208,7 @@ import {
   RoadmapGraph,
   type RoadmapGraphEditing,
   type RoadmapGraphEditingIntent,
+  type RoadmapGraphProps,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 
@@ -269,6 +270,54 @@ function editingCapability(overrides: Partial<RoadmapGraphEditing> = {}): Roadma
   };
 }
 
+type GraphOptions = Omit<Partial<RoadmapGraphProps>, 'projection'> & {
+  roadmap?: RoadmapDto;
+  /** Grants the editing capability; omit it for a non-editable teaching projection. */
+  editing?: Partial<RoadmapGraphEditing>;
+};
+
+function graph({ roadmap: roadmapData = roadmap, editing, ...props }: GraphOptions = {}) {
+  return (
+    <RoadmapGraph
+      projection={{
+        kind: 'teaching',
+        roadmap: roadmapData,
+        ...(editing ? { editing: editingCapability(editing) } : {}),
+      }}
+      onSelectNode={vi.fn()}
+      {...props}
+    />
+  );
+}
+
+function renderGraph(options?: GraphOptions) {
+  const result = render(graph(options));
+  return { ...result, rerenderGraph: (next?: GraphOptions) => result.rerender(graph(next)) };
+}
+
+function withOutsideButton(content: ReactNode) {
+  return (
+    <>
+      <button type="button">Fuera del canvas</button>
+      {content}
+    </>
+  );
+}
+
+function mockCanvasRect(width: number, height: number) {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: width,
+    bottom: height,
+    width,
+    height,
+    toJSON: () => ({}),
+  });
+}
+
 function GraphHarness({
   panelWidth = 360,
   roadmapData = roadmap,
@@ -300,23 +349,31 @@ beforeEach(() => {
   reactFlowHandlers.onMoveEnd = undefined;
 });
 
-test('renders a student projection without graph editing mechanics', () => {
-  render(
-    <RoadmapGraph
-      projection={{ kind: 'student', roadmap: studentRoadmap }}
-      onSelectNode={vi.fn()}
-    />,
-  );
-
-  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Abrir acciones node-1' })).toBeNull();
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
-test('renders a teaching projection without editing when the capability is absent', () => {
-  render(<RoadmapGraph projection={{ kind: 'teaching', roadmap }} onSelectNode={vi.fn()} />);
+test.each([
+  {
+    name: 'renders a student projection without graph editing mechanics',
+    element: () => (
+      <RoadmapGraph
+        projection={{ kind: 'student', roadmap: studentRoadmap }}
+        onSelectNode={vi.fn()}
+      />
+    ),
+  },
+  {
+    name: 'renders a teaching projection without editing when the capability is absent',
+    element: () => graph(),
+  },
+])('$name', ({ element }) => {
+  render(element());
 
   expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Abrir acciones node-1' })).toBeNull();
+  // Absorbs 'does not expose automatic ordering when the Roadmap cannot be edited'.
+  expect(screen.queryByRole('alertdialog')).toBeNull();
 });
 
 test('keeps a dragged node position when selecting it before the roadmap reloads', async () => {
@@ -333,12 +390,7 @@ test('keeps a dragged node position when selecting it before the roadmap reloads
 test('emits only the selected Node identifier through the Roadmap boundary', async () => {
   const user = userEvent.setup();
   const onSelectNode = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-      onSelectNode={onSelectNode}
-    />,
-  );
+  renderGraph({ editing: {}, onSelectNode });
 
   await user.click(screen.getByRole('button', { name: 'Seleccionar nodo' }));
 
@@ -346,29 +398,14 @@ test('emits only the selected Node identifier through the Roadmap boundary', asy
 });
 
 test('restores focus to the selected rendered Node after an explicit focus-return request', async () => {
-  const { rerender } = render(
-    <>
-      <button type="button">Fuera del canvas</button>
-      <RoadmapGraph
-        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-        selectedNodeId="node-1"
-        onSelectNode={vi.fn()}
-      />
-    </>,
-  );
+  const { rerender } = render(withOutsideButton(graph({ editing: {}, selectedNodeId: 'node-1' })));
   const outside = screen.getByRole('button', { name: 'Fuera del canvas' });
   outside.focus();
 
   rerender(
-    <>
-      <button type="button">Fuera del canvas</button>
-      <RoadmapGraph
-        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-        selectedNodeId={null}
-        focusReturnRequest="close-node-1"
-        onSelectNode={vi.fn()}
-      />
-    </>,
+    withOutsideButton(
+      graph({ editing: {}, selectedNodeId: null, focusReturnRequest: 'close-node-1' }),
+    ),
   );
 
   await waitFor(() =>
@@ -377,33 +414,19 @@ test('restores focus to the selected rendered Node after an explicit focus-retur
 });
 
 test('does not move focus when the requested rendered Node no longer exists', async () => {
-  const { rerender } = render(
-    <>
-      <button type="button">Fuera del canvas</button>
-      <RoadmapGraph
-        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-        selectedNodeId="node-1"
-        onSelectNode={vi.fn()}
-      />
-    </>,
-  );
+  const { rerender } = render(withOutsideButton(graph({ editing: {}, selectedNodeId: 'node-1' })));
   const outside = screen.getByRole('button', { name: 'Fuera del canvas' });
   outside.focus();
 
   rerender(
-    <>
-      <button type="button">Fuera del canvas</button>
-      <RoadmapGraph
-        projection={{
-          kind: 'teaching',
-          roadmap: { ...roadmap, nodes: roadmap.nodes.filter((node) => node.id !== 'node-1') },
-          editing: editingCapability(),
-        }}
-        selectedNodeId={null}
-        focusReturnRequest="close-missing-node"
-        onSelectNode={vi.fn()}
-      />
-    </>,
+    withOutsideButton(
+      graph({
+        roadmap: { ...roadmap, nodes: roadmap.nodes.filter((node) => node.id !== 'node-1') },
+        editing: {},
+        selectedNodeId: null,
+        focusReturnRequest: 'close-missing-node',
+      }),
+    ),
   );
 
   await waitFor(() => expect(outside.matches(':focus')).toBe(true));
@@ -438,13 +461,7 @@ test('preserves the viewport when the editor panel width changes', async () => {
 test('reports only settled user viewport movement through the Roadmap boundary', async () => {
   const user = userEvent.setup();
   const onViewportChange = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap }}
-      onSelectNode={vi.fn()}
-      onViewportChange={onViewportChange}
-    />,
-  );
+  renderGraph({ onViewportChange });
 
   await user.click(screen.getByRole('button', { name: 'Finalizar movimiento del viewport' }));
 
@@ -455,36 +472,21 @@ test('applies each viewport restoration token once without reporting an echoed m
   const onViewportChange = vi.fn();
   const restoration = { token: 'preview-return-1', viewport: { x: 120, y: 80, zoom: 1.2 } };
   setViewportMock.mockImplementation((viewport) => reactFlowHandlers.onMoveEnd?.(null, viewport));
-  const { rerender } = render(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap }}
-      onSelectNode={vi.fn()}
-      onViewportChange={onViewportChange}
-      viewportRestoration={restoration}
-    />,
-  );
+  const { rerenderGraph } = renderGraph({ onViewportChange, viewportRestoration: restoration });
 
   await waitFor(() => expect(setViewportMock).toHaveBeenCalledWith({ x: 120, y: 80, zoom: 1.2 }));
   expect(onViewportChange).not.toHaveBeenCalled();
 
-  rerender(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap }}
-      onSelectNode={vi.fn()}
-      onViewportChange={onViewportChange}
-      viewportRestoration={{ token: 'preview-return-1', viewport: { x: 400, y: 0, zoom: 1 } }}
-    />,
-  );
+  rerenderGraph({
+    onViewportChange,
+    viewportRestoration: { token: 'preview-return-1', viewport: { x: 400, y: 0, zoom: 1 } },
+  });
   expect(setViewportMock).toHaveBeenCalledOnce();
 
-  rerender(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap }}
-      onSelectNode={vi.fn()}
-      onViewportChange={onViewportChange}
-      viewportRestoration={{ token: 'preview-return-2', viewport: { x: 400, y: 0, zoom: 1 } }}
-    />,
-  );
+  rerenderGraph({
+    onViewportChange,
+    viewportRestoration: { token: 'preview-return-2', viewport: { x: 400, y: 0, zoom: 1 } },
+  });
   await waitFor(() => expect(setViewportMock).toHaveBeenCalledTimes(2));
   expect(onViewportChange).not.toHaveBeenCalled();
 });
@@ -501,202 +503,121 @@ test('centers the roadmap from the canvas control', async () => {
 test('offers toolbar content a snapped open position without exposing viewport geometry', async () => {
   const user = userEvent.setup();
   screenToFlowPositionMock.mockImplementation(({ x, y }) => ({ x: x + 7, y: y + 9 }));
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    x: 0,
-    y: 0,
-    top: 0,
-    left: 0,
-    right: 1_000,
-    bottom: 1_000,
-    width: 1_000,
-    height: 1_000,
-    toJSON: () => ({}),
-  });
+  mockCanvasRect(1_000, 1_000);
   const requests: unknown[] = [];
-  try {
-    render(
-      <RoadmapGraph
-        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-        onSelectNode={vi.fn()}
-        bottomLeftActions={(findOpenPosition) => (
-          <button type="button" onClick={() => requests.push(findOpenPosition('Nuevo hito'))}>
-            Solicitar posición
-          </button>
-        )}
-      />,
-    );
+  renderGraph({
+    editing: {},
+    bottomLeftActions: (findOpenPosition) => (
+      <button type="button" onClick={() => requests.push(findOpenPosition('Nuevo hito'))}>
+        Solicitar posición
+      </button>
+    ),
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Solicitar posición' }));
+  await user.click(screen.getByRole('button', { name: 'Solicitar posición' }));
 
-    expect(requests).toEqual([{ x: 420, y: 460 }]);
-  } finally {
-    vi.restoreAllMocks();
-  }
+  expect(requests).toEqual([{ x: 420, y: 460 }]);
 });
 
 test('finds a grid-aligned gap when toolbar content requests an occupied position', async () => {
   const user = userEvent.setup();
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    x: 0,
-    y: 0,
-    top: 0,
-    left: 0,
-    right: 1_000,
-    bottom: 1_000,
-    width: 1_000,
-    height: 1_000,
-    toJSON: () => ({}),
-  });
+  mockCanvasRect(1_000, 1_000);
   const occupiedRoadmap = structuredClone(roadmap);
   occupiedRoadmap.nodes[0].positionX = 400;
   occupiedRoadmap.nodes[0].positionY = 460;
   let position: { x: number; y: number } | null = null;
-  try {
-    render(
-      <RoadmapGraph
-        projection={{ kind: 'teaching', roadmap: occupiedRoadmap, editing: editingCapability() }}
-        onSelectNode={vi.fn()}
-        bottomLeftActions={(findOpenPosition) => (
-          <button type="button" onClick={() => (position = findOpenPosition('Nuevo hito'))}>
-            Solicitar posición libre
-          </button>
-        )}
-      />,
-    );
+  renderGraph({
+    roadmap: occupiedRoadmap,
+    editing: {},
+    bottomLeftActions: (findOpenPosition) => (
+      <button type="button" onClick={() => (position = findOpenPosition('Nuevo hito'))}>
+        Solicitar posición libre
+      </button>
+    ),
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Solicitar posición libre' }));
+  await user.click(screen.getByRole('button', { name: 'Solicitar posición libre' }));
 
-    expect(position).toEqual({ x: 420, y: 360 });
-  } finally {
-    vi.restoreAllMocks();
-  }
+  expect(position).toEqual({ x: 420, y: 360 });
 });
 
 test('reports no available position to toolbar content when the title cannot fit or occupancy fills the graph', async () => {
   const user = userEvent.setup();
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    x: 0,
-    y: 0,
-    top: 0,
-    left: 0,
-    right: 200,
-    bottom: 100,
-    width: 200,
-    height: 100,
-    toJSON: () => ({}),
-  });
+  mockCanvasRect(200, 100);
   const responses: unknown[] = [];
-  try {
-    const { rerender } = render(
-      <RoadmapGraph
-        projection={{
-          kind: 'teaching',
-          roadmap: { ...roadmap, nodes: [] },
-          editing: editingCapability(),
+  const { rerenderGraph } = renderGraph({
+    roadmap: { ...roadmap, nodes: [] },
+    editing: {},
+    bottomLeftActions: (findOpenPosition) => (
+      <button
+        type="button"
+        onClick={() => {
+          responses.push(findOpenPosition('Corto'));
+          responses.push(
+            findOpenPosition(
+              'Un título deliberadamente muy largo que necesita varias líneas para leerse completo',
+            ),
+          );
         }}
-        onSelectNode={vi.fn()}
-        bottomLeftActions={(findOpenPosition) => (
-          <button
-            type="button"
-            onClick={() => {
-              responses.push(findOpenPosition('Corto'));
-              responses.push(
-                findOpenPosition(
-                  'Un título deliberadamente muy largo que necesita varias líneas para leerse completo',
-                ),
-              );
-            }}
-          >
-            Solicitar posiciones
-          </button>
-        )}
-      />,
-    );
+      >
+        Solicitar posiciones
+      </button>
+    ),
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Solicitar posiciones' }));
-    expect(responses).toEqual([{ x: 40, y: 20 }, null]);
+  await user.click(screen.getByRole('button', { name: 'Solicitar posiciones' }));
+  expect(responses).toEqual([{ x: 40, y: 20 }, null]);
 
-    rerender(
-      <RoadmapGraph
-        projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-        onSelectNode={vi.fn()}
-        bottomLeftActions={(findOpenPosition) => (
-          <button type="button" onClick={() => responses.push(findOpenPosition('Corto'))}>
-            Solicitar posición ocupada
-          </button>
-        )}
-      />,
-    );
-    await user.click(screen.getByRole('button', { name: 'Solicitar posición ocupada' }));
+  rerenderGraph({
+    editing: {},
+    bottomLeftActions: (findOpenPosition) => (
+      <button type="button" onClick={() => responses.push(findOpenPosition('Corto'))}>
+        Solicitar posición ocupada
+      </button>
+    ),
+  });
+  await user.click(screen.getByRole('button', { name: 'Solicitar posición ocupada' }));
 
-    expect(responses.at(-1)).toBeNull();
-  } finally {
-    vi.restoreAllMocks();
-  }
+  expect(responses.at(-1)).toBeNull();
 });
 
 test('closes the selected node when Escape is pressed on the canvas node', async () => {
   const user = userEvent.setup();
   const onClearSelectedNode = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-      selectedNodeId="node-1"
-      onSelectNode={vi.fn()}
-      onClearSelectedNode={onClearSelectedNode}
-    />,
-  );
+  renderGraph({ editing: {}, selectedNodeId: 'node-1', onClearSelectedNode });
 
   screen.getByTestId('keyboard-node').focus();
   await user.keyboard('{Escape}');
   expect(onClearSelectedNode).toHaveBeenCalledOnce();
 });
 
-test('reports a keyboard node move for persistence', async () => {
-  const user = userEvent.setup();
-  const onEditingIntent = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{
-        kind: 'teaching',
-        roadmap,
-        editing: editingCapability({ onEditingIntent }),
-      }}
-      selectedNodeId="node-1"
-      onSelectNode={vi.fn()}
-    />,
-  );
-
-  screen.getByTestId('keyboard-node').focus();
-  await user.keyboard('{ArrowRight}');
-  expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
-  expect(onEditingIntent).toHaveBeenCalledWith({
-    kind: 'node-positions',
+test.each([
+  {
+    name: 'reports a keyboard node move for persistence',
     cause: 'keyboard',
-    positions: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
-  });
-});
-
-test('emits the snapped pointer position supplied by React Flow', async () => {
+    selectedNodeId: 'node-1',
+    move: async (user: ReturnType<typeof userEvent.setup>) => {
+      screen.getByTestId('keyboard-node').focus();
+      await user.keyboard('{ArrowRight}');
+    },
+  },
+  {
+    name: 'emits the snapped pointer position supplied by React Flow',
+    cause: 'pointer',
+    selectedNodeId: undefined,
+    move: (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole('button', { name: 'Finalizar arrastre' })),
+  },
+])('$name', async ({ cause, selectedNodeId, move }) => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{
-        kind: 'teaching',
-        roadmap,
-        editing: editingCapability({ onEditingIntent }),
-      }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  renderGraph({ editing: { onEditingIntent }, selectedNodeId });
 
-  await user.click(screen.getByRole('button', { name: 'Finalizar arrastre' }));
+  await move(user);
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
-
   expect(onEditingIntent).toHaveBeenCalledWith({
     kind: 'node-positions',
-    cause: 'pointer',
+    cause,
     positions: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
   });
 });
@@ -704,16 +625,7 @@ test('emits the snapped pointer position supplied by React Flow', async () => {
 test('keeps one action menu open, closes it with Escape, and emits a teacher-block intent', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{
-        kind: 'teaching',
-        roadmap,
-        editing: editingCapability({ onEditingIntent }),
-      }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  renderGraph({ editing: { onEditingIntent } });
 
   await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
   expect(screen.queryByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeNull();
@@ -738,23 +650,13 @@ test('keeps one action menu open, closes it with Escape, and emits a teacher-blo
 
 test('clears action-menu state when editing behavior is removed', async () => {
   const user = userEvent.setup();
-  const { rerender } = render(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  const { rerenderGraph } = renderGraph({ editing: {} });
 
   await user.click(screen.getByRole('button', { name: 'Abrir acciones node-1' }));
   expect(screen.getByRole('button', { name: 'Ejecutar acceso node-1' })).toBeTruthy();
 
-  rerender(<RoadmapGraph projection={{ kind: 'teaching', roadmap }} onSelectNode={vi.fn()} />);
-  rerender(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap, editing: editingCapability() }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  rerenderGraph();
+  rerenderGraph({ editing: {} });
 
   expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
@@ -762,16 +664,7 @@ test('clears action-menu state when editing behavior is removed', async () => {
 test('translates automatic-layout geometry into a session confirmation intent without moving Nodes', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{
-        kind: 'teaching',
-        roadmap,
-        editing: editingCapability({ onEditingIntent }),
-      }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  renderGraph({ editing: { onEditingIntent } });
 
   const layoutButton = screen.getByRole('button', { name: 'Ordenar horizontalmente' });
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
@@ -793,12 +686,7 @@ test('translates automatic-layout geometry into a session confirmation intent wi
 test('emits a fresh automatic-layout request for each gesture', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap, editing: editingCapability({ onEditingIntent }) }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  renderGraph({ editing: { onEditingIntent } });
 
   await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
   await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
@@ -811,16 +699,7 @@ test('emits a fresh automatic-layout request for each gesture', async () => {
 test('emits complete dependency intents and ignores incomplete connection gestures', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{
-        kind: 'teaching',
-        roadmap,
-        editing: editingCapability({ onEditingIntent }),
-      }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  renderGraph({ editing: { onEditingIntent } });
 
   await user.click(screen.getByRole('button', { name: 'Conectar dependencia' }));
   expect(onEditingIntent).toHaveBeenCalledWith({
@@ -849,16 +728,7 @@ test('emits complete dependency intents and ignores incomplete connection gestur
 test('emits an immutable collection when deleting Dependencies', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
-  render(
-    <RoadmapGraph
-      projection={{
-        kind: 'teaching',
-        roadmap,
-        editing: editingCapability({ onEditingIntent }),
-      }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  renderGraph({ editing: { onEditingIntent } });
 
   await user.click(screen.getByRole('button', { name: 'Eliminar dependencias' }));
 
@@ -870,25 +740,14 @@ test('emits an immutable collection when deleting Dependencies', async () => {
   expect(intent.kind === 'delete-dependencies' && Object.isFrozen(intent.dependencyIds)).toBe(true);
 });
 
-test('does not expose automatic ordering when the Roadmap cannot be edited', () => {
-  render(<RoadmapGraph projection={{ kind: 'teaching', roadmap }} onSelectNode={vi.fn()} />);
-
-  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
-  expect(screen.queryByRole('alertdialog')).toBeNull();
-});
-
 test('places each roadmap overlay slot in its constrained viewport panel', () => {
-  render(
-    <RoadmapGraph
-      projection={{ kind: 'teaching', roadmap }}
-      onSelectNode={vi.fn()}
-      overlaySlots={{
-        topLeft: <span data-testid="top-left-overlay">Metadata</span>,
-        topCenter: <span data-testid="top-center-overlay">Preview</span>,
-        bottomRight: <span data-testid="bottom-right-overlay">Feedback</span>,
-      }}
-    />,
-  );
+  renderGraph({
+    overlaySlots: {
+      topLeft: <span data-testid="top-left-overlay">Metadata</span>,
+      topCenter: <span data-testid="top-center-overlay">Preview</span>,
+      bottomRight: <span data-testid="bottom-right-overlay">Feedback</span>,
+    },
+  });
 
   expect(
     within(screen.getByTestId('roadmap-panel-top-left')).getByTestId('top-left-overlay'),
@@ -903,16 +762,7 @@ test('places each roadmap overlay slot in its constrained viewport panel', () =>
 
 test('disables automatic ordering until the Roadmap has enough Nodes', async () => {
   const user = userEvent.setup();
-  render(
-    <RoadmapGraph
-      projection={{
-        kind: 'teaching',
-        roadmap: { ...roadmap, nodes: roadmap.nodes.slice(0, 1) },
-        editing: editingCapability(),
-      }}
-      onSelectNode={vi.fn()}
-    />,
-  );
+  renderGraph({ roadmap: { ...roadmap, nodes: roadmap.nodes.slice(0, 1) }, editing: {} });
 
   const button = screen.getByRole('button', {
     name: 'Ordenar horizontalmente',
