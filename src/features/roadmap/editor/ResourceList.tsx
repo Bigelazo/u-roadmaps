@@ -1,6 +1,9 @@
 import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
-import { Button } from '@/shared/ui/button';
+import { cn } from 'cn';
+import { Button, buttonVariants } from '@/shared/ui/button';
+import { Item } from '@/shared/ui/item';
+import { dividedItemClassName } from './primitives';
 
 type Props = {
   resources: Resource[];
@@ -20,7 +23,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
   return (
     <ul className="flex flex-col divide-y divide-border" aria-label="Recursos del nodo">
       {resources.map((item) => (
-        <li key={item.id} className="flex items-center gap-2 py-2.5 text-sm">
+        <Item key={item.id} render={<li />} className={cn(dividedItemClassName, 'gap-2')}>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium">{item.title}</span>
             <span className="block truncate text-xs text-muted-foreground">
@@ -32,7 +35,11 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
             target="_blank"
             rel="noreferrer"
             aria-label={`Abrir recurso ${item.title}`}
-            className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            className={buttonVariants({
+              variant: 'ghost',
+              size: 'icon',
+              className: 'text-muted-foreground',
+            })}
           >
             <ExternalLink className="size-3.5" />
           </a>
@@ -54,7 +61,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
           >
             <Trash2 />
           </Button>
-        </li>
+        </Item>
       ))}
     </ul>
   );

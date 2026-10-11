@@ -1,6 +1,6 @@
-import { throwApplicationError } from '@/app/_adapters/http';
+import { unwrap } from '@/shared/errors/server';
 import { requireAuthenticatedUser as requireSessionUser } from '@/shared/server/session';
 
 export function requireAuthenticatedUser() {
-  return requireSessionUser().match((value) => value, throwApplicationError);
+  return unwrap(() => requireSessionUser());
 }

@@ -60,6 +60,40 @@ export function transitivePrerequisiteNodeIds(
   return transitiveNodeIds(nodeId, nodeIdsByTarget(dependencies));
 }
 
+/** The visible Nodes of a Roadmap and the Dependencies between them. */
+export function visibleRoadmapGraph<
+  Node extends { id: string; isVisible: boolean },
+  Dependency extends RoadmapGraphDependency,
+>(nodes: readonly Node[], dependencies: readonly Dependency[]) {
+  const visibleNodes = nodes.filter((node) => node.isVisible);
+  const visibleNodeIds = new Set(visibleNodes.map(({ id }) => id));
+  return {
+    nodes: visibleNodes,
+    dependencies: dependencies.filter(
+      ({ sourceNodeId, targetNodeId }) =>
+        visibleNodeIds.has(sourceNodeId) && visibleNodeIds.has(targetNodeId),
+    ),
+  };
+}
+
+/**
+ * The visible, not yet Teacher-blocked Nodes that a new Dependency from a Teacher-blocked
+ * Node to `targetNodeId` would block, in the order of `nodes`.
+ */
+export function dependencyTeacherBlockImpact(
+  nodes: readonly { id: string; title: string; isVisible: boolean; isTeacherBlocked: boolean }[],
+  dependencies: readonly RoadmapGraphDependency[],
+  targetNodeId: string,
+) {
+  const affectedNodeIds = new Set([
+    targetNodeId,
+    ...transitiveDependentNodeIds(dependencies, targetNodeId),
+  ]);
+  return nodes
+    .filter((node) => node.isVisible && !node.isTeacherBlocked && affectedNodeIds.has(node.id))
+    .map(({ id, title }) => ({ id, title }));
+}
+
 export function wouldCreateDependencyCycle(
   dependencies: readonly RoadmapGraphDependency[],
   sourceNodeId: string,

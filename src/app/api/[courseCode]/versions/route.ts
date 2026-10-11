@@ -1,18 +1,11 @@
 import { NextResponse } from 'next/server';
-import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
+import { courseRoute } from '@/app/_adapters/http';
 import { requireCourseCode } from '@/app/_adapters/roadmap';
 import { readRoadmapVersionHistory } from '@/features/roadmap/server';
+import { unwrap } from '@/shared/errors/server';
 
-export async function GET(_request: Request, context: RouteContext<'/api/[courseCode]/versions'>) {
-  return handleApplicationResult(async () => {
-    const courseCode = requireCourseCode((await context.params).courseCode);
-    const actor = await requireAuthenticatedUser();
-    return NextResponse.json(
-      await readRoadmapVersionHistory(actor, courseCode).match(
-        (value) => value,
-        throwApplicationError,
-      ),
-    );
-  });
-}
+export const GET = courseRoute(
+  async ({ identifier: courseCode, user }) =>
+    NextResponse.json(await unwrap(() => readRoadmapVersionHistory(user, courseCode))),
+  { identify: (params: Record<string, string>) => requireCourseCode(params.courseCode) },
+);

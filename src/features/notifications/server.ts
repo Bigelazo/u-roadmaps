@@ -3,11 +3,9 @@ import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 import { studentNodeAccessById } from '@/features/roadmap/access';
 import {
-  listOwnNotices as listNotices,
+  acknowledgeOwnNotices as acknowledgeNotices,
   findOwnNotice,
   noticeRecord,
-  countOwnNoticeTargets,
-  countOwnNodeChanges,
   uuid,
   prepareOwnNoticeOpening as prepareNoticeOpening,
 } from './infrastructure/own-inbox';
@@ -18,8 +16,12 @@ import {
   type NoticeDelivery,
   type NoticeDeliveryScheduler,
 } from './infrastructure/notice-lifecycle';
-import { acknowledgeOwnNotices as acknowledgeNotices } from './infrastructure/own-inbox';
-export { reviewOwnNode } from './infrastructure/own-inbox';
+export {
+  reviewOwnNode,
+  listOwnNotices,
+  countOwnNoticeTargets as countOwnNotices,
+  countOwnNodeChanges as countOwnNodeChangeTargets,
+} from './infrastructure/own-inbox';
 
 /** Public types of the notice lifecycle module: a recorded change's deferred delivery and its scheduler. */
 export type { NoticeDelivery, NoticeDeliveryScheduler };
@@ -39,9 +41,6 @@ export function recordRoadmapNotices(
   return recordNoticeTargets(transaction, changes, accessibleNodes);
 }
 
-export function listOwnNotices(userId: string, params: URLSearchParams) {
-  return listNotices(userId, params);
-}
 export type InboxIdentity = Readonly<{ userId: string }>;
 
 export function getInboxIdentity(userId: string): InboxIdentity {
@@ -50,14 +49,6 @@ export function getInboxIdentity(userId: string): InboxIdentity {
 
 export async function getOwnNotice(userId: string, id: string) {
   return noticeRecord(await findOwnNotice(userId, id, accessibleNodes));
-}
-
-export function countOwnNotices(userId: string, params: URLSearchParams) {
-  return countOwnNoticeTargets(userId, params);
-}
-
-export function countOwnNodeChangeTargets(userId: string, params: URLSearchParams) {
-  return countOwnNodeChanges(userId, params);
 }
 
 async function accessibleNodes(
@@ -119,10 +110,6 @@ export function prepareOwnRoadmapOpening(userId: string, input: Record<string, u
     operationId,
     input.retry === true,
   ).then((operationId) => ({ roadmapId, operationId }));
-}
-
-export function prepareOwnNoticeOpening(userId: string, roadmapId: string) {
-  return prepareNoticeOpening(userId, roadmapId, accessibleNodes);
 }
 
 export { openNotificationStream } from './infrastructure/sse';

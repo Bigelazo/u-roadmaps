@@ -2,6 +2,7 @@ import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import {
   nodeVisibleBefore,
+  currentTargetNode,
   type NoticeTargetDescriptor,
   type RoadmapView,
   type TargetValues,
@@ -44,7 +45,7 @@ export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> 
   knowers: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   audience: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   async current(target, roadmap) {
-    const node = target.nodeId ? await roadmap.node(target.nodeId) : null;
+    const node = await currentTargetNode(target, roadmap);
     return node
       ? {
           value: JSON.stringify(node.description),

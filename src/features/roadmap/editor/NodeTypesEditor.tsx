@@ -3,8 +3,11 @@ import { useState } from 'react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
+import { cn } from 'cn';
 import { Button } from '@/shared/ui/button';
+import { Item } from '@/shared/ui/item';
 import { NodeTypeForm } from './NodeTypeForm';
+import { dividedItemClassName } from './primitives';
 import type { NodeTypeDraft, NodeTypeInput } from './types';
 
 const sectionTitleClassName = 'font-heading text-lg leading-tight font-semibold';
@@ -65,7 +68,11 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onRequestDelete }:
         <h2 className={sectionTitleClassName}>Tipos disponibles</h2>
         <ul className="flex flex-col divide-y divide-border" aria-label="Tipos de nodo disponibles">
           {nodeTypes.map((type) => (
-            <li key={type.id} className="flex min-h-12 items-center gap-3 text-sm">
+            <Item
+              key={type.id}
+              render={<li />}
+              className={cn(dividedItemClassName, 'min-h-12 gap-3 py-0')}
+            >
               <NodeTypeListIcon type={type} />
               <span className="min-w-0 flex-1 truncate font-medium">{type.name}</span>
               {type.isPredefined ? (
@@ -101,7 +108,7 @@ export function NodeTypesEditor({ nodeTypes, onAdd, onUpdate, onRequestDelete }:
                   </Button>
                 </div>
               )}
-            </li>
+            </Item>
           ))}
         </ul>
       </section>
