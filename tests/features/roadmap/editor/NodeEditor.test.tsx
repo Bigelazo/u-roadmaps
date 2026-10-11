@@ -87,7 +87,13 @@ function renderEditor(
 
 /** Editor props whose session shows `node` with `overrides`. */
 function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'session'> {
-  return { session: { node: { ...node, ...overrides }, nodeTypes, isVisibilityPending: false } };
+  return {
+    session: {
+      node: { ...node, ...overrides } as RoadmapNode,
+      nodeTypes,
+      isVisibilityPending: false,
+    },
+  };
 }
 
 /** A perform effect that stays pending until the test resolves its latest call. */

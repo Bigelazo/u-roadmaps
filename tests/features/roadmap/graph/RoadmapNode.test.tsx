@@ -256,11 +256,7 @@ test.each([
 ])('$name', ({ id, resources, labels }) => {
   renderNode(studentNodeProps({ id, data: { title: 'Material de estudio', ...resources } }));
 
-  if (labels.length === 0) {
-    expect(screen.queryByTestId('roadmap-node-resources')).toBeNull();
-    return;
-  }
-  expect(screen.getByTestId('roadmap-node-resources')).toBeTruthy();
+  expect(screen.queryByTestId('roadmap-node-resources') !== null).toBe(labels.length > 0);
   for (const name of labels) expect(screen.getByRole('img', { name })).toBeTruthy();
 });
 
