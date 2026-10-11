@@ -2,34 +2,30 @@ import { randomUUID } from 'node:crypto';
 import type { APIRequestContext } from '@playwright/test';
 import { insert, sql } from './database';
 import { expect, test } from './fixtures';
-import { authenticateAs, sessionCookie } from './helpers';
+import { authenticateAs, ok } from './helpers';
+import { listNotices } from './notices';
 
 test('own Inbox requires authentication and isolates notice identities', async ({
   request,
   page,
   course,
+  studentApi,
 }) => {
-  const user = course.users.studentWithoutProgress.id;
-  expect((await request.get('/api/notifications')).status()).toBe(401);
-  const headers = { cookie: await sessionCookie(user) };
-  const response = await request.get('/api/notifications', { headers });
-  expect(response.status()).toBe(200);
+  await ok(await request.get('/api/notifications'), 401);
+  const response = await ok(await studentApi.get('/api/notifications'));
   expect(await response.json()).toMatchObject({ notifications: [], hasMore: false });
-  expect(
-    (
-      await request.get('/api/notifications/00000000-0000-4000-8000-000000000001', { headers })
-    ).status(),
-  ).toBe(404);
-  await authenticateAs(page.context(), user);
+  await ok(await studentApi.get('/api/notifications/00000000-0000-4000-8000-000000000001'), 404);
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
   await page.getByRole('button', { name: 'Avisos', exact: true }).click();
   await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
 });
 
 test('Roadmap creation persists one own notice for each eligible Participation and browser opening recognizes it', async ({
-  request,
   page,
   course,
+  apiAs,
+  teacherApi: author,
   createCourse,
 }) => {
   const { teacher, teachingAssistant, multiCourseStudent, studentWithoutProgress } = course.users;
@@ -44,32 +40,20 @@ test('Roadmap creation persists one own notice for each eligible Participation a
       { user: withdrawnStudent, role: 'STUDENT', isActive: false },
     ],
   });
-  const author = { cookie: await sessionCookie(teacher.id) };
   const path = offering.apiPath();
-  const created = await request.post(path, { headers: author, data: {} });
-  expect(created.status()).toBe(201);
+  const created = await ok(await author.post(path, { data: {} }), 201);
   const roadmapId = (await created.json()).roadmap.id;
-  expect((await request.post(path, { headers: author, data: {} })).status()).toBe(409);
-  for (const { id } of Object.values(course.users)) {
+  await ok(await author.post(path, { data: {} }), 409);
+  for (const user of Object.values(course.users)) {
+    const { id } = user;
     const eligible = [teachingAssistant.id, multiCourseStudent.id, studentWithoutProgress.id];
+    const api = await apiAs(user);
     await expect
-      .poll(
-        async () =>
-          (
-            await (
-              await request.get(`/api/notifications?roadmapId=${roadmapId}`, {
-                headers: { cookie: await sessionCookie(id) },
-              })
-            ).json()
-          ).notifications.length,
-        { message: `audience for ${id}` },
-      )
+      .poll(async () => (await listNotices(api, { roadmapId })).length, {
+        message: `audience for ${id}`,
+      })
       .toBe(eligible.includes(id) ? 1 : 0);
-    const response = await request.get(`/api/notifications?roadmapId=${roadmapId}`, {
-      headers: { cookie: await sessionCookie(id) },
-    });
-    expect(response.status()).toBe(200);
-    const notices = (await response.json()).notifications;
+    const notices = await listNotices(api, { roadmapId });
     expect(notices, `audience for ${id}`).toHaveLength(eligible.includes(id) ? 1 : 0);
   }
   await sql(
@@ -83,26 +67,19 @@ test('Roadmap creation persists one own notice for each eligible Participation a
       },
     ]),
   );
-  const newcomerHeaders = { cookie: await sessionCookie(outsider.id) };
-  expect(
-    (await getJson(request, '/api/notifications', newcomerHeaders)).notifications,
-  ).toHaveLength(0);
-  const recipient = { cookie: await sessionCookie(multiCourseStudent.id) };
-  const first = (await getJson(request, `/api/notifications?roadmapId=${roadmapId}`, recipient))
+  expect(await listNotices(await apiAs(outsider), {})).toHaveLength(0);
+  const recipient = await apiAs(multiCourseStudent);
+  const first = (await getJson(recipient, `/api/notifications?roadmapId=${roadmapId}`))
     .notifications[0];
   const subject = `Roadmap disponible: ${offering.courseCode}`;
   expect(first).toMatchObject({ subject, read: false });
-  expect((await request.get(`/api/notifications/${first.id}`, { headers: author })).status()).toBe(
-    404,
+  await ok(await author.get(`/api/notifications/${first.id}`), 404);
+  await ok(
+    await author.patch(`/api/notifications/${first.id}`, {
+      data: { action: 'read', recipientId: multiCourseStudent.id },
+    }),
+    405,
   );
-  expect(
-    (
-      await request.patch(`/api/notifications/${first.id}`, {
-        headers: author,
-        data: { action: 'read', recipientId: multiCourseStudent.id },
-      })
-    ).status(),
-  ).toBe(405);
   await authenticateAs(page.context(), multiCourseStudent.id);
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
@@ -111,26 +88,26 @@ test('Roadmap creation persists one own notice for each eligible Participation a
     .getByRole('list', { name: 'Lista de avisos' })
     .getByRole('button', { name: first.courseName });
   await expect(row).toBeVisible();
-  expect(await getJson(request, `/api/notifications/${first.id}`, recipient)).not.toHaveProperty(
-    'seen',
-  );
-  expect((await getJson(request, `/api/notifications/${first.id}`, recipient)).read).toBe(false);
+  expect(await getJson(recipient, `/api/notifications/${first.id}`)).not.toHaveProperty('seen');
+  expect((await getJson(recipient, `/api/notifications/${first.id}`)).read).toBe(false);
   await row.click();
   await expect(page).toHaveURL(offering.pagePath());
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect
-    .poll(async () => (await getJson(request, `/api/notifications/${first.id}`, recipient)).read)
+    .poll(async () => (await getJson(recipient, `/api/notifications/${first.id}`)).read)
     .toBe(true);
   await page.reload();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  const persisted = await request.get(`/api/notifications/${first.id}`, { headers: recipient });
-  expect(await persisted.json()).toMatchObject({ id: first.id, read: true });
+  expect(await getJson(recipient, `/api/notifications/${first.id}`)).toMatchObject({
+    id: first.id,
+    read: true,
+  });
 });
 
 test('pagination and visible rows preserve notices when entry recognition fails', async ({
-  request,
   page,
   course,
+  apiAs,
   createCourse,
 }) => {
   const { roadmapId, courseCode } = course;
@@ -138,7 +115,7 @@ test('pagination and visible rows preserve notices when entry recognition fails'
   const otherCourse = await createCourse({
     participants: [{ user: recipient, role: 'STUDENT' }],
   });
-  const headers = { cookie: await sessionCookie(recipient.id) };
+  const api = await apiAs(recipient);
   const subject = `Roadmap disponible: ${courseCode}`;
   const seed = (id: string, availableAt: Date) =>
     sql(
@@ -171,17 +148,12 @@ test('pagination and visible rows preserve notices when entry recognition fails'
     .sort()
     .reverse();
   for (const id of ids) await seed(id, new Date('2026-01-01T00:00:00Z'));
-  const first = await getJson(
-    request,
-    `/api/notifications?roadmapId=${roadmapId}&limit=10`,
-    headers,
-  );
+  const first = await getJson(api, `/api/notifications?roadmapId=${roadmapId}&limit=10`);
   expect(first.notifications.map((notice: { id: string }) => notice.id)).toEqual(ids.slice(0, 10));
   expect(first.hasMore).toBe(true);
   const second = await getJson(
-    request,
+    api,
     `/api/notifications?roadmapId=${roadmapId}&limit=10&after=${ids[9]}`,
-    headers,
   );
   expect(second.notifications.map((notice: { id: string }) => notice.id)).toEqual(ids.slice(10));
   expect(second.hasMore).toBe(false);
@@ -193,9 +165,7 @@ test('pagination and visible rows preserve notices when entry recognition fails'
   await page.goto(otherCourse.pagePath());
   await page.getByRole('button', { name: 'Avisos, 12 sin leer', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Cargar más avisos' })).toBeVisible();
-  expect(await getJson(request, `/api/notifications/${ids[11]}`, headers)).not.toHaveProperty(
-    'seen',
-  );
+  expect(await getJson(api, `/api/notifications/${ids[11]}`)).not.toHaveProperty('seen');
   const failRecognition = true;
   await page.route('**/api/notifications/acknowledge', async (route) => {
     if (failRecognition) {
@@ -211,9 +181,7 @@ test('pagination and visible rows preserve notices when entry recognition fails'
     .click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('No se pudieron reconocer algunos avisos.')).toHaveCount(0);
-  expect(
-    (await getJson(request, `/api/notifications/counts?roadmapId=${roadmapId}`, headers)).count,
-  ).toBe(12);
+  expect((await getJson(api, `/api/notifications/counts?roadmapId=${roadmapId}`)).count).toBe(12);
 });
 
 test('Inbox query errors remain visible and can be retried', async ({ page, course }) => {
@@ -270,8 +238,9 @@ for (const viewport of [
 }
 
 test('a PostgreSQL notification failure preserves the committed Roadmap and creation response', async ({
-  request,
   course,
+  apiAs,
+  teacherApi,
   createCourse,
   rejectNoticeInserts,
 }) => {
@@ -285,14 +254,11 @@ test('a PostgreSQL notification failure preserves the committed Roadmap and crea
   });
   // The Roadmap does not exist yet, so the failure is scoped to its Course offering.
   await rejectNoticeInserts({ courseOfferingId: offering.id });
-  const headers = { cookie: await sessionCookie(teacher.id) };
-  const created = await request.post(offering.apiPath(), { headers, data: {} });
-  expect(created.status()).toBe(201);
-  expect((await request.get(offering.apiPath(), { headers })).status()).toBe(200);
-  const recipient = { cookie: await sessionCookie(multiCourseStudent.id) };
-  expect((await getJson(request, '/api/notifications', recipient)).notifications).toHaveLength(0);
+  await ok(await teacherApi.post(offering.apiPath(), { data: {} }), 201);
+  await ok(await teacherApi.get(offering.apiPath()));
+  expect(await listNotices(await apiAs(multiCourseStudent), {})).toHaveLength(0);
 });
 
-async function getJson(request: APIRequestContext, path: string, headers: { cookie: string }) {
-  return (await request.get(path, { headers })).json();
+async function getJson(api: APIRequestContext, path: string) {
+  return (await api.get(path)).json();
 }
