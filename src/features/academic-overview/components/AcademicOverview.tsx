@@ -21,7 +21,6 @@ import type {
   AcademicOverviewCourse,
   AcademicOverviewInstitutionalPosition,
   AcademicOverviewPage,
-  AcademicOverviewRole,
   AcademicOverviewTerm,
 } from '../types';
 import { termLabel } from '@/shared/course-offering';
@@ -31,10 +30,12 @@ import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
-const institutionalPositionDetails: Record<
-  AcademicOverviewInstitutionalPosition,
+// TEACHING_STAFF is the fallback for teaching staff without a reported position.
+const positionDetails: Record<
+  AcademicOverviewInstitutionalPosition | 'TEACHING_STAFF',
   Readonly<{ label: string; accentClass: string }>
 > = {
+  TEACHING_STAFF: { label: 'Equipo docente', accentClass: 'border-l-[#1d3193]' },
   COORDINATING_PROFESSOR: {
     label: 'Profesor coordinador',
     accentClass: 'border-l-[#9acc24]',
@@ -50,15 +51,6 @@ const institutionalPositionDetails: Record<
   TEACHING_ASSISTANT: { label: 'Ayudante', accentClass: 'border-l-[#933D8A]' },
   STUDENT: { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' },
   OBSERVER: { label: 'Oyente', accentClass: 'border-l-[#6f7a8a]' },
-};
-
-/** Positions shown when U-Campus reports no institutional position. */
-const roleFallbackDetails: Record<
-  AcademicOverviewRole,
-  Readonly<{ label: string; accentClass: string }>
-> = {
-  TEACHER: { label: 'Equipo docente', accentClass: 'border-l-[#1d3193]' },
-  STUDENT: { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' },
 };
 
 function courseCountLabel(count: number) {
@@ -83,9 +75,10 @@ function CourseRow({
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
 }>) {
-  const position = course.institutionalPosition
-    ? institutionalPositionDetails[course.institutionalPosition]
-    : roleFallbackDetails[course.role];
+  const position =
+    positionDetails[
+      course.institutionalPosition ?? (course.role === 'TEACHER' ? 'TEACHING_STAFF' : 'STUDENT')
+    ];
   // Teaching staff who cannot create the Roadmap still reach the version history.
   const awaitsCreation =
     course.role === 'TEACHER' &&
