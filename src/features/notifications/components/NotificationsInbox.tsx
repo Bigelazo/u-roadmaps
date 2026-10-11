@@ -11,7 +11,6 @@ import {
 import { ChangeSummaryDialog } from './ChangeSummaryDialog';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
-import { PopoverTrigger } from '@/shared/ui/popover';
 import { EmptyContent } from '@/shared/ui/empty';
 import { Bell, X } from 'lucide-react';
 import {
@@ -233,28 +232,23 @@ function InboxBell() {
         if (!nextOpen) resetFilter();
       }}
     >
-      <PopoverTrigger
+      <PopoverPrimitive.Trigger
         aria-label={
           countsError
             ? 'Avisos, contador no disponible'
             : `Avisos${unreadCount > 0 ? `, ${unreadCount} sin leer` : ''}`
         }
+        className="relative inline-flex size-11 items-center justify-center rounded-md text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
         onClick={() => openInbox()}
-        render={
-          <Button
-            className="relative shrink border-0 text-foreground"
-            size="icon"
-            variant="ghost"
-          />
-        }
+        type="button"
       >
-        <Bell aria-hidden="true" className="size-5" />
+        <Bell aria-hidden="true" size={20} />
         {!countsLoading && unreadCount > 0 ? (
           <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
             {formatBadgeCount(unreadCount)}
           </span>
         ) : null}
-      </PopoverTrigger>
+      </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Positioner
           align="end"
