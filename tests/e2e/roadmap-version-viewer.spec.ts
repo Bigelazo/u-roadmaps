@@ -1,7 +1,7 @@
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { literal, queryJson, sql } from './database';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 
 function yesterday() {
   const day = new Date(`${chileCalendarDay()}T12:00:00Z`);
@@ -67,7 +67,7 @@ const closedVersion = test.extend<{
         file: { name: 'guia.txt', mimeType: 'text/plain', buffer: Buffer.from('contenido guía') },
       },
     });
-    expect(upload.status()).toBe(201);
+    await ok(upload, 201);
     const resourceId = (await upload.json()).resource.id as string;
     await closedTerm.setFreezeDate(yesterday());
     await waitForClosure(closed);
@@ -88,8 +88,7 @@ closedVersion(
     const { closed, closedYear, nodeId, resourceId } = version;
     const before = await sideEffectCounts(closed);
     const api = await apiAs(course.users.teachingAssistant);
-    const response = await api.get(versionPath(closed));
-    expect(response.status()).toBe(200);
+    const response = await ok(await api.get(versionPath(closed)));
     const body = await response.json();
     expect(body.version).toMatchObject({
       edition: `Edición ${closedYear}-${closed.semester}`,
@@ -121,8 +120,7 @@ closedVersion(
     for (const key of ['isCompleted', 'canComplete', 'participants', 'completions', 'progress'])
       expect(serialized).not.toContain(`"${key}"`);
 
-    const download = await api.get(versionPath(closed, `/resources/${resourceId}/file`));
-    expect(download.status()).toBe(200);
+    const download = await ok(await api.get(versionPath(closed, `/resources/${resourceId}/file`)));
     expect(await download.text()).toBe('contenido guía');
     expect(await sideEffectCounts(closed)).toEqual(before);
   },
@@ -135,17 +133,14 @@ closedVersion(
     const refusedUsers = [course.users.studentWithProgress, await createUser()];
     for (const user of refusedUsers) {
       const api = await apiAs(user);
-      const refused = await api.get(versionPath(closed));
-      expect(refused.status()).toBe(404);
+      const refused = await ok(await api.get(versionPath(closed)), 404);
       expect((await refused.json()).error.code).toBe('VERSION_NOT_FOUND');
-      expect((await api.get(versionPath(closed, `/resources/${resourceId}/file`))).status()).toBe(
-        404,
-      );
+      await ok(await api.get(versionPath(closed, `/resources/${resourceId}/file`)), 404);
     }
     const missing = await (
       await apiAs(course.users.teachingAssistant)
     ).get(`/api/${closed.courseCode}/versions/${closed.year}/${closed.semester + 1}`);
-    expect(missing.status()).toBe(404);
+    await ok(missing, 404);
   },
 );
 
@@ -163,10 +158,8 @@ closedVersion(
       participants: [{ user: earlierTeacher, role: 'TEACHER' }],
     });
     const api = await apiAs(earlierTeacher);
-    expect((await api.get(versionPath(closed))).status()).toBe(404);
-    expect((await api.get(versionPath(closed, `/resources/${resourceId}/file`))).status()).toBe(
-      404,
-    );
+    await ok(await api.get(versionPath(closed)), 404);
+    await ok(await api.get(versionPath(closed, `/resources/${resourceId}/file`)), 404);
     await authenticateAs(page.context(), earlierTeacher.id);
     expect((await page.goto(viewerPagePath(closed)))?.status()).toBe(404);
   },

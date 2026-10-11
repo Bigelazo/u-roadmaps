@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
-import { prepareNodeCreator } from './create-node';
+import { authenticateAs, ok } from './helpers';
+import { createDependency, prepareNodeCreator } from './create-node';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -51,8 +51,7 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
     await expect(page.getByRole('button', { name: 'Completar', exact: true })).toBeEnabled();
     await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
     // Re-enter through authorized HTTP: the rejected action created no Completion.
-    const current = await student.get(course.apiPath());
-    expect(current.status()).toBe(200);
+    const current = await ok(await student.get(course.apiPath()));
     const currentNode = (await current.json()).nodes.find(
       (candidate: { id: string }) => candidate.id === node.id,
     );
@@ -62,10 +61,9 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
 
 test('student endpoints conceal prerequisite-blocked nodes without erasing past completion', async ({
   course,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const dependencyIds: string[] = [];
 
   const { nodeTypeId, createNode } = await prepareNodeCreator(teacher, course, {
@@ -76,18 +74,14 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
   const completedBeforeDependency = await createNode(uniqueName('Completado antes'), 100);
   const descendant = await createNode(uniqueName('Descendiente'), 200);
 
-  const completed = await student.post(
-    course.apiPath(`/nodes/${completedBeforeDependency.id}/completion`),
-  );
-  expect(completed.status()).toBe(200);
+  await ok(await student.post(course.apiPath(`/nodes/${completedBeforeDependency.id}/completion`)));
 
-  const externalResource = await teacher.post(
-    course.apiPath(`/nodes/${completedBeforeDependency.id}/resources`),
-    {
+  await ok(
+    await teacher.post(course.apiPath(`/nodes/${completedBeforeDependency.id}/resources`), {
       data: { title: 'Enlace privado', url: 'https://example.test/private', type: 'LINK' },
-    },
+    }),
+    201,
   );
-  expect(externalResource.status()).toBe(201);
 
   const uploadedResource = await teacher.post(
     course.apiPath(`/nodes/${completedBeforeDependency.id}/resources`),
@@ -101,18 +95,14 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
       },
     },
   );
-  expect(uploadedResource.status()).toBe(201);
+  await ok(uploadedResource, 201);
   const fileResource = (await uploadedResource.json()).resource as { id: string; url: string };
 
   for (const [sourceNodeId, targetNodeId] of [
     [prerequisite.id, completedBeforeDependency.id],
     [completedBeforeDependency.id, descendant.id],
   ]) {
-    const response = await teacher.post(course.apiPath('/dependencies'), {
-      data: { sourceNodeId, targetNodeId },
-    });
-    expect(response.status()).toBe(201);
-    dependencyIds.push((await response.json()).dependency.id);
+    dependencyIds.push(await createDependency(teacher, course, sourceNodeId, targetNodeId));
   }
 
   const teacherNode = (await (await teacher.get(course.apiPath())).json()).nodes.find(
@@ -123,8 +113,7 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
     resources: expect.arrayContaining([expect.objectContaining({ title: 'Enlace privado' })]),
   });
 
-  const blockedRoadmap = await student.get(course.apiPath());
-  expect(blockedRoadmap.status()).toBe(200);
+  const blockedRoadmap = await ok(await student.get(course.apiPath()));
   const blockedNode = (await blockedRoadmap.json()).nodes.find(
     (node: { id: string }) => node.id === completedBeforeDependency.id,
   );
@@ -145,26 +134,23 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
   const resources = await student.get(
     course.apiPath(`/nodes/${completedBeforeDependency.id}/resources`),
   );
-  expect(resources.status()).toBe(403);
+  await ok(resources, 403);
   expect((await resources.json()).error.code).toBe('PREREQUISITE_BLOCK');
-  const download = await student.get(fileResource.url);
-  expect(download.status()).toBe(403);
+  const download = await ok(await student.get(fileResource.url), 403);
   expect((await download.json()).error.code).toBe('PREREQUISITE_BLOCK');
   const repeatCompletion = await student.post(
     course.apiPath(`/nodes/${completedBeforeDependency.id}/completion`),
   );
-  expect(repeatCompletion.status()).toBe(403);
+  await ok(repeatCompletion, 403);
   expect((await repeatCompletion.json()).error.code).toBe('PREREQUISITE_BLOCK');
   const descendantCompletion = await student.post(
     course.apiPath(`/nodes/${descendant.id}/completion`),
   );
-  expect(descendantCompletion.status()).toBe(403);
+  await ok(descendantCompletion, 403);
   expect((await descendantCompletion.json()).error.code).toBe('PREREQUISITE_BLOCK');
 
   const prerequisiteDependencyId = dependencyIds.shift();
-  expect(
-    (await teacher.delete(course.apiPath(`/dependencies/${prerequisiteDependencyId}`))).status(),
-  ).toBe(204);
+  await ok(await teacher.delete(course.apiPath(`/dependencies/${prerequisiteDependencyId}`)), 204);
   const releasedRoadmap = await student.get(course.apiPath());
   const releasedNode = (await releasedRoadmap.json()).nodes.find(
     (node: { id: string }) => node.id === completedBeforeDependency.id,
@@ -178,10 +164,9 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
 test('student roadmap shows effective block reasons and restores a completed node after release', async ({
   page,
   course,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const dependencyIds: string[] = [];
 
   const { nodeTypeId, createNode } = await prepareNodeCreator(teacher, course, {
@@ -193,31 +178,26 @@ test('student roadmap shows effective block reasons and restores a completed nod
   const completedTarget = await createNode(uniqueName('Nodo completado bloqueado'), 500);
   const prerequisiteTarget = await createNode(uniqueName('Nodo con prerrequisitos'), 1000);
 
-  const completion = await student.post(course.apiPath(`/nodes/${completedTarget.id}/completion`));
-  expect(completion.status()).toBe(200);
+  await ok(await student.post(course.apiPath(`/nodes/${completedTarget.id}/completion`)));
 
-  const resource = await teacher.post(course.apiPath(`/nodes/${completedTarget.id}/resources`), {
-    data: {
-      title: 'Recurso protegido',
-      url: 'https://example.test/protected',
-      type: 'LINK',
-    },
-  });
-  expect(resource.status()).toBe(201);
+  await ok(
+    await teacher.post(course.apiPath(`/nodes/${completedTarget.id}/resources`), {
+      data: {
+        title: 'Recurso protegido',
+        url: 'https://example.test/protected',
+        type: 'LINK',
+      },
+    }),
+    201,
+  );
 
   for (const targetNodeId of [completedTarget.id, prerequisiteTarget.id]) {
-    const dependency = await teacher.post(course.apiPath('/dependencies'), {
-      data: { sourceNodeId: prerequisite.id, targetNodeId },
-    });
-    expect(dependency.status()).toBe(201);
-    dependencyIds.push((await dependency.json()).dependency.id);
+    dependencyIds.push(await createDependency(teacher, course, prerequisite.id, targetNodeId));
   }
 
-  const block = await teacher.post(course.apiPath(`/nodes/${completedTarget.id}/teacher-block`));
-  expect(block.status()).toBe(200);
+  await ok(await teacher.post(course.apiPath(`/nodes/${completedTarget.id}/teacher-block`)));
 
-  const studentRoadmap = await student.get(course.apiPath());
-  expect(studentRoadmap.status()).toBe(200);
+  const studentRoadmap = await ok(await student.get(course.apiPath()));
   const studentNodes = (await studentRoadmap.json()).nodes as Array<{
     id: string;
     access: { status: string; reason?: string };
@@ -240,7 +220,7 @@ test('student roadmap shows effective block reasons and restores a completed nod
   const blockedCompletion = await student.post(
     course.apiPath(`/nodes/${completedTarget.id}/completion`),
   );
-  expect(blockedCompletion.status()).toBe(403);
+  await ok(blockedCompletion, 403);
   expect((await blockedCompletion.json()).error.code).toBe('TEACHER_BLOCK');
 
   await page.context().clearCookies();
@@ -274,21 +254,17 @@ test('student roadmap shows effective block reasons and restores a completed nod
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   const targetDependencyId = dependencyIds.shift();
-  expect(
-    (await teacher.delete(course.apiPath(`/dependencies/${targetDependencyId}`))).status(),
-  ).toBe(204);
+  await ok(await teacher.delete(course.apiPath(`/dependencies/${targetDependencyId}`)), 204);
   const unlockPreview = await teacher.get(
     course.apiPath(`/nodes/${completedTarget.id}/teacher-block?operation=UNBLOCK`),
   );
-  expect(unlockPreview.status()).toBe(200);
+  await ok(unlockPreview);
   const { version } = await unlockPreview.json();
-  const unblock = await teacher.delete(
-    course.apiPath(`/nodes/${completedTarget.id}/teacher-block`),
-    {
+  await ok(
+    await teacher.delete(course.apiPath(`/nodes/${completedTarget.id}/teacher-block`), {
       headers: { 'x-teacher-block-preview': version },
-    },
+    }),
   );
-  expect(unblock.status()).toBe(200);
 
   await expect
     .poll(async () => {

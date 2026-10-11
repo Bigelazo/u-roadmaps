@@ -242,7 +242,7 @@ export const test = base.extend<{
     position: MufasaInstitutionalCoursePosition | null,
   ) => Promise<void>;
   /** An API client authenticated as a User; disposed when the test ends. */
-  apiAs: (user: E2EUser) => Promise<APIRequestContext>;
+  apiAs: (user: Pick<E2EUser, 'id'>) => Promise<APIRequestContext>;
   /** An API client authenticated as the primary Course offering's teacher. */
   teacherApi: APIRequestContext;
   /** An API client authenticated as the primary Course offering's student without progress. */

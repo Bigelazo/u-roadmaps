@@ -1,24 +1,21 @@
 import { enterRoadmap } from './enter-roadmap';
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 
 test('entry recognizes Node notices and shows changes once without targeting a Node', async ({
   page,
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   await enterRoadmap(page, course.pagePath(), course.users.studentWithoutProgress.id);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.goto('/academic-overview');
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { title: 'Pilas y colas' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { title: 'Pilas y colas' },
+    }),
+  );
   const pending = async () =>
     (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
       .notifications;
@@ -49,32 +46,27 @@ test('entry recognizes Node notices and shows changes once without targeting a N
 test('first entry clears pending notices silently and opening a Node or Inbox recognizes no later changes', async ({
   page,
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const pending = async () =>
     (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
       .notifications;
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { description: 'Primer cambio' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { description: 'Primer cambio' },
+    }),
+  );
   await expect.poll(pending).toHaveLength(1);
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto(course.pagePath());
   await expect.poll(pending).toHaveLength(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { description: 'Cambio mientras estudia' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { description: 'Cambio mientras estudia' },
+    }),
+  );
   await expect.poll(pending).toHaveLength(1);
   const before = await pending();
   const mutations: string[] = [];
@@ -93,30 +85,28 @@ test('first entry clears pending notices silently and opening a Node or Inbox re
     .toEqual(['/api/notifications/node-changes']);
   expect(await pending()).toEqual(before);
   expect(before[0]).not.toHaveProperty('seen');
-  expect(
-    (
-      await recipient.post('/api/notifications/openings', {
-        data: {
-          roadmapId: course.roadmapId,
-          nodeId: course.nodes.first,
-          operationId: crypto.randomUUID(),
-        },
-      })
-    ).status(),
-  ).toBe(400);
-  expect(
-    (
-      await recipient.patch(`/api/notifications/${before[0].id}`, { data: { action: 'seen' } })
-    ).status(),
-  ).toBe(405);
+  await ok(
+    await recipient.post('/api/notifications/openings', {
+      data: {
+        roadmapId: course.roadmapId,
+        nodeId: course.nodes.first,
+        operationId: crypto.randomUUID(),
+      },
+    }),
+    400,
+  );
+  await ok(
+    await recipient.patch(`/api/notifications/${before[0].id}`, { data: { action: 'seen' } }),
+    405,
+  );
 });
 
 test('entry from Academic overview groups changes under current Node titles and puts classification last', async ({
   page,
   course,
+  teacherApi: author,
   apiAs,
 }) => {
-  const author = await apiAs(course.users.teacher);
   const recipient = await apiAs(course.users.studentWithProgress);
   await authenticateAs(page.context(), course.users.studentWithProgress.id);
   const entered = page.waitForResponse((response) =>
@@ -133,36 +123,28 @@ test('entry from Academic overview groups changes under current Node titles and 
   const type = await author.post(course.apiPath('/node-types'), {
     data: { name: 'Lectura inicial', icon: 'BookOpen', color: '#024AD8' },
   });
-  expect(type.status()).toBe(201);
+  await ok(type, 201);
   const typeId = (await type.json()).nodeType.id;
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { nodeTypeId: typeId },
-      })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await author.patch(course.apiPath(`/node-types/${typeId}`), {
-        data: { name: 'Lectura final' },
-      })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { description: 'Nueva descripción' },
-      })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { title: 'Título vigente' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { nodeTypeId: typeId },
+    }),
+  );
+  await ok(
+    await author.patch(course.apiPath(`/node-types/${typeId}`), {
+      data: { name: 'Lectura final' },
+    }),
+  );
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { description: 'Nueva descripción' },
+    }),
+  );
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { title: 'Título vigente' },
+    }),
+  );
   const pending = async () =>
     (
       await (
@@ -212,19 +194,16 @@ test('entry from Academic overview groups changes under current Node titles and 
 test('failed entry preparation leaves notices pending without a banner', async ({
   page,
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
   await enterRoadmap(page, course.pagePath(), course.users.studentWithoutProgress.id);
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   await page.goto('/academic-overview');
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { description: 'Cambio que requiere reintento' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { description: 'Cambio que requiere reintento' },
+    }),
+  );
   const pending = async () =>
     (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
       .notifications;
@@ -243,19 +222,16 @@ test('failed entry preparation leaves notices pending without a banner', async (
 test('a delayed acknowledgement from a previous entry never shows its summary on Academic overview', async ({
   page,
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
   await enterRoadmap(page, course.pagePath(), course.users.studentWithoutProgress.id);
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   await page.goto('/academic-overview');
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { description: 'Cambio de la entrada anterior' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { description: 'Cambio de la entrada anterior' },
+    }),
+  );
   const pending = async () =>
     (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
       .notifications;

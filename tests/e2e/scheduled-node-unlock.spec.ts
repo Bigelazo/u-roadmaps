@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
-import { prepareNodeCreator } from './create-node';
+import { ok } from './helpers';
+import { createDependency, prepareNodeCreator } from './create-node';
 import { literal, sql } from './database';
 
 function uniqueName(prefix: string) {
@@ -27,10 +28,9 @@ async function moveScheduleToYesterday(nodeId: string) {
 
 test('a scheduled unlock waits for blocked prerequisites and releases on its day', async ({
   course,
-  apiAs,
+  teacherApi: teacher,
+  studentApi: student,
 }) => {
-  const teacher = await apiAs(course.users.teacher);
-  const student = await apiAs(course.users.studentWithoutProgress);
   const { createNode } = await prepareNodeCreator(teacher, course);
   const prerequisite = await createNode(uniqueName('Prerrequisito'), 0);
   const scheduled = await createNode(uniqueName('Programado'), 200);
@@ -42,34 +42,28 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
       (node: { id: string }) => node.id === nodeId,
     ).access;
 
-  expect(
-    (
-      await teacher.post(course.apiPath('/dependencies'), {
-        data: { sourceNodeId: prerequisite.id, targetNodeId: scheduled.id },
-      })
-    ).status(),
-  ).toBe(201);
+  await createDependency(teacher, course, prerequisite.id, scheduled.id);
 
   // A schedule needs a Teacher block and a future day.
   const unblocked = await teacher.put(schedulePath(standalone.id), {
     data: { unlockOn: chileDayOffset(1) },
   });
-  expect(unblocked.status()).toBe(409);
+  await ok(unblocked, 409);
   expect((await unblocked.json()).error.code).toBe('TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK');
 
   for (const node of [prerequisite, standalone]) {
-    expect((await teacher.post(course.apiPath(`/nodes/${node.id}/teacher-block`))).status()).toBe(
-      200,
-    );
+    await ok(await teacher.post(course.apiPath(`/nodes/${node.id}/teacher-block`)));
   }
-  const today = await teacher.put(schedulePath(scheduled.id), {
-    data: { unlockOn: chileDayOffset(0) },
-  });
-  expect(today.status()).toBe(400);
+  await ok(
+    await teacher.put(schedulePath(scheduled.id), {
+      data: { unlockOn: chileDayOffset(0) },
+    }),
+    400,
+  );
 
   const tomorrow = chileDayOffset(1);
   const saved = await teacher.put(schedulePath(scheduled.id), { data: { unlockOn: tomorrow } });
-  expect(saved.status()).toBe(200);
+  await ok(saved);
   expect(await saved.json()).toEqual({ teacherUnlockOn: tomorrow });
   const teacherView = await (await teacher.get(course.apiPath())).json();
   expect(teacherView.nodes.find((node: { id: string }) => node.id === scheduled.id)).toMatchObject({
@@ -77,9 +71,7 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
     teacherUnlockOn: tomorrow,
   });
 
-  expect(
-    (await teacher.put(schedulePath(standalone.id), { data: { unlockOn: tomorrow } })).status(),
-  ).toBe(200);
+  await ok(await teacher.put(schedulePath(standalone.id), { data: { unlockOn: tomorrow } }));
 
   // The new Node absorbs its block; entry establishes Bloqueado for later unlocks.
   const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
@@ -93,10 +85,8 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
       ),
     )
     .toBe(true);
-  expect((await student.post('/api/notifications/openings', { data: opening })).status()).toBe(200);
-  expect((await student.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
-    200,
-  );
+  await ok(await student.post('/api/notifications/openings', { data: opening }));
+  await ok(await student.post('/api/notifications/acknowledge', { data: opening }));
 
   // Both days arrive. The E2E server checks every second (SCHEDULED_UNLOCK_INTERVAL_MS):
   // the free node is released and notified, while the one behind a blocked prerequisite waits.
@@ -129,13 +119,11 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   const preview = await (
     await teacher.get(course.apiPath(`/nodes/${prerequisite.id}/teacher-block?operation=UNBLOCK`))
   ).json();
-  expect(
-    (
-      await teacher.delete(course.apiPath(`/nodes/${prerequisite.id}/teacher-block`), {
-        headers: { 'x-teacher-block-preview': preview.version },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await teacher.delete(course.apiPath(`/nodes/${prerequisite.id}/teacher-block`), {
+      headers: { 'x-teacher-block-preview': preview.version },
+    }),
+  );
   // Only the student's own pending prerequisite remains.
   expect(await studentAccess(scheduled.id)).toEqual({
     status: 'BLOCKED',
