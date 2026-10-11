@@ -13,7 +13,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, CircleHelp, Eye, History } from 'lucide-react';
+import { CircleAlert, CircleHelp, Eye, History, X } from 'lucide-react';
 import { versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -49,8 +49,7 @@ import type {
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
-import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
-import { DismissibleAlert } from '@/shared/ui/dismissible-alert';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
@@ -884,13 +883,23 @@ export function RoadmapCanvasView({ input }: Props) {
             </Button>
           ) : null}
           {syncedSelectionNotice ? (
-            <DismissibleAlert
-              tone="neutral"
-              message={syncedSelectionNotice}
-              closeLabel="Cerrar aviso de actualización"
-              onDismiss={dismissSelectionNotice}
-              className="absolute top-20 right-5 z-5 w-[min(23rem,calc(100%-2.5rem))]"
-            />
+            <Alert
+              role="status"
+              className="absolute top-20 right-5 z-5 w-[min(23rem,calc(100%-2.5rem))] bg-card shadow-sm"
+            >
+              <AlertDescription>{syncedSelectionNotice}</AlertDescription>
+              <AlertAction>
+                <Button
+                  aria-label="Cerrar aviso de actualización"
+                  onClick={dismissSelectionNotice}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </AlertAction>
+            </Alert>
           ) : null}
         </div>
         <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
