@@ -63,6 +63,7 @@ import {
   TutorialClosingPopover,
 } from '@/shared/client/tutorial/tutorial';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
+import { termLabel } from '@/shared/course-offering';
 import {
   nodeTypeDeletionConfirmation,
   roadmapAutoLayoutConfirmation,
@@ -1337,9 +1338,7 @@ function RoadmapCanvasHeader({
       <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
         <span>{courseCode}</span>
         <span aria-hidden="true">·</span>
-        <span>
-          {semester === 1 ? 'Otoño' : 'Primavera'} {year}
-        </span>
+        <span>{termLabel({ year, semester })}</span>
       </p>
     </header>
   );

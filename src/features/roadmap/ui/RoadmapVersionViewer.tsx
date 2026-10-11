@@ -6,8 +6,10 @@ import { ArrowLeft, Download, ExternalLink, FileText, X } from 'lucide-react';
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
-import { creatorLabel, originLabel, positionLabels } from '@/features/roadmap/ui/version-labels';
+import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
 import { Button, buttonVariants } from '@/shared/ui/button';
+import { Item } from '@/shared/ui/item';
+import { PageEyebrow, PageTitle } from '@/shared/ui/page-header';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import type { RoadmapVersion } from '@/features/roadmap/server';
 
@@ -33,37 +35,15 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
             Historial de versiones
           </Link>
           <div>
-            <p className="text-xs font-bold tracking-[0.08em] text-muted-foreground uppercase">
-              {version.course.code}
-            </p>
+            <PageEyebrow>{version.course.code}</PageEyebrow>
             <p className="mt-1 text-sm text-muted-foreground">{version.course.name}</p>
-            <h1 className="mt-2 font-heading text-4xl font-semibold tracking-[-0.04em]">
-              {authorship.edition}
-            </h1>
+            <PageTitle className="mt-2">{authorship.edition}</PageTitle>
             <p className="mt-1 text-sm text-muted-foreground">Versión cerrada · solo lectura</p>
           </div>
           <dl className="grid gap-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
             <dt className="font-semibold">Origen</dt>
             <dd>{originLabel(authorship.origin)}</dd>
-            <dt className="font-semibold">Creada por</dt>
-            <dd>{creatorLabel(authorship.creator)}</dd>
-            <dt className="font-semibold">Equipo docente</dt>
-            <dd>
-              {authorship.teachingStaff.length === 0 ? (
-                'Sin registro'
-              ) : (
-                <ul className="grid gap-1">
-                  {authorship.teachingStaff.map((member) => (
-                    <li key={member.id}>
-                      {member.name}
-                      {member.institutionalPosition
-                        ? ` · ${positionLabels[member.institutionalPosition]}`
-                        : ''}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </dd>
+            <VersionAuthorshipList {...authorship} />
             <dt className="font-semibold">Linaje</dt>
             <dd>
               <ol aria-label="Linaje" className="flex flex-wrap gap-x-2">
@@ -124,12 +104,17 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
                 <ul className="mt-3 grid gap-2">
                   {selectedNode.resources.map((resource) => (
                     <li key={resource.id}>
-                      <a
-                        className="flex items-center gap-2 rounded-lg border border-fog px-3 py-2 text-sm hover:bg-muted"
-                        href={resource.url}
-                        {...(resource.type === 'FILE'
-                          ? { download: resource.title }
-                          : { target: '_blank', rel: 'noreferrer' })}
+                      <Item
+                        className="flex-nowrap gap-2 border-fog py-2"
+                        render={
+                          <a
+                            href={resource.url}
+                            {...(resource.type === 'FILE'
+                              ? { download: resource.title }
+                              : { target: '_blank', rel: 'noreferrer' })}
+                          />
+                        }
+                        variant="outline"
                       >
                         {resource.type === 'FILE' ? (
                           <Download size={16} aria-hidden="true" />
@@ -137,7 +122,7 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
                           <ExternalLink size={16} aria-hidden="true" />
                         )}
                         {resource.title}
-                      </a>
+                      </Item>
                     </li>
                   ))}
                 </ul>
