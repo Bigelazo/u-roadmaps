@@ -56,3 +56,10 @@ export async function unwrap<Value, Failure>(
     },
   );
 }
+
+/** Wraps an operation that throws `ApplicationError`s into one that returns an `ApplicationResult`. */
+export function withApplicationResult<Args extends unknown[], Value>(
+  operation: (...args: Args) => Promise<Value>,
+) {
+  return (...args: Args): ApplicationResult<Value> => applicationResult(() => operation(...args));
+}

@@ -12,7 +12,8 @@ export type SerializableOptions = Readonly<{
   concurrentModification?: () => ApplicationError;
 }>;
 
-const defaultConcurrentModification = () =>
+/** The default 409 once every serializable attempt failed (ADR-0015). */
+export const concurrentModificationError = () =>
   new ApplicationError(409, 'CONFLICT', 'La operación entra en conflicto con otra modificación.');
 
 /**
@@ -36,7 +37,7 @@ export async function serializableTransaction<T>(
     } catch (error) {
       if (!isSerializationFailure(error)) throw error;
       if (attempt === SERIALIZABLE_MAX_ATTEMPTS - 1)
-        throw (options.concurrentModification ?? defaultConcurrentModification)();
+        throw (options.concurrentModification ?? concurrentModificationError)();
       // Separate attempts so unrelated concurrent Roadmaps can finish their writes.
       await delay(50 * 2 ** attempt + Math.random() * 50);
     }
