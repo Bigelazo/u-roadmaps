@@ -1,7 +1,7 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, absorbs, availabilityRef } from '../absorption';
-import type { NoticeTargetDescriptor, TargetValues } from './descriptor';
+import { participantIds, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
 
 type RoadmapCreatedFact = Extract<RoadmapChangeFact, { kind: 'roadmap-created' }>;
 
@@ -26,11 +26,8 @@ export const roadmapAvailabilityTarget: NoticeTargetDescriptor<RoadmapCreatedFac
   target: (_fact, changes) => availabilityRef(changes.roadmapId),
   previousValue: () => ABSENT,
   knowers: async (_fact, changes, roadmap) =>
-    (await roadmap.participants())
-      .map(({ userId }) => userId)
-      .filter((userId) => userId !== changes.actorId),
-  audience: async (_fact, _changes, roadmap) =>
-    (await roadmap.participants()).map(({ userId }) => userId),
+    (await participantIds(roadmap)).filter((userId) => userId !== changes.actorId),
+  audience: async (_fact, _changes, roadmap) => participantIds(roadmap),
   async current(_target, roadmap) {
     const course = await roadmap.course();
     return course ? { value: PRESENT, visible: true, context: course } : null;

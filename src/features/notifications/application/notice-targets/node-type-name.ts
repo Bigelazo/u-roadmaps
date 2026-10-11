@@ -1,7 +1,12 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { nodeTypeNameTarget } from '@/shared/route-notice-target';
-import type { NoticeTargetDescriptor, NoticeTargetRef, RoadmapView } from './descriptor';
+import {
+  participantIds,
+  type NoticeTargetDescriptor,
+  type NoticeTargetRef,
+  type RoadmapView,
+} from './descriptor';
 
 export const typeNameRef = (nodeTypeId: string) => ({
   noticeTarget: NOTICE_TARGET.nodeTypeName,
@@ -21,7 +26,7 @@ async function typeRecipients(
   roadmap: RoadmapView,
 ) {
   if (!(await roadmap.nodeType(fact.nodeTypeId))?.hasVisibleNode) return [];
-  return (await roadmap.participants()).map(({ userId }) => userId);
+  return participantIds(roadmap);
 }
 
 /**
