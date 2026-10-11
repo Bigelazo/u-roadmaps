@@ -1,20 +1,24 @@
 import { expect, test } from './fixtures';
-import { sessionCookie } from './helpers';
+import { ok, sessionCookie } from './helpers';
+import {
+  acknowledgeOpening,
+  findNode,
+  listNotices,
+  pendingNotices,
+  prepareOpening,
+  recognize,
+} from './notices';
 
 test('title target absorbs renames, withdraws a return to known and restarts after recognition', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const roadmap = await (await author.get(course.apiPath())).json();
-  const node = roadmap.nodes.find((node: { id: string }) => node.id === course.nodes.first);
+  const node = findNode(roadmap, course.nodes.first);
   const path = course.apiPath(`/nodes/${node.id}`);
-  const notices = async () =>
-    (await (await recipient.get(`/api/notifications?nodeId=${node.id}&read=false`)).json())
-      .notifications;
-  const rename = async (title: string) =>
-    expect((await author.patch(path, { data: { title } })).status()).toBe(200);
+  const notices = () => pendingNotices(recipient, node.id);
+  const rename = async (title: string) => ok(await author.patch(path, { data: { title } }));
   await rename('Recursividad');
   await expect.poll(notices).toHaveLength(1);
   const firstId = (await notices())[0].id;
@@ -23,23 +27,12 @@ test('title target absorbs renames, withdraws a return to known and restarts aft
     .poll(async () => (await notices())[0]?.body)
     .toBe(`«${node.title}» pasó a llamarse «Recursividad avanzada».`);
   expect(await notices()).toMatchObject([{ id: firstId }]);
-  expect(
-    (await (await author.get(`/api/notifications?nodeId=${node.id}`)).json()).notifications,
-  ).toHaveLength(0);
+  expect(await listNotices(author, { nodeId: node.id })).toHaveLength(0);
   await rename(node.title);
   await expect.poll(notices).toHaveLength(0);
   await rename('Pila');
   await expect.poll(notices).toHaveLength(1);
-  const opening = {
-    roadmapId: roadmap.roadmap.id,
-    operationId: crypto.randomUUID(),
-  };
-  expect((await recipient.post('/api/notifications/openings', { data: opening })).status()).toBe(
-    200,
-  );
-  expect((await recipient.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
-    200,
-  );
+  await recognize(recipient, roadmap.roadmap.id);
   await rename('Pilas');
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0].body).toBe('«Pila» pasó a llamarse «Pilas».');
@@ -47,37 +40,29 @@ test('title target absorbs renames, withdraws a return to known and restarts aft
 
 test('concurrent title changes leave one target matching the current Node, and repeated saves do not duplicate it', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const path = course.apiPath(`/nodes/${course.nodes.first}`);
   const responses = await Promise.all(
     ['Primero', 'Segundo', 'Tercero'].map((title) => author.patch(path, { data: { title } })),
   );
-  for (const response of responses) expect(response.status()).toBe(200);
+  for (const response of responses) await ok(response);
   const roadmap = await (await author.get(course.apiPath())).json();
-  const title = roadmap.nodes.find((node: { id: string }) => node.id === course.nodes.first).title;
-  const notices = async () =>
-    (
-      await (
-        await recipient.get(`/api/notifications?nodeId=${course.nodes.first}&read=false`)
-      ).json()
-    ).notifications;
+  const { title } = findNode(roadmap, course.nodes.first);
+  const notices = () => pendingNotices(recipient, course.nodes.first);
   await expect.poll(notices).toHaveLength(1);
   await expect.poll(async () => (await notices())[0]?.data.currentTitle).toBe(title);
-  expect((await author.patch(path, { data: { title } })).status()).toBe(200);
+  await ok(await author.patch(path, { data: { title } }));
   expect(await notices()).toHaveLength(1);
 });
 
 test('updating and withdrawing a title target invalidate the recipient Inbox over real SSE', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }, testInfo) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
-  const roadmap = await (await author.get(course.apiPath())).json();
-  const node = roadmap.nodes.find((node: { id: string }) => node.id === course.nodes.first);
+  const node = findNode(await (await author.get(course.apiPath())).json(), course.nodes.first);
   const stop = new AbortController();
   const response = await fetch(`${testInfo.project.use.baseURL}/api/notifications/stream`, {
     headers: { cookie: await sessionCookie(course.users.studentWithoutProgress.id) },
@@ -107,16 +92,12 @@ test('updating and withdrawing a title target invalidate the recipient Inbox ove
   const settled = listen.catch((error: Error) => {
     if (!stop.signal.aborted) throw error;
   });
-  const notices = async () =>
-    (await (await recipient.get(`/api/notifications?nodeId=${node.id}&read=false`)).json())
-      .notifications;
+  const notices = () => pendingNotices(recipient, node.id);
   try {
     await expect.poll(() => ready).toBe(true);
     for (const title of ['Primer nombre', 'Segundo nombre', node.title]) {
       const before = inboxEvents;
-      expect(
-        (await author.patch(course.apiPath(`/nodes/${node.id}`), { data: { title } })).status(),
-      ).toBe(200);
+      await ok(await author.patch(course.apiPath(`/nodes/${node.id}`), { data: { title } }));
       await expect.poll(() => inboxEvents).toBeGreaterThan(before);
       await expect.poll(notices).toHaveLength(title === node.title ? 0 : 1);
       expect(
@@ -131,38 +112,21 @@ test('updating and withdrawing a title target invalidate the recipient Inbox ove
 
 test('recognition preserves title changes delivered after its opening snapshot, including retries', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const path = course.apiPath(`/nodes/${course.nodes.first}`);
-  const notices = async () =>
-    (
-      await (
-        await recipient.get(`/api/notifications?nodeId=${course.nodes.first}&read=false`)
-      ).json()
-    ).notifications;
-  const rename = async (title: string) =>
-    expect((await author.patch(path, { data: { title } })).status()).toBe(200);
+  const notices = () => pendingNotices(recipient, course.nodes.first);
+  const rename = async (title: string) => ok(await author.patch(path, { data: { title } }));
   await rename('Título reconocido');
   await expect.poll(notices).toHaveLength(1);
-  const opening = {
-    roadmapId: course.roadmapId,
-    operationId: crypto.randomUUID(),
-  };
-  expect((await recipient.post('/api/notifications/openings', { data: opening })).status()).toBe(
-    200,
-  );
+  const opening = await prepareOpening(recipient, course.roadmapId);
   await rename('Título posterior');
   await expect.poll(async () => (await notices())[0]?.data.currentTitle).toBe('Título posterior');
-  expect((await recipient.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
-    200,
-  );
+  await acknowledgeOpening(recipient, opening);
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0].body).toBe('«Título reconocido» pasó a llamarse «Título posterior».');
-  expect((await recipient.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
-    200,
-  );
+  await acknowledgeOpening(recipient, opening);
   expect(await notices()).toHaveLength(1);
   await rename('Título final');
   await expect
@@ -177,21 +141,13 @@ test('an actor’s own rename advances their Known title, so a colleague’s rev
   const teacherA = await apiAs(course.users.teacher);
   const teacherB = await apiAs(course.users.teachingAssistant);
   const roadmap = await (await teacherA.get(course.apiPath())).json();
-  const node = roadmap.nodes.find((node: { id: string }) => node.id === course.nodes.first);
+  const node = findNode(roadmap, course.nodes.first);
   const path = course.apiPath(`/nodes/${node.id}`);
-  const opening = { roadmapId: roadmap.roadmap.id, operationId: crypto.randomUUID() };
-  expect((await teacherA.post('/api/notifications/openings', { data: opening })).status()).toBe(
-    200,
-  );
-  expect((await teacherA.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
-    200,
-  );
-  const notices = async () =>
-    (await (await teacherA.get(`/api/notifications?nodeId=${node.id}&read=false`)).json())
-      .notifications;
-  expect((await teacherA.patch(path, { data: { title: 'Pilas y colas' } })).status()).toBe(200);
+  await recognize(teacherA, roadmap.roadmap.id);
+  const notices = () => pendingNotices(teacherA, node.id);
+  await ok(await teacherA.patch(path, { data: { title: 'Pilas y colas' } }));
   expect(await notices()).toHaveLength(0);
-  expect((await teacherB.patch(path, { data: { title: node.title } })).status()).toBe(200);
+  await ok(await teacherB.patch(path, { data: { title: node.title } }));
   await expect
     .poll(async () => (await notices())[0]?.body)
     .toBe(`«Pilas y colas» pasó a llamarse «${node.title}».`);

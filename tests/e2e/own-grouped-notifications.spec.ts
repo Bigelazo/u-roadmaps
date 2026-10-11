@@ -1,22 +1,18 @@
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
+import { listNotices } from './notices';
 
 test('Inbox groups three targets, counts edits as targets, and ungroups on withdrawal', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
   page,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const roadmap = await (await author.get(course.apiPath())).json();
   const nodes = roadmap.nodes.filter((node: { isVisible: boolean }) => node.isVisible).slice(0, 3);
   expect(nodes).toHaveLength(3);
-  const notices = async () =>
-    (
-      await (
-        await recipient.get(`/api/notifications?groupBy=roadmapId&roadmapId=${course.roadmapId}`)
-      ).json()
-    ).notifications;
+  const notices = () =>
+    listNotices(recipient, { groupBy: 'roadmapId', roadmapId: course.roadmapId });
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   // Enter before edits so the canvas can display arriving counts without recognition.
   const recognized = page.waitForResponse(
@@ -27,13 +23,11 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
   await recognized;
   for (let edit = 0; edit < 4; edit++) {
     for (const node of nodes) {
-      expect(
-        (
-          await author.patch(course.apiPath(`/nodes/${node.id}`), {
-            data: { title: `${node.title} ${edit}` },
-          })
-        ).status(),
-      ).toBe(200);
+      await ok(
+        await author.patch(course.apiPath(`/nodes/${node.id}`), {
+          data: { title: `${node.title} ${edit}` },
+        }),
+      );
     }
   }
   await expect.poll(notices).toMatchObject([
@@ -73,22 +67,18 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
   await expect.poll(notices).toHaveLength(0);
   // A fresh set of pending targets crosses back below the threshold.
   for (const node of nodes) {
-    expect(
-      (
-        await author.patch(course.apiPath(`/nodes/${node.id}`), {
-          data: { title: `${node.title} final` },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await author.patch(course.apiPath(`/nodes/${node.id}`), {
+        data: { title: `${node.title} final` },
+      }),
+    );
   }
   await expect.poll(notices).toHaveLength(1);
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${nodes[0].id}`), {
-        data: { title: `${nodes[0].title} 3` },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${nodes[0].id}`), {
+      data: { title: `${nodes[0].title} 3` },
+    }),
+  );
   await expect.poll(notices).toHaveLength(2);
   expect(
     (await (await recipient.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)).json())
@@ -99,10 +89,9 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
 test('Roadmaps group separately before pagination and absorbed targets move to the top', async ({
   course,
   createCourse,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const second = await createCourse({
     participants: [
       { user: course.users.teacher, role: 'TEACHER' },
@@ -124,30 +113,26 @@ test('Roadmaps group separately before pagination and absorbed targets move to t
         isVisible: true,
       },
     });
-    expect(response.status()).toBe(201);
+    await ok(response, 201);
   }
   const list = async (query = '') =>
     await (await recipient.get(`/api/notifications?groupBy=roadmapId&${query}`)).json();
   for (const node of firstNodes.slice(0, 2)) {
-    expect(
-      (
-        await author.patch(course.apiPath(`/nodes/${node.id}`), {
-          data: { title: `${node.title} nuevo` },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await author.patch(course.apiPath(`/nodes/${node.id}`), {
+        data: { title: `${node.title} nuevo` },
+      }),
+    );
   }
   await expect.poll(async () => (await list()).notifications.length).toBe(4);
   const before = (await list()).notifications.find(
     (row: { data: { nodeId: string } }) => row.data.nodeId === firstNodes[0].id,
   );
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${firstNodes[0].id}`), {
-        data: { title: 'Cambio más reciente' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${firstNodes[0].id}`), {
+      data: { title: 'Cambio más reciente' },
+    }),
+  );
   await expect
     .poll(async () => (await list()).notifications[0]?.body)
     .toContain('Cambio más reciente');
@@ -155,13 +140,12 @@ test('Roadmaps group separately before pagination and absorbed targets move to t
   expect(updated.id).toBe(before.id);
   expect(Date.parse(updated.createdAt)).toBeGreaterThan(Date.parse(before.createdAt));
   expect(updated.data.occurredAt).toBe(updated.createdAt);
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${firstNodes[2].id}`), {
-        data: { title: 'Tercer objeto' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${firstNodes[2].id}`), {
+      data: { title: 'Tercer objeto' },
+    }),
+  );
+
   await expect.poll(async () => (await list()).notifications.length).toBe(3);
   const firstPage = await list('limit=1');
   expect(firstPage.notifications).toMatchObject([
