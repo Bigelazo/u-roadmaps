@@ -280,12 +280,4 @@ function ConfirmationDialog({
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect;
 
-export {
-  ConfirmationDialog,
-  type ConfirmationAction,
-  type ConfirmationDetail,
-  type ConfirmationDialogProps,
-  type ConfirmationIntent,
-  type ConfirmationPresentation,
-  type ConfirmationSection,
-};
+export { ConfirmationDialog, type ConfirmationDialogProps, type ConfirmationPresentation };
