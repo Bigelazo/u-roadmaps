@@ -1,41 +1,20 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult,
-  parseJsonObject as parseJson,
-  throwApplicationError,
-} from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
-import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { courseRoute } from '@/app/_adapters/http';
 import { createRoadmapNode, getRoadmapNodesForActor } from '@/features/roadmap/server';
+import { unwrap } from '@/shared/errors/server';
 
-export async function POST(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes'>,
-) {
-  return handleApplicationResult(async () => {
-    const identifier = requireCourseOfferingIdentifier(await context.params);
-    const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
-    const node = await createRoadmapNode(
-      { userId: user.id, identifier, input: body },
-      roadmapChangePort,
-    ).match((value) => value, throwApplicationError);
-
-    return NextResponse.json({ node }, { status: 201 });
-  });
-}
-
-export async function GET(
-  _request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes'>,
-) {
-  return handleApplicationResult(async () => {
-    const identifier = requireCourseOfferingIdentifier(await context.params);
-    const actor = await requireAuthenticatedUser();
-    const nodes = await getRoadmapNodesForActor(actor, identifier, roadmapChangePort).match(
-      (value) => value,
-      throwApplicationError,
+export const POST = courseRoute(
+  async ({ identifier, user, body }) => {
+    const node = await unwrap(() =>
+      createRoadmapNode({ userId: user.id, identifier, input: body }, roadmapChangePort),
     );
-    return NextResponse.json({ nodes });
-  });
-}
+    return NextResponse.json({ node }, { status: 201 });
+  },
+  { body: true },
+);
+
+export const GET = courseRoute(async ({ identifier, user }) => {
+  const nodes = await unwrap(() => getRoadmapNodesForActor(user, identifier, roadmapChangePort));
+  return NextResponse.json({ nodes });
+});

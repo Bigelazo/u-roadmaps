@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { ResultAsync } from 'neverthrow';
+import { ResultAsync, type Result } from 'neverthrow';
 import { unstable_rethrow } from 'next/navigation';
 import { Prisma } from '@/shared/server/db';
 import { ApplicationError, type ApplicationResult } from '@/shared/errors/types';
@@ -40,4 +40,19 @@ export function applicationResult<Value>(
   operation: () => Promise<Value>,
 ): ApplicationResult<Value> {
   return ResultAsync.fromPromise(Promise.resolve().then(operation), normalizeApplicationError);
+}
+
+/**
+ * Resolves to the success value or throws the error, for callers that map thrown errors.
+ * Takes a thunk so the `neverthrow/must-use-result` lint sees the Result returned.
+ */
+export async function unwrap<Value, Failure>(
+  result: () => Result<Value, Failure> | ResultAsync<Value, Failure>,
+): Promise<Value> {
+  return result().match(
+    (value) => value,
+    (error) => {
+      throw error;
+    },
+  );
 }
