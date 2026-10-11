@@ -11,6 +11,13 @@ independientes de desarrollo:
   de notificaciones y los tests unitarios de operaciones del Roadmap. El rol
   local necesita permiso `CREATEDB`; el harness crea la base si falta.
 
+Para los valores de la plantilla, crear una sola vez el rol y la base E2E:
+
+```sql
+CREATE USER roadmap_e2e_user WITH PASSWORD 'roadmap_e2e_password';
+CREATE DATABASE roadmap_e2e_db OWNER roadmap_e2e_user;
+```
+
 La validación agregada se ejecuta con:
 
 ```sh
@@ -44,11 +51,8 @@ pnpm test:e2e
 Consultar [playwright.config.ts](../../playwright.config.ts) para los navegadores,
 workers, reintentos y límites vigentes. Una selección focalizada no sustituye la
 suite completa. Un fallo, timeout o caso sin ejecutar no cuenta como aprobación.
-Los [resultados históricos](../testing-validation-history.md) sirven para auditar
-aceptaciones y mediciones anteriores, no para decidir cómo ejecutar la suite hoy.
-Registrar nuevas validaciones en `docs/issue-<n>-validation.md`, con el commit,
-los comandos y sus resultados. Esta guía conserva la preparación y las
-convenciones de ejecución; la configuración conserva sus valores vigentes.
+Esta guía conserva la preparación y las convenciones de ejecución; la
+configuración conserva sus valores vigentes.
 
 ## Preparación y aislamiento E2E
 
