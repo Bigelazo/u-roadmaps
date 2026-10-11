@@ -1,6 +1,12 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import { nodeVisibleBefore, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
+import {
+  nodeVisibleBefore,
+  participantIds,
+  currentTargetNode,
+  type NoticeTargetDescriptor,
+  type TargetValues,
+} from './descriptor';
 
 export const nodeTypeRef = (nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.nodeType,
@@ -33,16 +39,16 @@ export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
   previousContext: (fact) => ({ typeName: fact.previous.name }),
   async knowers(fact, changes, roadmap) {
     if (!(await nodeVisibleBefore(fact.nodeId, changes, roadmap))) return [];
-    return (await roadmap.participants()).map(({ userId }) => userId);
+    return participantIds(roadmap);
   },
   async audience(fact, changes, roadmap) {
     // Revealing a retyped Node is not a type change: nobody saw the previous type.
     if (!(await nodeVisibleBefore(fact.nodeId, changes, roadmap))) return [];
     if (!(await roadmap.node(fact.nodeId))?.isVisible) return [];
-    return (await roadmap.participants()).map(({ userId }) => userId);
+    return participantIds(roadmap);
   },
   async current(target, roadmap) {
-    const node = target.nodeId ? await roadmap.node(target.nodeId) : null;
+    const node = await currentTargetNode(target, roadmap);
     return node
       ? {
           value: node.nodeTypeId,

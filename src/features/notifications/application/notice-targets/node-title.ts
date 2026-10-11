@@ -1,6 +1,11 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import { nodeVisibleBefore, type NoticeTargetDescriptor } from './descriptor';
+import {
+  nodeVisibleBefore,
+  participantIds,
+  currentTargetNode,
+  type NoticeTargetDescriptor,
+} from './descriptor';
 
 export const nodeTitleRef = (nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.nodeTitle,
@@ -20,16 +25,16 @@ export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
   previousValue: (fact) => fact.previous,
   async knowers(fact, changes, roadmap) {
     if (!(await nodeVisibleBefore(fact.nodeId, changes, roadmap))) return [];
-    return (await roadmap.participants()).map(({ userId }) => userId);
+    return participantIds(roadmap);
   },
   async audience(fact, changes, roadmap) {
     // Revealing a renamed Node is not a title change: nobody saw the previous title.
     if (!(await nodeVisibleBefore(fact.nodeId, changes, roadmap))) return [];
     if (!(await roadmap.node(fact.nodeId))?.isVisible) return [];
-    return (await roadmap.participants()).map(({ userId }) => userId);
+    return participantIds(roadmap);
   },
   async current(target, roadmap) {
-    const node = target.nodeId ? await roadmap.node(target.nodeId) : null;
+    const node = await currentTargetNode(target, roadmap);
     return node ? { value: node.title, visible: node.isVisible } : null;
   },
   entryValues: async (roadmap) =>
