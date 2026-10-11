@@ -9,9 +9,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { InboxIdentity } from '../server';
-import { OwnInboxRealtime, OWN_INBOX_REFRESH_EVENT } from './own-realtime';
-import { request, type InboxRecord } from './inbox-api';
+import { OWN_INBOX_REFRESH_EVENT as refreshEvent } from './own-realtime';
+import { postJson, request, type InboxRecord } from './inbox-api';
 
 type NoticeCounts = { count: number };
 type Filter = Record<string, string | number>;
@@ -31,14 +30,7 @@ function query(input: ListInput) {
   if (input.read === false) params.set('read', 'false');
   return params.toString();
 }
-const refreshEvent = OWN_INBOX_REFRESH_EVENT;
-async function list(input: ListInput): Promise<Page> {
-  const page = await request<{
-    notifications: InboxRecord[];
-    hasMore: boolean;
-  }>(`?${query(input)}&groupBy=roadmapId`);
-  return page;
-}
+const list = (input: ListInput) => request<Page>(`?${query(input)}&groupBy=roadmapId`);
 
 function useInboxRefresh(refetch: () => Promise<unknown>, generation: { current: number }) {
   useEffect(() => {
@@ -165,21 +157,6 @@ export function useCounts(input: { filters: { read?: boolean; data?: Filter }[] 
   const counts = result?.queryKey === key ? result.counts : undefined;
   return { counts, error, isLoading: !counts && !error, refetch };
 }
-export function InboxDriverProvider({
-  identity,
-  children,
-}: {
-  identity: InboxIdentity;
-  children: ReactNode;
-}) {
-  return (
-    <>
-      <OwnInboxRealtime userId={identity.userId} />
-      {children}
-    </>
-  );
-}
-
 const NodeChangeCountsContext = createContext<Record<string, number> | undefined>(undefined);
 
 function useNodeChangeCounts(roadmapId: string) {
@@ -221,11 +198,7 @@ function ActiveNodeChangeCounts({
     if (!byNode || reviewedOpening.current === openedNodeId) return;
     reviewedOpening.current = openedNodeId;
     if (!byNode[openedNodeId]) return;
-    void request('/node-changes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roadmapId, nodeId: openedNodeId }),
-    }).then(refetch, () => {
+    void postJson('/node-changes', { roadmapId, nodeId: openedNodeId }).then(refetch, () => {
       reviewedOpening.current = null;
     });
   }, [byNode, openedNodeId, refetch, roadmapId]);
