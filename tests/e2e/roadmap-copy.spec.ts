@@ -4,7 +4,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { literal, queryJson, sql } from './database';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 import { uploadsDirectory } from './test-data';
 
 function yesterday() {
@@ -108,7 +108,7 @@ const copyScenario = test.extend<{
         file: { name: 'guia.txt', mimeType: 'text/plain', buffer: Buffer.from(fileContent) },
       },
     });
-    expect(upload.status()).toBe(201);
+    await ok(upload, 201);
     const source: RoadmapBody = await (await api.get(closed.apiPath())).json();
     await closedTerm.setFreezeDate(yesterday());
     await waitForClosure(closed);
@@ -123,11 +123,10 @@ function sourceOf(offering: E2ECourseOffering) {
 
 copyScenario(
   'copying a closed version reproduces its content under the copy rules',
-  async ({ course, scenario, apiAs, waitForClosure }) => {
+  async ({ course, scenario, teacherApi: api, waitForClosure }) => {
     const { closed, next, source } = scenario;
-    const api = await apiAs(course.users.teacher);
     const created = await api.post(next.apiPath(), { data: sourceOf(closed) });
-    expect(created.status()).toBe(201);
+    await ok(created, 201);
     const copy: RoadmapBody = await (await api.get(next.apiPath())).json();
 
     const sourceIds = new Set([
@@ -229,14 +228,12 @@ copyScenario(
 
 copyScenario(
   'students see copied visible Nodes blocked, no hidden Nodes, and one availability notice',
-  async ({ course, scenario, apiAs }) => {
+  async ({ course, scenario, teacherApi, apiAs }) => {
     const { closed, next, source } = scenario;
-    const created = await (
-      await apiAs(course.users.teacher)
-    ).post(next.apiPath(), {
+    const created = await teacherApi.post(next.apiPath(), {
       data: sourceOf(closed),
     });
-    expect(created.status()).toBe(201);
+    await ok(created, 201);
     const roadmapId = (await created.json()).roadmap.id;
     for (const student of [course.users.studentWithProgress, course.users.studentWithoutProgress]) {
       const api = await apiAs(student);
@@ -265,10 +262,10 @@ copyScenario(
 
 copyScenario(
   'only the course professor copies, and invalid sources leave no Roadmap',
-  async ({ course, scenario, apiAs, createCourse, createTerm }) => {
+  async ({ course, scenario, apiAs, teacherApi: professor, createCourse, createTerm }) => {
     const { closed, next } = scenario;
     const assistant = await apiAs(course.users.teachingAssistant);
-    expect((await assistant.post(next.apiPath(), { data: sourceOf(closed) })).status()).toBe(403);
+    await ok(await assistant.post(next.apiPath(), { data: sourceOf(closed) }), 403);
 
     const openTerm = await createTerm();
     const open = await createCourse({
@@ -280,7 +277,6 @@ copyScenario(
       ...scenario.closedTerm,
       participants: [{ user: course.users.teacher, role: 'TEACHER' }],
     });
-    const professor = await apiAs(course.users.teacher);
     for (const [source, status, code] of [
       [sourceOf(open).source, 409, 'VERSION_NOT_CLOSED'],
       [
@@ -305,8 +301,7 @@ copyScenario(
 
 copyScenario(
   'concurrent copy requests create exactly one Roadmap',
-  async ({ course, scenario, apiAs }) => {
-    const api = await apiAs(course.users.teacher);
+  async ({ course, scenario, teacherApi: api }) => {
     const responses = await Promise.all(
       Array.from({ length: 4 }, () =>
         api.post(scenario.next.apiPath(), { data: sourceOf(scenario.closed) }),
@@ -363,7 +358,7 @@ function fileKeyOf(resourceId: string) {
 
 async function download(api: APIRequestContext, url: string) {
   const response = await api.get(url);
-  expect(response.status()).toBe(200);
+  await ok(response);
   return (await response.body()).toString();
 }
 
@@ -379,11 +374,10 @@ async function storedCopies(content: string) {
 
 copyScenario(
   'copied file Resources own their bytes independently of the version',
-  async ({ course, scenario, apiAs }) => {
+  async ({ course, scenario, teacherApi: api }) => {
     // A closed version refuses every edit, so independence is checked from the new edition.
     const { closed, next, source, fileContent } = scenario;
-    const api = await apiAs(course.users.teacher);
-    expect((await api.post(next.apiPath(), { data: sourceOf(closed) })).status()).toBe(201);
+    await ok(await api.post(next.apiPath(), { data: sourceOf(closed) }), 201);
     const copy: RoadmapBody = await (await api.get(next.apiPath())).json();
     const [original] = fileResources(source);
     const [copied] = fileResources(copy);
@@ -403,7 +397,7 @@ copyScenario(
         file: { name: 'guia.txt', mimeType: 'text/plain', buffer: Buffer.from('reemplazo') },
       },
     });
-    expect(replacement.status()).toBe(201);
+    await ok(replacement, 201);
     expect(await download(api, (await replacement.json()).resource.url)).toBe('reemplazo');
     expect(await download(api, original!.url)).toBe(fileContent);
   },
@@ -411,12 +405,11 @@ copyScenario(
 
 copyScenario(
   'a file missing from storage is omitted while the rest of the copy succeeds',
-  async ({ course, scenario, apiAs }) => {
+  async ({ course, scenario, teacherApi: api }) => {
     const { closed, next, source } = scenario;
     const [original] = fileResources(source);
     await rm(join(uploadsDirectory(), await fileKeyOf(original!.id)));
-    const api = await apiAs(course.users.teacher);
-    expect((await api.post(next.apiPath(), { data: sourceOf(closed) })).status()).toBe(201);
+    await ok(await api.post(next.apiPath(), { data: sourceOf(closed) }), 201);
     const copy: RoadmapBody = await (await api.get(next.apiPath())).json();
     expect(fileResources(copy)).toEqual([]);
     const others = (body: RoadmapBody) =>
@@ -431,10 +424,9 @@ copyScenario(
 
 copyScenario(
   'a creation that fails after copying bytes leaves no orphaned files',
-  async ({ course, scenario, apiAs, rejectResourceInserts }) => {
+  async ({ course, scenario, teacherApi: api, rejectResourceInserts }) => {
     const { closed, next, fileContent } = scenario;
     await rejectResourceInserts(next);
-    const api = await apiAs(course.users.teacher);
     const refused = await api.post(next.apiPath(), { data: sourceOf(closed) });
     expect(refused.ok()).toBe(false);
     expect(Number(await roadmapCount(next))).toBe(0);
