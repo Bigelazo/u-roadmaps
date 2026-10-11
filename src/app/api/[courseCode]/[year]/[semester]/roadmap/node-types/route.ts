@@ -1,43 +1,20 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult,
-  parseJsonObject as parseJson,
-  throwApplicationError,
-} from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
-import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { courseRoute } from '@/app/_adapters/http';
 import { createRoadmapNodeType, getNodeTypesForActor } from '@/features/roadmap/server';
+import { unwrap } from '@/shared/errors/server';
 
-export async function GET(
-  _request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/node-types'>,
-) {
-  return handleApplicationResult(async () => {
-    const params = await context.params;
-    const identifier = requireCourseOfferingIdentifier(params);
-    const actor = await requireAuthenticatedUser();
-    const nodeTypes = await getNodeTypesForActor(actor, identifier, roadmapChangePort).match(
-      (value) => value,
-      throwApplicationError,
+export const GET = courseRoute(async ({ identifier, user }) => {
+  const nodeTypes = await unwrap(() => getNodeTypesForActor(user, identifier, roadmapChangePort));
+  return NextResponse.json({ nodeTypes });
+});
+
+export const POST = courseRoute(
+  async ({ identifier, user, body }) => {
+    const nodeType = await unwrap(() =>
+      createRoadmapNodeType({ userId: user.id, identifier, input: body }),
     );
-    return NextResponse.json({ nodeTypes });
-  });
-}
-
-export async function POST(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/node-types'>,
-) {
-  return handleApplicationResult(async () => {
-    const params = await context.params;
-    const identifier = requireCourseOfferingIdentifier(params);
-    const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
-    const nodeType = await createRoadmapNodeType({
-      userId: user.id,
-      identifier,
-      input: body,
-    }).match((value) => value, throwApplicationError);
     return NextResponse.json({ nodeType }, { status: 201 });
-  });
-}
+  },
+  { body: true },
+);

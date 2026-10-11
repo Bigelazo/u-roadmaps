@@ -1,11 +1,9 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import { handleApplicationResult, throwApplicationError } from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
-import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
-import type { TeacherBlockOperation } from '@/features/roadmap';
+import { courseRoute } from '@/app/_adapters/http';
+import type { CourseOfferingIdentifier, TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock, previewTeacherBlock } from '@/features/roadmap/server';
-import { ApplicationError } from '@/shared/errors/types';
+import { ApplicationError, unwrap } from '@/shared/errors/server';
 
 function teacherBlockOperation(request: Request): TeacherBlockOperation {
   const operation = new URL(request.url).searchParams.get('operation');
@@ -19,70 +17,46 @@ function teacherBlockOperation(request: Request): TeacherBlockOperation {
   );
 }
 
-async function teacherBlockInput(
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
+type TeacherBlockRoute = {
+  user: { id: string };
+  identifier: CourseOfferingIdentifier;
+  params: Readonly<Record<string, string>>;
+};
+
+function teacherBlockInput(
+  { user, identifier, params }: TeacherBlockRoute,
   operation: TeacherBlockOperation,
   request?: Request,
 ) {
-  const [params, user] = await Promise.all([context.params, requireAuthenticatedUser()]);
   return {
     userId: user.id,
-    identifier: requireCourseOfferingIdentifier(params),
+    identifier,
     id: params.nodeId,
     operation,
     previewVersion: request?.headers.get('x-teacher-block-preview') ?? undefined,
   };
 }
 
-async function applyTeacherBlock(input: Awaited<ReturnType<typeof teacherBlockInput>>) {
-  const result = await changeTeacherBlock(input, roadmapChangePort).match(
-    (value) => value,
-    throwApplicationError,
+export const GET = courseRoute(
+  async (route) =>
+    NextResponse.json(
+      await unwrap(() => previewTeacherBlock(teacherBlockInput(route, route.prepared))),
+    ),
+  { prepare: teacherBlockOperation, authWithParams: true },
+);
+
+function changeTeacherBlockRoute(operation: TeacherBlockOperation) {
+  return courseRoute(
+    async (route) =>
+      NextResponse.json(
+        await unwrap(() =>
+          changeTeacherBlock(teacherBlockInput(route, operation, route.request), roadmapChangePort),
+        ),
+      ),
+    { authWithParams: true },
   );
-  return result;
 }
 
-export async function GET(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
-) {
-  return handleApplicationResult(async () => {
-    const preview = await previewTeacherBlock(
-      await teacherBlockInput(context, teacherBlockOperation(request)),
-    ).match((value) => value, throwApplicationError);
-    return NextResponse.json(preview);
-  });
-}
-
-export async function POST(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
-) {
-  return handleApplicationResult(async () => {
-    return NextResponse.json(
-      await applyTeacherBlock(await teacherBlockInput(context, 'BLOCK', request)),
-    );
-  });
-}
-
-export async function DELETE(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
-) {
-  return handleApplicationResult(async () => {
-    return NextResponse.json(
-      await applyTeacherBlock(await teacherBlockInput(context, 'UNBLOCK', request)),
-    );
-  });
-}
-
-export async function PATCH(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/nodes/[nodeId]/teacher-block'>,
-) {
-  return handleApplicationResult(async () => {
-    return NextResponse.json(
-      await applyTeacherBlock(await teacherBlockInput(context, 'BRANCH_UNLOCK', request)),
-    );
-  });
-}
+export const POST = changeTeacherBlockRoute('BLOCK');
+export const DELETE = changeTeacherBlockRoute('UNBLOCK');
+export const PATCH = changeTeacherBlockRoute('BRANCH_UNLOCK');

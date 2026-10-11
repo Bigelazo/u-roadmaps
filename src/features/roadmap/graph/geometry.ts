@@ -11,7 +11,7 @@ const roadmapNodeSeparation = roadmapGridSize;
  * Tamaño mínimo de una tarjeta, expresado en celdas completas del roadmap.
  * El mínimo conserva espacio para el icono, el título corto y el padding.
  */
-export const roadmapNodeMinimumSize = {
+const roadmapNodeMinimumSize = {
   width: roadmapGridSize * 6,
   height: roadmapGridSize * 4,
 } as const;

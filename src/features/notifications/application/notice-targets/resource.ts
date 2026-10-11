@@ -1,6 +1,11 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import type { NoticeTargetDescriptor, RoadmapView, TargetValues } from './descriptor';
+import {
+  currentTargetNode,
+  type NoticeTargetDescriptor,
+  type RoadmapView,
+  type TargetValues,
+} from './descriptor';
 
 export const resourceRef = (resourceId: string, nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.resource,
@@ -66,7 +71,7 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   knowers: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
   audience: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
   async current(target, roadmap) {
-    const node = target.nodeId ? await roadmap.node(target.nodeId) : null;
+    const node = await currentTargetNode(target, roadmap);
     if (!node) return null;
     const resourceId = target.targetKey.slice('resource:'.length);
     const resource = await roadmap.resource(resourceId);

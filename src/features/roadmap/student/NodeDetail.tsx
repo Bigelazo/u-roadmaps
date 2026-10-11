@@ -257,7 +257,6 @@ export function StudentNodeDetail({
     >
       <Sidebar
         side="right"
-        collapsible="none"
         id="student-node-detail-panel"
         aria-labelledby="student-node-detail-title"
         className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"

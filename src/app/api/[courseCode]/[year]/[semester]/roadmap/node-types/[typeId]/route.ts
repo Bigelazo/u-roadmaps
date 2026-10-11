@@ -1,48 +1,23 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
-import {
-  handleApplicationResult,
-  parseJsonObject as parseJson,
-  throwApplicationError,
-} from '@/app/_adapters/http';
-import { requireAuthenticatedUser } from '@/app/_adapters/auth';
-import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
+import { courseRoute } from '@/app/_adapters/http';
 import { deleteRoadmapNodeType, updateRoadmapNodeType } from '@/features/roadmap/server';
+import { unwrap } from '@/shared/errors/server';
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/node-types/[typeId]'>,
-) {
-  return handleApplicationResult(async () => {
-    const params = await context.params;
-    const identifier = requireCourseOfferingIdentifier(params);
-    const [body, user] = await Promise.all([parseJson(request), requireAuthenticatedUser()]);
-    const result = await updateRoadmapNodeType(
-      {
-        userId: user.id,
-        identifier,
-        id: params.typeId,
-        input: body,
-      },
-      roadmapChangePort,
-    ).match((value) => value, throwApplicationError);
-
-    return NextResponse.json({ nodeType: result.nodeType });
-  });
-}
-
-export async function DELETE(
-  _request: Request,
-  context: RouteContext<'/api/[courseCode]/[year]/[semester]/roadmap/node-types/[typeId]'>,
-) {
-  return handleApplicationResult(async () => {
-    const params = await context.params;
-    const identifier = requireCourseOfferingIdentifier(params);
-    const user = await requireAuthenticatedUser();
-    await deleteRoadmapNodeType({ userId: user.id, identifier, id: params.typeId }).match(
-      (value) => value,
-      throwApplicationError,
+export const PATCH = courseRoute(
+  async ({ identifier, user, params, body }) => {
+    const result = await unwrap(() =>
+      updateRoadmapNodeType(
+        { userId: user.id, identifier, id: params.typeId, input: body },
+        roadmapChangePort,
+      ),
     );
-    return new NextResponse(null, { status: 204 });
-  });
-}
+    return NextResponse.json({ nodeType: result.nodeType });
+  },
+  { body: true },
+);
+
+export const DELETE = courseRoute(async ({ identifier, user, params }) => {
+  await unwrap(() => deleteRoadmapNodeType({ userId: user.id, identifier, id: params.typeId }));
+  return new NextResponse(null, { status: 204 });
+});

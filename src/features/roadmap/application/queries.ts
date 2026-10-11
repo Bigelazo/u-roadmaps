@@ -13,7 +13,7 @@ import {
   requireRoadmapCreationAccess,
   type RoadmapActor,
 } from '@/features/roadmap/application/participation';
-import { applicationResult } from '@/shared/errors/server';
+import { applicationResult, unwrap } from '@/shared/errors/server';
 
 export function createRoadmapForActor(
   actor: RoadmapActor,
@@ -22,18 +22,9 @@ export function createRoadmapForActor(
   changePort: RoadmapChangePort,
 ) {
   return applicationResult(async () => {
-    await requireRoadmapCreationAccess(actor, identifier, changePort).match(
-      (value) => value,
-      (error) => {
-        throw error;
-      },
-    );
-    return createRoadmap(identifier, await readInput(), actor, changePort).match(
-      (value) => value,
-      (error) => {
-        throw error;
-      },
-    );
+    await unwrap(() => requireRoadmapCreationAccess(actor, identifier, changePort));
+    const input = await readInput();
+    return unwrap(() => createRoadmap(identifier, input, actor, changePort));
   });
 }
 
@@ -43,24 +34,11 @@ export function getNodeTypesForActor(
   changePort: RoadmapChangePort,
 ) {
   return applicationResult(async () => {
-    const { courseOffering } = await requireCourseOfferingParticipation(
-      actor,
-      identifier,
-      ['STUDENT', 'TEACHER'],
-      changePort,
-    ).match(
-      (value) => value,
-      (error) => {
-        throw error;
-      },
+    const { courseOffering } = await unwrap(() =>
+      requireCourseOfferingParticipation(actor, identifier, ['STUDENT', 'TEACHER'], changePort),
     );
     if (!courseOffering.roadmap) {
-      const roadmap = await requireRoadmap(identifier).match(
-        (value) => value,
-        (error) => {
-          throw error;
-        },
-      );
+      const roadmap = await unwrap(() => requireRoadmap(identifier));
       return getAvailableTypes(roadmap.id);
     }
     return getAvailableTypes(courseOffering.roadmap.id);
@@ -73,23 +51,10 @@ export function getRoadmapNodesForActor(
   changePort: RoadmapChangePort,
 ) {
   return applicationResult(async () => {
-    const { participation } = await requireCourseOfferingParticipation(
-      actor,
-      identifier,
-      ['STUDENT', 'TEACHER'],
-      changePort,
-    ).match(
-      (value) => value,
-      (error) => {
-        throw error;
-      },
+    const { participation } = await unwrap(() =>
+      requireCourseOfferingParticipation(actor, identifier, ['STUDENT', 'TEACHER'], changePort),
     );
-    const roadmap = await getRoadmapDto(identifier, participation.role === 'TEACHER').match(
-      (value) => value,
-      (error) => {
-        throw error;
-      },
-    );
+    const roadmap = await unwrap(() => getRoadmapDto(identifier, participation.role === 'TEACHER'));
     return roadmap.nodes;
   });
 }

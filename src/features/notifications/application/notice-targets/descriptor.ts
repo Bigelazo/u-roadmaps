@@ -199,3 +199,13 @@ export async function nodeVisibleBefore(
   if (visibility?.kind === 'node-visibility') return visibility.previous;
   return (await roadmap.node(nodeId))?.isVisible ?? false;
 }
+
+/** The user ids of the Roadmap's active Participations, the actor included. */
+export async function participantIds(roadmap: RoadmapView) {
+  return (await roadmap.participants()).map(({ userId }) => userId);
+}
+
+/** The target's Node as it is now, or null when the target has no Node or it is gone. */
+export async function currentTargetNode(target: NoticeTargetRef, roadmap: RoadmapView) {
+  return target.nodeId ? roadmap.node(target.nodeId) : null;
+}

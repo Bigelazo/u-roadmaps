@@ -23,8 +23,7 @@ import {
 import { Input } from '@/shared/ui/input';
 import { Separator } from '@/shared/ui/separator';
 import { Switch } from '@/shared/ui/switch';
-import { MarkdownEditor } from './MarkdownEditor';
-import { inputClassName, NodeTypeSelect } from './primitives';
+import { NodeContentFields } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
@@ -76,7 +75,6 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
     previewNodeInformation,
     previewButtonRef,
   } = useNodeEditorContext();
-  const fieldPrefix = isFullscreen ? 'fullscreen-node' : 'edit-node';
 
   return (
     <form
@@ -90,40 +88,12 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
       }}
     >
       <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor={`${fieldPrefix}-title`}>Título</FieldLabel>
-          <Input
-            id={`${fieldPrefix}-title`}
-            className={inputClassName}
-            value={nodeDraft.title}
-            onChange={(event) => changeNodeDraft({ ...nodeDraft, title: event.target.value })}
-            required
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`${fieldPrefix}-description`}>
-            Descripción <span className="font-normal text-muted-foreground">(opcional)</span>
-          </FieldLabel>
-          <MarkdownEditor
-            id={`${fieldPrefix}-description`}
-            aria-describedby={`${fieldPrefix}-description-help`}
-            value={nodeDraft.description}
-            onValueChange={(description) => changeNodeDraft({ ...nodeDraft, description })}
-          />
-          <FieldDescription id={`${fieldPrefix}-description-help`}>
-            Admite Markdown: **negrita**, *cursiva*, listas y [enlaces](https://ejemplo.cl). Puedes
-            arrastrar un archivo .md para reemplazar el texto, previa confirmación.
-          </FieldDescription>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor={`${fieldPrefix}-type`}>Tipo</FieldLabel>
-          <NodeTypeSelect
-            id={`${fieldPrefix}-type`}
-            nodeTypes={nodeTypes}
-            value={nodeDraft.nodeTypeId}
-            onValueChange={(nodeTypeId) => changeNodeDraft({ ...nodeDraft, nodeTypeId })}
-          />
-        </Field>
+        <NodeContentFields
+          idPrefix={isFullscreen ? 'fullscreen-node' : 'edit-node'}
+          nodeTypes={nodeTypes}
+          value={nodeDraft}
+          onChange={(patch) => changeNodeDraft({ ...nodeDraft, ...patch })}
+        />
       </FieldGroup>
       <div className={cn('grid gap-2', !isFullscreen && 'grid-cols-2')}>
         <Button type="submit" disabled={!canSaveNode}>
