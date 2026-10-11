@@ -304,8 +304,8 @@ function renderSession(persistence: SessionPersistence, input: SessionInput = te
       <RoadmapCanvasSession {...next} />
     </RoadmapCanvasSessionPersistenceProvider>
   );
-  const result = render(view(input));
-  return { ...result, rerenderSession: (next: SessionInput) => result.rerender(view(next)) };
+  const utils = render(view(input));
+  return { ...utils, rerenderSession: (next: SessionInput) => utils.rerender(view(next)) };
 }
 
 function signalChange(detail: object) {

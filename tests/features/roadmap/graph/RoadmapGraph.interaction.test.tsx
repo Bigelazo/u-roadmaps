@@ -291,8 +291,8 @@ function graph({ roadmap: roadmapData = roadmap, editing, ...props }: GraphOptio
 }
 
 function renderGraph(options?: GraphOptions) {
-  const result = render(graph(options));
-  return { ...result, rerenderGraph: (next?: GraphOptions) => result.rerender(graph(next)) };
+  const utils = render(graph(options));
+  return { ...utils, rerenderGraph: (next?: GraphOptions) => utils.rerender(graph(next)) };
 }
 
 function withOutsideButton(content: ReactNode) {
