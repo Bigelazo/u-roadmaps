@@ -9,21 +9,10 @@ import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change
 import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import { mockViewport } from '../../../support/viewport';
 
 // The public canvas seam renders a mobile sidebar in these scenarios.
-beforeEach(() => {
-  vi.stubGlobal('innerWidth', 640);
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: query === '(max-width: 767px)',
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: () => false,
-  }));
-});
+beforeEach(() => mockViewport(640));
 // The runner cleans up each canvas before these file-scoped globals are restored.
 afterAll(() => vi.unstubAllGlobals());
 

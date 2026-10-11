@@ -3,22 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import type { NodeType, RoadmapNode, StudentBlockedRoadmapNode } from '@/features/roadmap/types';
-
-function mockViewport(width: number) {
-  vi.stubGlobal('innerWidth', width);
-  vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
-    matches:
-      (query === '(max-width: 767px)' && width < 768) ||
-      (query === '(min-width: 1024px)' && width >= 1024),
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: () => false,
-  }));
-}
+import { mockViewport } from '../../../support/viewport';
 
 beforeEach(() => mockViewport(640));
 afterEach(() => vi.unstubAllGlobals());
