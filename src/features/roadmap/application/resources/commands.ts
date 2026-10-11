@@ -3,12 +3,12 @@ import { roadmapChangeTransaction } from '../change-transaction';
 import 'server-only';
 import { resourceContentState } from '@/shared/server/resource-content-state';
 
+import { resourceDto } from '@/features/roadmap/application/roadmap';
 import {
   requireResourceType,
   requireString,
   requireUrl,
-  resourceDto,
-} from '@/features/roadmap/application/roadmap';
+} from '@/features/roadmap/application/validation';
 import {
   requireEditorRoadmap,
   requireNode,
@@ -22,7 +22,7 @@ import {
 } from '@/features/roadmap/infrastructure/resources/filesystem';
 import { fileResourceUrl } from '@/features/roadmap/domain/resource';
 import { requireUuid } from '@/shared/validation';
-import { ApplicationError, applicationResult } from '@/shared/errors/server';
+import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
 
 type JsonObject = Record<string, unknown>;
 type ResourceInput = EditorInput & { id: string };
@@ -31,7 +31,7 @@ type UploadedResourceInput = ResourceInput & {
   file: unknown;
 };
 
-async function createRoadmapResourceUnsafe(
+export const createRoadmapResource = withApplicationResult(async function createRoadmapResource(
   { id, input, ...editor }: ResourceInput & { input: JsonObject },
   changePort: RoadmapChangePort,
 ) {
@@ -60,7 +60,7 @@ async function createRoadmapResourceUnsafe(
     });
     return resourceDto(resource, editor.identifier);
   });
-}
+});
 
 function uploadedFileError(error: unknown): never {
   if (error instanceof Error && error.message === 'EMPTY_FILE') {
@@ -72,7 +72,7 @@ function uploadedFileError(error: unknown): never {
   throw error;
 }
 
-async function uploadRoadmapResourceUnsafe(
+export const uploadRoadmapResource = withApplicationResult(async function uploadRoadmapResource(
   { file, id, ...editor }: UploadedResourceInput,
   changePort: RoadmapChangePort,
 ) {
@@ -120,9 +120,9 @@ async function uploadRoadmapResourceUnsafe(
     await deleteUploadedFile(fileKey);
     throw error;
   }
-}
+});
 
-async function updateRoadmapResourceUnsafe(
+export const updateRoadmapResource = withApplicationResult(async function updateRoadmapResource(
   { id, input, ...editor }: ResourceInput & { input: JsonObject },
   changePort: RoadmapChangePort,
 ) {
@@ -162,9 +162,9 @@ async function updateRoadmapResourceUnsafe(
       });
     return { resource: resourceDto(updated, editor.identifier) };
   });
-}
+});
 
-async function removeRoadmapResourceUnsafe(
+export const removeRoadmapResource = withApplicationResult(async function removeRoadmapResource(
   { id, ...editor }: ResourceInput,
   changePort: RoadmapChangePort,
 ) {
@@ -190,26 +190,4 @@ async function removeRoadmapResourceUnsafe(
   });
   if (deleted.fileKey) await deleteUploadedFile(deleted.fileKey).catch(() => undefined);
   return {};
-}
-
-export function createRoadmapResource(
-  input: ResourceInput & { input: JsonObject },
-  changePort: RoadmapChangePort,
-) {
-  return applicationResult(() => createRoadmapResourceUnsafe(input, changePort));
-}
-
-export function uploadRoadmapResource(input: UploadedResourceInput, changePort: RoadmapChangePort) {
-  return applicationResult(() => uploadRoadmapResourceUnsafe(input, changePort));
-}
-
-export function updateRoadmapResource(
-  input: ResourceInput & { input: JsonObject },
-  changePort: RoadmapChangePort,
-) {
-  return applicationResult(() => updateRoadmapResourceUnsafe(input, changePort));
-}
-
-export function removeRoadmapResource(input: ResourceInput, changePort: RoadmapChangePort) {
-  return applicationResult(() => removeRoadmapResourceUnsafe(input, changePort));
-}
+});

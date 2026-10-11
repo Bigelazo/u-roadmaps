@@ -7,20 +7,17 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { Prisma, prisma } from '@/shared/server/db';
+import { nodeDto, nodeTypeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import {
-  findCycle,
-  nodeDto,
   nodeDescription,
-  normalizeName,
   optionalString,
   requireBoolean,
   requireNodeTypeColor,
   requireNodeTypeIcon,
   requireFiniteNumber,
   requireString,
-  nodeTypeDto,
-  resourceDto,
-} from '@/features/roadmap/application/roadmap';
+} from '@/features/roadmap/application/validation';
+import { normalizeName } from '@/features/roadmap/domain/roadmap-copy';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
 import type {
@@ -29,7 +26,10 @@ import type {
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
-import { transitiveDependentNodeIds } from '@/features/roadmap/domain/access';
+import {
+  transitiveDependentNodeIds,
+  wouldCreateDependencyCycle,
+} from '@/features/roadmap/domain/access';
 import {
   chileCalendarDay,
   dueScheduledUnlockNodeIds,
@@ -521,7 +521,7 @@ async function prepareRoadmapDependency(
   ) {
     throw new ApplicationError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
   }
-  if (findCycle(dependencies, sourceNodeId, targetNodeId))
+  if (wouldCreateDependencyCycle(dependencies, sourceNodeId, targetNodeId))
     throw new ApplicationError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
   return {
     roadmapId: roadmap.id,
