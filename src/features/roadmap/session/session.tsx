@@ -18,7 +18,7 @@ import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-previ
 import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
 import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
-import { useRoadmapCanvasFeedback } from '@/features/roadmap/session/feedback';
+import { notify } from '@/shared/ui/notify';
 import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type {
   AnyRoadmapDto,
@@ -578,7 +578,6 @@ export function useRoadmapCanvasSession(
 ): InjectedSessionResult & RoadmapCanvasSessionWorkflows {
   const persistence = useContext(persistenceContext);
   const active = useInjectedSession(input, persistence);
-  const feedback = useRoadmapCanvasFeedback();
   const guardDraft = options.guardDraft ?? allowAnyDraft;
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
     currentView: options.canvasPreview?.currentView ?? initialCanvasPreviewView,
@@ -599,9 +598,9 @@ export function useRoadmapCanvasSession(
     previewRoadmapDependency: active.previewRoadmapDependency,
     connectNodes: active.connectNodes,
     deleteDependency: active.deleteDependency,
-    onCreationSuccess: () => feedback?.showSuccess('Dependencia creada exitosamente.'),
+    onCreationSuccess: () => notify.success('Dependencia creada exitosamente.'),
     onDeletionSuccess: (deletedCount) =>
-      feedback?.showSuccess(
+      notify.success(
         deletedCount === 1
           ? 'Dependencia eliminada exitosamente.'
           : 'Dependencias eliminadas exitosamente.',

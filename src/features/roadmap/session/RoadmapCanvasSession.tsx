@@ -1,7 +1,6 @@
 'use client';
 
 import { RoadmapCanvasView } from '@/features/roadmap/session/RoadmapCanvasView';
-import { RoadmapCanvasFeedbackProvider } from '@/features/roadmap/session/feedback';
 import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
 
@@ -12,10 +11,9 @@ import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types
  */
 export function RoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
   return (
-    <RoadmapCanvasFeedbackProvider
+    <RoadmapCanvasView
       key={`${roadmapCanvasSessionKey(input)}:${input.roadmapEntryKey ?? ''}`}
-    >
-      <RoadmapCanvasView input={input} />
-    </RoadmapCanvasFeedbackProvider>
+      input={input}
+    />
   );
 }
