@@ -210,7 +210,12 @@ function NodeActionMenu({
   );
 
   return (
-    <div className="absolute right-[-10px] bottom-[-10px] z-10">
+    <div
+      className={cn(
+        'absolute right-[-10px] bottom-[-10px] z-10',
+        !useActionSheet && 'hidden lg:block',
+      )}
+    >
       {isOpen && !useActionSheet ? (
         <div
           aria-label="Menú de acciones del nodo"

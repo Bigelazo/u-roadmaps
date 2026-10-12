@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
 import { nodeMenuActions } from '@/features/roadmap/graph/node-menu-actions';
 import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
@@ -39,8 +39,17 @@ export function NodeActionSheet({
   onClose: () => void;
   finalFocus: () => HTMLElement | false | null;
 }) {
-  const actions = node
-    ? nodeMenuActions(node.id, node.data.isHidden, node.data.isTeacherBlocked, onAction)
+  // Keep the last Node while the sheet animates closed so its content does not collapse.
+  const [lastNode, setLastNode] = useState(node);
+  if (node && node !== lastNode) setLastNode(node);
+  const shownNode = node ?? lastNode;
+  const actions = shownNode
+    ? nodeMenuActions(
+        shownNode.id,
+        shownNode.data.isHidden,
+        shownNode.data.isTeacherBlocked,
+        onAction,
+      )
     : [];
 
   return (
@@ -60,7 +69,7 @@ export function NodeActionSheet({
       }}
     >
       <SheetContent
-        id={node ? `node-actions-${node.id}` : undefined}
+        id={shownNode ? `node-actions-${shownNode.id}` : undefined}
         side="bottom"
         showCloseButton={false}
         finalFocus={false}
@@ -68,7 +77,7 @@ export function NodeActionSheet({
       >
         <SheetHeader className="pr-16">
           <SheetTitle>Menú de acciones del nodo</SheetTitle>
-          <SheetDescription>{node?.data.title}</SheetDescription>
+          <SheetDescription>{shownNode?.data.title}</SheetDescription>
         </SheetHeader>
         <SheetClose
           aria-label="Cerrar acciones"
