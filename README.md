@@ -169,25 +169,24 @@ Los avisos no tienen configuración externa. Véase [operación y verificación]
 
 ## Comandos disponibles
 
-| Comando                                    | Descripción                                                                                                    |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                 | Inicia Next.js en desarrollo.                                                                                  |
-| `pnpm build`                               | Genera el build de producción.                                                                                 |
-| `pnpm start`                               | Sirve un build de producción existente.                                                                        |
-| `pnpm lint` / `pnpm lint:fix`              | Revisa el código con ESLint / aplica correcciones automáticas.                                                 |
-| `pnpm format:check` / `pnpm format`        | Comprueba el formato / formatea el repositorio con Prettier.                                                   |
-| `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                           |
-| `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.                      |
-| `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                             |
-| `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas.          |
-| `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                            |
-| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                               |
-| `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                               |
-| `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                          |
-| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                                       |
-| `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                            |
-| `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.           |
-| `pnpm check:notification-bundle`           | Verifica que los artefactos de navegador y servidor y las dependencias carecen de SDK/configuración retirados. |
+| Comando                                    | Descripción                                                                                           |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                 | Inicia Next.js en desarrollo.                                                                         |
+| `pnpm build`                               | Genera el build de producción.                                                                        |
+| `pnpm start`                               | Sirve un build de producción existente.                                                               |
+| `pnpm lint` / `pnpm lint:fix`              | Revisa el código con ESLint / aplica correcciones automáticas.                                        |
+| `pnpm format:check` / `pnpm format`        | Comprueba el formato / formatea el repositorio con Prettier.                                          |
+| `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                  |
+| `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.             |
+| `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                    |
+| `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas. |
+| `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                   |
+| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                      |
+| `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                      |
+| `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                 |
+| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                              |
+| `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                   |
+| `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.  |
 
 La sincronización del calendario puede consultar el PDF sin escribir en la base:
 

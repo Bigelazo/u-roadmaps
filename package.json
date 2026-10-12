@@ -21,7 +21,6 @@
     "prisma:prepare": "prisma generate && prisma migrate deploy && prisma db seed",
     "dev:data:reset": "dotenv -o -e .env -- sh -c 'tsx --conditions react-server scripts/reset-development-data.ts --assert-environment && prisma migrate deploy && tsx --conditions react-server scripts/reset-development-data.ts'",
     "sync:academic-calendar": "tsx --conditions react-server scripts/sync-academic-calendar.ts",
-    "check:notification-bundle": "node scripts/check-notification-bundle.mjs",
     "test:integration": "vitest run --config vitest.notifications.config.mts",
     "loc:chart": "node scripts/loc-chart/generate.mjs"
   },

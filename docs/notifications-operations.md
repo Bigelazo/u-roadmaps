@@ -55,7 +55,6 @@ pnpm prisma:generate
 NODE_ENV=production pnpm exec dotenv -e .env.production -- pnpm prisma:migrate
 NODE_ENV=production pnpm exec dotenv -e .env.production -- pnpm prisma:seed
 pnpm build
-pnpm check:notification-bundle
 pnpm start
 ```
 
@@ -130,10 +129,8 @@ contenido pedagógico.
 
 ```sh
 pnpm build
-pnpm check:notification-bundle
 ```
 
-La comprobación inspecciona los artefactos de cliente y servidor para asegurar
-que no quedan dependencias del proveedor anterior. La cobertura E2E de avisos
-vive en `tests/e2e/own-*.spec.ts` y `roadmap-entry-summary.spec.ts`; cómo
-ejecutarla está en la [guía de pruebas](agents/testing.md).
+La cobertura E2E de avisos vive en `tests/e2e/own-*.spec.ts` y
+`roadmap-entry-summary.spec.ts`; cómo ejecutarla está en la
+[guía de pruebas](agents/testing.md).
