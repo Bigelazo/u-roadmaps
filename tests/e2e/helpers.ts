@@ -1,5 +1,5 @@
 import { encode } from 'next-auth/jwt';
-import { expect, type APIResponse, type BrowserContext } from '@playwright/test';
+import { expect, type APIResponse, type BrowserContext, type Page } from '@playwright/test';
 
 const sessionCookieName = 'next-auth.session-token';
 const sessionSecret = process.env.NEXTAUTH_SECRET ?? 'e2e-nextauth-secret';
@@ -32,4 +32,11 @@ export async function ok(response: APIResponse, status = 200) {
 
 export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** A toast in the app-level stack, found by its title (Base UI also mirrors it into a live region). */
+export function toast(page: Page, message: string) {
+  return page
+    .locator('[data-slot="toast-viewport"] [data-slot="toast"]')
+    .filter({ has: page.locator('[data-slot="toast-title"]', { hasText: message }) });
 }

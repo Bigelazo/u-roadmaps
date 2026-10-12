@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, toast } from './helpers';
 
 async function expectViewportFitsPage(page: import('@playwright/test').Page) {
   const documentMetrics = await page.evaluate(() => {
@@ -37,19 +37,18 @@ async function bounds(locator: Locator) {
 }
 
 async function expectTopRightToast(page: Page, toast: Locator) {
-  const [navigation, toastBox] = await Promise.all([
-    bounds(page.getByRole('banner')),
-    bounds(toast),
-  ]);
+  const navigation = await bounds(page.getByRole('banner'));
   const viewport = page.viewportSize()!;
-  expect(viewport.width - toastBox.x - toastBox.width).toBeCloseTo(20, 0);
-  expect(toastBox.y).toBeGreaterThanOrEqual(navigation.y + navigation.height);
-}
-
-function toast(page: Page, message: string) {
-  return page
-    .locator('[data-slot="toast-viewport"] [data-slot="toast"]')
-    .filter({ hasText: message });
+  // Toasts slide in from above and scale while the stack expands: wait for them to settle.
+  await expect
+    .poll(async () => {
+      const box = await bounds(toast);
+      return {
+        belowNavigation: box.y >= navigation.y + navigation.height,
+        rightInset: Math.round(viewport.width - box.x - box.width),
+      };
+    })
+    .toEqual({ belowNavigation: true, rightInset: 20 });
 }
 
 test('roadmap fits the viewport for teachers and students without residual vertical scrolling', async ({

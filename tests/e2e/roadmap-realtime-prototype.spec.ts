@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test, type E2EPrimaryCourseOffering } from './fixtures';
-import { authenticateAs, ok } from './helpers';
+import { authenticateAs, ok, toast } from './helpers';
 import { prepareNodeCreator } from './create-node';
 
 async function panNodeIntoView(page: Page, nodeId: string) {
@@ -67,11 +67,11 @@ test('teaching sessions reload live and recover transient projection failures th
         data: { description: 'Cambio recuperado sin aviso' },
       }),
     );
-    await expect(page.getByText('Fallo transitorio de actualización')).toBeVisible();
+    await expect(toast(page, 'Fallo transitorio de actualización')).toBeVisible();
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Nodo sincronizado');
     await page.unroute(projectionRoute);
     await expect(page.getByLabel('Descripción')).toHaveValue('Cambio recuperado sin aviso');
-    await expect(page.getByText('Fallo transitorio de actualización')).toBeHidden();
+    await expect(toast(page, 'Fallo transitorio de actualización')).toBeHidden();
 
     await recipient.setOffline(true);
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
