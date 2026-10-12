@@ -188,6 +188,10 @@
   outline-offset: 2px;
 }
 
+.touchTrigger {
+  --action-size: 2.75rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .menuRing,
   .menuRingOpen,

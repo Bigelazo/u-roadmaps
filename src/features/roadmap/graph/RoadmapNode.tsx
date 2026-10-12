@@ -1,15 +1,11 @@
 import {
   CircleCheckBig,
   CircleEllipsis,
-  Eye,
   EyeOff,
-  FilePlusCorner,
   FileText,
   Link2,
   LockKeyhole,
-  LockKeyholeOpen,
   Settings,
-  Trash2,
   X,
 } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -18,6 +14,7 @@ import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
+import { nodeMenuActions } from '@/features/roadmap/graph/node-menu-actions';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
 import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
@@ -42,6 +39,7 @@ export type RoadmapNodeData = Record<string, unknown> &
     canManageActions?: boolean;
     isActionMenuOpen?: boolean;
     isActionMenuClosing?: boolean;
+    useActionSheet?: boolean;
     onToggleActionMenu?: (nodeId: string, trigger: HTMLButtonElement) => void;
   };
 
@@ -161,65 +159,13 @@ function StaffStateBadge({ state }: { state: keyof typeof staffStateBadges }) {
   );
 }
 
-function nodeMenuActions(
-  nodeId: string,
-  hidden: boolean,
-  teacherBlocked: boolean,
-  onAction: NodeActionCallbacks['onAction'],
-) {
-  const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';
-  const visibilityLabel = hidden ? 'Mostrar para estudiantes' : 'Ocultar para estudiantes';
-  return [
-    ...(!hidden
-      ? [
-          {
-            id: 'access',
-            label: accessLabel,
-            Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
-            HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
-            onSelect: () =>
-              onAction?.({
-                kind: 'change-teacher-block',
-                nodeId,
-                operation: teacherBlocked ? 'UNBLOCK' : 'BLOCK',
-              }),
-            angle: 0,
-          },
-        ]
-      : []),
-    {
-      id: 'visibility',
-      label: visibilityLabel,
-      Icon: hidden ? EyeOff : Eye,
-      HoverIcon: hidden ? Eye : EyeOff,
-      onSelect: () => onAction?.({ kind: 'change-visibility', nodeId, isVisible: hidden }),
-      angle: 30,
-    },
-    {
-      id: 'resource',
-      label: 'Agregar recurso',
-      Icon: FilePlusCorner,
-      HoverIcon: null,
-      onSelect: () => onAction?.({ kind: 'add-resource', nodeId }),
-      angle: 60,
-    },
-    {
-      id: 'delete',
-      label: 'Eliminar nodo',
-      Icon: Trash2,
-      HoverIcon: null,
-      onSelect: () => onAction?.({ kind: 'delete-node', nodeId }),
-      angle: 90,
-    },
-  ];
-}
-
 function NodeActionMenu({
   nodeId,
   hidden,
   teacherBlocked,
   isOpen,
   isClosing,
+  useActionSheet,
   onToggle,
   onAction,
 }: NodeActionCallbacks & {
@@ -228,14 +174,44 @@ function NodeActionMenu({
   teacherBlocked: boolean;
   isOpen: boolean;
   isClosing: boolean;
+  useActionSheet: boolean;
   onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
 }) {
   const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
   const actions = nodeMenuActions(nodeId, hidden, teacherBlocked, onAction);
+  const trigger = (
+    <button
+      type="button"
+      aria-label={isOpen ? 'Cerrar menú de acciones del nodo' : 'Abrir menú de acciones del nodo'}
+      aria-expanded={isOpen}
+      aria-haspopup={useActionSheet ? 'dialog' : undefined}
+      aria-controls={`node-actions-${nodeId}`}
+      className={cn('nodrag nopan', styles.actionTrigger, useActionSheet && styles.touchTrigger)}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle?.(nodeId, event.currentTarget);
+      }}
+    >
+      {isOpen ? (
+        <X
+          data-testid="node-action-trigger-close"
+          className={cn('size-5 transition-all duration-150', isClosing && 'scale-75 opacity-0')}
+          aria-hidden="true"
+        />
+      ) : (
+        <ClosedIcon
+          data-testid={`node-action-trigger-${hidden ? 'hidden' : teacherBlocked ? 'blocked' : 'default'}`}
+          className="size-5"
+          aria-hidden="true"
+        />
+      )}
+    </button>
+  );
 
   return (
-    <div className="absolute right-[-10px] bottom-[-10px] z-10 hidden lg:block">
-      {isOpen ? (
+    <div className="absolute right-[-10px] bottom-[-10px] z-10">
+      {isOpen && !useActionSheet ? (
         <div
           aria-label="Menú de acciones del nodo"
           className={cn(styles.menuRing, isClosing ? styles.menuRingClosing : styles.menuRingOpen)}
@@ -294,47 +270,16 @@ function NodeActionMenu({
           })}
         </div>
       ) : null}
-      <Tooltip>
-        <TooltipTrigger
-          delay={200}
-          render={
-            <button
-              type="button"
-              aria-label={
-                isOpen ? 'Cerrar menú de acciones del nodo' : 'Abrir menú de acciones del nodo'
-              }
-              aria-expanded={isOpen}
-              aria-controls={`node-actions-${nodeId}`}
-              className={cn('nodrag nopan', styles.actionTrigger)}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggle?.(nodeId, event.currentTarget);
-              }}
-            />
-          }
-        >
-          {isOpen ? (
-            <X
-              data-testid="node-action-trigger-close"
-              className={cn(
-                'size-5 transition-all duration-150',
-                isClosing && 'scale-75 opacity-0',
-              )}
-              aria-hidden="true"
-            />
-          ) : (
-            <ClosedIcon
-              data-testid={`node-action-trigger-${hidden ? 'hidden' : teacherBlocked ? 'blocked' : 'default'}`}
-              className="size-5"
-              aria-hidden="true"
-            />
-          )}
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {isOpen ? 'Cerrar acciones' : 'Acciones del nodo'}
-        </TooltipContent>
-      </Tooltip>
+      {useActionSheet ? (
+        trigger
+      ) : (
+        <Tooltip>
+          <TooltipTrigger delay={200} render={trigger} />
+          <TooltipContent side="bottom">
+            {isOpen ? 'Cerrar acciones' : 'Acciones del nodo'}
+          </TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
@@ -409,6 +354,7 @@ function NodeActionBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | '
           teacherBlocked={teacherBlocked}
           isOpen={Boolean(data.isActionMenuOpen)}
           isClosing={Boolean(data.isActionMenuClosing)}
+          useActionSheet={Boolean(data.useActionSheet)}
           onToggle={data.onToggleActionMenu}
           onAction={data.onAction}
         />

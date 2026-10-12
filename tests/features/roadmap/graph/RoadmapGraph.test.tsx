@@ -1,7 +1,8 @@
 import { type ReactNode } from 'react';
 import type { NodeProps } from '@xyflow/react';
 import { render, screen } from '@testing-library/react';
-import { expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { mockViewport } from '../../../support/viewport';
 import { RoadmapGraph, type RoadmapGraphEditing } from '@/features/roadmap/graph/RoadmapGraph';
 import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
@@ -205,3 +206,6 @@ test('enables the complete editing capability only for an editable teaching proj
     2,
   );
 });
+
+beforeEach(() => mockViewport(1280));
+afterEach(() => vi.unstubAllGlobals());

@@ -33,6 +33,7 @@ import {
 } from '@/features/roadmap/graph/geometry';
 import type { NodeActionCallbacks, NodeActionIntent } from '@/features/roadmap/graph/node-action';
 import { Button } from '@/shared/ui/button';
+import { NodeActionSheet, useNodeActionSheet } from '@/features/roadmap/graph/NodeActionSheet';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeTypes } from '@/features/roadmap/graph/roadmap-node-types';
 import type {
@@ -73,6 +74,7 @@ const bottomRightPanelClassName =
   'pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1';
 
 type RoadmapGraphActionMenu = NodeActionCallbacks & {
+  useActionSheet: boolean;
   openNodeId: string | null;
   closingNodeId: string | null;
   onToggle: (nodeId: string, trigger: HTMLButtonElement) => void;
@@ -114,6 +116,7 @@ function mapProjectionToFlow(
         linkCount: resources.filter((resource) => resource.type !== 'FILE').length,
         blockReason,
         canManageActions: canEdit,
+        useActionSheet: actionMenu.useActionSheet,
         isActionMenuOpen,
         isActionMenuClosing: actionMenu.closingNodeId === node.id,
         onToggleActionMenu: actionMenu.onToggle,
@@ -458,11 +461,13 @@ function activeMenuNodeId(
 
 function useNodeActionMenu({
   editing,
+  useActionSheet,
   selectedNodeId,
   selectedNodeIdRef,
   emitEditingIntent,
 }: {
   editing: RoadmapGraphEditing | undefined;
+  useActionSheet: boolean;
   selectedNodeId: string | null | undefined;
   selectedNodeIdRef: RefObject<string | null | undefined>;
   emitEditingIntent: (intent: RoadmapGraphEditingIntent) => void;
@@ -470,25 +475,29 @@ function useNodeActionMenu({
   const [openMenu, setOpenMenu] = useState<NodeActionMenuState>(null);
   const [closingMenu, setClosingMenu] = useState<NodeActionMenuState>(null);
   const openNodeId = activeMenuNodeId(openMenu, editing, selectedNodeId);
-  const closingNodeId = activeMenuNodeId(closingMenu, editing, selectedNodeId);
+  const closingNodeId = useActionSheet
+    ? null
+    : activeMenuNodeId(closingMenu, editing, selectedNodeId);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocusRef = useRef(true);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const beginClosing = useCallback(
     (nodeId: string) => {
-      if (!editing) return;
+      if (!editing || useActionSheet) return;
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       setClosingMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
       closeTimerRef.current = setTimeout(() => setClosingMenu(null), 400);
     },
-    [editing, selectedNodeIdRef],
+    [editing, selectedNodeIdRef, useActionSheet],
   );
   const closeActionMenu = useCallback(
     (restoreFocus = true) => {
+      restoreFocusRef.current = restoreFocus;
       if (openNodeId) beginClosing(openNodeId);
       setOpenMenu(null);
-      if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+      if (restoreFocus && !useActionSheet) requestAnimationFrame(() => triggerRef.current?.focus());
     },
-    [beginClosing, openNodeId],
+    [beginClosing, openNodeId, useActionSheet],
   );
   const onToggle = useCallback(
     (nodeId: string, trigger: HTMLButtonElement) => {
@@ -499,6 +508,7 @@ function useNodeActionMenu({
         return;
       }
       if (openNodeId) beginClosing(openNodeId);
+      restoreFocusRef.current = true;
       setOpenMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
     },
     [beginClosing, closeActionMenu, editing, openNodeId, selectedNodeIdRef],
@@ -511,10 +521,14 @@ function useNodeActionMenu({
     [closeActionMenu, emitEditingIntent],
   );
   const actionMenu = useMemo<RoadmapGraphActionMenu>(
-    () => ({ openNodeId, closingNodeId, onToggle, onAction }),
-    [closingNodeId, onAction, onToggle, openNodeId],
+    () => ({ useActionSheet, openNodeId, closingNodeId, onToggle, onAction }),
+    [closingNodeId, onAction, onToggle, openNodeId, useActionSheet],
   );
-  return { actionMenu, closeActionMenu };
+  return {
+    actionMenu,
+    closeActionMenu,
+    actionMenuFinalFocus: () => (restoreFocusRef.current ? triggerRef.current : false),
+  };
 }
 
 function useRoadmapGraphController({
@@ -527,6 +541,7 @@ function useRoadmapGraphController({
   const editing: RoadmapGraphEditing | undefined =
     projection.kind === 'teaching' ? projection.editing : undefined;
   const canEdit = editing !== undefined;
+  const useActionSheet = useNodeActionSheet();
   const projectionKind = projection.kind;
   const projectionRoadmap = projection.roadmap;
   const stableProjection = useMemo<RoadmapGraphProjection>(() => {
@@ -570,8 +585,9 @@ function useRoadmapGraphController({
     (dependencyId: string) => deleteDependencies([dependencyId]),
     [deleteDependencies],
   );
-  const { actionMenu, closeActionMenu } = useNodeActionMenu({
+  const { actionMenu, closeActionMenu, actionMenuFinalFocus } = useNodeActionMenu({
     editing,
+    useActionSheet,
     selectedNodeId,
     selectedNodeIdRef,
     emitEditingIntent,
@@ -671,6 +687,9 @@ function useRoadmapGraphController({
 
   return {
     canEdit,
+    useActionSheet,
+    requestNodeAction: actionMenu.onAction,
+    actionMenuFinalFocus,
     layoutDirection,
     openActionMenuNodeId: actionMenu.openNodeId,
     closingActionMenuNodeId: actionMenu.closingNodeId,
@@ -765,67 +784,80 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     }));
 
   return (
-    <div ref={containerRef} className="relative h-full" onKeyDownCapture={handleKeyDownCapture}>
-      <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
-        className="h-full"
-        nodes={flow.nodes}
-        edges={flow.edges}
-        nodeTypes={roadmapNodeTypes}
-        edgeTypes={roadmapEdgeTypes}
-        nodesDraggable={canInteract}
-        nodesConnectable={canInteract}
-        snapToGrid
-        snapGrid={[roadmapGridSize, roadmapGridSize]}
-        connectionMode={ConnectionMode.Loose}
-        nodesFocusable
-        nodeDragThreshold={5}
-        nodeClickDistance={6}
-        elementsSelectable={isNavigationEnabled}
-        panOnDrag={isNavigationEnabled}
-        zoomOnScroll={isNavigationEnabled}
-        zoomOnPinch={isNavigationEnabled}
-        zoomOnDoubleClick={isNavigationEnabled}
-        onNodesChange={handleNodesChange}
-        onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
-          setFlow((current) => ({
-            ...current,
-            edges: applyEdgeChanges(
-              changes.filter((change) => change.type !== 'remove'),
-              current.edges,
-            ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
-          }))
-        }
-        onNodeClick={(_event, node) => {
-          if (node.data.blockReason) return;
-          onSelectNode(node.id);
-        }}
-        onPaneClick={() => {
-          if (isActionMenuActive) closeActionMenu(false);
-        }}
-        onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
-        onEdgeMouseLeave={canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined}
-        onNodeDragStop={
-          canInteract
-            ? (_event, node) => {
-                applyNodePositions('pointer', snappedNodePositions(immutableNodePositions([node])));
-              }
-            : undefined
-        }
-        onConnect={canInteract ? connectNodes : undefined}
-        onEdgesDelete={
-          canInteract ? (edges) => deleteDependencies(edges.map((edge) => edge.id)) : undefined
-        }
-        onMoveEnd={(event, viewport) => {
-          if (!event) return;
-          onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-        }}
-        fitView
-        fitViewOptions={roadmapFitViewOptions}
-        proOptions={{ hideAttribution: true }}
-      >
-        <RoadmapGraphContents props={props} model={model} />
-      </ReactFlow>
-    </div>
+    <>
+      <div ref={containerRef} className="relative h-full" onKeyDownCapture={handleKeyDownCapture}>
+        <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
+          className="h-full"
+          nodes={flow.nodes}
+          edges={flow.edges}
+          nodeTypes={roadmapNodeTypes}
+          edgeTypes={roadmapEdgeTypes}
+          nodesDraggable={canInteract}
+          nodesConnectable={canInteract}
+          snapToGrid
+          snapGrid={[roadmapGridSize, roadmapGridSize]}
+          connectionMode={ConnectionMode.Loose}
+          nodesFocusable
+          nodeDragThreshold={5}
+          nodeClickDistance={6}
+          elementsSelectable={isNavigationEnabled}
+          panOnDrag={isNavigationEnabled}
+          zoomOnScroll={isNavigationEnabled}
+          zoomOnPinch={isNavigationEnabled}
+          zoomOnDoubleClick={isNavigationEnabled}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
+            setFlow((current) => ({
+              ...current,
+              edges: applyEdgeChanges(
+                changes.filter((change) => change.type !== 'remove'),
+                current.edges,
+              ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
+            }))
+          }
+          onNodeClick={(_event, node) => {
+            if (node.data.blockReason) return;
+            onSelectNode(node.id);
+          }}
+          onPaneClick={() => {
+            if (isActionMenuActive) closeActionMenu(false);
+          }}
+          onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
+          onEdgeMouseLeave={canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined}
+          onNodeDragStop={
+            canInteract
+              ? (_event, node) => {
+                  applyNodePositions(
+                    'pointer',
+                    snappedNodePositions(immutableNodePositions([node])),
+                  );
+                }
+              : undefined
+          }
+          onConnect={canInteract ? connectNodes : undefined}
+          onEdgesDelete={
+            canInteract ? (edges) => deleteDependencies(edges.map((edge) => edge.id)) : undefined
+          }
+          onMoveEnd={(event, viewport) => {
+            if (!event) return;
+            onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+          }}
+          fitView
+          fitViewOptions={roadmapFitViewOptions}
+          proOptions={{ hideAttribution: true }}
+        >
+          <RoadmapGraphContents props={props} model={model} />
+        </ReactFlow>
+      </div>
+      {model.useActionSheet ? (
+        <NodeActionSheet
+          node={flow.nodes.find((node) => node.id === openActionMenuNodeId)}
+          onAction={model.requestNodeAction}
+          onClose={closeActionMenu}
+          finalFocus={model.actionMenuFinalFocus}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -845,7 +877,10 @@ function RoadmapGraphContents({
       {' '}
       <RoadmapGraphOverlays slots={overlaySlots} />
       <RoadmapViewportRestorer restoration={viewportRestoration} />
-      <ActionMenuViewportAdjustment nodeId={openActionMenuNodeId} containerRef={containerRef} />
+      <ActionMenuViewportAdjustment
+        nodeId={canEdit && !model.useActionSheet ? openActionMenuNodeId : null}
+        containerRef={containerRef}
+      />
       <RoadmapGraphToolbar
         containerRef={containerRef}
         layoutDirection={layoutDirection}

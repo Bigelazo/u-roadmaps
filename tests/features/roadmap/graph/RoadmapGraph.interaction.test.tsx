@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { mockViewport } from '../../../support/viewport';
 
 const { fitViewMock, screenToFlowPositionMock, setViewportMock, reactFlowHandlers } = vi.hoisted(
   () => ({
@@ -772,3 +773,6 @@ test('disables automatic ordering until the Roadmap has enough Nodes', async () 
   await user.click(button);
   expect(screen.queryByRole('alertdialog')).toBeNull();
 });
+
+beforeEach(() => mockViewport(1280));
+afterEach(() => vi.unstubAllGlobals());
