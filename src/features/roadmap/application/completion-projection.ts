@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import { studentNodeAccessById } from '@/features/roadmap/domain/access';
+import { studentNodeAccessById, visibleRoadmapGraph } from '@/features/roadmap/domain/access';
 import { nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import { Prisma } from '@/shared/server/db';
 
@@ -148,18 +148,6 @@ function commonRoadmapProjection(data: RoadmapProjectionData) {
   };
 }
 
-function visibleRoadmapData(data: RoadmapProjectionData) {
-  const nodes = data.nodes.filter((node) => node.isVisible);
-  const visibleNodeIds = new Set(nodes.map((node) => node.id));
-  return {
-    nodes,
-    dependencies: data.dependencies.filter(
-      (dependency) =>
-        visibleNodeIds.has(dependency.sourceNodeId) && visibleNodeIds.has(dependency.targetNodeId),
-    ),
-  };
-}
-
 function projectAccessibleNode(node: RoadmapNode, identifier: CourseOfferingIdentifier) {
   return {
     ...nodeDto(node),
@@ -172,7 +160,7 @@ export function projectStudentRoadmap(
   identifier: CourseOfferingIdentifier,
   completedNodeIds: ReadonlySet<string>,
 ) {
-  const { nodes, dependencies } = visibleRoadmapData(data);
+  const { nodes, dependencies } = visibleRoadmapGraph(data.nodes, data.dependencies);
   const accessByNodeId = studentNodeAccessById({
     nodes,
     dependencies,

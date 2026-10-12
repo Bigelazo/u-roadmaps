@@ -74,7 +74,7 @@ function isTeachingRoadmap(value: unknown): value is RoadmapDto {
   );
 }
 
-function isTeacherBlockImpact(value: unknown): value is TeacherBlockImpact {
+function isTitledRecord(value: unknown): value is TeacherBlockImpact {
   return isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string';
 }
 
@@ -87,16 +87,12 @@ function isDeletionDependency(value: unknown) {
   );
 }
 
-function isDeletionResource(value: unknown) {
-  return isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string';
-}
-
 function isTeacherBlockPreview(value: unknown): value is TeacherBlockPreview {
   return (
     isRecord(value) &&
     typeof value.version === 'string' &&
     Array.isArray(value.nodes) &&
-    value.nodes.every(isTeacherBlockImpact)
+    value.nodes.every(isTitledRecord)
   );
 }
 
@@ -113,8 +109,12 @@ function isNodeDeletionImpact(value: unknown): value is NodeDeletionImpact {
     Array.isArray(value.dependencies) &&
     value.dependencies.every(isDeletionDependency) &&
     Array.isArray(value.resources) &&
-    value.resources.every(isDeletionResource)
+    value.resources.every(isTitledRecord)
   );
+}
+
+function isDependencyPreview(value: unknown): value is { nodes: TeacherBlockImpact[] } {
+  return isRecord(value) && Array.isArray(value.nodes) && value.nodes.every(isTitledRecord);
 }
 
 function isVisibilityPreview(value: unknown): value is {
@@ -157,34 +157,37 @@ async function request(
   return response.json();
 }
 
-async function mutate(
+/** Reads a JSON body and rejects with the fallback message when it has an unexpected shape. */
+async function fetchValid<T>(
   input: RoadmapCanvasSessionInput,
   suffix: string,
   init: RequestInit,
+  isValid: (body: unknown) => body is T,
   fallback: string,
 ) {
-  await request(input, suffix, init, fallback);
+  const body: unknown = await request(input, suffix, init, fallback);
+  if (!isValid(body)) throw new Error(fallback);
+  return body;
 }
 
 export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistence = {
-  async load(input) {
-    const body = await request(input, '', { cache: 'no-store' }, 'No se pudo cargar el roadmap.');
-    const validProjection =
-      input.experience.kind === 'teaching' ? isTeachingRoadmap(body) : isStudentRoadmap(body);
-    if (!validProjection) throw new Error('No se pudo cargar el roadmap.');
-    return body;
-  },
+  load: (input) =>
+    fetchValid<AnyRoadmapDto>(
+      input,
+      '',
+      { cache: 'no-store' },
+      input.experience.kind === 'teaching' ? isTeachingRoadmap : isStudentRoadmap,
+      'No se pudo cargar el roadmap.',
+    ),
 
-  async loadSimulation(input) {
-    const body = await request(
+  loadSimulation: (input) =>
+    fetchValid(
       input,
       '/simulation',
       { cache: 'no-store' },
+      isStudentRoadmap,
       'No se pudo cargar la previsualización.',
-    );
-    if (!isStudentRoadmap(body)) throw new Error('No se pudo cargar la previsualización.');
-    return body;
-  },
+    ),
 
   async addNode(input, node: NewRoadmapNode, position: Point) {
     const body = await request(
@@ -207,7 +210,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async updateNode(input, nodeId: string, node: NodeUpdate) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}`,
       { method: 'PATCH', body: JSON.stringify({ ...node, description: node.description || null }) },
@@ -216,7 +219,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async moveNode(input, nodeId: string, position: Point) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}`,
       { method: 'PATCH', body: JSON.stringify({ positionX: position.x, positionY: position.y }) },
@@ -225,7 +228,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async connectNodes(input, sourceNodeId, targetNodeId, sourceHandle, targetHandle) {
-    await mutate(
+    await request(
       input,
       '/dependencies',
       {
@@ -240,33 +243,27 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
     const query = new URLSearchParams({ sourceNodeId, targetNodeId });
     if (sourceHandle) query.set('sourceHandle', sourceHandle);
     if (targetHandle) query.set('targetHandle', targetHandle);
-    const body = await request(
+    const body = await fetchValid(
       input,
       `/dependencies?${query}`,
       {},
+      isDependencyPreview,
       'No se pudo calcular el impacto de la dependencia.',
     );
-    if (!isRecord(body) || !Array.isArray(body.nodes) || !body.nodes.every(isTeacherBlockImpact)) {
-      throw new Error('No se pudo calcular el impacto de la dependencia.');
-    }
     return body.nodes;
   },
 
-  async previewTeacherBlock(input, nodeId, operation: TeacherBlockOperation) {
-    const body = await request(
+  previewTeacherBlock: (input, nodeId, operation: TeacherBlockOperation) =>
+    fetchValid(
       input,
       `/nodes/${nodeId}/teacher-block?operation=${operation}`,
       {},
+      isTeacherBlockPreview,
       'No se pudo calcular el impacto del bloqueo docente.',
-    );
-    if (!isTeacherBlockPreview(body)) {
-      throw new Error('No se pudo calcular el impacto del bloqueo docente.');
-    }
-    return body;
-  },
+    ),
 
   async changeTeacherBlock(input, nodeId, operation, previewVersion) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}/teacher-block`,
       {
@@ -278,7 +275,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async scheduleTeacherUnlock(input, nodeId, unlockOn) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}/teacher-block/schedule`,
       unlockOn
@@ -292,7 +289,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async deleteDependency(input, dependencyId) {
-    await mutate(
+    await request(
       input,
       `/dependencies/${dependencyId}`,
       { method: 'DELETE' },
@@ -301,7 +298,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async toggleVisibility(input, nodeId, isVisible) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}`,
       { method: 'PATCH', body: JSON.stringify({ isVisible: !isVisible }) },
@@ -310,31 +307,27 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async previewNodeVisibility(input, nodeId) {
-    const body = await request(
+    const body = await fetchValid(
       input,
       `/nodes/${nodeId}?operation=HIDE`,
       {},
+      isVisibilityPreview,
       'No se pudo calcular el impacto de ocultar el nodo.',
     );
-    if (!isVisibilityPreview(body))
-      throw new Error('No se pudo calcular el impacto de ocultar el nodo.');
     return body.dependencies;
   },
 
-  async previewNodeDeletion(input, nodeId) {
-    const body = await request(
+  previewNodeDeletion: (input, nodeId) =>
+    fetchValid(
       input,
       `/nodes/${nodeId}?operation=DELETE`,
       {},
+      isNodeDeletionImpact,
       'No se pudo calcular el impacto de eliminar el nodo.',
-    );
-    if (!isNodeDeletionImpact(body))
-      throw new Error('No se pudo calcular el impacto de eliminar el nodo.');
-    return body;
-  },
+    ),
 
   async deleteNode(input, nodeId, previewVersion) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}`,
       {
@@ -346,7 +339,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async addResource(input, nodeId, resource) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}/resources`,
       { method: 'POST', body: JSON.stringify(resource) },
@@ -357,7 +350,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   async uploadResource(input, nodeId, file) {
     const body = new FormData();
     body.append('file', file);
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}/resources`,
       { method: 'POST', body },
@@ -366,7 +359,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async updateResource(input, resourceId, resource) {
-    await mutate(
+    await request(
       input,
       `/resources/${resourceId}`,
       { method: 'PATCH', body: JSON.stringify(resource) },
@@ -375,7 +368,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async deleteResource(input, resourceId) {
-    await mutate(
+    await request(
       input,
       `/resources/${resourceId}`,
       { method: 'DELETE' },
@@ -384,7 +377,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async addNodeType(input, nodeType: RoadmapNodeTypeInput) {
-    await mutate(
+    await request(
       input,
       '/node-types',
       { method: 'POST', body: JSON.stringify(nodeType) },
@@ -393,7 +386,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async updateNodeType(input, nodeTypeId, nodeType) {
-    await mutate(
+    await request(
       input,
       `/node-types/${nodeTypeId}`,
       { method: 'PATCH', body: JSON.stringify(nodeType) },
@@ -402,7 +395,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async deleteNodeType(input, nodeTypeId) {
-    await mutate(
+    await request(
       input,
       `/node-types/${nodeTypeId}`,
       { method: 'DELETE' },
@@ -411,7 +404,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async complete(input, nodeId) {
-    await mutate(
+    await request(
       input,
       `/nodes/${nodeId}/completion`,
       { method: 'POST' },
@@ -420,7 +413,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async completeSimulatedNode(input, nodeId) {
-    await mutate(
+    await request(
       input,
       `/simulation/nodes/${nodeId}/completion`,
       { method: 'POST' },
@@ -429,7 +422,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   async resetSimulation(input) {
-    await mutate(
+    await request(
       input,
       '/simulation',
       { method: 'DELETE' },

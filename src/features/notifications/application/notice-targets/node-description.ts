@@ -44,7 +44,7 @@ export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> 
   knowers: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   audience: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   async current(target, roadmap) {
-    const node = target.nodeId ? await roadmap.node(target.nodeId) : null;
+    const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     return node
       ? {
           value: JSON.stringify(node.description),

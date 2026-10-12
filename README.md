@@ -67,11 +67,11 @@ Cada curso se identifica por el código del ramo, el año y el semestre, y tiene
 - Campana y bandeja de avisos dentro de la aplicación, con paginación, filtros por curso y nodo, contadores de pendientes y navegación al elemento relacionado.
 - Avisos propios guardados en PostgreSQL para la disponibilidad de un roadmap, los Nodos, Recursos, cambios de acceso, Dependencias y clasificación.
 - Selección de destinatarios según participación activa y acceso al contenido, excluyendo al autor del cambio.
-- Reconocimiento contextual de avisos al entrar al roadmap o abrir el nodo correspondiente. Ver una fila o abrir el diálogo del aviso no basta para reconocerlo; las llegadas posteriores a una apertura permanecen pendientes.
-- Primer aviso inmediato por clase y resumen separado de sus repeticiones al cerrar una ventana fija de 60 segundos, con cantidad y contexto del último cambio.
+- Reconocimiento de avisos al entrar al roadmap, con un Resumen de cambios de lo ocurrido desde la entrada anterior. Abrir la bandeja o un nodo no reconoce avisos; las llegadas posteriores a la entrada permanecen pendientes.
+- Agrupación por objeto del aviso: los cambios sucesivos al mismo elemento actualizan un único aviso, y volver al valor conocido lo retira.
 - Entrega en vivo mediante SSE para los avisos propios y la proyección del roadmap; recuperación al volver a la pestaña o recuperar la conexión, con tratamiento de borradores locales y pérdida de acceso.
 
-Los avisos funcionan exclusivamente con la aplicación y PostgreSQL, sin SDK ni credenciales de Novu. Las cinco clases usan el mismo contrato de agrupación. La operación admitida es un único proceso Node persistente; las ventanas no recuperan repeticiones tras caídas. Véanse [resúmenes propios](docs/notifications-summaries.md) y [SSE](docs/notifications-sse.md).
+Los avisos funcionan exclusivamente con la aplicación y PostgreSQL, sin servicios externos. Véase [operación de avisos](docs/notifications-operations.md).
 
 ## Tecnologías
 
@@ -169,25 +169,24 @@ Los avisos no tienen configuración externa. Véase [operación y verificación]
 
 ## Comandos disponibles
 
-| Comando                                    | Descripción                                                                                                    |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `pnpm dev`                                 | Inicia Next.js en desarrollo.                                                                                  |
-| `pnpm build`                               | Genera el build de producción.                                                                                 |
-| `pnpm start`                               | Sirve un build de producción existente.                                                                        |
-| `pnpm lint` / `pnpm lint:fix`              | Revisa el código con ESLint / aplica correcciones automáticas.                                                 |
-| `pnpm format:check` / `pnpm format`        | Comprueba el formato / formatea el repositorio con Prettier.                                                   |
-| `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                           |
-| `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.                      |
-| `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                             |
-| `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas.          |
-| `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                            |
-| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                               |
-| `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                               |
-| `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                          |
-| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                                       |
-| `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                            |
-| `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.           |
-| `pnpm check:notification-bundle`           | Verifica que los artefactos de navegador y servidor y las dependencias carecen de SDK/configuración retirados. |
+| Comando                                    | Descripción                                                                                           |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                 | Inicia Next.js en desarrollo.                                                                         |
+| `pnpm build`                               | Genera el build de producción.                                                                        |
+| `pnpm start`                               | Sirve un build de producción existente.                                                               |
+| `pnpm lint` / `pnpm lint:fix`              | Revisa el código con ESLint / aplica correcciones automáticas.                                        |
+| `pnpm format:check` / `pnpm format`        | Comprueba el formato / formatea el repositorio con Prettier.                                          |
+| `pnpm typecheck`                           | Comprueba tipos sin emitir archivos.                                                                  |
+| `pnpm test:unit`                           | Ejecuta la suite de Vitest; requiere cargar el entorno indicado en la sección de pruebas.             |
+| `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                    |
+| `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas. |
+| `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                   |
+| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                      |
+| `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                      |
+| `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                 |
+| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                              |
+| `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                   |
+| `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.  |
 
 La sincronización del calendario puede consultar el PDF sin escribir en la base:
 
@@ -199,29 +198,12 @@ Sin `--dry-run`, guarda las fechas y sus fuentes en `AcademicTerm`. El script ut
 
 ## Pruebas
 
-La suite de Vitest contiene pruebas de dominio, aplicación, componentes, integraciones, adaptadores HTTP y límites de arquitectura. Algunas pruebas importan el cliente de base de datos y necesitan `DATABASE_URL`; las operaciones del Roadmap también usan PostgreSQL real mediante `NOTIFICATIONS_DATABASE_URL`. La preparación y el aislamiento de ambas suites están en la [guía de pruebas](docs/agents/testing.md). Carga el entorno y retira el origen fijo de NextAuth para los casos que comprueban distintos orígenes:
-
-```bash
-pnpm exec dotenv -e .env -- env -u NEXTAUTH_URL pnpm test:unit
-```
-
-Las pruebas E2E usan el servicio PostgreSQL local existente y una base independiente. Para los valores de la plantilla, crea una sola vez:
-
-```sql
-CREATE USER roadmap_e2e_user WITH PASSWORD 'roadmap_e2e_password';
-CREATE DATABASE roadmap_e2e_db OWNER roadmap_e2e_user;
-```
-
-Configura `E2E_DATABASE_URL` en `.env`, instala los navegadores y ejecuta:
-
 ```bash
 pnpm exec playwright install chromium
-pnpm test:e2e
+pnpm test
 ```
 
-Playwright prepara los fixtures y ejecuta un build de producción con recursos separados del desarrollo. Los navegadores y workers vigentes se definen en [playwright.config.ts](playwright.config.ts). Cada invocación administra su servidor y finaliza sin abrir el reporte HTML. Ver la [guía de pruebas](docs/agents/testing.md) y el [historial de validación](docs/testing-validation-history.md).
-
-La suite ordinaria verifica SSE propio y resúmenes mediante entrega inmediata, sin esperas por una ventana de agrupación, activación Cloud ni señales inyectadas como sustituto del transporte.
+Las suites unitarias, de integración y E2E usan bases PostgreSQL separadas del desarrollo. La preparación, el aislamiento y las convenciones de ejecución están en la [guía de pruebas](docs/agents/testing.md).
 
 ## Despliegue
 
@@ -279,7 +261,7 @@ El proyecto está en desarrollo. Esta lista de funcionalidades describe el códi
 - **Evolución del roadmap pendiente:** todavía no existe el flujo para copiar una versión anterior con nuevas identidades, archivos independientes y referencia a su origen.
 - **Gestión académica incompleta:** las secciones coordinadas, el cargo institucional persistido, la importación y reconciliación del listado completo de participantes y el seguimiento docente de estudiantes aún no están implementados. Los datos ficticios de estos escenarios no prueban su disponibilidad en la aplicación.
 - **Permisos institucionales en desarrollo:** con respuesta de U-Campus, la creación se reserva al profesor de cátedra y la edición se asigna a cátedra, coordinación y auxiliares. La asignación de permisos de edición a ayudantes prevista por el dominio sigue pendiente. Cuando falta la respuesta institucional, algunas operaciones utilizan la participación docente local activa.
-- **Operación de notificaciones:** los avisos de las cinco clases usan PostgreSQL, agrupación y SSE propios. Se admite un único proceso Node persistente, sin coordinación de ventanas entre réplicas ni recuperación tras caídas. La entrega es de mejor esfuerzo y no incorpora recuperación durable de avisos perdidos tras guardar un cambio.
+- **Operación de notificaciones:** se admite un único proceso Node persistente. La entrega es de mejor esfuerzo y no incorpora recuperación durable de avisos perdidos tras guardar un cambio.
 - **Almacenamiento local:** los archivos requieren conservar `uploads/`. El código actual no incorpora un servicio de almacenamiento de objetos compartido entre instancias.
 
 El contrato de notificaciones propias está en [#152](https://github.com/Bigelazo/u-roadmaps/issues/152); la integración retirada se conserva como antecedente en [#139](https://github.com/Bigelazo/u-roadmaps/issues/139) y en el historial Git.
@@ -291,7 +273,8 @@ El contrato de notificaciones propias está en [#152](https://github.com/Bigelaz
 - [Criterios visuales](DESIGN.md).
 - [Operación de notificaciones propias](docs/notifications-operations.md).
 - [Antecedente de la integración retirada](https://github.com/Bigelazo/u-roadmaps/issues/139).
-- [Instrucciones de pruebas E2E](docs/agents/testing.md).
+- [Guía de pruebas](docs/agents/testing.md).
+- [Instrucciones para agentes](AGENTS.md).
 - [Convenciones del gestor de issues](docs/agents/issue-tracker.md).
 
 ## Contribuciones y licencia

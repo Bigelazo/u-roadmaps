@@ -22,6 +22,12 @@ export function chileCalendarDay(now = new Date()): CalendarDay {
   }).format(now);
 }
 
+export function addCalendarDays(day: CalendarDay, days: number): CalendarDay {
+  const date = new Date(`${day}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export function isCalendarDay(value: unknown): value is CalendarDay {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);

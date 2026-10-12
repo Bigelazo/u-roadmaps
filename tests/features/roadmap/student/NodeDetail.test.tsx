@@ -1,24 +1,10 @@
+import { type ComponentProps } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import type { NodeType, RoadmapNode, StudentBlockedRoadmapNode } from '@/features/roadmap/types';
-
-function mockViewport(width: number) {
-  vi.stubGlobal('innerWidth', width);
-  vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
-    matches:
-      (query === '(max-width: 767px)' && width < 768) ||
-      (query === '(min-width: 1024px)' && width >= 1024),
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: () => false,
-  }));
-}
+import { mockViewport } from '../../../support/viewport';
 
 beforeEach(() => mockViewport(640));
 afterEach(() => vi.unstubAllGlobals());
@@ -74,12 +60,23 @@ const nodeTypes: NodeType[] = [
   },
 ];
 
+/** Renders the detail of an available `node` with inert callbacks unless overridden. */
+function renderDetail(props: Partial<ComponentProps<typeof StudentNodeDetail>> = {}) {
+  return render(
+    <StudentNodeDetail
+      node={node}
+      status="available"
+      onClose={vi.fn()}
+      onComplete={vi.fn()}
+      {...props}
+    />,
+  );
+}
+
 test('fullscreen shows node content and Escape returns to the selected node', async () => {
   const user = userEvent.setup();
   const onClose = vi.fn();
-  render(
-    <StudentNodeDetail node={node} status="available" onClose={onClose} onComplete={vi.fn()} />,
-  );
+  renderDetail({ onClose });
 
   await user.click(screen.getByRole('button', { name: 'Ver nodo en pantalla completa' }));
   const dialog = screen.getByRole('dialog', { name: node.title });
@@ -94,9 +91,7 @@ test('fullscreen shows node content and Escape returns to the selected node', as
 });
 
 test('restricted student nodes do not offer fullscreen content', () => {
-  render(
-    <StudentNodeDetail node={blockedNode} status="locked" onClose={vi.fn()} onComplete={vi.fn()} />,
-  );
+  renderDetail({ node: blockedNode, status: 'locked' });
   expect(screen.queryByRole('button', { name: 'Ver nodo en pantalla completa' })).toBeNull();
 });
 
@@ -104,9 +99,7 @@ test('student can close a named mobile node-detail dialog with Escape or its clo
   const user = userEvent.setup();
   const onClose = vi.fn();
 
-  render(
-    <StudentNodeDetail node={node} status="available" onClose={onClose} onComplete={vi.fn()} />,
-  );
+  renderDetail({ onClose });
 
   expect(screen.getByRole('dialog', { name: node.title }).getAttribute('aria-modal')).toBe('true');
 
@@ -121,14 +114,7 @@ test('student can complete an available node and open every resource in a new ta
   const user = userEvent.setup();
   const onComplete = vi.fn();
 
-  render(
-    <StudentNodeDetail
-      node={nodeWithResources}
-      status="available"
-      onClose={vi.fn()}
-      onComplete={onComplete}
-    />,
-  );
+  renderDetail({ node: nodeWithResources, onComplete });
 
   await user.click(screen.getByRole('button', { name: 'Completar' }));
   expect(onComplete).toHaveBeenCalledWith(nodeWithResources);
@@ -143,16 +129,14 @@ test('student can complete an available node and open every resource in a new ta
 });
 
 test('student cannot complete a completed node', () => {
-  render(
-    <StudentNodeDetail node={node} status="completed" onClose={vi.fn()} onComplete={vi.fn()} />,
-  );
+  renderDetail({ status: 'completed' });
 
   const completedButton = screen.getByRole('button', { name: 'Completado' }) as HTMLButtonElement;
   expect(completedButton.disabled).toBe(true);
 });
 
 test('student cannot complete a locked node and is told why', () => {
-  render(<StudentNodeDetail node={node} status="locked" onClose={vi.fn()} onComplete={vi.fn()} />);
+  renderDetail({ status: 'locked' });
 
   const lockedButton = screen.getByRole('button', {
     name: 'Completa prerrequisitos',
@@ -166,14 +150,10 @@ test('student cannot complete a locked node and is told why', () => {
 test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(
   'does not open a detail surface for a %s node',
   (reason) => {
-    render(
-      <StudentNodeDetail
-        node={{ ...blockedNode, access: { status: 'BLOCKED', reason } }}
-        status="locked"
-        onClose={vi.fn()}
-        onComplete={vi.fn()}
-      />,
-    );
+    renderDetail({
+      node: { ...blockedNode, access: { status: 'BLOCKED', reason } },
+      status: 'locked',
+    });
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText(blockedNode.title)).toBeNull();
@@ -184,9 +164,7 @@ test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(
 test('does not render a desktop detail sidebar when no node is selected', () => {
   mockViewport(1280);
 
-  render(
-    <StudentNodeDetail node={undefined} status={null} onClose={vi.fn()} onComplete={vi.fn()} />,
-  );
+  renderDetail({ node: undefined, status: null });
 
   expect(screen.queryByText('Selecciona un nodo')).toBeNull();
 });
@@ -195,16 +173,7 @@ test('uses the student profile width and exposes a desktop resize control', () =
   mockViewport(1280);
   const onPanelWidthChange = vi.fn();
 
-  render(
-    <StudentNodeDetail
-      node={node}
-      status="available"
-      onClose={vi.fn()}
-      onComplete={vi.fn()}
-      panelWidth={460}
-      onPanelWidthChange={onPanelWidthChange}
-    />,
-  );
+  renderDetail({ panelWidth: 460, onPanelWidthChange });
 
   const separator = screen.getByRole('separator', { name: 'Redimensionar detalle del nodo' });
   expect(separator.getAttribute('aria-valuenow')).toBe('460');
@@ -215,15 +184,7 @@ test('uses the student profile width and exposes a desktop resize control', () =
 test('uses the selected-node header and keeps completion next to the close action', () => {
   mockViewport(1280);
 
-  render(
-    <StudentNodeDetail
-      node={node}
-      nodeTypes={nodeTypes}
-      status="available"
-      onClose={vi.fn()}
-      onComplete={vi.fn()}
-    />,
-  );
+  renderDetail({ nodeTypes });
 
   expect(screen.getByText('Nodo seleccionado')).toBeTruthy();
   expect(screen.getByTestId('student-node-type-icon').getAttribute('style')).toContain(

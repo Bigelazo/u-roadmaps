@@ -31,8 +31,9 @@ import {
   nodeDraftIsDirty,
   nodeEditorReducer,
   nodeEditorStateIsDirty,
-  resourceSessionIsDirtyForNode,
+  resourceSessionIsDirty,
   type NodeEditorAction,
+  type NodeEditorState,
 } from './session';
 import type {
   NodeEditorEffect,
@@ -65,7 +66,7 @@ function projectNodeInformationPreview(
 ): StudentAccessibleRoadmapNode {
   let resources = node.resources;
 
-  if (resourceSessionIsDirtyForNode(node, resourceSession)) {
+  if (resourceSessionIsDirty(node, resourceSession)) {
     if (resourceSession.kind === 'editing-existing') {
       resources = node.resources.map((resource) =>
         resource.id === resourceSession.resourceId
@@ -246,7 +247,7 @@ function useNodeEditorController(
       return;
     }
     const resource = currentNode.resources.find((candidate) => candidate.id === session.resourceId);
-    if (!resource || !resourceSessionIsDirtyForNode(currentNode, session)) return;
+    if (!resource || !resourceSessionIsDirty(currentNode, session)) return;
     startEffect({
       kind: 'update-resource',
       resourceId: session.resourceId,
@@ -254,41 +255,29 @@ function useNodeEditorController(
     });
   }, [startEffect]);
 
-  const changeNodeDraft = useCallback(
-    (value: ReturnType<typeof createNodeEditorState>['nodeDraft']) =>
-      transition({ type: 'change-node-draft', value }),
-    [transition],
+  const transitions = useMemo(
+    () => ({
+      changeNodeDraft: (value: NodeUpdate) => transition({ type: 'change-node-draft', value }),
+      changeResource: (value: ResourceInput) => transition({ type: 'change-resource', value }),
+      openResource: (mode: 'file' | 'link') => transition({ type: 'open-resource', mode }),
+      editResource: (resource: Resource) => transition({ type: 'edit-resource', resource }),
+      changeResourceMode: (mode: 'file' | 'link') =>
+        transition({ type: 'change-resource-mode', mode }),
+      selectResourceFile: (file: File | null) => transition({ type: 'select-resource-file', file }),
+      closeResource: () => transition({ type: 'close-resource' }),
+      requestResourceDeletion: (resource: Resource) =>
+        transition({ type: 'request-resource-deletion', resource }),
+      cancelResourceDeletion: () => transition({ type: 'cancel-resource-deletion' }),
+      resolveRemoteConflict: () => transition({ type: 'resolve-remote-conflict' }),
+      cancelGuard: () => {
+        if (!stateRef.current.pendingGuard) return;
+        transition({ type: 'cancel-guard' });
+        settleGuard(false);
+      },
+    }),
+    [settleGuard, transition],
   );
-  const changeResource = useCallback(
-    (value: ResourceInput) => transition({ type: 'change-resource', value }),
-    [transition],
-  );
-  const openResource = useCallback(
-    (mode: 'file' | 'link') => transition({ type: 'open-resource', mode }),
-    [transition],
-  );
-  const editResource = useCallback(
-    (resource: Resource) => transition({ type: 'edit-resource', resource }),
-    [transition],
-  );
-  const changeResourceMode = useCallback(
-    (mode: 'file' | 'link') => transition({ type: 'change-resource-mode', mode }),
-    [transition],
-  );
-  const selectResourceFile = useCallback(
-    (file: File | null) => transition({ type: 'select-resource-file', file }),
-    [transition],
-  );
-  const closeResource = useCallback(() => transition({ type: 'close-resource' }), [transition]);
 
-  const requestResourceDeletion = useCallback(
-    (resource: Resource) => transition({ type: 'request-resource-deletion', resource }),
-    [transition],
-  );
-  const cancelResourceDeletion = useCallback(
-    () => transition({ type: 'cancel-resource-deletion' }),
-    [transition],
-  );
   const handleResourceDeletionAction = useCallback(
     (actionId: string) => {
       const current = stateRef.current;
@@ -304,46 +293,40 @@ function useNodeEditorController(
     [startEffect],
   );
 
-  const toggleVisibility = useCallback(() => {
-    const currentNode = stateRef.current.canonicalNode;
-    if (currentNode) {
-      onIntent({
-        kind: 'change-visibility',
-        nodeId: currentNode.id,
-        isVisible: currentNode.isVisible,
+  const intents = useMemo(() => {
+    const withCurrentNode =
+      <Args extends unknown[]>(run: (node: RoadmapNode, ...args: Args) => void) =>
+      (...args: Args) => {
+        const currentNode = stateRef.current.canonicalNode;
+        if (currentNode) run(currentNode, ...args);
+      };
+    // A dirty draft must be discarded before the intent leaves this Node.
+    const guardThen = (reason: 'deselect-node' | 'delete-node', intent: 'close' | 'delete-node') =>
+      withCurrentNode((currentNode) => {
+        void guardDraft({ kind: reason, nodeId: currentNode.id }).then((proceed) => {
+          if (proceed) onIntent({ kind: intent, nodeId: currentNode.id });
+        });
       });
-    }
-  }, [onIntent]);
-  const requestTeacherBlock = useCallback(
-    (operation: TeacherBlockOperation) => {
-      const currentNode = stateRef.current.canonicalNode;
-      if (currentNode)
-        onIntent({ kind: 'change-teacher-block', nodeId: currentNode.id, operation });
-    },
-    [onIntent],
-  );
-  const scheduleTeacherUnlock = useCallback(
-    (unlockOn: string | null) => {
-      const currentNode = stateRef.current.canonicalNode;
-      if (currentNode)
-        onIntent({ kind: 'schedule-teacher-unlock', nodeId: currentNode.id, unlockOn });
-    },
-    [onIntent],
-  );
-  const closeNode = useCallback(() => {
-    const currentNode = stateRef.current.canonicalNode;
-    if (!currentNode) return;
-    void guardDraft({ kind: 'deselect-node', nodeId: currentNode.id }).then((proceed) => {
-      if (proceed) onIntent({ kind: 'close', nodeId: currentNode.id });
-    });
+
+    return {
+      toggleVisibility: withCurrentNode((currentNode) =>
+        onIntent({
+          kind: 'change-visibility',
+          nodeId: currentNode.id,
+          isVisible: currentNode.isVisible,
+        }),
+      ),
+      requestTeacherBlock: withCurrentNode((currentNode, operation: TeacherBlockOperation) =>
+        onIntent({ kind: 'change-teacher-block', nodeId: currentNode.id, operation }),
+      ),
+      scheduleTeacherUnlock: withCurrentNode((currentNode, unlockOn: string | null) =>
+        onIntent({ kind: 'schedule-teacher-unlock', nodeId: currentNode.id, unlockOn }),
+      ),
+      closeNode: guardThen('deselect-node', 'close'),
+      requestNodeDeletion: guardThen('delete-node', 'delete-node'),
+    };
   }, [guardDraft, onIntent]);
-  const requestNodeDeletion = useCallback(() => {
-    const currentNode = stateRef.current.canonicalNode;
-    if (!currentNode) return;
-    void guardDraft({ kind: 'delete-node', nodeId: currentNode.id }).then((proceed) => {
-      if (proceed) onIntent({ kind: 'delete-node', nodeId: currentNode.id });
-    });
-  }, [guardDraft, onIntent]);
+
   const previewNodeInformation = useCallback(() => {
     const current = stateRef.current;
     if (!current.canonicalNode) return;
@@ -381,7 +364,6 @@ function useNodeEditorController(
       nodeDraft: state.nodeDraft,
       resourceSession: state.resourceSession,
       isDirty: nodeEditorStateIsDirty(state),
-      isNodeDirty: nodeDraftIsDirty(activeNode, state.nodeDraft),
       canSaveNode:
         !state.remoteConflict &&
         !state.pendingEditorEffect &&
@@ -389,48 +371,23 @@ function useNodeEditorController(
         Boolean(state.nodeDraft.title.trim()),
       isVisibilityPending,
       pendingEditorEffect: state.pendingEditorEffect,
-      pendingResourceDeletion: state.pendingResourceDeletion,
       previewButtonRef,
-      changeNodeDraft,
-      changeResource,
-      openResource,
-      editResource,
-      changeResourceMode,
-      selectResourceFile,
-      closeResource,
+      ...transitions,
+      ...intents,
       saveNode,
       saveResource,
-      requestResourceDeletion,
-      cancelResourceDeletion,
-      toggleVisibility,
-      requestTeacherBlock,
-      scheduleTeacherUnlock,
-      requestNodeDeletion,
-      closeNode,
       previewNodeInformation,
     };
   }, [
-    changeNodeDraft,
-    changeResource,
-    closeNode,
-    closeResource,
-    editResource,
+    intents,
     isVisibilityPending,
     node,
     nodeTypes,
-    openResource,
     previewNodeInformation,
-    requestNodeDeletion,
-    requestResourceDeletion,
-    cancelResourceDeletion,
-    requestTeacherBlock,
-    scheduleTeacherUnlock,
     saveNode,
     saveResource,
-    selectResourceFile,
     state,
-    toggleVisibility,
-    changeResourceMode,
+    transitions,
   ]);
 
   const confirmGuard = useCallback(
@@ -445,60 +402,43 @@ function useNodeEditorController(
     },
     [settleGuard, transition],
   );
-  const cancelGuard = useCallback(() => {
-    if (!stateRef.current.pendingGuard) return;
-    transition({ type: 'cancel-guard' });
-    settleGuard(false);
-  }, [settleGuard, transition]);
 
-  const resourceDeletionPendingActionId =
-    state.pendingEditorEffect?.effect.kind === 'delete-resource'
-      ? roadmapConfirmationActionIds.deleteResource
-      : undefined;
-
-  return {
-    state,
-    transition,
-    cancelResourceDeletion,
-    handleResourceDeletionAction,
-    contextValue,
-    confirmGuard,
-    cancelGuard,
-    resourceDeletionPendingActionId,
-  };
+  return { state, transitions, handleResourceDeletionAction, contextValue, confirmGuard };
 }
 
 export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(
   function NodeEditor(props, ref) {
-    const {
-      state,
-      transition,
-      cancelResourceDeletion,
-      handleResourceDeletionAction,
-      contextValue,
-      confirmGuard,
-      cancelGuard,
-      resourceDeletionPendingActionId,
-    } = useNodeEditorController(props, ref);
+    const { state, transitions, handleResourceDeletionAction, contextValue, confirmGuard } =
+      useNodeEditorController(props, ref);
 
     return (
       <>
-        <NodeEditorConflictNotice
-          state={state}
-          onResolve={() => transition({ type: 'resolve-remote-conflict' })}
-        />
+        <NodeEditorConflictNotice state={state} onResolve={transitions.resolveRemoteConflict} />
         {contextValue ? (
           <NodeEditorProvider value={contextValue}>
             <NodeDetailsEditor />
           </NodeEditorProvider>
-        ) : null}
-        <NodeEditorConfirmations
-          state={state}
-          cancelGuard={cancelGuard}
-          confirmGuard={confirmGuard}
-          resourceDeletionPendingActionId={resourceDeletionPendingActionId}
-          cancelResourceDeletion={cancelResourceDeletion}
-          handleResourceDeletionAction={handleResourceDeletionAction}
+        ) : null}{' '}
+        <ConfirmationDialog
+          confirmation={
+            state.pendingGuard ? editorDraftDiscardConfirmation(state.pendingGuard) : null
+          }
+          onCancel={transitions.cancelGuard}
+          onAction={confirmGuard}
+        />
+        <ConfirmationDialog
+          confirmation={
+            state.pendingResourceDeletion
+              ? resourceDeletionConfirmation(state.pendingResourceDeletion)
+              : null
+          }
+          pendingActionId={
+            state.pendingEditorEffect?.effect.kind === 'delete-resource'
+              ? roadmapConfirmationActionIds.deleteResource
+              : undefined
+          }
+          onCancel={transitions.cancelResourceDeletion}
+          onAction={handleResourceDeletionAction}
         />
       </>
     );
@@ -509,7 +449,7 @@ function NodeEditorConflictNotice({
   state,
   onResolve,
 }: {
-  state: ReturnType<typeof createNodeEditorState>;
+  state: NodeEditorState;
   onResolve: () => void;
 }) {
   return state.remoteConflict ? (
@@ -526,44 +466,4 @@ function NodeEditorConflictNotice({
       </AlertDescription>
     </Alert>
   ) : null;
-}
-
-function NodeEditorConfirmations({
-  state,
-  cancelGuard,
-  confirmGuard,
-  resourceDeletionPendingActionId,
-  cancelResourceDeletion,
-  handleResourceDeletionAction,
-}: Pick<
-  ReturnType<typeof useNodeEditorController>,
-  | 'state'
-  | 'cancelGuard'
-  | 'confirmGuard'
-  | 'resourceDeletionPendingActionId'
-  | 'cancelResourceDeletion'
-  | 'handleResourceDeletionAction'
->) {
-  return (
-    <>
-      {' '}
-      <ConfirmationDialog
-        confirmation={
-          state.pendingGuard ? editorDraftDiscardConfirmation(state.pendingGuard) : null
-        }
-        onCancel={cancelGuard}
-        onAction={confirmGuard}
-      />
-      <ConfirmationDialog
-        confirmation={
-          state.pendingResourceDeletion
-            ? resourceDeletionConfirmation(state.pendingResourceDeletion)
-            : null
-        }
-        pendingActionId={resourceDeletionPendingActionId}
-        onCancel={cancelResourceDeletion}
-        onAction={handleResourceDeletionAction}
-      />
-    </>
-  );
 }

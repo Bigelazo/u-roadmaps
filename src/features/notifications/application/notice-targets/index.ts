@@ -92,7 +92,7 @@ export function targetContext(value: unknown): TargetContext {
 
 /** Attribution label of a stored notice: an attributed actor without a name is teaching staff. */
 export function noticeActorLabel(data: unknown): { actorName?: string } {
-  if (!data || typeof data !== 'object') return {};
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
   const { actorId, actorName } = data as { actorId?: unknown; actorName?: unknown };
   if (typeof actorName === 'string') return { actorName };
   return typeof actorId === 'string' ? { actorName: 'Equipo docente' } : {};

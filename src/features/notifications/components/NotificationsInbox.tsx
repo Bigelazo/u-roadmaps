@@ -1,6 +1,7 @@
 'use client';
 
-import { InboxDriverProvider, useCounts, useNotifications } from './inbox-driver';
+import { useCounts, useNotifications } from './inbox-driver';
+import { OwnInboxRealtime } from './own-realtime';
 import {
   acknowledgeOwnInbox,
   prepareOwnInboxOpening,
@@ -10,6 +11,7 @@ import {
 import { ChangeSummaryDialog } from './ChangeSummaryDialog';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
+import { EmptyContent } from '@/shared/ui/empty';
 import { Bell, X } from 'lucide-react';
 import {
   createContext,
@@ -22,8 +24,8 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
+import { formatBadgeCount } from '@/shared/badge-count';
 import type { InboxIdentity } from '../server';
-type NotificationRecord = InboxRecord;
 type NotificationDataFilter = Record<string, string | number>;
 const notificationDateFormatter = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'medium',
@@ -33,17 +35,10 @@ const notificationDateFormatter = new Intl.DateTimeFormat('es-CL', {
 export function NotificationCountButton({
   filter,
   label,
-  enabled = true,
 }: {
   filter: NotificationDataFilter;
   label: string;
-  enabled?: boolean;
 }) {
-  if (!enabled) return null;
-  return <NotificationCount filter={filter} label={label} />;
-}
-
-function NotificationCount({ filter, label }: { filter: NotificationDataFilter; label: string }) {
   const openInbox = useOpenNotificationInbox();
   const { counts, error } = useCounts({ filters: [{ read: false, data: filter }] });
   const count = counts?.[0]?.count ?? 0;
@@ -69,12 +64,12 @@ const NotificationInboxContext = createContext<{
   filter: NotificationDataFilter | undefined;
   openInbox: (filter?: NotificationDataFilter) => void;
   resetFilter: () => void;
+  open: boolean;
+  setOpen: (open: boolean) => void;
 }>({
   filter: undefined,
   openInbox: () => undefined,
   resetFilter: () => undefined,
-});
-const InboxOpenContext = createContext<{ open: boolean; setOpen: (open: boolean) => void }>({
   open: false,
   setOpen: () => undefined,
 });
@@ -95,18 +90,17 @@ export function useOpenNotificationInbox() {
   return useContext(NotificationInboxContext).openInbox;
 }
 
-function stringField(data: Record<string, unknown>, field: string) {
-  const value = data[field];
-  return typeof value === 'string' ? value : null;
+function field<T extends 'string' | 'number'>(
+  data: Record<string, unknown>,
+  name: string,
+  type: T,
+): (T extends 'string' ? string : number) | null {
+  const value = data[name];
+  return typeof value === type ? (value as T extends 'string' ? string : number) : null;
 }
 
-function numberField(data: Record<string, unknown>, field: string) {
-  const value = data[field];
-  return typeof value === 'number' ? value : null;
-}
-
-function notificationDate(notification: NotificationRecord) {
-  const occurredAt = stringField(notification.data ?? {}, 'occurredAt');
+function notificationDate(notification: InboxRecord) {
+  const occurredAt = field(notification.data ?? {}, 'occurredAt', 'string');
   if (!occurredAt || Number.isNaN(new Date(occurredAt).getTime())) return 'Fecha no disponible';
   return notificationDateFormatter.format(new Date(occurredAt));
 }
@@ -115,8 +109,8 @@ function NotificationRow({
   notification,
   onSelect,
 }: {
-  notification: NotificationRecord;
-  onSelect: (notification: NotificationRecord) => void;
+  notification: InboxRecord;
+  onSelect: (notification: InboxRecord) => void;
 }) {
   return (
     <li>
@@ -149,7 +143,7 @@ function InboxNotificationList({
 }: Pick<
   ReturnType<typeof useNotifications>,
   'notifications' | 'isLoading' | 'isFetching' | 'hasMore' | 'error' | 'fetchMore' | 'refetch'
-> & { onSelect: (notification: NotificationRecord) => void }) {
+> & { onSelect: (notification: InboxRecord) => void }) {
   if (isLoading && !notifications) {
     return (
       <p className="p-6 text-center text-sm text-muted-foreground" role="status">
@@ -158,14 +152,14 @@ function InboxNotificationList({
     );
   }
   const refreshError = error ? (
-    <div className="grid justify-items-center gap-3 p-6 text-center">
-      <p className="text-sm text-muted-foreground" role="alert">
+    <EmptyContent className="mx-auto gap-3 p-6 text-center">
+      <p className="text-muted-foreground" role="alert">
         No se pudieron cargar los avisos.
       </p>
       <Button onClick={() => void refetch()} type="button" variant="outline">
         Reintentar
       </Button>
-    </div>
+    </EmptyContent>
   ) : null;
   if (error && !notifications?.length) return refreshError;
   if (!notifications?.length) {
@@ -199,9 +193,8 @@ function InboxNotificationList({
 }
 
 function InboxBell() {
-  const { open, setOpen } = useContext(InboxOpenContext);
   const router = useRouter();
-  const { filter, openInbox, resetFilter } = useContext(NotificationInboxContext);
+  const { filter, openInbox, resetFilter, open, setOpen } = useContext(NotificationInboxContext);
   const {
     counts,
     isLoading: countsLoading,
@@ -219,11 +212,11 @@ function InboxBell() {
   }, [open, refetch, refetchCounts]);
   const unreadCount = counts?.[0]?.count ?? 0;
 
-  function selectNotification(notification: NotificationRecord) {
+  function selectNotification(notification: InboxRecord) {
     const data = notification.data ?? {};
-    const courseCode = stringField(data, 'courseCode');
-    const year = numberField(data, 'year');
-    const semester = numberField(data, 'semester');
+    const courseCode = field(data, 'courseCode', 'string');
+    const year = field(data, 'year', 'number');
+    const semester = field(data, 'semester', 'number');
     if (!courseCode || year === null || semester === null) return;
 
     router.push(`/courses/${encodeURIComponent(courseCode)}/${year}/${semester}`);
@@ -252,7 +245,7 @@ function InboxBell() {
         <Bell aria-hidden="true" size={20} />
         {!countsLoading && unreadCount > 0 ? (
           <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
-            {unreadCount > 99 ? '99+' : unreadCount}
+            {formatBadgeCount(unreadCount)}
           </span>
         ) : null}
       </PopoverPrimitive.Trigger>
@@ -312,13 +305,10 @@ export function NotificationsProvider({
 }) {
   return (
     <div className="contents" key={identity?.userId ?? 'anonymous'}>
-      {identity ? (
-        <InboxDriverProvider identity={identity}>
-          <NotificationInboxProvider>{children}</NotificationInboxProvider>
-        </InboxDriverProvider>
-      ) : (
-        <NotificationInboxProvider>{children}</NotificationInboxProvider>
-      )}
+      <NotificationInboxProvider>
+        {identity ? <OwnInboxRealtime userId={identity.userId} /> : null}
+        {children}
+      </NotificationInboxProvider>
     </div>
   );
 }
@@ -379,17 +369,15 @@ export function RoadmapEntryNotifications({ children }: { children: ReactNode })
 
 function NotificationInboxProvider({ children }: { children: ReactNode }) {
   const [filter, setFilter] = useState<NotificationDataFilter | undefined>();
-  const [inboxOpen, setInboxOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const openInbox = useCallback((nextFilter?: NotificationDataFilter) => {
     setFilter(nextFilter);
-    setInboxOpen(true);
+    setOpen(true);
   }, []);
   const resetFilter = useCallback(() => setFilter(undefined), []);
   return (
-    <NotificationInboxContext.Provider value={{ filter, openInbox, resetFilter }}>
-      <InboxOpenContext.Provider value={{ open: inboxOpen, setOpen: setInboxOpen }}>
-        {children}
-      </InboxOpenContext.Provider>
+    <NotificationInboxContext.Provider value={{ filter, openInbox, resetFilter, open, setOpen }}>
+      {children}
     </NotificationInboxContext.Provider>
   );
 }

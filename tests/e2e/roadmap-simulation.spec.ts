@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures';
+import { ok } from './helpers';
 
 test('teachers persist isolated student-progress simulations without changing student completions', async ({
   course,
@@ -11,13 +12,13 @@ test('teachers persist isolated student-progress simulations without changing st
   ]);
   const simulationPath = course.apiPath('/simulation');
 
-  expect((await teacher.delete(simulationPath)).status()).toBe(200);
+  await ok(await teacher.delete(simulationPath));
   const [emptySimulation, studentRoadmap] = await Promise.all([
     teacher.get(simulationPath),
     student.get(course.apiPath()),
   ]);
-  expect(emptySimulation.status()).toBe(200);
-  expect(studentRoadmap.status()).toBe(200);
+  await ok(emptySimulation);
+  await ok(studentRoadmap);
   expect(await emptySimulation.json()).toEqual(await studentRoadmap.json());
 
   const simulation = await (await teacher.get(simulationPath)).json();
@@ -58,9 +59,9 @@ test('teachers persist isolated student-progress simulations without changing st
   const hiddenCompletion = await teacher.post(
     `${simulationPath}/nodes/${course.nodes.hidden}/completion`,
   );
-  expect(hiddenCompletion.status()).toBe(404);
+  await ok(hiddenCompletion, 404);
   expect((await hiddenCompletion.json()).error.code).toBe('NODE_NOT_FOUND');
-  expect((await student.post(completionPath)).status()).toBe(403);
+  await ok(await student.post(completionPath), 403);
 
   const racedReset = await Promise.all([
     teacher.delete(simulationPath),

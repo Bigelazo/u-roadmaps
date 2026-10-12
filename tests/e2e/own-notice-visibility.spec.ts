@@ -1,29 +1,23 @@
 import { expect, test } from './fixtures';
+import { prepareNodeCreator } from './create-node';
 import { sql } from './database';
 import { createExistingNode } from './existing-node';
+import { ok } from './helpers';
+import { findNode, listNotices, prepareOpening } from './notices';
 
 test('blocking hides a pending description from Inbox and counts; unblocking restores the same notice', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const path = course.apiPath(`/nodes/${course.nodes.first}`);
-  const notices = async () =>
-    (await (await recipient.get(`/api/notifications?nodeId=${course.nodes.first}`)).json())
-      .notifications;
-  expect(
-    (await author.patch(path, { data: { description: 'Descripción pendiente' } })).status(),
-  ).toBe(200);
+  const notices = () => listNotices(recipient, { nodeId: course.nodes.first });
+  await ok(await author.patch(path, { data: { description: 'Descripción pendiente' } }));
   await expect.poll(notices).toHaveLength(1);
   const noticeId = (await notices())[0].id;
-  expect((await author.post(`${path}/teacher-block`)).status()).toBe(200);
+  await ok(await author.post(`${path}/teacher-block`));
   await expect
-    .poll(async () =>
-      (await notices()).map(
-        (notice: { data: { noticeTarget: string } }) => notice.data.noticeTarget,
-      ),
-    )
+    .poll(async () => (await notices()).map((notice) => notice.data.noticeTarget))
     .toEqual(['node-access']);
   const count = await (
     await recipient.get(`/api/notifications/node-changes?roadmapId=${course.roadmapId}`)
@@ -34,25 +28,21 @@ test('blocking hides a pending description from Inbox and counts; unblocking res
       .count,
   ).toBe(1);
   const preview = await (await author.get(`${path}/teacher-block?operation=UNBLOCK`)).json();
-  expect(
-    (
-      await author.delete(`${path}/teacher-block`, {
-        headers: { 'x-teacher-block-preview': preview.version },
-      })
-    ).status(),
-  ).toBe(200);
-  await expect
-    .poll(async () => (await notices()).map((notice: { id: string }) => notice.id))
-    .toEqual([noticeId]);
+  await ok(
+    await author.delete(`${path}/teacher-block`, {
+      headers: { 'x-teacher-block-preview': preview.version },
+    }),
+  );
+  await expect.poll(async () => (await notices()).map((notice) => notice.id)).toEqual([noticeId]);
 });
 
 test('Participation loss withdraws pending notices permanently, isolated to that recipient and Roadmap', async ({
   course,
   apiAs,
+  teacherApi: author,
+  studentApi: recipient,
   createCourse,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
   const otherRecipient = await apiAs(course.users.studentWithProgress);
   const otherCourse = await createCourse({
     participants: [
@@ -61,7 +51,7 @@ test('Participation loss withdraws pending notices permanently, isolated to that
     ],
   });
   const edit = async (path: string) =>
-    expect((await author.patch(path, { data: { title: 'Título pendiente' } })).status()).toBe(200);
+    ok(await author.patch(path, { data: { title: 'Título pendiente' } }));
   const otherRoadmap = await (await author.get(otherCourse.apiPath())).json();
   await edit(course.apiPath(`/nodes/${course.nodes.first}`));
   await edit(
@@ -69,101 +59,81 @@ test('Participation loss withdraws pending notices permanently, isolated to that
       `/nodes/${otherRoadmap.nodes.find((node: { isVisible: boolean }) => node.isVisible).id}`,
     ),
   );
-  const notices = async (api = recipient, roadmapId = course.roadmapId) =>
-    (await (await api.get(`/api/notifications?roadmapId=${roadmapId}`)).json()).notifications;
+  const notices = (api = recipient, roadmapId = course.roadmapId) =>
+    listNotices(api, { roadmapId });
   await expect.poll(() => notices()).toHaveLength(1);
   await expect.poll(() => notices(recipient, otherCourse.roadmapId!)).toHaveLength(1);
   await expect.poll(() => notices(otherRecipient)).toHaveLength(1);
-  const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
-  expect((await recipient.post('/api/notifications/openings', { data: opening })).status()).toBe(
-    200,
-  );
+  const opening = await prepareOpening(recipient, course.roadmapId);
   await sql(
     `UPDATE "Participation" SET "isActive" = false WHERE "courseOfferingId" = '${course.id}' AND "userId" = '${course.users.studentWithoutProgress.id}';`,
   );
   expect(await notices()).toHaveLength(0);
-  expect((await recipient.get(course.apiPath())).status()).toBe(403);
+  await ok(await recipient.get(course.apiPath()), 403);
   await sql(
     `UPDATE "Participation" SET "isActive" = true WHERE "courseOfferingId" = '${course.id}' AND "userId" = '${course.users.studentWithoutProgress.id}';`,
   );
   expect(await notices()).toHaveLength(0);
-  expect((await recipient.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(
-    404,
-  );
+  await ok(await recipient.post('/api/notifications/acknowledge', { data: opening }), 404);
   expect(await notices(otherRecipient)).toHaveLength(1);
   expect(await notices(recipient, otherCourse.roadmapId!)).toHaveLength(1);
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { title: 'Cambio posterior al regreso' },
-      })
-    ).status(),
-  ).toBe(200);
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { title: 'Cambio posterior al regreso' },
+    }),
+  );
   await expect.poll(() => notices()).toHaveLength(1);
 });
 
 test('hidden Node content returns on showing, but entry recognizes hidden targets without listing them', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
+  // Returns the acknowledgement body, which carries the recognition summary.
   const recognize = async () => {
-    const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
-    expect((await recipient.post('/api/notifications/openings', { data: opening })).status()).toBe(
-      200,
+    const opening = await prepareOpening(recipient, course.roadmapId);
+    const response = await ok(
+      await recipient.post('/api/notifications/acknowledge', { data: opening }),
     );
-    const response = await recipient.post('/api/notifications/acknowledge', { data: opening });
-    expect(response.status()).toBe(200);
     return response.json();
   };
-  const initial = await (await author.get(course.apiPath())).json();
+  const { nodeTypeId } = await prepareNodeCreator(author, course);
   const nodeId = await createExistingNode({
     roadmapId: course.roadmapId,
-    nodeTypeId: initial.nodeTypes[0].id,
+    nodeTypeId,
     title: 'Nodo conocido',
   });
   await recognize();
   const path = course.apiPath(`/nodes/${nodeId}`);
   const roadmap = await (await author.get(course.apiPath())).json();
-  const node = roadmap.nodes.find((value: { id: string }) => value.id === nodeId);
+  const node = findNode(roadmap, nodeId);
   const type = roadmap.nodeTypes.find((value: { id: string }) => value.id !== node.nodeTypeId);
-  expect(
-    (
-      await author.patch(path, {
-        data: {
-          title: 'Título pendiente',
-          description: 'Descripción pendiente',
-          nodeTypeId: type.id,
-        },
-      })
-    ).status(),
-  ).toBe(200);
-  expect(
-    (
-      await author.post(`${path}/resources`, {
-        data: { title: 'Guía pendiente', url: 'https://example.test/guide', type: 'LINK' },
-      })
-    ).status(),
-  ).toBe(201);
-  const notices = async () =>
-    (await (await recipient.get(`/api/notifications?nodeId=${nodeId}`)).json()).notifications;
+  await ok(
+    await author.patch(path, {
+      data: {
+        title: 'Título pendiente',
+        description: 'Descripción pendiente',
+        nodeTypeId: type.id,
+      },
+    }),
+  );
+  await ok(
+    await author.post(`${path}/resources`, {
+      data: { title: 'Guía pendiente', url: 'https://example.test/guide', type: 'LINK' },
+    }),
+    201,
+  );
+  const notices = () => listNotices(recipient, { nodeId });
+  const targets = async () => (await notices()).map((notice) => notice.data.noticeTarget);
   await expect.poll(notices).toHaveLength(4);
-  const ids = (await notices()).map((notice: { id: string }) => notice.id).sort();
-  expect((await author.patch(path, { data: { isVisible: false } })).status()).toBe(200);
-  await expect
-    .poll(async () =>
-      (await notices()).map(
-        (notice: { data: { noticeTarget: string } }) => notice.data.noticeTarget,
-      ),
-    )
-    .toEqual(['node-access']);
-  expect((await recipient.get(`/api/notifications/${ids[0]}`)).status()).toBe(404);
-  expect((await author.patch(path, { data: { isVisible: true } })).status()).toBe(200);
-  await expect
-    .poll(async () => (await notices()).map((notice: { id: string }) => notice.id).sort())
-    .toEqual(ids);
-  expect((await author.patch(path, { data: { isVisible: false } })).status()).toBe(200);
+  const ids = (await notices()).map((notice) => notice.id).sort();
+  await ok(await author.patch(path, { data: { isVisible: false } }));
+  await expect.poll(targets).toEqual(['node-access']);
+  await ok(await recipient.get(`/api/notifications/${ids[0]}`), 404);
+  await ok(await author.patch(path, { data: { isVisible: true } }));
+  await expect.poll(async () => (await notices()).map((notice) => notice.id).sort()).toEqual(ids);
+  await ok(await author.patch(path, { data: { isVisible: false } }));
   await expect.poll(async () => (await notices())[0]?.data.currentValue).toBe('Retirado');
   const recognized = await recognize();
   expect(recognized.acknowledged).toBe(5);
@@ -171,14 +141,8 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
     { title: 'Título pendiente', items: ['«Título pendiente» fue ocultado del Roadmap.'] },
   ]);
   expect(await notices()).toHaveLength(0);
-  expect((await author.patch(path, { data: { isVisible: true } })).status()).toBe(200);
-  await expect
-    .poll(async () =>
-      (await notices()).map(
-        (notice: { data: { noticeTarget: string } }) => notice.data.noticeTarget,
-      ),
-    )
-    .toEqual(['node-access']);
+  await ok(await author.patch(path, { data: { isVisible: true } }));
+  await expect.poll(targets).toEqual(['node-access']);
   expect((await recognize()).summary.groups).toEqual([
     { title: 'Título pendiente', items: ['«Título pendiente» volvió a mostrarse en el Roadmap.'] },
   ]);
@@ -186,20 +150,15 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
 
 test('concurrent Roadmap openings cannot retain withdrawn targets after Participation loss', async ({
   course,
-  apiAs,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = await apiAs(course.users.teacher);
-  const recipient = await apiAs(course.users.studentWithoutProgress);
-  expect(
-    (
-      await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
-        data: { title: 'Cambio antes de perder acceso' },
-      })
-    ).status(),
-  ).toBe(200);
-  const notices = async () =>
-    (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
-      .notifications;
+  await ok(
+    await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
+      data: { title: 'Cambio antes de perder acceso' },
+    }),
+  );
+  const notices = () => listNotices(recipient, { roadmapId: course.roadmapId });
   await expect.poll(notices).toHaveLength(1);
   const openings = Array.from({ length: 8 }, () => ({
     roadmapId: course.roadmapId,
@@ -218,8 +177,6 @@ test('concurrent Roadmap openings cannot retain withdrawn targets after Particip
     `UPDATE "Participation" SET "isActive" = true WHERE "courseOfferingId" = '${course.id}' AND "userId" = '${course.users.studentWithoutProgress.id}';`,
   );
   for (const opening of openings)
-    expect(
-      (await recipient.post('/api/notifications/acknowledge', { data: opening })).status(),
-    ).toBe(404);
+    await ok(await recipient.post('/api/notifications/acknowledge', { data: opening }), 404);
   expect(await notices()).toHaveLength(0);
 });

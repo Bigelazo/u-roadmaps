@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { panelWidthLimits } from '@/features/roadmap/ui/ResizablePanel';
-import { Sidebar, SidebarContent, SidebarRail } from '@/shared/ui/sidebar';
+import { RoadmapSidePanel } from '@/features/roadmap/ui/RoadmapSidePanel';
+import { SidebarContent } from '@/shared/ui/sidebar';
 
 type Props = {
   isOpen: boolean;
@@ -23,23 +23,14 @@ export function NodeEditorPanel({ isOpen, panelWidth, onPanelWidthChange, childr
   }, []);
 
   return (
-    <Sidebar
+    <RoadmapSidePanel
       hidden={!isOpen}
-      side="right"
-      collapsible="none"
       id="roadmap-editor-panel"
       aria-label="Panel de edición del roadmap"
-      className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"
+      railLabel="Redimensionar panel de edición"
+      panelWidth={panelWidth}
+      onPanelWidthChange={onPanelWidthChange}
     >
-      <SidebarRail
-        ariaLabel="Redimensionar panel de edición"
-        controlsId="roadmap-editor-panel"
-        value={panelWidth}
-        min={panelWidthLimits.min}
-        max={panelWidthLimits.max}
-        onValueChange={onPanelWidthChange}
-        className="sm:hidden lg:flex"
-      />
       <SidebarContent className="overflow-visible lg:overflow-y-auto">
         <details
           aria-label="Editor de nodo"
@@ -52,6 +43,6 @@ export function NodeEditorPanel({ isOpen, panelWidth, onPanelWidthChange, childr
           <div className="pb-6">{children}</div>
         </details>
       </SidebarContent>
-    </Sidebar>
+    </RoadmapSidePanel>
   );
 }

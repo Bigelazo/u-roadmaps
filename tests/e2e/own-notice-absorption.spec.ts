@@ -1,33 +1,23 @@
 import { expect, test } from './fixtures';
-import { authenticateAs, sessionCookie } from './helpers';
+import { authenticateAs, ok } from './helpers';
+import { acknowledgeOpening, listNotices, prepareOpening } from './notices';
 
 test('Node repeats arrive without an open Inbox and an earlier opening cannot acknowledge later changes', async ({
-  request,
   page,
   course,
+  teacherApi: author,
+  studentApi: recipient,
 }) => {
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
-  const recipient = { cookie: await sessionCookie(course.users.studentWithoutProgress.id) };
-  const roadmap = await (await request.get(course.apiPath(), { headers: author })).json();
+  const roadmap = await (await author.get(course.apiPath())).json();
   const title = `Cambios propios ${crypto.randomUUID()}`;
-  const created = await request.post(course.apiPath('/nodes'), {
-    headers: author,
+  const created = await author.post(course.apiPath('/nodes'), {
     data: { title, nodeTypeId: roadmap.nodeTypes[0].id, positionX: 600, positionY: 0 },
   });
-  expect(created.status()).toBe(201);
-  const nodeId = (await created.json()).node.id;
+  const nodeId = (await (await ok(created, 201)).json()).node.id;
   const filter = `roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}`;
-  const notices = async () => {
-    const response = await request.get(`/api/notifications?${filter}`, { headers: recipient });
-    expect(response.status()).toBe(200);
-    return (await response.json()).notifications;
-  };
+  const notices = () => listNotices(recipient, { roadmapId: roadmap.roadmap.id, nodeId });
   const count = async () =>
-    (
-      await (
-        await request.get(`/api/notifications/counts?${filter}`, { headers: recipient })
-      ).json()
-    ).count;
+    (await (await recipient.get(`/api/notifications/counts?${filter}`)).json()).count;
   try {
     await expect.poll(notices).toHaveLength(1);
     const first = (await notices())[0];
@@ -37,14 +27,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
       data: { eventCount: 1, changeKind: 'node-available' },
     });
     for (const description of ['Primer detalle', 'Último detalle'])
-      expect(
-        (
-          await request.patch(course.apiPath(`/nodes/${nodeId}`), {
-            headers: author,
-            data: { description },
-          })
-        ).status(),
-      ).toBe(200);
+      await ok(await author.patch(course.apiPath(`/nodes/${nodeId}`), { data: { description } }));
     await expect
       .poll(async () => (await notices())[0]?.data.nodeDescription)
       .toBe('Último detalle');
@@ -56,29 +39,15 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
       read: false,
       data: { noticeTarget: 'node-creation', nodeDescription: 'Último detalle' },
     });
-    const opening = { roadmapId: roadmap.roadmap.id, operationId: crypto.randomUUID() };
-    expect(
-      (
-        await request.post('/api/notifications/openings', { headers: recipient, data: opening })
-      ).status(),
-    ).toBe(200);
-    expect(
-      (
-        await request.post('/api/notifications/acknowledge', { headers: recipient, data: opening })
-      ).status(),
-    ).toBe(200);
+    const opening = await prepareOpening(recipient, roadmap.roadmap.id);
+    await acknowledgeOpening(recipient, opening);
     expect(await count()).toBe(0);
 
     // No browser/Inbox is open; a later edit is delivered immediately.
     const laterTitle = `${title} actualizado`;
-    expect(
-      (
-        await request.patch(course.apiPath(`/nodes/${nodeId}`), {
-          headers: author,
-          data: { title: laterTitle },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await author.patch(course.apiPath(`/nodes/${nodeId}`), { data: { title: laterTitle } }),
+    );
     await expect.poll(notices).toHaveLength(1);
     const [latest] = await notices();
     expect(latest).toMatchObject({
@@ -96,11 +65,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     );
     await expect.poll(() => count()).toBe(1);
     // Retrying the earlier opening cannot absorb the later notice.
-    expect(
-      (
-        await request.post('/api/notifications/acknowledge', { headers: recipient, data: opening })
-      ).status(),
-    ).toBe(200);
+    await acknowledgeOpening(recipient, opening);
     await expect.poll(() => count()).toBe(1);
 
     await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
@@ -117,6 +82,6 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     await expect.poll(count).toBe(0);
     expect(await notices()).toHaveLength(0);
   } finally {
-    await request.delete(course.apiPath(`/nodes/${nodeId}`), { headers: author });
+    await author.delete(course.apiPath(`/nodes/${nodeId}`));
   }
 });

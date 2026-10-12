@@ -42,8 +42,6 @@ type TeacherBlockWorkflowOptions = {
   ) => Promise<boolean>;
 };
 
-type TeacherBlockWorkflowDialog = ConfirmationDialogProps;
-
 type StateTransition =
   TeacherBlockWorkflowState | ((state: TeacherBlockWorkflowState) => TeacherBlockWorkflowState);
 
@@ -116,18 +114,6 @@ function replaceTeacherBlockPreview(
     ...(pending.operation === operation ? { preview } : {}),
     ...(operation === 'UNBLOCK' ? { individualPreview: preview } : {}),
     ...(operation === 'BRANCH_UNLOCK' ? { branchPreview: preview } : {}),
-  };
-}
-
-function selectedTeacherBlockPreview(
-  pending: TeacherBlockPreviewState,
-  operation: TeacherBlockOperation,
-  preview: TeacherBlockPreview,
-): TeacherBlockPreviewState {
-  return {
-    nodeId: pending.nodeId,
-    operation,
-    preview,
   };
 }
 
@@ -248,37 +234,42 @@ export function useTeacherBlockWorkflow({
     );
   }, [transition]);
 
-  const refreshAfterFailedMutation = useCallback(
+  /**
+   * Applies a refreshed preview and, for a complete unlock-scope pair, refreshes the paired scope.
+   * When the paired refresh fails or breaks the pair, `fallbackToSelected` falls back to only the
+   * selected operation's preview; otherwise the refreshed state is kept.
+   */
+  const refreshPreviewPair = useCallback(
     async (
       pending: TeacherBlockPreviewState,
       operation: TeacherBlockOperation,
+      preview: TeacherBlockPreview,
+      fallbackToSelected: boolean,
     ): Promise<TeacherBlockPreviewState> => {
-      const refreshedPreview = await previewTeacherBlock(pending.nodeId, operation);
-      if (!refreshedPreview) return pending;
-
-      const refreshedPending = replaceTeacherBlockPreview(pending, operation, refreshedPreview);
+      const refreshedPending = replaceTeacherBlockPreview(pending, operation, preview);
       if (
-        isUnlockScopeOperation(operation) &&
-        refreshedPreview.mode !== 'UPSTREAM' &&
-        isCompleteUnlockPreviewPair(pending)
+        !isUnlockScopeOperation(operation) ||
+        preview.mode === 'UPSTREAM' ||
+        !isCompleteUnlockPreviewPair(pending)
       ) {
-        const otherOperation = operation === 'UNBLOCK' ? 'BRANCH_UNLOCK' : 'UNBLOCK';
-        const otherPreview = await previewTeacherBlock(pending.nodeId, otherOperation);
-        if (otherPreview?.mode === 'UPSTREAM') {
-          return replaceTeacherBlockPreview(refreshedPending, otherOperation, otherPreview);
-        }
-
-        if (otherPreview) {
-          const pairedPending = replaceTeacherBlockPreview(
-            refreshedPending,
-            otherOperation,
-            otherPreview,
-          );
-          if (isCompleteUnlockPreviewPair(pairedPending)) return pairedPending;
-        }
+        return refreshedPending;
       }
 
-      return refreshedPending;
+      const fallback = fallbackToSelected
+        ? { nodeId: pending.nodeId, operation, preview }
+        : refreshedPending;
+      const otherOperation = operation === 'UNBLOCK' ? 'BRANCH_UNLOCK' : 'UNBLOCK';
+      const otherPreview = await previewTeacherBlock(pending.nodeId, otherOperation);
+      if (!otherPreview) return fallback;
+
+      const pairedPending = replaceTeacherBlockPreview(
+        refreshedPending,
+        otherOperation,
+        otherPreview,
+      );
+      return pairedPending.preview.mode === 'UPSTREAM' || isCompleteUnlockPreviewPair(pairedPending)
+        ? pairedPending
+        : fallback;
     },
     [previewTeacherBlock],
   );
@@ -302,39 +293,11 @@ export function useTeacherBlockWorkflow({
           }
 
           if (!sameTeacherBlockPreview(displayedPreview, latestPreview)) {
-            let latestPending = replaceTeacherBlockPreview(pending, operation, latestPreview);
-            const latestSelectedPreview = selectedTeacherBlockPreview(
-              pending,
-              operation,
-              latestPreview,
+            transition(
+              awaitingConfirmation(
+                await refreshPreviewPair(pending, operation, latestPreview, true),
+              ),
             );
-            if (
-              isUnlockScopeOperation(operation) &&
-              latestPreview.mode !== 'UPSTREAM' &&
-              isCompleteUnlockPreviewPair(pending)
-            ) {
-              const otherOperation = operation === 'UNBLOCK' ? 'BRANCH_UNLOCK' : 'UNBLOCK';
-              const otherPreview = await previewTeacherBlock(pending.nodeId, otherOperation);
-              if (!otherPreview) {
-                transition(awaitingConfirmation(latestSelectedPreview));
-                return;
-              }
-
-              latestPending = replaceTeacherBlockPreview(
-                latestPending,
-                otherOperation,
-                otherPreview,
-              );
-              if (
-                latestPending.preview.mode !== 'UPSTREAM' &&
-                !isCompleteUnlockPreviewPair(latestPending)
-              ) {
-                transition(awaitingConfirmation(latestSelectedPreview));
-                return;
-              }
-            }
-
-            transition(awaitingConfirmation(latestPending));
             return;
           }
 
@@ -349,14 +312,20 @@ export function useTeacherBlockWorkflow({
             return;
           }
 
-          const refreshedPending = await refreshAfterFailedMutation(pending, operation);
-          transition(awaitingConfirmation(refreshedPending));
+          const refreshedPreview = await previewTeacherBlock(pending.nodeId, operation);
+          transition(
+            awaitingConfirmation(
+              refreshedPreview
+                ? await refreshPreviewPair(pending, operation, refreshedPreview, false)
+                : pending,
+            ),
+          );
         } catch {
           transition(awaitingConfirmation(pending));
         }
       })();
     },
-    [changeTeacherBlock, previewTeacherBlock, refreshAfterFailedMutation, transition],
+    [changeTeacherBlock, previewTeacherBlock, refreshPreviewPair, transition],
   );
 
   const handleAction = useCallback(
@@ -385,7 +354,7 @@ export function useTeacherBlockWorkflow({
   const pendingActionId =
     state.kind === 'revalidating' || state.kind === 'mutating' ? state.actionId : undefined;
 
-  const confirmationDialog: TeacherBlockWorkflowDialog = {
+  const confirmationDialog: ConfirmationDialogProps = {
     confirmation,
     pendingActionId,
     onCancel: cancel,

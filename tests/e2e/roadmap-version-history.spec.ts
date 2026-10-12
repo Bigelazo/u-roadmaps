@@ -1,7 +1,7 @@
 import { expect, test, type E2ECourseOffering, type E2EUser } from './fixtures';
 import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { insert, literal, sql } from './database';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 import { randomUUID } from 'node:crypto';
 
 function yesterday() {
@@ -52,7 +52,7 @@ test('a closed version records its creator and the teaching staff active at clos
     ],
   });
   const creation = await (await apiAs(creator)).post(created.apiPath(), { data: {} });
-  expect(creation.status()).toBe(201);
+  await ok(creation, 201);
   const closed = { ...created, roadmapId: (await creation.json()).roadmap.id as string };
   await createCourse({
     ...openTerm,
@@ -79,8 +79,7 @@ test('a closed version records its creator and the teaching staff active at clos
     ]),
   );
 
-  const response = await (await apiAs(assistant)).get(versionsPath(created));
-  expect(response.status()).toBe(200);
+  const response = await ok(await (await apiAs(assistant)).get(versionsPath(created)));
   const history = await response.json();
   expect(history.horizon).toEqual({ year: openTerm.year, semester: openTerm.semester });
   expect(history.versions).toEqual([
@@ -160,12 +159,11 @@ test('students and outsiders are refused the version history', async ({
   page,
 }) => {
   const student = await apiAs(course.users.studentWithProgress);
-  const studentResponse = await student.get(versionsPath(course));
-  expect(studentResponse.status()).toBe(403);
+  const studentResponse = await ok(await student.get(versionsPath(course)), 403);
   expect((await studentResponse.json()).error.code).toBe('FORBIDDEN');
   const outsider = await apiAs(await createUser());
-  expect((await outsider.get(versionsPath(course))).status()).toBe(403);
-  expect((await outsider.get('/api/E2E-MISSING/versions')).status()).toBe(404);
+  await ok(await outsider.get(versionsPath(course)), 403);
+  await ok(await outsider.get('/api/E2E-MISSING/versions'), 404);
 
   await authenticateAs(page.context(), course.users.studentWithProgress.id);
   await page.goto(course.pagePath());

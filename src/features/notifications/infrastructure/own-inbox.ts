@@ -1,6 +1,6 @@
+import 'server-only';
 import { lockNoticeParticipation } from './participation-lock';
 import { visibleOwnNotices } from './notice-visibility';
-import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
@@ -60,30 +60,6 @@ export function noticeRecord(notice: {
   };
 }
 
-export function noticeFilter(params: URLSearchParams): Prisma.RoadmapNoticeWhereInput {
-  const roadmapId = params.get('roadmapId');
-  const courseCode = params.get('courseCode');
-  const year = params.get('year');
-  const semester = params.get('semester');
-  const nodeId = params.get('nodeId');
-  if (
-    (year && !Number.isSafeInteger(Number(year))) ||
-    (semester && !['1', '2'].includes(semester))
-  ) {
-    throw new ApplicationError(400, 'INVALID_REQUEST', 'Filtro de Curso inválido.');
-  }
-  return {
-    ...(roadmapId ? { roadmapId: uuid(roadmapId) } : {}),
-    ...(nodeId ? { data: { path: ['nodeId'], equals: nodeId } } : {}),
-    AND: [
-      ...(courseCode ? [{ data: { path: ['courseCode'], equals: courseCode } }] : []),
-      ...(year ? [{ data: { path: ['year'], equals: Number(year) } }] : []),
-      ...(semester ? [{ data: { path: ['semester'], equals: Number(semester) } }] : []),
-    ],
-    acknowledgedAt: null,
-  };
-}
-
 export function uuid(value: unknown): string {
   if (
     typeof value !== 'string' ||
@@ -95,13 +71,20 @@ export function uuid(value: unknown): string {
 }
 
 function inboxFilter(params: URLSearchParams): InboxFilter {
-  noticeFilter(params); // Share the HTTP filter validation with the legacy read contract.
+  const year = params.get('year');
+  const semester = params.get('semester');
+  if (
+    (year && !Number.isSafeInteger(Number(year))) ||
+    (semester && !['1', '2'].includes(semester))
+  ) {
+    throw new ApplicationError(400, 'INVALID_REQUEST', 'Filtro de Curso inválido.');
+  }
   return {
     ...(params.get('roadmapId') ? { roadmapId: uuid(params.get('roadmapId')) } : {}),
     ...(params.get('nodeId') ? { nodeId: params.get('nodeId')! } : {}),
     ...(params.get('courseCode') ? { courseCode: params.get('courseCode')! } : {}),
-    ...(params.get('year') ? { year: Number(params.get('year')) } : {}),
-    ...(params.get('semester') ? { semester: Number(params.get('semester')) } : {}),
+    ...(year ? { year: Number(year) } : {}),
+    ...(semester ? { semester: Number(semester) } : {}),
   };
 }
 

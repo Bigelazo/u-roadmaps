@@ -1,6 +1,9 @@
 import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
+import { cn } from 'cn';
 import { Button } from '@/shared/ui/button';
+import { Item } from '@/shared/ui/item';
+import { dividedItemClassName } from './primitives';
 
 type Props = {
   resources: Resource[];
@@ -20,7 +23,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
   return (
     <ul className="flex flex-col divide-y divide-border" aria-label="Recursos del nodo">
       {resources.map((item) => (
-        <li key={item.id} className="flex items-center gap-2 py-2.5 text-sm">
+        <Item key={item.id} render={<li />} className={cn(dividedItemClassName, 'gap-2')}>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium">{item.title}</span>
             <span className="block truncate text-xs text-muted-foreground">
@@ -54,7 +57,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
           >
             <Trash2 />
           </Button>
-        </li>
+        </Item>
       ))}
     </ul>
   );

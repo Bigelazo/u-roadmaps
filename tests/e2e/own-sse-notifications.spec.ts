@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
+import { recognize } from './notices';
 import { literal, sql } from './database';
 
 test('real SSE keeps student content stable while notices and counters update, including recovery', async ({
@@ -22,8 +23,7 @@ test('real SSE keeps student content stable while notices and counters update, i
         positionY: 150,
       },
     });
-    expect(created.status()).toBe(201);
-    nodeId = (await created.json()).node.id;
+    nodeId = (await (await ok(created, 201)).json()).node.id;
     const teacherPage = await teacher.newPage();
     await teacherPage.goto(`${course.pagePath()}?targetNode=${nodeId}`);
     const page = await student.newPage();
@@ -59,16 +59,8 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => count()).toBe(2);
     // HTTP recognition in one tab must update the already open Inbox in another.
-    const operation = {
-      roadmapId: (await (await student.request.get(course.apiPath())).json()).roadmap.id,
-      operationId: crypto.randomUUID(),
-    };
-    expect(
-      (await page.request.post('/api/notifications/openings', { data: operation })).status(),
-    ).toBe(200);
-    expect(
-      (await page.request.post('/api/notifications/acknowledge', { data: operation })).status(),
-    ).toBe(200);
+    const roadmapId = (await (await student.request.get(course.apiPath())).json()).roadmap.id;
+    await recognize(page.request, roadmapId);
     await expect.poll(count).toBe(0);
     await expect(other.getByRole('button', { name: /^Avisos(,|$)/ })).toHaveAttribute(
       'aria-label',
@@ -76,13 +68,11 @@ test('real SSE keeps student content stable while notices and counters update, i
     );
     await student.setOffline(true);
     await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
-    expect(
-      (
-        await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
-          data: { description: 'Recovered after reconnect' },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
+        data: { description: 'Recovered after reconnect' },
+      }),
+    );
     const reconnected = page.waitForResponse((response) =>
       response.url().endsWith('/api/notifications/stream'),
     );
@@ -106,13 +96,12 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await page.goto(`${course.pagePath()}?targetNode=${nodeId}`);
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
-    expect(
-      (
-        await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
-          data: { description: 'Actualizado al refrescar' },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(
+      await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
+        data: { description: 'Actualizado al refrescar' },
+      }),
+    );
+
     await expect.poll(count).toBe(1);
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await page.reload();

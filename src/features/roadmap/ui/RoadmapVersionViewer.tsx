@@ -6,10 +6,11 @@ import { ArrowLeft, Download, ExternalLink, FileText, X } from 'lucide-react';
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
-import { creatorLabel, originLabel, positionLabels } from '@/features/roadmap/ui/version-labels';
+import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
 import { Button, buttonVariants } from '@/shared/ui/button';
+import { PageEyebrow, PageTitle } from '@/shared/ui/page-layout';
 import { versionHistoryUrl } from '@/shared/version-history-url';
-import type { RoadmapVersion } from '@/features/roadmap/server';
+import type { RoadmapVersion } from '@/features/roadmap/version-types';
 
 export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVersion }>) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -33,37 +34,15 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
             Historial de versiones
           </Link>
           <div>
-            <p className="text-xs font-bold tracking-[0.08em] text-muted-foreground uppercase">
-              {version.course.code}
-            </p>
+            <PageEyebrow>{version.course.code}</PageEyebrow>
             <p className="mt-1 text-sm text-muted-foreground">{version.course.name}</p>
-            <h1 className="mt-2 font-heading text-4xl font-semibold tracking-[-0.04em]">
-              {authorship.edition}
-            </h1>
+            <PageTitle className="mt-2">{authorship.edition}</PageTitle>
             <p className="mt-1 text-sm text-muted-foreground">Versión cerrada · solo lectura</p>
           </div>
           <dl className="grid gap-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
             <dt className="font-semibold">Origen</dt>
             <dd>{originLabel(authorship.origin)}</dd>
-            <dt className="font-semibold">Creada por</dt>
-            <dd>{creatorLabel(authorship.creator)}</dd>
-            <dt className="font-semibold">Equipo docente</dt>
-            <dd>
-              {authorship.teachingStaff.length === 0 ? (
-                'Sin registro'
-              ) : (
-                <ul className="grid gap-1">
-                  {authorship.teachingStaff.map((member) => (
-                    <li key={member.id}>
-                      {member.name}
-                      {member.institutionalPosition
-                        ? ` · ${positionLabels[member.institutionalPosition]}`
-                        : ''}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </dd>
+            <VersionAuthorshipList {...authorship} />
             <dt className="font-semibold">Linaje</dt>
             <dd>
               <ol aria-label="Linaje" className="flex flex-wrap gap-x-2">

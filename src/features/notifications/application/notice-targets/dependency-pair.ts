@@ -2,7 +2,12 @@ import { NOTICE_TARGET } from './kinds';
 import { ABSENT, PRESENT } from '../absorption';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { dependencyTarget } from '@/shared/route-notice-target';
-import type { NoticeTargetDescriptor, NoticeTargetRef, RoadmapView } from './descriptor';
+import {
+  participantIds,
+  type NoticeTargetDescriptor,
+  type NoticeTargetRef,
+  type RoadmapView,
+} from './descriptor';
 
 export const dependencyPairRef = (sourceNodeId: string, targetNodeId: string) => ({
   noticeTarget: NOTICE_TARGET.dependency,
@@ -32,7 +37,7 @@ async function pairRecipients(
 ) {
   // Removals caused by hiding or deleting a Node are not reported as Dependency facts.
   if (!fact.sourceNode.isVisible || !fact.targetNode.isVisible) return [];
-  return (await roadmap.participants()).map(({ userId }) => userId);
+  return participantIds(roadmap);
 }
 
 /**

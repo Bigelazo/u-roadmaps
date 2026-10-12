@@ -1,98 +1,83 @@
 import { enterRoadmap } from './enter-roadmap';
-import { expect, test } from './fixtures';
-import { sessionCookie, authenticateAs } from './helpers';
-
-type Notice = {
-  id: string;
-  subject: string;
-  body: string;
-  read: boolean;
-  data: Record<string, unknown>;
-};
+import { expect, test, type E2EUser } from './fixtures';
+import { authenticateAs, ok } from './helpers';
+import { listNotices, type StoredNotice } from './notices';
 
 test('used Type renames deliver one general notice across Sections and recognize together with Nodes', async ({
   request,
   course,
+  apiAs,
+  teacherApi: author,
+  studentApi,
   createUser,
   page,
 }) => {
   const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
-  const student = course.users.studentWithoutProgress.id;
-  await enterRoadmap(page, course.pagePath(), student);
+  const student = course.users.studentWithoutProgress;
+  await enterRoadmap(page, course.pagePath(), student.id);
   await page.goto('/academic-overview');
-  const otherSection = course.users.studentComplete.id;
-  const roadmap = await (await request.get(roadmapPath(), { headers: author })).json();
+  const otherSection = course.users.studentComplete;
+  const roadmap = await (await author.get(roadmapPath())).json();
   const suffix = crypto.randomUUID();
-  const outsider = (await createUser()).id;
+  const outsider = await createUser();
   const before = `Lecturas ${suffix}`;
   const after = `Guías ${suffix}`;
   const nodeIds: string[] = [];
-  const notices = async (userId: string = student) => {
-    const response = await request.get(
-      `/api/notifications?roadmapId=${roadmap.roadmap.id}&limit=100`,
-      {
-        headers: { cookie: await sessionCookie(userId) },
-      },
-    );
-    expect(response.status()).toBe(200);
-    return (await response.json()).notifications as Notice[];
-  };
-  const classification = async (userId: string = student) =>
-    (await notices(userId)).filter((n) => n.data.nextTypeName === after);
-  const patch = async (data: Record<string, unknown>) => {
-    const response = await request.patch(roadmapPath(`/node-types/${typeId}`), {
-      headers: author,
-      data,
-    });
-    expect(response.status()).toBe(200);
-    return response;
-  };
-  const anonymous = await request.patch(roadmapPath(`/node-types/${roadmap.nodeTypes[0].id}`), {
-    data: { name: before },
-  });
-  expect(anonymous.status()).toBe(401);
-  const created = await request.post(roadmapPath('/node-types'), {
-    headers: author,
-    data: { name: before, icon: 'BookOpen', color: '#024AD8' },
-  });
-  expect(created.status()).toBe(201);
+  const notices = async (user: E2EUser = student) =>
+    listNotices(await apiAs(user), { roadmapId: course.roadmapId, limit: 100 });
+  const classification = async (user: E2EUser = student) =>
+    (await notices(user)).filter((n) => n.data.nextTypeName === after);
+  const patch = async (data: Record<string, unknown>) =>
+    ok(await author.patch(roadmapPath(`/node-types/${typeId}`), { data }));
+  // Unauthenticated: the shared `request` carries no session cookie.
+  await ok(
+    await request.patch(roadmapPath(`/node-types/${roadmap.nodeTypes[0].id}`), {
+      data: { name: before },
+    }),
+    401,
+  );
+  const created = await ok(
+    await author.post(roadmapPath('/node-types'), {
+      data: { name: before, icon: 'BookOpen', color: '#024AD8' },
+    }),
+    201,
+  );
   const typeId = (await created.json()).nodeType.id;
   await patch({ name: after });
   expect(await classification()).toHaveLength(0);
   await patch({ name: before });
   for (const isVisible of [true, true, false]) {
-    const response = await request.post(roadmapPath('/nodes'), {
-      headers: author,
-      data: {
-        title: `Nodo ${suffix} ${nodeIds.length}`,
-        nodeTypeId: typeId,
-        positionX: 2000 + nodeIds.length * 320,
-        positionY: 0,
-        isVisible,
-      },
-    });
-    expect(response.status()).toBe(201);
+    const response = await ok(
+      await author.post(roadmapPath('/nodes'), {
+        data: {
+          title: `Nodo ${suffix} ${nodeIds.length}`,
+          nodeTypeId: typeId,
+          positionX: 2000 + nodeIds.length * 320,
+          positionY: 0,
+          isVisible,
+        },
+      }),
+      201,
+    );
     nodeIds.push((await response.json()).node.id);
   }
   await patch({ icon: 'GraduationCap' });
   await patch({ color: '#1467A8' });
   expect(await classification()).toHaveLength(0);
-  const forbidden = await request.patch(roadmapPath(`/node-types/${typeId}`), {
-    headers: { cookie: await sessionCookie(student) },
-    data: { name: after },
-  });
-  expect(forbidden.status()).toBe(403);
+  await ok(
+    await studentApi.patch(roadmapPath(`/node-types/${typeId}`), { data: { name: after } }),
+    403,
+  );
   await patch({ name: after });
   await expect.poll(() => classification()).toHaveLength(1);
-  for (const userId of [
+  for (const user of [
     otherSection,
-    course.users.teachingAssistant.id,
-    course.users.multiCourseStudent.id,
+    course.users.teachingAssistant,
+    course.users.multiCourseStudent,
   ])
-    await expect.poll(() => classification(userId)).toHaveLength(1);
-  for (const userId of [course.users.teacher.id, course.users.withdrawnStudent.id, outsider])
-    expect(await classification(userId)).toHaveLength(0);
+    await expect.poll(() => classification(user)).toHaveLength(1);
+  for (const user of [course.users.teacher, course.users.withdrawnStudent, outsider])
+    expect(await classification(user)).toHaveLength(0);
   const notice = (await classification())[0];
   expect(notice).toMatchObject({
     subject: `Tipo «${before}» → «${after}»`,
@@ -106,11 +91,9 @@ test('used Type renames deliver one general notice across Sections and recognize
     },
   });
   expect(notice.data.nodeId).toBeUndefined();
-  const count = await request.get(`/api/notifications/counts?roadmapId=${roadmap.roadmap.id}`, {
-    headers: { cookie: await sessionCookie(student) },
-  });
+  const count = await studentApi.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`);
   expect((await count.json()).count).toBeGreaterThan(0);
-  await authenticateAs(page.context(), student);
+  await authenticateAs(page.context(), student.id);
   await page.goto('/academic-overview');
   await expect(page.getByRole('button', { name: /^Avisos, .* sin leer$/ })).toBeVisible();
   await expect(
@@ -134,11 +117,11 @@ test('used Type renames deliver one general notice across Sections and recognize
   );
   expect(pendingNodes).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
-  const reassigned = await request.patch(roadmapPath(`/nodes/${nodeIds[0]}`), {
-    headers: author,
-    data: { nodeTypeId: roadmap.nodeTypes[0].id },
-  });
-  expect(reassigned.status()).toBe(200);
+  await ok(
+    await author.patch(roadmapPath(`/nodes/${nodeIds[0]}`), {
+      data: { nodeTypeId: roadmap.nodeTypes[0].id },
+    }),
+  );
   await expect.poll(() => classification()).toHaveLength(0);
   // Reassigning the Node type is stored immediately (no grouping window, see ADR-0014).
   await expect
@@ -154,14 +137,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     ),
   ).toBe(false);
   for (const id of nodeIds.slice(0, 2)) {
-    expect(
-      (
-        await request.patch(roadmapPath(`/nodes/${id}`), {
-          headers: author,
-          data: { isVisible: false },
-        })
-      ).status(),
-    ).toBe(200);
+    await ok(await author.patch(roadmapPath(`/nodes/${id}`), { data: { isVisible: false } }));
   }
   await patch({ name: `Oculto ${suffix}` });
   expect((await notices()).filter((n) => n.data.nextTypeName === `Oculto ${suffix}`)).toHaveLength(
@@ -170,44 +146,44 @@ test('used Type renames deliver one general notice across Sections and recognize
 });
 
 test('a PostgreSQL classification-notice failure preserves the confirmed Type rename', async ({
-  request,
   course,
+  teacherApi: author,
+  studentApi,
   rejectNoticeInserts,
 }) => {
   const roadmapPath = course.apiPath;
-  const author = { cookie: await sessionCookie(course.users.teacher.id) };
   const suffix = crypto.randomUUID().replaceAll('-', '');
   const nextName = `Renombre ${suffix}`;
-  const created = await request.post(roadmapPath('/node-types'), {
-    headers: author,
-    data: { name: `Antes ${suffix}`, icon: 'BookOpen', color: '#024AD8' },
-  });
-  expect(created.status()).toBe(201);
+  const created = await ok(
+    await author.post(roadmapPath('/node-types'), {
+      data: { name: `Antes ${suffix}`, icon: 'BookOpen', color: '#024AD8' },
+    }),
+    201,
+  );
   const typeId = (await created.json()).nodeType.id;
-  const node = await request.post(roadmapPath('/nodes'), {
-    headers: author,
-    data: { title: `Nodo ${suffix}`, nodeTypeId: typeId, positionX: 4000, positionY: 0 },
-  });
-  expect(node.status()).toBe(201);
+  await ok(
+    await author.post(roadmapPath('/nodes'), {
+      data: { title: `Nodo ${suffix}`, nodeTypeId: typeId, positionX: 4000, positionY: 0 },
+    }),
+    201,
+  );
   const failure = await rejectNoticeInserts({
     roadmapId: course.roadmapId,
     noticeClass: 'roadmap-classification-changed',
   });
-  const renamed = await request.patch(roadmapPath(`/node-types/${typeId}`), {
-    headers: author,
-    data: { name: nextName },
-  });
-  expect(renamed.status()).toBe(200);
+  const renamed = await ok(
+    await author.patch(roadmapPath(`/node-types/${typeId}`), { data: { name: nextName } }),
+  );
   expect((await renamed.json()).nodeType.name).toBe(nextName);
-  const persisted = await request.get(roadmapPath(), { headers: author });
+  const persisted = await author.get(roadmapPath());
   expect((await persisted.json()).nodeTypes).toContainEqual(
     expect.objectContaining({ id: typeId, name: nextName }),
   );
   await expect.poll(() => failure.wasAttempted()).toBe(true);
-  const inbox = await request.get('/api/notifications?limit=100', {
-    headers: { cookie: await sessionCookie(course.users.studentWithoutProgress.id) },
-  });
+  const inbox = await studentApi.get('/api/notifications?limit=100');
   expect(
-    (await inbox.json()).notifications.some((n: Notice) => n.data.nextTypeName === nextName),
+    ((await inbox.json()).notifications as StoredNotice[]).some(
+      (n) => n.data.nextTypeName === nextName,
+    ),
   ).toBe(false);
 });

@@ -1,14 +1,12 @@
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, ok } from './helpers';
 
 test('a teacher previews, completes, resets, and exits the persistent student canvas', async ({
   page,
   course,
-  apiAs,
+  teacherApi: api,
 }) => {
-  const api = await apiAs(course.users.teacher);
-
-  expect((await api.delete(course.apiPath('/simulation'))).status()).toBe(200);
+  await ok(await api.delete(course.apiPath('/simulation')));
   const simulation = await (await api.get(course.apiPath('/simulation'))).json();
   const node = simulation.nodes.find(
     (candidate: { access: { status: string }; canComplete?: boolean }) =>

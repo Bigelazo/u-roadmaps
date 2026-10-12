@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
-import { studentNodeAccessById } from '@/features/roadmap/domain/access';
+import { studentNodeAccessById, visibleRoadmapGraph } from '@/features/roadmap/domain/access';
 
 export type AccessSnapshot = Readonly<{
   nodes: readonly {
@@ -31,11 +31,9 @@ export function projectAccessSnapshot({
   participants: readonly AccessSnapshotParticipant[];
   completions: readonly { userId: string; roadmapNodeId: string }[];
 }): AccessSnapshot {
-  const visibleNodes = nodes.filter((node) => node.isVisible);
-  const visibleNodeIds = new Set(visibleNodes.map(({ id }) => id));
-  const visibleDependencies = dependencies.filter(
-    ({ sourceNodeId, targetNodeId }) =>
-      visibleNodeIds.has(sourceNodeId) && visibleNodeIds.has(targetNodeId),
+  const { nodes: visibleNodes, dependencies: visibleDependencies } = visibleRoadmapGraph(
+    nodes,
+    dependencies,
   );
   const completionIdsByUser = new Map<string, Set<string>>();
   for (const completion of completions) {

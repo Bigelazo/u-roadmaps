@@ -1,4 +1,5 @@
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
+import { addCalendarDays } from '@/features/roadmap/domain/scheduled-unlock';
 
 export type { PracticeExperience } from '@/features/roadmap/types';
 export type PracticeAcademicTerm = Readonly<{ year: number; semester: number }>;
@@ -56,12 +57,6 @@ function node(
     isTeacherBlocked: false,
     ...extra,
   } as RoadmapNode;
-}
-
-function addDays(day: string, days: number) {
-  const date = new Date(`${day}T12:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
 }
 
 /**
@@ -161,7 +156,7 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
         nodeTypes.assessment,
         [1280, 40],
         'Se habilita cuando el equipo docente lo libere.',
-        { isTeacherBlocked: true, teacherUnlockOn: addDays(today, 14) },
+        { isTeacherBlocked: true, teacherUnlockOn: addCalendarDays(today, 14) },
       ),
       node(
         practiceNodeIds.g,

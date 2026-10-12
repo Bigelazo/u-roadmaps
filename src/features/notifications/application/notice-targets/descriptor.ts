@@ -199,3 +199,8 @@ export async function nodeVisibleBefore(
   if (visibility?.kind === 'node-visibility') return visibility.previous;
   return (await roadmap.node(nodeId))?.isVisible ?? false;
 }
+
+/** The user ids of the Roadmap's active Participations, the actor included. */
+export async function participantIds(roadmap: RoadmapView) {
+  return (await roadmap.participants()).map(({ userId }) => userId);
+}
