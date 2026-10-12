@@ -1,6 +1,6 @@
 'use client';
 
-import type * as React from 'react';
+import * as React from 'react';
 import { Toast as ToastPrimitive } from '@base-ui/react/toast';
 import { CircleAlert, CircleCheck, X } from 'lucide-react';
 import { cn } from 'cn';
@@ -25,7 +25,7 @@ function ToastViewport({ className, ...props }: ToastPrimitive.Viewport.Props) {
       data-slot="toast-viewport"
       aria-label="Notificaciones"
       className={cn(
-        'pointer-events-none fixed inset-x-4 top-[calc(4rem+1.25rem)] z-50 mx-auto w-auto max-w-sm outline-none sm:right-5 sm:left-auto sm:mx-0 sm:w-full',
+        'pointer-events-none fixed inset-x-4 top-[calc(var(--global-navigation-height,4rem)+1.25rem)] z-50 mx-auto w-auto max-w-sm outline-none sm:right-5 sm:left-auto sm:mx-0 sm:w-full',
         className,
       )}
       {...props}
@@ -172,7 +172,28 @@ function ToastList() {
   ));
 }
 
+/** Publishes the global navigation height so the viewport sits below it even when it wraps. */
+function useGlobalNavigationHeight() {
+  React.useEffect(() => {
+    const navigation = document.querySelector('[data-global-navigation]');
+    if (!navigation) return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() =>
+      root.style.setProperty(
+        '--global-navigation-height',
+        `${navigation.getBoundingClientRect().height}px`,
+      ),
+    );
+    observer.observe(navigation);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--global-navigation-height');
+    };
+  }, []);
+}
+
 function Toaster({ children, toastManager = toast, ...props }: ToastPrimitive.Provider.Props) {
+  useGlobalNavigationHeight();
   return (
     <ToastProvider toastManager={toastManager} {...props}>
       {children}
