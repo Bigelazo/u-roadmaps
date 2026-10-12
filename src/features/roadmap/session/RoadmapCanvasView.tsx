@@ -13,7 +13,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, CircleHelp, Eye, History, X } from 'lucide-react';
+import { CircleAlert, CircleHelp, Eye, History } from 'lucide-react';
 import { versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -37,10 +37,6 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
-import {
-  RoadmapCanvasFeedback,
-  useRoadmapCanvasFeedback,
-} from '@/features/roadmap/session/feedback';
 import type {
   RoadmapDto,
   RoadmapNode,
@@ -49,10 +45,11 @@ import type {
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/shared/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
+import { notify } from '@/shared/ui/notify';
 import { Badge } from '@/shared/ui/badge';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
@@ -177,14 +174,31 @@ function exclusive<Args extends unknown[]>(
 }
 
 /** Shows `message` when the session mutation succeeds. */
-async function withSuccess(
-  feedback: ReturnType<typeof useRoadmapCanvasFeedback>,
-  mutation: Promise<boolean>,
-  message: string,
-) {
+async function withSuccess(mutation: Promise<boolean>, message: string) {
   const succeeded = await mutation;
-  if (succeeded) feedback?.showSuccess(message);
+  if (succeeded) notify.success(message);
   return succeeded;
+}
+
+/**
+ * Shows `message` as a toast with a stable id while it is set and closes it once it clears.
+ * Closing the toast (timeout, button, swipe or unmount) calls `onClose` so the source state clears.
+ */
+function useStateToast(
+  tone: 'error' | 'neutral',
+  id: string,
+  message: string | null,
+  onClose: () => void,
+) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    if (message) notify[tone](message, { id, onClose: () => onCloseRef.current() });
+    else notify.close(id);
+  }, [id, message, tone]);
+  useEffect(() => () => notify.close(id), [id]);
 }
 
 /** Automatic-layout and Node type deletion confirmation state. */
@@ -363,7 +377,6 @@ function useRoadmapCanvasController({ input }: Props) {
       onExit: restoreCanvasPreview,
     },
   });
-  const feedback = useRoadmapCanvasFeedback();
   const [exclusiveConfirmationRequest, setExclusiveConfirmationRequest] = useState<{
     source: ExclusiveConfirmationSource;
   } | null>(null);
@@ -386,9 +399,7 @@ function useRoadmapCanvasController({ input }: Props) {
     deleteNodeType,
   });
   const { automaticLayout, nodeTypeDeletion, requestAutomaticLayout } = confirmations;
-  useEffect(() => {
-    feedback?.reportError(roadmap ? error : null, dismissError);
-  }, [dismissError, error, feedback, roadmap]);
+  useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
 
   const performEditorEffect = useCallback(
     async (effect: NodeEditorEffect): Promise<NodeEditorPerformResult> => {
@@ -411,10 +422,10 @@ function useRoadmapCanvasController({ input }: Props) {
             return [deleteResource(effect.resourceId), 'Recurso eliminado exitosamente.'];
         }
       })();
-      const succeeded = await withSuccess(feedback, mutation, message);
+      const succeeded = await withSuccess(mutation, message);
       return { status: succeeded ? 'committed' : 'rejected' };
     },
-    [addResource, deleteResource, updateNode, updateResource, uploadResource, feedback],
+    [addResource, deleteResource, updateNode, updateResource, uploadResource],
   );
 
   const exclusiveConfirmationSource = exclusiveConfirmationRequest?.source;
@@ -533,6 +544,7 @@ function useRoadmapCanvasController({ input }: Props) {
     setDismissedInvalidTargetId(invalidTargetId);
     setSyncedSelectionNotice(null);
   }, [invalidTargetId]);
+  useStateToast('neutral', 'roadmap-selection-notice', selectionNotice, dismissSelectionNotice);
   const acknowledgesRoadmap = fetchesRoadmapNotices(input);
   useEffect(() => {
     if (!acknowledgesRoadmap || !roadmap || isCanvasPreview) return;
@@ -654,7 +666,6 @@ function useRoadmapCanvasController({ input }: Props) {
           return;
         case 'schedule-teacher-unlock':
           void withSuccess(
-            feedback,
             scheduleTeacherUnlock(intent.nodeId, intent.unlockOn),
             intent.unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
           );
@@ -683,7 +694,6 @@ function useRoadmapCanvasController({ input }: Props) {
     },
     [
       closeSelectedNodeNow,
-      feedback,
       moveNode,
       scheduleTeacherUnlock,
       openResourceComposer,
@@ -726,7 +736,6 @@ function useRoadmapCanvasController({ input }: Props) {
     semester,
     dispatchCanvas,
     focusReturnRequest,
-    syncedSelectionNotice: selectionNotice,
     dismissSelectionNotice,
     canvasFocusRef,
     selectedNodeId,
@@ -753,7 +762,6 @@ function useRoadmapCanvasController({ input }: Props) {
     deleteNodeType,
     completeNode,
     canvasPreviewWorkflow,
-    feedback,
     exclusiveConfirmation,
     ...confirmations,
     requestExclusiveConfirmation,
@@ -791,8 +799,6 @@ export function RoadmapCanvasView({ input }: Props) {
   const model = useRoadmapCanvasController({ input });
   const {
     dispatchCanvas,
-    syncedSelectionNotice,
-    dismissSelectionNotice,
     canvasFocusRef,
     selectedNodeId,
     roadmap,
@@ -876,30 +882,10 @@ export function RoadmapCanvasView({ input }: Props) {
               graphProjection={graphProjection}
             />
           </NodeChangeCountsProvider>
-          <RoadmapCanvasFeedback />
           {error ? (
             <Button className="absolute top-24 right-5" type="button" onClick={retryRefresh}>
               Reintentar actualización
             </Button>
-          ) : null}
-          {syncedSelectionNotice ? (
-            <Alert
-              role="status"
-              className="absolute top-20 right-5 z-5 w-[min(23rem,calc(100%-2.5rem))] bg-card shadow-sm"
-            >
-              <AlertDescription>{syncedSelectionNotice}</AlertDescription>
-              <AlertAction>
-                <Button
-                  aria-label="Cerrar aviso de actualización"
-                  onClick={dismissSelectionNotice}
-                  size="icon-sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <X aria-hidden="true" />
-                </Button>
-              </AlertAction>
-            </Alert>
           ) : null}
         </div>
         <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
@@ -1070,7 +1056,6 @@ function RoadmapStudentPanel({
     canvasPreviewWorkflow,
     dispatchCanvas,
     completeNode,
-    feedback,
     isHistoricalRoadmap,
     editorPanel,
     studentPanel,
@@ -1098,7 +1083,7 @@ function RoadmapStudentPanel({
             if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
             else {
               void completeNode(node.id).then((succeeded) => {
-                if (succeeded) feedback?.showSuccess('Nodo completado.');
+                if (succeeded) notify.success('Nodo completado.');
               });
             }
           }}

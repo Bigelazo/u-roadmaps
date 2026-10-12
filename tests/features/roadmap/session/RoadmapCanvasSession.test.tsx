@@ -9,6 +9,8 @@ import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change
 import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import { Toaster } from '@/shared/ui/toast';
+import { closeToast, findToast, queryToast, queryToasts } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
 
 // The public canvas seam renders a mobile sidebar in these scenarios.
@@ -302,6 +304,7 @@ function renderSession(persistence: SessionPersistence, input: SessionInput = te
   const view = (next: SessionInput) => (
     <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
       <RoadmapCanvasSession {...next} />
+      <Toaster />
     </RoadmapCanvasSessionPersistenceProvider>
   );
   const utils = render(view(input));
@@ -321,10 +324,10 @@ describe('RoadmapCanvasSession', () => {
     await user.click(node);
     const complete = await screen.findByRole('button', { name: 'Completar Límites' });
     await user.click(complete);
-    expect(await screen.findByRole('status', { name: 'Nodo completado.' })).not.toBeNull();
+    expect(await findToast('Nodo completado.')).not.toBeNull();
   });
 
-  test('resets feedback and ignores a delayed response when the Course offering changes', async () => {
+  test('keeps app-level success toasts and ignores a delayed response when the Course offering changes', async () => {
     const user = userEvent.setup();
     let resolvePreviousRoadmap!: (value: StudentRoadmapDto) => void;
     const previousRoadmap = new Promise<StudentRoadmapDto>((resolve) => {
@@ -357,11 +360,12 @@ describe('RoadmapCanvasSession', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Derivadas' }));
     await user.click(screen.getByRole('button', { name: 'Completar Derivadas' }));
-    expect(await screen.findByRole('status', { name: 'Nodo completado.' })).toBeTruthy();
+    expect(await findToast('Nodo completado.')).toBeTruthy();
 
     rerenderSession(studentInput('current', courseInput('CC1003', 'Álgebra I')));
 
-    expect(screen.queryByRole('status', { name: 'Nodo completado.' })).toBeNull();
+    // Toasts live in the app-level Toaster, so a success outlives the Course offering switch.
+    expect(queryToast('Nodo completado.')).toBeTruthy();
     resolvePreviousRoadmap(roadmap);
     expect(await screen.findByRole('button', { name: 'Integrales' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Límites' })).toBeNull();
@@ -506,14 +510,11 @@ describe('RoadmapCanvasSession', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));
     await user.click(await screen.findByRole('button', { name: 'Completar Límites' }));
-    expect(
-      await screen.findByRole('alert', { name: 'No se pudo completar el nodo.' }),
-    ).not.toBeNull();
+    expect(await findToast('No se pudo completar el nodo.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Límites' })).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Cerrar alerta' }));
-    await waitFor(() =>
-      expect(screen.queryByRole('alert', { name: 'No se pudo completar el nodo.' })).toBeNull(),
-    );
+    await closeToast(user, await findToast('No se pudo completar el nodo.'));
+    await waitFor(() => expect(queryToast('No se pudo completar el nodo.')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Límites' })).not.toBeNull();
   });
 
   test('routes current teaching Canvas preview through the session and isolates simulated Completions', async () => {
@@ -577,23 +578,16 @@ describe('RoadmapCanvasSession', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));
     await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }));
-    expect(
-      await screen.findByRole('status', { name: 'Cambios guardados exitosamente.' }),
-    ).toBeTruthy();
+    expect(await findToast('Cambios guardados exitosamente.')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Guardar enlace' }));
-    expect(
-      await screen.findByRole('status', { name: 'Enlace guardado exitosamente.' }),
-    ).toBeTruthy();
+    expect(await findToast('Enlace guardado exitosamente.')).toBeTruthy();
     await user.click(await screen.findByRole('button', { name: 'Actualizar recurso' }));
-    expect(
-      await screen.findByRole('status', { name: 'Enlace guardado exitosamente.' }),
-    ).toBeTruthy();
+    // Successes stack, so the second save adds a second toast with the same message.
+    await waitFor(() => expect(queryToasts('Enlace guardado exitosamente.')).toHaveLength(2));
     await user.click(await screen.findByRole('button', { name: 'Eliminar recurso' }));
     await user.click(screen.getByRole('button', { name: 'Subir archivo' }));
-    expect(
-      await screen.findByRole('status', { name: 'Recurso guardado exitosamente.' }),
-    ).toBeTruthy();
+    expect(await findToast('Recurso guardado exitosamente.')).toBeTruthy();
 
     const saved = await persistence.load(teachingInput);
     expect(saved.nodes[0]).toMatchObject({ title: 'Límites y continuidad' });
@@ -637,17 +631,13 @@ describe('RoadmapCanvasSession', () => {
     renderSession(persistence);
 
     await user.click(await screen.findByRole('button', { name: 'Crear dependencia' }));
-    expect(
-      await screen.findByRole('status', { name: 'Dependencia creada exitosamente.' }),
-    ).toBeTruthy();
+    expect(await findToast('Dependencia creada exitosamente.')).toBeTruthy();
     expect((await persistence.load(teachingInput)).dependencies).toHaveLength(1);
 
     await user.click(screen.getByRole('button', { name: 'Eliminar dependencia' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
-    expect(
-      await screen.findByRole('status', { name: 'Dependencia eliminada exitosamente.' }),
-    ).toBeTruthy();
+    expect(await findToast('Dependencia eliminada exitosamente.')).toBeTruthy();
     await waitFor(async () =>
       expect((await persistence.load(teachingInput)).dependencies).toEqual([]),
     );
@@ -711,9 +701,7 @@ describe('RoadmapCanvasSession', () => {
     expect((await persistence.load(teachingInput)).dependencies).toEqual([]);
 
     await user.click(within(dialog).getByRole('button', { name: 'Conectar y bloquear' }));
-    expect(
-      await screen.findByRole('status', { name: 'Dependencia creada exitosamente.' }),
-    ).toBeTruthy();
+    expect(await findToast('Dependencia creada exitosamente.')).toBeTruthy();
     expect((await persistence.load(teachingInput)).nodes).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'node-2', isTeacherBlocked: true })]),
     );
@@ -766,8 +754,8 @@ test('current teaching sessions recover missed changes and retain the last proje
   await screen.findByRole('button', { name: 'Cambio remoto' });
   load.mockRejectedValueOnce(new Error('Fallo transitorio'));
   act(() => window.dispatchEvent(new Event('online')));
-  await screen.findByText('Fallo transitorio');
+  await findToast('Fallo transitorio');
   expect(screen.getByRole('button', { name: 'Cambio remoto' })).toBeTruthy();
   await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar actualización' }));
-  await waitFor(() => expect(screen.queryByText('Fallo transitorio')).toBeNull());
+  await waitFor(() => expect(queryToast('Fallo transitorio')).toBeNull());
 });
