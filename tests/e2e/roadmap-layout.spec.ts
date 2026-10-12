@@ -1,4 +1,4 @@
-import type { Locator } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
@@ -36,11 +36,20 @@ async function bounds(locator: Locator) {
   return box;
 }
 
-async function expectTopRightOverlay(canvas: Locator, overlay: Locator) {
-  const [canvasBox, overlayBox] = await Promise.all([bounds(canvas), bounds(overlay)]);
-  expect(overlayBox.x).toBeGreaterThanOrEqual(canvasBox.x);
-  expect(canvasBox.x + canvasBox.width - overlayBox.x - overlayBox.width).toBeCloseTo(20, 0);
-  expect(overlayBox.y - canvasBox.y).toBeCloseTo(20, 0);
+async function expectTopRightToast(page: Page, toast: Locator) {
+  const [navigation, toastBox] = await Promise.all([
+    bounds(page.getByRole('banner')),
+    bounds(toast),
+  ]);
+  const viewport = page.viewportSize()!;
+  expect(viewport.width - toastBox.x - toastBox.width).toBeCloseTo(20, 0);
+  expect(toastBox.y).toBeGreaterThanOrEqual(navigation.y + navigation.height);
+}
+
+function toast(page: Page, message: string) {
+  return page
+    .locator('[data-slot="toast-viewport"] [data-slot="toast"]')
+    .filter({ hasText: message });
 }
 
 test('roadmap fits the viewport for teachers and students without residual vertical scrolling', async ({
@@ -187,29 +196,33 @@ test('keeps feedback visible beside an open editor', async ({ page, course }) =>
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
-  const canvas = page.getByLabel('Lienzo del roadmap');
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect(page.locator('#roadmap-editor-panel')).toBeVisible();
 
   await page.getByLabel('Título', { exact: true }).fill('Variables revisadas');
   await page.getByRole('button', { name: 'Guardar cambios' }).click();
-  const success = page.getByRole('status', { name: 'Cambios guardados exitosamente.' });
+  const success = toast(page, 'Cambios guardados exitosamente.');
   await expect(success).toBeVisible();
-  await expectTopRightOverlay(canvas, success);
+  await expectTopRightToast(page, success);
 
   await page.route(`**${course.apiPath(`/nodes/${course.nodes.first}`)}`, async (route) => {
     await route.fulfill({ status: 409, json: { error: 'No se pudo guardar el nodo.' } });
   });
   await page.getByLabel('Título', { exact: true }).fill('Variables con error');
   await page.getByRole('button', { name: 'Guardar cambios' }).click();
-  const error = page.getByRole('alert', { name: 'No se pudo guardar el nodo.' });
+  const error = toast(page, 'No se pudo guardar el nodo.');
   await expect(error).toBeVisible();
-  await expectTopRightOverlay(canvas, error);
-  await expectTopRightOverlay(canvas, success);
-  // The later success surface retains priority while both notifications exist.
-  await page.getByRole('button', { name: 'Cerrar notificación' }).click();
+  // Both notifications stay in the stack; hovering expands it so each one can be read and closed.
+  await error.hover();
+  await expect(success).toBeVisible();
+  await expectTopRightToast(page, error);
+  await expectTopRightToast(page, success);
+  const [errorBox, successBox] = await Promise.all([bounds(error), bounds(success)]);
+  expect(successBox.y).toBeGreaterThanOrEqual(errorBox.y + errorBox.height);
+  await success.locator('[data-slot="toast-close"]').click();
   await expect(success).toHaveCount(0);
-  await page.getByRole('button', { name: 'Cerrar alerta' }).click();
+  await error.hover();
+  await error.locator('[data-slot="toast-close"]').click();
   await expect(error).toHaveCount(0);
 });
 

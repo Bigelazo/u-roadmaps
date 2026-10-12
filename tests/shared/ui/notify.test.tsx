@@ -20,7 +20,6 @@ function toastOf(text: string) {
 describe('notify', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    render(<Toaster />);
   });
 
   afterEach(() => {
@@ -28,6 +27,7 @@ describe('notify', () => {
   });
 
   it('shows a success toast that dismisses itself after 6 s and reports the close', () => {
+    render(<Toaster />);
     const onClose = vi.fn();
     act(() => void notify.success('Cambios guardados exitosamente.', { onClose }));
 
@@ -39,6 +39,7 @@ describe('notify', () => {
   });
 
   it('announces errors assertively and dismisses them after 6 s', () => {
+    render(<Toaster />);
     const onClose = vi.fn();
     act(() => void notify.error('No se pudo guardar el nodo.', { onClose }));
 
@@ -50,6 +51,7 @@ describe('notify', () => {
   });
 
   it('keeps neutral toasts until they are closed with the unified close label', () => {
+    render(<Toaster />);
     const onClose = vi.fn();
     act(() => void notify.neutral('El Nodo seleccionado ya no está disponible.', { onClose }));
 
@@ -65,6 +67,7 @@ describe('notify', () => {
   });
 
   it('updates the toast that shares an id instead of stacking a new one', () => {
+    render(<Toaster />);
     act(() => void notify.error('Primer error.', { id: 'session-error' }));
     act(() => void notify.error('Segundo error.', { id: 'session-error' }));
 
@@ -72,6 +75,7 @@ describe('notify', () => {
   });
 
   it('stacks toasts without ids', () => {
+    render(<Toaster />);
     act(() => {
       notify.success('Dependencia creada exitosamente.');
       notify.success('Nodo completado.');
@@ -81,6 +85,7 @@ describe('notify', () => {
   });
 
   it('closes a toast by id and reports the close', () => {
+    render(<Toaster />);
     const onClose = vi.fn();
     act(() => void notify.neutral('Aviso.', { id: 'notice', onClose }));
     act(() => notify.close('notice'));
