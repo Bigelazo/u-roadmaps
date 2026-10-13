@@ -15,8 +15,8 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, CircleHelp, Eye, History } from 'lucide-react';
-import { versionHistoryUrl } from '@/features/roadmap/client';
+import { CircleAlert, CircleHelp, Eye, History, Users } from 'lucide-react';
+import { courseParticipantsUrl, versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
 import { canvasStateReducer, initialCanvasState } from '@/features/roadmap/canvas/state';
@@ -1199,6 +1199,15 @@ function RoadmapCanvasGraph({
                   >
                     <History data-icon="inline-start" />
                     Historial de versiones
+                  </Link>
+                ) : null}
+                {canPreviewCanvas && !input.practice ? (
+                  <Link
+                    className={cn(buttonVariants({ variant: 'outline' }))}
+                    href={courseParticipantsUrl({ courseCode, year, semester })}
+                  >
+                    <Users data-icon="inline-start" />
+                    Integrantes
                   </Link>
                 ) : null}
                 {canEnterCanvasPreview ? (

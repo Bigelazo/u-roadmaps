@@ -1,0 +1,211 @@
+import 'server-only';
+
+import {
+  getMufasaAcademicCourses,
+  getMufasaCourseMembers,
+  getMufasaPersonNames,
+} from '@/integrations/ucampus/server';
+import {
+  effectivePosition,
+  positionCapabilities,
+  type InstitutionalCoursePosition,
+} from '@/shared/institutional-position';
+import { prisma } from '@/shared/server/db';
+import { unwrap, withApplicationResult } from '@/shared/errors/server';
+import {
+  averageStudentCompletion,
+  compareCourseMembers,
+  completionRatio,
+} from '../domain/course-progress';
+import type { CourseOfferingIdentifier } from '../types';
+import type { RoadmapChangePort } from './change-port';
+import { requireCourseOfferingParticipation, type RoadmapActor } from './participation';
+
+export type CourseMember = Readonly<{
+  key: string;
+  name: string;
+  sections: string[];
+  /** Null only for local teaching staff whose U-Campus position is still unknown. */
+  institutionalPosition: InstitutionalCoursePosition | null;
+  /** Whether the person has entered U-Roadmaps at least once. */
+  hasEntered: boolean;
+  /** Completed visible Nodes; null for teaching staff or without a Roadmap. */
+  completedNodes: number | null;
+  completion: number | null;
+}>;
+
+export type CourseParticipants = Readonly<{
+  course: Readonly<CourseOfferingIdentifier & { name: string }>;
+  /** MUFASA lists the full U-Campus roster; LOCAL only people who already entered. */
+  source: 'MUFASA' | 'LOCAL';
+  hasRoadmap: boolean;
+  visibleNodes: number;
+  studentCount: number;
+  averageStudentCompletion: number | null;
+  teachingStaff: CourseMember[];
+  students: CourseMember[];
+}>;
+
+type RosterEntry = Readonly<{
+  key: string;
+  name: string;
+  userId: string | null;
+  sections: string[];
+  institutionalPosition: InstitutionalCoursePosition | null;
+  isTeachingStaff: boolean;
+}>;
+
+function compareSections(a: string, b: string) {
+  return a.localeCompare(b, 'es-CL', { numeric: true });
+}
+
+/** The offering's full U-Campus roster, or null when U-Campus cannot provide it. */
+async function readInstitutionalRoster(
+  actor: RoadmapActor,
+  identifier: CourseOfferingIdentifier,
+): Promise<RosterEntry[] | null> {
+  const options = { useLocalFixtureData: actor.useLocalFixtureData === true };
+  const { courses } = await getMufasaAcademicCourses(actor.rut, options);
+  const ramoId = courses.find(
+    (course) =>
+      course.courseCode === identifier.courseCode &&
+      course.year === identifier.year &&
+      course.semester === identifier.semester &&
+      course.ramoId !== null,
+  )?.ramoId;
+  if (!ramoId) return null;
+  const roster = await getMufasaCourseMembers(ramoId, identifier, options);
+  if (roster.source !== 'MUFASA' || roster.members.length === 0) return null;
+
+  // A person can hold several positions or sections; the effective one decides their group.
+  const byRut = new Map<
+    string,
+    { sections: Set<string>; positions: InstitutionalCoursePosition[] }
+  >();
+  for (const member of roster.members) {
+    const entry = byRut.get(member.rut) ?? { sections: new Set<string>(), positions: [] };
+    if (member.section) entry.sections.add(member.section);
+    entry.positions.push(member.institutionalPosition);
+    byRut.set(member.rut, entry);
+  }
+  const ruts = [...byRut.keys()];
+  const [localUsers, names] = await Promise.all([
+    prisma.user.findMany({
+      where: { rut: { in: ruts } },
+      select: { id: true, name: true, rut: true },
+    }),
+    getMufasaPersonNames(ruts, options),
+  ]);
+  const usersByRut = new Map(localUsers.map((user) => [user.rut, user]));
+  return [...byRut].map(([rut, { sections, positions }]) => {
+    const institutionalPosition = effectivePosition(positions);
+    const localUser = usersByRut.get(rut);
+    return {
+      key: rut,
+      name: names.get(rut) ?? localUser?.name ?? `RUT ${rut}`,
+      userId: localUser?.id ?? null,
+      sections: [...sections].sort(compareSections),
+      institutionalPosition,
+      isTeachingStaff: positionCapabilities(institutionalPosition).isTeachingStaff,
+    };
+  });
+}
+
+/** Active local Participations, the only roster available while U-Campus is unreachable. */
+async function readLocalRoster(courseOfferingId: string): Promise<RosterEntry[]> {
+  const participations = await prisma.participation.findMany({
+    where: { courseOfferingId, isActive: true },
+    select: {
+      role: true,
+      institutionalPosition: true,
+      user: { select: { id: true, name: true } },
+    },
+  });
+  return participations.map(({ role, institutionalPosition, user }) => ({
+    key: user.id,
+    name: user.name,
+    userId: user.id,
+    sections: [],
+    // Legacy student Participations predate stored positions.
+    institutionalPosition: institutionalPosition ?? (role === 'STUDENT' ? 'STUDENT' : null),
+    isTeachingStaff: role === 'TEACHER',
+  }));
+}
+
+/** Completed visible Nodes per local User. */
+async function readCompletedVisibleNodes(roadmapId: string, userIds: string[]) {
+  const counts = await prisma.completion.groupBy({
+    by: ['userId'],
+    where: { userId: { in: userIds }, roadmapNode: { roadmapId, isVisible: true } },
+    _count: { _all: true },
+  });
+  return new Map(counts.map(({ userId, _count }) => [userId, _count._all]));
+}
+
+/**
+ * Student progress tracking (GLOSSARY): the offering's members and each
+ * student's Roadmap completion, for its active teaching staff only.
+ */
+export const readCourseParticipants = withApplicationResult(async function readCourseParticipants(
+  actor: RoadmapActor,
+  identifier: CourseOfferingIdentifier,
+  changePort: RoadmapChangePort,
+): Promise<CourseParticipants> {
+  const { courseOffering } = await unwrap(() =>
+    requireCourseOfferingParticipation(actor, identifier, ['TEACHER'], changePort),
+  );
+  const [institutionalRoster, course, visibleNodes] = await Promise.all([
+    readInstitutionalRoster(actor, identifier),
+    prisma.course.findUnique({ where: { code: identifier.courseCode }, select: { name: true } }),
+    courseOffering.roadmap
+      ? prisma.roadmapNode.count({
+          where: { roadmapId: courseOffering.roadmap.id, isVisible: true },
+        })
+      : 0,
+  ]);
+  const roster = institutionalRoster ?? (await readLocalRoster(courseOffering.id));
+  const learnerIds = roster.flatMap(({ userId, isTeachingStaff }) =>
+    userId && !isTeachingStaff ? [userId] : [],
+  );
+  const completed = courseOffering.roadmap
+    ? await readCompletedVisibleNodes(courseOffering.roadmap.id, learnerIds)
+    : new Map<string, number>();
+
+  const members = roster
+    .map(({ key, name, userId, sections, institutionalPosition, isTeachingStaff }) => {
+      const completedNodes =
+        courseOffering.roadmap && !isTeachingStaff
+          ? ((userId ? completed.get(userId) : undefined) ?? 0)
+          : null;
+      return {
+        isTeachingStaff,
+        member: {
+          key,
+          name,
+          sections,
+          institutionalPosition,
+          hasEntered: userId !== null,
+          completedNodes,
+          completion:
+            completedNodes === null ? null : completionRatio(completedNodes, visibleNodes),
+        },
+      };
+    })
+    .sort((a, b) => compareCourseMembers(a.member, b.member));
+  const students = members.flatMap(({ isTeachingStaff, member }) =>
+    isTeachingStaff ? [] : [member],
+  );
+
+  return {
+    course: { ...identifier, name: course?.name ?? identifier.courseCode },
+    source: institutionalRoster ? 'MUFASA' : 'LOCAL',
+    hasRoadmap: Boolean(courseOffering.roadmap),
+    visibleNodes,
+    studentCount: students.filter((member) => member.institutionalPosition === 'STUDENT').length,
+    averageStudentCompletion: averageStudentCompletion(students),
+    teachingStaff: members.flatMap(({ isTeachingStaff, member }) =>
+      isTeachingStaff ? [member] : [],
+    ),
+    students,
+  };
+});

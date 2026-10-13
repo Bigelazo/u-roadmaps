@@ -8,6 +8,7 @@ import {
   History,
   MapPinned,
   Route,
+  Users,
 } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import {
@@ -24,7 +25,7 @@ import type {
   AcademicOverviewPage,
   AcademicOverviewTerm,
 } from '../types';
-import { termLabel } from '@/shared/course-offering';
+import { courseParticipantsUrl, termLabel } from '@/shared/course-offering';
 import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
@@ -166,6 +167,16 @@ function CourseRow({
             >
               <History aria-hidden="true" size={16} />
               Historial de versiones
+            </Link>
+          ) : null}
+          {course.role === 'TEACHER' && course.hasRoadmap ? (
+            <Link
+              aria-label={`Integrantes de ${course.name}`}
+              className={buttonVariants({ variant: 'outline', className: 'min-h-11' })}
+              href={courseParticipantsUrl(course)}
+            >
+              <Users aria-hidden="true" size={16} />
+              Integrantes
             </Link>
           ) : null}
         </div>

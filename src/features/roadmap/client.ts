@@ -6,3 +6,4 @@ export function roadmapUrl(identifier: CourseOfferingIdentifier, suffix = ''): s
 }
 
 export { versionHistoryUrl, versionUrl } from '@/shared/version-history-url';
+export { courseParticipantsUrl } from '@/shared/course-offering';

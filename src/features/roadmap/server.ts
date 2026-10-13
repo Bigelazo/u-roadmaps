@@ -48,6 +48,10 @@ export {
 
 export { synchronizeAcademicParticipations } from './application/academic-participation';
 export {
+  readCourseParticipants,
+  type CourseParticipants,
+} from './application/course-participants';
+export {
   downloadRoadmapVersionResource,
   readRoadmapVersion,
   readRoadmapVersionHistory,

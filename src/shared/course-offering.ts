@@ -9,3 +9,8 @@ export type CourseOfferingIdentifier = {
 export function termLabel({ year, semester }: Pick<CourseOfferingIdentifier, 'year' | 'semester'>) {
   return `${semester === 1 ? 'Otoño' : 'Primavera'} ${year}`;
 }
+
+/** The teaching-staff page listing a Course offering's members and their Roadmap progress. */
+export function courseParticipantsUrl({ courseCode, year, semester }: CourseOfferingIdentifier) {
+  return `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}/participants`;
+}
