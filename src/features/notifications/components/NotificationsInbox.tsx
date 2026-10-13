@@ -12,6 +12,7 @@ import { ChangeSummaryDialog } from './ChangeSummaryDialog';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from '@/shared/ui/popover';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
+import { Empty, EmptyHeader, EmptyDescription } from '@/shared/ui/empty';
 import { Bell, X } from 'lucide-react';
 import {
   createContext,
@@ -163,7 +164,11 @@ function InboxNotificationList({
   if (!notifications?.length) {
     return (
       <Alert role="status" className="m-3 w-auto">
-        <AlertDescription>No tienes avisos todavía.</AlertDescription>
+        <Empty className="p-0">
+          <EmptyHeader>
+            <EmptyDescription>No tienes avisos todavía.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </Alert>
     );
   }

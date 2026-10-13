@@ -7,6 +7,7 @@ import { Menu } from '@base-ui/react/menu';
 import { CirclePlus, Plus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
+import { cn } from 'cn';
 import { Checkbox } from '@/shared/ui/checkbox';
 import {
   Dialog,
@@ -65,13 +66,13 @@ export function NodeCreator({
                   <Button
                     type="button"
                     size="icon-lg"
-                    className={`${styles.trigger} ${isMenuOpen ? styles.triggerOpen : ''}`}
+                    className={cn(styles.trigger, isMenuOpen && styles.triggerOpen)}
                   />
                 }
               >
                 <span
                   aria-hidden="true"
-                  className={`${styles.menuIcon} ${isMenuOpen ? styles.menuIconOpen : ''}`}
+                  className={cn(styles.menuIcon, isMenuOpen && styles.menuIconOpen)}
                 >
                   <span className={styles.menuLine} />
                   <span className={styles.menuLine} />

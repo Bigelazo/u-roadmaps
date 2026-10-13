@@ -46,7 +46,7 @@ async function expectTopRightOverlay(canvas: Locator, overlay: Locator) {
 test('student Node detail actions do not overlap its heading on mobile', async ({
   page,
   course,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto(course.pagePath());
@@ -60,13 +60,13 @@ test('student Node detail actions do not overlap its heading on mobile', async (
   const labelBox = await bounds(label);
   expect(overlaps(labelBox, await bounds(actions))).toBe(false);
   await expect(detail.getByRole('button', { name: 'Completar', exact: true })).toBeVisible();
-  await page.screenshot({ path: 'test-results/node-detail-mobile.png' });
+  await page.screenshot({ path: testInfo.outputPath('node-detail-mobile.png') });
 });
 
 test('the named Inbox popup fits desktop and fills mobile without losing dismissal', async ({
   page,
   course,
-}) => {
+}, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto(course.pagePath());
@@ -80,7 +80,7 @@ test('the named Inbox popup fits desktop and fills mobile without losing dismiss
   expect((await bounds(inbox)).width).toBeLessThanOrEqual(384);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => bounds(inbox)).toEqual({ x: 0, y: 0, width: 390, height: 844 });
-  await page.screenshot({ path: 'test-results/inbox-mobile.png' });
+  await page.screenshot({ path: testInfo.outputPath('inbox-mobile.png') });
   await inbox.getByRole('button', { name: 'Cerrar avisos' }).click();
   await expect(inbox).toBeHidden();
   await expect(bell).toBeFocused();
