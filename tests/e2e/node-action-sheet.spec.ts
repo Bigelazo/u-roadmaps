@@ -167,7 +167,9 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   await confirmation.getByRole('button', { name: 'Seguir editando' }).tap();
   await page.getByRole('group', { name: 'Editor de nodo', exact: true }).locator('summary').tap();
   await expect(composer.getByLabel('Título', { exact: true })).toHaveValue('Touch Resource draft');
-  await composer.getByLabel('Enlace', { exact: true }).fill('https://example.test/touch-resource');
+  await composer
+    .getByRole('textbox', { name: 'Enlace', exact: true })
+    .fill('https://example.test/touch-resource');
   await composer.getByRole('button', { name: 'Agregar enlace' }).tap();
   await expect(composer).toBeHidden();
   await expect(node.getByRole('img', { name: '1 enlace', exact: true })).toBeVisible();

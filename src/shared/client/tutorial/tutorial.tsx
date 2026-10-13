@@ -5,16 +5,7 @@ import './tutorial.css';
 
 import { driver, type Config, type Driver, type DriveStep } from 'driver.js';
 import { useEffect, useRef, useState } from 'react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/ui/alert-dialog';
+import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 
 /** Marks the question-mark icon that opens a Roadmap tutorial on its origin page. */
 export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
@@ -248,9 +239,9 @@ export function RoadmapTutorial<Action = never>({
   const resume = () => {
     setIsConfirmingExit(false);
     // Released after the closing key or click has been handled.
-    setTimeout(() => {
+    queueMicrotask(() => {
       confirmingRef.current = false;
-    }, 0);
+    });
   };
   const leave = () => {
     driverRef.current?.destroy();
@@ -258,22 +249,24 @@ export function RoadmapTutorial<Action = never>({
   };
 
   return (
-    <AlertDialog open={isConfirmingExit} onOpenChange={(open) => (open ? undefined : resume())}>
-      <AlertDialogContent className="u-roadmaps-tour-exit z-(--tutorial-z-exit-confirmation)">
-        <AlertDialogHeader>
-          <AlertDialogTitle>¿Salir del tutorial?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Podrás seguir explorando el mapa de práctica y repetir el tutorial cuando quieras.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel variant="outline" onClick={leave}>
-            Salir
-          </AlertDialogCancel>
-          <AlertDialogAction onClick={resume}>Seguir con el tutorial</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmationDialog
+      confirmation={
+        isConfirmingExit
+          ? {
+              title: '¿Salir del tutorial?',
+              description:
+                'Podrás seguir explorando el mapa de práctica y repetir el tutorial cuando quieras.',
+              intent: 'default',
+              cancelLabel: 'Salir',
+              actions: [{ id: 'resume', label: 'Seguir con el tutorial' }],
+            }
+          : null
+      }
+      className="u-roadmaps-tour-exit z-(--tutorial-z-exit-confirmation)"
+      onCancel={leave}
+      onDismiss={resume}
+      onAction={resume}
+    />
   );
 }
 

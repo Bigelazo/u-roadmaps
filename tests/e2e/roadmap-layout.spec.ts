@@ -43,6 +43,54 @@ async function expectTopRightOverlay(canvas: Locator, overlay: Locator) {
   expect(overlayBox.y - canvasBox.y).toBeCloseTo(20, 0);
 }
 
+test('student Node detail actions do not overlap its heading on mobile', async ({
+  page,
+  course,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  const detail = page.getByRole('dialog');
+  await expect(detail).toBeVisible();
+  const label = detail.getByText('Nodo seleccionado', { exact: true });
+  const actions = detail.getByRole('group', { name: 'Acciones del nodo' });
+  const labelBox = await bounds(label);
+  expect(overlaps(labelBox, await bounds(actions))).toBe(false);
+  await expect(detail.getByRole('button', { name: 'Completar', exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/node-detail-mobile.png' });
+});
+
+test('the named Inbox popup fits desktop and fills mobile without losing dismissal', async ({
+  page,
+  course,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
+  await page.goto(course.pagePath());
+  const bell = page.getByRole('button', { name: 'Avisos', exact: true });
+  await bell.focus();
+  await page.keyboard.press('Enter');
+
+  const inbox = page.getByRole('dialog', { name: 'Avisos', exact: true });
+  await expect(inbox).toBeVisible();
+  await expect(inbox.getByRole('status')).toHaveText('No tienes avisos todavía.');
+  expect((await bounds(inbox)).width).toBeLessThanOrEqual(384);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => bounds(inbox)).toEqual({ x: 0, y: 0, width: 390, height: 844 });
+  await page.screenshot({ path: 'test-results/inbox-mobile.png' });
+  await inbox.getByRole('button', { name: 'Cerrar avisos' }).click();
+  await expect(inbox).toBeHidden();
+  await expect(bell).toBeFocused();
+  await bell.press('Enter');
+  await expect(inbox).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(inbox).toBeHidden();
+  await expect(bell).toBeFocused();
+});
+
 test('roadmap fits the viewport for teachers and students without residual vertical scrolling', async ({
   page,
   course,
@@ -71,11 +119,14 @@ test('uploading a resource preserves the roadmap viewport and sends multipart da
 
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await page.getByRole('button', { name: 'Recurso', exact: true }).click();
-  await page.getByLabel('Archivo', { exact: true }).setInputFiles({
-    name: 'guia-viewport.pdf',
-    mimeType: 'application/pdf',
-    buffer: Buffer.from('%PDF-1.4 viewport guide'),
-  });
+  await page
+    .getByLabel('Archivo', { exact: true })
+    .and(page.locator('input'))
+    .setInputFiles({
+      name: 'guia-viewport.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4 viewport guide'),
+    });
 
   const uploadResponse = await Promise.all([
     page.waitForResponse(

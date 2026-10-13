@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Alert, AlertDescription } from '@/shared/ui/alert';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -255,16 +256,13 @@ export function AcademicOverview({
         </header>
 
         {overview.source === 'LOCAL' ? (
-          <div
-            className="flex gap-3 rounded-lg border border-fog bg-card px-4 py-3 text-sm text-muted-foreground"
-            role="status"
-          >
-            <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0 text-primary" size={18} />
-            <p>
+          <Alert role="status">
+            <AlertTriangle aria-hidden="true" />
+            <AlertDescription>
               No fue posible actualizar tus cursos desde U-Campus. Mostramos los cursos con
               participación vigente en U-Roadmaps.
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
         ) : null}
 
         {overview.terms.length === 0 ? (

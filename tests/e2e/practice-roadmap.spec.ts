@@ -157,7 +157,9 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   const composer = page.getByRole('form', { name: 'Editor de recurso' });
   await composer.getByRole('tab', { name: 'Enlace' }).click();
   await composer.getByLabel('Título').fill('Guía de práctica');
-  await composer.getByLabel('Enlace', { exact: true }).fill('https://example.test/guia');
+  await composer
+    .getByRole('textbox', { name: 'Enlace', exact: true })
+    .fill('https://example.test/guia');
   await composer.getByRole('button', { name: 'Agregar enlace' }).click();
   await expect(practiceNode(page, titles.a).getByRole('img', { name: '1 enlace' })).toBeVisible();
 

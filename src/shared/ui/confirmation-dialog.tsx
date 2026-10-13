@@ -71,6 +71,8 @@ type ConfirmationPresentation = {
 
 type ConfirmationDialogProps = {
   confirmation: ConfirmationPresentation | null;
+  className?: string;
+  onDismiss?: () => void;
   pendingActionId?: string;
   onCancel: () => void;
   onAction: (actionId: string) => void;
@@ -174,8 +176,10 @@ function ConfirmationDetails({ sections }: { sections: ConfirmationSection[] }) 
 
 function ConfirmationDialog({
   confirmation,
+  className,
   pendingActionId,
   onCancel,
+  onDismiss = onCancel,
   onAction,
 }: ConfirmationDialogProps) {
   const isPending = pendingActionId !== undefined;
@@ -204,13 +208,14 @@ function ConfirmationDialog({
           return;
         }
 
-        onCancel();
+        if (eventDetails.reason === 'close-press') onCancel();
+        else onDismiss();
       }}
     >
       {confirmation ? (
         <AlertDialogContent
           data-intent={confirmation.intent}
-          className="max-h-[calc(100vh-2rem)] gap-5 overflow-y-auto sm:max-w-xl"
+          className={cn('max-h-[calc(100vh-2rem)] gap-5 overflow-y-auto sm:max-w-xl', className)}
           finalFocus={finalFocusRef}
         >
           <AlertDialogHeader className="items-stretch gap-4 text-left">

@@ -1,5 +1,7 @@
 'use client';
 
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+
 import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
 import {
@@ -1215,17 +1217,23 @@ function RoadmapCanvasGraph({
                   </Link>
                 ) : null}
                 {canEnterCanvasPreview ? (
-                  <Button
-                    ref={canvasPreviewWorkflow.entryButtonRef}
-                    aria-label="Vista estudiante"
-                    title="Vista estudiante"
-                    type="button"
-                    variant="outline"
-                    onClick={canvasPreviewWorkflow.requestEntry}
-                  >
-                    <Eye data-icon="inline-start" />
-                    Vista estudiante
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          ref={canvasPreviewWorkflow.entryButtonRef}
+                          aria-label="Vista estudiante"
+                          type="button"
+                          variant="outline"
+                          onClick={canvasPreviewWorkflow.requestEntry}
+                        >
+                          <Eye data-icon="inline-start" />
+                          Vista estudiante
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Vista estudiante</TooltipContent>
+                  </Tooltip>
                 ) : null}
               </>
             )
@@ -1299,17 +1307,23 @@ function RoadmapTutorialLink({
 }) {
   return (
     <>
-      <Link
-        {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
-        aria-label="Abrir tutorial"
-        title="Abrir tutorial"
-        className={buttonVariants({ variant: 'outline', size: 'icon' })}
-        href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
-        // Rendering the Practice route records tutorial openings.
-        prefetch={false}
-      >
-        <CircleHelp />
-      </Link>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Link
+              {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
+              aria-label="Abrir tutorial"
+              className={buttonVariants({ variant: 'outline', size: 'icon' })}
+              href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
+              // Rendering the Practice route records tutorial openings.
+              prefetch={false}
+            >
+              <CircleHelp />
+            </Link>
+          }
+        />
+        <TooltipContent>Abrir tutorial</TooltipContent>
+      </Tooltip>
       <TutorialClosingPopover />
     </>
   );

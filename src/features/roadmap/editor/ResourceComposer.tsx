@@ -3,6 +3,7 @@ import type { Resource } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { inputClassName } from './primitives';
 import { useNodeEditorContext } from './context';
 import type { ResourceInput } from './types';
@@ -65,6 +66,65 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
   );
   const isPending = Boolean(pendingEditorEffect);
 
+  const resourceFields =
+    mode === 'file' && !isEditingResource ? (
+      <Field>
+        <FieldLabel htmlFor="resource-file">Archivo</FieldLabel>
+        <label
+          htmlFor="resource-file"
+          className="mt-1 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center transition-colors focus-within:ring-3 focus-within:ring-ring/50 hover:bg-primary/10"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            selectResourceFile(event.dataTransfer.files.item(0));
+          }}
+        >
+          <FileUp className="mb-2 size-5 text-primary" />
+          <span className="text-sm font-semibold">
+            {selectedFile ? selectedFile.name : 'Arrastra un archivo aquí'}
+          </span>
+          <span className="mt-1 text-xs text-muted-foreground">
+            {selectedFile ? 'Listo para subir' : 'o selecciónalo desde tu computador'}
+          </span>
+          <input
+            id="resource-file"
+            className="sr-only"
+            type="file"
+            onChange={(event) => selectResourceFile(event.target.files?.item(0) ?? null)}
+          />
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
+      </Field>
+    ) : (
+      <FieldGroup className="gap-3">
+        <Field>
+          <FieldLabel htmlFor="resource-title">Título</FieldLabel>
+          <Input
+            id="resource-title"
+            className={inputClassName}
+            placeholder="Ej. Guía de ejercicios"
+            value={resourceValue.title}
+            onChange={(event) => changeResource({ ...resourceValue, title: event.target.value })}
+            required
+          />
+        </Field>
+        {mode === 'link' && (
+          <Field>
+            <FieldLabel htmlFor="resource-url">Enlace</FieldLabel>
+            <Input
+              id="resource-url"
+              className={inputClassName}
+              type="url"
+              placeholder="https://"
+              value={resourceValue.url}
+              onChange={(event) => changeResource({ ...resourceValue, url: event.target.value })}
+              required
+            />
+          </Field>
+        )}
+      </FieldGroup>
+    );
+
   return (
     <form
       className="mb-4 flex flex-col gap-3 border-y border-dashed border-border py-4"
@@ -88,80 +148,33 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
           <X />
         </Button>
       </div>
-      {!isEditingResource && (
-        <div className="grid grid-cols-2 gap-1 rounded-lg bg-cloud p-1" role="tablist">
-          {resourceTabs.map(({ mode: tabMode, label, Icon }) => (
-            <Button
-              key={tabMode}
-              type="button"
-              role="tab"
-              aria-selected={mode === tabMode}
-              variant={mode === tabMode ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => onModeChange(tabMode)}
-            >
-              <Icon data-icon="inline-start" />
-              {label}
-            </Button>
-          ))}
-        </div>
-      )}
-      {mode === 'file' && !isEditingResource ? (
-        <Field>
-          <FieldLabel htmlFor="resource-file">Archivo</FieldLabel>
-          <label
-            htmlFor="resource-file"
-            className="mt-1 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center transition-colors focus-within:ring-3 focus-within:ring-ring/50 hover:bg-primary/10"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              selectResourceFile(event.dataTransfer.files.item(0));
-            }}
-          >
-            <FileUp className="mb-2 size-5 text-primary" />
-            <span className="text-sm font-semibold">
-              {selectedFile ? selectedFile.name : 'Arrastra un archivo aquí'}
-            </span>
-            <span className="mt-1 text-xs text-muted-foreground">
-              {selectedFile ? 'Listo para subir' : 'o selecciónalo desde tu computador'}
-            </span>
-            <input
-              id="resource-file"
-              className="sr-only"
-              type="file"
-              onChange={(event) => selectResourceFile(event.target.files?.item(0) ?? null)}
-            />
-          </label>
-          <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
-        </Field>
+      {isEditingResource ? (
+        resourceFields
       ) : (
-        <FieldGroup className="gap-3">
-          <Field>
-            <FieldLabel htmlFor="resource-title">Título</FieldLabel>
-            <Input
-              id="resource-title"
-              className={inputClassName}
-              placeholder="Ej. Guía de ejercicios"
-              value={resourceValue.title}
-              onChange={(event) => changeResource({ ...resourceValue, title: event.target.value })}
-              required
-            />
-          </Field>
-          {mode === 'link' && (
-            <Field>
-              <FieldLabel htmlFor="resource-url">Enlace</FieldLabel>
-              <Input
-                id="resource-url"
-                className={inputClassName}
-                type="url"
-                placeholder="https://"
-                value={resourceValue.url}
-                onChange={(event) => changeResource({ ...resourceValue, url: event.target.value })}
-                required
-              />
-            </Field>
-          )}
-        </FieldGroup>
+        <Tabs
+          value={mode}
+          onValueChange={(value) => {
+            if (value === 'file' || value === 'link') onModeChange(value);
+          }}
+        >
+          <TabsList
+            activateOnFocus
+            className="w-full group-data-horizontal/tabs:h-auto"
+            aria-label="Tipo de recurso"
+          >
+            {resourceTabs.map(({ mode: tabMode, label, Icon }) => (
+              <TabsTrigger key={tabMode} value={tabMode} className="min-h-11">
+                <Icon data-icon="inline-start" />
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {resourceTabs.map(({ mode: tabMode }) => (
+            <TabsContent key={tabMode} value={tabMode}>
+              {mode === tabMode ? resourceFields : null}
+            </TabsContent>
+          ))}
+        </Tabs>
       )}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={!canSave || isPending}>

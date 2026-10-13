@@ -1,3 +1,4 @@
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import { useState } from 'react';
 import { cn } from 'cn';
 import {
@@ -48,16 +49,22 @@ function NodeHeader() {
           >
             <NodeForm isFullscreen />
           </NodeFullscreenDialog>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label="Deseleccionar nodo"
-            title="Deseleccionar nodo"
-            onClick={closeNode}
-          >
-            <X />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Deseleccionar nodo"
+                  onClick={closeNode}
+                >
+                  <X />
+                </Button>
+              }
+            />
+            <TooltipContent>Deseleccionar nodo</TooltipContent>
+          </Tooltip>
         </>
       }
     />
@@ -140,44 +147,46 @@ function NodeUnlockSchedule({ scheduledDay }: { scheduledDay: string | null }) {
         if (canSchedule) scheduleTeacherUnlock(draftDay);
       }}
     >
-      <div className="flex items-start gap-2">
-        <CalendarClock
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <div>
-          <FieldLabel htmlFor="node-unlock-date">Desbloqueo programado</FieldLabel>
-          <FieldDescription>
-            {scheduledDay
-              ? `Se desbloqueará el ${formatCalendarDay(scheduledDay)}, a las 00:00 (hora de Chile).`
-              : 'Elige un día para desbloquear este hito sin intervención docente.'}{' '}
-            Si ese día un prerrequisito sigue bloqueado, esperará a que lo desbloquees.
-          </FieldDescription>
+      <Field>
+        <div className="flex items-start gap-2">
+          <CalendarClock
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div>
+            <FieldLabel htmlFor="node-unlock-date">Desbloqueo programado</FieldLabel>
+            <FieldDescription>
+              {scheduledDay
+                ? `Se desbloqueará el ${formatCalendarDay(scheduledDay)}, a las 00:00 (hora de Chile).`
+                : 'Elige un día para desbloquear este hito sin intervención docente.'}{' '}
+              Si ese día un prerrequisito sigue bloqueado, esperará a que lo desbloquees.
+            </FieldDescription>
+          </div>
         </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Input
-          id="node-unlock-date"
-          type="date"
-          className="w-auto min-w-0 flex-1"
-          min={minimumDay}
-          value={draftDay}
-          onChange={(event) => setDraftDay(event.target.value)}
-        />
-        <Button type="submit" variant="outline" size="sm" disabled={!canSchedule}>
-          {scheduledDay ? 'Cambiar fecha' : 'Programar'}
-        </Button>
-        {scheduledDay && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => scheduleTeacherUnlock(null)}
-          >
-            Quitar fecha
+        <div className="flex flex-wrap gap-2">
+          <Input
+            id="node-unlock-date"
+            type="date"
+            className="w-auto min-w-0 flex-1"
+            min={minimumDay}
+            value={draftDay}
+            onChange={(event) => setDraftDay(event.target.value)}
+          />
+          <Button type="submit" variant="outline" size="sm" disabled={!canSchedule}>
+            {scheduledDay ? 'Cambiar fecha' : 'Programar'}
           </Button>
-        )}
-      </div>
+          {scheduledDay && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => scheduleTeacherUnlock(null)}
+            >
+              Quitar fecha
+            </Button>
+          )}
+        </div>
+      </Field>
     </form>
   );
 }

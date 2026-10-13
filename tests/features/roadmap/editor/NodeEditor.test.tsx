@@ -17,6 +17,25 @@ import { mockViewport } from '../../../support/viewport';
 beforeEach(() => mockViewport(1280));
 afterEach(() => vi.unstubAllGlobals());
 
+test('switches Resource panels with arrow keys and names the active panel', async () => {
+  const user = userEvent.setup();
+  renderEditor();
+
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  const fileTab = screen.getByRole('tab', { name: 'Archivo' });
+  await user.click(fileTab);
+  expect(screen.getByRole('tabpanel', { name: 'Archivo' })).toBeTruthy();
+  await user.keyboard('{ArrowRight}');
+
+  const linkTab = screen.getByRole('tab', { name: 'Enlace' });
+  expect(linkTab.matches(':focus')).toBe(true);
+  expect(linkTab.getAttribute('aria-selected')).toBe('true');
+  const panel = screen.getByRole('tabpanel', { name: 'Enlace' });
+  expect(linkTab.getAttribute('aria-controls')).toBe(panel.id);
+  expect(within(panel).getByLabelText('Enlace', { selector: 'input' })).toBeTruthy();
+  expect(screen.queryByLabelText('Archivo', { selector: 'input' })).toBeNull();
+});
+
 const node: RoadmapNode = {
   id: 'node-1',
   title: 'Límites',
@@ -116,7 +135,7 @@ async function retitle(user: User, title: string) {
 async function fillLink(user: User, title: string, url: string) {
   await user.click(screen.getByRole('tab', { name: 'Enlace' }));
   await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), title);
-  await user.type(screen.getByLabelText('Enlace'), url);
+  await user.type(screen.getByLabelText('Enlace', { selector: 'input' }), url);
 }
 
 const saveButton = () =>
@@ -296,7 +315,7 @@ test('uploads a selected file and keeps the resource session on rejection', asyn
 
   await user.click(screen.getByRole('button', { name: 'Recurso' }));
   const file = new File(['guía'], 'guia-1.pdf', { type: 'application/pdf' });
-  await user.upload(screen.getByLabelText('Archivo'), file);
+  await user.upload(screen.getByLabelText('Archivo', { selector: 'input' }), file);
   await user.click(screen.getByRole('button', { name: 'Subir archivo' }));
 
   expect(perform).toHaveBeenCalledWith({ kind: 'upload-resource', nodeId: node.id, file });
@@ -419,7 +438,7 @@ test('keeps the complete Node and Resource session unchanged when a guard is can
   expect((screen.getByPlaceholderText('Ej. Guía de ejercicios') as HTMLInputElement).value).toBe(
     'Borrador del recurso',
   );
-  expect((screen.getByLabelText('Enlace') as HTMLInputElement).value).toBe(
+  expect((screen.getByLabelText('Enlace', { selector: 'input' }) as HTMLInputElement).value).toBe(
     'https://example.test/borrador',
   );
 });
@@ -540,7 +559,7 @@ test.each([
     name: 'includes a selected file Resource in the public preview intent',
     compose: (user: User) =>
       user.upload(
-        screen.getByLabelText('Archivo'),
+        screen.getByLabelText('Archivo', { selector: 'input' }),
         new File(['guía'], 'guia-de-limites.pdf', { type: 'application/pdf' }),
       ),
     preview: {
@@ -573,7 +592,7 @@ test('consumes a typed Resource command once and focuses its composer', async ()
   };
   renderEditor({ command });
 
-  const file = await screen.findByLabelText('Archivo');
+  const file = await screen.findByLabelText('Archivo', { selector: 'input' });
   await waitFor(() => expect(file.matches(':focus')).toBe(true));
   expect(screen.getAllByText('Nuevo recurso')).toHaveLength(1);
 });

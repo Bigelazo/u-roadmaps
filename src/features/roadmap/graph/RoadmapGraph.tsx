@@ -1,5 +1,7 @@
 'use client';
 
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+
 import {
   useCallback,
   useEffect,
@@ -285,17 +287,23 @@ function RoadmapGraphToolbar({
     <>
       <Panel position="bottom-left" className="m-4! max-w-[calc(100%-2rem)] sm:m-6!">
         <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:flex-wrap sm:items-center">
-          <Button
-            aria-label="Centrar mapa"
-            title="Centrar mapa"
-            type="button"
-            variant="outline"
-            size="icon"
-            className="self-start sm:self-auto"
-            onClick={() => void fitView(roadmapFitViewOptions).then(() => onFitView?.())}
-          >
-            <Maximize aria-hidden="true" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  aria-label="Centrar mapa"
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="self-start sm:self-auto"
+                  onClick={() => void fitView(roadmapFitViewOptions).then(() => onFitView?.())}
+                >
+                  <Maximize aria-hidden="true" />
+                </Button>
+              }
+            />
+            <TooltipContent>Centrar mapa</TooltipContent>
+          </Tooltip>
           {showAutoLayout ? (
             <Button
               type="button"
