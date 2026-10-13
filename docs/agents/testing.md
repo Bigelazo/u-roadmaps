@@ -164,6 +164,11 @@ y mantienen el comportamiento local. `createCourse({ roadmap: false })` registra
 como profesor de cátedra a sus Participations docentes activas para los tests de
 creación; los casos de otros cargos sobrescriben ese dato explícitamente.
 
+`reportPosition` acepta un `id_ramo` opcional y `reportRoster(idRamo, curso,
+integrantes)` registra la respuesta de `integrantes` de ese Ramo y los nombres de
+`personas`, con la forma real de MUFASA: `id_cargo` mixto e `id_periodo` ignorado.
+Un Ramo sin nómina registrada responde 503. Ambos se eliminan al terminar el test.
+
 No se infiere un cargo institucional desde un rol guardado en la aplicación.
 Desde #187, la creación usa el cargo confirmado por U-Campus o, ante una respuesta
 fallida o parcial, el cargo de profesor de cátedra guardado en una Participation

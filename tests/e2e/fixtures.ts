@@ -1,4 +1,10 @@
-import { reportUcampusPosition, forgetUcampusUser } from './ucampus';
+import {
+  forgetUcampusRoster,
+  forgetUcampusUser,
+  reportUcampusPosition,
+  reportUcampusRoster,
+  type UcampusRosterMember,
+} from './ucampus';
 import type { MufasaInstitutionalCoursePosition } from '@/integrations/ucampus/server';
 import { randomUUID } from 'node:crypto';
 import { test as base, expect, type APIRequestContext } from '@playwright/test';
@@ -240,6 +246,14 @@ export const test = base.extend<{
     user: E2EUser,
     offering: E2ECourseOffering,
     position: MufasaInstitutionalCoursePosition | null,
+    /** The U-Campus Course (Ramo) identifier reported with the course, if any. */
+    ramoId?: number,
+  ) => Promise<void>;
+  /** Registers the U-Campus `integrantes` of a Course (Ramo) for this test. */
+  reportRoster: (
+    ramoId: number,
+    offering: E2ECourseOffering,
+    members: readonly UcampusRosterMember[],
   ) => Promise<void>;
   /** The test's API client authenticated as a User (one per User); disposed when the test ends. */
   apiAs: (user: Pick<E2EUser, 'id'>) => Promise<APIRequestContext>;
@@ -461,11 +475,23 @@ export const test = base.extend<{
 
   reportPosition: async ({}, provide) => {
     const users = new Map<string, E2EUser>();
-    await provide(async (user, offering, position) => {
+    await provide(async (user, offering, position, ramoId) => {
       users.set(user.id, user);
-      await reportUcampusPosition(user, offering, position);
+      await reportUcampusPosition(user, offering, position, ramoId);
     });
     await Promise.all([...users.values()].map(forgetUcampusUser));
+  },
+
+  reportRoster: async ({}, provide) => {
+    const rosters = new Map<number, string[]>();
+    await provide(async (ramoId, offering, members) => {
+      rosters.set(
+        ramoId,
+        members.map(({ rut }) => rut),
+      );
+      await reportUcampusRoster(ramoId, offering, members);
+    });
+    await Promise.all([...rosters].map(([ramoId, ruts]) => forgetUcampusRoster(ramoId, ruts)));
   },
 
   apiAs: async ({ playwright, baseURL }, provide) => {

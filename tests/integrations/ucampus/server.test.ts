@@ -1,5 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { getMufasaAcademicCourses, getMufasaEnrolledCourses } from '@/integrations/ucampus/server';
+import {
+  getMufasaAcademicCourses,
+  getMufasaCourseMembers,
+  getMufasaEnrolledCourses,
+  getMufasaPersonNames,
+} from '@/integrations/ucampus/server';
 
 const originalToken = process.env.MUFASA_TOKEN;
 const originalBaseUrl = process.env.MUFASA_BASE_URL;
@@ -41,6 +46,7 @@ it('reads enrolled courses from MUFASA without exposing its token in the URL', a
         year: 2026,
         semester: 2,
         section: '1',
+        ramoId: null,
         isTeaching: false,
         institutionalPosition: 'STUDENT',
       },
@@ -91,6 +97,7 @@ it('keeps valid enrolled courses when MUFASA includes a course with an unsupport
         year: 2026,
         semester: 2,
         section: null,
+        ramoId: null,
         isTeaching: false,
         institutionalPosition: 'STUDENT',
       },
@@ -183,6 +190,7 @@ it('queries MUFASA for a real user while development fixtures are enabled', asyn
         year: 2026,
         semester: 2,
         section: null,
+        ramoId: null,
         isTeaching: false,
         institutionalPosition: 'STUDENT',
       },
@@ -265,4 +273,81 @@ it('combines enrolled and taught courses for the academic overview', async () =>
     'https://mufasa.example.test/api/cursos_inscritos?rut=12345678&id_periodo=todos',
     'https://mufasa.example.test/api/cursos_dictados?rut=12345678&periodo=todos',
   ]);
+});
+
+it('reads the U-Campus roster of every section in the requested Academic term only', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
+  // Recorded shape: MUFASA ignores id_periodo when id_ramo is given and mixes id_cargo types.
+  const fetch = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify([
+        { rut: 11111111, seccion: '1', id_periodo: '2026.2', id_cargo: 0, cargo: 'Alumno' },
+        {
+          rut: 22222222,
+          seccion: '2',
+          id_periodo: '2026.2',
+          id_cargo: '1',
+          cargo: 'Profesor de Cátedra',
+        },
+        { rut: 33333333, seccion: '1', id_periodo: '2026.2', id_cargo: '10', cargo: 'Oyente' },
+        { rut: 44444444, seccion: '1', id_periodo: '2025.2', id_cargo: 0, cargo: 'Alumno' },
+        { rut: 55555555, seccion: '1', id_periodo: '2026.2', id_cargo: 99, cargo: 'Desconocido' },
+      ]),
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+
+  await expect(getMufasaCourseMembers(675, { year: 2026, semester: 2 })).resolves.toEqual({
+    source: 'MUFASA',
+    members: [
+      { rut: '11111111', section: '1', institutionalPosition: 'STUDENT' },
+      { rut: '22222222', section: '2', institutionalPosition: 'COURSE_PROFESSOR' },
+      { rut: '33333333', section: '1', institutionalPosition: 'OBSERVER' },
+    ],
+  });
+  expect((fetch.mock.calls[0][0] as URL).toString()).toBe(
+    'https://mufasa.example.test/api/integrantes?id_ramo=675&id_periodo=2026.2',
+  );
+});
+
+it('reports an unavailable roster instead of an empty one when MUFASA fails', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 503 })));
+
+  await expect(getMufasaCourseMembers(675, { year: 2026, semester: 2 })).resolves.toEqual({
+    source: 'LOCAL',
+    members: [],
+  });
+});
+
+it('reads person names in batches and tolerates a failed batch', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
+  const ruts = Array.from({ length: 51 }, (_, index) => String(10000000 + index));
+  const fetch = vi.fn((url: URL) => {
+    const requested = url.searchParams.get('rut')!.split(',');
+    if (requested.length === 1) return Promise.resolve(new Response('', { status: 500 }));
+    return Promise.resolve(
+      new Response(
+        JSON.stringify(
+          requested.map((rut) => ({
+            rut: Number(rut),
+            nombre1: 'Ana',
+            nombre2: 'María',
+            apellido1: 'Pérez',
+            apellido2: 'Soto',
+          })),
+        ),
+      ),
+    );
+  });
+  vi.stubGlobal('fetch', fetch);
+
+  const names = await getMufasaPersonNames(ruts);
+
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(names.size).toBe(50);
+  expect(names.get('10000000')).toBe('Ana Pérez Soto');
+  expect(names.has('10000050')).toBe(false);
 });
