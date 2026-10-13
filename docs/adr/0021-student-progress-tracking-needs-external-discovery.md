@@ -1,11 +1,11 @@
 ---
-status: accepted
+status: superseded by ADR-0026
 date: 2026-10-08
 ---
 
 # Definir el seguimiento de estudiantes antes de implementarlo
 
-**Student progress tracking** está definido en [CONTEXT.md](../../CONTEXT.md),
+**Student progress tracking** está definido en [GLOSSARY.md](../../GLOSSARY.md),
 pero todavía no existe una vista ni una API docente de seguimiento. Al implementar
 [#191](https://github.com/Bigelazo/u-roadmaps/issues/191), esa especificación asumía
 que la feature ya existía. Se acordó limitar el issue a corregir cargos, permisos

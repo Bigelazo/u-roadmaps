@@ -56,8 +56,16 @@ The reconciliation of an authenticated user's U-Campus courses and Institutional
 _Avoid_: Roster synchronization, authentication, cache refresh
 
 **Student progress tracking (Seguimiento de estudiantes)**:
-The teaching staff's offering-scoped view of student Participations, combining basic institutional identity, Course section, participation activity, latest Platform entry, and a summary of Roadmap Completions.
+The active teaching staff's offering-scoped view of every U-Campus member of a Course offering across all its Course sections, showing each one's Institutional course position, whether they have entered the platform, each student's and observer's Roadmap completion rate, and the Average student completion. Students and outsiders cannot consult it.
 _Avoid_: Student list, course roster, public profile
+
+**Roadmap completion rate (Porcentaje de completación del roadmap)**:
+A participant's share of their Course offering's currently visible Nodes that they have completed. Hidden Nodes are outside the measure, a retained Completion of a currently blocked Node still counts, and someone who has never entered the platform has 0%. It measures progress through the Roadmap, not a grade or demonstrated learning.
+_Avoid_: Grade, progress score, completion percentage of the course
+
+**Average student completion (Completación promedio de estudiantes)**:
+The mean Roadmap completion rate of a Course offering's students only. Observers and teaching staff never weigh on it, while students who have never entered count with 0%.
+_Avoid_: Course average, class grade
 
 **Roadmap (Roadmap)**:
 The optional, unique learning path of a course offering, created at a course professor's initiative and composed of nodes and their dependencies. It is one semester's version in the course's roadmap lineage. Its creation materializes the offering, all its coordinated sections, and their rosters from U-Campus. Academic-calendar closure removes every teacher block and then freezes the version while preserving hidden nodes; copying it with fresh identities for a new offering creates a successor, excluding participants and completions.
