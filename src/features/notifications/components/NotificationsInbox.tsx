@@ -10,8 +10,9 @@ import {
 } from './inbox-api';
 import { ChangeSummaryDialog } from './ChangeSummaryDialog';
 import type { ChangeSummary } from '../contracts/change-summary';
-import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
-import { EmptyContent } from '@/shared/ui/empty';
+import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from '@/shared/ui/popover';
+import { Alert, AlertDescription } from '@/shared/ui/alert';
+import { Empty, EmptyHeader, EmptyDescription } from '@/shared/ui/empty';
 import { Bell, X } from 'lucide-react';
 import {
   createContext,
@@ -146,25 +147,29 @@ function InboxNotificationList({
 > & { onSelect: (notification: InboxRecord) => void }) {
   if (isLoading && !notifications) {
     return (
-      <p className="p-6 text-center text-sm text-muted-foreground" role="status">
-        Cargando avisos…
-      </p>
+      <Alert role="status" className="m-3 w-auto">
+        <AlertDescription>Cargando avisos…</AlertDescription>
+      </Alert>
     );
   }
   const refreshError = error ? (
-    <EmptyContent className="mx-auto gap-3 p-6 text-center">
-      <p className="text-muted-foreground" role="alert">
-        No se pudieron cargar los avisos.
-      </p>
+    <Alert variant="destructive" className="m-3 w-auto gap-3">
+      <AlertDescription>No se pudieron cargar los avisos.</AlertDescription>
       <Button onClick={() => void refetch()} type="button" variant="outline">
         Reintentar
       </Button>
-    </EmptyContent>
+    </Alert>
   ) : null;
   if (error && !notifications?.length) return refreshError;
   if (!notifications?.length) {
     return (
-      <p className="p-6 text-center text-sm text-muted-foreground">No tienes avisos todavía.</p>
+      <Alert role="status" className="m-3 w-auto">
+        <Empty className="p-0">
+          <EmptyHeader>
+            <EmptyDescription>No tienes avisos todavía.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </Alert>
     );
   }
   return (
@@ -225,14 +230,14 @@ function InboxBell() {
   }
 
   return (
-    <PopoverPrimitive.Root
+    <Popover
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
         if (!nextOpen) resetFilter();
       }}
     >
-      <PopoverPrimitive.Trigger
+      <PopoverTrigger
         aria-label={
           countsError
             ? 'Avisos, contador no disponible'
@@ -248,51 +253,48 @@ function InboxBell() {
             {formatBadgeCount(unreadCount)}
           </span>
         ) : null}
-      </PopoverPrimitive.Trigger>
-      <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Positioner
-          align="end"
-          className="max-lg:!fixed max-lg:!inset-0 max-lg:!translate-x-0 max-lg:!translate-y-0"
-          side="bottom"
-          sideOffset={8}
-        >
-          <PopoverPrimitive.Popup className="z-50 max-h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg outline-none max-lg:h-dvh max-lg:max-h-dvh max-lg:w-screen max-lg:max-w-none max-lg:rounded-none lg:rounded-xl">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="font-heading text-base font-semibold">Avisos</h2>
-              <div className="flex items-center gap-2">
-                {countsError ? (
-                  <p className="mt-1 text-sm text-destructive" role="status">
-                    No se pudo actualizar el contador.
-                  </p>
-                ) : null}
-                <Button
-                  aria-label="Cerrar avisos"
-                  className="lg:hidden"
-                  onClick={() => setOpen(false)}
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <X aria-hidden="true" size={20} />
-                </Button>
-              </div>
-            </div>
-            <div className="max-h-[calc(min(32rem,100dvh-6rem)-4rem)] overflow-y-auto max-lg:h-[calc(100dvh-4rem)] max-lg:max-h-none">
-              <InboxNotificationList
-                notifications={notifications}
-                isLoading={isLoading}
-                isFetching={isFetching}
-                hasMore={hasMore}
-                error={error}
-                fetchMore={fetchMore}
-                refetch={refetch}
-                onSelect={selectNotification}
-              />
-            </div>
-          </PopoverPrimitive.Popup>
-        </PopoverPrimitive.Positioner>
-      </PopoverPrimitive.Portal>
-    </PopoverPrimitive.Root>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        side="bottom"
+        sideOffset={8}
+        positionerClassName="max-lg:fixed! max-lg:inset-0! max-lg:transform-none!"
+        className="max-h-[min(32rem,calc(100dvh-6rem))] w-[min(24rem,calc(100vw-2rem))] gap-0 overflow-hidden p-0 max-lg:h-dvh max-lg:max-h-dvh max-lg:w-screen max-lg:max-w-none max-lg:rounded-none max-lg:duration-0 max-lg:data-open:animate-none max-lg:data-closed:animate-none"
+      >
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <PopoverTitle>Avisos</PopoverTitle>
+          <div className="flex items-center gap-2">
+            {countsError ? (
+              <Alert variant="destructive" role="status">
+                <AlertDescription>No se pudo actualizar el contador.</AlertDescription>
+              </Alert>
+            ) : null}
+            <Button
+              aria-label="Cerrar avisos"
+              className="lg:hidden"
+              onClick={() => setOpen(false)}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <X aria-hidden="true" size={20} />
+            </Button>
+          </div>
+        </div>
+        <div className="max-h-[calc(min(32rem,100dvh-6rem)-4rem)] overflow-y-auto max-lg:h-[calc(100dvh-4rem)] max-lg:max-h-none">
+          <InboxNotificationList
+            notifications={notifications}
+            isLoading={isLoading}
+            isFetching={isFetching}
+            hasMore={hasMore}
+            error={error}
+            fetchMore={fetchMore}
+            refetch={refetch}
+            onSelect={selectNotification}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -1,10 +1,13 @@
 'use client';
 
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+
 import { useRef, useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import { CirclePlus, Plus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
+import { cn } from 'cn';
 import { Checkbox } from '@/shared/ui/checkbox';
 import {
   Dialog,
@@ -54,26 +57,32 @@ export function NodeCreator({
   return (
     <div ref={menuLayerRef} className={styles.menuLayer}>
       <Menu.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-        <Menu.Trigger
-          aria-label="Crear en el mapa"
-          title="Crear en el mapa"
-          render={
-            <Button
-              type="button"
-              size="icon-lg"
-              className={`${styles.trigger} ${isMenuOpen ? styles.triggerOpen : ''}`}
-            />
-          }
-        >
-          <span
-            aria-hidden="true"
-            className={`${styles.menuIcon} ${isMenuOpen ? styles.menuIconOpen : ''}`}
-          >
-            <span className={styles.menuLine} />
-            <span className={styles.menuLine} />
-            <span className={styles.menuLine} />
-          </span>
-        </Menu.Trigger>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Menu.Trigger
+                aria-label="Crear en el mapa"
+                render={
+                  <Button
+                    type="button"
+                    size="icon-lg"
+                    className={cn(styles.trigger, isMenuOpen && styles.triggerOpen)}
+                  />
+                }
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(styles.menuIcon, isMenuOpen && styles.menuIconOpen)}
+                >
+                  <span className={styles.menuLine} />
+                  <span className={styles.menuLine} />
+                  <span className={styles.menuLine} />
+                </span>
+              </Menu.Trigger>
+            }
+          />
+          <TooltipContent>Crear en el mapa</TooltipContent>
+        </Tooltip>
         <Menu.Portal container={menuLayerRef}>
           <Menu.Positioner align="end" side="top" sideOffset={-34} className={styles.positioner}>
             <Menu.Popup className={styles.menu}>

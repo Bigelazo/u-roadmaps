@@ -37,7 +37,7 @@ export function NodePanelHeader({
         isSidebar && 'shrink-0 p-0 px-6 pt-7 pb-6',
       )}
     >
-      <div className="min-w-0 pr-20">
+      <div className="min-w-0 sm:pr-20">
         <p className="text-xs font-bold tracking-[1.2px] text-primary uppercase">
           Nodo seleccionado
         </p>
@@ -66,7 +66,7 @@ export function NodePanelHeader({
         </div>
       </div>
       <div
-        className="absolute top-4 right-4 flex items-center gap-1"
+        className="mt-3 flex flex-wrap items-center gap-1 sm:absolute sm:top-4 sm:right-4 sm:mt-0"
         role="group"
         aria-label="Acciones del nodo"
       >

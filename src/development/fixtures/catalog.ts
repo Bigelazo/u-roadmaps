@@ -26,21 +26,28 @@ export const developmentFixtureIds = {
   daniela: uuid('10000000', 1),
   nicolas: uuid('10000000', 2),
   camila: studentId(51),
+  coordinatingProfessor: uuid('10000000', 3),
+  teachingAssistant: uuid('10000000', 4),
+  historicalTeacher: uuid('10000000', 5),
+  departedCreator: uuid('10000000', 6),
   offerings: {
     cc1002: uuid('30000000', 1),
     ma1001: uuid('30000000', 2),
     fi1001Historical: uuid('30000000', 3),
+    fi1001Original: uuid('30000000', 5),
     fi1001Current: uuid('30000000', 4),
   },
   roadmaps: {
     cc1002: uuid('40000000', 1),
     ma1001: uuid('40000000', 2),
     fi1001Historical: uuid('40000000', 3),
+    fi1001Original: uuid('40000000', 5),
   },
   customNodeTypes: {
     cc1002: uuid('50000000', 1),
     ma1001: uuid('50000000', 2),
     fi1001Historical: uuid('50000000', 3),
+    fi1001Original: uuid('50000000', 5),
   },
   predefinedNodeTypes: {
     content: uuid('00000000', 1),
@@ -154,6 +161,30 @@ export const fixtureUsers = [
     institutionalEmail: 'nicolas.fuentes@u-roadmaps.test',
     rut: '10000002',
   },
+  {
+    id: developmentFixtureIds.coordinatingProfessor,
+    name: 'Paula Contreras Muñoz',
+    institutionalEmail: 'paula.contreras@u-roadmaps.test',
+    rut: '10000003',
+  },
+  {
+    id: developmentFixtureIds.teachingAssistant,
+    name: 'Martín Vega Ríos',
+    institutionalEmail: 'martin.vega@u-roadmaps.test',
+    rut: '10000004',
+  },
+  {
+    id: developmentFixtureIds.historicalTeacher,
+    name: 'Sofía Herrera Díaz',
+    institutionalEmail: 'sofia.herrera@u-roadmaps.test',
+    rut: '10000005',
+  },
+  {
+    id: developmentFixtureIds.departedCreator,
+    name: 'Andrés Silva Pérez',
+    institutionalEmail: 'andres.silva@u-roadmaps.test',
+    rut: '10000006',
+  },
   ...studentNames.map((name, index) => ({
     id: studentId(index + 1),
     name,
@@ -214,7 +245,30 @@ const sections = (students: readonly string[]) => [
   { label: '2', memberIds: students.slice(Math.ceil(students.length / 2)) },
 ];
 
+// Synthetic calendar dates keep the current catalog editable across local runs.
+export const fixtureAcademicTerms = [
+  { year: 2025, semester: 2, day: '2026-01-20' },
+  { year: 2026, semester: 1, day: '2026-07-20' },
+  { year: 2026, semester: 2, day: '2099-01-20' },
+].map(({ year, semester, day }) => ({
+  year,
+  semester,
+  lastClassDay: new Date(day),
+  examStartDay: new Date(day),
+  examEndDay: new Date(day),
+  roadmapFreezeDate: new Date(day),
+  sourcePageUrl: 'https://fixtures.u-roadmaps.test/calendar',
+  sourcePdfUrl: 'https://fixtures.u-roadmaps.test/calendar.pdf',
+}));
+
 export const developmentFixtureOfferings = [
+  {
+    id: developmentFixtureIds.offerings.fi1001Original,
+    courseCode: 'FI1001',
+    year: 2025,
+    semester: 2,
+    sections: sections(regularStudents),
+  },
   {
     id: developmentFixtureIds.offerings.cc1002,
     courseCode: 'CC1002',
@@ -255,6 +309,46 @@ export const developmentFixtureOfferings = [
 ] as const;
 
 export const fixtureParticipations: Participation[] = [
+  teacherParticipation(
+    developmentFixtureIds.teachingAssistant,
+    developmentFixtureIds.offerings.fi1001Historical,
+    'TEACHING_ASSISTANT',
+  ),
+  teacherParticipation(
+    developmentFixtureIds.historicalTeacher,
+    developmentFixtureIds.offerings.fi1001Original,
+    'AUXILIARY_PROFESSOR',
+  ),
+  teacherParticipation(
+    developmentFixtureIds.daniela,
+    developmentFixtureIds.offerings.fi1001Original,
+    'COURSE_PROFESSOR',
+  ),
+  {
+    ...teacherParticipation(
+      developmentFixtureIds.departedCreator,
+      developmentFixtureIds.offerings.fi1001Original,
+      'COURSE_PROFESSOR',
+    ),
+    isActive: false,
+  },
+  teacherParticipation(
+    developmentFixtureIds.coordinatingProfessor,
+    developmentFixtureIds.offerings.fi1001Current,
+    'COORDINATING_PROFESSOR',
+  ),
+  teacherParticipation(
+    developmentFixtureIds.teachingAssistant,
+    developmentFixtureIds.offerings.fi1001Current,
+    'TEACHING_ASSISTANT',
+  ),
+  ...regularStudents.map((id, index) =>
+    studentParticipation(
+      id,
+      developmentFixtureIds.offerings.fi1001Original,
+      index < 25 ? '1' : '2',
+    ),
+  ),
   teacherParticipation(
     developmentFixtureIds.daniela,
     developmentFixtureIds.offerings.cc1002,
@@ -839,7 +933,68 @@ function materializeRoadmap(blueprint: RoadmapBlueprint, roadmapIndex: number) {
   };
 }
 
-export const fixtureRoadmaps = roadmapBlueprints.map(materializeRoadmap);
+// The original and successor retain the same pedagogical content with independent identities/files.
+const originalRoadmapBlueprint: RoadmapBlueprint = {
+  ...roadmapBlueprints[2],
+  id: developmentFixtureIds.roadmaps.fi1001Original,
+  courseOfferingId: developmentFixtureIds.offerings.fi1001Original,
+  customNodeType: {
+    ...roadmapBlueprints[2].customNodeType,
+    id: developmentFixtureIds.customNodeTypes.fi1001Original,
+  },
+};
+
+type FixtureRoadmapAuthorship = {
+  creatorId: string | null;
+  closedAt: Date | null;
+  sourceRoadmapId: string | null;
+  sourceYear: number | null;
+  sourceSemester: number | null;
+};
+
+const unrecordedAuthorship: FixtureRoadmapAuthorship = {
+  creatorId: null,
+  closedAt: null,
+  sourceRoadmapId: null,
+  sourceYear: null,
+  sourceSemester: null,
+};
+const closedRoadmapAuthorship: Record<string, FixtureRoadmapAuthorship> = {
+  [developmentFixtureIds.roadmaps.fi1001Original]: {
+    ...unrecordedAuthorship,
+    creatorId: developmentFixtureIds.departedCreator,
+    closedAt: new Date('2026-01-21T03:00:00.000Z'),
+  },
+  [developmentFixtureIds.roadmaps.fi1001Historical]: {
+    creatorId: developmentFixtureIds.daniela,
+    closedAt: new Date('2026-07-21T04:00:00.000Z'),
+    sourceRoadmapId: developmentFixtureIds.roadmaps.fi1001Original,
+    sourceYear: 2025,
+    sourceSemester: 2,
+  },
+};
+
+export const fixtureRoadmaps = [...roadmapBlueprints, originalRoadmapBlueprint].map(
+  (blueprint, index) => ({
+    ...materializeRoadmap(blueprint, index),
+    ...(closedRoadmapAuthorship[blueprint.id] ?? unrecordedAuthorship),
+  }),
+);
+
+export const fixtureClosureTeachingStaff = fixtureRoadmaps.flatMap((roadmap) =>
+  roadmap.closedAt
+    ? fixtureParticipations
+        .filter(
+          ({ courseOfferingId, role, isActive }) =>
+            courseOfferingId === roadmap.courseOfferingId && role === 'TEACHER' && isActive,
+        )
+        .map(({ userId, institutionalPosition }) => ({
+          roadmapId: roadmap.id,
+          userId,
+          institutionalPosition,
+        }))
+    : [],
+);
 type FixtureRoadmap = (typeof fixtureRoadmaps)[number];
 
 export const normalizedNodeTypeName = (name: string) => name.toLocaleLowerCase('es-CL');
@@ -918,6 +1073,7 @@ const completionStudentsByRoadmap = [
   regularStudents,
   [...regularStudents.slice(0, 49), developmentFixtureIds.camila],
   [...regularStudents.slice(0, 48), developmentFixtureIds.nicolas, developmentFixtureIds.camila],
+  regularStudents,
 ] as const;
 
 export const fixtureCompletions = fixtureRoadmaps.flatMap((roadmap, roadmapIndex) => {
@@ -959,6 +1115,10 @@ export const reservedFixtureOfferingIds = developmentFixtureOfferings.map(({ id 
 export const reservedFixtureUserIds = [
   developmentFixtureIds.daniela,
   developmentFixtureIds.nicolas,
+  developmentFixtureIds.coordinatingProfessor,
+  developmentFixtureIds.teachingAssistant,
+  developmentFixtureIds.historicalTeacher,
+  developmentFixtureIds.departedCreator,
   ...Array.from({ length: 55 }, (_, index) => studentId(index + 1)),
 ];
 
@@ -966,4 +1126,8 @@ export const developmentPersonas = [
   { id: developmentFixtureIds.daniela, label: 'Daniela Rojas Mella' },
   { id: developmentFixtureIds.nicolas, label: 'Nicolás Fuentes Arancibia' },
   { id: developmentFixtureIds.camila, label: 'Camila Morales Soto' },
+  { id: developmentFixtureIds.coordinatingProfessor, label: 'Paula Contreras Muñoz' },
+  { id: developmentFixtureIds.teachingAssistant, label: 'Martín Vega Ríos' },
+  { id: developmentFixtureIds.historicalTeacher, label: 'Sofía Herrera Díaz' },
+  { id: developmentFixtureIds.departedCreator, label: 'Andrés Silva Pérez' },
 ];

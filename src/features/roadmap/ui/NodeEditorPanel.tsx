@@ -8,19 +8,31 @@ type Props = {
   isOpen: boolean;
   panelWidth: number;
   onPanelWidthChange: (width: number) => void;
+  expandRequest?: string;
   children: ReactNode;
 };
 
-export function NodeEditorPanel({ isOpen, panelWidth, onPanelWidthChange, children }: Props) {
+export function NodeEditorPanel({
+  isOpen,
+  panelWidth,
+  onPanelWidthChange,
+  expandRequest,
+  children,
+}: Props) {
   const [isMobileEditorExpanded, setIsMobileEditorExpanded] = useState(false);
+  const [handledExpandRequest, setHandledExpandRequest] = useState(expandRequest);
+  if (expandRequest !== handledExpandRequest) {
+    setHandledExpandRequest(expandRequest);
+    if (expandRequest) setIsMobileEditorExpanded(true);
+  }
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
     const update = () => setIsMobileEditorExpanded(media.matches);
-    update();
+    setIsMobileEditorExpanded(media.matches || Boolean(expandRequest));
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
-  }, []);
+  }, [expandRequest]);
 
   return (
     <RoadmapSidePanel

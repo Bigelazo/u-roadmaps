@@ -188,7 +188,9 @@ test('teaching staff perform each action step of the teaching tutorial', async (
 
   await openNodeMenu(page, 'Nodo de práctica', 'Agregar recurso');
   const composer = page.locator('[aria-label="Editor de recurso"]');
-  await expect(composer.getByLabel('Enlace')).toHaveValue(/wikipedia\.org/);
+  await expect(composer.getByRole('textbox', { name: 'Enlace', exact: true })).toHaveValue(
+    /wikipedia\.org/,
+  );
   await composer.getByRole('button', { name: 'Agregar enlace' }).click();
   await expectStep(page, 'Elimina tu nodo');
 

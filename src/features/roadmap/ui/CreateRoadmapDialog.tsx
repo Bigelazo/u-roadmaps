@@ -3,14 +3,15 @@
 // The academic overview's Roadmap creation: empty or copied from a closed version.
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useId, useState, useTransition } from 'react';
 import { ExternalLink, Plus } from 'lucide-react';
 import { roadmapUrl, versionUrl } from '@/features/roadmap/client';
 import { creatorLabel, originLabel } from '@/features/roadmap/ui/version-labels';
 import { versionHistoryApiUrl } from '@/shared/version-history-url';
 import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
 import { Button } from '@/shared/ui/button';
-import { FieldLegend, FieldSet } from '@/shared/ui/field';
+import { RadioGroup, RadioGroupItem } from '@/shared/ui/radio-group';
+import { Field, FieldLabel, FieldLegend, FieldSet } from '@/shared/ui/field';
 import {
   Dialog,
   DialogContent,
@@ -54,6 +55,7 @@ async function frozenVersions(courseCode: string): Promise<Version[] | null> {
 }
 
 export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: Props) {
+  const originId = useId();
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [versions, setVersions] = useState<Version[] | null>(null);
@@ -112,60 +114,77 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
           </DialogDescription>
         </DialogHeader>
         <FieldSet className="grid max-h-[50vh] gap-2 overflow-y-auto" disabled={busy}>
-          <FieldLegend className="sr-only">Origen del roadmap</FieldLegend>
-          <label className="flex items-center gap-3 rounded-lg border border-fog px-3 py-2">
-            <input
-              checked={source === 'empty'}
-              name="roadmap-source"
-              onChange={() => setSource('empty')}
-              type="radio"
-            />
-            <span className="font-medium">Roadmap vacío</span>
-          </label>
-          {versions === null ? (
-            <p className="text-sm text-muted-foreground" role="status">
-              Buscando versiones anteriores…
-            </p>
-          ) : versions.length > 0 ? (
-            <>
-              <p className="mt-2 text-sm font-semibold">Desde una versión anterior</p>
-              {versions.map((version) => (
-                <div
-                  className="flex items-center gap-3 rounded-lg border border-fog px-3 py-2"
-                  key={termKey(version)}
-                >
-                  <label className="flex min-w-0 flex-1 items-center gap-3">
-                    <input
-                      checked={source === termKey(version)}
-                      name="roadmap-source"
-                      onChange={() => setSource(termKey(version))}
-                      type="radio"
-                    />
-                    <span className="grid min-w-0">
-                      <span className="font-medium">{version.edition}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {creatorLabel(version.creator)} · {originLabel(version.origin)}
-                      </span>
-                    </span>
-                  </label>
-                  <a
-                    aria-label={`Ver ${version.edition}`}
-                    className="flex items-center gap-1 text-sm underline underline-offset-3"
-                    href={versionUrl({ courseCode, ...version })}
-                    rel="noreferrer"
-                    target="_blank"
+          <FieldLegend id={originId} className="sr-only">
+            Origen del roadmap
+          </FieldLegend>
+          <RadioGroup
+            aria-labelledby={originId}
+            name="roadmap-source"
+            value={source}
+            disabled={busy}
+            onValueChange={(value) => {
+              if (typeof value === 'string') setSource(value);
+            }}
+          >
+            <Field
+              orientation="horizontal"
+              data-disabled={busy}
+              className="rounded-lg border border-fog px-3 py-2"
+            >
+              <RadioGroupItem id={`${originId}-empty`} value="empty" disabled={busy} />
+              <FieldLabel htmlFor={`${originId}-empty`} className="min-h-11 flex-1 items-center">
+                Roadmap vacío
+              </FieldLabel>
+            </Field>
+            {versions === null ? (
+              <p className="text-sm text-muted-foreground" role="status">
+                Buscando versiones anteriores…
+              </p>
+            ) : versions.length > 0 ? (
+              <>
+                <p className="mt-2 text-sm font-semibold">Desde una versión anterior</p>
+                {versions.map((version) => (
+                  <Field
+                    orientation="horizontal"
+                    data-disabled={busy}
+                    className="rounded-lg border border-fog px-3 py-2"
+                    key={termKey(version)}
                   >
-                    Ver <ExternalLink aria-hidden="true" size={14} />
-                  </a>
-                </div>
-              ))}
-            </>
-          ) : null}
-          {historyFailed ? (
-            <p className="text-sm text-destructive" role="alert">
-              No se pudieron cargar las versiones anteriores. Puedes crear un roadmap vacío.
-            </p>
-          ) : null}
+                    <RadioGroupItem
+                      id={`${originId}-${termKey(version)}`}
+                      value={termKey(version)}
+                      disabled={busy}
+                    />
+                    <FieldLabel
+                      htmlFor={`${originId}-${termKey(version)}`}
+                      className="min-h-11 min-w-0 flex-1 items-center"
+                    >
+                      <span className="grid min-w-0">
+                        <span className="font-medium">{version.edition}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {creatorLabel(version.creator)} · {originLabel(version.origin)}
+                        </span>
+                      </span>
+                    </FieldLabel>
+                    <a
+                      aria-label={`Ver ${version.edition}`}
+                      className="flex items-center gap-1 text-sm underline underline-offset-3"
+                      href={versionUrl({ courseCode, ...version })}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Ver <ExternalLink aria-hidden="true" size={14} />
+                    </a>
+                  </Field>
+                ))}
+              </>
+            ) : null}
+            {historyFailed ? (
+              <p className="text-sm text-destructive" role="alert">
+                No se pudieron cargar las versiones anteriores. Puedes crear un roadmap vacío.
+              </p>
+            ) : null}
+          </RadioGroup>
         </FieldSet>
         {error ? (
           <p className="text-sm text-destructive" role="alert">

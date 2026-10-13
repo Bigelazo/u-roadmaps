@@ -2,16 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/shared/ui/alert-dialog';
+import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { useClaimTutorialInvitation } from '@/shared/client/tutorial/tutorial-records';
 import type { PostCreationInvitationWording } from '../types';
 
@@ -30,27 +21,23 @@ export function PostCreationInvitationDialog({
   useClaimTutorialInvitation('post-creation', true);
   const router = useRouter();
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>¡Roadmap creado!</AlertDialogTitle>
-          <AlertDialogDescription>
-            ¿Quieres {wording} el tutorial de edición? Te muestra cómo construir el roadmap en un
-            mapa de práctica, sin cambiar este.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel variant="outline">Ahora no</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              setOpen(false);
-              router.push(`/practice-roadmap/teaching?${new URLSearchParams({ origin })}`);
-            }}
-          >
-            Hacer tutorial
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmationDialog
+      confirmation={
+        open
+          ? {
+              title: '¡Roadmap creado!',
+              description: `¿Quieres ${wording} el tutorial de edición? Te muestra cómo construir el roadmap en un mapa de práctica, sin cambiar este.`,
+              intent: 'default',
+              cancelLabel: 'Ahora no',
+              actions: [{ id: 'tutorial', label: 'Hacer tutorial' }],
+            }
+          : null
+      }
+      onCancel={() => setOpen(false)}
+      onAction={() => {
+        setOpen(false);
+        router.push(`/practice-roadmap/teaching?${new URLSearchParams({ origin })}`);
+      }}
+    />
   );
 }

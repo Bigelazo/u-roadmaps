@@ -1,10 +1,12 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { prisma } from '@/shared/server/db';
 import {
   developmentFixtureCourses,
   developmentFixtureOfferings,
   fixtureCompletions,
+  fixtureAcademicTerms,
+  fixtureClosureTeachingStaff,
   fixtureParticipations,
   fixtureResources,
   fixtureRoadmaps,
@@ -58,7 +60,13 @@ export async function seedPredefinedNodeTypes() {
 }
 
 export async function resetDevelopmentData() {
-  await replaceFixtureUploadedFiles(developmentFixtureFileContents());
+  const previousFiles = await prisma.resource.findMany({
+    where: {
+      fileKey: { not: null },
+      roadmapNode: { roadmap: { courseOfferingId: { in: reservedFixtureOfferingIds } } },
+    },
+    select: { fileKey: true },
+  });
 
   await prisma.$transaction(async (transaction) => {
     await transaction.courseOffering.deleteMany({
@@ -96,6 +104,13 @@ export async function resetDevelopmentData() {
       ),
     );
 
+    for (const term of fixtureAcademicTerms) {
+      await transaction.academicTerm.upsert({
+        where: { year_semester: { year: term.year, semester: term.semester } },
+        create: term,
+        update: term,
+      });
+    }
     await transaction.courseOffering.createMany({
       data: developmentFixtureOfferings.map(({ id, courseCode, year, semester }) => ({
         id,
@@ -104,7 +119,15 @@ export async function resetDevelopmentData() {
         semester,
       })),
     });
-    await transaction.user.createMany({ data: [...fixtureUsers] });
+    await transaction.user.createMany({
+      data: fixtureUsers.map((user) => ({
+        ...user,
+        // Catalog browser checks stay read-only; invitation tests own their Users.
+        ...(process.env.U_ROADMAPS_E2E_DATA === 'true'
+          ? { tutorialInvitationShownAt: new Date('2026-08-15T12:00:00.000Z') }
+          : {}),
+      })),
+    });
     await transaction.participation.createMany({
       data: fixtureParticipations.map(
         ({ userId, courseOfferingId, role, institutionalPosition, isActive }) => ({
@@ -117,8 +140,22 @@ export async function resetDevelopmentData() {
       ),
     });
     await transaction.roadmap.createMany({
-      data: fixtureRoadmaps.map(({ id, courseOfferingId }) => ({ id, courseOfferingId })),
+      data: fixtureRoadmaps.map(
+        ({ id, courseOfferingId, creatorId, closedAt, sourceYear, sourceSemester }) => ({
+          id,
+          courseOfferingId,
+          creatorId,
+          closedAt,
+          sourceYear,
+          sourceSemester,
+        }),
+      ),
     });
+    for (const { id, sourceRoadmapId } of fixtureRoadmaps) {
+      if (sourceRoadmapId)
+        await transaction.roadmap.update({ where: { id }, data: { sourceRoadmapId } });
+    }
+    await transaction.roadmapClosureTeachingStaff.createMany({ data: fixtureClosureTeachingStaff });
     await transaction.nodeType.createMany({
       data: fixtureRoadmaps.map(({ id: roadmapId, customNodeType }) => ({
         ...customNodeType,
@@ -165,4 +202,10 @@ export async function resetDevelopmentData() {
       }),
     );
   });
+  await Promise.all(
+    previousFiles.map(({ fileKey }) =>
+      fileKey ? rm(join(fixtureUploadsDirectory, fileKey), { force: true }) : Promise.resolve(),
+    ),
+  );
+  await replaceFixtureUploadedFiles(developmentFixtureFileContents());
 }

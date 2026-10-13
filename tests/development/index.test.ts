@@ -41,6 +41,10 @@ describe('fixture environment', () => {
       { id: '10000000-0000-4000-8000-000000000001', label: 'Daniela Rojas Mella' },
       { id: '10000000-0000-4000-8000-000000000002', label: 'Nicolás Fuentes Arancibia' },
       { id: '20000000-0000-4000-8000-000000000051', label: 'Camila Morales Soto' },
+      { id: '10000000-0000-4000-8000-000000000003', label: 'Paula Contreras Muñoz' },
+      { id: '10000000-0000-4000-8000-000000000004', label: 'Martín Vega Ríos' },
+      { id: '10000000-0000-4000-8000-000000000005', label: 'Sofía Herrera Díaz' },
+      { id: '10000000-0000-4000-8000-000000000006', label: 'Andrés Silva Pérez' },
     ]);
   });
 

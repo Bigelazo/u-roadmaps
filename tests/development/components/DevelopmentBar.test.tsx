@@ -16,6 +16,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+test('names the profile trigger with a tooltip on keyboard focus', async () => {
+  const user = userEvent.setup();
+  render(<DevelopmentBar personas={[{ id: 'teacher', label: 'Docente: Ana Pérez' }]} />);
+
+  await user.tab();
+
+  expect(await screen.findByText('Cambiar perfil de desarrollo')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Cambiar perfil de desarrollo' }).title).toBe('');
+});
+
 test('developer can open the persona menu and select a persona', async () => {
   const user = userEvent.setup();
   const fetch = vi.fn().mockResolvedValue({ ok: true });

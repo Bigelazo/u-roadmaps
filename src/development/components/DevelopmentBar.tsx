@@ -1,7 +1,15 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu } from '@base-ui/react/menu';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuItem,
+} from '@/shared/ui/dropdown-menu';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import { UsersRound } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 
@@ -32,35 +40,36 @@ export default function DevelopmentBar({
   if (hideOnPersonaPage && pathname === '/development/personas') return null;
 
   return (
-    <Menu.Root>
-      <Menu.Trigger
-        aria-label="Cambiar perfil de desarrollo"
-        render={<Button size="sm" />}
-        title="Cambiar perfil de desarrollo"
-      >
-        <UsersRound aria-hidden="true" data-icon="inline-start" />
-        Perfil
-      </Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner align="start" side="bottom" sideOffset={8}>
-          <Menu.Popup className="min-w-64 rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg outline-none">
-            <Menu.Group>
-              <Menu.GroupLabel className="px-2 py-1.5 text-xs font-bold tracking-[0.08em] text-muted-foreground">
-                CAMBIAR PERFIL
-              </Menu.GroupLabel>
-              {personas.map((persona) => (
-                <Menu.Item
-                  className="flex min-h-11 w-full items-center rounded-(--radius-md) px-2 text-left text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
-                  key={persona.id}
-                  onClick={() => void assumePersona(persona.id)}
-                >
-                  {persona.label}
-                </Menu.Item>
-              ))}
-            </Menu.Group>
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              aria-label="Cambiar perfil de desarrollo"
+              render={<Button size="sm" />}
+            >
+              <UsersRound aria-hidden="true" data-icon="inline-start" />
+              Perfil
+            </DropdownMenuTrigger>
+          }
+        />
+        <TooltipContent>Cambiar perfil de desarrollo</TooltipContent>
+      </Tooltip>
+
+      <DropdownMenuContent align="start" sideOffset={8} className="min-w-64">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>CAMBIAR PERFIL</DropdownMenuLabel>
+          {personas.map((persona) => (
+            <DropdownMenuItem
+              className="min-h-11"
+              key={persona.id}
+              onClick={() => void assumePersona(persona.id)}
+            >
+              {persona.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

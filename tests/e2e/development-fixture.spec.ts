@@ -1,7 +1,7 @@
 import { developmentFixtureIds, fixtureRoadmaps } from '@/development';
 import { fixtureParticipations, developmentFixtureOfferings } from '@/development/fixtures/catalog';
 import { expect, test } from './fixtures';
-import { fixtureRoadmapPath, ok } from './helpers';
+import { authenticateAs, fixtureRoadmapPath, ok } from './helpers';
 
 const [cc1002Roadmap] = fixtureRoadmaps;
 
@@ -29,6 +29,67 @@ const fixture = {
   },
   fi1001Current: { courseCode: 'FI1001', year: 2026, semester: 2 },
 } as const;
+
+test('the FI1001 catalog exposes a closed two-edition lineage and an empty current offering', async ({
+  apiAs,
+}) => {
+  const api = await apiAs({ id: fixture.daniela });
+  const history = await (await ok(await api.get('/api/FI1001/versions'))).json();
+  expect(history.horizon).toEqual({ year: 2026, semester: 2 });
+  expect(history.versions).toMatchObject([
+    {
+      year: 2026,
+      semester: 1,
+      closedAt: expect.any(String),
+      origin: { kind: 'COPY', year: 2025, semester: 2 },
+      creator: { name: 'Daniela Rojas Mella' },
+      teachingStaff: [
+        { name: 'Daniela Rojas Mella', institutionalPosition: 'COURSE_PROFESSOR' },
+        { name: 'Martín Vega Ríos', institutionalPosition: 'TEACHING_ASSISTANT' },
+      ],
+    },
+    {
+      year: 2025,
+      semester: 2,
+      closedAt: expect.any(String),
+      origin: { kind: 'EMPTY' },
+      creator: { name: 'Andrés Silva Pérez' },
+      teachingStaff: [
+        { name: 'Daniela Rojas Mella', institutionalPosition: 'COURSE_PROFESSOR' },
+        { name: 'Sofía Herrera Díaz', institutionalPosition: 'AUXILIARY_PROFESSOR' },
+      ],
+    },
+  ]);
+  const departed = await apiAs({ id: developmentFixtureIds.departedCreator });
+  const overview = await (await ok(await departed.get('/api/academic-overview'))).json();
+  expect(overview.offerings).not.toContainEqual(
+    expect.objectContaining({ courseCode: 'FI1001', year: 2025, semester: 2 }),
+  );
+  for (const [year, semester] of [
+    [2025, 2],
+    [2026, 1],
+  ]) {
+    const version = await (
+      await ok(await api.get(`/api/FI1001/versions/${year}/${semester}`))
+    ).json();
+    expect(version.nodes).toHaveLength(15);
+    expect(
+      version.nodes.every(
+        (node: { isTeacherBlocked: boolean; teacherUnlockOn?: string }) =>
+          node.isTeacherBlocked === false && !node.teacherUnlockOn,
+      ),
+    ).toBe(true);
+    expect(version.nodes.filter((node: { isVisible: boolean }) => !node.isVisible)).toHaveLength(1);
+    expect(version.dependencies.length).toBeGreaterThan(0);
+    expect(version.nodeTypes).toContainEqual(expect.objectContaining({ isPredefined: false }));
+    const file = version.nodes
+      .flatMap((node: { resources: { type: string; url: string }[] }) => node.resources)
+      .find((resource: { type: string }) => resource.type === 'FILE');
+    expect(file).toBeTruthy();
+    expect((await (await ok(await api.get(file.url))).body()).byteLength).toBeGreaterThan(0);
+  }
+  await ok(await api.get(fixtureRoadmapPath(fixture.fi1001Current)), 404);
+});
 
 function hasCycle(
   nodeIds: readonly string[],
@@ -273,4 +334,82 @@ test('every catalog Participation exposes its declared institutional position', 
       );
     }
   }
+});
+
+test('the FI1001 catalog gives teaching staff their creation options and historical horizon', async ({
+  apiAs,
+  page,
+}) => {
+  const courseName = 'Introducción a la Física Newtoniana';
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/academic-overview');
+  await page.getByRole('button', { name: `Crear roadmap de ${courseName}` }).click();
+  const dialog = page.getByRole('dialog', { name: `Crear roadmap de ${courseName}` });
+  await expect(dialog.getByRole('radio', { name: 'Roadmap vacío' })).toBeChecked();
+  for (const edition of ['Edición 2025-2', 'Edición 2026-1']) {
+    await expect(dialog.getByRole('radio', { name: new RegExp(edition) })).toBeVisible();
+    await expect(dialog.getByRole('link', { name: `Ver ${edition}` })).toBeVisible();
+  }
+
+  for (const userId of [
+    developmentFixtureIds.teachingAssistant,
+    developmentFixtureIds.coordinatingProfessor,
+  ]) {
+    const api = await apiAs({ id: userId });
+    for (const data of [{}, { source: { year: 2026, semester: 1 } }]) {
+      await ok(await api.post(fixtureRoadmapPath(fixture.fi1001Current), { data }), 403);
+    }
+    await ok(await api.get(fixtureRoadmapPath(fixture.fi1001Current)), 404);
+    await authenticateAs(page.context(), userId);
+    await page.goto('/academic-overview');
+    await expect(page.getByRole('button', { name: `Crear roadmap de ${courseName}` })).toHaveCount(
+      0,
+    );
+    await page.getByRole('link', { name: `Historial de versiones de ${courseName}` }).click();
+    await expect(page.getByRole('listitem', { name: 'Edición 2026-1' })).toBeVisible();
+    await expect(page.getByRole('listitem', { name: 'Edición 2025-2' })).toBeVisible();
+  }
+
+  const historical = await apiAs({ id: developmentFixtureIds.historicalTeacher });
+  const history = await (await ok(await historical.get('/api/FI1001/versions'))).json();
+  expect(history.horizon).toEqual({ year: 2025, semester: 2 });
+  expect(history.versions.map(({ edition }: { edition: string }) => edition)).toEqual([
+    'Edición 2025-2',
+  ]);
+  await ok(await historical.get('/api/FI1001/versions/2026/1'), 404);
+});
+
+test('the FI1001 historical student sees the closed course while versions exclude student data', async ({
+  apiAs,
+  page,
+}) => {
+  const student = await apiAs({ id: fixture.nicolas });
+  const roadmap = await (
+    await ok(await student.get(fixtureRoadmapPath(fixture.fi1001Historical)))
+  ).json();
+  expect(roadmap.nodes).toHaveLength(14);
+  expect(
+    roadmap.nodes.every(
+      (node: { canComplete: boolean; access: { reason?: string } }) =>
+        !node.canComplete && node.access.reason !== 'TEACHER_BLOCK',
+    ),
+  ).toBe(true);
+  await ok(await student.get('/api/FI1001/versions'), 403);
+  await ok(await student.get('/api/FI1001/versions/2026/1'), 404);
+
+  const teacher = await apiAs({ id: fixture.daniela });
+  const version = await (await ok(await teacher.get('/api/FI1001/versions/2026/1'))).json();
+  const serialized = JSON.stringify(version);
+  expect(serialized).not.toContain(fixture.nicolas);
+  for (const key of ['isCompleted', 'canComplete', 'participants', 'completions', 'progress']) {
+    expect(serialized).not.toContain(`"${key}"`);
+  }
+
+  await authenticateAs(page.context(), fixture.daniela);
+  await page.goto('/courses/FI1001/versions/2026/1');
+  await expect(page.getByRole('heading', { name: 'Edición 2026-1' })).toBeVisible();
+  await expect(page.getByText('Copiada de la edición 2025-2')).toBeVisible();
+  await expect(page.getByText('Martín Vega Ríos · Ayudante')).toBeVisible();
+  await expect(page.getByText('Nicolás Fuentes Arancibia')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Completar', exact: true })).toHaveCount(0);
 });

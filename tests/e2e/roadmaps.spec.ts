@@ -1158,7 +1158,7 @@ test('uses the teaching width for node information preview', async ({ page, cour
   await page.getByRole('button', { name: 'Recurso', exact: true }).click();
   await page.getByRole('tab', { name: 'Enlace', exact: true }).click();
   await page.getByPlaceholder('Ej. Guía de ejercicios').fill(resourceTitle);
-  await page.getByLabel('Enlace', { exact: true }).fill(resourceUrl);
+  await page.getByRole('textbox', { name: 'Enlace', exact: true }).fill(resourceUrl);
   const previewButton = page.getByRole('button', { name: 'Previsualizar cambios', exact: true });
   await previewButton.click();
 
@@ -1170,7 +1170,7 @@ test('uses the teaching width for node information preview', async ({ page, cour
   await page.getByRole('button', { name: 'Cerrar detalle', exact: true }).click();
   await expect(editorPanel).toBeVisible();
   await expect(page.getByPlaceholder('Ej. Guía de ejercicios')).toHaveValue(resourceTitle);
-  await expect(page.getByLabel('Enlace', { exact: true })).toHaveValue(resourceUrl);
+  await expect(page.getByRole('textbox', { name: 'Enlace', exact: true })).toHaveValue(resourceUrl);
   await expect(previewButton).toBeFocused();
 });
 

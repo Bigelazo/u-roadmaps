@@ -1,5 +1,7 @@
 'use client';
 
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+
 import { memo, useCallback } from 'react';
 import { X } from 'lucide-react';
 import {
@@ -79,21 +81,27 @@ export const FloatingEdge = memo(function FloatingEdge({
               pointerEvents: 'all',
             }}
           >
-            <Button
-              type="button"
-              variant="destructive"
-              size="icon"
-              aria-label="Eliminar dependencia"
-              title="Eliminar dependencia"
-              className="rounded-full border border-destructive/20 shadow-sm hover:shadow-md"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete(id);
-              }}
-            >
-              <X data-icon="inline-start" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    aria-label="Eliminar dependencia"
+                    className="rounded-full border border-destructive/20 shadow-sm hover:shadow-md"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDelete(id);
+                    }}
+                  >
+                    <X data-icon="inline-start" aria-hidden="true" />
+                  </Button>
+                }
+              />
+              <TooltipContent>Eliminar dependencia</TooltipContent>
+            </Tooltip>
           </div>
         </EdgeLabelRenderer>
       ) : null}

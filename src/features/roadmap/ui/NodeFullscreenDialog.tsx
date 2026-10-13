@@ -1,5 +1,7 @@
 'use client';
 
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+
 import type { ReactNode } from 'react';
 import { Maximize2, X } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
@@ -27,13 +29,19 @@ export function NodeFullscreenDialog({
 }) {
   return (
     <Dialog>
-      <DialogTrigger
-        render={<Button type="button" variant="ghost" size="icon" />}
-        aria-label={triggerLabel}
-        title={triggerLabel}
-      >
-        <Maximize2 />
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DialogTrigger
+              render={<Button type="button" variant="ghost" size="icon" />}
+              aria-label={triggerLabel}
+            >
+              <Maximize2 />
+            </DialogTrigger>
+          }
+        />
+        <TooltipContent>{triggerLabel}</TooltipContent>
+      </Tooltip>
       <DialogContent
         className="flex h-[calc(100dvh-2rem)] flex-col gap-6 p-6 sm:max-w-5xl sm:p-8"
         showCloseButton={false}
@@ -48,14 +56,24 @@ export function NodeFullscreenDialog({
             </DialogDescription>
           )}
         </div>
-        <DialogClose
-          render={<Button type="button" variant="ghost" size="icon" />}
-          className="absolute top-4 right-4"
-          aria-label="Cerrar pantalla completa"
-          title="Cerrar pantalla completa"
+        <Tooltip
+          onOpenChange={(_open, details) => {
+            if (details.reason === 'escape-key') details.allowPropagation();
+          }}
         >
-          <X />
-        </DialogClose>
+          <TooltipTrigger
+            render={
+              <DialogClose
+                render={<Button type="button" variant="ghost" size="icon" />}
+                className="absolute top-4 right-4"
+                aria-label="Cerrar pantalla completa"
+              >
+                <X />
+              </DialogClose>
+            }
+          />
+          <TooltipContent>Cerrar pantalla completa</TooltipContent>
+        </Tooltip>
       </DialogContent>
     </Dialog>
   );

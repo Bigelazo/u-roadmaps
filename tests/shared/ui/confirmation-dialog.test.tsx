@@ -21,6 +21,29 @@ const twoActionConfirmation = {
   ],
 } as const satisfies ConfirmationPresentation;
 
+test('can dismiss back to a tutorial while the cancellation button exits it', async () => {
+  const user = userEvent.setup();
+  const leave = vi.fn();
+  const resume = vi.fn();
+  render(
+    <ConfirmationDialog
+      confirmation={{ ...singleActionConfirmation, cancelLabel: 'Salir' }}
+      onAction={resume}
+      onCancel={leave}
+      onDismiss={resume}
+      className="tutorial-confirmation"
+    />,
+  );
+
+  const dialog = await screen.findByRole('alertdialog', { name: 'Archivar cambios' });
+  expect(dialog.classList.contains('tutorial-confirmation')).toBe(true);
+  await user.keyboard('{Escape}');
+  expect(resume).toHaveBeenCalledOnce();
+  expect(leave).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole('button', { name: 'Salir' }));
+  expect(leave).toHaveBeenCalledOnce();
+});
+
 test('does not render a confirmation when its presentation is null', () => {
   render(<ConfirmationDialog confirmation={null} onAction={vi.fn()} onCancel={vi.fn()} />);
 
