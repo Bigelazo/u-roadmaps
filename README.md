@@ -137,9 +137,9 @@ NODE_ENV=development pnpm dev:data:reset
 pnpm dev
 ```
 
-Abre [http://localhost:3000](http://localhost:3000). El botón **Cambiar perfil de desarrollo**, en la esquina inferior izquierda, permite asumir los perfiles de Daniela Rojas Mella, Nicolás Fuentes Arancibia y Camila Morales Soto.
+Abre [http://localhost:3000](http://localhost:3000). El botón **Cambiar perfil de desarrollo**, en la esquina inferior izquierda, permite asumir los perfiles de Daniela Rojas Mella, Nicolás Fuentes Arancibia, Camila Morales Soto y los perfiles de verificación de FI1001.
 
-La demostración incluye roadmaps de programación y cálculo, un curso histórico de física, un curso sin roadmap, recursos descargables y distintos escenarios de avance y bloqueo. `dev:data:reset` aplica las migraciones y reemplaza los datos reservados de la demostración; requiere una base local llamada `roadmap_dev_db` o `roadmap_e2e_db` y las banderas de fixtures correspondientes.
+La demostración incluye roadmaps de programación y cálculo, dos versiones cerradas de física, un curso sin roadmap, recursos descargables y distintos escenarios de avance y bloqueo. La [guía de versionamiento](docs/roadmap-versioning-walkthrough.md) recorre las ediciones FI1001, sus permisos y la copia manual. `dev:data:reset` aplica las migraciones y reemplaza los datos reservados de la demostración, incluidos los archivos de las copias manuales; requiere una base local llamada `roadmap_dev_db` o `roadmap_e2e_db` y las banderas de fixtures correspondientes.
 
 Para inicializar solamente el esquema y los tipos predefinidos, sin cargar los escenarios ficticios:
 

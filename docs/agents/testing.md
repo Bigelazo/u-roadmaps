@@ -79,6 +79,10 @@ Puede coexistir con desarrollo. Ejecutar las invocaciones E2E consecutivamente:
 comparten base, puerto, compilación y fixtures. No iniciar una segunda corrida
 mientras la primera siga activa.
 
+La [revisión visual del versionamiento](../roadmap-versioning-walkthrough.md)
+describe el linaje FI1001 sembrado, los perfiles y cómo restablecerlo después de
+una copia manual. El catálogo permanece de solo lectura en E2E.
+
 ## Datos propios por test
 
 Los specs migrados importan `test` y `expect` desde
@@ -97,6 +101,13 @@ Los specs migrados importan `test` y `expect` desde
   creará en ese Curso. Puede filtrar `noticeClass` y devuelve `wasAttempted()`;
   sus triggers, funciones y secuencias se eliminan por el mismo ciclo de fixtures.
 - `createUser()`: un Usuario propio sin Participaciones, para comprobar aislamiento.
+- `createTerm(semester?)`: un Período académico sintético propio en los años
+  reservados 1000–1999, inicialmente abierto. Pasar sus `year` y `semester` a
+  `createCourse`; `term.setFreezeDate(día)` publica una fecha de prueba y
+  `term.setFreezeDate(null)` elimina el calendario para probar el respaldo.
+- `waitForClosure(curso)`: espera el cierre registrado sin pausas fijas. El
+  servidor E2E ejecuta la pasada de cierre cada segundo. Los períodos propios
+  se eliminan al terminar y el `globalSetup` elimina los huérfanos del rango.
 - `apiAs(usuario)`: un cliente de API autenticado como ese Usuario, que se cierra
   al terminar el test.
 
