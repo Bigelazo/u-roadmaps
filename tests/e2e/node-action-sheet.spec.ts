@@ -1,6 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, test as base, type E2ECourseOffering } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, toast } from './helpers';
 import { prepareNodeCreator } from './create-node';
 
 const test = base.extend<{
@@ -216,8 +216,9 @@ test('touch deletion prevents duplicate mutations and recovers after a failed re
   await expect(remove).toBeEnabled();
   expect(mutations).toBe(1);
   await confirmation.getByRole('button', { name: 'Cancelar' }).tap();
-  await expect(page.getByRole('alert', { name: 'No se pudo eliminar el nodo.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Cerrar alerta' }).tap();
+  const error = toast(page, 'No se pudo eliminar el nodo.');
+  await expect(error).toBeVisible();
+  await error.getByRole('button', { name: 'Cerrar notificación', includeHidden: true }).tap();
   await page.unroute(path);
   await node.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).tap();
   await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
