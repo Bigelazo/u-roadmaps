@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
-import { authenticateAs, ok } from './helpers';
+import { authenticateAs, ok, toast } from './helpers';
 
 function dayOffset(days: number) {
   const day = new Date(`${chileCalendarDay()}T12:00:00Z`);
@@ -397,9 +397,7 @@ test('an open teaching canvas refuses its next save and becomes read-only after 
   await term.setFreezeDate(dayOffset(-1));
   await waitForClosure(offering);
   await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
-  await expect(
-    page.getByText('Este roadmap está cerrado y es de sólo lectura.', { exact: true }),
-  ).toBeVisible();
+  await expect(toast(page, 'Este roadmap está cerrado y es de sólo lectura.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Crear en el mapa' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Guardar cambios', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeVisible();

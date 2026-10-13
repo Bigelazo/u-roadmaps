@@ -9,6 +9,7 @@ import { Plus_Jakarta_Sans, Poppins } from 'next/font/google';
 import { cn } from 'cn';
 import { getInboxIdentity } from '@/features/notifications/server';
 import { NotificationsProvider } from '@/features/notifications';
+import { Toaster } from '@/shared/ui/toast';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
 const poppins = Poppins({
@@ -43,6 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           />
           <AuthenticationAlert />
           {children}
+          <Toaster limit={3} />
         </NotificationsProvider>
       </body>
     </html>

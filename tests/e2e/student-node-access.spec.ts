@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { authenticateAs, ok } from './helpers';
+import { authenticateAs, ok, toast } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
 
 function uniqueName(prefix: string) {
@@ -40,13 +40,12 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
     await page.getByRole('button', { name: 'Completar', exact: true }).click();
     expect((await completion).status()).toBe(restriction === 'blocked' ? 403 : 404);
     await expect(
-      page.getByRole('alert', {
-        name:
-          restriction === 'blocked'
-            ? 'El equipo docente bloqueó este nodo.'
-            : 'El nodo no existe en este roadmap.',
-        exact: true,
-      }),
+      toast(
+        page,
+        restriction === 'blocked'
+          ? 'El equipo docente bloqueó este nodo.'
+          : 'El nodo no existe en este roadmap.',
+      ),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Completar', exact: true })).toBeEnabled();
     await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
