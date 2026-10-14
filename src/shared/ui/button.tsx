@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from 'cn';
 
-const buttonVariants = cva(
+const buttonVariantClasses = cva(
   "group/button inline-flex min-h-11 shrink-0 items-center justify-center rounded-(--radius-md) border border-transparent bg-clip-padding text-sm font-bold whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
@@ -38,6 +38,11 @@ const buttonVariants = cva(
   },
 );
 
+/** The variant classes, merged so a variant's border or color overrides the base one. */
+function buttonVariants(props?: Parameters<typeof buttonVariantClasses>[0]) {
+  return cn(buttonVariantClasses(props));
+}
+
 function Button({
   className,
   variant = 'default',
@@ -47,7 +52,7 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={buttonVariants({ variant, size, className })}
       {...props}
     />
   );

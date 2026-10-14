@@ -3,7 +3,6 @@ import { Alert, AlertDescription } from '@/shared/ui/alert';
 import {
   AlertTriangle,
   Archive,
-  ArrowUpRight,
   BookOpen,
   ChevronDown,
   History,
@@ -31,7 +30,6 @@ import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-lay
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
-import { cn } from 'cn';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
 // TEACHING_STAFF is the fallback for teaching staff without a reported position.
@@ -155,7 +153,7 @@ function CourseRow({
                 // A closed Roadmap is read-only history, so it is not the row's primary action.
                 <Link
                   aria-label={`Ver roadmap de ${course.name}`}
-                  className={cn(buttonVariants({ variant: 'outline' }))}
+                  className={buttonVariants({ variant: 'outline' })}
                   href={roadmapUrl(course)}
                 >
                   Ver roadmap
@@ -163,11 +161,10 @@ function CourseRow({
               ) : (
                 <Link
                   aria-label={`Abrir roadmap de ${course.name}`}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  className={buttonVariants()}
                   href={roadmapUrl(course)}
                 >
                   Abrir roadmap
-                  <ArrowUpRight aria-hidden="true" size={16} />
                 </Link>
               )}
             </>
@@ -186,7 +183,7 @@ function CourseRow({
           {(isPastOffering && course.role === 'TEACHER') || awaitsCreation ? (
             <Link
               aria-label={`Historial de versiones de ${course.name}`}
-              className={buttonVariants({ variant: 'outline', className: 'min-h-11' })}
+              className={buttonVariants({ variant: 'outline' })}
               href={versionHistoryUrl(course.courseCode)}
             >
               <History aria-hidden="true" size={16} />
@@ -196,7 +193,7 @@ function CourseRow({
           {course.role === 'TEACHER' && course.hasRoadmap ? (
             <Link
               aria-label={`Integrantes de ${course.name}`}
-              className={buttonVariants({ variant: 'outline', className: 'min-h-11' })}
+              className={buttonVariants({ variant: 'outline' })}
               href={courseParticipantsUrl(course)}
             >
               <Users aria-hidden="true" size={16} />
@@ -344,7 +341,7 @@ export function AcademicOverview({
                     <Accordion className="pt-4" multiple>
                       {previousTerms.map((term, index) => (
                         <AccordionItem
-                          className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
+                          className="grid gap-4 not-last:border-b-0 md:gap-x-8 md:grid-cols-[13rem_minmax(0,1fr)] md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
                           key={`${term.year}-${term.semester}`}
                           value={`${term.year}-${term.semester}`}
                         >
@@ -357,7 +354,7 @@ export function AcademicOverview({
                               {courseCountLabel(term.courses.length)}
                             </span>
                           </div>
-                          <AccordionContent className="pb-4">
+                          <AccordionContent className="pb-4 [&_a]:no-underline">
                             <CourseList
                               isPastTerm
                               notificationsEnabled={notificationsEnabled}
