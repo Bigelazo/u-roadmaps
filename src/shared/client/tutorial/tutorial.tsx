@@ -10,7 +10,7 @@ import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 /** Marks the question-mark icon that opens a Roadmap tutorial on its origin page. */
 export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
 
-/** Marks the bar holding "Salir", which stays usable above the tour at any moment. */
+/** Marks the "Salir" control, which stays usable above the tour at any moment. */
 export const TUTORIAL_EXIT_ATTRIBUTE = 'data-tutorial-exit';
 
 const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
@@ -98,7 +98,8 @@ export function clickElement(selector: string) {
 
 /**
  * Runs a Roadmap tutorial as soon as its first element exists. It advances only through
- * its own controls; Esc, the close control and overlay clicks ask before leaving.
+ * its own controls; completed action steps cannot be revisited. Esc, the close control
+ * and overlay clicks ask before leaving.
  */
 export function RoadmapTutorial<Action = never>({
   steps,
@@ -127,6 +128,8 @@ export function RoadmapTutorial<Action = never>({
       if (offset === 1 && !byAction && isActionStep(tour.getActiveIndex())) return;
       const index = (tour.getActiveIndex() ?? 0) + offset;
       if (index < 0) return;
+      // The canvas keeps the action's effects, so returning would require repeating it.
+      if (offset === -1 && isActionStep(index)) return;
       if (index >= steps.length) {
         tour.destroy();
         return;
@@ -147,14 +150,18 @@ export function RoadmapTutorial<Action = never>({
       showProgress: true,
       allowKeyboardControl: false,
       disableActiveInteraction: true,
-      steps: steps.map((step): DriveStep => ({
+      steps: steps.map((step, index): DriveStep => ({
         element: () => resolveElement(step.element) ?? document.body,
         disableActiveInteraction: !step.advanceWhen,
         popover: {
           title: step.title,
           description: step.description,
           side: step.side,
-          ...(step.advanceWhen ? { showButtons: ['close' as const] } : {}),
+          ...(step.advanceWhen
+            ? { showButtons: ['close' as const] }
+            : isActionStep(index - 1)
+              ? { showButtons: ['next' as const, 'close' as const] }
+              : {}),
         },
       })),
       onNextClick: () => void move(tour, 1),

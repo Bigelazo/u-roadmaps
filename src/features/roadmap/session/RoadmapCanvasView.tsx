@@ -15,7 +15,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, CircleHelp, Eye, History, Users } from 'lucide-react';
+import { CircleAlert, CircleHelp, Eye, History, LogOut, Users } from 'lucide-react';
 import { courseParticipantsUrl, versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -57,7 +57,9 @@ import { Button, buttonVariants } from '@/shared/ui/button';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 import {
+  TUTORIAL_EXIT_ATTRIBUTE,
   TUTORIAL_TRIGGER_ATTRIBUTE,
+  markTutorialClosingPopover,
   TutorialClosingPopover,
 } from '@/shared/client/tutorial/tutorial';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
@@ -869,6 +871,20 @@ export function RoadmapCanvasView({ input }: Props) {
           aria-label="Lienzo del roadmap"
           className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
         >
+          {input.practice?.exitHref ? (
+            <Link
+              {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
+              className={buttonVariants({
+                variant: 'outline',
+                className: 'absolute top-4 right-4 z-20 sm:top-6 sm:right-6',
+              })}
+              href={input.practice.exitHref}
+              onClick={markTutorialClosingPopover}
+            >
+              <LogOut data-icon="inline-start" />
+              Salir
+            </Link>
+          ) : null}
           <NodeChangeCountsProvider
             roadmapId={roadmap.roadmap.id}
             openedNodeId={isSidePanelOpen ? selectedNodeId : null}

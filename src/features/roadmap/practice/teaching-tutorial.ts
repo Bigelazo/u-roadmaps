@@ -1,4 +1,4 @@
-import { clickElement, type TutorialStep } from '@/shared/client/tutorial/tutorial';
+import { clickElement, waitForElement, type TutorialStep } from '@/shared/client/tutorial/tutorial';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 import { NODE_TYPES_MENU_ITEM_LABEL } from '@/features/roadmap/editor/types';
 import { practiceNodeIds } from './practice-roadmap';
@@ -17,6 +17,34 @@ function nodeCreator() {
 function resourceComposerOrCanvas() {
   return (
     document.querySelector('[aria-label="Editor de recurso"]') ?? document.querySelector(canvas)
+  );
+}
+
+/** Keeps action confirmations clear of the tutorial popover after the canvas resizes. */
+function confirmationOrCanvas() {
+  return (
+    document.querySelector('[role="alertdialog"]:not(.u-roadmaps-tour-exit)') ??
+    document.querySelector(canvas)
+  );
+}
+
+/** Follows the requested Node's block control into its action menu and confirmation. */
+function branchBlockControl() {
+  const confirmation = document.querySelector('[role="alertdialog"]:not(.u-roadmaps-tour-exit)');
+  const menu = document.getElementById(`node-actions-${practiceNodeIds.b}`);
+  const blockAction = menu
+    ? [...menu.querySelectorAll('button')].find(
+        (button) =>
+          button.getAttribute('aria-label') === 'Bloquear rama' ||
+          button.textContent?.trim() === 'Bloquear rama',
+      )
+    : null;
+  const node = document.querySelector(nodeSelector(practiceNodeIds.b));
+  return (
+    confirmation ??
+    blockAction ??
+    node?.querySelector('button[aria-label="Abrir menú de acciones del nodo"]') ??
+    node
   );
 }
 
@@ -108,10 +136,11 @@ export function teachingTutorialSteps(
       side: 'left',
     },
     {
-      element: canvas,
+      element: branchBlockControl,
       title: 'Bloquea una rama',
+      prepare: () => clickElement(nodeSelector(practiceNodeIds.b)),
       description:
-        'Abre el menú de acciones de Conceptos básicos y elige "Bloquear rama". El bloqueo docente impide que tus estudiantes trabajen en un nodo.',
+        'En el nodo "Conceptos básicos", abre su menú de acciones con el ícono de engranaje. Elige "Bloquear rama" y confirma con "Bloquear rama". El bloqueo docente impide que tus estudiantes trabajen en los nodos de esa rama.',
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
         action.nodeId === practiceNodeIds.b &&
@@ -136,11 +165,16 @@ export function teachingTutorialSteps(
     {
       element: nodeSelector(practiceNodeIds.f),
       title: 'Desbloqueo programado',
+      prepare: async () => {
+        clickElement('#roadmap-editor-panel button[aria-label="Deseleccionar nodo"]');
+        await waitForElement('#roadmap-editor-panel[hidden]');
+        clickElement('button[aria-label="Centrar mapa"]');
+      },
       description:
         'Proyecto final tiene un desbloqueo programado: se libera solo en la fecha que elegiste. Lo configuras en el editor de un nodo con bloqueo docente.',
     },
     {
-      element: canvas,
+      element: confirmationOrCanvas,
       title: 'Oculta un nodo',
       description:
         'Abre el menú de Retroalimentación del control y elige "Ocultar para estudiantes". Al ocultarlo se eliminan sus dependencias.',
@@ -158,7 +192,7 @@ export function teachingTutorialSteps(
       advanceWhen: (action) => action.type === 'addResource' && action.nodeId === createdNodeId,
     },
     {
-      element: canvas,
+      element: confirmationOrCanvas,
       title: 'Elimina tu nodo',
       prepare: () => resourceSuggestion.set(false),
       description:

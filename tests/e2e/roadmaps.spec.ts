@@ -659,7 +659,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   ).toBe(true);
 });
 
-test('keeps the two-scope unlock confirmation usable on a narrow viewport', async ({
+test('keeps the two-scope unlock confirmation within the dialog at every viewport', async ({
   page,
   course,
   teacherApi: teacher,
@@ -697,6 +697,7 @@ test('keeps the two-scope unlock confirmation usable on a narrow viewport', asyn
   await ok(await teacher.post(course.apiPath(`/nodes/${source.id}/teacher-block`)));
 
   await authenticateAs(page.context(), course.users.teacher.id);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto(course.pagePath());
   await panRoadmapNodeIntoView(page, source.id);
@@ -717,14 +718,24 @@ test('keeps the two-scope unlock confirmation usable on a narrow viewport', asyn
     dialog.getByRole('button', { name: 'Desbloquear este Nodo' }),
     dialog.getByRole('button', { name: 'Desbloquear la rama' }),
   ];
-  for (const control of controls) {
-    await expect(control).toBeVisible();
-    const box = await control.boundingBox();
-    if (!box) throw new Error('No se pudo medir una acción de confirmación.');
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.y).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(375);
-    expect(box.y + box.height).toBeLessThanOrEqual(812);
+  for (const width of [375, 640, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 812 });
+    await expect
+      .poll(() => dialog.evaluate((element) => element.scrollWidth - element.clientWidth))
+      .toBeLessThanOrEqual(1);
+    const dialogBox = await dialog.boundingBox();
+    if (!dialogBox) throw new Error('No se pudo medir el diálogo de confirmación.');
+    expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(width);
+    for (const control of controls) {
+      await expect(control).toBeVisible();
+      const box = await control.boundingBox();
+      if (!box) throw new Error('No se pudo medir una acción de confirmación.');
+      expect(box.x).toBeGreaterThanOrEqual(dialogBox.x);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width);
+      expect(box.y + box.height).toBeLessThanOrEqual(812);
+    }
   }
 
   await controls[0].click();
@@ -1256,15 +1267,21 @@ test('landing access starts VTI and dismisses authentication failures without re
 }) => {
   await page.goto('/?error=Authentication');
   await expect(
-    page.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
+    page.getByRole('alert', { name: 'No pudimos completar tu ingreso con U-Pasaporte.' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Ingresar con U-Pasaporte' })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Ruta de aprendizaje de ejemplo' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Funciones', level: 2 })).toBeVisible();
+  const hero = page.getByRole('region', { name: 'Cada curso, una ruta clara.' });
+  await expect(hero.getByRole('button', { name: 'Ingresar con U-Pasaporte' })).toBeVisible();
+  await expect(page.getByRole('figure', { name: 'Ruta de aprendizaje de ejemplo' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('list', { name: 'Nodos de la ruta de ejemplo' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Funciones: Contenido disponible y siguiente paso' }),
+  ).toHaveCount(1);
   await page.getByRole('button', { name: 'Cerrar alerta' }).click();
   await expect(page).toHaveURL('/');
   await expect(
-    page.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
+    page.getByRole('alert', { name: 'No pudimos completar tu ingreso con U-Pasaporte.' }),
   ).toHaveCount(0);
 
   const protectedRoute = await request.get('/academic-overview', { maxRedirects: 0 });
@@ -1291,7 +1308,9 @@ test('logout requires confirmation and removes the application session', async (
   await dialog.getByRole('button', { name: 'Cerrar sesión' }).click();
 
   await expect(page).toHaveURL('/');
-  await expect(page.getByRole('button', { name: 'Autenticarse' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Ingresar con U-Pasaporte' }).first(),
+  ).toBeVisible();
   await expect(page.context().cookies()).resolves.not.toContainEqual(
     expect.objectContaining({ name: 'next-auth.session-token' }),
   );
@@ -1312,7 +1331,7 @@ test('1440px visual references cover the public shell states in each browser', a
 
   await page.goto('/?error=Authentication');
   await expect(
-    page.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
+    page.getByRole('alert', { name: 'No pudimos completar tu ingreso con U-Pasaporte.' }),
   ).toBeVisible();
   await testInfo.attach('authentication-error-landing', {
     body: await page.screenshot({ fullPage: true }),

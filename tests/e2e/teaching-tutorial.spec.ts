@@ -90,6 +90,9 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expectStep(page, 'Tipo de nodo y recursos');
 
   await next(page, 'Nodo oculto');
+  await tourPopover(page).getByRole('button', { name: 'Anterior' }).click();
+  await expectStep(page, 'Tipo de nodo y recursos');
+  await next(page, 'Nodo oculto');
   await expect(practiceNode(page, 'Material de apoyo')).toHaveClass(/driver-active-element/);
   await next(page, 'Bloqueo docente');
   await next(page, 'Crea un nodo');
@@ -129,6 +132,11 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
   // "Tipos de nodo" is explained on its own, without creating a Custom node type.
   await expectStep(page, 'Tipos de nodo');
+  // Completed actions cannot be replayed through either navigation control.
+  await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
+  await page.keyboard.press('ArrowLeft');
+  await expectStep(page, 'Tipos de nodo');
+  await expect(practiceNode(page, 'Nodo de práctica')).toHaveCount(1);
   await expect(creator).toHaveClass(/driver-active-element/);
   await next(page, 'Conecta tu nodo');
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
@@ -139,6 +147,9 @@ test('teaching staff perform each action step of the teaching tutorial', async (
     await expect(page.locator('.react-flow__edge')).toHaveCount(9, { timeout: 1000 });
   }).toPass();
   await expectStep(page, 'Dependencias');
+  await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
+  await page.keyboard.press('ArrowLeft');
+  await expectStep(page, 'Dependencias');
   await expect(tourPopover(page)).toContainText('ciclos');
   await next(page, 'Selecciona tu nodo');
 
@@ -148,16 +159,36 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expectStep(page, 'Selecciona tu nodo');
   await practiceNode(page, 'Nodo de práctica').click();
   await expectStep(page, 'Editor de nodo');
+  await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
+  await page.keyboard.press('ArrowLeft');
+  await expectStep(page, 'Editor de nodo');
   await expect(page.locator('[aria-label="Editor de nodo"]')).toHaveClass(/driver-active-element/);
   await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/Descripción/)).toHaveValue(
     markdown,
   );
 
   await next(page, 'Bloquea una rama');
+  const blockNode = practiceNode(page, 'Conceptos básicos');
+  const blockMenuTrigger = blockNode.getByRole('button', {
+    name: 'Abrir menú de acciones del nodo',
+  });
+  await expect(blockNode).toHaveClass(/selected/);
+  await expect(blockMenuTrigger).toHaveClass(/driver-active-element/);
+  await expect(tourPopover(page)).toContainText('nodo "Conceptos básicos"');
+  await expect(tourPopover(page)).toContainText('confirma');
 
   // The confirmation is portaled, and stays usable.
-  await openNodeMenu(page, 'Conceptos básicos', 'Bloquear rama');
+  await blockMenuTrigger.click();
+  const blockAction = blockNode.getByRole('button', { name: 'Bloquear rama', exact: true });
+  await expect(blockAction).toHaveClass(/driver-active-element/);
+  await blockAction.click();
   const confirmation = page.getByRole('alertdialog');
+  await expect(confirmation).toHaveClass(/driver-active-element/);
+  await confirmation.getByRole('button', { name: 'Cancelar' }).click();
+  await expectStep(page, 'Bloquea una rama');
+  await expect(blockMenuTrigger).toHaveClass(/driver-active-element/);
+  await blockMenuTrigger.click();
+  await blockAction.click();
   await confirmation.getByRole('button', { name: 'Bloquear rama' }).click();
   await expectStep(page, 'Bloqueo propagado');
   for (const title of [
@@ -174,12 +205,17 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(confirmation.getByRole('button', { name: 'Desbloquear este Nodo' })).toBeVisible();
   await confirmation.getByRole('button', { name: 'Desbloquear la rama' }).click();
   await expectStep(page, 'Desbloqueo programado');
+  await expect(page.getByLabel('Panel de edición del roadmap', { exact: true })).toBeHidden();
+  await expect(practiceNode(page, 'Proyecto final')).toHaveClass(/driver-active-element/);
+  // React Flow transforms can round a fully visible node's intersection just below 1.
+  await expect(practiceNode(page, 'Proyecto final')).toBeInViewport({ ratio: 0.99 });
   await expect(blockedByTeacher(page, 'Ejercicios guiados')).toHaveCount(0);
   await next(page, 'Oculta un nodo');
 
   // Cancelling the confirmation keeps the step.
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
   await expect(confirmation).toContainText('Dependencias que se eliminarán');
+  await expect(confirmation).toHaveClass(/driver-active-element/);
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Oculta un nodo');
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
@@ -195,6 +231,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expectStep(page, 'Elimina tu nodo');
 
   await openNodeMenu(page, 'Nodo de práctica', 'Eliminar nodo');
+  await expect(confirmation).toHaveClass(/driver-active-element/);
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Elimina tu nodo');
   await openNodeMenu(page, 'Nodo de práctica', 'Eliminar nodo');

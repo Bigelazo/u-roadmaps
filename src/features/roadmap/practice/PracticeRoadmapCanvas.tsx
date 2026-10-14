@@ -1,9 +1,6 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
-import { LogOut } from 'lucide-react';
-import { buttonVariants } from '@/shared/ui/button';
 import { RoadmapCanvasSession } from '@/features/roadmap/session/RoadmapCanvasSession';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
@@ -22,12 +19,7 @@ import { studentTutorialSteps } from '@/features/roadmap/practice/student-tutori
 import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
 import { reportingPracticeActions } from '@/features/roadmap/practice/practice-actions';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
-import {
-  createTutorialActions,
-  TUTORIAL_EXIT_ATTRIBUTE,
-  markTutorialClosingPopover,
-  RoadmapTutorial,
-} from '@/shared/client/tutorial/tutorial';
+import { createTutorialActions, RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
 import { useRecordTutorialOpening } from '@/shared/client/tutorial/tutorial-records';
 
 /**
@@ -70,24 +62,7 @@ export function PracticeRoadmapCanvas({
     ),
   );
   return (
-    // Below the global navigation, the bar takes the height its content needs, wrapped
-    // or not, and the canvas fills the rest. The column stays unpositioned: a stacking
-    // context here would keep the "Salir" bar below the tutorial overlay.
     <div data-practice-roadmap className="flex flex-col lg:h-[calc(100dvh-4rem)]">
-      <nav
-        aria-label="Mapa de práctica"
-        {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
-        className="sticky top-16 z-20 flex shrink-0 flex-wrap items-center justify-end gap-2 border-b bg-background px-4 py-2 sm:px-6"
-      >
-        <Link
-          className={buttonVariants({ variant: 'outline' })}
-          href={practiceExitHref(origin)}
-          onClick={markTutorialClosingPopover}
-        >
-          <LogOut data-icon="inline-start" />
-          Salir
-        </Link>
-      </nav>
       <main className="min-h-0 flex-1 bg-cloud">
         <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
           <RoadmapCanvasSession
@@ -97,6 +72,7 @@ export function PracticeRoadmapCanvas({
             }}
             experience={{ kind: experience, term: 'current' }}
             practice={{
+              exitHref: practiceExitHref(origin),
               nodeChangeCounts: experience === 'student' ? practiceNodeChangeCounts : {},
               onAction: actions.report,
               suggestedResource: resourceSuggestion.get,

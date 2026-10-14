@@ -1,13 +1,13 @@
 /*
  * The tutorial's layers, around driver.js 1.9.0's own: its overlay sits at 10000 and its
  * popover at 1000000000 (driver.css).
- * - exit bar: the "Salir" bar, just above the overlay.
+ * - exit control: the "Salir" button, just above the overlay.
  * - acting layer: portaled menus, dialogs and popups during an action step, above the
  *   overlay and highlighted element but below the tour popover.
  * - exit confirmation: "¿Salir del tutorial?", above the tour popover.
  */
 :root {
-  --tutorial-z-exit-bar: 10001;
+  --tutorial-z-exit-control: 10001;
   --tutorial-z-acting-layer: 100000;
   --tutorial-z-exit-confirmation: 1000000001;
 }
@@ -119,9 +119,9 @@
   pointer-events: none;
 }
 
-/* "Salir" leaves the tutorial at any moment: its bar sits above the overlay. */
+/* Only "Salir" sits above the overlay, so the surrounding canvas stays dimmed. */
 .driver-active [data-tutorial-exit] {
-  z-index: var(--tutorial-z-exit-bar);
+  z-index: var(--tutorial-z-exit-control);
 }
 .driver-active [data-tutorial-exit],
 .driver-active [data-tutorial-exit] * {

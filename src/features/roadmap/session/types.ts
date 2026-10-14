@@ -123,6 +123,8 @@ export type RoadmapCanvasSessionInput = {
   readonly experience: RoadmapCanvasExperience;
   /** Present on the Practice roadmap, which belongs to no Course offering. */
   readonly practice?: {
+    /** Return destination for the exit control inside the Practice canvas. */
+    readonly exitHref?: string;
     readonly nodeChangeCounts: Readonly<Record<string, number>>;
     /** Told about canvas actions that took effect, for the teaching Roadmap tutorial. */
     readonly onAction?: (action: PracticeCanvasAction) => void;
