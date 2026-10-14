@@ -242,7 +242,7 @@ function ConfirmationDialog({
             <ConfirmationDetails sections={confirmation.sections} />
           ) : null}
 
-          <AlertDialogFooter>
+          <AlertDialogFooter className="sm:flex-wrap">
             <AlertDialogCancel disabled={isPending}>
               {confirmation.cancelLabel ?? 'Cancelar'}
             </AlertDialogCancel>
