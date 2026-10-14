@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import {
   AlertTriangle,
+  Archive,
   ArrowUpRight,
   BookOpen,
   ChevronDown,
@@ -30,6 +31,7 @@ import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-lay
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
+import { cn } from 'cn';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
 // TEACHING_STAFF is the fallback for teaching staff without a reported position.
@@ -54,6 +56,10 @@ const positionDetails: Record<
   STUDENT: { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' },
   OBSERVER: { label: 'Oyente', accentClass: 'border-l-[#6f7a8a]' },
 };
+
+function roadmapUrl(course: AcademicOverviewCourse) {
+  return `/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`;
+}
 
 function courseCountLabel(count: number) {
   return `${count} ${count === 1 ? 'curso' : 'cursos'}`;
@@ -112,20 +118,27 @@ function CourseRow({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:justify-end">
-          <p
-            className={
-              course.hasRoadmap
-                ? 'flex items-center gap-2 text-sm font-medium text-progress-deep'
-                : 'flex items-center gap-2 text-sm text-muted-foreground'
-            }
-          >
-            {course.hasRoadmap ? (
-              <Route aria-hidden="true" size={17} />
-            ) : (
-              <BookOpen aria-hidden="true" size={17} />
-            )}
-            {course.hasRoadmap ? 'Roadmap disponible' : 'Sin roadmap'}
-          </p>
+          {course.hasRoadmap && isPastOffering ? (
+            <p className="flex items-center gap-2 text-sm font-medium text-graphite">
+              <Archive aria-hidden="true" size={17} />
+              Cerrado · solo lectura
+            </p>
+          ) : (
+            <p
+              className={
+                course.hasRoadmap
+                  ? 'flex items-center gap-2 text-sm font-medium text-progress-deep'
+                  : 'flex items-center gap-2 text-sm text-muted-foreground'
+              }
+            >
+              {course.hasRoadmap ? (
+                <Route aria-hidden="true" size={17} />
+              ) : (
+                <BookOpen aria-hidden="true" size={17} />
+              )}
+              {course.hasRoadmap ? 'Roadmap disponible' : 'Sin roadmap'}
+            </p>
+          )}
           {course.hasRoadmap ? (
             <>
               {notificationsEnabled ? (
@@ -138,14 +151,25 @@ function CourseRow({
                   label={`el curso ${course.name}`}
                 />
               ) : null}
-              <Link
-                aria-label={`Abrir roadmap de ${course.name}`}
-                className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                href={`/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`}
-              >
-                Abrir roadmap
-                <ArrowUpRight aria-hidden="true" size={16} />
-              </Link>
+              {isPastOffering ? (
+                // A closed Roadmap is read-only history, so it is not the row's primary action.
+                <Link
+                  aria-label={`Ver roadmap de ${course.name}`}
+                  className={cn(buttonVariants({ variant: 'outline' }))}
+                  href={roadmapUrl(course)}
+                >
+                  Ver roadmap
+                </Link>
+              ) : (
+                <Link
+                  aria-label={`Abrir roadmap de ${course.name}`}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  href={roadmapUrl(course)}
+                >
+                  Abrir roadmap
+                  <ArrowUpRight aria-hidden="true" size={16} />
+                </Link>
+              )}
             </>
           ) : course.canCreateRoadmap ? (
             renderRoadmapCreation({
