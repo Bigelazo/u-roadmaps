@@ -32,28 +32,45 @@ import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
-// TEACHING_STAFF is the fallback for teaching staff without a reported position.
+// TEACHING_STAFF is the fallback for teaching staff without a reported position:
+// it has no position color, so its plate is neutral and its marker an outline.
 const positionDetails: Record<
   AcademicOverviewInstitutionalPosition | 'TEACHING_STAFF',
-  Readonly<{ label: string; accentClass: string }>
+  Readonly<{ label: string; color: string | null }>
 > = {
-  TEACHING_STAFF: { label: 'Equipo docente', accentClass: 'border-l-[#1d3193]' },
+  TEACHING_STAFF: { label: 'Equipo docente', color: null },
   COORDINATING_PROFESSOR: {
     label: 'Profesor coordinador',
-    accentClass: 'border-l-[#9acc24]',
+    color: 'var(--position-coordinating-professor)',
   },
-  COURSE_PROFESSOR: {
-    label: 'Profesor de cátedra',
-    accentClass: 'border-l-[#1d3193]',
-  },
-  AUXILIARY_PROFESSOR: {
-    label: 'Auxiliar',
-    accentClass: 'border-l-[#f0195c]',
-  },
-  TEACHING_ASSISTANT: { label: 'Ayudante', accentClass: 'border-l-[#933D8A]' },
-  STUDENT: { label: 'Estudiante', accentClass: 'border-l-[#f4ce62]' },
-  OBSERVER: { label: 'Oyente', accentClass: 'border-l-[#6f7a8a]' },
+  COURSE_PROFESSOR: { label: 'Profesor de cátedra', color: 'var(--position-course-professor)' },
+  AUXILIARY_PROFESSOR: { label: 'Auxiliar', color: 'var(--position-auxiliary-professor)' },
+  TEACHING_ASSISTANT: { label: 'Ayudante', color: 'var(--position-teaching-assistant)' },
+  STUDENT: { label: 'Estudiante', color: 'var(--position-student)' },
+  OBSERVER: { label: 'Oyente', color: 'var(--position-observer)' },
 };
+
+/** The person's institutional position in the course, always named next to its color. */
+function PositionPlate({
+  position,
+}: Readonly<{ position: (typeof positionDetails)[keyof typeof positionDetails] }>) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-sm bg-[color-mix(in_srgb,var(--position-color)_16%,var(--card))] px-2 py-0.5 text-xs font-bold text-ink"
+      style={{ '--position-color': position.color ?? 'var(--steel)' } as React.CSSProperties}
+    >
+      <span
+        aria-hidden="true"
+        className={
+          position.color
+            ? 'size-2 shrink-0 rounded-full bg-(--position-color)'
+            : 'size-2 shrink-0 rounded-full border border-graphite'
+        }
+      />
+      {position.label}
+    </span>
+  );
+}
 
 function roadmapUrl(course: AcademicOverviewCourse) {
   return `/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`;
@@ -95,7 +112,7 @@ function CourseRow({
   const isPastOffering = isPastTerm || course.isPastClosure;
 
   return (
-    <li className={`min-w-0 border-l-4 ${position.accentClass}`}>
+    <li className="min-w-0">
       <div className="grid gap-4 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold tracking-[0.08em] text-muted-foreground uppercase">
@@ -110,10 +127,10 @@ function CourseRow({
           <h4 className="mt-2 font-heading text-xl leading-[1.08] font-semibold tracking-[-0.02em] sm:text-2xl">
             {course.name}
           </h4>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {position.label}
-            {course.department ? ` · ${course.department}` : ''}
-          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <PositionPlate position={position} />
+            {course.department ? <span>{course.department}</span> : null}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:justify-end">
           {course.hasRoadmap && isPastOffering ? (
