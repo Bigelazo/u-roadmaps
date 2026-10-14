@@ -20,7 +20,8 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   title: 'U-Roadmaps',
-  description: 'Visualizador y gestor de rutas pedagógicas y asignaturas universitarias.',
+  description:
+    'Cada curso, una ruta clara. Explora contenidos, requisitos y recursos en una ruta que muestra tu avance.',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -33,7 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <NotificationsProvider identity={inboxIdentity}>
           <GlobalNavigation
-            isAuthenticated={Boolean(session)}
+            isAuthenticated={Boolean(user)}
             userName={user?.name ?? null}
             inboxIdentity={inboxIdentity}
             developmentTools={

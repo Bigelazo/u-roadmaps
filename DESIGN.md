@@ -172,6 +172,8 @@ Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram 
 - **Dependency**: blue directional structure. It remains distinguishable from Jade progress and from custom node-type colors.
 - **Resource card**: compact title, resource type, and Lucide icon with an explicit external or download affordance.
 - **Teacher panel**: denser authoring surface that uses Ink and Blue for structure. Jade appears only when teacher actions affect or report participant progress.
+- **Route specimen**: a faithful static reproduction of the student canvas (`RouteSpecimen`): production node geometry, predefined types, status and resource badges, ink dependencies and the fog grid. Use it wherever a page must show the product instead of describing it, label its course visibly as an example, and never invent states the product lacks.
+- **Cited surface**: when a page compares U-Roadmaps with the platform it replaces, show that platform as quoted sheets in its own system sans, greys, section bands and link color, one sheet per section it really splits content into. Name it only in the panel heading (for example “Hoy, en U-Cursos”), never with its logo, icons, avatars or real people. It sits on Ink as a foreign object; U-Roadmaps type and color stay out of it, except for the Blue cue that links a quoted row to its node.
 - **Institutional provenance**: “Universidad de Chile” appears in the global footer, separate from the U-Roadmaps wordmark.
 
 ## Logo and Favicon Status
@@ -190,7 +192,7 @@ Route traces may simplify or disappear on mobile when they stop communicating us
 
 Meet WCAG AA contrast for text and interactive states. Preserve visible keyboard focus, semantic heading order, accessible names, and browser zoom. Never rely on color, opacity, or motion alone to communicate state.
 
-Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation.
+Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Choreographed motion outside shadcn primitives uses Motion (`motion/react`, ADR-0027); motion is never reduced for `prefers-reduced-motion` (ADR-0022). Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation.
 
 ## Reference Implementation
 

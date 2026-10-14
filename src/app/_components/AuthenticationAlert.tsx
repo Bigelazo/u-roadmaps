@@ -6,16 +6,37 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 
+const authenticationFailures = {
+  Authentication: {
+    title: 'No pudimos completar tu ingreso con U-Pasaporte.',
+    description:
+      'La respuesta de U-Pasaporte expiró o llegó incompleta. Vuelve a ingresar con U-Pasaporte.',
+  },
+  AuthenticationUnavailable: {
+    title: 'El ingreso con U-Pasaporte no está disponible.',
+    description:
+      'U-Roadmaps no pudo iniciar la conexión con el servicio institucional. Inténtalo más tarde.',
+  },
+} as const;
+
+function isAuthenticationFailure(
+  error: string | null,
+): error is keyof typeof authenticationFailures {
+  return error !== null && Object.hasOwn(authenticationFailures, error);
+}
+
 function AuthenticationAlertContent() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  if (pathname !== '/' || searchParams.get('error') !== 'Authentication') return null;
+  const error = searchParams.get('error');
+  if (pathname !== '/' || !isAuthenticationFailure(error)) return null;
+  const { title, description } = authenticationFailures[error];
 
   return (
     <Alert
-      aria-label="No fue posible completar la autenticación institucional."
+      aria-label={title}
       className="rounded-none border-x-0 border-t-0 border-destructive px-0 py-0"
       variant="destructive"
     >
@@ -23,8 +44,8 @@ function AuthenticationAlertContent() {
         <div className="flex min-w-0 items-start gap-3">
           <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
           <div className="min-w-0">
-            <AlertTitle>No fue posible completar la autenticación institucional.</AlertTitle>
-            <AlertDescription>Inténtalo nuevamente.</AlertDescription>
+            <AlertTitle>{title}</AlertTitle>
+            <AlertDescription>{description}</AlertDescription>
           </div>
         </div>
         <AlertAction className="static">

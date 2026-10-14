@@ -30,13 +30,15 @@ export default function GlobalNavigation({
       className="sticky top-0 z-20 box-border min-h-16 border-b bg-background"
     >
       <div className="mx-auto flex min-h-16 max-w-360 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6 [body:has([data-page-width=full])_&]:max-w-none">
-        <Link
-          href="/"
-          className="flex min-h-11 items-center gap-2 rounded-md text-primary no-underline transition-colors outline-none hover:text-primary-deep focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
-        >
-          <Network aria-hidden="true" size={22} strokeWidth={2.5} />
-          <span className="text-xl font-bold tracking-[-0.04em]">U-Roadmaps</span>
-        </Link>
+        <nav aria-label="Principal">
+          <Link
+            href="/"
+            className="flex min-h-11 items-center gap-2 rounded-md text-primary no-underline transition-colors outline-none hover:text-primary-deep focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none"
+          >
+            <Network aria-hidden="true" size={22} strokeWidth={2.5} />
+            <span className="text-xl font-bold tracking-[-0.04em]">U-Roadmaps</span>
+          </Link>
+        </nav>
         {developmentTools}
         <div className="ml-auto flex min-w-0 items-center gap-3">
           {isAuthenticated && inboxIdentity ? (

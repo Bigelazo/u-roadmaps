@@ -1,136 +1,176 @@
-import { ArrowRight, BookOpen, ListChecks, Map as MapIcon } from 'lucide-react';
 import { redirect } from 'next/navigation';
-import { Badge } from '@/shared/ui/badge';
-import { Button } from '@/shared/ui/button';
-import { Card, CardContent, CardHeader } from '@/shared/ui/card';
+import { CourseRouteComparison } from '@/app/_components/landing/CourseRouteComparison';
+import { InstitutionalLoginForm } from '@/app/_components/InstitutionalLoginForm';
 import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
-import { cn } from 'cn';
 
-const courseBenefits = [
+const audienceLanes = [
   {
-    icon: MapIcon,
-    title: 'Explora el mapa del curso',
-    description: 'Visualiza unidades, evaluaciones y materiales complementarios en una sola ruta.',
+    id: 'teaching-staff',
+    title: 'Para equipos docentes',
+    lead: 'Ordena el curso como se estudia y decide cuándo se abre cada parte.',
+    items: [
+      {
+        title: 'Arma la ruta del curso',
+        description:
+          'Crea nodos de contenido, evaluación y material extra, y conéctalos según lo que requiere cada uno.',
+      },
+      {
+        title: 'Decide cuándo se abre cada parte',
+        description:
+          'Bloquea un nodo o programa su desbloqueo para una fecha; tus estudiantes ven qué falta y desde cuándo.',
+      },
+      {
+        title: 'Sigue el avance de tu curso',
+        description:
+          'Revisa cuánto de la ruta completó cada estudiante y el promedio del curso, con el listado de U-Campus.',
+      },
+      {
+        title: 'Cada semestre queda registrado',
+        description:
+          'Al terminar el semestre, la ruta queda como una versión de solo lectura en el historial del curso.',
+      },
+    ],
   },
   {
-    icon: ListChecks,
-    title: 'Sigue tu avance',
+    id: 'students',
+    title: 'Para estudiantes',
+    lead: 'Sabes qué puedes abrir, qué necesitas antes y qué ya completaste.',
+    items: [
+      {
+        title: 'Sabes qué puedes abrir',
+        description:
+          'Cada nodo indica si está disponible, completado o bloqueado, y qué debes completar antes.',
+      },
+      {
+        title: 'Los recursos están donde los necesitas',
+        description: 'Archivos, enlaces y videos viven dentro del nodo al que pertenecen.',
+      },
+      {
+        title: 'Tu avance queda registrado',
+        description: 'Marca cada nodo al completarlo; el registro se conserva con su fecha.',
+      },
+      {
+        title: 'Te enteras de los cambios',
+        description:
+          'Si el equipo docente modifica la ruta, recibes un aviso y un resumen al volver a entrar.',
+      },
+    ],
+  },
+] as const;
+
+const startSteps = [
+  {
+    title: 'Ingresa con U-Pasaporte',
+    description: 'Usa tu cuenta institucional; no hay un registro aparte.',
+  },
+  {
+    title: 'Encuentra tus cursos',
     description:
-      'Identifica qué contenidos ya completaste y cuáles debes preparar antes de continuar.',
+      'Tu resumen académico reúne tus cursos de U-Campus, actuales y anteriores, con tu cargo en cada uno.',
   },
   {
-    icon: BookOpen,
-    title: 'Encuentra recursos a tiempo',
-    description: 'Accede a lecturas, archivos y enlaces asociados directamente a cada tema.',
+    title: 'Abre la ruta del curso',
+    description: 'Si el curso aún no tiene ruta, quien dicta la cátedra puede crearla desde ahí.',
   },
-];
-
-const sampleRoute = [
-  {
-    label: 'Completado',
-    title: 'Variables',
-    variant: 'progress' as const,
-    markerClassName: 'bg-progress',
-  },
-  {
-    label: 'Estás aquí',
-    title: 'Funciones',
-    variant: 'progress' as const,
-    cardClassName: 'bg-progress-soft ring-progress',
-  },
-  { label: 'Siguiente', title: 'Estructuras', variant: 'outline' as const },
-];
+] as const;
 
 export default async function Home() {
   const user = await resolveSessionUser(await getApplicationSession());
   if (user) redirect('/academic-overview');
 
   return (
-    <main className="min-h-screen bg-cloud text-foreground">
-      <div className="mx-auto max-w-[1440px] px-6 py-10 md:py-20">
-        <section className="overflow-hidden rounded-xl bg-ink p-6 text-primary-foreground sm:p-8 md:grid md:grid-cols-[minmax(0,1fr)_420px] md:gap-12 md:p-14">
-          <div className="max-w-2xl">
-            <p className="mb-5 text-xs font-bold tracking-widest text-primary-soft uppercase">
-              U-Roadmaps
-            </p>
-            <h1 className="font-heading text-5xl leading-[0.98] font-semibold tracking-tighter md:text-7xl">
-              Cada curso, una ruta clara.
-            </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-primary-foreground/85">
-              U-Roadmaps muestra cómo se conectan los contenidos de tus cursos para que puedas
-              preparar cada unidad con una visión clara de sus requisitos y recursos.
-            </p>
-            <form action="/api/plogin/start" method="post" className="mt-8">
-              <Button size="lg" type="submit">
-                Ingresar con U-Pasaporte <ArrowRight aria-hidden="true" data-icon="inline-end" />
-              </Button>
-            </form>
+    <>
+      <main className="bg-cloud text-foreground">
+        <section
+          aria-labelledby="landing-title"
+          className="mx-auto max-w-[1440px] px-4 pt-6 sm:px-6 md:pt-10"
+        >
+          <div className="rounded-xl bg-ink px-6 py-10 text-primary-foreground sm:px-10 md:py-12 xl:grid xl:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] xl:items-center xl:gap-10 xl:px-12">
+            <div className="max-w-xl">
+              <h1
+                id="landing-title"
+                className="font-heading text-[2.5rem] leading-[0.98] font-semibold tracking-[-0.04em] text-balance sm:text-5xl xl:text-[3.5rem] xl:tracking-[-0.05em]"
+              >
+                Cada curso, una ruta clara.
+              </h1>
+              <p className="mt-6 text-lg leading-[1.55] text-pretty text-primary-foreground/85">
+                Explora contenidos, requisitos y recursos en una ruta que muestra tu avance.
+              </p>
+              <InstitutionalLoginForm tone="dark" className="mt-8" />
+              <p className="mt-4 text-sm leading-normal text-primary-soft">
+                Usa tu cuenta U-Pasaporte. Tus cursos se cargan desde{' '}
+                <span className="whitespace-nowrap">U-Campus</span>.
+              </p>
+            </div>
+            <CourseRouteComparison className="mt-14 xl:mt-0" />
           </div>
-          <ol
-            aria-label="Ruta de aprendizaje de ejemplo"
-            className="relative mt-10 flex flex-col gap-4 pl-8 before:absolute before:top-2 before:bottom-2 before:left-2 before:w-px before:bg-primary-bright md:mt-0 md:grid md:grid-cols-3 md:items-start md:gap-4 md:pt-8 md:pl-0 md:before:top-2 md:before:right-4 md:before:bottom-auto md:before:left-4 md:before:h-px md:before:w-auto"
-          >
-            {sampleRoute.map(({ label, title, variant, cardClassName, markerClassName }) => (
-              <li className="relative md:last:mt-24 md:even:mt-12" key={title}>
-                <span
-                  aria-hidden="true"
-                  className={cn(
-                    'absolute top-4 -left-8 size-4 rounded-full border-4 border-ink bg-primary-soft md:-top-6 md:left-1/2 md:-translate-x-1/2',
-                    markerClassName,
-                  )}
-                />
-                <Card
-                  className={cn(
-                    '[--card-spacing:--spacing(4)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2',
-                    cardClassName,
-                  )}
-                  size="sm"
-                >
-                  <CardHeader className="gap-2">
-                    <Badge variant={variant}>{label}</Badge>
-                    <h2 className="font-heading text-lg font-semibold tracking-[-0.02em]">
-                      {title}
-                    </h2>
-                  </CardHeader>
-                </Card>
-              </li>
-            ))}
-          </ol>
         </section>
 
-        <section className="mt-16">
-          <p className="text-xs font-bold tracking-widest text-primary uppercase">
-            Una ruta para cada curso
-          </p>
-          <h2 className="mt-2 font-heading text-4xl font-semibold tracking-[-0.04em]">
-            Lo importante, en el orden que importa.
-          </h2>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {courseBenefits.map(({ icon: Icon, title, description }) => (
-              <article key={title}>
-                <Card className="h-full min-h-52 [--card-spacing:--spacing(6)]">
-                  <CardHeader className="gap-6">
-                    <div className="grid size-11 place-items-center rounded-md bg-primary-soft text-primary">
-                      <Icon aria-hidden="true" />
-                    </div>
-                    <h3 className="font-heading text-2xl font-semibold tracking-[-0.02em]">
-                      {title}
-                    </h3>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="leading-relaxed text-muted-foreground">{description}</p>
-                  </CardContent>
-                </Card>
-              </article>
-            ))}
+        <section
+          aria-label="Qué cambia para cada persona"
+          className="mx-auto grid max-w-[1440px] gap-16 px-4 py-20 sm:px-6 md:grid-cols-2 md:gap-12 md:py-28 lg:gap-20 lg:px-12"
+        >
+          {audienceLanes.map((lane) => (
+            <div key={lane.id} aria-labelledby={`${lane.id}-title`} role="group">
+              <h2
+                id={`${lane.id}-title`}
+                className="font-heading text-[1.75rem] leading-[1.08] font-semibold tracking-[-0.03em]"
+              >
+                {lane.title}
+              </h2>
+              <p className="mt-3 max-w-[38ch] text-lg leading-[1.55] text-graphite">{lane.lead}</p>
+              <ul className="mt-8">
+                {lane.items.map((item) => (
+                  <li key={item.title} className="border-t border-fog py-5">
+                    <p className="font-bold text-ink">{item.title}</p>
+                    <p className="mt-1 max-w-[52ch] leading-normal text-graphite">
+                      {item.description}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+
+        <section aria-labelledby="start-title" className="border-t border-fog bg-card">
+          <div className="mx-auto max-w-[1440px] px-4 py-20 sm:px-6 md:py-24 lg:px-12">
+            <h2
+              id="start-title"
+              className="font-heading text-[1.75rem] leading-[1.08] font-semibold tracking-[-0.03em]"
+            >
+              Cómo empiezas
+            </h2>
+            <ol className="relative mt-10 grid gap-10 md:grid-cols-3 md:gap-8">
+              <span
+                aria-hidden="true"
+                className="absolute top-2 bottom-2 left-[7px] w-px bg-primary md:top-[7px] md:right-[calc(100%/3-1.75rem)] md:bottom-auto md:left-2 md:h-px md:w-auto"
+              />
+              {startSteps.map((step) => (
+                <li key={step.title} className="relative pl-10 md:pt-10 md:pl-0">
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-0.5 left-0 size-4 rounded-full border-4 border-card bg-primary ring-1 ring-primary md:top-0"
+                  />
+                  <p className="font-heading text-[1.375rem] leading-[1.15] font-semibold tracking-[-0.02em]">
+                    {step.title}
+                  </p>
+                  <p className="mt-2 max-w-[36ch] leading-normal text-graphite">
+                    {step.description}
+                  </p>
+                </li>
+              ))}
+            </ol>
+            <InstitutionalLoginForm className="mt-12" />
           </div>
         </section>
-      </div>
-      <footer className="border-t bg-card">
-        <div className="mx-auto max-w-[1440px] px-6 py-5 text-sm text-muted-foreground">
-          Universidad de Chile
+      </main>
+      <footer className="border-t border-fog bg-cloud">
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-2 px-4 py-6 text-sm text-graphite sm:px-6 lg:px-12">
+          <span>Universidad de Chile</span>
+          <span>U-Roadmaps · Cada curso, una ruta clara.</span>
         </div>
       </footer>
-    </main>
+    </>
   );
 }

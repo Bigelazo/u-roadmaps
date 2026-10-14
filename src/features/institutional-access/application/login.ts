@@ -38,7 +38,8 @@ function asApplicationError(error: unknown): never {
 /** Starts VTI without creating a local application session. */
 export async function startInstitutionalLogin(request: Request) {
   const started = await startVtiLogin();
-  if (!started) return NextResponse.redirect(siteUrl('/?error=Authentication', request), 303);
+  if (!started)
+    return NextResponse.redirect(siteUrl('/?error=AuthenticationUnavailable', request), 303);
 
   const response = NextResponse.redirect(started.loginTarget, 303);
   response.cookies.set({

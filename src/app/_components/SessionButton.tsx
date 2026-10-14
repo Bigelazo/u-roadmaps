@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Button } from '@/shared/ui/button';
+import { InstitutionalLoginForm } from './InstitutionalLoginForm';
 import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 
 const LOGOUT_ACTION_ID = 'logout';
@@ -18,14 +19,7 @@ export default function SessionButton({ isAuthenticated }: { isAuthenticated: bo
   const [pendingActionId, setPendingActionId] = useState<string>();
   const logoutFormRef = useRef<HTMLFormElement>(null);
 
-  if (!isAuthenticated)
-    return (
-      <form action="/api/plogin/start" method="post">
-        <Button type="submit" variant="outline">
-          Autenticarse
-        </Button>
-      </form>
-    );
+  if (!isAuthenticated) return <InstitutionalLoginForm tone="outline" size="default" compact />;
 
   return (
     <>

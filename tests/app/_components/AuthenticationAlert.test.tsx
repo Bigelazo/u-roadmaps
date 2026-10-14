@@ -27,13 +27,27 @@ test('shows the authentication failure on the landing page and dismisses it with
   render(<AuthenticationAlert />);
 
   expect(
-    screen.getByRole('alert', { name: 'No fue posible completar la autenticación institucional.' }),
+    screen.getByRole('alert', { name: 'No pudimos completar tu ingreso con U-Pasaporte.' }),
   ).not.toBeNull();
-  expect(screen.getByText('Inténtalo nuevamente.')).not.toBeNull();
+  expect(
+    screen.getByText(
+      'La respuesta de U-Pasaporte expiró o llegó incompleta. Vuelve a ingresar con U-Pasaporte.',
+    ),
+  ).not.toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Cerrar alerta' }));
 
   expect(navigation.replace).toHaveBeenCalledWith('/');
+});
+
+test('explains that institutional sign-in could not start', () => {
+  navigation.error = 'AuthenticationUnavailable';
+
+  render(<AuthenticationAlert />);
+
+  expect(
+    screen.getByRole('alert', { name: 'El ingreso con U-Pasaporte no está disponible.' }),
+  ).not.toBeNull();
 });
 
 test('does not show the alert for other routes or authentication states', () => {
