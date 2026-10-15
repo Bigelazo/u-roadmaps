@@ -7,7 +7,7 @@ export function nodeMenuActions(
   teacherBlocked: boolean,
   onAction: NodeActionCallbacks['onAction'],
 ) {
-  const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear rama';
+  const accessLabel = teacherBlocked ? 'Desbloquear' : 'Bloquear nodo';
   const visibilityLabel = hidden ? 'Mostrar para estudiantes' : 'Ocultar para estudiantes';
   return [
     ...(!hidden

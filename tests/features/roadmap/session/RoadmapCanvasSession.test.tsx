@@ -27,7 +27,7 @@ vi.mock('next/dynamic', () => ({
       const resource = node.resources[0];
       const actions: [label: string, run: () => void][] = [
         [
-          'Bloquear rama',
+          'Bloquear nodo',
           () => onIntent({ kind: 'change-teacher-block', nodeId: node.id, operation: 'BLOCK' }),
         ],
         [
@@ -652,13 +652,11 @@ describe('RoadmapCanvasSession', () => {
     const deleteNodeButton = screen.getByRole('button', { name: 'Eliminar nodo' });
     await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
     const visibilityDialog = await screen.findByRole('alertdialog', {
-      name: 'Confirmar ocultación',
+      name: '¿Ocultar “Límites”?',
     });
 
     fireEvent.click(deleteNodeButton);
-    expect(screen.getByRole('alertdialog', { name: 'Confirmar ocultación' })).toBe(
-      visibilityDialog,
-    );
+    expect(screen.getByRole('alertdialog', { name: '¿Ocultar “Límites”?' })).toBe(visibilityDialog);
 
     await user.click(within(visibilityDialog).getByRole('button', { name: 'Ocultar' }));
     await waitFor(async () =>
@@ -667,9 +665,9 @@ describe('RoadmapCanvasSession', () => {
 
     await user.click(screen.getByRole('button', { name: 'Eliminar nodo' }));
     const deletionDialog = await screen.findByRole('alertdialog', {
-      name: 'Eliminar nodo: Límites',
+      name: '¿Eliminar “Límites”?',
     });
-    await user.click(within(deletionDialog).getByRole('button', { name: 'Eliminar' }));
+    await user.click(within(deletionDialog).getByRole('button', { name: 'Eliminar nodo' }));
     await waitFor(async () => expect((await persistence.load(teachingInput)).nodes).toEqual([]));
   });
 
@@ -679,9 +677,9 @@ describe('RoadmapCanvasSession', () => {
     renderSession(persistence);
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));
-    await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
-    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo de rama' });
-    await user.click(within(dialog).getByRole('button', { name: 'Bloquear rama' }));
+    await user.click(screen.getByRole('button', { name: 'Bloquear nodo' }));
+    const dialog = await screen.findByRole('alertdialog', { name: '¿Bloquear “Límites”?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Bloquear nodo' }));
 
     await waitFor(async () =>
       expect((await persistence.load(teachingInput)).nodes[0]).toMatchObject({

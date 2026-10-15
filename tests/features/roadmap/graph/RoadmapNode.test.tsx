@@ -121,7 +121,7 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
   expect(screen.queryByTestId('node-action-focus')).toBeNull();
   expect(screen.getByRole('group', { name: 'Menú de acciones del nodo' })).toBeTruthy();
 
-  await user.click(screen.getByRole('button', { name: 'Bloquear rama' }));
+  await user.click(screen.getByRole('button', { name: 'Bloquear nodo' }));
   expect(onAction).toHaveBeenCalledWith({
     kind: 'change-teacher-block',
     nodeId: 'teacher-node',
@@ -176,7 +176,7 @@ test('offers showing a hidden node without an access action', async () => {
   rerenderWith(menuProps(true));
 
   expect(screen.getByTestId('node-action-trigger-close')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Bloquear rama' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bloquear nodo' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Desbloquear' })).toBeNull();
   const visibilityAction = screen.getByRole('button', { name: 'Mostrar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');

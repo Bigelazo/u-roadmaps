@@ -16,7 +16,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
   if (resources.length === 0) {
     return (
       <p className="border-l-2 border-border pl-3 text-sm leading-snug text-muted-foreground">
-        Aún no hay recursos. Sube archivos o agrega enlaces para este hito.
+        Aún no hay recursos. Sube archivos o agrega enlaces para este nodo.
       </p>
     );
   }

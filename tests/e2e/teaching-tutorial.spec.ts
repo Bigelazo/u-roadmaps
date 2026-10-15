@@ -16,9 +16,9 @@ const steps = [
   'Dependencias',
   'Selecciona tu nodo',
   'Editor de nodo',
-  'Bloquea una rama',
+  'Bloquea un nodo',
   'Bloqueo propagado',
-  'Desbloquea la rama',
+  'Desbloquea el nodo',
   'Desbloqueo programado',
   'Oculta un nodo',
   'Agrega un recurso',
@@ -167,7 +167,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
     markdown,
   );
 
-  await next(page, 'Bloquea una rama');
+  await next(page, 'Bloquea un nodo');
   const blockNode = practiceNode(page, 'Conceptos básicos');
   const blockMenuTrigger = blockNode.getByRole('button', {
     name: 'Abrir menú de acciones del nodo',
@@ -179,17 +179,17 @@ test('teaching staff perform each action step of the teaching tutorial', async (
 
   // The confirmation is portaled, and stays usable.
   await blockMenuTrigger.click();
-  const blockAction = blockNode.getByRole('button', { name: 'Bloquear rama', exact: true });
+  const blockAction = blockNode.getByRole('button', { name: 'Bloquear nodo', exact: true });
   await expect(blockAction).toHaveClass(/driver-active-element/);
   await blockAction.click();
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toHaveClass(/driver-active-element/);
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
-  await expectStep(page, 'Bloquea una rama');
+  await expectStep(page, 'Bloquea un nodo');
   await expect(blockMenuTrigger).toHaveClass(/driver-active-element/);
   await blockMenuTrigger.click();
   await blockAction.click();
-  await confirmation.getByRole('button', { name: 'Bloquear rama' }).click();
+  await confirmation.getByRole('button', { name: 'Bloquear nodo' }).click();
   await expectStep(page, 'Bloqueo propagado');
   for (const title of [
     'Conceptos básicos',
@@ -199,11 +199,11 @@ test('teaching staff perform each action step of the teaching tutorial', async (
     'Retroalimentación del control',
   ])
     await expect(blockedByTeacher(page, title)).toBeVisible();
-  await next(page, 'Desbloquea la rama');
+  await next(page, 'Desbloquea el nodo');
 
   await openNodeMenu(page, 'Conceptos básicos', 'Desbloquear');
-  await expect(confirmation.getByRole('button', { name: 'Desbloquear este Nodo' })).toBeVisible();
-  await confirmation.getByRole('button', { name: 'Desbloquear la rama' }).click();
+  await expect(confirmation.getByRole('button', { name: 'Solo este nodo' })).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Incluir dependientes' }).click();
   await expectStep(page, 'Desbloqueo programado');
   await expect(page.getByLabel('Panel de edición del roadmap', { exact: true })).toBeHidden();
   await expect(practiceNode(page, 'Proyecto final')).toHaveClass(/driver-active-element/);
@@ -214,7 +214,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
 
   // Cancelling the confirmation keeps the step.
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
-  await expect(confirmation).toContainText('Dependencias que se eliminarán');
+  await expect(confirmation).toContainText('se eliminarán sus conexiones con');
   await expect(confirmation).toHaveClass(/driver-active-element/);
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Oculta un nodo');
@@ -235,7 +235,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Elimina tu nodo');
   await openNodeMenu(page, 'Nodo de práctica', 'Eliminar nodo');
-  await confirmation.getByRole('button', { name: 'Eliminar' }).click();
+  await confirmation.getByRole('button', { name: 'Eliminar nodo' }).click();
   await expectStep(page, 'Vista estudiante');
   await expect(practiceNode(page, 'Nodo de práctica')).toHaveCount(0);
 

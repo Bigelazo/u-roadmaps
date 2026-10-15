@@ -1,5 +1,5 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
-import { useState } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import { cn } from 'cn';
 import {
   CalendarClock,
@@ -7,102 +7,183 @@ import {
   EyeOff,
   LockKeyhole,
   LockKeyholeOpen,
+  PencilLine,
   Save,
   Trash2,
   X,
 } from 'lucide-react';
 import { addCalendarDays, chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
+import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldTitle,
-} from '@/shared/ui/field';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { Separator } from '@/shared/ui/separator';
-import { Switch } from '@/shared/ui/switch';
+import { SidebarHeader } from '@/shared/ui/sidebar';
 import { NodeContentFields } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
-import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 
+type NodeStatusChip = { id: string; Icon: ComponentType<{ className?: string }>; label: string };
+
+function nodeStatusChips(node: ReturnType<typeof useNodeEditorContext>['node']) {
+  const chips: NodeStatusChip[] = [
+    node.isVisible
+      ? { id: 'visible', Icon: Eye, label: 'Visible' }
+      : { id: 'hidden', Icon: EyeOff, label: 'Oculto' },
+  ];
+  if (node.isVisible && node.isTeacherBlocked)
+    chips.push({ id: 'blocked', Icon: LockKeyhole, label: 'Bloqueado' });
+  if (node.isVisible && node.isTeacherBlocked && node.teacherUnlockOn)
+    chips.push({
+      id: 'scheduled',
+      Icon: CalendarClock,
+      label: `Desbloqueo ${formatShortCalendarDay(node.teacherUnlockOn)}`,
+    });
+  return chips;
+}
+
+/** The title is edited below, so the header carries the Node's access state instead. */
 function NodeHeader() {
-  const { node, nodeTypes, closeNode } = useNodeEditorContext();
-  const type = nodeTypes.find((nodeType) => nodeType.id === node.nodeTypeId);
+  const { node, closeNode } = useNodeEditorContext();
 
   return (
-    <NodePanelHeader
-      title={node.title}
-      nodeType={type}
-      iconTestId="node-type-icon"
-      isSidebar
-      actions={
-        <>
-          <NodeFullscreenDialog
-            key={node.id}
-            title="Editar nodo"
-            triggerLabel="Editar nodo en pantalla completa"
-          >
-            <NodeForm isFullscreen />
-          </NodeFullscreenDialog>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  aria-label="Deseleccionar nodo"
-                  onClick={closeNode}
-                >
-                  <X />
-                </Button>
-              }
-            />
-            <TooltipContent>Deseleccionar nodo</TooltipContent>
-          </Tooltip>
-        </>
-      }
-    />
+    <SidebarHeader className="shrink-0 flex-row items-center justify-between gap-3 border-b border-border px-6 py-3">
+      <h2 className="sr-only">{node.title}</h2>
+      <ul aria-label="Estado del nodo" className="flex min-w-0 flex-wrap gap-1.5">
+        {nodeStatusChips(node).map(({ id, Icon, label }) => (
+          <li key={id}>
+            <Badge
+              variant={id === 'visible' ? 'outline' : 'secondary'}
+              className="h-7 gap-1.5 px-2.5 text-[13px]"
+            >
+              <Icon aria-hidden="true" />
+              {label}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+      <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Acciones del nodo">
+        <NodeFullscreenDialog
+          key={node.id}
+          title="Editar nodo"
+          triggerLabel="Editar nodo en pantalla completa"
+        >
+          <NodeForm isFullscreen />
+        </NodeFullscreenDialog>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label="Deseleccionar nodo"
+                onClick={closeNode}
+              >
+                <X />
+              </Button>
+            }
+          />
+          <TooltipContent>Deseleccionar nodo</TooltipContent>
+        </Tooltip>
+      </div>
+    </SidebarHeader>
   );
+}
+
+const unsavedFieldLabels = { title: 'título', description: 'descripción', nodeTypeId: 'tipo' };
+
+function listInProse(items: readonly string[]) {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} y ${items.at(-1)}` : items[0];
 }
 
 function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
   const {
+    node,
     nodeTypes,
     nodeDraft,
     isDirty,
+    unsavedFields,
     canSaveNode,
     changeNodeDraft,
     saveNode,
+    discardNodeDraft,
     previewNodeInformation,
     previewButtonRef,
   } = useNodeEditorContext();
+  const idPrefix = isFullscreen ? 'fullscreen-node' : 'edit-node';
+  const [titleErrorNodeId, setTitleErrorNodeId] = useState<string | null>(null);
+  const titleError =
+    titleErrorNodeId === node.id && !nodeDraft.title.trim()
+      ? 'Escribe un título para el nodo.'
+      : undefined;
 
   return (
     <form
+      noValidate
       className={cn(
         'flex flex-col gap-4 py-5',
         isFullscreen && 'py-0 [&_.markdown-editor_pre]:min-h-[50dvh]',
       )}
       onSubmit={(event) => {
         event.preventDefault();
-        if (canSaveNode) saveNode();
+        if (!canSaveNode) return;
+        if (!nodeDraft.title.trim()) {
+          setTitleErrorNodeId(node.id);
+          document.getElementById(`${idPrefix}-title`)?.focus();
+          return;
+        }
+        saveNode();
       }}
     >
       <FieldGroup>
         <NodeContentFields
-          idPrefix={isFullscreen ? 'fullscreen-node' : 'edit-node'}
+          idPrefix={idPrefix}
           nodeTypes={nodeTypes}
           value={nodeDraft}
+          titleError={titleError}
           onChange={(patch) => changeNodeDraft({ ...nodeDraft, ...patch })}
         />
       </FieldGroup>
-      <div className={cn('grid gap-2', !isFullscreen && 'grid-cols-2')}>
+      <div
+        className={cn(
+          'flex items-center justify-between gap-3 rounded-lg bg-primary-soft/45 py-1 pr-1 pl-3 text-sm text-primary-deep',
+          unsavedFields.length === 0 && 'hidden',
+        )}
+      >
+        <p aria-live="polite" className="flex min-w-0 items-center gap-2">
+          {unsavedFields.length > 0 ? (
+            <>
+              <PencilLine aria-hidden="true" className="size-4 shrink-0" />
+              <span>
+                <span className="font-semibold">Sin guardar:</span>{' '}
+                {listInProse(unsavedFields.map((field) => unsavedFieldLabels[field]))}
+              </span>
+            </>
+          ) : null}
+        </p>
+        {unsavedFields.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="shrink-0 text-primary-deep hover:bg-primary-soft"
+            onClick={() => {
+              setTitleErrorNodeId(null);
+              discardNodeDraft();
+            }}
+          >
+            Descartar
+          </Button>
+        ) : null}
+      </div>
+      <div
+        className={cn(
+          'grid gap-2',
+          !isFullscreen && 'grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))]',
+        )}
+      >
         <Button type="submit" disabled={!canSaveNode}>
           <Save data-icon="inline-start" />
           Guardar cambios
@@ -121,6 +202,16 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
       </div>
     </form>
   );
+}
+
+function formatShortCalendarDay(day: string) {
+  return new Intl.DateTimeFormat('es-CL', {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'short',
+  })
+    .format(new Date(`${day}T12:00:00.000Z`))
+    .replace('.', '');
 }
 
 function formatCalendarDay(day: string) {
@@ -158,7 +249,7 @@ function NodeUnlockSchedule({ scheduledDay }: { scheduledDay: string | null }) {
             <FieldDescription>
               {scheduledDay
                 ? `Se desbloqueará el ${formatCalendarDay(scheduledDay)}, a las 00:00 (hora de Chile).`
-                : 'Elige un día para desbloquear este hito sin intervención docente.'}{' '}
+                : 'Elige un día para desbloquear este nodo sin intervención docente.'}{' '}
               Si ese día un prerrequisito sigue bloqueado, esperará a que lo desbloquees.
             </FieldDescription>
           </div>
@@ -191,98 +282,133 @@ function NodeUnlockSchedule({ scheduledDay }: { scheduledDay: string | null }) {
   );
 }
 
+function AccessRow({
+  Icon,
+  label,
+  description,
+  action,
+  children,
+}: {
+  Icon: ComponentType<{ className?: string }>;
+  label: string;
+  description: string;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-1 py-3">
+      <Icon className="size-4 text-muted-foreground" />
+      <p className="text-sm font-semibold">{label}</p>
+      {action ?? <span />}
+      <p className="col-span-2 col-start-2 text-sm text-muted-foreground">{description}</p>
+      {children ? <div className="col-span-3 pt-2">{children}</div> : null}
+    </div>
+  );
+}
+
 function NodeStatus() {
   const { node, isVisibilityPending, toggleVisibility, requestTeacherBlock } =
     useNodeEditorContext();
-  const accessStatus = node.isTeacherBlocked
-    ? 'Acceso restringido por docencia'
-    : 'Sin restricciones docentes';
-  const AccessIcon = !node.isVisible
-    ? EyeOff
-    : node.isTeacherBlocked
-      ? LockKeyhole
-      : LockKeyholeOpen;
   const TeacherBlockIcon = node.isTeacherBlocked ? LockKeyholeOpen : LockKeyhole;
 
   return (
-    <section className="border-t border-border py-5">
-      <div className="rounded-xl border border-border bg-cloud/55 p-1">
-        <div>
-          <h3 className="px-3 pt-3 font-heading text-base font-semibold">Estado del hito</h3>
-          <p className="px-3 pt-0.5 text-sm text-muted-foreground">
-            Define qué pueden ver y abrir las y los estudiantes.
-          </p>
-        </div>
-        <FieldGroup className="gap-0 pt-3">
-          <Field orientation="horizontal" className="rounded-lg px-3 py-3">
-            <FieldContent>
-              <FieldLabel htmlFor="node-visible">Visible para estudiantes</FieldLabel>
-              <FieldDescription>
-                {node.isVisible
-                  ? 'El hito aparece en el roadmap de estudiantes.'
-                  : 'El hito no aparece en el roadmap de estudiantes.'}
-              </FieldDescription>
-            </FieldContent>
-            <Switch
-              id="node-visible"
-              checked={node.isVisible}
-              disabled={isVisibilityPending}
-              onCheckedChange={toggleVisibility}
-            />
-          </Field>
-          <Separator className="mx-3 w-auto" />
-          <div className="flex flex-col gap-3 rounded-lg px-3 py-3">
-            <div className="flex items-start gap-2">
-              <AccessIcon
-                className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <div>
-                <FieldTitle>Acceso de estudiantes</FieldTitle>
-                <FieldDescription>
-                  {node.isVisible
-                    ? accessStatus
-                    : 'El acceso se habilitará cuando el hito sea visible.'}
-                </FieldDescription>
-              </div>
-            </div>
-            {node.isVisible && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => requestTeacherBlock(node.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK')}
-              >
-                <TeacherBlockIcon data-icon="inline-start" />
-                {node.isTeacherBlocked ? 'Desbloquear' : 'Bloquear rama'}
-              </Button>
+    <section aria-labelledby="node-access-heading" className="border-t border-border pt-5 pb-2">
+      <h3 id="node-access-heading" className="font-heading text-base font-semibold">
+        Acceso de estudiantes
+      </h3>
+      <AccessRow
+        Icon={node.isVisible ? Eye : EyeOff}
+        label={node.isVisible ? 'Visible para estudiantes' : 'Oculto para estudiantes'}
+        description={
+          node.isVisible
+            ? 'Al ocultarlo se eliminarán sus conexiones con otros nodos.'
+            : 'Al mostrarlo aparecerá sin conexiones ni bloqueo docente.'
+        }
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            disabled={isVisibilityPending}
+            onClick={toggleVisibility}
+          >
+            {node.isVisible ? (
+              <EyeOff data-icon="inline-start" />
+            ) : (
+              <Eye data-icon="inline-start" />
             )}
-            {node.isVisible && node.isTeacherBlocked && (
-              <NodeUnlockSchedule
-                key={`${node.id}:${node.teacherUnlockOn ?? ''}`}
-                scheduledDay={node.teacherUnlockOn ?? null}
-              />
-            )}
-          </div>
-        </FieldGroup>
-      </div>
+            {node.isVisible ? 'Ocultar' : 'Mostrar'}
+          </Button>
+        }
+      />
+      <Separator />
+      <AccessRow
+        Icon={node.isVisible && node.isTeacherBlocked ? LockKeyhole : LockKeyholeOpen}
+        label={
+          !node.isVisible
+            ? 'Sin acceso mientras esté oculto'
+            : node.isTeacherBlocked
+              ? 'Bloqueado por docencia'
+              : 'Sin bloqueo docente'
+        }
+        description={
+          !node.isVisible
+            ? 'Podrás bloquearlo cuando sea visible.'
+            : node.isTeacherBlocked
+              ? 'Los estudiantes no pueden abrirlo, ni tampoco los nodos que dependen de él.'
+              : 'Al bloquearlo, también se bloquearán los nodos que dependen de él.'
+        }
+        action={
+          node.isVisible ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={() => requestTeacherBlock(node.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK')}
+            >
+              <TeacherBlockIcon data-icon="inline-start" />
+              {node.isTeacherBlocked ? 'Desbloquear' : 'Bloquear nodo'}
+            </Button>
+          ) : undefined
+        }
+      >
+        {node.isVisible && node.isTeacherBlocked && (
+          <NodeUnlockSchedule
+            key={`${node.id}:${node.teacherUnlockOn ?? ''}`}
+            scheduledDay={node.teacherUnlockOn ?? null}
+          />
+        )}
+      </AccessRow>
     </section>
   );
 }
 
 function NodeDangerZone() {
-  const { requestNodeDeletion } = useNodeEditorContext();
+  const { node, requestNodeDeletion } = useNodeEditorContext();
+  const resourceCount = node.resources.length;
 
   return (
     <section className="border-t border-border py-5">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold tracking-[0.12em] text-destructive uppercase">
-            Zona de peligro
+        <div className="min-w-0">
+          <h3 className="font-heading text-base font-semibold">Eliminar nodo</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {resourceCount === 1
+              ? 'Se eliminará con su recurso y sus conexiones.'
+              : resourceCount > 1
+                ? `Se eliminará con sus ${resourceCount} recursos y sus conexiones.`
+                : 'Se eliminará con sus conexiones.'}
           </p>
-          <h3 className="mt-0.5 font-heading text-base font-semibold">Eliminar este nodo</h3>
         </div>
-        <Button type="button" variant="destructive" size="sm" onClick={requestNodeDeletion}>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="shrink-0"
+          onClick={requestNodeDeletion}
+        >
           <Trash2 data-icon="inline-start" />
           Eliminar
         </Button>

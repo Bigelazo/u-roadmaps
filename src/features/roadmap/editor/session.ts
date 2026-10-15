@@ -66,7 +66,7 @@ const emptyResourceInput: ResourceInput = {
   type: 'LINK',
 };
 
-function nodeUpdateFromNode(node: RoadmapNode | undefined): NodeUpdate {
+export function nodeUpdateFromNode(node: RoadmapNode | undefined): NodeUpdate {
   return node
     ? {
         title: node.title,

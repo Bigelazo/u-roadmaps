@@ -27,17 +27,12 @@ export function NodeResources() {
 
   return (
     <section className="border-t border-border pt-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold tracking-[0.12em] text-primary uppercase">
-            Material de apoyo
-          </p>
-          <h3 className="mt-0.5 font-heading text-lg font-semibold tracking-[-0.02em]">
-            Recursos <span className="text-muted-foreground">({node.resources.length})</span>
-          </h3>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-heading text-base font-semibold">
+          Recursos <span className="text-muted-foreground">({node.resources.length})</span>
+        </h3>
         {!isComposerOpen && (
-          <Button type="button" size="sm" onClick={() => openResource('file')}>
+          <Button type="button" size="sm" variant="outline" onClick={() => openResource('file')}>
             <Plus data-icon="inline-start" />
             Recurso
           </Button>

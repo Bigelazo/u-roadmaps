@@ -14,15 +14,19 @@ type NodeTypePresentation = {
   color: string;
 };
 
-function nodeVisibilityDescription(isHiding: boolean, dependencyCount: number) {
-  if (!isHiding)
-    return 'Este Nodo se mostrará al estudiantado y quedará disponible inmediatamente. No tendrá Dependencias ni Bloqueo docente.';
-  if (dependencyCount === 0)
-    return 'El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y no posee Dependencias.';
+function quoted(title: string) {
+  return `“${title}”`;
+}
 
-  const dependencyLabel =
-    dependencyCount === 1 ? 'dependencia relacionada' : 'dependencias relacionadas';
-  return `El Nodo desaparecerá del Roadmap del estudiantado, se quitará su Bloqueo docente y se eliminarán ${dependencyCount} ${dependencyLabel}.`;
+/** Names up to three Nodes in prose; longer lists collapse to a count. */
+function nodeNames(titles: readonly string[]) {
+  if (titles.length > 3) return `${titles.length} nodos`;
+  const names = titles.map(quoted);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names.at(-1)}` : names[0];
+}
+
+function uniqueTitles(titles: readonly string[]) {
+  return [...new Set(titles)];
 }
 
 type RoadmapConfirmationRoadmap = {
@@ -40,6 +44,7 @@ type RoadmapNodeIdentity = {
   id: string;
   title: string;
   nodeTypeId: string;
+  isTeacherBlocked?: boolean;
 };
 
 export const roadmapConfirmationActionIds = {
@@ -83,7 +88,7 @@ export function editorDraftDiscardConfirmation(
   return {
     title: 'Descartar cambios sin guardar',
     description: editorDraftDiscardDescriptions[destination.kind],
-    intent: 'warning',
+    intent: 'destructive',
     cancelLabel: 'Seguir editando',
     actions: [
       {
@@ -244,62 +249,38 @@ type RoadmapTeacherBlockConfirmationInput = {
   branchPreview?: TeacherBlockPreview;
 };
 
-function teacherBlockSection(
-  roadmap: RoadmapConfirmationRoadmap,
-  title: string,
+function affectedTitles(
   preview: TeacherBlockPreview,
   nodeId: string,
+  relation?: TeacherBlockImpact['relation'],
 ) {
-  return {
-    title,
-    items: teacherBlockItems(roadmap, preview.nodes, nodeId),
-    emptyMessage: teacherBlockEmptyMessage,
-  };
+  return uniqueTitles(
+    preview.nodes
+      .filter(
+        (node) =>
+          node.id !== nodeId &&
+          node.relation !== 'SELECTED_NODE' &&
+          (!relation || node.relation === relation),
+      )
+      .map((node) => node.title),
+  );
 }
 
-const teacherBlockModes: Record<
-  TeacherBlockPreview['mode'],
-  {
-    title: string;
-    description: (nodeCount: string) => string;
-    sectionTitle: string;
-    actionId: string;
-    /** Omitted when the label names the affected Node count. */
-    actionLabel?: string;
-  }
-> = {
-  BLOCK: {
-    title: 'Confirmar bloqueo de rama',
-    description: (nodeCount) =>
-      `Bloquearás ${nodeCount}. Esta acción puede afectar el acceso y progreso estudiantil.`,
-    sectionTitle: 'Nodos que se bloquearán',
-    actionId: roadmapConfirmationActionIds.blockTeacher,
-    actionLabel: 'Bloquear rama',
-  },
-  UPSTREAM: {
-    title: 'Desbloquear prerrequisitos',
-    description: (nodeCount) =>
-      `Desbloquearás ${nodeCount}, incluidos los prerrequisitos bloqueados. Esta acción puede afectar el acceso y progreso estudiantil.`,
-    sectionTitle: 'Nodos que se desbloquearán',
-    actionId: roadmapConfirmationActionIds.unlockPrerequisites,
-  },
-  SINGLE: {
-    title: 'Confirmar desbloqueo',
-    description: (nodeCount) =>
-      `Desbloquearás ${nodeCount}. Esta acción puede afectar el acceso y progreso estudiantil.`,
-    sectionTitle: 'Nodos que se desbloquearán',
-    actionId: roadmapConfirmationActionIds.unlockNode,
-    actionLabel: 'Desbloquear este Nodo',
-  },
-  BRANCH: {
-    title: 'Confirmar desbloqueo de rama',
-    description: (nodeCount) =>
-      `Desbloquearás ${nodeCount} elegibles de la rama. Esta acción puede afectar el acceso y progreso estudiantil.`,
-    sectionTitle: 'Nodos que se desbloquearán',
-    actionId: roadmapConfirmationActionIds.unlockBranch,
-    actionLabel: 'Desbloquear la rama',
-  },
-};
+/** Describes the dependents an access change carries along, naming them when they are few. */
+function dependentsPhrase(titles: readonly string[], state: { one: string; many: string }) {
+  if (titles.length > 3) return `Los ${nodeNames(titles)} que dependen de él ${state.many}`;
+  return titles.length === 1
+    ? `${nodeNames(titles)}, que depende de él, ${state.one}`
+    : `${nodeNames(titles)}, que dependen de él, ${state.many}`;
+}
+
+function withDependents(
+  sentence: string,
+  dependents: readonly string[],
+  state: { one: string; many: string },
+) {
+  return dependents.length ? `${sentence} ${dependentsPhrase(dependents, state)}.` : sentence;
+}
 
 export function roadmapTeacherBlockConfirmation({
   roadmap,
@@ -308,60 +289,106 @@ export function roadmapTeacherBlockConfirmation({
   individualPreview,
   branchPreview,
 }: RoadmapTeacherBlockConfirmationInput): ConfirmationPresentation {
+  const title = quoted(nodeTitleLookup(roadmap)(nodeId));
+
   if (individualPreview?.mode === 'SINGLE' && branchPreview?.mode === 'BRANCH') {
+    const dependents = affectedTitles(branchPreview, nodeId);
     return {
-      title: 'Confirmar desbloqueo',
-      description:
-        'Elige el alcance del desbloqueo. Ambas opciones pueden afectar el acceso y progreso estudiantil.',
+      title: `¿Desbloquear ${title}?`,
+      description: `Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.${
+        dependents.length
+          ? ` ${dependentsPhrase(dependents, { one: 'sigue bloqueado', many: 'siguen bloqueados' })}: puedes desbloquear solo este nodo o también sus dependientes.`
+          : ''
+      }`,
       intent: 'warning',
-      sections: [
-        teacherBlockSection(roadmap, 'Solo este Nodo', individualPreview, nodeId),
-        teacherBlockSection(roadmap, 'Este Nodo y su rama', branchPreview, nodeId),
-      ],
       actions: [
-        { id: roadmapConfirmationActionIds.unlockNode, label: 'Desbloquear este Nodo' },
-        { id: roadmapConfirmationActionIds.unlockBranch, label: 'Desbloquear la rama' },
+        { id: roadmapConfirmationActionIds.unlockNode, label: 'Solo este nodo' },
+        { id: roadmapConfirmationActionIds.unlockBranch, label: 'Incluir dependientes' },
       ],
     };
   }
 
-  const nodes = preview.nodes.length;
-  const nodesLabel = countLabel(nodes);
-  const mode = teacherBlockModes[preview.mode];
+  if (preview.mode === 'BLOCK') {
+    return {
+      title: `¿Bloquear ${title}?`,
+      description: withDependents(
+        'Los estudiantes no podrán abrirlo hasta que lo desbloquees.',
+        affectedTitles(preview, nodeId),
+        { one: 'también quedará bloqueado', many: 'también quedarán bloqueados' },
+      ),
+      intent: 'warning',
+      actions: [{ id: roadmapConfirmationActionIds.blockTeacher, label: 'Bloquear nodo' }],
+    };
+  }
+
+  if (preview.mode === 'UPSTREAM') {
+    const prerequisites = affectedTitles(preview, nodeId, 'PREREQUISITE');
+    const nodes = preview.nodes.length;
+    return {
+      title: `¿Desbloquear ${title}?`,
+      description: `Para que los estudiantes puedan abrirlo, también se desbloquearán sus prerrequisitos bloqueados: ${nodeNames(
+        prerequisites,
+      )}.`,
+      intent: 'warning',
+      actions: [
+        {
+          id: roadmapConfirmationActionIds.unlockPrerequisites,
+          label: `Desbloquear ${nodes} ${countLabel(nodes)}`,
+        },
+      ],
+    };
+  }
 
   return {
-    title: mode.title,
-    description: mode.description(`${nodes} ${nodesLabel}`),
+    title: `¿Desbloquear ${title}?`,
+    description: withDependents(
+      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.',
+      affectedTitles(preview, nodeId),
+      { one: 'también quedará desbloqueado', many: 'también quedarán desbloqueados' },
+    ),
     intent: 'warning',
-    sections: [teacherBlockSection(roadmap, mode.sectionTitle, preview, nodeId)],
     actions: [
-      { id: mode.actionId, label: mode.actionLabel ?? `Desbloquear ${nodes} ${nodesLabel}` },
+      {
+        id:
+          preview.mode === 'BRANCH'
+            ? roadmapConfirmationActionIds.unlockBranch
+            : roadmapConfirmationActionIds.unlockNode,
+        label: 'Desbloquear nodo',
+      },
     ],
   };
 }
 
 export function nodeDeletionConfirmation({
   node,
+  resources,
+  dependencies,
 }: {
   node: { title: string; nodeType: NodeTypePresentation };
+  resources: readonly { id: string }[];
+  dependencies: readonly { sourceTitle: string; targetTitle: string }[];
 }): ConfirmationPresentation {
-  return {
-    title: (
-      <span className="wrap-break-word">
-        Eliminar nodo:{' '}
-        <NodeTypeIcon
-          icon={node.nodeType.icon}
-          style={{ color: node.nodeType.color }}
-          aria-hidden="true"
-          className="inline-block size-5 align-text-bottom"
-        />{' '}
-        {node.title}
-      </span>
+  const connected = uniqueTitles(
+    dependencies.map((dependency) =>
+      dependency.sourceTitle === node.title ? dependency.targetTitle : dependency.sourceTitle,
     ),
-    description:
-      'Eliminarás este nodo, junto con todos sus recursos y dependencias relacionadas. Esta acción no se puede deshacer.',
+  );
+  const losses = [
+    resources.length === 1
+      ? 'su recurso'
+      : resources.length > 1
+        ? `sus ${resources.length} recursos`
+        : '',
+    connected.length ? `sus conexiones con ${nodeNames(connected)}` : '',
+  ].filter(Boolean);
+
+  return {
+    title: <span className="wrap-break-word">¿Eliminar {quoted(node.title)}?</span>,
+    description: `${
+      losses.length ? `También se eliminarán ${losses.join(' y ')}. ` : ''
+    }Esta acción no se puede deshacer.`,
     intent: 'destructive',
-    actions: [{ id: roadmapConfirmationActionIds.deleteNode, label: 'Eliminar' }],
+    actions: [{ id: roadmapConfirmationActionIds.deleteNode, label: 'Eliminar nodo' }],
   };
 }
 
@@ -373,39 +400,40 @@ export function roadmapNodeVisibilityConfirmation(
   dependencies: readonly StructuralDependency[],
 ): ConfirmationPresentation {
   const titleOf = nodeTitleLookup(roadmap);
+  const title = quoted(node.title);
+
+  if (!isHiding) {
+    return {
+      title: `¿Mostrar ${title}?`,
+      description:
+        'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
+      intent: 'default',
+      actions: [{ id: roadmapConfirmationActionIds.toggleVisibility, label: 'Mostrar' }],
+    };
+  }
+
+  const connected = uniqueTitles(
+    dependencies.map((dependency) =>
+      titleOf(
+        dependency.sourceNodeId === node.id ? dependency.targetNodeId : dependency.sourceNodeId,
+      ),
+    ),
+  );
+  const losses = [
+    node.isTeacherBlocked ? 'se quitará su bloqueo docente' : '',
+    connected.length ? `se eliminarán sus conexiones con ${nodeNames(connected)}` : '',
+  ].filter(Boolean);
+  const consequences = losses.length
+    ? ` Además, ${losses.join(' y ')}${
+        connected.length ? '; al volver a mostrarlo, tendrás que conectarlo de nuevo' : ''
+      }.`
+    : '';
 
   return {
-    title: isHiding ? 'Confirmar ocultación' : 'Confirmar publicación',
-    description: nodeVisibilityDescription(isHiding, dependencies.length),
-    intent: isHiding ? 'destructive' : 'default',
-    sections: [
-      {
-        title: isHiding ? 'Nodo que se ocultará' : 'Nodo que se publicará',
-        items: [
-          nodeItem(node.id, { title: node.title, nodeType: nodeTypeFor(roadmap, node.nodeTypeId) }),
-        ],
-      },
-      ...(isHiding
-        ? [
-            {
-              title: 'Dependencias que se eliminarán',
-              items: dependencies.map((dependency) => ({
-                kind: 'relationship' as const,
-                id: dependency.id,
-                source: titleOf(dependency.sourceNodeId),
-                target: titleOf(dependency.targetNodeId),
-              })),
-              emptyMessage: 'No hay Dependencias relacionadas.',
-            },
-          ]
-        : []),
-    ],
-    actions: [
-      {
-        id: roadmapConfirmationActionIds.toggleVisibility,
-        label: isHiding ? 'Ocultar' : 'Mostrar',
-      },
-    ],
+    title: `¿Ocultar ${title}?`,
+    description: `Dejará de aparecer en el roadmap de los estudiantes.${consequences}`,
+    intent: 'destructive',
+    actions: [{ id: roadmapConfirmationActionIds.toggleVisibility, label: 'Ocultar' }],
   };
 }
 

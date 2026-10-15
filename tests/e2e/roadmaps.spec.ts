@@ -406,15 +406,9 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   const initialPreview = await initialPreviewPromise;
   expect(initialPreview.status()).toBe(200);
 
-  const dialog = page.getByRole('alertdialog', { name: `Eliminar nodo: ${sourceTitle}` });
+  const dialog = page.getByRole('alertdialog', { name: `¿Eliminar “${sourceTitle}”?` });
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole('heading', { name: `Eliminar nodo: ${sourceTitle}` }),
-  ).toBeVisible();
-  await expect(dialog.getByRole('heading').locator('svg')).toHaveCSS('color', 'rgb(2, 74, 216)');
-  await expect(dialog).toContainText(
-    'Eliminarás este nodo, junto con todos sus recursos y dependencias relacionadas. Esta acción no se puede deshacer.',
-  );
+  await expect(dialog).toContainText('Esta acción no se puede deshacer.');
   await expect(dialog.getByRole('list')).toHaveCount(0);
 
   const latestPreviewPromise = page.waitForResponse(
@@ -428,7 +422,7 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
     (response) =>
       response.request().method() === 'DELETE' && response.url().includes(`/nodes/${sourceNodeId}`),
   );
-  await dialog.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Eliminar nodo', exact: true }).click();
   const [latestPreview, deletionRequest, deletionResponse] = await Promise.all([
     latestPreviewPromise,
     deletionRequestPromise,
@@ -708,15 +702,14 @@ test('keeps the two-scope unlock confirmation within the dialog at every viewpor
   await editor.locator('summary').click();
   await editor.getByRole('button', { name: 'Desbloquear', exact: true }).click();
 
-  const dialog = page.getByRole('alertdialog', { name: 'Confirmar desbloqueo' });
+  const dialog = page.getByRole('alertdialog', { name: /^¿Desbloquear “/ });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('region', { name: 'Solo este Nodo' })).toBeVisible();
-  await expect(dialog.getByRole('region', { name: 'Este Nodo y su rama' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Cancelar' })).toBeFocused();
 
   const controls = [
     dialog.getByRole('button', { name: 'Cancelar' }),
-    dialog.getByRole('button', { name: 'Desbloquear este Nodo' }),
-    dialog.getByRole('button', { name: 'Desbloquear la rama' }),
+    dialog.getByRole('button', { name: 'Solo este nodo' }),
+    dialog.getByRole('button', { name: 'Incluir dependientes' }),
   ];
   for (const width of [375, 640, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 812 });

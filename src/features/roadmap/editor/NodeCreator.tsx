@@ -115,7 +115,7 @@ export function NodeCreator({
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Agregar al mapa</DialogTitle>
-            <DialogDescription>Crea un hito y luego conéctalo desde el lienzo.</DialogDescription>
+            <DialogDescription>Crea un nodo y luego conéctalo desde el lienzo.</DialogDescription>
           </DialogHeader>
           <form
             className="flex flex-col gap-4"
@@ -137,7 +137,7 @@ export function NodeCreator({
                 value={{ ...value, nodeTypeId: selectedNodeTypeId }}
                 onChange={(patch) => setValue((current) => ({ ...current, ...patch }))}
                 titlePlaceholder="Ej. Repasar límites"
-                descriptionPlaceholder="Qué debe lograr el estudiante en este hito"
+                descriptionPlaceholder="Qué debe lograr el estudiante en este nodo"
               />
               <Field orientation="horizontal" className="rounded-lg bg-cloud px-3 py-2.5">
                 <Checkbox

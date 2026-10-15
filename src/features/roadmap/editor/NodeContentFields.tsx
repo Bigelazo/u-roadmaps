@@ -1,5 +1,5 @@
 import type { RoadmapDto } from '@/features/roadmap/types';
-import { Field, FieldDescription, FieldLabel } from '@/shared/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { MarkdownEditor } from './MarkdownEditor';
 import { inputClassName, NodeTypeSelect } from './primitives';
@@ -13,6 +13,7 @@ type Props = {
   onChange: (patch: Partial<NodeContent>) => void;
   titlePlaceholder?: string;
   descriptionPlaceholder?: string;
+  titleError?: string;
 };
 
 /** Title, Markdown description and Node type fields shared by the Node creator and editor. */
@@ -23,10 +24,11 @@ export function NodeContentFields({
   onChange,
   titlePlaceholder,
   descriptionPlaceholder,
+  titleError,
 }: Props) {
   return (
     <>
-      <Field>
+      <Field data-invalid={titleError ? true : undefined}>
         <FieldLabel htmlFor={`${idPrefix}-title`}>Título</FieldLabel>
         <Input
           id={`${idPrefix}-title`}
@@ -34,8 +36,11 @@ export function NodeContentFields({
           placeholder={titlePlaceholder}
           value={value.title}
           onChange={(event) => onChange({ title: event.target.value })}
+          aria-invalid={titleError ? true : undefined}
+          aria-describedby={titleError ? `${idPrefix}-title-error` : undefined}
           required
         />
+        {titleError ? <FieldError id={`${idPrefix}-title-error`}>{titleError}</FieldError> : null}
       </Field>
       <Field>
         <FieldLabel htmlFor={`${idPrefix}-description`}>

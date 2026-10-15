@@ -59,7 +59,7 @@ async function confirmNodeDeletion(page: Page, offering: E2ECourseOffering, node
       response.request().method() === 'DELETE' &&
       response.url().endsWith(offering.apiPath(`/nodes/${nodeId}`)),
   );
-  await confirmation.getByRole('button', { name: 'Eliminar', exact: true }).tap();
+  await confirmation.getByRole('button', { name: 'Eliminar nodo', exact: true }).tap();
   const response = await deleted;
   expect(response.status()).toBe(204);
   await expect(confirmation).toBeHidden();
@@ -79,7 +79,7 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole('button')).toHaveText([
     'Cerrar acciones',
-    'Bloquear rama',
+    'Bloquear nodo',
     'Ocultar para estudiantes',
     'Agregar recurso',
     'Eliminar nodo',
@@ -111,16 +111,15 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
   await expect(trigger).toBeFocused();
 
   await trigger.tap();
-  await sheet.getByRole('button', { name: 'Bloquear rama' }).tap();
+  await sheet.getByRole('button', { name: 'Bloquear nodo' }).tap();
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toBeVisible();
   await expect(sheet).toBeHidden();
-  await expect(confirmation).toContainText('Nodo seleccionado');
-  await expect(confirmation).toContainText('Dependiente');
+  await expect(confirmation).toContainText(/dependen? de él/);
   await expect
     .poll(() => confirmation.evaluate((element) => element.contains(document.activeElement)))
     .toBe(true);
-  await confirmation.getByRole('button', { name: 'Bloquear rama' }).tap();
+  await confirmation.getByRole('button', { name: 'Bloquear nodo' }).tap();
   await expect(confirmation).toBeHidden();
   await trigger.tap();
   await expect(sheet.getByRole('button', { name: 'Desbloquear', exact: true })).toBeVisible();
@@ -154,7 +153,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   ]);
   await sheet.getByRole('button', { name: 'Mostrar para estudiantes' }).tap();
   await expect(confirmation).toContainText(
-    'Este Nodo se mostrará al estudiantado y quedará disponible inmediatamente. No tendrá Dependencias ni Bloqueo docente.',
+    'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
   );
   await confirmation.getByRole('button', { name: 'Mostrar', exact: true }).tap();
   await expect(confirmation).toBeHidden();
@@ -220,7 +219,7 @@ test('touch deletion prevents duplicate mutations and recovers after a failed re
   const sheet = page.getByRole('dialog', { name: 'Menú de acciones del nodo' });
   await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
   const confirmation = page.getByRole('alertdialog');
-  const remove = confirmation.getByRole('button', { name: 'Eliminar', exact: true });
+  const remove = confirmation.getByRole('button', { name: 'Eliminar nodo', exact: true });
   await remove.tap();
   await expect.poll(() => mutations).toBe(1);
   await expect(remove).toBeDisabled();

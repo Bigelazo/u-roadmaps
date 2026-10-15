@@ -31,6 +31,7 @@ import {
   nodeDraftIsDirty,
   nodeEditorReducer,
   nodeEditorStateIsDirty,
+  nodeUpdateFromNode,
   resourceSessionIsDirty,
   type NodeEditorAction,
   type NodeEditorState,
@@ -53,6 +54,13 @@ function isGuardRelevant(reason: NodeEditorGuardReason, nodeId: string | null) {
     return reason.nodeId !== nodeId;
   }
   return reason.nodeId === nodeId;
+}
+
+function unsavedNodeFields(node: RoadmapNode, draft: NodeUpdate) {
+  const saved = nodeUpdateFromNode(node);
+  return (['title', 'description', 'nodeTypeId'] as const).filter(
+    (field) => draft[field] !== saved[field],
+  );
 }
 
 function isCommitted(result: NodeEditorPerformResult) {
@@ -269,6 +277,11 @@ function useNodeEditorController(
         transition({ type: 'request-resource-deletion', resource }),
       cancelResourceDeletion: () => transition({ type: 'cancel-resource-deletion' }),
       resolveRemoteConflict: () => transition({ type: 'resolve-remote-conflict' }),
+      discardNodeDraft: () => {
+        const currentNode = stateRef.current.canonicalNode;
+        if (currentNode)
+          transition({ type: 'change-node-draft', value: nodeUpdateFromNode(currentNode) });
+      },
       cancelGuard: () => {
         if (!stateRef.current.pendingGuard) return;
         transition({ type: 'cancel-guard' });
@@ -341,6 +354,15 @@ function useNodeEditorController(
     });
   }, [onIntent]);
 
+  const hasDraft = nodeEditorStateIsDirty(state);
+  useEffect(() => {
+    if (!hasDraft) return;
+    // Closing or reloading the tab would otherwise drop the draft without the editor's guard.
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasDraft]);
+
   useEffect(() => {
     if (!command || command.nodeId !== state.nodeId || handledCommandIdRef.current === command.id)
       return;
@@ -364,11 +386,12 @@ function useNodeEditorController(
       nodeDraft: state.nodeDraft,
       resourceSession: state.resourceSession,
       isDirty: nodeEditorStateIsDirty(state),
+      unsavedFields: unsavedNodeFields(activeNode, state.nodeDraft),
+      // An empty title stays submittable so the form can explain why it cannot be saved.
       canSaveNode:
         !state.remoteConflict &&
         !state.pendingEditorEffect &&
-        nodeDraftIsDirty(activeNode, state.nodeDraft) &&
-        Boolean(state.nodeDraft.title.trim()),
+        nodeDraftIsDirty(activeNode, state.nodeDraft),
       isVisibilityPending,
       pendingEditorEffect: state.pendingEditorEffect,
       previewButtonRef,

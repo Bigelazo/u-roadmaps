@@ -35,8 +35,8 @@ function branchBlockControl() {
   const blockAction = menu
     ? [...menu.querySelectorAll('button')].find(
         (button) =>
-          button.getAttribute('aria-label') === 'Bloquear rama' ||
-          button.textContent?.trim() === 'Bloquear rama',
+          button.getAttribute('aria-label') === 'Bloquear nodo' ||
+          button.textContent?.trim() === 'Bloquear nodo',
       )
     : null;
   const node = document.querySelector(nodeSelector(practiceNodeIds.b));
@@ -137,10 +137,10 @@ export function teachingTutorialSteps(
     },
     {
       element: branchBlockControl,
-      title: 'Bloquea una rama',
+      title: 'Bloquea un nodo',
       prepare: () => clickElement(nodeSelector(practiceNodeIds.b)),
       description:
-        'En el nodo "Conceptos básicos", abre su menú de acciones con el ícono de engranaje. Elige "Bloquear rama" y confirma con "Bloquear rama". El bloqueo docente impide que tus estudiantes trabajen en los nodos de esa rama.',
+        'En el nodo "Conceptos básicos", abre su menú de acciones con el ícono de engranaje. Elige "Bloquear nodo" y confirma con "Bloquear nodo". El bloqueo docente impide que tus estudiantes trabajen en ese nodo y en los que dependen de él.',
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
         action.nodeId === practiceNodeIds.b &&
@@ -154,9 +154,9 @@ export function teachingTutorialSteps(
     },
     {
       element: canvas,
-      title: 'Desbloquea la rama',
+      title: 'Desbloquea el nodo',
       description:
-        'Abre otra vez el menú de Conceptos básicos y elige "Desbloquear". Puedes desbloquear solo este nodo o toda la rama.',
+        'Abre otra vez el menú de Conceptos básicos y elige "Desbloquear". Puedes desbloquear solo este nodo o incluir sus dependientes.',
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
         action.nodeId === practiceNodeIds.b &&

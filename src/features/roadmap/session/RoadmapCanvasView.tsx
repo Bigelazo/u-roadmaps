@@ -1107,6 +1107,7 @@ function RoadmapStudentPanel({
             }
           }}
           isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
+          isTeacherPreview={Boolean(teacherPreviewNode)}
           nodeTypes={roadmap.nodeTypes}
           panelWidth={teacherPreviewNode ? editorPanel.width : studentPanel.width}
           onPanelWidthChange={teacherPreviewNode ? editorPanel.setWidth : studentPanel.setWidth}
