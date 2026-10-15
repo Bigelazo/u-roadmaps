@@ -20,3 +20,6 @@ next-env.d.ts
 graphify-out/
 loc-chart.html
 .impeccable/
+# Impeccable skill binaries, downloaded by its launcher on first run.
+.agents/skills/impeccable/scripts/bin/
+.claude/skills/impeccable/scripts/bin/
