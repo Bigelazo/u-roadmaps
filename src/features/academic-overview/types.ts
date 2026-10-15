@@ -21,6 +21,11 @@ export type AcademicOverviewCourse = Readonly<{
   role: AcademicOverviewRole;
   institutionalPosition: AcademicOverviewInstitutionalPosition | null;
   hasRoadmap: boolean;
+  /**
+   * The participant's own completion of the Roadmap's visible Nodes; null for
+   * teaching staff, without a Roadmap or when the Roadmap has no visible Node.
+   */
+  progress: Readonly<{ completedNodes: number; visibleNodes: number }> | null;
   /** Past its Roadmap closure instant: no Roadmap can be created for it any longer. */
   isPastClosure: boolean;
   canCreateRoadmap: boolean;
@@ -28,7 +33,7 @@ export type AcademicOverviewCourse = Readonly<{
 
 export type AcademicOverviewApiOffering = Omit<
   AcademicOverviewCourse,
-  'canCreateRoadmap' | 'isPastClosure'
+  'canCreateRoadmap' | 'isPastClosure' | 'progress'
 >;
 
 /** Whether Course offerings of an Academic term are past their Roadmap closure instant. */

@@ -72,6 +72,40 @@ function PositionPlate({
   );
 }
 
+/** The participant's own route progress: completed visible Nodes over all visible Nodes. */
+function CourseProgress({
+  progress,
+}: Readonly<{ progress: NonNullable<AcademicOverviewCourse['progress']> }>) {
+  const { completedNodes, visibleNodes } = progress;
+  const percent = Math.round((completedNodes / visibleNodes) * 100);
+  return (
+    <div className="mt-4 flex max-w-md items-center gap-3">
+      <div
+        aria-hidden="true"
+        className="h-1.5 min-w-24 flex-1 overflow-hidden rounded-full bg-progress-soft"
+      >
+        <div className="h-full rounded-full bg-progress" style={{ width: `${percent}%` }} />
+      </div>
+      <p
+        className={
+          completedNodes > 0
+            ? 'shrink-0 text-sm font-medium text-progress-deep tabular-nums'
+            : 'shrink-0 text-sm text-muted-foreground'
+        }
+      >
+        {completedNodes > 0 ? (
+          <>
+            {completedNodes} de {visibleNodes} {visibleNodes === 1 ? 'nodo' : 'nodos'}
+            <span className="sr-only"> completados, {percent} %</span>
+          </>
+        ) : (
+          'Aún no completas nodos'
+        )}
+      </p>
+    </div>
+  );
+}
+
 function roadmapUrl(course: AcademicOverviewCourse) {
   return `/courses/${encodeURIComponent(course.courseCode)}/${course.year}/${course.semester}`;
 }
@@ -131,6 +165,7 @@ function CourseRow({
             <PositionPlate position={position} />
             {course.department ? <span>{course.department}</span> : null}
           </div>
+          {course.progress ? <CourseProgress progress={course.progress} /> : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:justify-end">
           {course.hasRoadmap && isPastOffering ? (
@@ -358,7 +393,7 @@ export function AcademicOverview({
                     <Accordion className="pt-4" multiple>
                       {previousTerms.map((term, index) => (
                         <AccordionItem
-                          className="grid gap-4 not-last:border-b-0 md:gap-x-8 md:grid-cols-[13rem_minmax(0,1fr)] md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
+                          className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-x-8 md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
                           key={`${term.year}-${term.semester}`}
                           value={`${term.year}-${term.semester}`}
                         >
