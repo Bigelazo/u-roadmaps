@@ -121,13 +121,17 @@ type RoadmapCreationAction = (props: {
   year: number;
 }) => React.ReactNode;
 
+type CourseHeadingLevel = 'h3' | 'h4';
+
 function CourseRow({
   course,
+  headingLevel: Heading,
   isPastTerm,
   renderRoadmapCreation,
   notificationsEnabled,
 }: Readonly<{
   course: AcademicOverviewCourse;
+  headingLevel: CourseHeadingLevel;
   isPastTerm: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
@@ -158,9 +162,9 @@ function CourseRow({
               </>
             ) : null}
           </div>
-          <h4 className="mt-2 font-heading text-xl leading-[1.08] font-semibold tracking-[-0.02em] sm:text-2xl">
+          <Heading className="mt-2 font-heading text-xl leading-[1.08] font-semibold tracking-[-0.02em] sm:text-2xl">
             {course.name}
-          </h4>
+          </Heading>
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
             <PositionPlate position={position} />
             {course.department ? <span>{course.department}</span> : null}
@@ -260,11 +264,13 @@ function CourseRow({
 
 function CourseList({
   term,
+  headingLevel,
   isPastTerm = false,
   renderRoadmapCreation,
   notificationsEnabled,
 }: Readonly<{
   term: AcademicOverviewTerm;
+  headingLevel: CourseHeadingLevel;
   isPastTerm?: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
@@ -274,6 +280,7 @@ function CourseList({
       {term.courses.map((course) => (
         <CourseRow
           course={course}
+          headingLevel={headingLevel}
           isPastTerm={isPastTerm}
           key={`${course.courseCode}:${course.year}:${course.semester}`}
           renderRoadmapCreation={renderRoadmapCreation}
@@ -286,14 +293,18 @@ function CourseList({
 
 function AcademicTermSection({
   term,
+  isPastTerm = false,
   renderRoadmapCreation,
   notificationsEnabled,
 }: Readonly<{
   term: AcademicOverviewTerm;
+  /** A past term sits under “Semestres anteriores”, one heading level deeper. */
+  isPastTerm?: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
 }>) {
   const id = `term-${term.year}-${term.semester}`;
+  const Heading = isPastTerm ? 'h3' : 'h2';
 
   return (
     <section
@@ -301,14 +312,23 @@ function AcademicTermSection({
       className="grid gap-4 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8"
     >
       <div className="flex items-baseline justify-between gap-4 md:block">
-        <h3 className="font-heading text-2xl font-semibold tracking-[-0.02em]" id={id}>
+        <Heading
+          className={
+            isPastTerm
+              ? 'font-heading text-xl font-semibold tracking-[-0.02em]'
+              : 'font-heading text-2xl font-semibold tracking-[-0.02em]'
+          }
+          id={id}
+        >
           {termLabel(term)}
-        </h3>
+        </Heading>
         <p className="shrink-0 text-sm text-muted-foreground md:mt-1">
           {courseCountLabel(term.courses.length)}
         </p>
       </div>
       <CourseList
+        headingLevel={isPastTerm ? 'h4' : 'h3'}
+        isPastTerm={isPastTerm}
         notificationsEnabled={notificationsEnabled}
         renderRoadmapCreation={renderRoadmapCreation}
         term={term}
@@ -375,48 +395,63 @@ export function AcademicOverview({
             {previousTerms.length > 0 ? (
               <Collapsible>
                 <div className="flex flex-col items-start gap-1">
-                  <CollapsibleTrigger className="group/previous-terms inline-flex cursor-pointer items-center gap-2 text-left font-heading text-3xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
-                    <span>Semestres anteriores</span>
-                    <ChevronDown
-                      aria-hidden="true"
-                      className="shrink-0 transition-transform group-data-panel-open/previous-terms:rotate-180"
-                      size={20}
-                    />
-                  </CollapsibleTrigger>
+                  <h2>
+                    <CollapsibleTrigger className="group/previous-terms inline-flex cursor-pointer items-center gap-2 text-left font-heading text-2xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+                      <span>Semestres anteriores</span>
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="shrink-0 transition-transform group-data-panel-open/previous-terms:rotate-180"
+                        size={20}
+                      />
+                    </CollapsibleTrigger>
+                  </h2>
                   <span className="text-sm text-muted-foreground">
                     {previousTerms.length} {previousTerms.length === 1 ? 'semestre' : 'semestres'}
                   </span>
                 </div>
-                <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+                <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
                   <div className="pt-6">
                     <Separator />
-                    <Accordion className="pt-4" multiple>
-                      {previousTerms.map((term, index) => (
-                        <AccordionItem
-                          className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-x-8 md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
-                          key={`${term.year}-${term.semester}`}
-                          value={`${term.year}-${term.semester}`}
-                        >
-                          {index > 0 ? <Separator /> : null}
-                          <div className="flex flex-col items-start gap-1 pb-4">
-                            <AccordionTrigger className="w-fit flex-none cursor-pointer gap-2 py-0 font-heading text-2xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50">
-                              <span>{termLabel(term)}</span>
-                            </AccordionTrigger>
-                            <span className="text-sm text-muted-foreground">
-                              {courseCountLabel(term.courses.length)}
-                            </span>
-                          </div>
-                          <AccordionContent className="pb-4 [&_a]:no-underline">
-                            <CourseList
-                              isPastTerm
-                              notificationsEnabled={notificationsEnabled}
-                              renderRoadmapCreation={renderRoadmapCreation}
-                              term={term}
-                            />
-                          </AccordionContent>
-                        </AccordionItem>
-                      ))}
-                    </Accordion>
+                    {previousTerms.length === 1 ? (
+                      // A single past term needs no second disclosure.
+                      <div className="pt-6">
+                        <AcademicTermSection
+                          isPastTerm
+                          notificationsEnabled={notificationsEnabled}
+                          renderRoadmapCreation={renderRoadmapCreation}
+                          term={previousTerms[0]}
+                        />
+                      </div>
+                    ) : (
+                      <Accordion className="pt-4" multiple>
+                        {previousTerms.map((term, index) => (
+                          <AccordionItem
+                            className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-x-8 md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
+                            key={`${term.year}-${term.semester}`}
+                            value={`${term.year}-${term.semester}`}
+                          >
+                            {index > 0 ? <Separator /> : null}
+                            <div className="flex flex-col items-start gap-1 pb-4">
+                              <AccordionTrigger className="w-fit flex-none cursor-pointer gap-2 py-0 font-heading text-xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50">
+                                <span>{termLabel(term)}</span>
+                              </AccordionTrigger>
+                              <span className="text-sm text-muted-foreground">
+                                {courseCountLabel(term.courses.length)}
+                              </span>
+                            </div>
+                            <AccordionContent className="pb-4 [&_a]:no-underline">
+                              <CourseList
+                                headingLevel="h4"
+                                isPastTerm
+                                notificationsEnabled={notificationsEnabled}
+                                renderRoadmapCreation={renderRoadmapCreation}
+                                term={term}
+                              />
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    )}
                   </div>
                 </CollapsibleContent>
               </Collapsible>

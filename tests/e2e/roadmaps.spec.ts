@@ -849,11 +849,10 @@ test('teacher and student workflows render on a test-owned course offering', asy
   await expect(page.getByRole('listitem')).toHaveCount(3);
   await expect(page.getByRole('heading', { name: 'Primavera 2026' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Semestres anteriores/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Otoño 2026/ })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Otoño 2026' })).toHaveCount(0);
+  // A single past term opens with “Semestres anteriores”, without a second disclosure.
   await page.getByRole('button', { name: /Semestres anteriores/ }).click();
-  await expect(page.getByRole('button', { name: /Otoño 2026/ })).toBeVisible();
-  await expect(page.getByRole('listitem')).toHaveCount(3);
-  await page.getByRole('button', { name: /Otoño 2026/ }).click();
+  await expect(page.getByRole('heading', { level: 3, name: 'Otoño 2026' })).toBeVisible();
   await expect(page.getByRole('listitem')).toHaveCount(4);
   await expect(page.getByText('Tu período actual')).toHaveCount(0);
   const withoutRoadmapRow = page

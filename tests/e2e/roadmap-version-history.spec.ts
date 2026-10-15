@@ -210,7 +210,6 @@ test('teaching staff reach the history from the Roadmap and from past offerings'
     page.getByRole('link', { name: `Historial de versiones de ${past.courseName}` }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: /Semestres anteriores/ }).click();
-  await page.getByRole('button', { name: `Otoño ${pastTerm.year}` }).click();
   await expect(
     page.getByRole('link', { name: `Historial de versiones de ${past.courseName}` }),
   ).toBeVisible();
