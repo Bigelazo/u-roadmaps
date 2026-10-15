@@ -544,7 +544,7 @@ test('projects an unsaved Node type through the public preview intent', async ()
   const { onIntent } = renderEditor();
 
   await user.click(screen.getByRole('combobox', { name: 'Tipo' }));
-  await user.click(screen.getByRole('option', { name: 'Evaluación', exact: true }));
+  await user.click(screen.getByRole('option', { name: 'Evaluación' }));
   await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
 
   expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({
