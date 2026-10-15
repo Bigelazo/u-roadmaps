@@ -145,3 +145,14 @@
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) * {
   pointer-events: auto;
 }
+
+/* The creation menu overlaps its floating trigger by design; keep the trigger in front. */
+.driver-active button[aria-label='Crear en el mapa'] {
+  z-index: calc(var(--tutorial-z-acting-layer) + 1);
+}
+
+/* Following the open menu must leave its sibling trigger usable to close it again. */
+.driver-active.u-roadmaps-tour-acting button[aria-label='Crear en el mapa'],
+.driver-active.u-roadmaps-tour-acting button[aria-label='Crear en el mapa'] * {
+  pointer-events: auto;
+}

@@ -310,3 +310,28 @@ async function roadmapShape(roadmapId: string) {
     );
   `);
 }
+
+test('the highlighted creation menu stays behind its floating button', async ({
+  page,
+  createUser,
+}) => {
+  const user = await createUser();
+  await authenticateAs(page.context(), user.id);
+  await page.goto('/practice-roadmap/teaching');
+  await page.getByRole('button', { name: 'Centrar mapa' }).click();
+  for (let i = 0; i < 3; i++)
+    await tourPopover(page).getByRole('button', { name: 'Siguiente' }).click();
+  const creator = page.getByRole('button', { name: 'Crear en el mapa' });
+  await creator.click();
+  await expect(page.getByRole('menu')).toHaveClass(/driver-active-element/);
+  await expect
+    .poll(() =>
+      creator.evaluate((button) => {
+        const rect = button.getBoundingClientRect();
+        return button.contains(document.elementFromPoint(rect.x + 5, rect.y + rect.height / 2));
+      }),
+    )
+    .toBe(true);
+  await creator.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+});
