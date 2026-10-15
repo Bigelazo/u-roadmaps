@@ -30,6 +30,7 @@ import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-lay
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button';
+import { cn } from 'cn';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
 // TEACHING_STAFF is the fallback for teaching staff without a reported position:
@@ -150,8 +151,8 @@ function CourseRow({
   const isPastOffering = isPastTerm || course.isPastClosure;
 
   return (
-    <li className="min-w-0">
-      <div className="grid gap-4 px-5 py-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6">
+    <li className="min-w-0 sm:col-span-2 sm:grid sm:grid-cols-subgrid">
+      <div className="grid gap-4 px-5 py-5 sm:col-span-2 sm:grid-cols-subgrid sm:items-center sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold tracking-[0.08em] text-muted-foreground uppercase">
             <span>{course.courseCode}</span>
@@ -283,7 +284,8 @@ function CourseList({
   notificationsEnabled: boolean;
 }>) {
   return (
-    <ul className={dividedListClassName}>
+    // Rows share one action column, so statuses and actions line up from row to row.
+    <ul className={cn(dividedListClassName, 'sm:grid sm:grid-cols-[minmax(0,1fr)_auto]')}>
       {term.courses.map((course) => (
         <CourseRow
           course={course}
