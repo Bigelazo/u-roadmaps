@@ -336,7 +336,6 @@ test('the Academic overview offers Roadmap creation only before the offering clo
   await page.goto('/academic-overview');
   await expect(createButton(open.courseName)).toBeVisible();
   await page.getByRole('button', { name: /Semestres anteriores/ }).click();
-  await page.getByRole('button', { name: `Otoño ${closedTerm.year}` }).click();
   await expect(historyLink(closed.courseName)).toBeVisible();
   await expect(createButton(closed.courseName)).toHaveCount(0);
 });

@@ -4,12 +4,12 @@ export function UnavailableNoticeFallback({
   reason: 'course-unavailable' | 'roadmap-unavailable';
 }) {
   return (
-    <Alert className="mx-auto mt-6 max-w-3xl" role="status">
-      <AlertTitle>No se puede abrir este Roadmap</AlertTitle>
+    <Alert role="status">
+      <AlertTitle>No se puede abrir ese roadmap</AlertTitle>
       <AlertDescription>
         {reason === 'course-unavailable'
-          ? 'Tu Participación ya no tiene acceso a este Curso. Puedes revisar tus Cursos en el Resumen académico.'
-          : 'Este Roadmap ya no está disponible. Puedes revisar tus Cursos en el Resumen académico.'}
+          ? 'Ya no tienes acceso a ese curso. Aquí están los cursos en los que participas hoy.'
+          : 'Ese roadmap ya no está disponible. Aquí están los cursos en los que participas hoy.'}
       </AlertDescription>
     </Alert>
   );

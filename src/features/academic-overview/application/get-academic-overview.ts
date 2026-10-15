@@ -59,6 +59,7 @@ function courseFromMufasa(
       ? localCourse.institutionalPosition
       : course.institutionalPosition,
     hasRoadmap: localCourse?.hasRoadmap ?? false,
+    progress: localCourse?.progress ?? null,
     isPastClosure: pastClosure,
     canCreateRoadmap: localCourse
       ? localCourse.canCreateRoadmap

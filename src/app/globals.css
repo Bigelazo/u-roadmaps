@@ -204,6 +204,12 @@ body {
   --color-progress: var(--progress);
   --color-progress-deep: var(--progress-deep);
   --color-progress-soft: var(--progress-soft);
+  --color-position-coordinating-professor: var(--position-coordinating-professor);
+  --color-position-course-professor: var(--position-course-professor);
+  --color-position-auxiliary-professor: var(--position-auxiliary-professor);
+  --color-position-teaching-assistant: var(--position-teaching-assistant);
+  --color-position-student: var(--position-student);
+  --color-position-observer: var(--position-observer);
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
@@ -254,6 +260,12 @@ body {
   --progress-deep: #176245;
   --progress-soft: #ddf2e9;
   --steel: #aeb7c3;
+  --position-coordinating-professor: #9acc24;
+  --position-course-professor: #1d3193;
+  --position-auxiliary-professor: #f0195c;
+  --position-teaching-assistant: #933d8a;
+  --position-student: #f4ce62;
+  --position-observer: #6f7a8a;
   --destructive: #b3262b;
   --border: #dce1e8;
   --input: #dce1e8;

@@ -40,6 +40,9 @@ const restrictedPrismaImports = [
 
 export default defineConfig([
   globalIgnores([
+    // Vendored agent skills, maintained upstream.
+    '.agents/**',
+    '.claude/**',
     '.next/**',
     '.next-e2e/**',
     'build/**',
@@ -49,6 +52,9 @@ export default defineConfig([
     'playwright-report/**',
     'src/generated/prisma/**',
     'test-results/**',
+    // Uploaded resource files stored on local disk.
+    'uploads/**',
+    'uploads-e2e/**',
   ]),
   {
     ...js.configs.recommended,

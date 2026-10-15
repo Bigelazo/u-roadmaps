@@ -327,7 +327,11 @@ test('a partial response keeps absent teaching offerings and their stored labels
   await authenticateAs(page.context(), user.id);
   await page.goto('/academic-overview');
   await expect(page.getByText(course.courseName, { exact: true })).toBeVisible();
-  await expect(page.getByText(/^Auxiliar · /)).toBeVisible();
+  await expect(
+    page.getByRole('listitem').filter({ hasText: course.courseCode }).getByText('Auxiliar', {
+      exact: true,
+    }),
+  ).toBeVisible();
 });
 
 test('a stored teaching assistant can edit while U-Campus is unavailable', async ({

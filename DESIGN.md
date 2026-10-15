@@ -26,6 +26,7 @@ colors:
   course-professor: "#1d3193"
   coordinating-professor: "#9acc24"
   enrolled-student: "#f4ce62"
+  observer: "#6f7a8a"
 
 typography:
   display-lg: { fontFamily: Poppins, fontSize: 56px, fontWeight: 600, lineHeight: 0.98, letterSpacing: -2.8px }
@@ -101,13 +102,14 @@ Do not use green alone to communicate completion or current position. Pair it wi
 
 ### Institutional course positions
 
-Academic-overview course cards use a 4px left border to describe the person's relationship with the course. This marker always pairs with a textual position; it never conveys a teaching position by color alone.
+Academic-overview course rows show a position plate: a 4px-radius label tinted with the position color at 16% over the card, a solid position-color dot, and the position name in Ink. The color always pairs with the textual position; it never conveys a position by color alone. Teaching staff whose position U-Campus has not reported show “Equipo docente” with an outlined Graphite dot instead of a color. The colors are exposed as `--position-*` tokens. Do not mark rows with a colored left border.
 
 - **Teaching assistant** (`{colors.teaching-assistant}`): Ayudante.
 - **Auxiliary professor** (`{colors.auxiliary-professor}`): Auxiliar.
 - **Course professor** (`{colors.course-professor}`): Profesor de cátedra.
 - **Coordinating professor** (`{colors.coordinating-professor}`): Profesor coordinador.
-- **Enrolled student** (`{colors.enrolled-student}`): Inscrito como estudiante.
+- **Enrolled student** (`{colors.enrolled-student}`): Estudiante.
+- **Observer** (`{colors.observer}`): Oyente.
 
 ## Typography
 
