@@ -42,7 +42,9 @@ vi.mock('@xyflow/react', () => ({
   Background: () => null,
   BackgroundVariant: { Lines: 'lines' },
   ConnectionMode: { Loose: 'loose' },
-  Handle: () => null,
+  Handle: ({ style }: { style: React.CSSProperties }) => (
+    <span data-testid="flow-handle" style={style} />
+  ),
   MarkerType: { ArrowClosed: 'arrow-closed' },
   Panel: ({ children, position, ...props }: { children: ReactNode; position: string }) => (
     <div data-testid={`roadmap-panel-${position}`} {...props}>
@@ -57,7 +59,7 @@ vi.mock('@xyflow/react', () => ({
           <RoadmapNode key={node.id} {...nodeProps(node)} />
         ))}
         {edges.map((edge) => (
-          <output key={edge.id} data-testid={`dependency-${edge.id}`}>
+          <output key={edge.id} data-testid={`dependency-${edge.id}`} style={edge.style}>
             {edge.sourceHandle}:{edge.targetHandle}
           </output>
         ))}
@@ -209,3 +211,15 @@ test('enables the complete editing capability only for an editable teaching proj
 
 beforeEach(() => mockViewport(1280));
 afterEach(() => vi.unstubAllGlobals());
+
+test('read-only teaching graphs hide connection handles and render black dependencies', () => {
+  render(
+    <RoadmapGraph projection={{ kind: 'teaching', roadmap: teacherRoadmap }} {...commonProps} />,
+  );
+
+  expect(screen.getByTestId('dependency-dependency-1').style.stroke).toBe('rgb(0, 0, 0)');
+  for (const handle of screen.getAllByTestId('flow-handle')) {
+    expect(handle.style.visibility).toBe('hidden');
+    expect(handle.style.pointerEvents).toBe('none');
+  }
+});

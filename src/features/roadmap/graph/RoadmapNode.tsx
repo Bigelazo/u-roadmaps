@@ -386,6 +386,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
+  const canConnect = editing && Boolean(data.canManageActions);
   const teacherBlocked = editing && data.isTeacherBlocked;
   const blocked = locked || teacherBlocked;
   const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
@@ -452,14 +453,14 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
               data-testid="roadmap-node-handle"
               type="source"
               position={position}
-              isConnectable={editing}
+              isConnectable={canConnect}
               style={{
                 width: 12,
                 height: 12,
                 background: 'var(--primary)',
                 border: '2px solid var(--card)',
-                visibility: editing ? 'visible' : 'hidden',
-                pointerEvents: editing ? 'auto' : 'none',
+                visibility: canConnect ? 'visible' : 'hidden',
+                pointerEvents: canConnect ? 'auto' : 'none',
               }}
             />
           ))

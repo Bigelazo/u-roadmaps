@@ -137,14 +137,17 @@ function mapProjectionToFlow(
     };
   });
   const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
-    const defaultStroke = isTeacherView
-      ? (() => {
-          const sourceNode = nodesById.get(dependency.sourceNodeId);
-          return sourceNode && 'isCompleted' in sourceNode && sourceNode.isCompleted;
-        })()
-        ? 'var(--ink)'
-        : 'var(--steel)'
-      : studentEdgeStroke;
+    const defaultStroke =
+      isTeacherView && !canEdit
+        ? '#000'
+        : isTeacherView
+          ? (() => {
+              const sourceNode = nodesById.get(dependency.sourceNodeId);
+              return sourceNode && 'isCompleted' in sourceNode && sourceNode.isCompleted;
+            })()
+            ? 'var(--ink)'
+            : 'var(--steel)'
+          : studentEdgeStroke;
     return {
       id: dependency.id,
       source: dependency.sourceNodeId,

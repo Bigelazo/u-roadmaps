@@ -177,12 +177,33 @@ closedVersion(
     await expect(
       page.getByRole('heading', { name: `Edición ${closedYear}-${closed.semester}` }),
     ).toBeVisible();
+    const canvas = page.locator('.react-flow');
+    await expect(
+      canvas.getByRole('heading', { name: `Edición ${closedYear}-${closed.semester}` }),
+    ).toBeVisible();
+    const handles = canvas.getByTestId('roadmap-node-handle');
+    await expect(handles.first()).toBeHidden();
+    expect(
+      await handles.evaluateAll((elements) =>
+        elements.every((element) => getComputedStyle(element).visibility === 'hidden'),
+      ),
+    ).toBe(true);
+    const arrows = canvas.locator('.react-flow__edge-path');
+    await expect(arrows.first()).toBeAttached();
+    expect(
+      await arrows.evaluateAll((elements) =>
+        elements.every((element) => getComputedStyle(element).stroke === 'rgb(0, 0, 0)'),
+      ),
+    ).toBe(true);
+    await canvas.getByText('Información de la versión', { exact: true }).click();
     await expect(page.getByText('Creada desde cero')).toBeVisible();
     await expect(
       page.getByText(`${course.users.teacher.name} · Profesor de cátedra`),
     ).toBeVisible();
     await expect(page.getByText(course.users.studentWithProgress.name)).toHaveCount(0);
 
+    await canvas.getByText('Información de la versión', { exact: true }).click();
+    await page.getByRole('button', { name: 'Centrar mapa' }).click();
     await page.locator(`.react-flow__node[data-id="${version.nodeId}"]`).click();
     const details = page.getByRole('complementary', { name: nodeTitle });
     await expect(details).toBeVisible();
@@ -191,6 +212,7 @@ closedVersion(
     expect((await download).suggestedFilename()).toBe('guia.txt');
     // Read-only: no editing or Completion affordances.
     await expect(page.getByRole('button', { name: /Completar|Recurso|Guardar/ })).toHaveCount(0);
+    await canvas.getByText('Información de la versión', { exact: true }).click();
     await expect(page.getByRole('list', { name: 'Linaje' })).toHaveText(
       `Edición ${closedYear}-${closed.semester}`,
     );
