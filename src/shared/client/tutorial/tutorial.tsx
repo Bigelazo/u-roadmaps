@@ -20,7 +20,8 @@ const actingClass = 'u-roadmaps-tour-acting';
 /**
  * One step of a Roadmap tutorial; `prepare` runs before the step is shown. An action
  * step has `advanceWhen`: its control stays usable and the step advances only when an
- * action reported by the page matches. Any other action keeps the step and highlights
+ * action reported by the page matches, unless `allowManualAdvance` also permits navigation.
+ * Any other action keeps the step and highlights
  * the expected control again; so does `element` resolving to a different control.
  */
 export type TutorialStep<Action = never> = Readonly<{
@@ -28,8 +29,12 @@ export type TutorialStep<Action = never> = Readonly<{
   title: string;
   description: string;
   side?: 'top' | 'right' | 'bottom' | 'left';
+  /** Highlight the bounding region of related elements together. */
+  highlightElements?: () => readonly Element[];
   prepare?: () => Promise<void> | void;
   advanceWhen?: (action: Action) => boolean;
+  /** Allow Next and revisiting this action step when repeating it is harmless. */
+  allowManualAdvance?: boolean;
 }>;
 
 /** Where a page reports the actions that took effect, for action steps to follow. */
@@ -116,6 +121,26 @@ export function RoadmapTutorial<Action = never>({
     let cancelled = false;
     let moving = false;
     let following = false;
+    const groupHighlight = document.createElement('div');
+    groupHighlight.setAttribute('aria-hidden', 'true');
+    groupHighlight.setAttribute('data-tutorial-highlight-group', '');
+    groupHighlight.style.position = 'fixed';
+    groupHighlight.style.pointerEvents = 'none';
+    const resolveHighlight = (step: TutorialStep<Action>) => {
+      const elements = step.highlightElements?.();
+      if (!elements?.length) return resolveElement(step.element) ?? document.body;
+      const bounds = elements.map((element) => element.getBoundingClientRect());
+      const left = Math.min(...bounds.map((rect) => rect.left));
+      const top = Math.min(...bounds.map((rect) => rect.top));
+      Object.assign(groupHighlight.style, {
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${Math.max(...bounds.map((rect) => rect.right)) - left}px`,
+        height: `${Math.max(...bounds.map((rect) => rect.bottom)) - top}px`,
+      });
+      if (!groupHighlight.isConnected) document.body.appendChild(groupHighlight);
+      return groupHighlight;
+    };
     const askExit = () => {
       if (confirmingRef.current) return;
       confirmingRef.current = true;
@@ -123,13 +148,15 @@ export function RoadmapTutorial<Action = never>({
     };
     const isActionStep = (index: number | undefined): index is number =>
       index !== undefined && steps[index]?.advanceWhen !== undefined;
+    const isRequiredActionStep = (index: number | undefined): index is number =>
+      isActionStep(index) && !steps[index].allowManualAdvance;
     const move = async (tour: Driver, offset: 1 | -1, byAction = false) => {
       if (confirmingRef.current || moving) return;
-      if (offset === 1 && !byAction && isActionStep(tour.getActiveIndex())) return;
+      if (offset === 1 && !byAction && isRequiredActionStep(tour.getActiveIndex())) return;
       const index = (tour.getActiveIndex() ?? 0) + offset;
       if (index < 0) return;
       // The canvas keeps the action's effects, so returning would require repeating it.
-      if (offset === -1 && isActionStep(index)) return;
+      if (offset === -1 && isRequiredActionStep(index)) return;
       if (index >= steps.length) {
         tour.destroy();
         return;
@@ -151,15 +178,15 @@ export function RoadmapTutorial<Action = never>({
       allowKeyboardControl: false,
       disableActiveInteraction: true,
       steps: steps.map((step, index): DriveStep => ({
-        element: () => resolveElement(step.element) ?? document.body,
+        element: () => resolveHighlight(step),
         disableActiveInteraction: !step.advanceWhen,
         popover: {
           title: step.title,
           description: step.description,
           side: step.side,
-          ...(step.advanceWhen
+          ...(isRequiredActionStep(index)
             ? { showButtons: ['close' as const] }
-            : isActionStep(index - 1)
+            : index === 0 || isRequiredActionStep(index - 1)
               ? { showButtons: ['next' as const, 'close' as const] }
               : {}),
         },
@@ -201,7 +228,13 @@ export function RoadmapTutorial<Action = never>({
     const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
       document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
-      if (confirmingRef.current || !isActionStep(index)) return;
+      if (confirmingRef.current || index === undefined || !tour.isActive()) return;
+      if (steps[index].highlightElements) {
+        resolveHighlight(steps[index]);
+        tour.refresh();
+        return;
+      }
+      if (!isActionStep(index)) return;
       const element = resolveElement(steps[index].element);
       if (element && element !== tour.getActiveElement()) highlightAgain();
       // Keeps the highlight on a control that is still moving, like an opening menu.
@@ -239,6 +272,7 @@ export function RoadmapTutorial<Action = never>({
       document.body.classList.remove(actingClass);
       window.removeEventListener('keydown', onKeyDown, true);
       tour.destroy();
+      groupHighlight.remove();
       driverRef.current = null;
     };
   }, [steps, actions]);

@@ -6,10 +6,10 @@ import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
 const steps = [
-  'Centrar mapa',
-  'Tipo de nodo y recursos',
+  'Centrar roadmap',
+  'Nodos',
   'Nodo oculto',
-  'Bloqueo docente',
+  'Nodo bloqueado',
   'Crea un nodo',
   'Tipos de nodo',
   'Conecta tu nodo',
@@ -81,20 +81,21 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await authenticateAs(page.context(), user.id);
   await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
 
-  // An action step offers no "Siguiente": only its action advances it.
-  await expectStep(page, 'Centrar mapa');
-  await expect(tourPopover(page).getByRole('button', { name: 'Siguiente' })).toHaveCount(0);
-  await page.keyboard.press('ArrowRight');
-  await expectStep(page, 'Centrar mapa');
+  // Centering is optional and repeatable, through Next or the canvas control.
+  await expectStep(page, 'Centrar roadmap');
+  await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
+  await next(page, 'Nodos');
+  await tourPopover(page).getByRole('button', { name: 'Anterior' }).click();
+  await expectStep(page, 'Centrar roadmap');
   await page.getByRole('button', { name: 'Centrar mapa' }).click();
-  await expectStep(page, 'Tipo de nodo y recursos');
+  await expectStep(page, 'Nodos');
 
   await next(page, 'Nodo oculto');
   await tourPopover(page).getByRole('button', { name: 'Anterior' }).click();
-  await expectStep(page, 'Tipo de nodo y recursos');
+  await expectStep(page, 'Nodos');
   await next(page, 'Nodo oculto');
   await expect(practiceNode(page, 'Material de apoyo')).toHaveClass(/driver-active-element/);
-  await next(page, 'Bloqueo docente');
+  await next(page, 'Nodo bloqueado');
   await next(page, 'Crea un nodo');
   await expect(tourPopover(page)).toContainText('archivo .md');
 
@@ -137,6 +138,10 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await page.keyboard.press('ArrowLeft');
   await expectStep(page, 'Tipos de nodo');
   await expect(practiceNode(page, 'Nodo de práctica')).toHaveCount(1);
+  const createdTransform = await practiceNode(page, 'Nodo de práctica').evaluate(
+    (node) => node.style.transform,
+  );
+  expect(createdTransform).toBe('translate(960px, 360px)');
   await expect(creator).toHaveClass(/driver-active-element/);
   await next(page, 'Conecta tu nodo');
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
@@ -150,7 +155,44 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
   await page.keyboard.press('ArrowLeft');
   await expectStep(page, 'Dependencias');
-  await expect(tourPopover(page)).toContainText('ciclos');
+  await expect(tourPopover(page)).toContainText('todos sus prerrequisitos');
+  const focus = page.locator('[data-tutorial-highlight-group]');
+  await expect(focus).toHaveClass(/driver-active-element/);
+  await expect
+    .poll(async () => {
+      const bounds = await focus.boundingBox();
+      const nodes = await Promise.all([
+        practiceNode(page, 'Nodo de práctica').boundingBox(),
+        practiceNode(page, 'Control 1').boundingBox(),
+      ]);
+      return (
+        bounds &&
+        nodes.every(
+          (node) =>
+            node &&
+            node.x >= bounds.x - 1 &&
+            node.y >= bounds.y - 1 &&
+            node.x + node.width <= bounds.x + bounds.width + 1 &&
+            node.y + node.height <= bounds.y + bounds.height + 1,
+        )
+      );
+    })
+    .toBe(true);
+  await expect
+    .poll(async () => {
+      const region = await focus.boundingBox();
+      const popover = await tourPopover(page).boundingBox();
+      return (
+        region &&
+        popover &&
+        (popover.x + popover.width <= region.x ||
+          region.x + region.width <= popover.x ||
+          popover.y + popover.height <= region.y ||
+          region.y + region.height <= popover.y)
+      );
+    })
+    .toBe(true);
+  await page.screenshot({ path: 'test-results/tutorial-dependencies.png' });
   await next(page, 'Selecciona tu nodo');
 
   // Selecting another Node keeps the step.
@@ -280,9 +322,9 @@ test('the canvas question-mark icon opens the teaching tutorial and points back 
 
   await page.getByRole('link', { name: 'Abrir tutorial' }).click();
   await expect(page).toHaveURL(/\/practice-roadmap\/teaching\?origin=/);
-  await expectStep(page, 'Centrar mapa');
+  await expectStep(page, 'Centrar roadmap');
   await page.getByRole('button', { name: 'Centrar mapa' }).click();
-  await expectStep(page, 'Tipo de nodo y recursos');
+  await expectStep(page, 'Nodos');
 
   await page.getByRole('link', { name: 'Salir' }).click();
   await expect(page).toHaveURL(new RegExp(`${course.pagePath()}$`));
@@ -310,3 +352,28 @@ async function roadmapShape(roadmapId: string) {
     );
   `);
 }
+
+test('the highlighted creation menu stays behind its floating button', async ({
+  page,
+  createUser,
+}) => {
+  const user = await createUser();
+  await authenticateAs(page.context(), user.id);
+  await page.goto('/practice-roadmap/teaching');
+  await page.getByRole('button', { name: 'Centrar mapa' }).click();
+  for (let i = 0; i < 3; i++)
+    await tourPopover(page).getByRole('button', { name: 'Siguiente' }).click();
+  const creator = page.getByRole('button', { name: 'Crear en el mapa' });
+  await creator.click();
+  await expect(page.getByRole('menu')).toHaveClass(/driver-active-element/);
+  await expect
+    .poll(() =>
+      creator.evaluate((button) => {
+        const rect = button.getBoundingClientRect();
+        return button.contains(document.elementFromPoint(rect.x + 5, rect.y + rect.height / 2));
+      }),
+    )
+    .toBe(true);
+  await creator.click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+});
