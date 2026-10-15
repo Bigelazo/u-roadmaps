@@ -176,9 +176,7 @@ test('renders the selected Node as one cohesive editing surface', () => {
   renderEditor();
 
   expect(screen.getByRole('heading', { name: node.title })).toBeTruthy();
-  expect(
-    within(screen.getByRole('list', { name: 'Estado del nodo' })).getByText('Visible'),
-  ).toBeTruthy();
+  expect(screen.getByTestId('node-type-icon')).toBeTruthy();
   expect(screen.getByRole('heading', { name: 'Acceso de estudiantes' })).toBeTruthy();
   expect(screen.getByRole('heading', { name: /Recursos/ })).toBeTruthy();
 });

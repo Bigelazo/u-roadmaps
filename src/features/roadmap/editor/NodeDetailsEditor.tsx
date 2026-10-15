@@ -13,82 +13,54 @@ import {
   X,
 } from 'lucide-react';
 import { addCalendarDays, chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
-import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { Separator } from '@/shared/ui/separator';
-import { SidebarHeader } from '@/shared/ui/sidebar';
 import { NodeContentFields } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
+import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 
-type NodeStatusChip = { id: string; Icon: ComponentType<{ className?: string }>; label: string };
-
-function nodeStatusChips(node: ReturnType<typeof useNodeEditorContext>['node']) {
-  const chips: NodeStatusChip[] = [
-    node.isVisible
-      ? { id: 'visible', Icon: Eye, label: 'Visible' }
-      : { id: 'hidden', Icon: EyeOff, label: 'Oculto' },
-  ];
-  if (node.isVisible && node.isTeacherBlocked)
-    chips.push({ id: 'blocked', Icon: LockKeyhole, label: 'Bloqueado' });
-  if (node.isVisible && node.isTeacherBlocked && node.teacherUnlockOn)
-    chips.push({
-      id: 'scheduled',
-      Icon: CalendarClock,
-      label: `Desbloqueo ${formatShortCalendarDay(node.teacherUnlockOn)}`,
-    });
-  return chips;
-}
-
-/** The title is edited below, so the header carries the Node's access state instead. */
 function NodeHeader() {
-  const { node, closeNode } = useNodeEditorContext();
+  const { node, nodeTypes, closeNode } = useNodeEditorContext();
+  const type = nodeTypes.find((nodeType) => nodeType.id === node.nodeTypeId);
 
   return (
-    <SidebarHeader className="shrink-0 flex-row items-center justify-between gap-3 border-b border-border px-6 py-3">
-      <h2 className="sr-only">{node.title}</h2>
-      <ul aria-label="Estado del nodo" className="flex min-w-0 flex-wrap gap-1.5">
-        {nodeStatusChips(node).map(({ id, Icon, label }) => (
-          <li key={id}>
-            <Badge
-              variant={id === 'visible' ? 'outline' : 'secondary'}
-              className="h-7 gap-1.5 px-2.5 text-[13px]"
-            >
-              <Icon aria-hidden="true" />
-              {label}
-            </Badge>
-          </li>
-        ))}
-      </ul>
-      <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Acciones del nodo">
-        <NodeFullscreenDialog
-          key={node.id}
-          title="Editar nodo"
-          triggerLabel="Editar nodo en pantalla completa"
-        >
-          <NodeForm isFullscreen />
-        </NodeFullscreenDialog>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label="Deseleccionar nodo"
-                onClick={closeNode}
-              >
-                <X />
-              </Button>
-            }
-          />
-          <TooltipContent>Deseleccionar nodo</TooltipContent>
-        </Tooltip>
-      </div>
-    </SidebarHeader>
+    <NodePanelHeader
+      title={node.title}
+      nodeType={type}
+      iconTestId="node-type-icon"
+      isSidebar
+      actions={
+        <>
+          <NodeFullscreenDialog
+            key={node.id}
+            title="Editar nodo"
+            triggerLabel="Editar nodo en pantalla completa"
+          >
+            <NodeForm isFullscreen />
+          </NodeFullscreenDialog>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Deseleccionar nodo"
+                  onClick={closeNode}
+                >
+                  <X />
+                </Button>
+              }
+            />
+            <TooltipContent>Deseleccionar nodo</TooltipContent>
+          </Tooltip>
+        </>
+      }
+    />
   );
 }
 
@@ -202,16 +174,6 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
       </div>
     </form>
   );
-}
-
-function formatShortCalendarDay(day: string) {
-  return new Intl.DateTimeFormat('es-CL', {
-    timeZone: 'UTC',
-    day: 'numeric',
-    month: 'short',
-  })
-    .format(new Date(`${day}T12:00:00.000Z`))
-    .replace('.', '');
 }
 
 function formatCalendarDay(day: string) {
