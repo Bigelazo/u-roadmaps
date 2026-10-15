@@ -1,4 +1,4 @@
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test as base, type E2ECourseOffering } from './fixtures';
 import { authenticateAs, toast } from './helpers';
 import { prepareNodeCreator } from './create-node';
@@ -50,6 +50,20 @@ const test = base.extend<{
 });
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+async function confirmNodeDeletion(page: Page, offering: E2ECourseOffering, nodeId: string) {
+  const confirmation = page.getByRole('alertdialog');
+  // Revalidation, the DELETE, and the projection reload finish asynchronously after the tap.
+  const deleted = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' &&
+      response.url().endsWith(offering.apiPath(`/nodes/${nodeId}`)),
+  );
+  await confirmation.getByRole('button', { name: 'Eliminar', exact: true }).tap();
+  const response = await deleted;
+  expect(response.status()).toBe(204);
+  await expect(confirmation).toBeHidden();
+}
 
 test('touch Node actions are labeled, modal, contextual, and hand focus to confirmations', async ({
   page,
@@ -178,7 +192,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   await trigger.tap();
   await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
   await expect(confirmation).toContainText('Touch prerequisite');
-  await confirmation.getByRole('button', { name: 'Eliminar', exact: true }).tap();
+  await confirmNodeDeletion(page, offering, first.id);
   await expect(node).toHaveCount(0);
 });
 
@@ -222,7 +236,7 @@ test('touch deletion prevents duplicate mutations and recovers after a failed re
   await page.unroute(path);
   await node.getByRole('button', { name: 'Abrir menú de acciones del nodo' }).tap();
   await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
-  await remove.tap();
+  await confirmNodeDeletion(page, offering, first.id);
   await expect(node).toHaveCount(0);
 });
 
