@@ -1,15 +1,10 @@
+import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
+
 type ParticipationRole = 'STUDENT' | 'TEACHER';
 type ResourceType = 'FILE' | 'LINK' | 'VIDEO';
 type FixtureNodeKind = 'CONTENT' | 'ASSESSMENT' | 'SUPPLEMENTARY' | 'CUSTOM';
 type DescriptionLength = 'SHORT' | 'MEDIUM' | 'LONG';
 export type FileFormat = 'PDF' | 'MARKDOWN' | 'DOCX' | 'XLSX' | 'PPTX';
-
-export type InstitutionalCoursePosition =
-  | 'COORDINATING_PROFESSOR'
-  | 'COURSE_PROFESSOR'
-  | 'AUXILIARY_PROFESSOR'
-  | 'TEACHING_ASSISTANT'
-  | 'STUDENT';
 
 const uuid = (prefix: string, number: number) =>
   `${prefix}-0000-4000-8000-${String(number).padStart(12, '0')}`;
@@ -229,7 +224,7 @@ const studentParticipation = (
 const teacherParticipation = (
   userId: string,
   courseOfferingId: string,
-  institutionalPosition: Exclude<InstitutionalCoursePosition, 'STUDENT'>,
+  institutionalPosition: Exclude<InstitutionalCoursePosition, 'STUDENT' | 'OBSERVER'>,
 ): Participation => ({
   userId,
   courseOfferingId,
@@ -247,6 +242,8 @@ const sections = (students: readonly string[]) => [
 
 // Synthetic calendar dates keep the current catalog editable across local runs.
 export const fixtureAcademicTerms = [
+  { year: 2024, semester: 2, day: '2025-01-20' },
+  { year: 2025, semester: 1, day: '2025-07-20' },
   { year: 2025, semester: 2, day: '2026-01-20' },
   { year: 2026, semester: 1, day: '2026-07-20' },
   { year: 2026, semester: 2, day: '2099-01-20' },
@@ -261,7 +258,72 @@ export const fixtureAcademicTerms = [
   sourcePdfUrl: 'https://fixtures.u-roadmaps.test/calendar.pdf',
 }));
 
+// Stable reserved identities; append new editions without renumbering existing assets.
+const historicalEditions = [
+  {
+    number: 6,
+    courseCode: 'FI1001',
+    year: 2024,
+    semester: 2,
+    template: 2,
+    sourceNumber: null,
+    title: 'Mediciones y error experimental',
+  },
+  {
+    number: 7,
+    courseCode: 'FI1001',
+    year: 2025,
+    semester: 1,
+    template: 2,
+    sourceNumber: 6,
+    title: 'Magnitudes, unidades y estimaciones',
+  },
+  {
+    number: 8,
+    courseCode: 'CC1002',
+    year: 2025,
+    semester: 2,
+    template: 0,
+    sourceNumber: null,
+    title: 'Primeros programas en Python',
+  },
+  {
+    number: 9,
+    courseCode: 'CC1002',
+    year: 2026,
+    semester: 1,
+    template: 0,
+    sourceNumber: 8,
+    title: 'Algoritmos y resolución de problemas',
+  },
+  {
+    number: 10,
+    courseCode: 'MA1001',
+    year: 2025,
+    semester: 2,
+    template: 1,
+    sourceNumber: null,
+    title: 'Números reales y desigualdades',
+  },
+  {
+    number: 11,
+    courseCode: 'MA1001',
+    year: 2026,
+    semester: 1,
+    template: 1,
+    sourceNumber: 10,
+    title: 'Modelación con funciones reales',
+  },
+] as const;
+
 export const developmentFixtureOfferings = [
+  ...historicalEditions.map(({ number, courseCode, year, semester }) => ({
+    id: uuid('30000000', number),
+    courseCode,
+    year,
+    semester,
+    sections: sections([...regularStudents, developmentFixtureIds.nicolas]),
+  })),
   {
     id: developmentFixtureIds.offerings.fi1001Original,
     courseCode: 'FI1001',
@@ -309,6 +371,35 @@ export const developmentFixtureOfferings = [
 ] as const;
 
 export const fixtureParticipations: Participation[] = [
+  ...historicalEditions.flatMap(({ number, courseCode }) => [
+    teacherParticipation(
+      developmentFixtureIds.daniela,
+      uuid('30000000', number),
+      'COURSE_PROFESSOR',
+    ),
+    teacherParticipation(
+      developmentFixtureIds.coordinatingProfessor,
+      uuid('30000000', number),
+      'COORDINATING_PROFESSOR',
+    ),
+    teacherParticipation(
+      developmentFixtureIds.teachingAssistant,
+      uuid('30000000', number),
+      'TEACHING_ASSISTANT',
+    ),
+    ...(courseCode === 'FI1001'
+      ? [
+          teacherParticipation(
+            developmentFixtureIds.historicalTeacher,
+            uuid('30000000', number),
+            'AUXILIARY_PROFESSOR',
+          ),
+        ]
+      : []),
+    ...[...regularStudents, developmentFixtureIds.nicolas].map((id, index) =>
+      studentParticipation(id, uuid('30000000', number), index < 26 ? '1' : '2'),
+    ),
+  ]),
   teacherParticipation(
     developmentFixtureIds.teachingAssistant,
     developmentFixtureIds.offerings.fi1001Historical,
@@ -933,7 +1024,7 @@ function materializeRoadmap(blueprint: RoadmapBlueprint, roadmapIndex: number) {
   };
 }
 
-// The original and successor retain the same pedagogical content with independent identities/files.
+// Each edition has independent node, resource and file identities.
 const originalRoadmapBlueprint: RoadmapBlueprint = {
   ...roadmapBlueprints[2],
   id: developmentFixtureIds.roadmaps.fi1001Original,
@@ -942,6 +1033,11 @@ const originalRoadmapBlueprint: RoadmapBlueprint = {
     ...roadmapBlueprints[2].customNodeType,
     id: developmentFixtureIds.customNodeTypes.fi1001Original,
   },
+  nodes: roadmapBlueprints[2].nodes.map((node, index) =>
+    index === 0
+      ? ['Unidades y análisis dimensional', 'conversión de unidades y consistencia de ecuaciones']
+      : node,
+  ),
 };
 
 type FixtureRoadmapAuthorship = {
@@ -962,6 +1058,9 @@ const unrecordedAuthorship: FixtureRoadmapAuthorship = {
 const closedRoadmapAuthorship: Record<string, FixtureRoadmapAuthorship> = {
   [developmentFixtureIds.roadmaps.fi1001Original]: {
     ...unrecordedAuthorship,
+    sourceRoadmapId: uuid('40000000', 7),
+    sourceYear: 2025,
+    sourceSemester: 1,
     creatorId: developmentFixtureIds.departedCreator,
     closedAt: new Date('2026-01-21T03:00:00.000Z'),
   },
@@ -974,12 +1073,65 @@ const closedRoadmapAuthorship: Record<string, FixtureRoadmapAuthorship> = {
   },
 };
 
-export const fixtureRoadmaps = [...roadmapBlueprints, originalRoadmapBlueprint].map(
-  (blueprint, index) => ({
+const historicalRoadmaps = historicalEditions.map((edition) => {
+  const template = roadmapBlueprints[edition.template];
+  const source = historicalEditions.find(({ number }) => number === edition.sourceNumber);
+  const term = fixtureAcademicTerms.find(
+    ({ year, semester }) => year === edition.year && semester === edition.semester,
+  )!;
+  return {
+    ...materializeRoadmap(
+      {
+        ...template,
+        id: uuid('40000000', edition.number),
+        courseOfferingId: uuid('30000000', edition.number),
+        customNodeType: { ...template.customNodeType, id: uuid('50000000', edition.number) },
+        nodes: template.nodes.map((node, index) =>
+          index === 0
+            ? [
+                edition.title,
+                `fundamentos de ${template.theme} en la edición ${edition.year}-${edition.semester}`,
+              ]
+            : node,
+        ),
+        resources: template.resources.map((resource, index) =>
+          index === 0
+            ? {
+                ...resource,
+                title: `Programa ${edition.year}-${edition.semester}: ${edition.title}`,
+              }
+            : resource,
+        ),
+      },
+      edition.number,
+    ),
+    creatorId: developmentFixtureIds.daniela,
+    closedAt: new Date(term.roadmapFreezeDate.getTime() + 24 * 60 * 60 * 1000),
+    sourceRoadmapId: source ? uuid('40000000', source.number) : null,
+    sourceYear: source?.year ?? null,
+    sourceSemester: source?.semester ?? null,
+  };
+});
+
+export const fixtureRoadmaps = [
+  ...[...roadmapBlueprints, originalRoadmapBlueprint].map((blueprint, index) => ({
     ...materializeRoadmap(blueprint, index),
-    ...(closedRoadmapAuthorship[blueprint.id] ?? unrecordedAuthorship),
-  }),
-);
+    ...(closedRoadmapAuthorship[blueprint.id] ?? {
+      ...unrecordedAuthorship,
+      creatorId:
+        blueprint.id === developmentFixtureIds.roadmaps.cc1002
+          ? developmentFixtureIds.camila
+          : developmentFixtureIds.daniela,
+      sourceRoadmapId: uuid(
+        '40000000',
+        blueprint.id === developmentFixtureIds.roadmaps.cc1002 ? 9 : 11,
+      ),
+      sourceYear: 2026,
+      sourceSemester: 1,
+    }),
+  })),
+  ...historicalRoadmaps,
+];
 
 export const fixtureClosureTeachingStaff = fixtureRoadmaps.flatMap((roadmap) =>
   roadmap.closedAt
@@ -1079,16 +1231,20 @@ const completionStudentsByRoadmap = [
 export const fixtureCompletions = fixtureRoadmaps.flatMap((roadmap, roadmapIndex) => {
   let studentOffset = 0;
   return progressGroups.flatMap((group) => {
-    const students = completionStudentsByRoadmap[roadmapIndex].slice(
-      studentOffset,
-      studentOffset + group.count,
-    );
+    const students = (
+      completionStudentsByRoadmap[roadmapIndex] ?? [
+        ...regularStudents,
+        developmentFixtureIds.nicolas,
+      ]
+    ).slice(studentOffset, studentOffset + group.count);
     studentOffset += group.count;
     return students.flatMap((userId) =>
       group.completedNodeIndexes.map((nodeIndex) => ({
         userId,
         roadmapNodeId: roadmap.nodes[nodeIndex - 1].id,
-        completedAt: new Date('2026-08-15T12:00:00.000Z'),
+        completedAt: roadmap.closedAt
+          ? new Date(roadmap.closedAt.getTime() - 24 * 60 * 60 * 1000)
+          : new Date('2026-08-15T12:00:00.000Z'),
       })),
     );
   });

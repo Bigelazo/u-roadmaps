@@ -30,7 +30,7 @@ const fixture = {
   fi1001Current: { courseCode: 'FI1001', year: 2026, semester: 2 },
 } as const;
 
-test('the FI1001 catalog exposes a closed two-edition lineage and an empty current offering', async ({
+test('the FI1001 catalog exposes a closed four-edition lineage and an empty current offering', async ({
   apiAs,
 }) => {
   const api = await apiAs({ id: fixture.daniela });
@@ -52,13 +52,15 @@ test('the FI1001 catalog exposes a closed two-edition lineage and an empty curre
       year: 2025,
       semester: 2,
       closedAt: expect.any(String),
-      origin: { kind: 'EMPTY' },
+      origin: { kind: 'COPY', year: 2025, semester: 1 },
       creator: { name: 'Andrés Silva Pérez' },
       teachingStaff: [
         { name: 'Daniela Rojas Mella', institutionalPosition: 'COURSE_PROFESSOR' },
         { name: 'Sofía Herrera Díaz', institutionalPosition: 'AUXILIARY_PROFESSOR' },
       ],
     },
+    { year: 2025, semester: 1, origin: { kind: 'COPY', year: 2024, semester: 2 } },
+    { year: 2024, semester: 2, origin: { kind: 'EMPTY' } },
   ]);
   const departed = await apiAs({ id: developmentFixtureIds.departedCreator });
   const overview = await (await ok(await departed.get('/api/academic-overview'))).json();
@@ -66,6 +68,8 @@ test('the FI1001 catalog exposes a closed two-edition lineage and an empty curre
     expect.objectContaining({ courseCode: 'FI1001', year: 2025, semester: 2 }),
   );
   for (const [year, semester] of [
+    [2024, 2],
+    [2025, 1],
     [2025, 2],
     [2026, 1],
   ]) {
@@ -346,7 +350,7 @@ test('the FI1001 catalog gives teaching staff their creation options and histori
   await page.getByRole('button', { name: `Crear roadmap de ${courseName}` }).click();
   const dialog = page.getByRole('dialog', { name: `Crear roadmap de ${courseName}` });
   await expect(dialog.getByRole('radio', { name: 'Roadmap vacío' })).toBeChecked();
-  for (const edition of ['Edición 2025-2', 'Edición 2026-1']) {
+  for (const edition of ['Edición 2024-2', 'Edición 2025-1', 'Edición 2025-2', 'Edición 2026-1']) {
     await expect(dialog.getByRole('radio', { name: new RegExp(edition) })).toBeVisible();
     await expect(dialog.getByRole('link', { name: `Ver ${edition}` })).toBeVisible();
   }
@@ -375,6 +379,8 @@ test('the FI1001 catalog gives teaching staff their creation options and histori
   expect(history.horizon).toEqual({ year: 2025, semester: 2 });
   expect(history.versions.map(({ edition }: { edition: string }) => edition)).toEqual([
     'Edición 2025-2',
+    'Edición 2025-1',
+    'Edición 2024-2',
   ]);
   await ok(await historical.get('/api/FI1001/versions/2026/1'), 404);
 });
@@ -413,4 +419,37 @@ test('the FI1001 historical student sees the closed course while versions exclud
   await expect(page.getByText('Martín Vega Ríos · Ayudante')).toBeVisible();
   await expect(page.getByText('Nicolás Fuentes Arancibia')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Completar', exact: true })).toHaveCount(0);
+});
+
+test('programming and calculus have distinct closed editions and a copied current roadmap', async ({
+  apiAs,
+}) => {
+  const teacher = await apiAs({ id: fixture.daniela });
+  for (const courseCode of ['CC1002', 'MA1001']) {
+    const history = await (await ok(await teacher.get(`/api/${courseCode}/versions`))).json();
+    expect(history.versions).toMatchObject([
+      {
+        year: 2026,
+        semester: 1,
+        origin: { kind: 'COPY', year: 2025, semester: 2 },
+        teachingStaff: [
+          { institutionalPosition: 'COURSE_PROFESSOR' },
+          { institutionalPosition: 'COORDINATING_PROFESSOR' },
+          { institutionalPosition: 'TEACHING_ASSISTANT' },
+        ],
+      },
+      { year: 2025, semester: 2, origin: { kind: 'EMPTY' } },
+    ]);
+    const titles = [];
+    for (const [year, semester] of [
+      [2025, 2],
+      [2026, 1],
+    ]) {
+      const version = await (
+        await ok(await teacher.get(`/api/${courseCode}/versions/${year}/${semester}`))
+      ).json();
+      titles.push(version.nodes.map((node: { title: string }) => node.title).sort());
+    }
+    expect(titles[0]).not.toEqual(titles[1]);
+  }
 });
