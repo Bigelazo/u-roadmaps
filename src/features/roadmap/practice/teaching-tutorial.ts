@@ -66,29 +66,30 @@ export function teachingTutorialSteps(
   return [
     {
       element: 'button[aria-label="Centrar mapa"]',
-      title: 'Centrar mapa',
+      title: 'Centrar roadmap',
       description:
-        'Arrastra el fondo para desplazarte y usa la rueda del mouse para acercar o alejar. Presiona este botón para volver a ver el mapa completo.',
+        'Puedes arrastrar el fondo para desplazarte, y usar la rueda del mouse para acercar o alejar. Presiona este botón para centrar la vista en el roadmap completo',
       advanceWhen: (action) => action.type === 'fitView',
+      allowManualAdvance: true,
     },
     nodeTypeAndResourcesStep,
     {
       element: nodeSelector(practiceNodeIds.h),
       title: 'Nodo oculto',
       description:
-        'Este ícono marca un nodo oculto para estudiantes: solo el equipo docente lo ve.',
+        'Esta representación marca un nodo que está oculto para estudiantes: solo el equipo docente puede verlo.',
     },
     {
       element: nodeSelector(practiceNodeIds.f),
-      title: 'Bloqueo docente',
+      title: 'Nodo bloqueado',
       description:
-        'Este ícono marca un nodo bloqueado por el equipo docente. Tus estudiantes no pueden trabajar en él hasta que lo liberes.',
+        'Esta representación marca un nodo bloqueado por el equipo docente. Los estudiantes pueden verlo en el roadmap, pero no pueden acceder a él hasta que lo liberes.',
     },
     {
       element: nodeCreator,
       title: 'Crea un nodo',
       description:
-        'Presiona "Crear en el mapa" y elige "Crear nodo". Escribe un título, elige su tipo y deja marcado "Visible para estudiantes". En la descripción puedes escribir Markdown o arrastrar un archivo .md para reemplazar el texto.',
+        'Presiona el botón flotante y elige "Crear nodo". Escribe un título, elige el tipo y déjalo visible para estudiantes. La descripción es compatible con Markdown, y puedes arrastrar un archivo .md a la descripción.',
       side: 'top',
       advanceWhen: (action) => {
         if (action.type !== 'addNode') return false;
@@ -110,7 +111,7 @@ export function teachingTutorialSteps(
       element: canvas,
       title: 'Conecta tu nodo',
       description:
-        'Arrastra desde el borde de tu nuevo nodo hasta Control 1 para crear una dependencia.',
+        'Arrastra desde uno de los 4 puntos de tu nuevo nodo hasta uno de los 4 puntos del nodo "Control 1" para crear una dependencia.',
       advanceWhen: (action) =>
         action.type === 'connectNodes' &&
         action.sourceNodeId === createdNodeId &&
@@ -119,8 +120,23 @@ export function teachingTutorialSteps(
     {
       element: nodeSelector(practiceNodeIds.e),
       title: 'Dependencias',
+      highlightElements: () => {
+        const selectors = [
+          nodeSelector(practiceNodeIds.e),
+          ...(createdNodeId
+            ? [
+                nodeSelector(createdNodeId),
+                `.react-flow__edge[aria-label="Edge from ${createdNodeId} to ${practiceNodeIds.e}"]`,
+              ]
+            : []),
+        ];
+        return selectors.flatMap((selector) => {
+          const element = document.querySelector(selector);
+          return element ? [element] : [];
+        });
+      },
       description:
-        'Tu nodo ahora es prerrequisito de Control 1: un nodo queda bloqueado hasta completar sus prerrequisitos. No se permiten ciclos. Para borrar una dependencia, selecciona su flecha y presiona "Eliminar dependencia".',
+        'Tu nodo ahora es un prerrequisito del nodo "Control 1": un nodo permanecerá automáticamente bloqueado para estudiantes hasta que complete todos sus prerrequisitos. Para borrar una dependencia, puedes seleccionarla y pulsar el botón de eliminar.',
     },
     {
       element: canvas,

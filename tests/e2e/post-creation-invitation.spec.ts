@@ -73,7 +73,7 @@ test('accepting opens the teaching tutorial and "Salir" returns to the new Roadm
     .getByRole('button', { name: 'Hacer tutorial' })
     .click();
   await expect(page).toHaveURL(/\/practice-roadmap\/teaching\?origin=/);
-  await expect(page.locator('.driver-popover-title')).toHaveText('Centrar mapa');
+  await expect(page.locator('.driver-popover-title')).toHaveText('Centrar roadmap');
 
   await page.getByRole('link', { name: 'Salir' }).click();
   await expect(page).toHaveURL(new RegExp(`${offeringPath(offering)}$`));
@@ -95,7 +95,7 @@ test('a professor who opened the teaching tutorial before is invited to repeat i
   });
   await authenticateAs(page.context(), professor.id);
   await page.goto(`/practice-roadmap/teaching?${new URLSearchParams({ origin: '/' })}`);
-  await expect(page.locator('.driver-popover-title')).toHaveText('Centrar mapa');
+  await expect(page.locator('.driver-popover-title')).toHaveText('Centrar roadmap');
 
   await createEmptyRoadmap(page, offering);
   await expect(page.getByRole('alertdialog', { name: invitationName })).toContainText(

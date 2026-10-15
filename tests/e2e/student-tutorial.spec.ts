@@ -7,7 +7,7 @@ import { authenticateAs } from './helpers';
 const steps = [
   'Muévete por el mapa',
   'Centrar mapa',
-  'Tipo de nodo y recursos',
+  'Nodos',
   'Nodo completado',
   'Nodo pendiente',
   'Bloqueado por prerrequisitos',
@@ -64,7 +64,7 @@ test('a student walks through the tutorial from their Roadmap and is pointed bac
   await expect(page.getByRole('button', { name: /^Avisos/ })).toBeVisible();
 
   await expectStep(page, 0);
-  await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toBeDisabled();
+  await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
   await advanceTo(page, 2);
   await expect(practiceNode(page, 'Lectura complementaria')).toHaveClass(/driver-active-element/);
   await advanceTo(page, 9);

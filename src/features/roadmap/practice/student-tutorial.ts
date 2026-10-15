@@ -7,9 +7,9 @@ export const nodeSelector = (id: string) => `.react-flow__node[data-id="${id}"]`
 /** Shared by the student and teaching Roadmap tutorials. */
 export const nodeTypeAndResourcesStep = {
   element: nodeSelector(practiceNodeIds.c),
-  title: 'Tipo de nodo y recursos',
+  title: 'Nodos',
   description:
-    'El ícono y su nombre indican el tipo de nodo, como Material extra. Los contadores muestran cuántos enlaces y archivos contiene.',
+    'El nodo es la unidad fundamental del roadmap. El icono y color indican el tipo de nodo, en este caso, "Material extra". Su título indica el propósito o temática. Los contadores representan cuántos archivos y enlaces contiene dentro.',
 };
 
 /** The student Roadmap tutorial on the Practice roadmap: explanatory, advanced with "Siguiente". */

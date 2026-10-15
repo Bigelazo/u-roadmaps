@@ -24,6 +24,9 @@ export const practiceNodeIds = {
   h: 'practice-node-h',
 } as const;
 
+/** New tutorial Nodes sit below Control 1 (960, 160), just above Material de apoyo (640, 400). */
+export const practiceCreatedNodePosition = { x: 960, y: 360 } as const;
+
 /** The simulated progress shown in the student experience. */
 export const practiceStudentProgress = { completedNodeIds: [practiceNodeIds.a] } as const;
 /** The link the teaching Roadmap tutorial prefills, so adding a Resource takes one click. */

@@ -1,3 +1,4 @@
+import { practiceCreatedNodePosition } from './practice-roadmap';
 import type {
   PracticeCanvasAction,
   RoadmapCanvasSessionPersistence,
@@ -34,8 +35,8 @@ export function reportingPracticeActions(
     return persistence;
   return {
     ...persistence,
-    async addNode(...args) {
-      const nodeId = await addNode(...args);
+    async addNode(input, node) {
+      const nodeId = await addNode(input, node, practiceCreatedNodePosition);
       if (nodeId) report({ type: 'addNode', nodeId });
       return nodeId;
     },
