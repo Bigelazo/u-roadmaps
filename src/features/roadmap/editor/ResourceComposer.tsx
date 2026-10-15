@@ -57,13 +57,19 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
   const isEditingResource = resourceSession.kind === 'editing-existing';
   const resourceValue = sessionValue(resourceSession);
   const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
-  const canSave = canSaveResource(
-    mode,
-    isEditingResource,
-    resourceValue,
-    selectedFile,
-    editingResource,
-  );
+  const extensionIndex = editingResource?.title.lastIndexOf('.') ?? -1;
+  const extension =
+    editingResource?.type === 'FILE' &&
+    extensionIndex > 0 &&
+    extensionIndex < editingResource.title.length - 1
+      ? editingResource.title.slice(extensionIndex)
+      : '';
+  const editableTitle = extension
+    ? resourceValue.title.slice(0, -extension.length)
+    : resourceValue.title;
+  const canSave =
+    (!extension || Boolean(editableTitle.trim())) &&
+    canSaveResource(mode, isEditingResource, resourceValue, selectedFile, editingResource);
   const isPending = Boolean(pendingEditorEffect);
 
   const resourceFields =
@@ -99,14 +105,25 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
       <FieldGroup className="gap-3">
         <Field>
           <FieldLabel htmlFor="resource-title">Título</FieldLabel>
-          <Input
-            id="resource-title"
-            className={inputClassName}
-            placeholder="Ej. Guía de ejercicios"
-            value={resourceValue.title}
-            onChange={(event) => changeResource({ ...resourceValue, title: event.target.value })}
-            required
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              id="resource-title"
+              className={inputClassName}
+              placeholder="Ej. Guía de ejercicios"
+              value={editableTitle}
+              aria-describedby={extension ? 'resource-extension' : undefined}
+              onChange={(event) =>
+                changeResource({ ...resourceValue, title: event.target.value + extension })
+              }
+              required
+            />
+            {extension ? (
+              <span id="resource-extension" className="shrink-0 text-sm text-muted-foreground">
+                <span className="sr-only">Extensión del archivo: </span>
+                {extension}
+              </span>
+            ) : null}
+          </div>
         </Field>
         {mode === 'link' && (
           <Field>

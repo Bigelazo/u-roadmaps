@@ -72,6 +72,36 @@ const nodeTypes: RoadmapDto['nodeTypes'] = [
   },
 ];
 
+test.each(['Guía.docx', 'Guía.final.PDF', 'README', '.env'])(
+  'renames the file %s while keeping its extension outside the editable title',
+  async (title) => {
+    const user = userEvent.setup();
+    const file = { ...resource, title, type: 'FILE' as const };
+    const { perform } = renderEditor(withNode({ resources: [file] }));
+    await user.click(screen.getByRole('button', { name: `Editar recurso ${title}` }));
+    const input = within(screen.getByRole('form', { name: 'Editor de recurso' })).getByRole(
+      'textbox',
+      { name: 'Título' },
+    );
+    const extension = title === 'Guía.docx' ? '.docx' : title === 'Guía.final.PDF' ? '.PDF' : '';
+    expect((input as HTMLInputElement).value).toBe(
+      extension ? title.slice(0, -extension.length) : title,
+    );
+    expect(input.getAttribute('aria-describedby')).toBe(extension ? 'resource-extension' : null);
+    await user.clear(input);
+    expect(
+      (screen.getByRole('button', { name: 'Guardar recurso' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    await user.type(input, 'Nombre actualizado');
+    await user.click(screen.getByRole('button', { name: 'Guardar recurso' }));
+    expect(perform).toHaveBeenCalledWith({
+      kind: 'update-resource',
+      resourceId: file.id,
+      resource: { url: file.url, title: `Nombre actualizado${extension}`, type: 'FILE' },
+    });
+  },
+);
+
 type User = ReturnType<typeof userEvent.setup>;
 
 function renderEditor(
@@ -514,7 +544,7 @@ test('projects an unsaved Node type through the public preview intent', async ()
   const { onIntent } = renderEditor();
 
   await user.click(screen.getByRole('combobox', { name: 'Tipo' }));
-  await user.click(screen.getByText('Evaluación', { exact: true }));
+  await user.click(screen.getByRole('option', { name: 'Evaluación', exact: true }));
   await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
 
   expect(onIntent.mock.calls.at(-1)?.[0]).toMatchObject({

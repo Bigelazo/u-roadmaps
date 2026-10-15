@@ -30,9 +30,10 @@ export function NodeTypeSelect({
     <Select value={value} onValueChange={(nextValue) => nextValue && onValueChange(nextValue)}>
       <SelectTrigger id={id} className={inputClassName}>
         <SelectValue placeholder="Selecciona un tipo">
-          {(selectedNodeTypeId: string | null) =>
-            nodeTypes.find((type) => type.id === selectedNodeTypeId)?.name ?? 'Selecciona un tipo'
-          }
+          {(selectedNodeTypeId: string | null) => {
+            const type = nodeTypes.find((type) => type.id === selectedNodeTypeId);
+            return type ? <NodeTypeLabel type={type} /> : 'Selecciona un tipo';
+          }}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -49,15 +50,21 @@ export function NodeTypeSelect({
 function NodeTypeOption({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
   return (
     <SelectItem value={type.id}>
-      <span className="flex items-center gap-2">
-        <NodeTypeIcon
-          icon={type.icon}
-          className="size-4"
-          style={{ color: type.color }}
-          aria-hidden="true"
-        />
-        {type.name}
-      </span>
+      <NodeTypeLabel type={type} />
     </SelectItem>
+  );
+}
+
+function NodeTypeLabel({ type }: { type: RoadmapDto['nodeTypes'][number] }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <NodeTypeIcon
+        icon={type.icon}
+        className="size-4"
+        style={{ color: type.color }}
+        aria-hidden="true"
+      />
+      <span className="truncate">{type.name}</span>
+    </span>
   );
 }

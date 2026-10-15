@@ -6,7 +6,6 @@ import {
   CircleCheckBig,
   Download,
   ExternalLink,
-  FileCode2,
   FileText,
   LockKeyhole,
   X,
@@ -35,10 +34,7 @@ import { RoadmapSidePanel } from '@/features/roadmap/ui/RoadmapSidePanel';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
-
-function resourceIcon(type: Resource['type']) {
-  return type === 'VIDEO' ? <FileCode2 size={20} /> : <FileText size={20} />;
-}
+import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 
 function resourceTypeLabel(type: Resource['type']) {
   return type === 'FILE' ? 'Archivo descargable' : type === 'VIDEO' ? 'Video' : 'Enlace externo';
@@ -155,7 +151,7 @@ function StudentNodeDetailContent({
                     }
                   >
                     <ItemMedia variant="icon" className="text-primary">
-                      {resourceIcon(resource.type)}
+                      <ResourceIcon type={resource.type} />
                     </ItemMedia>
                     <ItemContent>
                       <ItemTitle>{resource.title}</ItemTitle>
