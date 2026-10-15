@@ -232,8 +232,15 @@ function CourseRow({
               year: course.year,
             })
           ) : awaitsCreation ? (
-            <p className="max-w-56 text-sm text-muted-foreground">
-              Solo el profesor de cátedra puede crear el roadmap.
+            <p className="max-w-64 text-sm text-muted-foreground">
+              Solo el profesor de cátedra puede crear el roadmap. Mientras tanto, revisa sus
+              versiones anteriores.
+            </p>
+          ) : course.role === 'STUDENT' ? (
+            <p className="max-w-64 text-sm text-muted-foreground">
+              {isPastOffering
+                ? 'Este curso cerró sin una ruta publicada.'
+                : 'Tu equipo docente aún no publica la ruta de este curso.'}
             </p>
           ) : null}
           {(isPastOffering && course.role === 'TEACHER') || awaitsCreation ? (
@@ -342,8 +349,11 @@ export function AcademicOverview({
   renderRoadmapCreation,
   notificationsEnabled,
   tutorialInvitation = false,
+  notice,
 }: Readonly<{
   overview: AcademicOverviewPage;
+  /** Why the person was sent back here, such as losing access to a Roadmap. */
+  notice?: React.ReactNode;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
   /** Whether this visit shows the first-visit tutorial invitation. */
@@ -359,14 +369,19 @@ export function AcademicOverview({
           <AcademicOverviewTutorialButton invited={tutorialInvitation} />
         </header>
 
-        {overview.source === 'LOCAL' ? (
-          <Alert role="status">
-            <AlertTriangle aria-hidden="true" />
-            <AlertDescription>
-              No fue posible actualizar tus cursos desde U-Campus. Mostramos los cursos con
-              participación vigente en U-Roadmaps.
-            </AlertDescription>
-          </Alert>
+        {notice || overview.source === 'LOCAL' ? (
+          <div className="flex flex-col gap-3">
+            {notice}
+            {overview.source === 'LOCAL' ? (
+              <Alert role="status">
+                <AlertTriangle aria-hidden="true" />
+                <AlertDescription>
+                  No pudimos actualizar tus cursos desde U-Campus. Mostramos los cursos que ya
+                  tenías en U-Roadmaps; recarga la página más tarde para ver cambios recientes.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
         ) : null}
 
         {overview.terms.length === 0 ? (
@@ -378,8 +393,8 @@ export function AcademicOverview({
               <EmptyTitle>No hay cursos para mostrar</EmptyTitle>
               <EmptyDescription>
                 {overview.source === 'LOCAL'
-                  ? 'No tienes participaciones activas en cursos.'
-                  : 'No hay cursos inscritos ni docentes disponibles para este resumen académico.'}
+                  ? 'Aún no tienes cursos en U-Roadmaps. Cuando U-Campus responda, verás aquí los cursos que inscribes y los que dictas.'
+                  : 'U-Campus no registra cursos inscritos ni cursos en los que formes parte del equipo docente.'}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

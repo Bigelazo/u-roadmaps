@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
 import { CreateRoadmapDialog } from '@/features/roadmap';
 import { isFirstVisitInvitationDue } from '@/features/roadmap/server';
 import { AcademicOverview } from '@/features/academic-overview';
@@ -20,20 +21,23 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
   if (!user) redirect('/api/plogin/start');
 
   return (
-    <>
-      {searchParams.accessLost === '1' ? (
-        <p role="status" className="mx-auto mt-6 max-w-3xl p-4">
-          Tu Participación ya no tiene acceso a este Roadmap. Puedes revisar tus Cursos en el
-          Resumen académico.
-        </p>
-      ) : null}
-      {noticeId && reason ? <UnavailableNoticeFallback reason={reason} /> : null}
-      <AcademicOverview
-        overview={await getAcademicOverviewPage(user)}
-        notificationsEnabled={Boolean(getInboxIdentity(user.id))}
-        renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}
-        tutorialInvitation={await isFirstVisitInvitationDue(user.id)}
-      />
-    </>
+    <AcademicOverview
+      overview={await getAcademicOverviewPage(user)}
+      notificationsEnabled={Boolean(getInboxIdentity(user.id))}
+      notice={
+        searchParams.accessLost === '1' ? (
+          <Alert role="status">
+            <AlertTitle>Ya no tienes acceso a ese roadmap</AlertTitle>
+            <AlertDescription>
+              Tu participación en el curso cambió. Aquí están los cursos en los que participas hoy.
+            </AlertDescription>
+          </Alert>
+        ) : noticeId && reason ? (
+          <UnavailableNoticeFallback reason={reason} />
+        ) : null
+      }
+      renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}
+      tutorialInvitation={await isFirstVisitInvitationDue(user.id)}
+    />
   );
 }
