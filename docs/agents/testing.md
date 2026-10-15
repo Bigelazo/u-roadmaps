@@ -221,6 +221,22 @@ pnpm exec playwright show-report
 pnpm exec playwright show-trace test-results/<caso>/trace.zip
 ```
 
+## Capturas de pantalla
+
+Cada captura leída ocupa entre 50 y 650 KB de contexto; una página completa a
+1440 px está en el extremo alto.
+
+- Guardar las capturas de Playwright MCP con un nombre relativo (por ejemplo
+  `filename: "landing-1440.png"`): quedan en `.playwright-mcp/`. El MCP rechaza
+  rutas fuera del repositorio, incluido el scratchpad.
+- Capturar el viewport o el elemento (`ref`) que cambió. Reservar `fullPage`
+  para revisar el recorrido completo de una página.
+- Leer cada archivo una sola vez. Tras un cambio, capturar con un nombre nuevo
+  y leer solo esa captura.
+- Para diferencias de píxeles entre antes y después, usar
+  `expect(page).toHaveScreenshot()` de Playwright; el Python del sistema no
+  tiene PIL.
+
 Consultar los límites de runner y navegador en
 [playwright.config.ts](../../playwright.config.ts), los de SQL E2E en
 [database.ts](../../tests/e2e/database.ts), y los del harness de notificaciones en
