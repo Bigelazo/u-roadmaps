@@ -199,7 +199,7 @@ test('renders item and relationship sections, including their empty state', asyn
   expect(within(relationships).getByText('La primera habilita la segunda.')).toBeTruthy();
 });
 
-test('cancels and restores focus to the element that opened the confirmation', async () => {
+test('opens on Cancel, then restores focus to the element that opened the confirmation', async () => {
   const user = userEvent.setup();
 
   function ConfirmationWithTrigger() {
@@ -224,7 +224,10 @@ test('cancels and restores focus to the element that opened the confirmation', a
 
   await user.click(trigger);
   const dialog = await screen.findByRole('alertdialog', { name: 'Archivar cambios' });
-  await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+  const cancel = within(dialog).getByRole('button', { name: 'Cancelar' });
+  // Enter right after opening must cancel, never confirm.
+  await waitFor(() => expect(cancel.matches(':focus')).toBe(true));
+  await user.click(cancel);
 
   await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
   await user.keyboard('{Enter}');

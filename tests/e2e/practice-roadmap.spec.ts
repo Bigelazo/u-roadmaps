@@ -136,17 +136,17 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await expect(edges).toHaveCount(9);
 
   // Block
-  await nodeAction(page, titles.b, 'Bloquear rama');
+  await nodeAction(page, titles.b, 'Bloquear nodo');
   await page
-    .getByRole('alertdialog', { name: 'Confirmar bloqueo de rama' })
-    .getByRole('button', { name: 'Bloquear rama' })
+    .getByRole('alertdialog', { name: /^¿Bloquear “/ })
+    .getByRole('button', { name: 'Bloquear nodo' })
     .click();
   await expectNodeAction(page, titles.b, 'Desbloquear');
 
   // Hide, which removes the Node's Dependencies
   await nodeAction(page, titles.g, 'Ocultar para estudiantes');
   await page
-    .getByRole('alertdialog', { name: 'Confirmar ocultación' })
+    .getByRole('alertdialog', { name: /^¿Ocultar “/ })
     .getByRole('button', { name: 'Ocultar' })
     .click();
   await expect(page.getByLabel(`${titles.g}: oculto para estudiantes`)).toBeVisible();
@@ -168,14 +168,14 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await nodeAction(page, titles.d, 'Eliminar nodo');
   await page
     .getByRole('alertdialog')
-    .getByRole('button', { name: 'Eliminar', exact: true })
+    .getByRole('button', { name: 'Eliminar nodo', exact: true })
     .click();
   await expect(practiceNode(page, titles.d)).toHaveCount(0);
 
   await openPractice(page, 'teaching');
   await expect(practiceNode(page, 'Nodo de práctica')).toHaveCount(0);
   await expect(practiceNode(page, titles.d)).toBeVisible();
-  await expectNodeAction(page, titles.b, 'Bloquear rama');
+  await expectNodeAction(page, titles.b, 'Bloquear nodo');
   expect(await rowsOwnedBy(user.id)).toBe(0);
 });
 

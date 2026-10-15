@@ -16,6 +16,8 @@ type NodeEditorContextValue = {
   nodeDraft: NodeUpdate;
   resourceSession: ResourceSession;
   isDirty: boolean;
+  /** Saved Node fields that differ in the draft, in form order. */
+  unsavedFields: readonly ('title' | 'description' | 'nodeTypeId')[];
   canSaveNode: boolean;
   isVisibilityPending: boolean;
   pendingEditorEffect: NodeEditorState['pendingEditorEffect'];
@@ -28,6 +30,7 @@ type NodeEditorContextValue = {
   selectResourceFile: (file: File | null) => void;
   closeResource: () => void;
   saveNode: () => void;
+  discardNodeDraft: () => void;
   saveResource: () => void;
   requestResourceDeletion: (resource: Resource) => void;
   toggleVisibility: () => void;

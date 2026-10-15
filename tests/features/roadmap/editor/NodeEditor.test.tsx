@@ -89,9 +89,10 @@ test.each(['Guía.docx', 'Guía.final.PDF', 'README', '.env'])(
     );
     expect(input.getAttribute('aria-describedby')).toBe(extension ? 'resource-extension' : null);
     await user.clear(input);
-    expect(
-      (screen.getByRole('button', { name: 'Guardar recurso' }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Guardar recurso' }));
+    expect(screen.getByText('Escribe un título para el recurso.')).toBeTruthy();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(perform).not.toHaveBeenCalled();
     await user.type(input, 'Nombre actualizado');
     await user.click(screen.getByRole('button', { name: 'Guardar recurso' }));
     expect(perform).toHaveBeenCalledWith({
@@ -175,17 +176,60 @@ test('renders the selected Node as one cohesive editing surface', () => {
   renderEditor();
 
   expect(screen.getByRole('heading', { name: node.title })).toBeTruthy();
-  expect(screen.getByTestId('node-type-icon')).toBeTruthy();
-  expect(screen.getByRole('heading', { name: 'Estado del hito' })).toBeTruthy();
+  expect(
+    within(screen.getByRole('list', { name: 'Estado del nodo' })).getByText('Visible'),
+  ).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Acceso de estudiantes' })).toBeTruthy();
   expect(screen.getByRole('heading', { name: /Recursos/ })).toBeTruthy();
 });
 
-test('places support material before the milestone status', () => {
+test('places support material before student access', () => {
   renderEditor();
 
   const resources = screen.getByRole('heading', { name: /Recursos/ });
-  const status = screen.getByRole('heading', { name: 'Estado del hito' });
+  const status = screen.getByRole('heading', { name: 'Acceso de estudiantes' });
   expect(resources.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+const unsavedNotice = (text: string) => (_: string, element: Element | null) =>
+  element?.tagName === 'SPAN' && element.textContent === text;
+
+test('names the unsaved fields and discards them back to the saved Node', async () => {
+  const user = userEvent.setup();
+  renderEditor();
+
+  await retitle(user, 'Nuevo título');
+  expect(screen.getByText(unsavedNotice('Sin guardar: título'))).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Descartar' }));
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe(node.title);
+  expect(screen.queryByText('Sin guardar:')).toBeNull();
+  expect(saveButton().disabled).toBe(true);
+});
+
+test('explains an empty title instead of saving it', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor();
+
+  await user.clear(screen.getByLabelText('Título'));
+  await user.click(saveButton());
+  const title = screen.getByLabelText('Título');
+  expect(screen.getByText('Escribe un título para el nodo.')).toBeTruthy();
+  expect(title.getAttribute('aria-invalid')).toBe('true');
+  expect(title.matches(':focus')).toBe(true);
+  expect(perform).not.toHaveBeenCalled();
+});
+
+test('rejects an incomplete link address in Spanish', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor();
+
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  await fillLink(user, 'Apunte', 'ejemplo.cl');
+  await user.click(screen.getByRole('button', { name: 'Agregar enlace' }));
+  expect(
+    screen.getByText('Ingresa un enlace completo, por ejemplo https://ejemplo.cl.'),
+  ).toBeTruthy();
+  expect(perform).not.toHaveBeenCalled();
 });
 
 test('schedules and removes the unlock day of a teacher-blocked Node', async () => {

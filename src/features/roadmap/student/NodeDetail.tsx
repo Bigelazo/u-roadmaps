@@ -6,8 +6,10 @@ import {
   CircleCheckBig,
   Download,
   ExternalLink,
+  Eye,
   FileText,
   LockKeyhole,
+  Pencil,
   X,
 } from 'lucide-react';
 import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
@@ -56,6 +58,8 @@ type ContentProps = {
   isReadOnly?: boolean;
   isModal?: boolean;
   isSidebar?: boolean;
+  /** Teaching staff see this view as a preview of their unsaved Node. */
+  isTeacherPreview?: boolean;
   nodeType?: NodeType;
 };
 
@@ -67,11 +71,30 @@ function StudentNodeDetailContent({
   isReadOnly = false,
   isModal = false,
   isSidebar = false,
+  isTeacherPreview = false,
   nodeType,
 }: ContentProps) {
   const blocked = isStudentBlockedNode(node);
   return (
     <>
+      {isTeacherPreview ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 bg-primary py-2 pr-3 pl-6 text-sm font-semibold text-primary-foreground">
+          <p className="flex min-w-0 items-center gap-2">
+            <Eye aria-hidden="true" className="size-4 shrink-0" />
+            Vista previa como estudiante
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="shrink-0"
+            onClick={onClose}
+          >
+            <Pencil data-icon="inline-start" />
+            Volver a editar
+          </Button>
+        </div>
+      ) : null}
       <NodePanelHeader
         title={node.title}
         nodeType={nodeType}
@@ -216,6 +239,7 @@ export function StudentNodeDetail({
   onClose,
   onComplete,
   isReadOnly,
+  isTeacherPreview,
   nodeTypes,
   panelWidth = 426,
   onPanelWidthChange,
@@ -228,6 +252,7 @@ export function StudentNodeDetail({
     onClose,
     onComplete,
     isReadOnly,
+    isTeacherPreview,
     nodeType: nodeTypes?.find((type) => type.id === node.nodeTypeId),
   };
   if (isMobile) {

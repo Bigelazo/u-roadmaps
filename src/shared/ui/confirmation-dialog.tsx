@@ -184,6 +184,8 @@ function ConfirmationDialog({
 }: ConfirmationDialogProps) {
   const isPending = pendingActionId !== undefined;
   const finalFocusRef = React.useRef<HTMLElement | null>(null);
+  // Enter must never confirm a consequential action by default.
+  const cancelRef = React.useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = React.useRef(false);
 
   useIsomorphicLayoutEffect(() => {
@@ -216,6 +218,7 @@ function ConfirmationDialog({
         <AlertDialogContent
           data-intent={confirmation.intent}
           className={cn('max-h-[calc(100vh-2rem)] gap-5 overflow-y-auto sm:max-w-xl', className)}
+          initialFocus={cancelRef}
           finalFocus={finalFocusRef}
         >
           <AlertDialogHeader className="items-stretch gap-4 text-left">
@@ -243,7 +246,7 @@ function ConfirmationDialog({
           ) : null}
 
           <AlertDialogFooter className="sm:flex-wrap">
-            <AlertDialogCancel disabled={isPending}>
+            <AlertDialogCancel ref={cancelRef} disabled={isPending}>
               {confirmation.cancelLabel ?? 'Cancelar'}
             </AlertDialogCancel>
             {confirmation.actions.map((action, index) => {
@@ -254,6 +257,7 @@ function ConfirmationDialog({
                 <AlertDialogAction
                   key={action.id}
                   type="button"
+                  autoFocus={false}
                   aria-busy={isActionPending || undefined}
                   data-emphasis={isPrimary ? 'primary' : 'secondary'}
                   data-intent={confirmation.intent}

@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { FileUp, Link2, Save, X } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
-import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 import { inputClassName } from './primitives';
@@ -26,24 +27,35 @@ function sessionValue(
   return session.kind === 'closed' ? { title: '', url: '', type: 'LINK' } : session.value;
 }
 
-function canSaveResource(
-  mode: Props['mode'],
-  isEditingResource: boolean,
-  resourceValue: ResourceInput,
-  selectedFile: File | null,
-  editingResource: Resource | null,
-) {
-  const hasChanges =
+function hasResourceChanges(resourceValue: ResourceInput, editingResource: Resource | null) {
+  return (
     !editingResource ||
     resourceValue.title !== editingResource.title ||
     resourceValue.url !== editingResource.url ||
-    resourceValue.type !== editingResource.type;
-  const hasRequiredLinkFields = Boolean(resourceValue.title.trim() && resourceValue.url.trim());
-  return mode === 'file' && !isEditingResource
-    ? Boolean(selectedFile)
-    : hasChanges &&
-        Boolean(resourceValue.title.trim()) &&
-        (mode !== 'link' || hasRequiredLinkFields);
+    resourceValue.type !== editingResource.type
+  );
+}
+
+function isWebAddress(value: string) {
+  try {
+    return ['http:', 'https:'].includes(new URL(value.trim()).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function resourceErrors(mode: Props['mode'], editableTitle: string, url: string) {
+  return {
+    title: editableTitle.trim() ? undefined : 'Escribe un título para el recurso.',
+    url:
+      mode !== 'link'
+        ? undefined
+        : !url.trim()
+          ? 'Ingresa el enlace del recurso.'
+          : isWebAddress(url)
+            ? undefined
+            : 'Ingresa un enlace completo, por ejemplo https://ejemplo.cl.',
+  };
 }
 
 function resourceSubmitLabel(mode: Props['mode'], isEditingResource: boolean) {
@@ -67,88 +79,111 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
   const editableTitle = extension
     ? resourceValue.title.slice(0, -extension.length)
     : resourceValue.title;
-  const canSave =
-    (!extension || Boolean(editableTitle.trim())) &&
-    canSaveResource(mode, isEditingResource, resourceValue, selectedFile, editingResource);
+  const isAddingFile = mode === 'file' && !isEditingResource;
+  // Text fields stay submittable so a submit can explain what is missing.
+  const canSave = isAddingFile
+    ? Boolean(selectedFile)
+    : hasResourceChanges(resourceValue, editingResource);
+  const [showErrors, setShowErrors] = useState(false);
+  const errors = isAddingFile
+    ? { title: undefined, url: undefined }
+    : resourceErrors(mode, editableTitle, resourceValue.url);
+  const titleError = showErrors ? errors.title : undefined;
+  const urlError = showErrors ? errors.url : undefined;
   const isPending = Boolean(pendingEditorEffect);
 
-  const resourceFields =
-    mode === 'file' && !isEditingResource ? (
-      <Field>
-        <FieldLabel htmlFor="resource-file">Archivo</FieldLabel>
-        <label
-          htmlFor="resource-file"
-          className="mt-1 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center transition-colors focus-within:ring-3 focus-within:ring-ring/50 hover:bg-primary/10"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            selectResourceFile(event.dataTransfer.files.item(0));
-          }}
-        >
-          <FileUp className="mb-2 size-5 text-primary" />
-          <span className="text-sm font-semibold">
-            {selectedFile ? selectedFile.name : 'Arrastra un archivo aquí'}
-          </span>
-          <span className="mt-1 text-xs text-muted-foreground">
-            {selectedFile ? 'Listo para subir' : 'o selecciónalo desde tu computador'}
-          </span>
-          <input
-            id="resource-file"
-            className="sr-only"
-            type="file"
-            onChange={(event) => selectResourceFile(event.target.files?.item(0) ?? null)}
+  const resourceFields = isAddingFile ? (
+    <Field>
+      <FieldLabel htmlFor="resource-file">Archivo</FieldLabel>
+      <label
+        htmlFor="resource-file"
+        className="mt-1 flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center transition-colors focus-within:ring-3 focus-within:ring-ring/50 hover:bg-primary/10"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault();
+          selectResourceFile(event.dataTransfer.files.item(0));
+        }}
+      >
+        <FileUp className="mb-2 size-5 text-primary" />
+        <span className="text-sm font-semibold">
+          {selectedFile ? selectedFile.name : 'Arrastra un archivo aquí'}
+        </span>
+        <span className="mt-1 text-xs text-muted-foreground">
+          {selectedFile ? 'Listo para subir' : 'o selecciónalo desde tu computador'}
+        </span>
+        <input
+          id="resource-file"
+          className="sr-only"
+          type="file"
+          onChange={(event) => selectResourceFile(event.target.files?.item(0) ?? null)}
+        />
+      </label>
+      <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
+    </Field>
+  ) : (
+    <FieldGroup className="gap-3">
+      <Field data-invalid={titleError ? true : undefined}>
+        <FieldLabel htmlFor="resource-title">Título</FieldLabel>
+        <div className="flex items-center gap-2">
+          <Input
+            id="resource-title"
+            className={inputClassName}
+            placeholder="Ej. Guía de ejercicios"
+            value={editableTitle}
+            aria-invalid={titleError ? true : undefined}
+            aria-describedby={
+              [extension && 'resource-extension', titleError && 'resource-title-error']
+                .filter(Boolean)
+                .join(' ') || undefined
+            }
+            onChange={(event) =>
+              changeResource({ ...resourceValue, title: event.target.value + extension })
+            }
+            required
           />
-        </label>
-        <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
+          {extension ? (
+            <span id="resource-extension" className="shrink-0 text-sm text-muted-foreground">
+              <span className="sr-only">Extensión del archivo: </span>
+              {extension}
+            </span>
+          ) : null}
+        </div>
+        {titleError ? <FieldError id="resource-title-error">{titleError}</FieldError> : null}
       </Field>
-    ) : (
-      <FieldGroup className="gap-3">
-        <Field>
-          <FieldLabel htmlFor="resource-title">Título</FieldLabel>
-          <div className="flex items-center gap-2">
-            <Input
-              id="resource-title"
-              className={inputClassName}
-              placeholder="Ej. Guía de ejercicios"
-              value={editableTitle}
-              aria-describedby={extension ? 'resource-extension' : undefined}
-              onChange={(event) =>
-                changeResource({ ...resourceValue, title: event.target.value + extension })
-              }
-              required
-            />
-            {extension ? (
-              <span id="resource-extension" className="shrink-0 text-sm text-muted-foreground">
-                <span className="sr-only">Extensión del archivo: </span>
-                {extension}
-              </span>
-            ) : null}
-          </div>
+      {mode === 'link' && (
+        <Field data-invalid={urlError ? true : undefined}>
+          <FieldLabel htmlFor="resource-url">Enlace</FieldLabel>
+          <Input
+            id="resource-url"
+            className={inputClassName}
+            type="url"
+            placeholder="https://"
+            value={resourceValue.url}
+            onChange={(event) => changeResource({ ...resourceValue, url: event.target.value })}
+            aria-invalid={urlError ? true : undefined}
+            aria-describedby={urlError ? 'resource-url-error' : undefined}
+            required
+          />
+          {urlError ? <FieldError id="resource-url-error">{urlError}</FieldError> : null}
         </Field>
-        {mode === 'link' && (
-          <Field>
-            <FieldLabel htmlFor="resource-url">Enlace</FieldLabel>
-            <Input
-              id="resource-url"
-              className={inputClassName}
-              type="url"
-              placeholder="https://"
-              value={resourceValue.url}
-              onChange={(event) => changeResource({ ...resourceValue, url: event.target.value })}
-              required
-            />
-          </Field>
-        )}
-      </FieldGroup>
-    );
+      )}
+    </FieldGroup>
+  );
 
   return (
     <form
+      noValidate
       className="mb-4 flex flex-col gap-3 border-y border-dashed border-border py-4"
       aria-label="Editor de recurso"
       onSubmit={(event) => {
         event.preventDefault();
-        if (canSave && !isPending) saveResource();
+        if (!canSave || isPending) return;
+        if (errors.title || errors.url) {
+          setShowErrors(true);
+          document.getElementById(errors.title ? 'resource-title' : 'resource-url')?.focus();
+          return;
+        }
+        saveResource();
       }}
     >
       <div className="flex items-center justify-between gap-2">

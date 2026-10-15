@@ -28,7 +28,7 @@ export function NodeTypeSelect({
 }) {
   return (
     <Select value={value} onValueChange={(nextValue) => nextValue && onValueChange(nextValue)}>
-      <SelectTrigger id={id} className={inputClassName}>
+      <SelectTrigger id={id} className={`${inputClassName} data-[size=default]:h-11`}>
         <SelectValue placeholder="Selecciona un tipo">
           {(selectedNodeTypeId: string | null) => {
             const type = nodeTypes.find((type) => type.id === selectedNodeTypeId);

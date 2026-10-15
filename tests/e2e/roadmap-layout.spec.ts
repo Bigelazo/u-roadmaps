@@ -289,7 +289,7 @@ test('keeps the radial node actions above their canvas focus treatment', async (
 
   await page.getByRole('button', { name: 'Ocultar para estudiantes' }).click();
 
-  await expect(page.getByRole('alertdialog', { name: 'Confirmar ocultación' })).toBeVisible();
+  await expect(page.getByRole('alertdialog', { name: /^¿Ocultar “/ })).toBeVisible();
   await page.getByRole('button', { name: 'Cancelar' }).click();
 });
 
@@ -307,7 +307,7 @@ test('keeps radial node actions evenly sized and separated', async ({ page, cour
 
   const controls = [
     node.getByRole('button', { name: 'Cerrar menú de acciones del nodo' }),
-    page.getByRole('button', { name: 'Bloquear rama' }),
+    page.getByRole('button', { name: 'Bloquear nodo' }),
     page.getByRole('button', { name: 'Ocultar para estudiantes' }),
     page.getByRole('button', { name: 'Agregar recurso' }),
     page.getByRole('button', { name: 'Eliminar nodo' }),

@@ -39,7 +39,7 @@ test('keeps Add resource at 60° for hidden nodes and delegates to the selected 
     </ReactFlowProvider>,
   );
 
-  expect(screen.queryByRole('button', { name: 'Bloquear rama' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Bloquear nodo' })).toBeNull();
   const action = screen.getByRole('button', { name: 'Agregar recurso' });
   expect(action.getAttribute('data-angle')).toBe('60');
   await user.click(action);

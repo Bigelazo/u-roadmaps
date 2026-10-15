@@ -30,8 +30,10 @@ for (const { context, open } of openings) {
     );
     const notices = () =>
       queryJson<unknown[]>(
-        `SELECT coalesce(jsonb_agg(n ORDER BY n.id), '[]') FROM "RoadmapNotice" n WHERE "roadmapId" = ${literal(course.roadmapId)};`,
+        `SELECT coalesce(jsonb_agg(n ORDER BY n.id), '[]') FROM "RoadmapNotice" n WHERE "roadmapId" = ${literal(course.roadmapId)} AND "recipientId" = ${literal(recipient.id)};`,
       );
+    // Delivery runs after the edit response; wait for this recipient's notice.
+    await expect.poll(notices).toHaveLength(1);
     const before = await notices();
     expect(before.length).toBeGreaterThan(0);
     const expired = randomUUID();
