@@ -66,6 +66,25 @@ test('uploads a file Resource as multipart form data without setting its boundar
   expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty('headers');
 });
 
+test('renames a file without resubmitting its protected download URL', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetchMock);
+
+  await httpRoadmapCanvasSessionPersistence.updateResource!(input, 'resource-1', {
+    title: 'Guía actualizada.docx',
+    url: '/api/CC1001/2026/2/roadmap/resources/resource-1/file',
+    type: 'FILE',
+  });
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/api/CC1001/2026/2/roadmap/resources/resource-1',
+    expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Guía actualizada.docx' }),
+    }),
+  );
+});
+
 test('translates a server Resource failure into the existing user-facing message', async () => {
   vi.stubGlobal(
     'fetch',

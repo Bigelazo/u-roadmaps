@@ -362,7 +362,10 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
     await request(
       input,
       `/resources/${resourceId}`,
-      { method: 'PATCH', body: JSON.stringify(resource) },
+      {
+        method: 'PATCH',
+        body: JSON.stringify(resource.type === 'FILE' ? { title: resource.title } : resource),
+      },
       'No se pudo guardar el recurso.',
     );
   },
