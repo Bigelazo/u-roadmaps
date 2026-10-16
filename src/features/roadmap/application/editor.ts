@@ -20,23 +20,25 @@ import {
 import { normalizeName } from '@/features/roadmap/domain/roadmap-copy';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import type { ApplicationErrorStatus } from '@/shared/errors/types';
 import type {
   NodeDeletionImpact,
   TeacherBlockOperation,
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
-import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import {
-  dependencyTeacherBlockImpact,
-  visibleRoadmapGraph,
-  wouldCreateDependencyCycle,
-} from '@/features/roadmap/domain/access';
+  decideTeacherBlock,
+  type TeacherBlockRuleFailure,
+} from '@/features/roadmap/domain/teacher-block';
+import { decideDependency, type DependencyRuleFailure } from '@/features/roadmap/domain/dependency';
+import type { RuleRejection } from '@/features/roadmap/domain/rule-rejection';
+import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
 import {
   chileCalendarDay,
+  decideScheduledUnlock,
   dueScheduledUnlockNodeIds,
-  InvalidScheduledUnlockDay,
-  requireScheduledUnlockDay,
   type CalendarDay,
+  type ScheduledUnlockRuleFailure,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import {
   requireEditorRoadmap,
@@ -68,6 +70,24 @@ const dependencyConflict = () =>
 /** Prisma filter for the dependencies that start or end at `nodeId`. */
 function touchingNode(nodeId: string) {
   return { OR: [{ sourceNodeId: nodeId }, { targetNodeId: nodeId }] };
+}
+
+type RoadmapRuleFailure =
+  DependencyRuleFailure | TeacherBlockRuleFailure | ScheduledUnlockRuleFailure;
+
+const RULE_FAILURE_STATUS: Readonly<Record<RoadmapRuleFailure, ApplicationErrorStatus>> = {
+  NODE_NOT_FOUND: 404,
+  SELF_DEPENDENCY: 409,
+  HIDDEN_NODE_DEPENDENCY_FORBIDDEN: 403,
+  DEPENDENCY_CONFLICT: 409,
+  DEPENDENCY_CYCLE: 409,
+  HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN: 409,
+  INVALID_TEACHER_UNLOCK_DATE: 400,
+  TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK: 409,
+};
+
+function ruleError({ reason, message }: RuleRejection<RoadmapRuleFailure>) {
+  return new ApplicationError(RULE_FAILURE_STATUS[reason], reason, message);
 }
 
 function versionHash(value: unknown) {
@@ -230,21 +250,26 @@ export const updateRoadmapNode = withApplicationResult(
       if ('positionX' in input) data.positionX = requireFiniteNumber(input.positionX, 'positionX');
       if ('positionY' in input) data.positionY = requireFiniteNumber(input.positionY, 'positionY');
       if (requestedVisibility !== undefined) data.isVisible = requestedVisibility;
-      const hiddenAfterUpdate = requestedVisibility === false || !node.isVisible;
       if (Object.keys(data).length === 0)
         throw new ApplicationError(
           400,
           'INVALID_REQUEST',
           'Debe indicar al menos un campo para actualizar.',
         );
-      const removedDependencies = hiddenAfterUpdate
-        ? await transaction.dependency.findMany({
-            where: touchingNode(node.id),
-            select: { id: true, sourceNodeId: true, targetNodeId: true },
-            orderBy: { id: 'asc' },
-          })
-        : [];
-      if (hiddenAfterUpdate) {
+      const isVisible = requestedVisibility ?? node.isVisible;
+      const { removedDependencies, clearsTeacherBlock } = decideVisibilityChange({
+        nodeId: node.id,
+        isVisible,
+        // Only a hidden Node loses Dependencies; skip the read on ordinary edits and moves.
+        dependencies: isVisible
+          ? []
+          : await transaction.dependency.findMany({
+              where: touchingNode(node.id),
+              select: { id: true, sourceNodeId: true, targetNodeId: true },
+              orderBy: { id: 'asc' },
+            }),
+      });
+      if (clearsTeacherBlock) {
         data.isTeacherBlocked = false;
         data.teacherUnlockOn = null;
       }
@@ -477,85 +502,42 @@ export const deleteRoadmapNodeType = withApplicationResult(async ({ id, ...edito
   }),
 );
 
-type PreparedRoadmapDependency = {
-  roadmapId: string;
-  sourceNodeId: string;
-  targetNodeId: string;
-  sourceHandle: string;
-  targetHandle: string;
-  sourceNode: { title: string; isVisible: boolean; isTeacherBlocked: boolean };
-  targetNode: { title: string; isVisible: boolean };
-  dependencies: Array<{ sourceNodeId: string; targetNodeId: string }>;
-};
-
 async function prepareRoadmapDependency(
   transaction: Prisma.TransactionClient,
   { input, ...editor }: WithInput,
-): Promise<PreparedRoadmapDependency> {
+) {
   const roadmap = await requireEditorRoadmap(transaction, editor);
   const sourceNodeId = requireUuid(input.sourceNodeId, 'sourceNodeId');
   const targetNodeId = requireUuid(input.targetNodeId, 'targetNodeId');
   const sourceHandle = dependencyHandle(input.sourceHandle, 'sourceHandle', 'right');
   const targetHandle = dependencyHandle(input.targetHandle, 'targetHandle', 'left');
-  if (sourceNodeId === targetNodeId)
-    throw new ApplicationError(409, 'SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
-  const [sourceNode, targetNode] = await Promise.all([
-    requireNode(transaction, sourceNodeId, roadmap.id),
-    requireNode(transaction, targetNodeId, roadmap.id),
+  const [nodes, dependencies] = await Promise.all([
+    transaction.roadmapNode.findMany({
+      where: { roadmapId: roadmap.id },
+      select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
+    }),
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId: roadmap.id } },
+      select: { sourceNodeId: true, targetNodeId: true },
+    }),
   ]);
-  if (!sourceNode.isVisible || !targetNode.isVisible) {
-    throw new ApplicationError(
-      403,
-      'HIDDEN_NODE_DEPENDENCY_FORBIDDEN',
-      'No se pueden crear dependencias con nodos ocultos.',
-    );
-  }
-  const dependencies = await transaction.dependency.findMany({
-    where: { sourceNode: { roadmapId: roadmap.id } },
-    select: { sourceNodeId: true, targetNodeId: true },
-  });
-  if (
-    dependencies.some(
-      (dependency) =>
-        dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId,
-    )
-  ) {
-    throw new ApplicationError(409, 'DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
-  }
-  if (wouldCreateDependencyCycle(dependencies, sourceNodeId, targetNodeId))
-    throw new ApplicationError(409, 'DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
+  const decision = decideDependency({ nodes, dependencies, sourceNodeId, targetNodeId });
+  if (decision.kind === 'REJECTED') throw ruleError(decision);
+  // The decision guarantees both Nodes exist.
+  const nodeFacts = (id: string) => {
+    const { title, isVisible } = nodes.find((node) => node.id === id)!;
+    return { title, isVisible };
+  };
   return {
     roadmapId: roadmap.id,
     sourceNodeId,
     targetNodeId,
     sourceHandle,
     targetHandle,
-    sourceNode,
-    targetNode,
-    dependencies,
+    sourceNode: nodeFacts(sourceNodeId),
+    targetNode: nodeFacts(targetNodeId),
+    teacherBlockedNodes: decision.teacherBlockedNodes,
   };
-}
-
-async function teacherBlockedDependentNodes(
-  transaction: Prisma.TransactionClient,
-  {
-    roadmapId,
-    sourceNode,
-    targetNodeId,
-    dependencies,
-  }: Pick<PreparedRoadmapDependency, 'roadmapId' | 'sourceNode' | 'targetNodeId' | 'dependencies'>,
-) {
-  if (!sourceNode.isTeacherBlocked) return [];
-  const nodes = await transaction.roadmapNode.findMany({
-    where: { roadmapId },
-    select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
-    orderBy: { title: 'asc' },
-  });
-  return dependencyTeacherBlockImpact(
-    nodes,
-    visibleRoadmapGraph(nodes, dependencies).dependencies,
-    targetNodeId,
-  );
 }
 
 export const createRoadmapDependency = withApplicationResult(
@@ -563,13 +545,7 @@ export const createRoadmapDependency = withApplicationResult(
     withSerializableTransaction(
       async (transaction, report) => {
         const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
-        const nodes = await teacherBlockedDependentNodes(transaction, {
-          ...prepared,
-          dependencies: [
-            ...prepared.dependencies,
-            { sourceNodeId: prepared.sourceNodeId, targetNodeId: prepared.targetNodeId },
-          ],
-        });
+        const nodes = prepared.teacherBlockedNodes;
         const { result: dependency, accessFacts } = await trackAccessChanges(
           transaction,
           prepared.roadmapId,
@@ -624,9 +600,7 @@ export const previewRoadmapDependency = withApplicationResult(
   async ({ input, ...editor }: WithInput) =>
     repeatableRead(async (transaction) => {
       const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
-      return {
-        nodes: await teacherBlockedDependentNodes(transaction, prepared),
-      };
+      return { nodes: prepared.teacherBlockedNodes };
     }),
 );
 
@@ -715,25 +689,9 @@ async function teacherBlockPreview(
     nodeId,
     operation: editor.operation,
   });
-  if (decision.kind === 'ALLOWED') {
-    const preview = { mode: decision.mode, nodes: decision.nodes };
-    return { ...preview, version: versionHash(preview) } satisfies TeacherBlockPreview;
-  }
-  if (decision.reason === 'NODE_NOT_FOUND') {
-    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
-  }
-  if (decision.reason === 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN') {
-    throw new ApplicationError(
-      409,
-      'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
-      'Un nodo oculto no puede tener un bloqueo docente.',
-    );
-  }
-  throw new ApplicationError(
-    409,
-    'INVALID_TEACHER_BLOCK_OPERATION',
-    'Operación de bloqueo no válida.',
-  );
+  if (decision.kind === 'REJECTED') throw ruleError(decision);
+  const preview = { mode: decision.mode, nodes: decision.nodes };
+  return { ...preview, version: versionHash(preview) } satisfies TeacherBlockPreview;
 }
 
 export const previewTeacherBlock = withApplicationResult(async (input: WithTeacherBlockOperation) =>
@@ -826,22 +784,9 @@ export const scheduleTeacherUnlock = withApplicationResult(
     withSerializableTransaction(async (transaction) => {
       const roadmap = await requireEditorRoadmap(transaction, editor);
       const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
-      let day: CalendarDay | null = null;
-      if (unlockOn !== null) {
-        try {
-          day = requireScheduledUnlockDay(unlockOn, chileCalendarDay());
-        } catch (error) {
-          if (!(error instanceof InvalidScheduledUnlockDay)) throw error;
-          throw new ApplicationError(400, 'INVALID_TEACHER_UNLOCK_DATE', error.message);
-        }
-        if (!node.isVisible || !node.isTeacherBlocked) {
-          throw new ApplicationError(
-            409,
-            'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK',
-            'Solo se puede programar el desbloqueo de un nodo visible con bloqueo docente.',
-          );
-        }
-      }
+      const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
+      if (decision.kind === 'REJECTED') throw ruleError(decision);
+      const { day } = decision;
       await transaction.roadmapNode.update({
         where: { id: node.id },
         data: { teacherUnlockOn: day ? calendarDayDate(day) : null },

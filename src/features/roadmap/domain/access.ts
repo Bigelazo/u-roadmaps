@@ -142,6 +142,15 @@ export function eligibleBranchUnlockNodeIds({
   );
 }
 
+/** Why a participant cannot open or complete a blocked Node. */
+export function blockedNodeAccessMessage(
+  access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>,
+) {
+  return access.reason === 'TEACHER_BLOCK'
+    ? 'El equipo docente bloqueó este nodo.'
+    : 'Este nodo permanece bloqueado por sus prerrequisitos.';
+}
+
 export function studentNodeAccessById({
   nodes,
   dependencies,

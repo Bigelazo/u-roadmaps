@@ -193,3 +193,18 @@ test('models hidden nodes and teacher blocks as incompatible states', () => {
 
   expectTypeOf(hiddenTeacherBlockedNode).toMatchTypeOf<RoadmapNode>();
 });
+
+test('rejects a Teacher block on a hidden Node with its explanation', () => {
+  expect(
+    decideTeacherBlock({
+      nodes: [{ id: 'draft', title: 'Borrador', isVisible: false, isTeacherBlocked: false }],
+      dependencies: [],
+      nodeId: 'draft',
+      operation: 'BLOCK',
+    }),
+  ).toEqual({
+    kind: 'REJECTED',
+    reason: 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
+    message: 'Un nodo oculto no puede tener un bloqueo docente.',
+  });
+});

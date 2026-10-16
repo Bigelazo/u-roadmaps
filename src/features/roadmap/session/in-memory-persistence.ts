@@ -1,10 +1,15 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
 import {
-  dependencyTeacherBlockImpact,
+  blockedNodeAccessMessage,
   studentNodeAccessById,
   visibleRoadmapGraph,
-  wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
+import { decideDependency } from '@/features/roadmap/domain/dependency';
+import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
+import {
+  chileCalendarDay,
+  decideScheduledUnlock,
+} from '@/features/roadmap/domain/scheduled-unlock';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import type {
   AnyRoadmapDto,
@@ -132,38 +137,23 @@ function dependencyId(roadmap: AnyRoadmapDto) {
   return `dependency-${roadmap.dependencies.length + 1}`;
 }
 
+function teachingNodes(roadmap: AnyRoadmapDto) {
+  return roadmap.nodes.filter((node): node is RoadmapNode => 'isTeacherBlocked' in node);
+}
+
 function dependencyImpact(
   roadmap: AnyRoadmapDto,
   sourceNodeId: string,
   targetNodeId: string,
 ): TeacherBlockImpact[] {
-  const sourceNode = roadmap.nodes.find(({ id }) => id === sourceNodeId);
-  const targetNode = roadmap.nodes.find(({ id }) => id === targetNodeId);
-  if (
-    !sourceNode ||
-    !targetNode ||
-    !('isTeacherBlocked' in sourceNode) ||
-    !('isTeacherBlocked' in targetNode)
-  )
-    throw new Error('La dependencia no existe en este roadmap.');
-  if (!sourceNode.isVisible || !targetNode.isVisible)
-    throw new Error('No se pueden crear dependencias con nodos ocultos.');
-  if (
-    roadmap.dependencies.some(
-      (dependency) =>
-        dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId,
-    )
-  )
-    throw new Error('La dependencia ya existe.');
-  if (wouldCreateDependencyCycle(roadmap.dependencies, sourceNodeId, targetNodeId))
-    throw new Error('La dependencia formaría un ciclo.');
-  if (!sourceNode.isTeacherBlocked) return [];
-
-  return dependencyTeacherBlockImpact(
-    roadmap.nodes.filter((node) => 'isTeacherBlocked' in node),
-    roadmap.dependencies,
+  const decision = decideDependency({
+    nodes: teachingNodes(roadmap),
+    dependencies: roadmap.dependencies,
+    sourceNodeId,
     targetNodeId,
-  ).sort((left, right) => left.title.localeCompare(right.title));
+  });
+  if (decision.kind === 'REJECTED') throw new Error(decision.message);
+  return decision.teacherBlockedNodes;
 }
 
 function nodeTypeFor(roadmap: AnyRoadmapDto, nodeId: string) {
@@ -194,7 +184,7 @@ function teacherBlockPreview(
   operation: TeacherBlockOperation,
 ): TeacherBlockPreview {
   const decision = teacherBlockDecision(roadmap, nodeId, operation);
-  if (decision.kind === 'REJECTED') throw new Error('No se pudo cambiar el bloqueo docente.');
+  if (decision.kind === 'REJECTED') throw new Error(decision.message);
   return { ...decision, version: 'in-memory-preview' };
 }
 
@@ -234,6 +224,10 @@ export function createInMemoryRoadmapSessionPersistence(
 
     async complete(_input: RoadmapCanvasSessionInput, nodeId: string) {
       if (studentCompletions) {
+        const access = asStudentRoadmap(roadmap, studentCompletions).nodes.find(
+          ({ id }) => id === nodeId,
+        )?.access;
+        if (access?.status === 'BLOCKED') throw new Error(blockedNodeAccessMessage(access));
         studentCompletions.add(nodeId);
         return;
       }
@@ -352,14 +346,13 @@ export function createInMemoryRoadmapSessionPersistence(
       nodeId: string,
       unlockOn: string | null,
     ) {
+      // A schedule is always after today and a Practice roadmap lives for one session, so no
+      // Scheduled unlock falls due here and unblocking never has one to release.
       mutateNode(nodeId, (node) => {
         if (!('isTeacherBlocked' in node)) return node;
-        if (unlockOn && !node.isTeacherBlocked)
-          throw new Error('Solo se puede programar el desbloqueo de un nodo con bloqueo docente.');
-        return {
-          ...node,
-          teacherUnlockOn: unlockOn ?? undefined,
-        } as AnyRoadmapNode;
+        const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
+        if (decision.kind === 'REJECTED') throw new Error(decision.message);
+        return { ...node, teacherUnlockOn: decision.day ?? undefined } as AnyRoadmapNode;
       });
     },
 
@@ -373,27 +366,36 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async toggleVisibility(_input: RoadmapCanvasSessionInput, nodeId: string, isVisible: boolean) {
-      // `isVisible` is the current visibility; hiding removes the Node's Dependencies.
+      // `isVisible` is the current visibility.
+      const change = decideVisibilityChange({
+        nodeId,
+        isVisible: !isVisible,
+        dependencies: roadmap.dependencies,
+      });
       mutateNode(nodeId, (node) =>
         'isVisible' in node
           ? ({
               ...node,
               isVisible: !isVisible,
-              ...(isVisible ? { isTeacherBlocked: false, teacherUnlockOn: undefined } : {}),
+              ...(change.clearsTeacherBlock
+                ? { isTeacherBlocked: false, teacherUnlockOn: undefined }
+                : {}),
             } as AnyRoadmapNode)
           : node,
       );
-      if (isVisible) {
-        const removed = new Set(incidentDependencies(roadmap, nodeId).map(({ id }) => id));
-        roadmap = {
-          ...roadmap,
-          dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
-        };
-      }
+      const removed = new Set(change.removedDependencies.map(({ id }) => id));
+      roadmap = {
+        ...roadmap,
+        dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
+      };
     },
 
     async previewNodeVisibility(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      return incidentDependencies(roadmap, nodeId).map(({ id, sourceNodeId, targetNodeId }) => ({
+      return decideVisibilityChange({
+        nodeId,
+        isVisible: false,
+        dependencies: roadmap.dependencies,
+      }).removedDependencies.map(({ id, sourceNodeId, targetNodeId }) => ({
         id,
         sourceNodeId,
         targetNodeId,

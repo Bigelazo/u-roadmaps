@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest';
 import {
   chileCalendarDay,
+  decideScheduledUnlock,
   dueScheduledUnlockNodeIds,
-  requireScheduledUnlockDay,
 } from '@/features/roadmap/domain/scheduled-unlock';
 
 const chain = [
@@ -72,9 +72,57 @@ test('places the Chilean calendar day across daylight-saving offsets', () => {
   expect(chileCalendarDay(new Date('2026-07-01T04:30:00Z'))).toBe('2026-07-01');
 });
 
-test('accepts only a future calendar day', () => {
-  expect(requireScheduledUnlockDay('2026-10-15', '2026-10-14')).toBe('2026-10-15');
-  expect(() => requireScheduledUnlockDay('2026-10-14', '2026-10-14')).toThrow();
-  expect(() => requireScheduledUnlockDay('2026-02-30', '2026-01-01')).toThrow();
-  expect(() => requireScheduledUnlockDay('15-10-2026', '2026-01-01')).toThrow();
+const blocked = { isVisible: true, isTeacherBlocked: true };
+
+test('schedules a Teacher-blocked Node only on a future calendar day', () => {
+  const today = '2026-10-14';
+  const invalidDate = { kind: 'REJECTED', reason: 'INVALID_TEACHER_UNLOCK_DATE' };
+
+  expect(decideScheduledUnlock({ node: blocked, unlockOn: '2026-10-15', today })).toEqual({
+    kind: 'ALLOWED',
+    day: '2026-10-15',
+  });
+  expect(decideScheduledUnlock({ node: blocked, unlockOn: '2026-10-14', today })).toMatchObject({
+    ...invalidDate,
+    message: 'La fecha de desbloqueo debe ser posterior a hoy.',
+  });
+  for (const unlockOn of ['2026-02-30', '15-10-2026'])
+    expect(decideScheduledUnlock({ node: blocked, unlockOn, today })).toMatchObject({
+      ...invalidDate,
+      message: 'La fecha debe tener el formato AAAA-MM-DD.',
+    });
+});
+
+test('schedules only a visible Node with a Teacher block', () => {
+  const requiresBlock = {
+    kind: 'REJECTED',
+    reason: 'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK',
+    message: 'Solo se puede programar el desbloqueo de un nodo visible con bloqueo docente.',
+  };
+  const today = '2026-10-14';
+
+  expect(
+    decideScheduledUnlock({
+      node: { isVisible: true, isTeacherBlocked: false },
+      unlockOn: '2026-10-15',
+      today,
+    }),
+  ).toEqual(requiresBlock);
+  expect(
+    decideScheduledUnlock({
+      node: { isVisible: false, isTeacherBlocked: true },
+      unlockOn: '2026-10-15',
+      today,
+    }),
+  ).toEqual(requiresBlock);
+});
+
+test('discards a schedule on any Node', () => {
+  expect(
+    decideScheduledUnlock({
+      node: { isVisible: false, isTeacherBlocked: false },
+      unlockOn: null,
+      today: '2026-10-14',
+    }),
+  ).toEqual({ kind: 'ALLOWED', day: null });
 });

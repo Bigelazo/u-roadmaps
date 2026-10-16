@@ -1,3 +1,4 @@
+import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
   transitivePrerequisiteNodeIds,
   type RoadmapGraphDependency,
@@ -34,16 +35,42 @@ export function isCalendarDay(value: unknown): value is CalendarDay {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-export class InvalidScheduledUnlockDay extends Error {}
+export type ScheduledUnlockRuleFailure =
+  'INVALID_TEACHER_UNLOCK_DATE' | 'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK';
 
-export function requireScheduledUnlockDay(value: unknown, today: CalendarDay): CalendarDay {
-  if (!isCalendarDay(value)) {
-    throw new InvalidScheduledUnlockDay('La fecha debe tener el formato AAAA-MM-DD.');
-  }
-  if (value <= today) {
-    throw new InvalidScheduledUnlockDay('La fecha de desbloqueo debe ser posterior a hoy.');
-  }
-  return value;
+export type ScheduledUnlockDecision =
+  { kind: 'ALLOWED'; day: CalendarDay | null } | RuleRejection<ScheduledUnlockRuleFailure>;
+
+/**
+ * Whether `unlockOn` can become the Node's Scheduled unlock: a calendar day after `today`
+ * for a visible Node with a Teacher block. `null` discards the schedule.
+ */
+export function decideScheduledUnlock({
+  node,
+  unlockOn,
+  today,
+}: {
+  node: { isVisible: boolean; isTeacherBlocked: boolean };
+  unlockOn: unknown;
+  today: CalendarDay;
+}): ScheduledUnlockDecision {
+  if (unlockOn === null) return { kind: 'ALLOWED', day: null };
+  if (!isCalendarDay(unlockOn))
+    return ruleRejection(
+      'INVALID_TEACHER_UNLOCK_DATE',
+      'La fecha debe tener el formato AAAA-MM-DD.',
+    );
+  if (unlockOn <= today)
+    return ruleRejection(
+      'INVALID_TEACHER_UNLOCK_DATE',
+      'La fecha de desbloqueo debe ser posterior a hoy.',
+    );
+  if (!node.isVisible || !node.isTeacherBlocked)
+    return ruleRejection(
+      'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK',
+      'Solo se puede programar el desbloqueo de un nodo visible con bloqueo docente.',
+    );
+  return { kind: 'ALLOWED', day: unlockOn };
 }
 
 /**

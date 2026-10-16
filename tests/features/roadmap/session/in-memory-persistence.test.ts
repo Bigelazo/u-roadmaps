@@ -120,3 +120,29 @@ test('models Branch unlock through the same Teacher block policy as production',
     ]),
   );
 });
+
+test('rejects a Scheduled unlock that is not after today, as production does', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+
+  await expect(persistence.scheduleTeacherUnlock!(input, 'selected', '2000-01-01')).rejects.toThrow(
+    'La fecha de desbloqueo debe ser posterior a hoy.',
+  );
+});
+
+test('rejects a student Completion of a blocked Node, as production does', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap, {
+    studentProgress: { completedNodeIds: [] },
+  });
+
+  await expect(persistence.complete(input, 'selected')).rejects.toThrow(
+    'El equipo docente bloqueó este nodo.',
+  );
+  expect((await persistence.load(input)).nodes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: 'selected',
+        access: expect.objectContaining({ status: 'BLOCKED' }),
+      }),
+    ]),
+  );
+});

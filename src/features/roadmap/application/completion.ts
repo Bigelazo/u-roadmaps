@@ -8,6 +8,7 @@ import 'server-only';
 import { Prisma, prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier, StudentNodeAccess } from '@/features/roadmap/types';
 import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
   loadRoadmapProjectionData,
   loadCompletedNodeIds,
@@ -22,13 +23,7 @@ type StudentNodeAccessInput = { userId: string; roadmapId: string; nodeId: strin
 type RequiredRole = 'STUDENT' | 'TEACHER';
 
 function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>) {
-  return new ApplicationError(
-    403,
-    access.reason,
-    access.reason === 'TEACHER_BLOCK'
-      ? 'El equipo docente bloqueó este nodo.'
-      : 'Este nodo permanece bloqueado por sus prerrequisitos.',
-  );
+  return new ApplicationError(403, access.reason, blockedNodeAccessMessage(access));
 }
 
 async function requireNodeAccess(

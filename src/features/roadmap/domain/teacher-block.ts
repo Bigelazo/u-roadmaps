@@ -9,6 +9,7 @@ import {
   transitivePrerequisiteNodeIds,
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
+import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 
 type TeacherBlockNode = {
   id: string;
@@ -18,8 +19,7 @@ type TeacherBlockNode = {
   nodeType?: TeacherBlockImpact['nodeType'];
 };
 
-export type TeacherBlockRuleFailure =
-  'NODE_NOT_FOUND' | 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN' | 'TEACHER_BLOCKED_PREREQUISITE';
+export type TeacherBlockRuleFailure = 'NODE_NOT_FOUND' | 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN';
 
 export type TeacherBlockDecision =
   | {
@@ -27,7 +27,7 @@ export type TeacherBlockDecision =
       mode: TeacherBlockUnlockMode;
       nodes: TeacherBlockImpact[];
     }
-  | { kind: 'REJECTED'; reason: TeacherBlockRuleFailure };
+  | RuleRejection<TeacherBlockRuleFailure>;
 
 export function decideTeacherBlock({
   nodes,
@@ -42,10 +42,12 @@ export function decideTeacherBlock({
 }): TeacherBlockDecision {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const selectedNode = nodeById.get(nodeId);
-  if (!selectedNode) return { kind: 'REJECTED', reason: 'NODE_NOT_FOUND' };
-  if (!selectedNode.isVisible) {
-    return { kind: 'REJECTED', reason: 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN' };
-  }
+  if (!selectedNode) return ruleRejection('NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!selectedNode.isVisible)
+    return ruleRejection(
+      'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
+      'Un nodo oculto no puede tener un bloqueo docente.',
+    );
 
   let changedNodeIds: Set<string>;
   let mode: TeacherBlockUnlockMode;
