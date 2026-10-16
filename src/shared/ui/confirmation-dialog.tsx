@@ -62,7 +62,7 @@ type ConfirmationActions =
 
 type ConfirmationPresentation = {
   title: React.ReactNode;
-  description: string;
+  description: React.ReactNode;
   intent: ConfirmationIntent;
   cancelLabel?: string;
   sections?: ConfirmationSection[];

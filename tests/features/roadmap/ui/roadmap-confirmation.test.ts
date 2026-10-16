@@ -1,3 +1,4 @@
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
   editorDraftDiscardConfirmation,
@@ -72,7 +73,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
       'blocks a Node without dependents',
       preview('BLOCK', []),
       '¿Bloquear “Funciones”?',
-      'Los estudiantes no podrán abrirlo hasta que lo desbloquees.',
+      'Los estudiantes no podrán acceder a él hasta su desbloqueo.',
       'block-teacher',
       'Bloquear nodo',
     ],
@@ -80,15 +81,15 @@ describe('roadmapTeacherBlockConfirmation', () => {
       'names one dependent that is blocked along',
       preview('BLOCK', ['Gráficas']),
       '¿Bloquear “Funciones”?',
-      'Los estudiantes no podrán abrirlo hasta que lo desbloquees. “Gráficas”, que depende de él, también quedará bloqueado.',
+      'Los estudiantes no podrán acceder a él hasta su desbloqueo. El nodo “Gráficas” también será bloqueado.',
       'block-teacher',
       'Bloquear nodo',
     ],
     [
-      'counts more than three dependents',
+      'names every dependent, including lists longer than three',
       preview('BLOCK', ['A', 'B', 'C', 'D']),
       '¿Bloquear “Funciones”?',
-      'Los estudiantes no podrán abrirlo hasta que lo desbloquees. Los 4 nodos que dependen de él también quedarán bloqueados.',
+      'Los estudiantes no podrán acceder a él hasta su desbloqueo. Los nodos “A”, “B”, “C” y “D” también serán bloqueados.',
       'block-teacher',
       'Bloquear nodo',
     ],
@@ -122,9 +123,14 @@ describe('roadmapTeacherBlockConfirmation', () => {
       nodeId: 'n0',
       preview: nodePreview,
     });
-    expect(confirmation).toEqual({
-      title,
-      description,
+    const text = (value: typeof confirmation.title) =>
+      renderToStaticMarkup(value)
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    expect(text(confirmation.title)).toBe(title);
+    expect(text(confirmation.description)).toBe(description);
+    expect(confirmation).toMatchObject({
       intent: 'warning',
       actions: [{ id, label }],
     });

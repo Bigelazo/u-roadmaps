@@ -309,12 +309,49 @@ export function roadmapTeacherBlockConfirmation({
   }
 
   if (preview.mode === 'BLOCK') {
+    const selectedNode = roadmap.nodes.find((node) => node.id === nodeId);
+    const inlineNode = (node: TeacherBlockImpact) => {
+      const roadmapNode = roadmap.nodes.find((candidate) => candidate.id === node.id);
+      const nodeType = node.nodeType ?? nodeTypeFor(roadmap, roadmapNode?.nodeTypeId ?? '');
+      return (
+        <span key={node.id}>
+          <NodeTypeIcon
+            icon={nodeType.icon}
+            className="inline size-[1em] align-[-0.125em]"
+            style={{ color: nodeType.color }}
+            aria-hidden="true"
+          />{' '}
+          {quoted(node.title)}
+        </span>
+      );
+    };
+    const dependents = preview.nodes.filter(
+      (node) => node.id !== nodeId && node.relation !== 'SELECTED_NODE',
+    );
+    const selected = preview.nodes.find((node) => node.id === nodeId) ?? {
+      id: nodeId,
+      title: selectedNode?.title ?? nodeId,
+      relation: 'SELECTED_NODE' as const,
+    };
     return {
-      title: `¿Bloquear ${title}?`,
-      description: withDependents(
-        'Los estudiantes no podrán abrirlo hasta que lo desbloquees.',
-        affectedTitles(preview, nodeId),
-        { one: 'también quedará bloqueado', many: 'también quedarán bloqueados' },
+      title: <>¿Bloquear {inlineNode(selected)}?</>,
+      description: (
+        <>
+          Los estudiantes no podrán acceder a él hasta su desbloqueo.
+          {dependents.length > 0 ? (
+            <>
+              {' '}
+              {dependents.length === 1 ? 'El nodo ' : 'Los nodos '}
+              {dependents.map((node, index) => (
+                <span key={node.id}>
+                  {index > 0 ? (index === dependents.length - 1 ? ' y ' : ', ') : null}
+                  {inlineNode(node)}
+                </span>
+              ))}
+              {dependents.length === 1 ? ' también será bloqueado.' : ' también serán bloqueados.'}
+            </>
+          ) : null}
+        </>
       ),
       intent: 'warning',
       actions: [{ id: roadmapConfirmationActionIds.blockTeacher, label: 'Bloquear nodo' }],

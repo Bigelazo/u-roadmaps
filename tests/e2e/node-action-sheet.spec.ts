@@ -115,7 +115,7 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toBeVisible();
   await expect(sheet).toBeHidden();
-  await expect(confirmation).toContainText(/dependen? de él/);
+  await expect(confirmation).toContainText('El nodo “Touch dependent” también será bloqueado.');
   await expect
     .poll(() => confirmation.evaluate((element) => element.contains(document.activeElement)))
     .toBe(true);
