@@ -83,19 +83,20 @@ export async function materializeParticipation(
   if (!institutionalPosition) return null;
   const { role } = positionCapabilities(institutionalPosition);
   return roadmapChangeTransaction(changePort, async (transaction, report) => {
-    await transaction.course.upsert({
-      where: { code: identifier.courseCode },
-      update: {},
-      create: { code: identifier.courseCode, name: access.name, department: '' },
+    // ON CONFLICT DO NOTHING, not an upsert: an upsert reads before it inserts, so
+    // concurrent syncs of the same Course (one per offering, or parallel requests)
+    // both insert and the second fails with a unique violation.
+    await transaction.course.createMany({
+      data: { code: identifier.courseCode, name: access.name, department: '' },
+      skipDuplicates: true,
     });
-    const courseOffering = await transaction.courseOffering.upsert({
-      where: { courseCode_year_semester: identifier },
-      update: {},
-      create: {
-        courseCode: identifier.courseCode,
-        year: identifier.year,
-        semester: identifier.semester,
-      },
+    const { courseCode, year, semester } = identifier;
+    await transaction.courseOffering.createMany({
+      data: { courseCode, year, semester },
+      skipDuplicates: true,
+    });
+    const courseOffering = await transaction.courseOffering.findUniqueOrThrow({
+      where: { courseCode_year_semester: { courseCode, year, semester } },
     });
     const roadmap = await transaction.roadmap.findUnique({
       where: { courseOfferingId: courseOffering.id },
@@ -161,26 +162,26 @@ export async function synchronizeAcademicParticipations(
       const key = `${course.courseCode}:${course.year}:${course.semester}`;
       offerings.set(key, [...(offerings.get(key) ?? []), course]);
     }
-    await Promise.all(
-      [...offerings.values()].map((courses) => {
-        const course = courses[0];
-        return materializeParticipation(
-          user,
-          {
-            courseCode: course.courseCode,
-            year: course.year,
-            semester: course.semester,
-          },
-          {
-            name: course.name,
-            positions: courses.flatMap(({ institutionalPosition }) =>
-              institutionalPosition ? [institutionalPosition] : [],
-            ),
-          },
-          changePort,
-        );
-      }),
-    );
+    // Each offering opens an interactive transaction. Await its commit before
+    // starting the next so a long academic history cannot flood the pool's queue.
+    for (const courses of offerings.values()) {
+      const course = courses[0];
+      await materializeParticipation(
+        user,
+        {
+          courseCode: course.courseCode,
+          year: course.year,
+          semester: course.semester,
+        },
+        {
+          name: course.name,
+          positions: courses.flatMap(({ institutionalPosition }) =>
+            institutionalPosition ? [institutionalPosition] : [],
+          ),
+        },
+        changePort,
+      );
+    }
   }
   return source;
 }

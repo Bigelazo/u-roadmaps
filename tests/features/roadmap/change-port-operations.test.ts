@@ -436,6 +436,23 @@ test('promotion reports the role change', async ({ course }) => {
   ]);
 });
 
+test('concurrent materializations of one new Course both succeed', async ({ course }) => {
+  const courseCode = `RACE${crypto.randomUUID().slice(0, 8)}`;
+  const offering = (year: number, semester: number) =>
+    materializeParticipation(
+      { id: course.studentId, rut: null },
+      { courseCode, year, semester },
+      { name: 'Curso concurrente', positions: ['STUDENT'] },
+      recordingChangePort().port,
+    );
+  try {
+    await Promise.all([offering(2025, 1), offering(2025, 2), offering(2025, 2)]);
+    expect(await prisma.courseOffering.count({ where: { courseCode } })).toBe(2);
+  } finally {
+    await prisma.course.deleteMany({ where: { code: courseCode } });
+  }
+});
+
 test.for([false, true])(
   'Roadmap creation reports availability (copy: %s)',
   async (copy, { course }) => {
