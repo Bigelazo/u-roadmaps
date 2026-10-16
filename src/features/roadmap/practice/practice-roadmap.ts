@@ -29,12 +29,6 @@ export const practiceCreatedNodePosition = { x: 960, y: 360 } as const;
 
 /** The simulated progress shown in the student experience. */
 export const practiceStudentProgress = { completedNodeIds: [practiceNodeIds.a] } as const;
-/** The link the teaching Roadmap tutorial prefills, so adding a Resource takes one click. */
-export const practiceSuggestedResource = {
-  title: 'Mapa conceptual',
-  url: 'https://es.wikipedia.org/wiki/Mapa_conceptual',
-  type: 'LINK',
-} as const;
 /** The Node change marks shown on the Practice roadmap. */
 export const practiceNodeChangeCounts: Readonly<Record<string, number>> = {
   [practiceNodeIds.c]: 1,

@@ -488,25 +488,23 @@ function useRoadmapCanvasController({ input }: Props) {
     requestAnimationFrame(() => focusReturn?.());
   }, [teacherPreviewFocusReturn]);
 
-  const suggestedResource = input.practice?.suggestedResource;
   const openResourceComposer = useCallback(
     (nodeId: string) => {
       if (!canEditRoadmap || isCanvasPreview) return;
       void guardEditorDraft({ kind: 'open-resource', nodeId }).then((proceed) => {
         if (!proceed) return;
-        const suggested = suggestedResource?.();
         dispatchCanvas({
           type: 'openResourceComposer',
           command: {
             id: crypto.randomUUID(),
             kind: 'open-resource',
             nodeId,
-            ...(suggested ? { mode: 'link', value: suggested } : { mode: 'file' }),
+            mode: 'file',
           },
         });
       });
     },
-    [canEditRoadmap, guardEditorDraft, isCanvasPreview, suggestedResource],
+    [canEditRoadmap, guardEditorDraft, isCanvasPreview],
   );
 
   useEffect(() => {

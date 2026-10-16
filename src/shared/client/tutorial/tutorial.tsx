@@ -29,6 +29,8 @@ export type TutorialStep<Action = never> = Readonly<{
   title: string;
   description: string;
   side?: 'top' | 'right' | 'bottom' | 'left';
+  /** Let explanatory steps expose controls and scrolling in their highlighted region. */
+  allowInteraction?: boolean;
   /** Highlight the bounding region of related elements together. */
   highlightElements?: () => readonly Element[];
   prepare?: () => Promise<void> | void;
@@ -179,13 +181,18 @@ export function RoadmapTutorial<Action = never>({
       disableActiveInteraction: true,
       steps: steps.map((step, index): DriveStep => ({
         element: () => resolveHighlight(step),
-        disableActiveInteraction: !step.advanceWhen,
+        disableActiveInteraction: !step.advanceWhen && !step.allowInteraction,
         popover: {
           title: step.title,
           description: step.description,
           side: step.side,
           ...(isRequiredActionStep(index)
-            ? { showButtons: ['close' as const] }
+            ? {
+                showButtons:
+                  index > 0 && !isRequiredActionStep(index - 1)
+                    ? ['previous' as const, 'close' as const]
+                    : ['close' as const],
+              }
             : index === 0 || isRequiredActionStep(index - 1)
               ? { showButtons: ['next' as const, 'close' as const] }
               : {}),

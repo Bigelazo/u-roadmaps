@@ -13,13 +13,6 @@ function nodeCreator() {
   return dialog ?? layer?.querySelector('[role="menu"]') ?? layer ?? null;
 }
 
-/** The open Resource form, or the canvas, where the Node action menu opens. */
-function resourceComposerOrCanvas() {
-  return (
-    document.querySelector('[aria-label="Editor de recurso"]') ?? document.querySelector(canvas)
-  );
-}
-
 /** Keeps action confirmations clear of the tutorial popover after the canvas resizes. */
 function confirmationOrCanvas() {
   return (
@@ -48,6 +41,14 @@ function branchBlockControl() {
   );
 }
 
+/** Keeps the requested Node highlighted, then follows its menu and confirmation. */
+function nodeControlOrConfirmation(nodeId: string) {
+  return () =>
+    document.querySelector('[role="alertdialog"]:not(.u-roadmaps-tour-exit)') ??
+    document.getElementById(`node-actions-${nodeId}`) ??
+    document.querySelector(nodeSelector(nodeId));
+}
+
 /** The open Node detail in "Vista estudiante", or the given Node. */
 function nodeDetailOr(nodeId: string) {
   return () =>
@@ -59,9 +60,7 @@ function nodeDetailOr(nodeId: string) {
  * The teaching Roadmap tutorial on the Practice roadmap. Action steps advance only when
  * the canvas reports their action took effect. Built per run: it remembers the new Node.
  */
-export function teachingTutorialSteps(
-  resourceSuggestion: { set: (isSuggesting: boolean) => void } = { set: () => undefined },
-): readonly TutorialStep<PracticeCanvasAction>[] {
+export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAction>[] {
   let createdNodeId: string | null = null;
   return [
     {
@@ -145,10 +144,11 @@ export function teachingTutorialSteps(
       advanceWhen: (action) => action.type === 'selectNode' && action.nodeId === createdNodeId,
     },
     {
-      element: '[aria-label="Editor de nodo"]',
+      element: '#roadmap-editor-panel [data-slot="sidebar-content"]',
+      allowInteraction: true,
       title: 'Editor de nodo',
       description:
-        'Aquí cambias el título, la descripción, que admite Markdown, y el tipo del nodo.',
+        'Aquí puedes cambiar múltiples propiedades del nodo, como su título, descripción, tipo, recursos, bloquear, ocultar, etc.',
       side: 'left',
     },
     {
@@ -156,7 +156,7 @@ export function teachingTutorialSteps(
       title: 'Bloquea un nodo',
       prepare: () => clickElement(nodeSelector(practiceNodeIds.b)),
       description:
-        'En el nodo "Conceptos básicos", abre su menú de acciones con el ícono de engranaje. Elige "Bloquear nodo" y confirma con "Bloquear nodo". El bloqueo docente impide que tus estudiantes trabajen en ese nodo y en los que dependen de él.',
+        'En el nodo "Conceptos básicos" abre su menú de acciones y elige "Bloquear nodo". El bloqueo también se propagará a todos los nodos dependientes del seleccionado.',
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
         action.nodeId === practiceNodeIds.b &&
@@ -166,13 +166,13 @@ export function teachingTutorialSteps(
       element: canvas,
       title: 'Bloqueo propagado',
       description:
-        'El bloqueo docente se propaga a los nodos que dependen de Conceptos básicos: Ejercicios guiados, Control 1, Proyecto final y Retroalimentación del control.',
+        'En este caso, el bloqueo se propagó a los nodos dependientes de "Conceptos básicos": "Ejercicios guiados", "Control 1", "Proyecto final" y "Retroalimentación del control".',
     },
     {
-      element: canvas,
+      element: nodeControlOrConfirmation(practiceNodeIds.b),
       title: 'Desbloquea el nodo',
       description:
-        'Abre otra vez el menú de Conceptos básicos y elige "Desbloquear". Puedes desbloquear solo este nodo o incluir sus dependientes.',
+        'Abre otra vez el menú de acciones del nodo "Conceptos básicos" y desbloquéalo. Puedes elegir entre desbloquear solo este nodo, o incluir además a los dependientes de él.',
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
         action.nodeId === practiceNodeIds.b &&
@@ -187,30 +187,27 @@ export function teachingTutorialSteps(
         clickElement('button[aria-label="Centrar mapa"]');
       },
       description:
-        'Proyecto final tiene un desbloqueo programado: se libera solo en la fecha que elegiste. Lo configuras en el editor de un nodo con bloqueo docente.',
+        'El nodo "Proyecto final" tiene configurado un desbloqueo programado: será liberado a los estudiantes en la fecha y hora seleccionados. Puedes configurar esto cuando quieras en el editor de nodos.',
     },
     {
-      element: confirmationOrCanvas,
+      element: nodeControlOrConfirmation(practiceNodeIds.g),
       title: 'Oculta un nodo',
       description:
-        'Abre el menú de Retroalimentación del control y elige "Ocultar para estudiantes". Al ocultarlo se eliminan sus dependencias.',
+        'Abre el menú de acciones y oculta este nodo. Esto eliminará todas sus dependencias.',
       advanceWhen: (action) =>
         action.type === 'changeVisibility' &&
         action.nodeId === practiceNodeIds.g &&
         !action.isVisible,
     },
     {
-      element: resourceComposerOrCanvas,
-      title: 'Agrega un recurso',
-      prepare: () => resourceSuggestion.set(true),
+      element: () => (createdNodeId ? document.querySelector(nodeSelector(createdNodeId)) : null),
+      title: 'Agregar recursos',
       description:
-        'Abre el menú de tu nodo y elige "Agregar recurso". Dejamos un enlace listo: solo presiona "Agregar enlace".',
-      advanceWhen: (action) => action.type === 'addResource' && action.nodeId === createdNodeId,
+        'Puedes agregar recursos a tus nodos, como archivos o enlaces. Lo puedes hacer a través del menú de acciones, o a través del panel de edición',
     },
     {
       element: confirmationOrCanvas,
       title: 'Elimina tu nodo',
-      prepare: () => resourceSuggestion.set(false),
       description:
         'Abre el menú de tu nodo y elige "Eliminar nodo". Antes de eliminar verás qué recursos y dependencias se pierden.',
       advanceWhen: (action) => action.type === 'deleteNode' && action.nodeId === createdNodeId,

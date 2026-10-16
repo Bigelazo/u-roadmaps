@@ -21,7 +21,7 @@ const steps = [
   'Desbloquea el nodo',
   'Desbloqueo programado',
   'Oculta un nodo',
-  'Agrega un recurso',
+  'Agregar recursos',
   'Elimina tu nodo',
   'Vista estudiante',
   'Completa un nodo',
@@ -204,10 +204,21 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
   await page.keyboard.press('ArrowLeft');
   await expectStep(page, 'Editor de nodo');
-  await expect(page.locator('[aria-label="Editor de nodo"]')).toHaveClass(/driver-active-element/);
+  await expect(page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]')).toHaveClass(
+    /driver-active-element/,
+  );
   await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/Descripción/)).toHaveValue(
     markdown,
   );
+
+  const editorScroll = page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]');
+  await page.locator('[aria-label="Editor de nodo"]').hover();
+  await page.mouse.wheel(0, 700);
+  await expect.poll(() => editorScroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await page.screenshot({ path: 'test-results/tutorial-editor-scroll.png' });
+  await editorScroll.evaluate((element) => {
+    element.scrollTop = 0;
+  });
 
   await next(page, 'Bloquea un nodo');
   const blockNode = practiceNode(page, 'Conceptos básicos');
@@ -217,7 +228,10 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(blockNode).toHaveClass(/selected/);
   await expect(blockMenuTrigger).toHaveClass(/driver-active-element/);
   await expect(tourPopover(page)).toContainText('nodo "Conceptos básicos"');
-  await expect(tourPopover(page)).toContainText('confirma');
+  await expect(tourPopover(page)).toContainText('todos los nodos dependientes');
+  await tourPopover(page).getByRole('button', { name: 'Anterior' }).click();
+  await expectStep(page, 'Editor de nodo');
+  await next(page, 'Bloquea un nodo');
 
   // The confirmation is portaled, and stays usable.
   await blockMenuTrigger.click();
@@ -226,6 +240,12 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await blockAction.click();
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toHaveClass(/driver-active-element/);
+  await expect(confirmation).toContainText(
+    'Los estudiantes no podrán acceder a él hasta su desbloqueo.',
+  );
+  await expect(confirmation).toContainText('también serán bloqueados.');
+  await expect(confirmation.locator('span svg')).toHaveCount(4);
+  await page.screenshot({ path: 'test-results/tutorial-block-confirmation.png' });
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Bloquea un nodo');
   await expect(blockMenuTrigger).toHaveClass(/driver-active-element/);
@@ -242,6 +262,8 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   ])
     await expect(blockedByTeacher(page, title)).toBeVisible();
   await next(page, 'Desbloquea el nodo');
+  await expect(blockNode).toHaveClass(/driver-active-element/);
+  await page.screenshot({ path: 'test-results/tutorial-unlock.png' });
 
   await openNodeMenu(page, 'Conceptos básicos', 'Desbloquear');
   await expect(confirmation.getByRole('button', { name: 'Solo este nodo' })).toBeVisible();
@@ -253,6 +275,10 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(practiceNode(page, 'Proyecto final')).toBeInViewport({ ratio: 0.99 });
   await expect(blockedByTeacher(page, 'Ejercicios guiados')).toHaveCount(0);
   await next(page, 'Oculta un nodo');
+  await expect(practiceNode(page, 'Retroalimentación del control')).toHaveClass(
+    /driver-active-element/,
+  );
+  await page.screenshot({ path: 'test-results/tutorial-hide.png' });
 
   // Cancelling the confirmation keeps the step.
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
@@ -262,15 +288,14 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expectStep(page, 'Oculta un nodo');
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
   await confirmation.getByRole('button', { name: 'Ocultar' }).click();
-  await expectStep(page, 'Agrega un recurso');
+  await expectStep(page, 'Agregar recursos');
 
-  await openNodeMenu(page, 'Nodo de práctica', 'Agregar recurso');
-  const composer = page.locator('[aria-label="Editor de recurso"]');
-  await expect(composer.getByRole('textbox', { name: 'Enlace', exact: true })).toHaveValue(
-    /wikipedia\.org/,
+  await expect(practiceNode(page, 'Nodo de práctica')).toHaveClass(/driver-active-element/);
+  await expect(tourPopover(page)).toContainText(
+    'Puedes agregar recursos a tus nodos, como archivos o enlaces.',
   );
-  await composer.getByRole('button', { name: 'Agregar enlace' }).click();
-  await expectStep(page, 'Elimina tu nodo');
+  await page.screenshot({ path: 'test-results/tutorial-resources.png' });
+  await next(page, 'Elimina tu nodo');
 
   await openNodeMenu(page, 'Nodo de práctica', 'Eliminar nodo');
   await expect(confirmation).toHaveClass(/driver-active-element/);
