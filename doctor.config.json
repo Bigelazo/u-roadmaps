@@ -67,7 +67,7 @@
         "rules": ["react-doctor/async-await-in-loop"]
       },
       {
-        "files": ["src/features/roadmap/application/change-transaction.ts"],
+        "files": ["src/features/roadmap/application/roadmap-command/change.ts"],
         "rules": ["react-doctor/async-await-in-loop"]
       },
       {

@@ -1,11 +1,12 @@
+import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
 import { completeSimulatedNode } from '@/features/roadmap/server';
-import { unwrap } from '@/shared/errors/server';
 
 export const POST = courseRoute(async ({ identifier, user, params }) => {
-  const completion = await unwrap(() =>
-    completeSimulatedNode({ userId: user.id, identifier, nodeId: params.nodeId }),
+  const completion = await completeSimulatedNode(
+    { userId: user.id, identifier, nodeId: params.nodeId },
+    roadmapChangePort,
   );
   return NextResponse.json({
     completion: {

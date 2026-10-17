@@ -47,10 +47,6 @@ const context = {
   }),
 };
 
-function result<T>(value: T) {
-  return { match: async (onSuccess: (value: T) => unknown) => onSuccess(value) };
-}
-
 function fileUploadRequest() {
   return {
     headers: new Headers({ 'content-type': 'multipart/form-data' }),
@@ -60,10 +56,10 @@ function fileUploadRequest() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  createResource.mockReturnValue(result(resource));
-  uploadResource.mockReturnValue(result(resource));
-  updateResource.mockReturnValue(result({ resource }));
-  removeResource.mockReturnValue(result({}));
+  createResource.mockResolvedValue(resource);
+  uploadResource.mockResolvedValue(resource);
+  updateResource.mockResolvedValue({ resource });
+  removeResource.mockResolvedValue({});
 });
 
 test.each(['LINK', 'VIDEO'] as const)('returns a confirmed %s Resource addition', async (type) => {
@@ -107,12 +103,7 @@ test('returns the updated Resource and an empty deletion response', async () => 
 test.each(['storage failure', 'validation failure'] as const)(
   'returns the error when a Resource %s prevents persistence',
   async (failure) => {
-    uploadResource.mockReturnValue({
-      match: async (
-        _onSuccess: (value: typeof resource) => unknown,
-        onError: (error: Error) => unknown,
-      ) => onError(new Error(failure)),
-    });
+    uploadResource.mockRejectedValue(new Error(failure));
     await expect(POST(fileUploadRequest(), context as never)).rejects.toThrow(failure);
   },
 );

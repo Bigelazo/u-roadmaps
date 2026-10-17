@@ -2,17 +2,17 @@ import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
 import { createRoadmapNodeType, getNodeTypesForActor } from '@/features/roadmap/server';
-import { unwrap } from '@/shared/errors/server';
 
 export const GET = courseRoute(async ({ identifier, user }) => {
-  const nodeTypes = await unwrap(() => getNodeTypesForActor(user, identifier, roadmapChangePort));
+  const nodeTypes = await getNodeTypesForActor({ userId: user.id, identifier });
   return NextResponse.json({ nodeTypes });
 });
 
 export const POST = courseRoute(
   async ({ identifier, user, body }) => {
-    const nodeType = await unwrap(() =>
-      createRoadmapNodeType({ userId: user.id, identifier, input: body }),
+    const nodeType = await createRoadmapNodeType(
+      { userId: user.id, identifier, input: body },
+      roadmapChangePort,
     );
     return NextResponse.json({ nodeType }, { status: 201 });
   },

@@ -11,15 +11,14 @@ import {
   type InstitutionalCoursePosition,
 } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
-import { unwrap, withApplicationResult } from '@/shared/errors/server';
 import {
   averageStudentCompletion,
   compareCourseMembers,
   completionRatio,
 } from '../domain/course-progress';
 import type { CourseOfferingIdentifier } from '../types';
-import type { RoadmapChangePort } from './change-port';
-import { requireCourseOfferingParticipation, type RoadmapActor } from './participation';
+import type { RoadmapActor } from './participation';
+import { roadmapRead } from './roadmap-command';
 
 export type CourseMember = Readonly<{
   key: string;
@@ -144,19 +143,22 @@ async function readCompletedVisibleNodes(roadmapId: string, userIds: string[]) {
 
 /**
  * Student progress tracking (GLOSSARY): the offering's members and each
- * student's Roadmap completion, for its active teaching staff only.
+ * student's Roadmap completion, for its active teaching staff only. The offering
+ * may have no Roadmap yet.
  */
-export const readCourseParticipants = withApplicationResult(async function readCourseParticipants(
+export async function readCourseParticipants(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
-  changePort: RoadmapChangePort,
 ): Promise<CourseParticipants> {
-  const { courseOffering } = await unwrap(() =>
-    requireCourseOfferingParticipation(actor, identifier, ['TEACHER'], changePort),
+  // Only the access check runs in the read snapshot; U-Campus is never called inside it.
+  const courseOffering = await roadmapRead(
+    { userId: actor.id, identifier },
+    'oversee',
+    async ({ courseOffering }) => courseOffering,
+    { roadmap: 'optional' },
   );
-  const [institutionalRoster, course, visibleNodes] = await Promise.all([
+  const [institutionalRoster, visibleNodes] = await Promise.all([
     readInstitutionalRoster(actor, identifier),
-    prisma.course.findUnique({ where: { code: identifier.courseCode }, select: { name: true } }),
     courseOffering.roadmap
       ? prisma.roadmapNode.count({
           where: { roadmapId: courseOffering.roadmap.id, isVisible: true },
@@ -197,7 +199,7 @@ export const readCourseParticipants = withApplicationResult(async function readC
   );
 
   return {
-    course: { ...identifier, name: course?.name ?? identifier.courseCode },
+    course: { ...identifier, name: courseOffering.course.name },
     source: institutionalRoster ? 'MUFASA' : 'LOCAL',
     hasRoadmap: Boolean(courseOffering.roadmap),
     visibleNodes,
@@ -208,4 +210,4 @@ export const readCourseParticipants = withApplicationResult(async function readC
     ),
     students,
   };
-});
+}

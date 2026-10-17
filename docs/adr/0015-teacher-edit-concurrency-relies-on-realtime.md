@@ -31,3 +31,14 @@ de avisos.
   envía el valor que tenía cargado y el servidor responde 409 si cambió, pidiendo
   volver a entrar. Viable, pero se prefirió no modificar la gestión del Roadmap
   docente en esta iteración.
+
+## Corrección — 2026-10-17: qué protege `previewVersion` en el servidor
+
+La afirmación de que ocultar y bloquear estaban protegidos por `previewVersion` era
+inexacta: el servidor solo comprobaba la versión al eliminar y al desbloquear un Nodo.
+Desde #276, eliminar un Nodo, desbloquearlo, ocultarlo, aplicar un BLOCK y crear una
+Dependency revalidan en el servidor la versión del impacto de su previsualización y
+responden 409 si cambió (`NODE_DELETE_PREVIEW_STALE`, `TEACHER_BLOCK_PREVIEW_STALE`,
+`NODE_VISIBILITY_PREVIEW_STALE`, `DEPENDENCY_PREVIEW_STALE`). La versión es opcional
+para todas salvo el desbloqueo hasta que el cliente la envíe siempre. Las ediciones de
+título, descripción y tipo siguen dependiendo del tiempo real, como decide este ADR.

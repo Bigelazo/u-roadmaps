@@ -50,19 +50,15 @@ const context = {
   }),
 };
 
-function result<T>(value: T) {
-  return { match: async (onSuccess: (value: T) => unknown) => onSuccess(value) };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   calls.length = 0;
-  createRoadmapNodeType.mockReturnValue(result(nodeType));
-  updateRoadmapNodeType.mockImplementation(() => {
+  createRoadmapNodeType.mockResolvedValue(nodeType);
+  updateRoadmapNodeType.mockImplementation(async () => {
     calls.push('committed');
-    return result({ nodeType });
+    return { nodeType };
   });
-  deleteRoadmapNodeType.mockReturnValue(result(undefined));
+  deleteRoadmapNodeType.mockResolvedValue(undefined);
 });
 
 test('returns the committed rename as a plain response', async () => {
@@ -80,7 +76,7 @@ test('returns the committed rename as a plain response', async () => {
 });
 
 test('returns the type after an appearance edit', async () => {
-  updateRoadmapNodeType.mockImplementation(() => result({ nodeType }));
+  updateRoadmapNodeType.mockResolvedValue({ nodeType });
 
   const response = await PATCH(
     new Request('http://localhost/node-types/type-id', {
