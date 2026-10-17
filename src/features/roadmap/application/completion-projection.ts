@@ -1,7 +1,10 @@
 import 'server-only';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import { studentNodeAccessById, visibleRoadmapGraph } from '@/features/roadmap/domain/access';
+import {
+  participantNodeAccess,
+  studentRoadmapNodes,
+} from '@/features/roadmap/domain/participant-view';
 import { nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import { Prisma } from '@/shared/server/db';
 
@@ -110,33 +113,26 @@ export async function loadRoadmapProjectionData(
   };
 }
 
+/** A student's access to each visible Node of a Roadmap; hidden Nodes have no entry. */
 export async function loadStudentNodeAccess(
   transaction: Prisma.TransactionClient,
   { roadmapId, completedNodeIds }: { roadmapId: string; completedNodeIds: ReadonlySet<string> },
 ) {
   const [nodes, dependencies] = await Promise.all([
     transaction.roadmapNode.findMany({
-      where: { roadmapId, isVisible: true },
-      select: { id: true, isTeacherBlocked: true },
+      where: { roadmapId },
+      select: { id: true, isVisible: true, isTeacherBlocked: true },
     }),
     transaction.dependency.findMany({
       where: { sourceNode: { roadmapId } },
       select: { sourceNodeId: true, targetNodeId: true },
     }),
   ]);
-  const visibleNodeIds = new Set(nodes.map((node) => node.id));
-  return {
+  return participantNodeAccess({
+    participant: { role: 'STUDENT', completedNodeIds },
     nodes,
-    accessByNodeId: studentNodeAccessById({
-      nodes,
-      dependencies: dependencies.filter(
-        (dependency) =>
-          visibleNodeIds.has(dependency.sourceNodeId) &&
-          visibleNodeIds.has(dependency.targetNodeId),
-      ),
-      completedNodeIds,
-    }),
-  };
+    dependencies,
+  }).accessByNodeId;
 }
 
 function commonRoadmapProjection(data: RoadmapProjectionData) {
@@ -160,37 +156,17 @@ export function projectStudentRoadmap(
   identifier: CourseOfferingIdentifier,
   completedNodeIds: ReadonlySet<string>,
 ) {
-  const { nodes, dependencies } = visibleRoadmapGraph(data.nodes, data.dependencies);
-  const accessByNodeId = studentNodeAccessById({
-    nodes,
-    dependencies,
-    completedNodeIds,
-  });
-
   return {
     ...commonRoadmapProjection(data),
-    nodes: nodes.map((node) => {
-      const isCompleted = completedNodeIds.has(node.id);
-      const access = accessByNodeId.get(node.id);
-      if (access?.status === 'BLOCKED') {
-        return {
-          id: node.id,
-          title: node.title,
-          positionX: node.positionX,
-          positionY: node.positionY,
-          nodeTypeId: node.nodeTypeId,
-          access,
-        };
-      }
-      return {
-        ...projectAccessibleNode(node, identifier),
-        access,
-        isCompleted,
-        canComplete: !data.roadmap.closedAt && !isCompleted,
+    ...studentRoadmapNodes({
+      nodes: data.nodes.map((node) => ({
+        ...node,
         resources: node.resources.map((resource) => resourceDto(resource, identifier)),
-      };
+      })),
+      dependencies: data.dependencies,
+      completedNodeIds,
+      isClosed: Boolean(data.roadmap.closedAt),
     }),
-    dependencies,
   };
 }
 

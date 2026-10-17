@@ -140,7 +140,7 @@ The reconciliation of a course offering's participants against a complete U-Camp
 _Avoid_: Authentication, additive import
 
 **Participation role (Rol de participación)**:
-The student, observer, or teaching-staff role held by a participation in one course offering. U-Campus students become students; observers retain a distinct observer role and follow the same Roadmap access and Completion rules as students, but are not academically evaluated and receive no passing or failing outcome for the Course offering; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections. Editing the Roadmap follows the Participation role; only Roadmap creation follows the Institutional course position.
+The student, observer, or teaching-staff role held by a participation in one course offering. U-Campus students become students; observers retain a distinct observer role and follow the same Roadmap access and Completion rules as students, but are not academically evaluated and receive no passing or failing outcome for the Course offering; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections. Editing the Roadmap follows the Participation role; only Roadmap creation follows the Institutional course position. For Roadmap notices, teaching staff count as having access to every visible node without a teacher block.
 _Avoid_: Function, global user role
 
 **Institutional course position (Cargo institucional de curso)**:
@@ -164,7 +164,7 @@ An element of a roadmap that holds pedagogical information, has exactly one node
 _Avoid_: Learning unit
 
 **Blocked node (Nodo bloqueado)**:
-A visible node to which a teacher block, a prerequisite block, or both apply. It remains represented in the student's roadmap but exposes neither its pedagogical details nor its resources and cannot be completed, even when that student completed it previously; the completion is retained and becomes effective again after every block is removed. When both reasons apply, the student is told only that teaching staff blocked it.
+A visible node to which a teacher block, a prerequisite block, or both apply. It remains represented in the student's roadmap with its title and node type, but exposes neither its pedagogical details nor its resources and cannot be completed, even when that student completed it previously; the completion is retained and becomes effective again after every block is removed. When both reasons apply, the student is told only that teaching staff blocked it.
 _Avoid_: Hidden node, unavailable node
 
 **Node state (Estado del nodo)**:

@@ -16,6 +16,7 @@ function nodeTitle({ context }: TargetValues) {
 export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
   noticeTarget: NOTICE_TARGET.nodeDeletion,
   noticeClass: 'roadmap-node-changed',
+  shownTo: 'everyone',
   readSide: { changeKind: 'node-deleted', changedFields: [], targetKind: 'roadmap' },
   scope: 'node',
   keepsKnownValue: false,

@@ -12,7 +12,7 @@ import {
 import { PRESENT, nodeCreationRef, nodeDeletionRef } from '../../application/absorption';
 import { acknowledgeCapturedNotice } from '../recognition-snapshot';
 import { setKnownValue, type RecipientRoadmap } from './known-values';
-import { roadmapView, type NodeAccessReader } from './roadmap-view';
+import { roadmapView, type ParticipantAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget } from './reconcile';
 import { lazyNoticeCourseContext, type NoticeCourseContext } from './course-context';
 
@@ -81,13 +81,13 @@ export async function recognizeTargetSnapshots(
     roadmapId,
     operationId,
     snapshots,
-    accessibleNodes,
+    readAccess,
   }: {
     recipientId: string;
     roadmapId: string;
     operationId: string;
     snapshots: Prisma.JsonValue;
-    accessibleNodes?: NodeAccessReader;
+    readAccess?: ParticipantAccessReader;
   },
 ) {
   if (!Array.isArray(snapshots)) throw new Error('Invalid notice opening snapshots.');
@@ -95,7 +95,7 @@ export async function recognizeTargetSnapshots(
   const courseContext = lazyNoticeCourseContext(transaction, roadmapId);
   const recognized = snapshots.map(targetSnapshot);
   // Recognition never edits the Roadmap: one view, loaded at once, serves every target.
-  const roadmap = roadmapView(transaction, roadmapId, accessibleNodes);
+  const roadmap = roadmapView(transaction, roadmapId, readAccess);
   if (recognized.length) await roadmap.preload();
   let acknowledged = 0;
   for (const { snapshot, target, descriptor } of recognized) {

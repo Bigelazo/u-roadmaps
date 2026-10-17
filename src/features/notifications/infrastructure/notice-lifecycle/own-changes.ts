@@ -57,7 +57,7 @@ export async function recordOwnChanges(
   ownTargets: readonly OwnTarget[],
 ) {
   const identity = { recipientId: changes.actorId, roadmapId: changes.roadmapId };
-  if (promoted(changes)) return rebaselineStaffAccess(transaction, identity);
+  if (promoted(changes)) return rebaselineStaffAccess(transaction, identity, roadmap);
   const courseContext = lazyNoticeCourseContext(transaction, changes.roadmapId);
   const occurredAt = new Date();
   for (const { descriptor, fact, target, previousValue } of ownTargets) {
@@ -103,20 +103,22 @@ export async function recordOwnChanges(
   }
 }
 
+/** The promoted actor now knows every Node's access as teaching staff see it. */
 async function rebaselineStaffAccess(
   transaction: Prisma.TransactionClient,
   identity: RecipientRoadmap,
+  roadmap: RoadmapView,
 ) {
-  const nodes = await transaction.roadmapNode.findMany({
-    where: { roadmapId: identity.roadmapId },
-    select: { id: true, isVisible: true, isTeacherBlocked: true },
-  });
+  const [nodes, accessible] = await Promise.all([
+    roadmap.nodes(),
+    roadmap.accessibleNodeIds(identity.recipientId),
+  ]);
   await transaction.noticeKnownValue.deleteMany({
     where: { ...identity, noticeTarget: nodeAccessTarget.noticeTarget },
   });
   await transaction.noticeKnownValue.createMany({
     data: nodes.map((node) => {
-      const state = nodeAccessState(node.isVisible, !node.isTeacherBlocked);
+      const state = nodeAccessState(node.isVisible, accessible.has(node.id));
       return {
         ...identity,
         ...nodeAccessRef(node.id),
