@@ -270,81 +270,90 @@ function AccessRow({
   );
 }
 
-function NodeStatus() {
-  const { node, isVisibilityPending, toggleVisibility, requestTeacherBlock } =
-    useNodeEditorContext();
+function NodeVisibility() {
+  const { node, isVisibilityPending, toggleVisibility } = useNodeEditorContext();
+
+  return (
+    <AccessRow
+      Icon={node.isVisible ? Eye : EyeOff}
+      label={node.isVisible ? 'Visible para estudiantes' : 'Oculto para estudiantes'}
+      description={
+        node.isVisible
+          ? 'Al ocultarlo se eliminarán sus conexiones con otros nodos.'
+          : 'Al mostrarlo aparecerá sin conexiones ni bloqueo docente.'
+      }
+      action={
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={isVisibilityPending}
+          onClick={toggleVisibility}
+        >
+          {node.isVisible ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+          {node.isVisible ? 'Ocultar' : 'Mostrar'}
+        </Button>
+      }
+    />
+  );
+}
+
+function NodeTeacherBlock() {
+  const { node, requestTeacherBlock } = useNodeEditorContext();
   const TeacherBlockIcon = node.isTeacherBlocked ? LockKeyholeOpen : LockKeyhole;
 
   return (
-    <section aria-labelledby="node-access-heading" className="border-t border-border pt-5 pb-2">
-      <h3 id="node-access-heading" className="font-heading text-base font-semibold">
-        Acceso de estudiantes
-      </h3>
-      <AccessRow
-        Icon={node.isVisible ? Eye : EyeOff}
-        label={node.isVisible ? 'Visible para estudiantes' : 'Oculto para estudiantes'}
-        description={
-          node.isVisible
-            ? 'Al ocultarlo se eliminarán sus conexiones con otros nodos.'
-            : 'Al mostrarlo aparecerá sin conexiones ni bloqueo docente.'
-        }
-        action={
+    <AccessRow
+      Icon={node.isVisible && node.isTeacherBlocked ? LockKeyhole : LockKeyholeOpen}
+      label={
+        !node.isVisible
+          ? 'Sin acceso mientras esté oculto'
+          : node.isTeacherBlocked
+            ? 'Bloqueado por docencia'
+            : 'Sin bloqueo docente'
+      }
+      description={
+        !node.isVisible
+          ? 'Podrás bloquearlo cuando sea visible.'
+          : node.isTeacherBlocked
+            ? 'Los estudiantes no pueden abrirlo, ni tampoco los nodos que dependen de él.'
+            : 'Al bloquearlo, también se bloquearán los nodos que dependen de él.'
+      }
+      action={
+        node.isVisible ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="shrink-0"
-            disabled={isVisibilityPending}
-            onClick={toggleVisibility}
+            onClick={() => requestTeacherBlock(node.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK')}
           >
-            {node.isVisible ? (
-              <EyeOff data-icon="inline-start" />
-            ) : (
-              <Eye data-icon="inline-start" />
-            )}
-            {node.isVisible ? 'Ocultar' : 'Mostrar'}
+            <TeacherBlockIcon data-icon="inline-start" />
+            {node.isTeacherBlocked ? 'Desbloquear' : 'Bloquear nodo'}
           </Button>
-        }
-      />
+        ) : undefined
+      }
+    >
+      {node.isVisible && node.isTeacherBlocked && (
+        <NodeUnlockSchedule
+          key={`${node.id}:${node.teacherUnlockOn ?? ''}`}
+          scheduledDay={node.teacherUnlockOn ?? null}
+        />
+      )}
+    </AccessRow>
+  );
+}
+
+function NodeStatus() {
+  return (
+    <section aria-labelledby="node-access-heading" className="border-t border-border pt-5 pb-2">
+      <h3 id="node-access-heading" className="font-heading text-base font-semibold">
+        Acceso de estudiantes
+      </h3>
+      <NodeVisibility />
       <Separator />
-      <AccessRow
-        Icon={node.isVisible && node.isTeacherBlocked ? LockKeyhole : LockKeyholeOpen}
-        label={
-          !node.isVisible
-            ? 'Sin acceso mientras esté oculto'
-            : node.isTeacherBlocked
-              ? 'Bloqueado por docencia'
-              : 'Sin bloqueo docente'
-        }
-        description={
-          !node.isVisible
-            ? 'Podrás bloquearlo cuando sea visible.'
-            : node.isTeacherBlocked
-              ? 'Los estudiantes no pueden abrirlo, ni tampoco los nodos que dependen de él.'
-              : 'Al bloquearlo, también se bloquearán los nodos que dependen de él.'
-        }
-        action={
-          node.isVisible ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={() => requestTeacherBlock(node.isTeacherBlocked ? 'UNBLOCK' : 'BLOCK')}
-            >
-              <TeacherBlockIcon data-icon="inline-start" />
-              {node.isTeacherBlocked ? 'Desbloquear' : 'Bloquear nodo'}
-            </Button>
-          ) : undefined
-        }
-      >
-        {node.isVisible && node.isTeacherBlocked && (
-          <NodeUnlockSchedule
-            key={`${node.id}:${node.teacherUnlockOn ?? ''}`}
-            scheduledDay={node.teacherUnlockOn ?? null}
-          />
-        )}
-      </AccessRow>
+      <NodeTeacherBlock />
     </section>
   );
 }
