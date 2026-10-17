@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Download, Link2 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, domAnimation, LazyMotion } from 'motion/react';
+import * as m from 'motion/react-m';
 import { RouteSpecimen, type RouteSpecimenNodeId } from '@/features/roadmap';
 import { cn } from 'cn';
 
@@ -346,35 +347,42 @@ export function CourseRouteComparison({ className }: { className?: string }) {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 size-full overflow-visible"
       >
-        <AnimatePresence>
-          {traces.map((trace) => (
-            <motion.g
-              key={trace.key}
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0.25 } }}
-            >
-              <motion.path
-                d={trace.d}
-                fill="none"
-                stroke="var(--primary-bright)"
-                strokeWidth={1.5}
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 0.55, ease: easeOutExpo }}
-              />
-              <circle cx={trace.start[0]} cy={trace.start[1]} r={3} fill="var(--primary-bright)" />
-              <motion.circle
-                cx={trace.end[0]}
-                cy={trace.end[1]}
-                r={3.5}
-                fill="var(--primary-bright)"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.45, duration: 0.3, ease: easeOutExpo }}
-              />
-            </motion.g>
-          ))}
-        </AnimatePresence>
+        <LazyMotion features={domAnimation} strict>
+          <AnimatePresence>
+            {traces.map((trace) => (
+              <m.g
+                key={trace.key}
+                initial={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.25 } }}
+              >
+                <m.path
+                  d={trace.d}
+                  fill="none"
+                  stroke="var(--primary-bright)"
+                  strokeWidth={1.5}
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 0.55, ease: easeOutExpo }}
+                />
+                <circle
+                  cx={trace.start[0]}
+                  cy={trace.start[1]}
+                  r={3}
+                  fill="var(--primary-bright)"
+                />
+                <m.circle
+                  cx={trace.end[0]}
+                  cy={trace.end[1]}
+                  r={3.5}
+                  fill="var(--primary-bright)"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.45, duration: 0.3, ease: easeOutExpo }}
+                />
+              </m.g>
+            ))}
+          </AnimatePresence>
+        </LazyMotion>
       </svg>
     </div>
   );

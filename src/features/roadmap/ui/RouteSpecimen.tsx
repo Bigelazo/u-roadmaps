@@ -12,7 +12,8 @@ import {
   LockKeyhole,
   type LucideIcon,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { domAnimation, LazyMotion } from 'motion/react';
+import * as m from 'motion/react-m';
 import { cn } from 'cn';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 
@@ -250,7 +251,7 @@ function NodeOutline({
           strokeWidth={2}
         />
       ) : null}
-      <motion.rect
+      <m.rect
         x={current ? -11 : -6}
         y={current ? -11 : -6}
         width={width + (current ? 22 : 12)}
@@ -284,7 +285,7 @@ function RouteNode({
       onPointerEnter={onNodeHover ? () => onNodeHover(node.id) : undefined}
       onPointerLeave={onNodeHover ? () => onNodeHover(null) : undefined}
     >
-      <motion.g
+      <m.g
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: easeOutExpo, delay: nodeDepth(node.id) * stagger * 2 }}
@@ -336,7 +337,7 @@ function RouteNode({
             </text>
           </g>
         ) : null}
-      </motion.g>
+      </m.g>
     </g>
   );
 }
@@ -348,104 +349,106 @@ export function RouteSpecimen({
   canvasClassName,
 }: RouteSpecimenInteraction & { className?: string; canvasClassName?: string }) {
   return (
-    <figure aria-label="Ruta de aprendizaje de ejemplo" className={cn('w-full', className)}>
-      <div
-        data-route-canvas
-        className={cn('overflow-hidden rounded-xl bg-card ring-1 ring-white/10', canvasClassName)}
-      >
-        <svg
-          viewBox={`-8 -8 ${viewBox.width + 16} ${viewBox.height + 16}`}
-          className="block h-auto w-full font-sans"
-          aria-hidden="true"
-          focusable="false"
+    <LazyMotion features={domAnimation} strict>
+      <figure aria-label="Ruta de aprendizaje de ejemplo" className={cn('w-full', className)}>
+        <div
+          data-route-canvas
+          className={cn('overflow-hidden rounded-xl bg-card ring-1 ring-white/10', canvasClassName)}
         >
-          <defs>
-            <pattern id="route-grid" width={20} height={20} patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--fog)" strokeWidth={1} />
-            </pattern>
-            <marker
-              id="route-arrow"
-              viewBox="-10 -10 20 20"
-              markerWidth={18}
-              markerHeight={18}
-              markerUnits="strokeWidth"
-              orient="auto-start-reverse"
-            >
-              <polyline
-                points="-5,-4 0,0 -5,4 -5,-4"
-                fill="var(--ink)"
-                stroke="var(--ink)"
-                strokeWidth={1}
-                strokeLinecap="round"
-                strokeLinejoin="round"
+          <svg
+            viewBox={`-8 -8 ${viewBox.width + 16} ${viewBox.height + 16}`}
+            className="block h-auto w-full font-sans"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <defs>
+              <pattern id="route-grid" width={20} height={20} patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="var(--fog)" strokeWidth={1} />
+              </pattern>
+              <marker
+                id="route-arrow"
+                viewBox="-10 -10 20 20"
+                markerWidth={18}
+                markerHeight={18}
+                markerUnits="strokeWidth"
+                orient="auto-start-reverse"
+              >
+                <polyline
+                  points="-5,-4 0,0 -5,4 -5,-4"
+                  fill="var(--ink)"
+                  stroke="var(--ink)"
+                  strokeWidth={1}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </marker>
+              <filter id="route-node-shadow" x="-20%" y="-20%" width="140%" height="160%">
+                <feDropShadow
+                  dx={0}
+                  dy={4}
+                  stdDeviation={5}
+                  floodColor="#12213a"
+                  floodOpacity={0.07}
+                />
+              </filter>
+            </defs>
+            <rect x={-8} y={-8} width="100%" height="100%" fill="url(#route-grid)" />
+            {dependencies.map(([sourceId, targetId]) => {
+              const source = nodeById.get(sourceId)!;
+              const target = nodeById.get(targetId)!;
+              const transition = {
+                duration: 0.5,
+                ease: easeOutExpo,
+                delay: (nodeDepth(sourceId) * 2 + 1) * stagger,
+              };
+              return (
+                <m.path
+                  key={`${sourceId}-${targetId}`}
+                  d={stepPath(source, target)}
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={{ pathLength: 1, opacity: 1 }}
+                  transition={transition}
+                  fill="none"
+                  stroke="var(--ink)"
+                  strokeWidth={1.5}
+                  markerEnd="url(#route-arrow)"
+                />
+              );
+            })}
+            {nodes.map((node) => (
+              <RouteNode
+                key={node.id}
+                node={node}
+                highlighted={node.id === highlightedNodeId}
+                onNodeHover={onNodeHover}
               />
-            </marker>
-            <filter id="route-node-shadow" x="-20%" y="-20%" width="140%" height="160%">
-              <feDropShadow
-                dx={0}
-                dy={4}
-                stdDeviation={5}
-                floodColor="#12213a"
-                floodOpacity={0.07}
-              />
-            </filter>
-          </defs>
-          <rect x={-8} y={-8} width="100%" height="100%" fill="url(#route-grid)" />
-          {dependencies.map(([sourceId, targetId]) => {
-            const source = nodeById.get(sourceId)!;
-            const target = nodeById.get(targetId)!;
-            const transition = {
-              duration: 0.5,
-              ease: easeOutExpo,
-              delay: (nodeDepth(sourceId) * 2 + 1) * stagger,
-            };
-            return (
-              <motion.path
-                key={`${sourceId}-${targetId}`}
-                d={stepPath(source, target)}
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: 1 }}
-                transition={transition}
-                fill="none"
-                stroke="var(--ink)"
-                strokeWidth={1.5}
-                markerEnd="url(#route-arrow)"
-              />
-            );
-          })}
-          {nodes.map((node) => (
-            <RouteNode
-              key={node.id}
-              node={node}
-              highlighted={node.id === highlightedNodeId}
-              onNodeHover={onNodeHover}
+            ))}
+          </svg>
+        </div>
+        <figcaption className="mt-4 flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+            <span className="font-semibold text-primary-foreground">
+              Curso de ejemplo · Programación · {completedCount} de {nodes.length} nodos completados
+            </span>
+            {nextNode ? (
+              <span className="text-primary-soft">Siguiente paso: {nextNode.title}</span>
+            ) : null}
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
+            <div
+              className="h-full rounded-full bg-progress"
+              style={{ width: `${(completedCount / nodes.length) * 100}%` }}
             />
-          ))}
-        </svg>
-      </div>
-      <figcaption className="mt-4 flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-          <span className="font-semibold text-primary-foreground">
-            Curso de ejemplo · Programación · {completedCount} de {nodes.length} nodos completados
-          </span>
-          {nextNode ? (
-            <span className="text-primary-soft">Siguiente paso: {nextNode.title}</span>
-          ) : null}
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-white/15" aria-hidden="true">
-          <div
-            className="h-full rounded-full bg-progress"
-            style={{ width: `${(completedCount / nodes.length) * 100}%` }}
-          />
-        </div>
-        <ol aria-label="Nodos de la ruta de ejemplo" className="sr-only">
-          {nodes.map((node) => (
-            <li key={node.id}>
-              {node.title}: {node.description}
-            </li>
-          ))}
-        </ol>
-      </figcaption>
-    </figure>
+          </div>
+          <ol aria-label="Nodos de la ruta de ejemplo" className="sr-only">
+            {nodes.map((node) => (
+              <li key={node.id}>
+                {node.title}: {node.description}
+              </li>
+            ))}
+          </ol>
+        </figcaption>
+      </figure>
+    </LazyMotion>
   );
 }
