@@ -1,1 +1,1 @@
-export { readParticipantAccess } from './application/access-snapshot';
+export { readParticipantAccess } from './application/participant-access';

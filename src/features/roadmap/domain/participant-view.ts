@@ -13,6 +13,14 @@ import {
 export type Participant =
   { role: 'STUDENT'; completedNodeIds: ReadonlySet<string> } | { role: 'TEACHER' };
 
+/** The participant a Participation role stands for; only students carry their Completions. */
+export function toParticipant(
+  role: Participant['role'],
+  completedNodeIds: ReadonlySet<string>,
+): Participant {
+  return role === 'TEACHER' ? { role } : { role, completedNodeIds };
+}
+
 type ParticipantNode = { id: string; isVisible: boolean; isTeacherBlocked: boolean };
 
 function teachingStaffAccess({ isTeacherBlocked }: ParticipantNode): StudentNodeAccess {
