@@ -11,6 +11,7 @@ import type {
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
 import type { TeacherBlockOperation } from '@/features/roadmap/types';
+import { unconfirmedWrites } from '@/features/roadmap/canvas/commands/unconfirmed-writes';
 
 type Operation<T> = (
   persistence: RoadmapCanvasSessionPersistence,
@@ -177,16 +178,13 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         : 'Dependencias eliminadas exitosamente.',
   },
   'apply-automatic-layout': {
-    run: async ({ mutate }, { positions }) => {
-      const moved = await Promise.all(
-        positions.map(({ nodeId, position }) =>
-          mutate(
-            (persistence, input) => persistence.moveNode(input, nodeId, position),
-            'No se pudo guardar la posición.',
-          ),
-        ),
+    /** The confirmed layout is written as one Node move. */
+    run: ({ mutate }, { positions }) => {
+      const { write, fallback } = unconfirmedWrites['move-nodes'];
+      return mutate(
+        (persistence, input) => write(persistence, input, { kind: 'move-nodes', positions }),
+        fallback,
       );
-      return moved.every(Boolean);
     },
   },
   'delete-node-type': {

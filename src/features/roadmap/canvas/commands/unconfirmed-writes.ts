@@ -42,10 +42,13 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
     success: () => 'Cambios guardados exitosamente.',
   },
   'move-nodes': {
+    /** Each Node moves on its own, so a failed move keeps the others; it fails with the first. */
     write: async (persistence, input, { positions }) => {
-      await Promise.all(
+      const moves = await Promise.allSettled(
         positions.map(({ nodeId, position }) => persistence.moveNode(input, nodeId, position)),
       );
+      const failed = moves.find((move) => move.status === 'rejected');
+      if (failed) throw failed.reason;
     },
     fallback: 'No se pudo guardar la posición.',
   },

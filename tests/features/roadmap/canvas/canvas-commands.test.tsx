@@ -679,6 +679,38 @@ describe('canvas commands', () => {
     expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout);
   });
 
+  test('an automatic layout with a failed move keeps the moved Nodes and stays open to retry', async () => {
+    const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+    const canvas = await openCanvas({
+      ...adapter,
+      async moveNode(input, nodeId, position) {
+        if (nodeId === 'derivatives') throw new Error();
+        return adapter.moveNode(input, nodeId, position);
+      },
+    });
+
+    await act(() =>
+      canvas.commands().request({
+        kind: 'apply-automatic-layout',
+        positions: [
+          { nodeId: 'limits', position: { x: 0, y: 200 } },
+          { nodeId: 'derivatives', position: { x: 300, y: 200 } },
+        ],
+        direction: 'LR',
+      }),
+    );
+    await canvas.confirm('auto-layout');
+
+    expect(canvas.commands().pending).toMatchObject({
+      kind: 'apply-automatic-layout',
+      phase: 'awaiting',
+    });
+    expect(await nodeOf(adapter, 'limits')).toMatchObject({ positionX: 0, positionY: 200 });
+    expect(await nodeOf(adapter, 'derivatives')).toMatchObject({ positionX: 0, positionY: 0 });
+    expect(canvas.session().error).toBe('No se pudo guardar la posición.');
+    expect(canvas.onCommandApplied).not.toHaveBeenCalled();
+  });
+
   test('resetting the Canvas preview asks first, then clears simulated Completions and reloads the preview', async () => {
     const canvas = await openCanvas();
     await act(async () => {
@@ -1045,6 +1077,36 @@ describe('canvas commands', () => {
         positionX: 40,
         positionY: 80,
       });
+    });
+
+    test('moves each Node on its own: a failed move keeps the others and shows its failure', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+      const canvas = await openCanvas({
+        ...adapter,
+        async moveNode(input, nodeId, position) {
+          if (nodeId === 'derivatives') throw new Error();
+          // The successful move settles after the failure.
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return adapter.moveNode(input, nodeId, position);
+        },
+      });
+
+      let applied: boolean | undefined;
+      await act(async () => {
+        applied = await canvas.commands().perform({
+          kind: 'move-nodes',
+          positions: [
+            { nodeId: 'limits', position: { x: 40, y: 80 } },
+            { nodeId: 'derivatives', position: { x: 300, y: 80 } },
+          ],
+        });
+      });
+
+      expect(applied).toBe(false);
+      expect(await nodeOf(adapter, 'limits')).toMatchObject({ positionX: 40, positionY: 80 });
+      expect(await nodeOf(adapter, 'derivatives')).toMatchObject({ positionX: 0, positionY: 0 });
+      expect(canvas.session().error).toBe('No se pudo guardar la posición.');
+      expect(canvas.onCommandApplied).not.toHaveBeenCalled();
     });
 
     test('creating a Node tells the view and the Practice roadmap which Node it created', async () => {
