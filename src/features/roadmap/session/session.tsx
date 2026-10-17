@@ -14,13 +14,10 @@ import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-previ
 import { useCanvasCommands } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type { AnyRoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
-import type { Point } from '@/features/roadmap/graph/geometry';
-import type { NodeEditorHandle, NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
+import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type {
-  NewRoadmapNode,
   RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
-  RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
 import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 import {
@@ -37,62 +34,6 @@ const persistenceContext = createContext<RoadmapCanvasSessionPersistence>(
 function messageFor(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback;
 }
-
-/** The persistence operations the session binds to its input as plain mutations. */
-type BoundOperation = Exclude<
-  keyof RoadmapCanvasSessionPersistence,
-  'load' | 'complete' | 'loadSimulation' | 'addNode' | 'completeSimulatedNode' | 'resetSimulation'
->;
-type OperationArgs<K extends BoundOperation> =
-  Parameters<RoadmapCanvasSessionPersistence[K]> extends [RoadmapCanvasSessionInput, ...infer Args]
-    ? Args
-    : never;
-type OperationResult<K extends BoundOperation> = Awaited<
-  ReturnType<RoadmapCanvasSessionPersistence[K]>
->;
-
-type InjectedSessionResult = {
-  roadmap: AnyRoadmapDto | null;
-  simulationRoadmap: StudentRoadmapDto | null;
-  error: string | null;
-  dismissError: () => void;
-  retryRefresh: () => void;
-  accessLost: boolean;
-  isClosed: boolean;
-  loadSimulation: () => Promise<boolean>;
-  persistence: RoadmapCanvasSessionPersistence;
-  /** The session input without the fields only the view reads, so its identity stays stable. */
-  stableInput: RoadmapCanvasSessionInput;
-  /** Runs a write, reloads the Roadmap and reports a failure as the session error. */
-  mutate: <T>(
-    operation: () => Promise<T>,
-    fallback: string,
-    reload?: boolean,
-  ) => Promise<{ success: boolean; result: T | undefined }>;
-  /** Runs a read whose failure is reported as the session error; resolves `null` then. */
-  preview: <T>(operation: () => Promise<T>, fallback: string) => Promise<T | null>;
-  addNode: (
-    node: NewRoadmapNode,
-    position: Point,
-    onCreated?: (nodeId: string) => void,
-  ) => Promise<boolean>;
-  updateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
-  moveNode: (nodeId: string, position: Point) => Promise<boolean>;
-  scheduleTeacherUnlock: (nodeId: string, unlockOn: string | null) => Promise<boolean>;
-  addResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
-  uploadResource: (nodeId: string, file: File) => Promise<boolean>;
-  updateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
-  deleteResource: (resourceId: string) => Promise<boolean>;
-  addNodeType: (nodeType: RoadmapNodeTypeInput) => Promise<boolean>;
-  updateNodeType: (nodeTypeId: string, nodeType: RoadmapNodeTypeInput) => Promise<boolean>;
-  completeNode: (nodeId: string) => Promise<boolean>;
-  completeSimulatedNode: (nodeId: string) => Promise<boolean>;
-};
-
-type RoadmapCanvasSessionWorkflows = {
-  canvasPreviewWorkflow: ReturnType<typeof useCanvasPreviewWorkflow>;
-  canvasCommands: ReturnType<typeof useCanvasCommands>;
-};
 
 type CanvasPreviewView = {
   selectedNodeId: string | null;
@@ -131,7 +72,7 @@ export function RoadmapCanvasSessionPersistenceProvider({
 function useInjectedSession(
   input: RoadmapCanvasSessionInput,
   persistence: RoadmapCanvasSessionPersistence,
-): InjectedSessionResult {
+) {
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
   const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
@@ -307,6 +248,7 @@ function useInjectedSession(
     [refresh],
   );
 
+  /** Runs a write, reloads the Roadmap and reports a failure as the session error. */
   const mutate = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string, reload = true) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
@@ -324,6 +266,7 @@ function useInjectedSession(
     [refresh, reportFailure, stableInput],
   );
 
+  /** Runs a read whose failure is reported as the session error; resolves `null` then. */
   const preview = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
@@ -361,70 +304,6 @@ function useInjectedSession(
     }
   }, [persistence, stableInput]);
 
-  const addNode = useCallback(
-    async (node: NewRoadmapNode, position: Point, onCreated?: (nodeId: string) => void) => {
-      const result = await mutate(
-        () => persistence.addNode(stableInput, node, position),
-        'No se pudo crear el nodo.',
-      );
-      if (result.success && typeof result.result === 'string') onCreated?.(result.result);
-      return result.success;
-    },
-    [mutate, persistence, stableInput],
-  );
-
-  const operations = useMemo(() => {
-    const run = <K extends BoundOperation>(name: K, args: OperationArgs<K>) =>
-      (
-        persistence[name] as (
-          input: RoadmapCanvasSessionInput,
-          ...args: unknown[]
-        ) => Promise<OperationResult<K>>
-      ).call(persistence, stableInput, ...args);
-    const bindMutation =
-      <K extends BoundOperation>(name: K, fallback: string) =>
-      async (...args: OperationArgs<K>) =>
-        (await mutate(() => run(name, args), fallback)).success;
-    return {
-      updateNode: bindMutation('updateNode', 'No se pudo guardar el nodo.'),
-      moveNode: bindMutation('moveNode', 'No se pudo guardar la posición.'),
-      scheduleTeacherUnlock: bindMutation(
-        'scheduleTeacherUnlock',
-        'No se pudo programar el desbloqueo.',
-      ),
-      addResource: bindMutation('addResource', 'No se pudo agregar el recurso.'),
-      uploadResource: bindMutation('uploadResource', 'No se pudo subir el archivo.'),
-      updateResource: bindMutation('updateResource', 'No se pudo guardar el recurso.'),
-      deleteResource: bindMutation('deleteResource', 'No se pudo eliminar el recurso.'),
-      addNodeType: bindMutation('addNodeType', 'No se pudo crear el tipo de nodo.'),
-      updateNodeType: bindMutation('updateNodeType', 'No se pudo guardar el tipo de nodo.'),
-    };
-  }, [mutate, persistence, stableInput]);
-
-  const completeNode = useCallback(
-    async (nodeId: string) =>
-      (
-        await mutate(
-          () => persistence.complete(stableInput, nodeId),
-          'No se pudo completar el nodo.',
-        )
-      ).success,
-    [mutate, persistence, stableInput],
-  );
-
-  const completeSimulatedNode = useCallback(
-    async (nodeId: string) => {
-      const result = await mutate(
-        () => persistence.completeSimulatedNode(stableInput, nodeId),
-        'No se pudo completar el nodo en la previsualización.',
-        false,
-      );
-      if (!result.success) return false;
-      return loadSimulation();
-    },
-    [loadSimulation, mutate, persistence, stableInput],
-  );
-
   return {
     roadmap: roadmapKey === key ? roadmap : null,
     simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
@@ -438,41 +317,51 @@ function useInjectedSession(
       (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
     loadSimulation,
     persistence,
+    /** The session input without the fields only the view reads, so its identity stays stable. */
     stableInput,
     mutate,
     preview,
-    addNode,
-    ...operations,
-    completeNode,
-    completeSimulatedNode,
   };
 }
 
 export function useRoadmapCanvasSession(
   input: RoadmapCanvasSessionInput,
   options: RoadmapCanvasSessionOptions = {},
-): InjectedSessionResult & RoadmapCanvasSessionWorkflows {
+) {
   const persistence = useContext(persistenceContext);
   const active = useInjectedSession(input, persistence);
   const guardDraft = options.guardDraft ?? allowAnyDraft;
+  const report = input.practice?.onAction;
+  const canvasCommands = useCanvasCommands({
+    session: active,
+    guardDraft,
+    onCommandApplied: options.onCommandApplied ?? noop,
+    report,
+  });
+  const { perform } = canvasCommands;
+  const completeSimulatedNode = useCallback(
+    (nodeId: string) => perform({ kind: 'complete-simulated-node', nodeId }),
+    [perform],
+  );
+  const prepareCanvasPreview = options.canvasPreview?.onEnter ?? noop;
+  // Reported once per entry, although the Canvas preview reloads on every Roadmap change.
+  const enterCanvasPreview = useCallback(() => {
+    prepareCanvasPreview();
+    report?.({ type: 'enterCanvasPreview' });
+  }, [prepareCanvasPreview, report]);
   const canvasPreviewWorkflow = useCanvasPreviewWorkflow({
     currentView: options.canvasPreview?.currentView ?? initialCanvasPreviewView,
     isHistorical: active.isClosed,
     guardDraft: () => guardDraft({ kind: 'enter-canvas-preview' }),
     loadSimulation: active.loadSimulation,
-    completeSimulatedNode: active.completeSimulatedNode,
-    onEnter: options.canvasPreview?.onEnter ?? noop,
+    completeSimulatedNode,
+    onEnter: enterCanvasPreview,
     onExit: options.canvasPreview?.onExit ?? noop,
   });
   const { roadmap: canonicalRoadmap, loadSimulation: reloadPreview } = active;
   useEffect(() => {
     if (canvasPreviewWorkflow.isActive && canonicalRoadmap) void reloadPreview();
   }, [canonicalRoadmap, reloadPreview, canvasPreviewWorkflow.isActive]);
-  const canvasCommands = useCanvasCommands({
-    session: active,
-    guardDraft,
-    onCommandApplied: options.onCommandApplied ?? noop,
-  });
 
   return {
     ...active,

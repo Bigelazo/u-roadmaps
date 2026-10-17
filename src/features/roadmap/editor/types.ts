@@ -28,12 +28,10 @@ export type ResourceSession =
   | { kind: 'adding-link'; value: ResourceInput }
   | { kind: 'editing-existing'; resourceId: string; value: ResourceInput };
 
-export type NodeEditorEffect =
-  | { kind: 'update-node'; nodeId: string; value: NodeUpdate }
-  | { kind: 'add-resource'; nodeId: string; resource: ResourceInput }
-  | { kind: 'upload-resource'; nodeId: string; file: File }
-  | { kind: 'update-resource'; resourceId: string; resource: ResourceInput }
-  | { kind: 'delete-resource'; resourceId: string };
+/** The canvas writes the Node editor applies and waits for. */
+export type NodeEditorEffect = CanvasCommandOf<
+  'update-node' | 'add-resource' | 'upload-resource' | 'update-resource' | 'delete-resource'
+>;
 
 export type NodeEditorPerformResult = { status: 'committed' } | { status: 'rejected' };
 

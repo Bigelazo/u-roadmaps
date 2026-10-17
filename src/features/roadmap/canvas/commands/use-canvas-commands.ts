@@ -2,17 +2,25 @@
 
 import { useMemo, useRef, useState } from 'react';
 import type {
+  CanvasCommand,
   CanvasCommandOf,
   ConfirmedActionKind,
   PendingConfirmation,
+  UnconfirmedCommand,
+  UnconfirmedCommandKind,
 } from '@/features/roadmap/canvas/commands/commands';
 import {
   confirmedActions,
   type ConfirmedAction,
   type ConfirmedActionContext,
 } from '@/features/roadmap/canvas/commands/confirmed-actions';
+import {
+  unconfirmedWrites,
+  type UnconfirmedWrite,
+} from '@/features/roadmap/canvas/commands/unconfirmed-writes';
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type {
+  PracticeCanvasAction,
   RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
@@ -27,7 +35,7 @@ export type CanvasCommandSession = {
     operation: () => Promise<T>,
     fallback: string,
     reload?: boolean,
-  ) => Promise<{ success: boolean }>;
+  ) => Promise<{ success: boolean; result: T | undefined }>;
   loadSimulation: () => Promise<boolean>;
 };
 
@@ -35,10 +43,13 @@ type CanvasCommandsOptions = {
   session: CanvasCommandSession;
   guardDraft: NodeEditorHandle['guardDraft'];
   /**
-   * Tells the view a command took effect, so it can follow up on its own state: close the
-   * editor after a Node deletion, or keep the direction of an automatic layout.
+   * Tells the view a command took effect, so it can follow up on its own state: select the
+   * Node it created, close the editor after a Node deletion, or keep the direction of an
+   * automatic layout.
    */
-  onCommandApplied: (command: CanvasCommandOf<ConfirmedActionKind>) => void;
+  onCommandApplied: (command: CanvasCommand, createdNodeId?: string) => void;
+  /** Tells the Practice roadmap, when there is one, which action took effect. */
+  report?: (action: PracticeCanvasAction) => void;
 };
 
 type AnyConfirmedAction = ConfirmedAction<ConfirmedActionKind>;
@@ -46,6 +57,14 @@ type AnyConfirmedAction = ConfirmedAction<ConfirmedActionKind>;
 /** The declarations are typed per kind; the engine runs any of them on its own pending data. */
 function declarationOf(kind: ConfirmedActionKind) {
   return confirmedActions[kind] as unknown as AnyConfirmedAction;
+}
+
+function isConfirmed(command: CanvasCommand): command is CanvasCommandOf<ConfirmedActionKind> {
+  return Object.hasOwn(confirmedActions, command.kind);
+}
+
+function unconfirmedWriteOf(kind: UnconfirmedCommandKind) {
+  return unconfirmedWrites[kind] as unknown as UnconfirmedWrite<UnconfirmedCommandKind>;
 }
 
 /** Change impacts come from deterministic previews, so equal content serializes equally. */
@@ -73,14 +92,17 @@ function needsConfirmation(kind: ConfirmedActionKind, impact: unknown) {
 }
 
 /**
- * Runs Confirmed actions with a single pending slot: at most one is previewing, awaiting a
- * choice or confirming at a time. On confirmation the Change impact is previewed again; a
- * changed impact is shown instead of taking effect, and a failed write shows the latest one.
+ * Runs every canvas write. Confirmed actions share a single pending slot: at most one is
+ * previewing, awaiting a choice or confirming at a time. On confirmation the Change impact
+ * is previewed again; a changed impact is shown instead of taking effect, and a failed write
+ * shows the latest one. Unconfirmed writes apply at once. Each write that took effect shows
+ * its toast and is reported to the Practice roadmap; a failure is the session error.
  */
 export function useCanvasCommands({
   session,
   guardDraft,
   onCommandApplied,
+  report,
 }: CanvasCommandsOptions) {
   const [pending, setPendingState] = useState<PendingConfirmation | null>(null);
   const pendingRef = useRef<PendingConfirmation | null>(null);
@@ -91,16 +113,52 @@ export function useCanvasCommands({
       pendingRef.current = next;
       setPendingState(next);
     };
+    /** Writes, then reloads the Roadmap, or only the Canvas preview for a simulated write. */
+    async function write<T>(
+      operation: () => Promise<T>,
+      fallback: string,
+      reloads: 'roadmap' | 'canvas-preview' = 'roadmap',
+    ) {
+      const { success, result } = await mutate(operation, fallback, reloads === 'roadmap');
+      const reloaded = success && (reloads === 'roadmap' || (await loadSimulation()));
+      return { success: reloaded, result };
+    }
     const context: ConfirmedActionContext = {
       preview: (operation, fallback) =>
         preview(() => operation(persistence, stableInput), fallback),
       mutate: async (operation, fallback) =>
-        (await mutate(() => operation(persistence, stableInput), fallback)).success,
+        (await write(() => operation(persistence, stableInput), fallback)).success,
       mutateCanvasPreview: async (operation, fallback) =>
-        (await mutate(() => operation(persistence, stableInput), fallback, false)).success &&
-        loadSimulation(),
+        (await write(() => operation(persistence, stableInput), fallback, 'canvas-preview'))
+          .success,
     };
     const isSlotFree = () => pendingRef.current === null;
+
+    /** The view and the Practice roadmap follow up on a command that took effect. */
+    function tookEffect(
+      command: CanvasCommand,
+      action: PracticeCanvasAction | null | undefined,
+      createdNodeId?: string,
+    ) {
+      if (action) report?.(action);
+      if (createdNodeId) onCommandApplied(command, createdNodeId);
+      else onCommandApplied(command);
+    }
+
+    /** Applies an unconfirmed write; resolves whether it took effect. */
+    async function perform(command: UnconfirmedCommand) {
+      const declaration = unconfirmedWriteOf(command.kind);
+      const { success, result } = await write(
+        () => declaration.write(persistence, stableInput, command),
+        declaration.fallback,
+        declaration.reloads,
+      );
+      if (!success) return false;
+      const message = declaration.success?.(command);
+      if (message) notify.success(message);
+      tookEffect(command, declaration.report?.(command, result), result || undefined);
+      return true;
+    }
 
     /**
      * Runs the request. A partial success opens what remains; a failure shows the latest
@@ -116,7 +174,7 @@ export function useCanvasCommands({
         if (message) notify.success(message);
         if (remaining) return open({ kind: opened.kind, request: remaining });
         setPending(null);
-        onCommandApplied(opened.request);
+        tookEffect(opened.request, action.report?.(opened.request, choice));
         return;
       }
       const latest = (action.preview && (await action.preview(context, opened.request))) ?? impact;
@@ -146,7 +204,12 @@ export function useCanvasCommands({
       else setPending(null);
     }
 
-    async function request(command: CanvasCommandOf<ConfirmedActionKind>) {
+    /** Opens a Confirmed action, or applies an unconfirmed write at once. */
+    async function request(command: CanvasCommand) {
+      if (!isConfirmed(command)) {
+        await perform(command);
+        return;
+      }
       if (!isSlotFree()) return;
       // The draft question finishes before the slot is claimed, so it never locks the canvas.
       if (command.kind === 'delete-node') {
@@ -172,8 +235,17 @@ export function useCanvasCommands({
       if (pendingRef.current?.phase === 'awaiting') setPending(null);
     };
 
-    return { request, confirm, cancel };
-  }, [guardDraft, loadSimulation, mutate, onCommandApplied, persistence, preview, stableInput]);
+    return { request, perform, confirm, cancel };
+  }, [
+    guardDraft,
+    loadSimulation,
+    mutate,
+    onCommandApplied,
+    persistence,
+    preview,
+    report,
+    stableInput,
+  ]);
 
   return { pending, ...commands };
 }

@@ -17,7 +17,6 @@ import {
 } from '@/features/roadmap/practice/practice-roadmap';
 import { studentTutorialSteps } from '@/features/roadmap/practice/student-tutorial';
 import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
-import { reportingPracticeActions } from '@/features/roadmap/practice/practice-actions';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 import { RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
 import { createTutorialActions } from '@/shared/client/tutorial/tutorial-support';
@@ -44,14 +43,11 @@ export function PracticeRoadmapCanvas({
     experience === 'teaching' ? teachingTutorialSteps() : [],
   );
   const [persistence] = useState(() =>
-    reportingPracticeActions(
-      createInMemoryRoadmapSessionPersistence(
-        practiceRoadmap(term, today),
-        experience === 'student'
-          ? { studentProgress: practiceStudentProgress }
-          : { createdNodePosition: practiceCreatedNodePosition },
-      ),
-      actions.report,
+    createInMemoryRoadmapSessionPersistence(
+      practiceRoadmap(term, today),
+      experience === 'student'
+        ? { studentProgress: practiceStudentProgress }
+        : { createdNodePosition: practiceCreatedNodePosition },
     ),
   );
   return (

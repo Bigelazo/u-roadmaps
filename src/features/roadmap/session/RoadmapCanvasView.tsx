@@ -27,6 +27,7 @@ import type {
   NodeEditorGuardReason,
   NodeEditorIntent,
   NodeEditorPerformResult,
+  NodeInput,
 } from '@/features/roadmap/editor/types';
 import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
@@ -39,11 +40,7 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
-import type {
-  CanvasCommand,
-  CanvasCommandOf,
-  ConfirmedActionKind,
-} from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type {
   RoadmapDto,
@@ -103,13 +100,6 @@ function RoadmapCanvasLoading({ isSimulation = false }: { isSimulation?: boolean
       </Empty>
     </section>
   );
-}
-
-/** Shows `message` when the session mutation succeeds. */
-async function withSuccess(mutation: Promise<boolean>, message: string) {
-  const succeeded = await mutation;
-  if (succeeded) notify.success(message);
-  return succeeded;
 }
 
 /**
@@ -176,8 +166,10 @@ function useRoadmapCanvasController({ input }: Props) {
   } | null>(null);
   const automaticLayoutTokenRef = useRef(0);
   const followAppliedCommand = useCallback(
-    (command: CanvasCommandOf<ConfirmedActionKind>) => {
-      if (command.kind === 'delete-node') {
+    (command: CanvasCommand, createdNodeId?: string) => {
+      if (command.kind === 'add-node' && createdNodeId) {
+        dispatchCanvas({ type: 'selectCreatedNode', nodeId: createdNodeId });
+      } else if (command.kind === 'delete-node') {
         dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
         requestNodeFocusReturn();
       } else if (command.kind === 'apply-automatic-layout') {
@@ -217,18 +209,7 @@ function useRoadmapCanvasController({ input }: Props) {
     dismissError,
     retryRefresh,
     accessLost,
-    addNode,
-    updateNode,
-    moveNode,
-    scheduleTeacherUnlock,
     canvasCommands,
-    addResource,
-    uploadResource,
-    updateResource,
-    deleteResource,
-    addNodeType,
-    updateNodeType,
-    completeNode,
     simulationRoadmap,
     canvasPreviewWorkflow,
     isClosed,
@@ -243,31 +224,12 @@ function useRoadmapCanvasController({ input }: Props) {
   });
   useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
 
+  const { request, perform } = canvasCommands;
   const performEditorEffect = useCallback(
-    async (effect: NodeEditorEffect): Promise<NodeEditorPerformResult> => {
-      const [mutation, message] = ((): [Promise<boolean>, string] => {
-        switch (effect.kind) {
-          case 'update-node':
-            return [updateNode(effect.nodeId, effect.value), 'Cambios guardados exitosamente.'];
-          case 'add-resource':
-            return [addResource(effect.nodeId, effect.resource), 'Enlace guardado exitosamente.'];
-          case 'upload-resource':
-            return [uploadResource(effect.nodeId, effect.file), 'Recurso guardado exitosamente.'];
-          case 'update-resource':
-            return [
-              updateResource(effect.resourceId, effect.resource),
-              effect.resource.type === 'LINK'
-                ? 'Enlace guardado exitosamente.'
-                : 'Recurso guardado exitosamente.',
-            ];
-          case 'delete-resource':
-            return [deleteResource(effect.resourceId), 'Recurso eliminado exitosamente.'];
-        }
-      })();
-      const succeeded = await withSuccess(mutation, message);
-      return { status: succeeded ? 'committed' : 'rejected' };
-    },
-    [addResource, deleteResource, updateNode, updateResource, uploadResource],
+    async (effect: NodeEditorEffect): Promise<NodeEditorPerformResult> => ({
+      status: (await perform(effect)) ? 'committed' : 'rejected',
+    }),
+    [perform],
   );
 
   const canvasMode = deriveCanvasMode({
@@ -415,35 +377,9 @@ function useRoadmapCanvasController({ input }: Props) {
     requestNodeFocusReturn,
     selectedNodeId,
   ]);
-  const { request: requestConfirmedAction } = canvasCommands;
   const runCanvasCommand = useCallback(
-    (command: CanvasCommand) => {
-      switch (command.kind) {
-        case 'hide-node':
-        case 'show-node':
-        case 'delete-node':
-        case 'change-teacher-block':
-        case 'create-dependency':
-        case 'delete-dependencies':
-        case 'apply-automatic-layout':
-        case 'delete-node-type':
-        case 'reset-canvas-preview':
-          void requestConfirmedAction(command);
-          return;
-        case 'schedule-teacher-unlock':
-          void withSuccess(
-            scheduleTeacherUnlock(command.nodeId, command.unlockOn),
-            command.unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
-          );
-          return;
-        case 'move-nodes':
-          void Promise.all(
-            command.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
-          );
-          return;
-      }
-    },
-    [moveNode, scheduleTeacherUnlock, requestConfirmedAction],
+    (command: CanvasCommand) => void request(command),
+    [request],
   );
   const handleNodeEditorIntent = useCallback(
     (intent: NodeEditorIntent) => {
@@ -510,11 +446,7 @@ function useRoadmapCanvasController({ input }: Props) {
     error,
     retryRefresh,
     accessLost,
-    addNode,
     canvasCommands,
-    addNodeType,
-    updateNodeType,
-    completeNode,
     canvasPreviewWorkflow,
     confirmedAutomaticLayout,
     runCanvasCommand,
@@ -551,14 +483,13 @@ function showsNodeChangeMarks(input: RoadmapCanvasSessionInput) {
 export function RoadmapCanvasView({ input }: Props) {
   const model = useRoadmapCanvasController({ input });
   const {
-    dispatchCanvas,
     canvasFocusRef,
     selectedNodeId,
     roadmap,
     error,
     retryRefresh,
     accessLost,
-    addNode,
+    canvasCommands,
     displayedRoadmap,
     graphProjection,
   } = model;
@@ -588,14 +519,12 @@ export function RoadmapCanvasView({ input }: Props) {
   }
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
   const addNodeAtOpenPosition = (
-    node: Parameters<typeof addNode>[0],
+    node: NodeInput,
     findOpenPosition: (title: string) => { x: number; y: number } | null,
   ) => {
     const position = findOpenPosition(node.title);
     if (!position) return Promise.resolve(false);
-    return addNode(node, position, (nodeId) =>
-      dispatchCanvas({ type: 'selectCreatedNode', nodeId }),
-    );
+    return canvasCommands.perform({ kind: 'add-node', node, position });
   };
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
@@ -775,7 +704,7 @@ function RoadmapStudentPanel({
     closeSelectedNode,
     canvasPreviewWorkflow,
     dispatchCanvas,
-    completeNode,
+    canvasCommands,
     isHistoricalRoadmap,
     editorPanel,
     studentPanel,
@@ -801,11 +730,7 @@ function RoadmapStudentPanel({
           onComplete={(node) => {
             if (canvasPreviewWorkflow.completeNode(node.id)) return;
             if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
-            else {
-              void completeNode(node.id).then((succeeded) => {
-                if (succeeded) notify.success('Nodo completado.');
-              });
-            }
+            else void canvasCommands.perform({ kind: 'complete-node', nodeId: node.id });
           }}
           isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
           isTeacherPreview={Boolean(teacherPreviewNode)}
@@ -842,7 +767,7 @@ function RoadmapCanvasGraph({
   model: ReturnType<typeof useRoadmapCanvasController>;
   input: Props['input'];
   addNodeAtOpenPosition: (
-    node: Parameters<ReturnType<typeof useRoadmapCanvasController>['addNode']>[0],
+    node: NodeInput,
     findOpenPosition: (title: string) => { x: number; y: number } | null,
   ) => Promise<boolean>;
   roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
@@ -859,8 +784,7 @@ function RoadmapCanvasGraph({
     dismissSelectionNotice,
     selectedNodeId,
     guardEditorDraft,
-    addNodeType,
-    updateNodeType,
+    canvasCommands,
     canvasPreviewWorkflow,
     confirmedAutomaticLayout,
     runCanvasCommand,
@@ -956,8 +880,12 @@ function RoadmapCanvasGraph({
               <NodeCreator
                 nodeTypes={roadmap.nodeTypes}
                 onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
-                onCreateNodeType={addNodeType}
-                onUpdateNodeType={updateNodeType}
+                onCreateNodeType={(nodeType) =>
+                  canvasCommands.perform({ kind: 'add-node-type', nodeType })
+                }
+                onUpdateNodeType={(nodeTypeId, nodeType) =>
+                  canvasCommands.perform({ kind: 'update-node-type', nodeTypeId, nodeType })
+                }
                 onRequestDeleteNodeType={(nodeType) =>
                   runCanvasCommand({ kind: 'delete-node-type', nodeTypeId: nodeType.id })
                 }

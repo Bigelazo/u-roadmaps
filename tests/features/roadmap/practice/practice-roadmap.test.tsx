@@ -1,8 +1,13 @@
+import type { ReactNode } from 'react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { expect, it } from 'vitest';
 import { practiceNodeIds, practiceRoadmap } from '@/features/roadmap/practice/practice-roadmap';
-import { reportingPracticeActions } from '@/features/roadmap/practice/practice-actions';
 import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
+import {
+  RoadmapCanvasSessionPersistenceProvider,
+  useRoadmapCanvasSession,
+} from '@/features/roadmap/session/session';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 
 it('gives "Retroalimentación del control" the Contenido Node type', () => {
@@ -26,11 +31,8 @@ it('explains "Gestionar tipos de nodo" in its own step right after "Crea un nodo
 it('advances "Oculta un nodo" when the Practice roadmap hides the Node, not when it shows it', async () => {
   const hideStep = teachingTutorialSteps().find((step) => step.title === 'Oculta un nodo')!;
   const reported: PracticeCanvasAction[] = [];
-  const persistence = reportingPracticeActions(
-    createInMemoryRoadmapSessionPersistence(
-      practiceRoadmap({ year: 2026, semester: 2 }, '2026-10-09'),
-    ),
-    (action) => reported.push(action),
+  const persistence = createInMemoryRoadmapSessionPersistence(
+    practiceRoadmap({ year: 2026, semester: 2 }, '2026-10-09'),
   );
   const input = {
     courseOffering: {
@@ -38,10 +40,27 @@ it('advances "Oculta un nodo" when the Practice roadmap hides the Node, not when
       title: 'Tutorial',
     },
     experience: { kind: 'teaching' as const, term: 'current' as const },
+    practice: {
+      nodeChangeCounts: {},
+      onAction: (action: PracticeCanvasAction) => reported.push(action),
+    },
+  };
+  const { result } = renderHook(() => useRoadmapCanvasSession(input), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        {children}
+      </RoadmapCanvasSessionPersistenceProvider>
+    ),
+  });
+  await waitFor(() => expect(result.current.roadmap).not.toBeNull());
+  const confirm = async (kind: 'show-node' | 'hide-node') => {
+    await act(() => result.current.canvasCommands.request({ kind, nodeId: practiceNodeIds.g }));
+    await waitFor(() => expect(result.current.canvasCommands.pending?.phase).toBe('awaiting'));
+    await act(() => result.current.canvasCommands.confirm(kind));
   };
 
-  await persistence.setVisibility(input, practiceNodeIds.g, true);
-  await persistence.setVisibility(input, practiceNodeIds.g, false);
+  await confirm('show-node');
+  await confirm('hide-node');
 
   expect(reported.map((action) => hideStep.advanceWhen?.(action) ?? false)).toEqual([false, true]);
 });

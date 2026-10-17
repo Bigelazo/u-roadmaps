@@ -1,4 +1,6 @@
+import type { NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
+import type { NewRoadmapNode, RoadmapNodeTypeInput } from '@/features/roadmap/session/types';
 import type {
   DependencyImpact,
   NodeDeletionImpact,
@@ -47,7 +49,29 @@ export type CanvasCommand =
       readonly direction: RoadmapLayoutDirection;
     }
   | { readonly kind: 'delete-node-type'; readonly nodeTypeId: string }
-  | { readonly kind: 'reset-canvas-preview' };
+  | { readonly kind: 'reset-canvas-preview' }
+  | {
+      readonly kind: 'add-node';
+      readonly node: NewRoadmapNode;
+      readonly position: RoadmapNodePosition;
+    }
+  | { readonly kind: 'update-node'; readonly nodeId: string; readonly value: NodeUpdate }
+  | { readonly kind: 'add-resource'; readonly nodeId: string; readonly resource: ResourceInput }
+  | { readonly kind: 'upload-resource'; readonly nodeId: string; readonly file: File }
+  | {
+      readonly kind: 'update-resource';
+      readonly resourceId: string;
+      readonly resource: ResourceInput;
+    }
+  | { readonly kind: 'delete-resource'; readonly resourceId: string }
+  | { readonly kind: 'add-node-type'; readonly nodeType: RoadmapNodeTypeInput }
+  | {
+      readonly kind: 'update-node-type';
+      readonly nodeTypeId: string;
+      readonly nodeType: RoadmapNodeTypeInput;
+    }
+  | { readonly kind: 'complete-node'; readonly nodeId: string }
+  | { readonly kind: 'complete-simulated-node'; readonly nodeId: string };
 
 export type CanvasCommandOf<Kind extends CanvasCommand['kind']> = Extract<
   CanvasCommand,
@@ -96,6 +120,11 @@ export type ChangeImpactOf = {
 
 /** Canvas commands that take effect only after teaching staff confirm them. */
 export type ConfirmedActionKind = keyof ChangeImpactOf;
+
+/** Canvas commands that take effect at once, without a confirmation. */
+export type UnconfirmedCommandKind = Exclude<CanvasCommand['kind'], ConfirmedActionKind>;
+
+export type UnconfirmedCommand = CanvasCommandOf<UnconfirmedCommandKind>;
 
 /**
  * The single pending Confirmed action of a Roadmap canvas session, as plain data.

@@ -6,6 +6,7 @@ import {
   type TeacherBlockChangeImpact,
 } from '@/features/roadmap/canvas/commands/commands';
 import type {
+  PracticeCanvasAction,
   RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
@@ -51,6 +52,8 @@ export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
   ) => Promise<boolean | { retry: CanvasCommandOf<Kind> }>;
   /** The toast shown once the request took effect, except for the `remaining` part. */
   success?: (request: CanvasCommandOf<Kind>, remaining?: CanvasCommandOf<Kind>) => string;
+  /** What the Practice roadmap is told once the whole request took effect. */
+  report?: (request: CanvasCommandOf<Kind>, choice: string | undefined) => PracticeCanvasAction;
 };
 
 /** The unlock scopes teaching staff can choose between; blocking previews only itself. */
@@ -64,6 +67,9 @@ const teacherBlockOperationByChoice: Readonly<Record<string, TeacherBlockOperati
   [roadmapConfirmationActionIds.unlockBranch]: 'BRANCH_UNLOCK',
 };
 
+const chosenTeacherBlockOperation = (requested: TeacherBlockOperation, choice?: string) =>
+  (choice && teacherBlockOperationByChoice[choice]) || requested;
+
 export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<Kind> } = {
   'hide-node': {
     preview: ({ preview }, { nodeId }) =>
@@ -76,6 +82,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.setVisibility(input, nodeId, false, impact.version),
         'No se pudo cambiar la visibilidad.',
       ),
+    report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: false }),
   },
   'show-node': {
     run: ({ mutate }, { nodeId }) =>
@@ -83,6 +90,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.setVisibility(input, nodeId, true),
         'No se pudo cambiar la visibilidad.',
       ),
+    report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: true }),
   },
   'delete-node': {
     preview: ({ preview }, { nodeId }) =>
@@ -95,6 +103,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.deleteNode(input, nodeId, impact.version),
         'No se pudo eliminar el nodo.',
       ),
+    report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   },
   'change-teacher-block': {
     preview: async ({ preview }, { nodeId, operation }) => {
@@ -115,13 +124,18 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
       return impact[operation] ? impact : null;
     },
     run: ({ mutate }, { nodeId, operation }, impact, choice) => {
-      const chosen = (choice && teacherBlockOperationByChoice[choice]) || operation;
+      const chosen = chosenTeacherBlockOperation(operation, choice);
       return mutate(
         (persistence, input) =>
           persistence.changeTeacherBlock(input, nodeId, chosen, impact[chosen]?.version),
         'No se pudo cambiar el bloqueo docente.',
       );
     },
+    report: ({ nodeId, operation }, choice) => ({
+      type: 'changeTeacherBlock',
+      nodeId,
+      operation: chosenTeacherBlockOperation(operation, choice),
+    }),
   },
   'create-dependency': {
     preview: ({ preview }, dependency) =>
@@ -136,6 +150,11 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         'No se pudo crear la dependencia.',
       ),
     success: () => 'Dependencia creada exitosamente.',
+    report: ({ sourceNodeId, targetNodeId }) => ({
+      type: 'connectNodes',
+      sourceNodeId,
+      targetNodeId,
+    }),
   },
   'delete-dependencies': {
     run: async ({ mutate }, request) => {
