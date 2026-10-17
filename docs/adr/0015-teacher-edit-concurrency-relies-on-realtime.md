@@ -42,3 +42,15 @@ responden 409 si cambió (`NODE_DELETE_PREVIEW_STALE`, `TEACHER_BLOCK_PREVIEW_ST
 `NODE_VISIBILITY_PREVIEW_STALE`, `DEPENDENCY_PREVIEW_STALE`). La versión es opcional
 para todas salvo el desbloqueo hasta que el cliente la envíe siempre. Las ediciones de
 título, descripción y tipo siguen dependiendo del tiempo real, como decide este ADR.
+
+## Actualización — 2026-10-17: la versión es obligatoria
+
+Desde #281, como el canvas ya envía la versión en toda Acción confirmada con
+previsualización, el servidor la exige para eliminar, ocultar, desbloquear y bloquear un
+Nodo y para crear una Dependency. Una confirmación sin versión se rechaza como una
+obsoleta: 409 con el mismo código. Mostrar un Nodo no tiene Impacto del cambio y no la
+necesita. La regla vive en la decisión de dominio que comparten el servidor y el Mapa de
+práctica ([ADR-0028](0028-roadmap-editing-rules-are-shared-domain-decisions.md)): ninguna
+escritura interna del servidor (la creación o copia de un Roadmap, las fixtures de
+desarrollo, el Scheduled unlock release) pasa por estos comandos, así que ninguna tiene que
+inventar una versión.
