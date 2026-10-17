@@ -93,6 +93,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.setVisibility(input, nodeId, false, impact.version),
         visibilityFailure,
       ),
+    success: () => 'Nodo ocultado exitosamente.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: false }),
   },
   'show-node': {
@@ -101,6 +102,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.setVisibility(input, nodeId, true),
         visibilityFailure,
       ),
+    success: () => 'Nodo visible para estudiantes.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: true }),
   },
   'delete-node': {
@@ -114,6 +116,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.deleteNode(input, nodeId, impact.version),
         'No se pudo eliminar el nodo.',
       ),
+    success: () => 'Nodo eliminado exitosamente.',
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   },
   'change-teacher-block': {
@@ -194,6 +197,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         fallback,
       );
     },
+    success: () => 'Nodos ordenados exitosamente.',
   },
   'delete-node-type': {
     run: ({ mutate }, { nodeTypeId }) =>
@@ -201,6 +205,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.deleteNodeType(input, nodeTypeId),
         'No se pudo eliminar el tipo de nodo.',
       ),
+    success: () => 'Tipo de nodo eliminado exitosamente.',
   },
   'reset-canvas-preview': {
     run: ({ mutateCanvasPreview }) =>
@@ -208,5 +213,6 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.resetSimulation(input),
         'No se pudo reiniciar el progreso de previsualización.',
       ),
+    success: () => 'Progreso de previsualización reiniciado.',
   },
 };

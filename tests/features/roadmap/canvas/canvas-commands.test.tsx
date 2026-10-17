@@ -109,6 +109,17 @@ function withTeacherBlocks(...nodeIds: string[]): RoadmapDto {
   };
 }
 
+/** A Custom node type no Node uses. */
+const laboratory: NodeType = {
+  id: 'laboratory',
+  name: 'Laboratorio',
+  icon: 'FlaskConical',
+  color: '#024AD8',
+  isPredefined: false,
+};
+
+const withLaboratory: RoadmapDto = { ...roadmap, nodeTypes: [...roadmap.nodeTypes, laboratory] };
+
 async function teacherBlockedNodeIds(persistence: RoadmapCanvasSessionPersistence) {
   return (await persistence.load(teachingInput)).nodes.flatMap((node) =>
     'isTeacherBlocked' in node && node.isTeacherBlocked ? [node.id] : [],
@@ -867,15 +878,72 @@ describe('canvas commands', () => {
     ]);
   });
 
+  describe('Confirmed action toasts', () => {
+    test.each<
+      [string, RoadmapDto, CanvasCommandOf<ConfirmedActionKind>, CanvasConfirmationChoice, string]
+    >([
+      [
+        'hiding a Node',
+        roadmap,
+        { kind: 'hide-node', nodeId: 'limits' },
+        'hide-node',
+        'Nodo ocultado exitosamente.',
+      ],
+      [
+        'showing a Node',
+        roadmap,
+        { kind: 'show-node', nodeId: 'series' },
+        'show-node',
+        'Nodo visible para estudiantes.',
+      ],
+      [
+        'deleting a Node',
+        roadmap,
+        { kind: 'delete-node', nodeId: 'limits' },
+        'delete-node',
+        'Nodo eliminado exitosamente.',
+      ],
+      [
+        'applying an automatic layout',
+        roadmap,
+        {
+          kind: 'apply-automatic-layout',
+          positions: [{ nodeId: 'limits', position: { x: 0, y: 200 } }],
+          direction: 'LR',
+        },
+        'auto-layout',
+        'Nodos ordenados exitosamente.',
+      ],
+      [
+        'deleting a Custom node type',
+        withLaboratory,
+        { kind: 'delete-node-type', nodeTypeId: laboratory.id },
+        'delete-node-type',
+        'Tipo de nodo eliminado exitosamente.',
+      ],
+      [
+        'resetting the Canvas preview',
+        roadmap,
+        { kind: 'reset-canvas-preview' },
+        'reset-canvas-preview',
+        'Progreso de previsualización reiniciado.',
+      ],
+    ])('%s shows its toast only once confirmed', async (_, fixture, request, choice, toast) => {
+      const canvas = await openCanvas(createInMemoryRoadmapSessionPersistence(fixture));
+
+      await act(() => canvas.commands().request(request));
+      await canvas.awaiting();
+      expect(successToasts()).toEqual([]);
+      await canvas.confirm(choice);
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(canvas.session().error).toBeNull();
+      expect(successToasts()).toEqual([toast]);
+    });
+  });
+
   describe('unconfirmed writes', () => {
     const guide = { id: 'guide', title: 'Guía', url: 'https://example.test/guia', type: 'LINK' };
-    const laboratory: NodeType = {
-      id: 'laboratory',
-      name: 'Laboratorio',
-      icon: 'FlaskConical',
-      color: '#024AD8',
-      isPredefined: false,
-    };
     /** Límites is Teacher-blocked, so it can be scheduled, and links a guide; Laboratorio is a Custom node type. */
     const editable: RoadmapDto = {
       ...withTeacherBlocks('limits'),
