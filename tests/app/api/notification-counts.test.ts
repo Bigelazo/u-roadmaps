@@ -1,7 +1,15 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
 const { database, transaction, session } = vi.hoisted(() => ({
-  database: { $queryRaw: vi.fn(), $transaction: vi.fn() },
+  database: {
+    $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
+    // The participant access read; access itself is covered by the notifications harness.
+    participation: { findMany: async () => [] },
+    roadmapNode: { findMany: async () => [] },
+    dependency: { findMany: async () => [] },
+    completion: { findMany: async () => [] },
+  },
   transaction: {
     $queryRaw: vi.fn(),
     roadmapNode: { findFirst: vi.fn() },
