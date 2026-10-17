@@ -1,8 +1,7 @@
 import 'server-only';
 import { prisma, Prisma } from '@/shared/server/db';
 import { groupedRoadmapNotice } from '../application/group-roadmap-notices';
-import { NOTICE_TARGETS_SHOWN_TO } from '../application/notice-visibility';
-import type { ShownTo } from '../application/notice-targets';
+import { noticeTargetDescriptors, type ShownTo } from '../application/notice-targets';
 
 export type InboxFilter = {
   roadmapId?: string;
@@ -80,34 +79,34 @@ function visibleNotices(
     ), visible AS (
       SELECT pending.* FROM pending LEFT JOIN nodes node ON node.id::text = pending.data->>'nodeId'
         AND node."roadmapId" = pending."roadmapId"
-      WHERE jsonb_typeof(pending.data) = 'object' AND CASE ${shownToCases(accessibleNodeIds)}
-        ELSE TRUE -- rows no descriptor owns are shown as stored
-      END
+      WHERE jsonb_typeof(pending.data) = 'object' AND ${shownToCase(accessibleNodeIds)}
     )`;
 }
 
 /** One `WHEN` per `shownTo` class over its Notice targets, as `isNoticeVisible` decides it. */
-function shownToCases(accessibleNodeIds: readonly string[]) {
+function shownToCase(accessibleNodeIds: readonly string[]) {
   const visibleNode = (column: string) => Prisma.sql`EXISTS (SELECT 1 FROM nodes other
     WHERE other.id::text = pending.data->>${column}::text AND other."roadmapId" = pending."roadmapId"
       AND other."isVisible")`;
+  const opensNode = Prisma.sql`COALESCE(node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[]), FALSE)`;
   const conditions: Record<ShownTo, Prisma.Sql> = {
     everyone: Prisma.sql`TRUE`,
     'node-viewers': Prisma.sql`COALESCE(node."isVisible", FALSE)`,
-    'node-openers': Prisma.sql`COALESCE(node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[]), FALSE)`,
+    'node-openers': opensNode,
     'dependency-viewers': Prisma.sql`${visibleNode('sourceNodeId')} AND ${visibleNode('targetNodeId')}`,
     'node-type-viewers': Prisma.sql`EXISTS (SELECT 1 FROM nodes typed
       WHERE typed."nodeTypeId"::text = pending.data->>'nodeTypeId'
         AND typed."roadmapId" = pending."roadmapId" AND typed."isVisible")`,
   };
-  return Prisma.join(
-    (Object.keys(conditions) as ShownTo[]).map(
-      (shownTo) => Prisma.sql`
-        WHEN pending.data->>'noticeTarget' = ANY(${NOTICE_TARGETS_SHOWN_TO[shownTo] ?? []}::text[])
-          THEN ${conditions[shownTo]}`,
-    ),
-    '',
-  );
+  const whens = Object.entries(conditions).map(([shownTo, condition]) => {
+    const targets = noticeTargetDescriptors
+      .filter((descriptor) => descriptor.shownTo === shownTo)
+      .map(({ noticeTarget }) => noticeTarget);
+    return Prisma.sql`WHEN pending.data->>'noticeTarget' = ANY(${targets}::text[]) THEN ${condition}`;
+  });
+  // A row no descriptor owns follows `node-openers` on its Node; without one it is shown as stored.
+  return Prisma.sql`CASE ${Prisma.join(whens, ' ')}
+    ELSE jsonb_typeof(pending.data->'nodeId') IS DISTINCT FROM 'string' OR ${opensNode} END`;
 }
 
 export async function queryInboxPage(

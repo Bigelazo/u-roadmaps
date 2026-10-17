@@ -95,8 +95,10 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
     // A Node that no longer exists shows neither its title nor its description.
     { noticeTarget: 'node-title', changeKind: 'node-updated', nodeId: randomUUID() },
     { noticeTarget: 'node-description', changeKind: 'node-updated', nodeId: randomUUID() },
-    // A row no descriptor owns is shown as stored; its legacy keys decide nothing.
-    { changeKind: 'node-updated', changedFields: ['description'], nodeId: chain[1].id },
+    // A row no descriptor owns is shown only to who can open its Node, and as stored without
+    // one; its legacy keys decide nothing.
+    { changeKind: 'node-deleted', changedFields: ['description'], nodeId: chain[1].id },
+    { changeKind: 'node-updated', changedFields: ['description'] },
   ];
   const occurredAt = new Date();
   const notices = [studentId, teacherId].flatMap((recipientId) =>

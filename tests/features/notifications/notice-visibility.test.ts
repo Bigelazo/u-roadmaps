@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { noticeTargetDescriptors } from '@/features/notifications/application/notice-targets';
-import {
-  isNoticeVisible,
-  NOTICE_TARGETS_SHOWN_TO,
-} from '@/features/notifications/application/notice-visibility';
+import { isNoticeVisible } from '@/features/notifications/application/notice-visibility';
 
 const nodes = [
   { id: 'open', isVisible: true, nodeTypeId: 'type' },
@@ -61,26 +58,15 @@ describe('who a Notice target is shown to', () => {
         accessible,
       ),
     ).toBe(false);
-    // Rows no descriptor owns are shown as stored.
-    expect(
-      isNoticeVisible(
-        { changeKind: 'node-updated', changedFields: ['description'], nodeId: 'hidden' },
-        nodes,
-        accessible,
-      ),
-    ).toBe(true);
   });
-});
 
-it('gives the Inbox SQL every Notice target under exactly one shownTo class', () => {
-  const classes = Object.entries(NOTICE_TARGETS_SHOWN_TO);
-  expect(classes.map(([shownTo]) => shownTo).sort()).toEqual([
-    'dependency-viewers',
-    'everyone',
-    'node-openers',
-    'node-type-viewers',
-    'node-viewers',
-  ]);
-  for (const [, targets] of classes) expect(targets).not.toHaveLength(0);
-  expect(classes.flatMap(([, targets]) => targets).sort()).toEqual(Object.keys(SHOWN).sort());
+  // Legacy rows may carry a description, a Resource title or a hidden Node's title.
+  it('shows a row no descriptor owns only on a Node the recipient can open', () => {
+    const legacy = { changeKind: 'node-deleted', changedFields: ['description'] };
+    expect(
+      aboutNodes.map((data) => isNoticeVisible({ ...legacy, ...data }, nodes, accessible)),
+    ).toEqual([true, false, false, false]);
+    // Without a Node, it is shown as stored.
+    expect(isNoticeVisible(legacy, nodes, accessible)).toBe(true);
+  });
 });
