@@ -42,12 +42,21 @@ de igualdad. Se decide que las escrituras del canvas pasen por un módulo de com
   de ocupar el espacio pendiente, venga la eliminación del menú de acciones del Nodo o
   del editor de Nodos. Así el canvas nunca queda bloqueado detrás de una pregunta sin
   responder.
-
+- **Las escrituras sin confirmación están en una sola tabla del módulo:** editar un Nodo
+  y sus Recursos, crear un Nodo, crear o renombrar un Tipo de nodo, mover Nodos,
+  programar un desbloqueo, completar un Nodo y completarlo en la Canvas preview. Cada una
+  declara su mensaje de error por defecto, su mensaje de éxito, su aviso al Mapa de
+  práctica y si recarga el Roadmap o solo la Canvas preview. Los mensajes de éxito solo
+  los muestra el módulo; los errores siguen siendo el error de la sesión.
+- **Un solo canal de avisos al Mapa de práctica.** El módulo avisa cada comando que tuvo
+  efecto, una vez y con la operación elegida. La vista avisa solo eventos de la interfaz
+  (seleccionar un Nodo, centrar el mapa, salir de la Canvas preview). Entrar a la Canvas
+  preview se avisa una vez por entrada, no en cada recarga de la previsualización.
 - **La vista solo dibuja la confirmación pendiente.** El canvas muestra un único diálogo
   a partir de los datos pendientes y no coordina nada. El módulo le avisa qué comando
-  tuvo efecto, y la vista hace lo que le toca a ella: cerrar el editor tras eliminar un
-  Nodo y recordar la dirección del ordenamiento automático. Entrar y salir de la Canvas
-  preview y restaurar su viewport también quedan en la vista.
+  tuvo efecto, y la vista hace lo que le toca a ella: seleccionar el Nodo creado, cerrar
+  el editor tras eliminar un Nodo y recordar la dirección del ordenamiento automático.
+  Entrar y salir de la Canvas preview y restaurar su viewport también quedan en la vista.
 
 ## Alternativas descartadas
 
