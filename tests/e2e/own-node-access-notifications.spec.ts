@@ -5,7 +5,7 @@ import { sql } from './database';
 import { createExistingNode } from './existing-node';
 import { authenticateAs, escapeRegExp, ok } from './helpers';
 import { listNotices } from './notices';
-import { changeTeacherBlock, hideNode } from './previewed-writes';
+import { changeTeacherBlock, deleteNode, hideNode } from './previewed-writes';
 
 test('access notices retain context through blocking, unlocking, hiding and deletion', async ({
   course,
@@ -91,7 +91,7 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     201,
   );
   await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${removedId}`)));
-  await ok(await author.delete(roadmapPath(`/nodes/${removedId}`)), 204);
+  await ok(await deleteNode(author, roadmapPath(`/nodes/${removedId}`)), 204);
 
   await expect
     .poll(async () => (await noticesFor(student, removedId))[0]?.data.changeKind)

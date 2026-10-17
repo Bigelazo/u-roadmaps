@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
 import { recognize } from './notices';
 import { literal, sql } from './database';
+import { deleteNode } from './previewed-writes';
 
 test('real SSE keeps student content stable while notices and counters update, including recovery', async ({
   browser,
@@ -121,7 +122,7 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeHidden();
   } finally {
     // eslint-disable-next-line playwright/no-conditional-in-test
-    if (nodeId) await teacher.request.delete(course.apiPath(`/nodes/${nodeId}`));
+    if (nodeId) await deleteNode(teacher.request, course.apiPath(`/nodes/${nodeId}`));
     await student.close();
     await teacher.close();
   }

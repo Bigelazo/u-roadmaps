@@ -13,6 +13,7 @@ import {
   createRoadmapDependency,
   deleteRoadmapDependency,
   changeTeacherBlock,
+  previewNodeDeletion,
   previewNodeVisibility,
   previewRoadmapDependency,
   previewTeacherBlock,
@@ -174,7 +175,11 @@ test('visibility and deletion report their facts and recipient access transition
   // Access baselines are recorded by the notice lifecycle module through the port.
   expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
   recording.changes.length = 0;
-  await deleteRoadmapNode({ ...input, id: nodeId }, recording.port);
+  const deletion = await previewNodeDeletion({ ...input, id: nodeId });
+  await deleteRoadmapNode(
+    { ...input, id: nodeId, previewVersion: deletion.version },
+    recording.port,
+  );
   expect(recording.facts()).toMatchObject([
     {
       kind: 'node-deleted',

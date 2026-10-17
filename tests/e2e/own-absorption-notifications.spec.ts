@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { ok } from './helpers';
 import { acknowledgeOpening, listNotices, prepareOpening, recognize } from './notices';
-import { changeTeacherBlock, hideNode } from './previewed-writes';
+import { changeTeacherBlock, deleteNode, hideNode } from './previewed-writes';
 
 test('entry establishes Node knowledge even when creation delivery has not reached the Inbox', async ({
   course,
@@ -79,12 +79,12 @@ test('new Node absorbs content, Resources and blocking, withdraws on hiding and 
   await ok(await hideNode(author, path));
   await expect.poll(notices).toHaveLength(0);
   const directlyDeleted = await creator.createNode('Eliminado sin reconocer', 400);
-  await ok(await author.delete(course.apiPath(`/nodes/${directlyDeleted.id}`)), 204);
+  await ok(await deleteNode(author, course.apiPath(`/nodes/${directlyDeleted.id}`)), 204);
   await expect.poll(() => listNotices(recipient, { nodeId: directlyDeleted.id })).toHaveLength(0);
   await ok(await author.patch(path, { data: { isVisible: true } }));
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0].data.noticeTarget).toBe('node-creation');
-  await ok(await author.delete(path), 204);
+  await ok(await deleteNode(author, path), 204);
   await expect.poll(notices).toHaveLength(0);
 });
 
@@ -98,7 +98,7 @@ test('a Node deleted after the captured entry remains a pending deletion when it
   const notices = () => listNotices(recipient, { nodeId: node.id });
   await expect.poll(notices).toHaveLength(1);
   const opening = await prepareOpening(recipient, course.roadmapId);
-  await ok(await author.delete(course.apiPath(`/nodes/${node.id}`)), 204);
+  await ok(await deleteNode(author, course.apiPath(`/nodes/${node.id}`)), 204);
   await expect.poll(notices).toHaveLength(0);
   await acknowledgeOpening(recipient, opening);
   await expect.poll(notices).toHaveLength(1);
@@ -160,7 +160,7 @@ test('pending Roadmap availability absorbs every later notice and recognition es
     201,
   );
   const removed = await creator.createNode('Eliminado antes de entrar', 200);
-  await ok(await author.delete(offering.apiPath(`/nodes/${removed.id}`)), 204);
+  await ok(await deleteNode(author, offering.apiPath(`/nodes/${removed.id}`)), 204);
   const dependent = await creator.createNode('Colas avanzadas', 500);
   // The title edit is committed; deferred absorption can only retain the availability row.
   expect(await notices()).toEqual([
@@ -220,7 +220,7 @@ test('deleting a known Node absorbs pending title, access and Resource targets',
   await expect
     .poll(async () => (await notices()).map((notice) => notice.data.noticeTarget).sort())
     .toEqual(['node-access', 'node-title']);
-  await ok(await author.delete(path), 204);
+  await ok(await deleteNode(author, path), 204);
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0].data.changeKind).toBe('node-deleted');
 });

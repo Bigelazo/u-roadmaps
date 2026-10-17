@@ -9,6 +9,8 @@ import { recordingChangePort } from './support/recording-change-port';
 import {
   changeTeacherBlock,
   createRoadmapDependency,
+  deleteRoadmapNode,
+  previewNodeDeletion,
   previewNodeVisibility,
   previewRoadmapDependency,
   previewTeacherBlock,
@@ -168,4 +170,17 @@ test('Dependency creation without a Dependency preview version is refused as sta
     ),
   ).rejects.toMatchObject({ status: 409, code: 'DEPENDENCY_PREVIEW_STALE' });
   expect(recording.changes).toEqual([]);
+});
+
+test('Node deletion without a deletion preview version is refused as stale', async ({ course }) => {
+  const recording = recordingChangePort();
+  const nodeId = course.change.nodeId;
+  const remove = (previewVersion?: string) =>
+    deleteRoadmapNode({ ...teacher(course), id: nodeId, previewVersion }, recording.port);
+
+  await expect(remove()).rejects.toMatchObject({ status: 409, code: 'NODE_DELETE_PREVIEW_STALE' });
+  expect(recording.changes).toEqual([]);
+
+  const { version } = await previewNodeDeletion({ ...teacher(course), id: nodeId });
+  await expect(remove(version)).resolves.toEqual({});
 });

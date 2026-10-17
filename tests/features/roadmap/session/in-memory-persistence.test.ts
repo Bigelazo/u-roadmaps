@@ -320,7 +320,7 @@ test('never reuses an identifier after a deletion', async () => {
     return created();
   };
   const deleteAll = async (ids: Awaited<ReturnType<typeof created>>) => {
-    await persistence.deleteNode(input, ids.node!);
+    await confirmedWrites(persistence, input).delete(ids.node!);
     await persistence.deleteDependency(input, ids.dependency!);
     await persistence.deleteNodeType(input, ids.nodeType!);
     await persistence.deleteResource(input, ids.resource!);

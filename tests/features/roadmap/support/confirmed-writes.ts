@@ -21,6 +21,10 @@ export function confirmedWrites(
       const { version } = await persistence.previewNodeHiding(input, nodeId);
       await persistence.setVisibility(input, nodeId, false, version);
     },
+    async delete(nodeId: string) {
+      const { version } = await persistence.previewNodeDeletion(input, nodeId);
+      await persistence.deleteNode(input, nodeId, version);
+    },
     async block(nodeId: string) {
       const { version } = await persistence.previewTeacherBlock(input, nodeId, 'BLOCK');
       await persistence.changeTeacherBlock(input, nodeId, 'BLOCK', version);

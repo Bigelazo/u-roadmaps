@@ -1,7 +1,7 @@
 import { expect, test } from './fixtures';
 import { authenticateAs, ok, toast } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
-import { changeTeacherBlock, hideNode } from './previewed-writes';
+import { changeTeacherBlock, deleteNode, hideNode } from './previewed-writes';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -28,7 +28,7 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
     const restrict = {
       blocked: () => changeTeacherBlock(teacher, endpoint),
       hidden: () => hideNode(teacher, endpoint),
-      deleted: () => teacher.delete(endpoint),
+      deleted: () => deleteNode(teacher, endpoint),
     };
     expect((await restrict[restriction]()).status()).toBe(restriction === 'deleted' ? 204 : 200);
     // A real notice arriving confirms the change reached this tab without a canvas reload.

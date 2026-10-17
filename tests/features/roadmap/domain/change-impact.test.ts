@@ -25,14 +25,9 @@ test('allows a preview version that still matches the Change impact', () => {
   });
 });
 
-test('allows a Node deletion confirmation that sends no preview version', () => {
-  expect(
-    decideChangeImpactVersion({ change: 'delete', sentVersion: undefined, version: 'current' }),
-  ).toEqual({ kind: 'ALLOWED' });
-});
-
 test.each([
   ['hide', 'NODE_VISIBILITY_PREVIEW_STALE'],
+  ['delete', 'NODE_DELETE_PREVIEW_STALE'],
   ['dependency', 'DEPENDENCY_PREVIEW_STALE'],
   ['block', 'TEACHER_BLOCK_PREVIEW_STALE'],
   ['unlock', 'TEACHER_BLOCK_PREVIEW_STALE'],

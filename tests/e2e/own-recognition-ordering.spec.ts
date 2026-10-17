@@ -9,6 +9,7 @@ import {
   recognize,
   type RoadmapOpening,
 } from './notices';
+import { deleteNode } from './previewed-writes';
 
 // Two server-captured entries emulate tabs whose acknowledgement requests arrive
 // in reverse order, without relying on browser timing or mocked notice delivery.
@@ -106,7 +107,7 @@ test('a newer entry recognizes Node absence after an older entry recreates its d
   // Establish lifecycle knowledge independently of later deletion delivery.
   await recognize(recipient, course.roadmapId);
   const older = await prepareOpening(recipient, course.roadmapId);
-  await ok(await author.delete(course.apiPath(`/nodes/${nodeId}`)), 204);
+  await ok(await deleteNode(author, course.apiPath(`/nodes/${nodeId}`)), 204);
   await expect.poll(notices).toHaveLength(1);
   const newer = await prepareOpening(recipient, course.roadmapId);
   await acknowledgeOpening(recipient, older);

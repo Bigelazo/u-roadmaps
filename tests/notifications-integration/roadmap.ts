@@ -15,6 +15,7 @@ import {
   deleteRoadmapDependency,
   createRoadmapResource,
   deleteRoadmapNode,
+  previewNodeDeletion,
   previewNodeVisibility,
   previewRoadmapDependency,
   previewTeacherBlock,
@@ -59,7 +60,10 @@ export function teacherEdits(
           : undefined;
       return updateRoadmapNode({ ...editor, id: nodeId, input, previewVersion }, port);
     },
-    remove: (nodeId: string) => deleteRoadmapNode({ ...editor, id: nodeId }, port),
+    async remove(nodeId: string) {
+      const { version } = await previewNodeDeletion({ ...editor, id: nodeId });
+      return deleteRoadmapNode({ ...editor, id: nodeId, previewVersion: version }, port);
+    },
     block: (nodeId: string) => changeTeacherBlockConfirmed(nodeId, 'BLOCK'),
     unblock: (nodeId: string) => changeTeacherBlockConfirmed(nodeId, 'UNBLOCK'),
     renameType: (nodeTypeId: string, name: string) =>
