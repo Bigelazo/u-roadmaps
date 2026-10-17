@@ -21,7 +21,12 @@ import {
   requireFiniteNumber,
   requireString,
 } from '@/features/roadmap/application/validation';
-import { normalizeName } from '@/features/roadmap/domain/node-type';
+import {
+  decideNodeTypeChange,
+  normalizeName,
+  type NodeTypeChange,
+  type NodeTypeRuleFailure,
+} from '@/features/roadmap/domain/node-type';
 import {
   decidePreviewVersion,
   type PreviewedChange,
@@ -71,7 +76,10 @@ function dependenciesTouching(transaction: Prisma.TransactionClient, nodeId: str
 }
 
 type RoadmapRuleFailure =
-  DependencyRuleFailure | TeacherBlockRuleFailure | ScheduledUnlockRuleFailure;
+  | DependencyRuleFailure
+  | TeacherBlockRuleFailure
+  | ScheduledUnlockRuleFailure
+  | NodeTypeRuleFailure;
 
 const RULE_FAILURE_STATUS: Readonly<Record<RoadmapRuleFailure, ApplicationErrorStatus>> = {
   NODE_NOT_FOUND: 404,
@@ -82,6 +90,10 @@ const RULE_FAILURE_STATUS: Readonly<Record<RoadmapRuleFailure, ApplicationErrorS
   HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN: 409,
   INVALID_TEACHER_UNLOCK_DATE: 400,
   TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK: 409,
+  NODE_TYPE_NOT_FOUND: 404,
+  PREDEFINED_TYPE_IMMUTABLE: 409,
+  NODE_TYPE_NAME_CONFLICT: 409,
+  NODE_TYPE_IN_USE: 409,
 };
 
 function ruleError({ reason, message }: RuleRejection<RoadmapRuleFailure>) {
@@ -141,42 +153,29 @@ async function requireType(transaction: Prisma.TransactionClient, id: string, ro
   return nodeType;
 }
 
-async function requireCustomType(
+/**
+ * Refuses a Node type change the Node type decision rejects and returns the Node types
+ * available in the Roadmap. Only a deletion reads the Nodes that use the type.
+ */
+async function decideNodeType(
   transaction: Prisma.TransactionClient,
-  id: string,
   roadmapId: string,
+  change: NodeTypeChange,
 ) {
-  const nodeType = await requireType(transaction, id, roadmapId);
-  if (nodeType.isPredefined) {
-    throw new ApplicationError(
-      409,
-      'PREDEFINED_TYPE_IMMUTABLE',
-      'Los tipos predefinidos son inmutables.',
-    );
-  }
-  return nodeType;
-}
-
-async function ensureTypeNameAvailable(
-  transaction: Prisma.TransactionClient,
-  name: string,
-  roadmapId: string,
-  excludedTypeId?: string,
-) {
-  const existing = await transaction.nodeType.findFirst({
-    where: {
-      normalizedName: normalizeName(name),
-      OR: [{ isPredefined: true }, { roadmapId }],
-      ...(excludedTypeId ? { NOT: { id: excludedTypeId } } : {}),
-    },
+  const nodeTypes = await transaction.nodeType.findMany({
+    where: { OR: [{ isPredefined: true }, { roadmapId }] },
+    select: { id: true, name: true, isPredefined: true },
   });
-  if (existing) {
-    throw new ApplicationError(
-      409,
-      'NODE_TYPE_NAME_CONFLICT',
-      'Ya existe un tipo disponible con ese nombre.',
-    );
-  }
+  const nodes =
+    change.kind === 'delete'
+      ? await transaction.roadmapNode.findMany({
+          where: { nodeTypeId: change.nodeTypeId },
+          select: { nodeTypeId: true },
+        })
+      : [];
+  const decision = decideNodeTypeChange({ nodeTypes, nodes, change });
+  if (decision.kind === 'REJECTED') throw ruleError(decision);
+  return nodeTypes;
 }
 
 function noChanges(message: string): never {
@@ -410,7 +409,7 @@ export const createRoadmapNodeType = roadmapCommand({
   }),
   access: 'none',
   run: async ({ tx, roadmap, input: { name, icon, color } }) => {
-    await ensureTypeNameAvailable(tx, name, roadmap.id);
+    await decideNodeType(tx, roadmap.id, { kind: 'create', name });
     const nodeType = await tx.nodeType.create({
       data: {
         roadmapId: roadmap.id,
@@ -439,25 +438,22 @@ export const updateRoadmapNodeType = roadmapCommand({
   },
   access: 'none',
   run: async ({ tx, roadmap, input: { typeId, changes } }) => {
-    const nodeType = await requireCustomType(tx, typeId, roadmap.id);
     const { name } = changes;
-    if (name !== undefined) await ensureTypeNameAvailable(tx, name, roadmap.id, nodeType.id);
+    const nodeTypes = await decideNodeType(tx, roadmap.id, {
+      kind: 'update',
+      nodeTypeId: typeId,
+      name,
+    });
+    const previous = nodeTypes.find(({ id }) => id === typeId)?.name;
     const updated = await tx.nodeType.update({
-      where: { id: nodeType.id },
+      where: { id: typeId },
       data: name === undefined ? changes : { ...changes, normalizedName: normalizeName(name) },
     });
     return {
       result: { nodeType: nodeTypeDto(updated) },
       facts:
-        name !== undefined && name !== nodeType.name
-          ? [
-              {
-                kind: 'node-type-name',
-                nodeTypeId: nodeType.id,
-                previous: nodeType.name,
-                current: updated.name,
-              },
-            ]
+        previous !== undefined && updated.name !== previous
+          ? [{ kind: 'node-type-name', nodeTypeId: typeId, previous, current: updated.name }]
           : [],
     };
   },
@@ -468,15 +464,8 @@ export const deleteRoadmapNodeType = roadmapCommand({
   parse: ({ id }: { id: string }) => requireUuid(id, 'typeId'),
   access: 'none',
   run: async ({ tx, roadmap, input: typeId }) => {
-    const nodeType = await requireCustomType(tx, typeId, roadmap.id);
-    if (await tx.roadmapNode.count({ where: { nodeTypeId: nodeType.id } })) {
-      throw new ApplicationError(
-        409,
-        'NODE_TYPE_IN_USE',
-        'No se puede eliminar un tipo utilizado por nodos.',
-      );
-    }
-    await tx.nodeType.delete({ where: { id: nodeType.id } });
+    await decideNodeType(tx, roadmap.id, { kind: 'delete', nodeTypeId: typeId });
+    await tx.nodeType.delete({ where: { id: typeId } });
     return { result: undefined, facts: [] };
   },
 });
