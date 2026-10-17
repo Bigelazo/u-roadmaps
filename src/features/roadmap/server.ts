@@ -40,7 +40,6 @@ export {
   getNodeTypesForActor,
 } from '@/features/roadmap/application/queries';
 export {
-  requireCourseOfferingParticipation,
   synchronizeParticipation,
   type RoadmapActor,
 } from '@/features/roadmap/application/participation';

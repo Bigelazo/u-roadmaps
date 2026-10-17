@@ -40,6 +40,11 @@ participante en un Roadmap existente sea un comando de `application/roadmap-comm
   decisión de capacidad. Un cierre concurrente equivale a "nada liberado".
 - **Una entrega fallida no falla el cambio confirmado:** se registra con el Roadmap, el
   actor, las clases de hecho y la causa. No hay reintento durable.
+- **Las lecturas usan la misma resolución y decisión (`roadmapRead`), sin port:** solo
+  consultan la Participation almacenada y nunca sincronizan con U-Campus. La sincronización
+  ocurre al ingresar a la plataforma y al entrar a la página del curso o a Student progress
+  tracking; quien no tiene una Participation activa recibe 403. Un Roadmap cerrado sigue
+  siendo legible.
 
 ## Alternativas descartadas
 

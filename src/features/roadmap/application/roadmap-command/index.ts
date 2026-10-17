@@ -4,6 +4,7 @@ export {
   type RoadmapCommand,
   type RoadmapCommandContext,
   type RoadmapParticipant,
+  type RoadmapReadContext,
 } from './command';
 export {
   changeRoadmap,

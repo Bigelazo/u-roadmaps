@@ -1,66 +1,20 @@
 import type { RoadmapChangePort } from './change-port';
-import { forbidden, roadmapNotFound } from './roadmap-command/errors';
+import { forbidden } from './roadmap-command/errors';
 import 'server-only';
 
 import {
   readMufasaCourseAccess,
   materializeParticipation,
-  synchronizeParticipation,
   type AcademicUser,
 } from './academic-participation';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import {
-  decideRoadmapCreation,
-  participationGrants,
-  type RoadmapCapability,
-} from '@/features/roadmap/domain/roadmap-capability';
+import { decideRoadmapCreation } from '@/features/roadmap/domain/roadmap-capability';
 import { effectivePosition } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
 
 export { synchronizeParticipation } from './academic-participation';
 
 export type RoadmapActor = AcademicUser;
-
-async function resolveParticipation(
-  actor: RoadmapActor,
-  identifier: CourseOfferingIdentifier,
-  courseOfferingId: string,
-  capability: RoadmapCapability,
-  changePort: RoadmapChangePort,
-) {
-  const participation = await prisma.participation.findFirst({
-    where: { userId: actor.id, courseOfferingId, isActive: true },
-  });
-  if (participationGrants(participation, capability)) return participation;
-  const synchronized = await synchronizeParticipation(actor, identifier, changePort);
-  return participationGrants(synchronized, capability) ? synchronized : null;
-}
-
-/**
- * The Course offering and the actor's Participation in it. The offering may have no
- * Roadmap yet, so callers that need one refuse its absence themselves.
- */
-export async function requireCourseOfferingParticipation(
-  actor: RoadmapActor,
-  identifier: CourseOfferingIdentifier,
-  capability: RoadmapCapability,
-  changePort: RoadmapChangePort,
-) {
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { courseCode_year_semester: identifier },
-    include: { roadmap: true },
-  });
-  if (!courseOffering) throw roadmapNotFound();
-  const participation = await resolveParticipation(
-    actor,
-    identifier,
-    courseOffering.id,
-    capability,
-    changePort,
-  );
-  if (!participation) throw forbidden();
-  return { actor, courseOffering, participation };
-}
 
 export async function requireRoadmapCreationAccess(
   actor: RoadmapActor,

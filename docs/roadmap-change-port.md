@@ -6,8 +6,9 @@ transiciones de acceso por destinatario, incluyendo al actor. Completion reporta
 las transiciones del propio estudiante y la sincronización académica reporta
 la promoción de estudiante a equipo docente.
 
-Las escrituras reciben el port como dependencia explícita. El módulo de comandos
-del Roadmap (`application/roadmap-command/`,
+Las escrituras reciben el port como dependencia explícita; las lecturas no lo
+reciben, porque no sincronizan la Participation con U-Campus (solo lo hace la
+entrada a una página). El módulo de comandos del Roadmap (`application/roadmap-command/`,
 [ADR-0029](adr/0029-roadmap-writes-run-through-one-command-module.md)) une los hechos
 de contenido de cada comando con los de acceso y llama una sola vez
 `report(transaction, changes)` dentro de la transacción de la mutación; un cambio sin
