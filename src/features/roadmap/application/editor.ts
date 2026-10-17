@@ -21,7 +21,7 @@ import {
   requireFiniteNumber,
   requireString,
 } from '@/features/roadmap/application/validation';
-import { normalizeName } from '@/features/roadmap/domain/roadmap-copy';
+import { normalizeName } from '@/features/roadmap/domain/node-type';
 import {
   decidePreviewVersion,
   type PreviewedChange,
