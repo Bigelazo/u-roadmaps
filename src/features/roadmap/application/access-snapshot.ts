@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
-import { studentNodeAccessById, visibleRoadmapGraph } from '@/features/roadmap/domain/access';
+import { participantNodeAccess, toParticipant } from '@/features/roadmap/domain/participant-view';
 
 export type AccessSnapshot = Readonly<{
   nodes: readonly {
@@ -20,7 +20,7 @@ type AccessSnapshotParticipant = Readonly<{
   isActive: boolean;
 }>;
 
-export function projectAccessSnapshot({
+function projectAccessSnapshot({
   nodes,
   dependencies,
   participants,
@@ -31,10 +31,6 @@ export function projectAccessSnapshot({
   participants: readonly AccessSnapshotParticipant[];
   completions: readonly { userId: string; roadmapNodeId: string }[];
 }): AccessSnapshot {
-  const { nodes: visibleNodes, dependencies: visibleDependencies } = visibleRoadmapGraph(
-    nodes,
-    dependencies,
-  );
   const completionIdsByUser = new Map<string, Set<string>>();
   for (const completion of completions) {
     const ids = completionIdsByUser.get(completion.userId) ?? new Set<string>();
@@ -44,20 +40,12 @@ export function projectAccessSnapshot({
 
   const accessibleByUser = new Map<string, ReadonlySet<string>>();
   const activeParticipants = participants.filter(({ isActive }) => isActive);
-  for (const participant of activeParticipants) {
-    const accessible =
-      participant.role === 'TEACHER'
-        ? visibleNodes.filter(({ isTeacherBlocked }) => !isTeacherBlocked).map(({ id }) => id)
-        : [
-            ...studentNodeAccessById({
-              nodes: visibleNodes,
-              dependencies: visibleDependencies,
-              completedNodeIds: completionIdsByUser.get(participant.userId) ?? new Set(),
-            }),
-          ]
-            .filter(([, access]) => access.status === 'ACCESSIBLE')
-            .map(([id]) => id);
-    accessibleByUser.set(participant.userId, new Set(accessible));
+  for (const { userId, role } of activeParticipants) {
+    const participant = toParticipant(role, completionIdsByUser.get(userId) ?? new Set());
+    accessibleByUser.set(
+      userId,
+      participantNodeAccess({ participant, nodes, dependencies }).accessibleNodeIds,
+    );
   }
 
   return {

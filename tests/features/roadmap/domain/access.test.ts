@@ -1,7 +1,6 @@
 import { expect, expectTypeOf, test } from 'vitest';
 import {
   eligibleBranchUnlockNodeIds,
-  studentNodeAccessById,
   transitiveDependentNodeIds,
   transitivePrerequisiteNodeIds,
   wouldCreateDependencyCycle,
@@ -64,53 +63,6 @@ test('keeps a branch blocked when an external blocked prerequisite still holds i
       rootNodeId: 'intro',
     }),
   ]).toEqual([]);
-});
-
-test('gives teacher blocks precedence and keeps historical completions intact while access is blocked', () => {
-  const completedNodeIds = new Set(['intro', 'theory', 'practice', 'assessment']);
-  const access = studentNodeAccessById({
-    nodes: [
-      { id: 'intro', isTeacherBlocked: false },
-      { id: 'theory', isTeacherBlocked: false },
-      { id: 'practice', isTeacherBlocked: true },
-      { id: 'assessment', isTeacherBlocked: true },
-      { id: 'extension', isTeacherBlocked: true },
-    ],
-    dependencies: diamondDependencies,
-    completedNodeIds,
-  });
-
-  expect(access.get('intro')).toEqual({ status: 'ACCESSIBLE' });
-  expect(access.get('practice')).toEqual({ status: 'BLOCKED', reason: 'TEACHER_BLOCK' });
-  expect(access.get('assessment')).toEqual({ status: 'BLOCKED', reason: 'TEACHER_BLOCK' });
-  expect(access.get('extension')).toEqual({ status: 'BLOCKED', reason: 'TEACHER_BLOCK' });
-  expect([...completedNodeIds]).toEqual(['intro', 'theory', 'practice', 'assessment']);
-});
-
-test('models a pending prerequisite separately from a teacher block', () => {
-  const access = studentNodeAccessById({
-    nodes: [
-      { id: 'prerequisite', isTeacherBlocked: false },
-      { id: 'selected', isTeacherBlocked: false },
-    ],
-    dependencies: [{ sourceNodeId: 'prerequisite', targetNodeId: 'selected' }],
-    completedNodeIds: new Set(),
-  });
-
-  expect(access.get('selected')).toEqual({ status: 'BLOCKED', reason: 'PREREQUISITE_BLOCK' });
-});
-
-test('a teacher block prevails over a simultaneous prerequisite block', () => {
-  const access = studentNodeAccessById({
-    nodes: [
-      { id: 'prerequisite', isTeacherBlocked: false },
-      { id: 'selected', isTeacherBlocked: true },
-    ],
-    dependencies: [{ sourceNodeId: 'prerequisite', targetNodeId: 'selected' }],
-    completedNodeIds: new Set(),
-  });
-
-  expect(access.get('selected')).toEqual({ status: 'BLOCKED', reason: 'TEACHER_BLOCK' });
 });
 
 test('keeps teacher-block policy pure while excluding hidden dependent nodes', () => {

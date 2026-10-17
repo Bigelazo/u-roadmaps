@@ -121,11 +121,24 @@ export type NoticeReadSide = Readonly<{
   targetKind: 'node' | 'roadmap';
 }>;
 
+/**
+ * Who a recipient's stored notices of a target are shown to (ADR-0030 decision 3):
+ * - `everyone`: every recipient;
+ * - `node-viewers`: while its Node exists and is visible, even if Blocked;
+ * - `node-openers`: while its Node is visible and accessible to the recipient;
+ * - `dependency-viewers`: while both Nodes of the Dependency are visible;
+ * - `node-type-viewers`: while the Node type has at least one visible Node.
+ */
+export type ShownTo =
+  'everyone' | 'node-viewers' | 'node-openers' | 'dependency-viewers' | 'node-type-viewers';
+
 export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapChangeFact> {
   /** Stored as `data.noticeTarget`; also selects the descriptor at read time. */
   readonly noticeTarget: string;
   readonly noticeClass: NoticeClass;
-  /** Read-side discriminators the Inbox SQL, grouping and counts still use. */
+  /** The Inbox, counts, Node change marks, Change summary and single-notice reads follow it. */
+  readonly shownTo: ShownTo;
+  /** Legacy keys the notice API still returns and grouping reads; never visibility. */
   readonly readSide: NoticeReadSide;
   /** Read-side discriminators that depend on the stored values (stored over `readSide`). */
   valueReadSide?(values: TargetValues): Partial<NoticeReadSide>;

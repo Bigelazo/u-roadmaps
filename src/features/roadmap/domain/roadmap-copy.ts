@@ -1,10 +1,6 @@
 import type { Resource } from '../types';
+import { normalizeName } from './node-type';
 import { fileResourceUrl } from './resource';
-
-/** Case- and whitespace-insensitive identity of a Node type name. */
-export function normalizeName(name: string): string {
-  return name.trim().toLocaleLowerCase('es-CL');
-}
 
 export type RoadmapCopySource = Readonly<{
   customNodeTypes: readonly { id: string; name: string; icon: string; color: string }[];

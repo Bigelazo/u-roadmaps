@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 import { resourceContentState } from '@/shared/server/resource-content-state';
+import { ApplicationError } from '@/shared/errors/server';
 import type {
   RoadmapView,
   RoadmapViewDependency,
@@ -9,11 +10,24 @@ import type {
   RoadmapViewResource,
 } from '../../application/notice-targets';
 
-export type NodeAccessReader = (
+/** One participant's accessible Nodes per Roadmap; a Roadmap without their active Participation is absent. */
+export type ParticipantAccessReader = (
+  transaction: Prisma.TransactionClient,
+  query: { userId: string; roadmapIds: readonly string[] },
+) => Promise<ReadonlyMap<string, ReadonlySet<string>>>;
+
+/** One Roadmap's accessible Nodes; without an active Participation it is 403. */
+export async function roadmapNodeAccess(
+  readAccess: ParticipantAccessReader,
   transaction: Prisma.TransactionClient,
   userId: string,
   roadmapId: string,
-) => Promise<ReadonlySet<string>>;
+): Promise<ReadonlySet<string>> {
+  const access = await readAccess(transaction, { userId, roadmapIds: [roadmapId] });
+  const accessible = access.get(roadmapId);
+  if (!accessible) throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
+  return accessible;
+}
 
 const nodeSelect = {
   id: true,
@@ -51,7 +65,7 @@ const resourceOrder = [{ createdAt: 'asc' }, { id: 'asc' }] as const;
 export function roadmapView(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
-  accessibleNodes?: NodeAccessReader,
+  readAccess?: ParticipantAccessReader,
 ): RoadmapView {
   let participants: ReturnType<RoadmapView['participants']> | undefined;
   let allNodes: Promise<readonly RoadmapViewNode[]> | undefined;
@@ -134,10 +148,10 @@ export function roadmapView(
       return course;
     },
     accessibleNodeIds(userId) {
-      if (!accessibleNodes) throw new Error('Node access is not available in this view.');
+      if (!readAccess) throw new Error('Node access is not available in this view.');
       let ids = accessible.get(userId);
       if (!ids) {
-        ids = accessibleNodes(transaction, userId, roadmapId);
+        ids = roadmapNodeAccess(readAccess, transaction, userId, roadmapId);
         accessible.set(userId, ids);
       }
       return ids;

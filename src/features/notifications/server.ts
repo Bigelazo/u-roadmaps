@@ -1,10 +1,13 @@
 import 'server-only';
 
 import type { Prisma } from '@/shared/server/db';
-import { studentNodeAccessById } from '@/features/roadmap/access';
+import { readParticipantAccess } from '@/features/roadmap/access';
 import {
   acknowledgeOwnNotices as acknowledgeNotices,
+  countOwnNodeChanges,
+  countOwnNoticeTargets,
   findOwnNotice,
+  listOwnNotices as listNotices,
   noticeRecord,
   uuid,
   prepareOwnNoticeOpening as prepareNoticeOpening,
@@ -16,18 +19,26 @@ import {
   type NoticeDelivery,
   type NoticeDeliveryScheduler,
 } from './infrastructure/notice-lifecycle';
-export {
-  reviewOwnNode,
-  listOwnNotices,
-  countOwnNoticeTargets as countOwnNotices,
-  countOwnNodeChanges as countOwnNodeChangeTargets,
-} from './infrastructure/own-inbox';
+export { reviewOwnNode } from './infrastructure/own-inbox';
 
 /** Public types of the notice lifecycle module: a recorded change's deferred delivery and its scheduler. */
 export type { NoticeDelivery, NoticeDeliveryScheduler };
 
+// Notifications receive Node access from the participant view.
+export function listOwnNotices(userId: string, params: URLSearchParams) {
+  return listNotices(userId, params, readParticipantAccess);
+}
+
+export function countOwnNotices(userId: string, params: URLSearchParams) {
+  return countOwnNoticeTargets(userId, params, readParticipantAccess);
+}
+
+export function countOwnNodeChangeTargets(userId: string, params: URLSearchParams) {
+  return countOwnNodeChanges(userId, params, readParticipantAccess);
+}
+
 export function acknowledgeOwnNotices(userId: string, input: Record<string, unknown>) {
-  return acknowledgeNotices(userId, input, accessibleNodes);
+  return acknowledgeNotices(userId, input, readParticipantAccess);
 }
 
 /**
@@ -38,7 +49,7 @@ export function recordRoadmapNotices(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
 ): Promise<NoticeDelivery | undefined> {
-  return recordNoticeTargets(transaction, changes, accessibleNodes);
+  return recordNoticeTargets(transaction, changes, readParticipantAccess);
 }
 
 export type InboxIdentity = Readonly<{ userId: string }>;
@@ -48,50 +59,7 @@ export function getInboxIdentity(userId: string): InboxIdentity {
 }
 
 export async function getOwnNotice(userId: string, id: string) {
-  return noticeRecord(await findOwnNotice(userId, id, accessibleNodes));
-}
-
-async function accessibleNodes(
-  transaction: Prisma.TransactionClient,
-  userId: string,
-  roadmapId: string,
-) {
-  const participation = await transaction.participation.findFirst({
-    where: { userId, isActive: true, courseOffering: { roadmap: { id: roadmapId } } },
-    select: { role: true },
-  });
-  if (!participation)
-    throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
-  const [nodes, dependencies, completions] = await Promise.all([
-    transaction.roadmapNode.findMany({
-      where: { roadmapId, isVisible: true },
-      select: { id: true, isTeacherBlocked: true },
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId } },
-      select: { sourceNodeId: true, targetNodeId: true },
-    }),
-    transaction.completion.findMany({
-      where: { userId, roadmapNode: { roadmapId } },
-      select: { roadmapNodeId: true },
-    }),
-  ]);
-  if (participation.role === 'TEACHER')
-    return new Set(nodes.filter((node) => !node.isTeacherBlocked).map((node) => node.id));
-  const visible = new Set(nodes.map((node) => node.id));
-  return new Set(
-    [
-      ...studentNodeAccessById({
-        nodes,
-        dependencies: dependencies.filter(
-          (edge) => visible.has(edge.sourceNodeId) && visible.has(edge.targetNodeId),
-        ),
-        completedNodeIds: new Set(completions.map((completion) => completion.roadmapNodeId)),
-      }),
-    ]
-      .filter(([, access]) => access.status === 'ACCESSIBLE')
-      .map(([id]) => id),
-  );
+  return noticeRecord(await findOwnNotice(userId, id, readParticipantAccess));
 }
 
 export function prepareOwnRoadmapOpening(userId: string, input: Record<string, unknown>) {
@@ -106,7 +74,7 @@ export function prepareOwnRoadmapOpening(userId: string, input: Record<string, u
   return prepareNoticeOpening(
     userId,
     roadmapId,
-    accessibleNodes,
+    readParticipantAccess,
     operationId,
     input.retry === true,
   ).then((operationId) => ({ roadmapId, operationId }));

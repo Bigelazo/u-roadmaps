@@ -31,6 +31,7 @@ function text(values: TargetValues) {
 export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
   noticeTarget: NOTICE_TARGET.nodeCreation,
   noticeClass: 'roadmap-node-changed',
+  shownTo: 'node-viewers',
   readSide: { changeKind: 'node-available', changedFields: [], targetKind: 'node' },
   scope: 'node',
   matches: (fact): fact is NodeCreatedFact => fact.kind === 'node-created',

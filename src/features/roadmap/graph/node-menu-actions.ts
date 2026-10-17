@@ -32,7 +32,7 @@ export function nodeMenuActions(
       label: visibilityLabel,
       Icon: hidden ? EyeOff : Eye,
       HoverIcon: hidden ? Eye : EyeOff,
-      onSelect: () => onAction?.({ kind: 'change-visibility', nodeId, isVisible: hidden }),
+      onSelect: () => onAction?.({ kind: hidden ? 'show-node' : 'hide-node', nodeId }),
       angle: 30,
     },
     {

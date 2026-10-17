@@ -140,7 +140,7 @@ The reconciliation of a course offering's participants against a complete U-Camp
 _Avoid_: Authentication, additive import
 
 **Participation role (Rol de participación)**:
-The student, observer, or teaching-staff role held by a participation in one course offering. U-Campus students become students; observers retain a distinct observer role and follow the same Roadmap access and Completion rules as students, but are not academically evaluated and receive no passing or failing outcome for the Course offering; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections. Editing the Roadmap follows the Participation role; only Roadmap creation follows the Institutional course position.
+The student, observer, or teaching-staff role held by a participation in one course offering. U-Campus students become students; observers retain a distinct observer role and follow the same Roadmap access and Completion rules as students, but are not academically evaluated and receive no passing or failing outcome for the Course offering; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections. Editing the Roadmap follows the Participation role; only Roadmap creation follows the Institutional course position. For Roadmap notices, teaching staff count as having access to every visible node without a teacher block.
 _Avoid_: Function, global user role
 
 **Institutional course position (Cargo institucional de curso)**:
@@ -164,7 +164,7 @@ An element of a roadmap that holds pedagogical information, has exactly one node
 _Avoid_: Learning unit
 
 **Blocked node (Nodo bloqueado)**:
-A visible node to which a teacher block, a prerequisite block, or both apply. It remains represented in the student's roadmap but exposes neither its pedagogical details nor its resources and cannot be completed, even when that student completed it previously; the completion is retained and becomes effective again after every block is removed. When both reasons apply, the student is told only that teaching staff blocked it.
+A visible node to which a teacher block, a prerequisite block, or both apply. It remains represented in the student's roadmap with its title and node type, but exposes neither its pedagogical details nor its resources and cannot be completed, even when that student completed it previously; the completion is retained and becomes effective again after every block is removed. When both reasons apply, the student is told only that teaching staff blocked it.
 _Avoid_: Hidden node, unavailable node
 
 **Node state (Estado del nodo)**:
@@ -232,8 +232,16 @@ A teaching-staff simulation of a Roadmap's student experience that follows the s
 _Avoid_: Preview, teacher progress, student impersonation, preview completion
 
 **Roadmap canvas session (Sesión del canvas del roadmap)**:
-A participant's active interaction with one Course offering's Roadmap, encompassing the current teaching, student, or Canvas preview experience together with any selected Node or pending confirmation. It ends when the participant leaves for another Course offering and is distinct from authentication.
+A participant's active interaction with one Course offering's Roadmap, encompassing the current teaching, student, or Canvas preview experience together with any selected Node or pending Confirmed action. It ends when the participant leaves for another Course offering and is distinct from authentication.
 _Avoid_: VTI session, browser session, Canvas preview
+
+**Confirmed action (Acción confirmada)**:
+A teaching-staff change to the Roadmap that takes effect only after explicit confirmation, once its Change impact, if it has one, has been shown. At most one is pending per Roadmap canvas session.
+_Avoid_: Dialog, workflow, confirmation flow
+
+**Change impact (Impacto del cambio)**:
+What a Confirmed action would remove, block or release, such as Dependencies, Resources or Teacher blocks. It is recomputed on confirmation; if it changed, the new impact is shown instead of the change taking effect.
+_Avoid_: Preview, impact preview
 
 **Node information preview (Previsualización de información del nodo)**:
 A teaching-staff inspection of a Node's information through the same view available to a student who can access that Node, projecting any unsaved change that is visible in that view. Unlike Canvas preview, it does not evaluate the Node's visibility, Teacher block, or Prerequisite block.

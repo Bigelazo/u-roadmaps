@@ -29,14 +29,13 @@ async function requireNodeAccess(
     completedNodeIds,
   }: { roadmapId: string; nodeId: string; completedNodeIds: ReadonlySet<string> },
 ) {
-  const { nodes, accessByNodeId } = await loadStudentNodeAccess(transaction, {
+  const accessByNodeId = await loadStudentNodeAccess(transaction, {
     roadmapId,
     completedNodeIds,
   });
-  if (!nodes.some((node) => node.id === nodeId)) throw nodeNotFound();
   const access = accessByNodeId.get(nodeId);
-  if (!access || access.status === 'ACCESSIBLE') return;
-  throw blockedNodeAccessError(access);
+  if (!access) throw nodeNotFound();
+  if (access.status === 'BLOCKED') throw blockedNodeAccessError(access);
 }
 
 export async function requireStudentNodeAccess(

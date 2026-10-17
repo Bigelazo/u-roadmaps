@@ -217,6 +217,7 @@ import {
   type RoadmapGraphProps,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 
 const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },
@@ -634,7 +635,6 @@ test('closes the selected node when Escape is pressed on the canvas node', async
 test.each([
   {
     name: 'reports a keyboard node move for persistence',
-    cause: 'keyboard',
     selectedNodeId: 'node-1',
     move: async (user: ReturnType<typeof userEvent.setup>) => {
       screen.getByTestId('keyboard-node').focus();
@@ -643,12 +643,11 @@ test.each([
   },
   {
     name: 'emits the snapped pointer position supplied by React Flow',
-    cause: 'pointer',
     selectedNodeId: undefined,
     move: (user: ReturnType<typeof userEvent.setup>) =>
       user.click(screen.getByRole('button', { name: 'Finalizar arrastre' })),
   },
-])('$name', async ({ cause, selectedNodeId, move }) => {
+])('$name', async ({ selectedNodeId, move }) => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
   renderGraph({ editing: { onEditingIntent }, selectedNodeId });
@@ -656,8 +655,7 @@ test.each([
   await move(user);
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
   expect(onEditingIntent).toHaveBeenCalledWith({
-    kind: 'node-positions',
-    cause,
+    kind: 'move-nodes',
     positions: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
   });
 });
@@ -701,7 +699,7 @@ test('clears action-menu state when editing behavior is removed', async () => {
   expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
 
-test('translates automatic-layout geometry into a session confirmation intent without moving Nodes', async () => {
+test('translates automatic-layout geometry into an automatic-layout command without moving Nodes', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
   renderGraph({ editing: { onEditingIntent } });
@@ -713,14 +711,37 @@ test('translates automatic-layout geometry into a session confirmation intent wi
 
   expect(onEditingIntent).toHaveBeenCalledOnce();
   const [intent] = onEditingIntent.mock.calls[0] as [RoadmapGraphEditingIntent];
-  expect(intent.kind).toBe('request-automatic-layout');
-  if (intent.kind !== 'request-automatic-layout') return;
+  expect(intent.kind).toBe('apply-automatic-layout');
+  if (intent.kind !== 'apply-automatic-layout') return;
   expect(intent.positions.map(({ nodeId }) => nodeId)).toEqual(['node-1', 'node-2']);
   expect(Object.isFrozen(intent.positions)).toBe(true);
   expect(Object.isFrozen(intent.positions[0])).toBe(true);
   expect(Object.isFrozen(intent.positions[0].position)).toBe(true);
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
   expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
+});
+
+test('emits no automatic-layout command when every Node already sits where the layout puts it', async () => {
+  const user = userEvent.setup();
+  const onEditingIntent = vi.fn();
+  const { rerenderGraph } = renderGraph({ editing: { onEditingIntent } });
+  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  const [layout] = onEditingIntent.mock.calls[0] as [CanvasCommandOf<'apply-automatic-layout'>];
+  const laidOut: RoadmapDto = {
+    ...roadmap,
+    nodes: roadmap.nodes.map((node) => {
+      const placement = layout.positions.find(({ nodeId }) => nodeId === node.id);
+      return placement
+        ? { ...node, positionX: placement.position.x, positionY: placement.position.y }
+        : node;
+    }),
+  };
+  onEditingIntent.mockClear();
+
+  rerenderGraph({ roadmap: laidOut, editing: { onEditingIntent } });
+  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+
+  expect(onEditingIntent).not.toHaveBeenCalled();
 });
 
 test('emits a fresh automatic-layout request for each gesture', async () => {
@@ -732,7 +753,7 @@ test('emits a fresh automatic-layout request for each gesture', async () => {
   await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
   expect(onEditingIntent).toHaveBeenCalledTimes(2);
   expect(
-    onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'request-automatic-layout'),
+    onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'apply-automatic-layout'),
   ).toBe(true);
 });
 
