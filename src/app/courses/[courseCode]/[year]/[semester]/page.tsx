@@ -29,6 +29,21 @@ function redirectUnavailableNotice(
   }
 }
 
+async function readCourseCreationInvitation({
+  userId,
+  roadmapId,
+  isTeaching,
+  created,
+}: {
+  userId: string;
+  roadmapId: string | undefined;
+  isTeaching: boolean;
+  created: string | string[] | undefined;
+}) {
+  if (!isTeaching || !roadmapId || created !== '1') return null;
+  return readPostCreationInvitation(userId, roadmapId);
+}
+
 export default async function CoursePage(
   props: PageProps<'/courses/[courseCode]/[year]/[semester]'>,
 ) {
@@ -54,11 +69,7 @@ export default async function CoursePage(
     },
   });
   if (!courseOffering) {
-    if (noticeId) {
-      redirect(
-        `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'course-unavailable' })}`,
-      );
-    }
+    redirectUnavailableNotice(noticeId, null, null);
     notFound();
   }
   // Refresh stored roles on entry; an unavailable source preserves local access.
@@ -72,10 +83,12 @@ export default async function CoursePage(
   const inboxIdentity = getInboxIdentity(user.id);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
   // Landing here from Roadmap creation may show the one-time teaching tutorial invitation.
-  const invitation =
-    isTeaching && courseOffering.roadmap && searchParams.created === '1'
-      ? await readPostCreationInvitation(user.id, courseOffering.roadmap.id)
-      : null;
+  const invitation = await readCourseCreationInvitation({
+    userId: user.id,
+    roadmapId: courseOffering.roadmap?.id,
+    isTeaching,
+    created: searchParams.created,
+  });
 
   return (
     <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
