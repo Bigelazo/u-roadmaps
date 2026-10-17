@@ -44,15 +44,13 @@ export type ScheduledUnlockDecision =
   { kind: 'ALLOWED'; day: CalendarDay | null } | RuleRejection<ScheduledUnlockRuleFailure>;
 
 /**
- * Whether `unlockOn` can become the Node's Scheduled unlock: a calendar day after `today`
- * for a visible Node with a Teacher block. `null` discards the schedule.
+ * Whether `unlockOn` is a Scheduled unlock day at all, whatever the Node: a calendar day
+ * after `today`, or `null` to discard the schedule.
  */
-export function decideScheduledUnlock({
-  node,
+export function decideScheduledUnlockDay({
   unlockOn,
   today,
 }: {
-  node: { isVisible: boolean; isTeacherBlocked: boolean };
   unlockOn: unknown;
   today: CalendarDay;
 }): ScheduledUnlockDecision {
@@ -67,12 +65,30 @@ export function decideScheduledUnlock({
       'INVALID_TEACHER_UNLOCK_DATE',
       'La fecha de desbloqueo debe ser posterior a hoy.',
     );
+  return { kind: 'ALLOWED', day: unlockOn };
+}
+
+/**
+ * Whether `unlockOn` can become the Node's Scheduled unlock: a calendar day after `today`
+ * for a visible Node with a Teacher block. `null` discards the schedule.
+ */
+export function decideScheduledUnlock({
+  node,
+  unlockOn,
+  today,
+}: {
+  node: { isVisible: boolean; isTeacherBlocked: boolean };
+  unlockOn: unknown;
+  today: CalendarDay;
+}): ScheduledUnlockDecision {
+  const day = decideScheduledUnlockDay({ unlockOn, today });
+  if (day.kind === 'REJECTED' || day.day === null) return day;
   if (!node.isVisible || !node.isTeacherBlocked)
     return ruleRejection(
       'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK',
       'Solo se puede programar el desbloqueo de un nodo visible con bloqueo docente.',
     );
-  return { kind: 'ALLOWED', day: unlockOn };
+  return day;
 }
 
 /**

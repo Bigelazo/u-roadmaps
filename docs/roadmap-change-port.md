@@ -40,6 +40,8 @@ la preparación existente de `roadmap_notifications_test_db`; requieren
 `NOTIFICATIONS_DATABASE_URL` en `.env`, igual que la suite de integración.
 Los tests del módulo de comandos (`tests/features/roadmap/roadmap-command.test.ts`),
 con el mismo adapter y PostgreSQL, comprueban la entrega después del commit, el
-descarte ante un commit fallido y que solo entrega el intento confirmado. El comportamiento de los avisos se verifica contra PostgreSQL en la
+descarte ante un commit fallido, que solo entrega el intento confirmado, que una
+entrada inválida responde 400 antes de la autorización y del lock, y que las
+lecturas y las previsualizaciones del editor no bloquean el Roadmap. El comportamiento de los avisos se verifica contra PostgreSQL en la
 suite de integración del módulo (`tests/notifications-integration/`), sin mocks
 de Prisma, y en los specs E2E `own-*`.
