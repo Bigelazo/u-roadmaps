@@ -18,7 +18,12 @@ participante en un Roadmap existente sea un comando de `application/roadmap-comm
 - **Un comando declara solo lo suyo:** la capacidad que exige (`complete` o `edit`), un
   `parse` puro, el alcance de acceso de su cambio (`roadmap`, `actor` o `none`, que puede
   depender de la entrada) y su mutación, que devuelve `{ result, facts }`. El comando
-  nunca llama al port.
+  nunca llama al port. Opcionalmente declara su `lock`: `update` (FOR UPDATE, por
+  defecto) o `key-share` (FOR KEY SHARE) para el progreso de participantes.
+- **Cuatro capacidades:** `read` (cualquier Participation activa), `oversee` (la vista
+  docente de un Roadmap, como la Canvas preview o el Student progress tracking: solo el
+  equipo docente activo), `complete` (estudiantes activos) y `edit` (equipo docente
+  activo). Un Roadmap cerrado solo rechaza `complete` y `edit`.
 - **El módulo fija el orden:** parsea antes de la transacción; resuelve la Participation y
   decide capacidad y cierre con la decisión pura de `domain/roadmap-capability.ts`, sin
   lock; bloquea la fila del Roadmap (FOR UPDATE, o FOR KEY SHARE para el progreso de
@@ -44,7 +49,13 @@ participante en un Roadmap existente sea un comando de `application/roadmap-comm
   consultan la Participation almacenada y nunca sincronizan con U-Campus. La sincronización
   ocurre al ingresar a la plataforma y al entrar a la página del curso o a Student progress
   tracking; quien no tiene una Participation activa recibe 403. Un Roadmap cerrado sigue
-  siendo legible.
+  siendo legible. Una lectura puede declarar `{ roadmap: 'optional' }` para servir una
+  Course offering cuyo Roadmap aún no existe (Student progress tracking); entonces solo
+  decide la Participation.
+- **Las lecturas y las previsualizaciones también parsean antes de autorizar:** un
+  identificador inválido responde 400, no 403. Una subida valida su archivo, parsea y
+  autoriza antes de guardar los bytes, que se guardan fuera de la transacción porque
+  esta puede reintentarse; el registro vuelve a decidir dentro de ella.
 
 ## Alternativas descartadas
 
