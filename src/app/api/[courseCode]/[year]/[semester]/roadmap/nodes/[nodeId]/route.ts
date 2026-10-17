@@ -26,11 +26,15 @@ export const GET = courseRoute(
 );
 
 export const PATCH = courseRoute(
-  async ({ identifier, user, params, body }) => {
-    const result = await updateRoadmapNode(
-      { userId: user.id, identifier, id: params.nodeId, input: body },
-      roadmapChangePort,
-    );
+  async ({ identifier, user, params, body, request }) => {
+    const input = {
+      userId: user.id,
+      identifier,
+      id: params.nodeId,
+      input: body,
+      previewVersion: request.headers.get('x-node-visibility-preview') ?? undefined,
+    };
+    const result = await updateRoadmapNode(input, roadmapChangePort);
     return NextResponse.json(result);
   },
   { body: true, authWithParams: true },

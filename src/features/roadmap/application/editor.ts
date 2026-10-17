@@ -57,6 +57,15 @@ function touchingNode(nodeId: string) {
   return { OR: [{ sourceNodeId: nodeId }, { targetNodeId: nodeId }] };
 }
 
+/** The Dependencies hiding `nodeId` removes, in the order its visibility preview hashes. */
+function dependenciesTouching(transaction: Prisma.TransactionClient, nodeId: string) {
+  return transaction.dependency.findMany({
+    where: touchingNode(nodeId),
+    select: { id: true, sourceNodeId: true, targetNodeId: true },
+    orderBy: { id: 'asc' },
+  });
+}
+
 type RoadmapRuleFailure =
   DependencyRuleFailure | TeacherBlockRuleFailure | ScheduledUnlockRuleFailure;
 
@@ -75,8 +84,26 @@ function ruleError({ reason, message }: RuleRejection<RoadmapRuleFailure>) {
   return new ApplicationError(RULE_FAILURE_STATUS[reason], reason, message);
 }
 
-function versionHash(value: unknown) {
-  return createHash('sha256').update(JSON.stringify(value)).digest('base64url');
+/** A preview's impact with its `version`, the hash a confirmation sends back. */
+function versioned<Impact extends object>(impact: Impact) {
+  const version = createHash('sha256').update(JSON.stringify(impact)).digest('base64url');
+  return { ...impact, version };
+}
+
+/**
+ * Rejects a confirmation whose sent preview version no longer matches the current impact.
+ * A missing version passes unless it is `required`.
+ */
+function rejectStalePreview(
+  sentVersion: string | undefined,
+  { version }: { version: string },
+  code: string,
+  message: string,
+  { required = false } = {},
+) {
+  if (sentVersion ? sentVersion !== version : required) {
+    throw new ApplicationError(409, code, message);
+  }
 }
 
 function dependencyHandle(value: unknown, field: string, fallback: string) {
@@ -191,7 +218,16 @@ type NodeChanges = {
 /** A Node edit; only a visibility change can change anyone's Node access. */
 export const updateRoadmapNode = roadmapCommand({
   capability: 'edit',
-  parse: ({ id, input }: { id: string; input: JsonObject }) => {
+  parse: ({
+    id,
+    input,
+    previewVersion,
+  }: {
+    id: string;
+    input: JsonObject;
+    /** The visibility preview's version; checked only when the edit hides the Node. */
+    previewVersion?: string;
+  }) => {
     const nodeId = requireUuid(id, 'nodeId');
     const changes: NodeChanges = {};
     if ('isVisible' in input) changes.isVisible = requireBoolean(input.isVisible, 'isVisible');
@@ -202,24 +238,27 @@ export const updateRoadmapNode = roadmapCommand({
     if ('positionY' in input) changes.positionY = requireFiniteNumber(input.positionY, 'positionY');
     if (Object.keys(changes).length === 0)
       noChanges('Debe indicar al menos un campo para actualizar.');
-    return { nodeId, changes };
+    return { nodeId, changes, previewVersion };
   },
   access: ({ changes }) => (changes.isVisible === undefined ? 'none' : 'roadmap'),
-  run: async ({ tx, roadmap, actor, input: { nodeId, changes } }) => {
+  run: async ({ tx, roadmap, actor, input: { nodeId, changes, previewVersion } }) => {
     const node = await requireNode(tx, nodeId, roadmap.id);
     if (changes.nodeTypeId !== undefined) await requireType(tx, changes.nodeTypeId, roadmap.id);
     const isVisible = changes.isVisible ?? node.isVisible;
+    // Only a hidden Node loses Dependencies; skip the read on ordinary edits and moves.
+    const dependencies = isVisible ? [] : await dependenciesTouching(tx, node.id);
+    if (changes.isVisible === false) {
+      rejectStalePreview(
+        previewVersion,
+        versioned({ dependencies }),
+        'NODE_VISIBILITY_PREVIEW_STALE',
+        'El impacto de ocultar el nodo cambió. Revisa y confirma la previsualización actualizada.',
+      );
+    }
     const { removedDependencies, clearsTeacherBlock } = decideVisibilityChange({
       nodeId: node.id,
       isVisible,
-      // Only a hidden Node loses Dependencies; skip the read on ordinary edits and moves.
-      dependencies: isVisible
-        ? []
-        : await tx.dependency.findMany({
-            where: touchingNode(node.id),
-            select: { id: true, sourceNodeId: true, targetNodeId: true },
-            orderBy: { id: 'asc' },
-          }),
+      dependencies,
     });
     if (removedDependencies.length > 0) {
       await tx.dependency.deleteMany({ where: touchingNode(node.id) });
@@ -303,7 +342,7 @@ async function nodeDeletionPreview(
     },
     orderBy: { id: 'asc' },
   });
-  const impact = {
+  return versioned({
     node: {
       title: node.title,
       nodeType: node.nodeType,
@@ -314,8 +353,7 @@ async function nodeDeletionPreview(
       targetTitle: dependency.targetNode.title,
     })),
     resources: node.resources,
-  };
-  return { ...impact, version: versionHash(impact) };
+  });
 }
 
 export const previewNodeDeletion = async ({
@@ -338,14 +376,12 @@ const nodeDeletion = roadmapCommand({
   access: 'roadmap',
   conflictMessage: 'La eliminación entra en conflicto con otra modificación.',
   run: async ({ tx, roadmap, input: { nodeId, previewVersion } }) => {
-    const preview = await nodeDeletionPreview(tx, roadmap.id, nodeId);
-    if (previewVersion && previewVersion !== preview.version) {
-      throw new ApplicationError(
-        409,
-        'NODE_DELETE_PREVIEW_STALE',
-        'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
-      );
-    }
+    rejectStalePreview(
+      previewVersion,
+      await nodeDeletionPreview(tx, roadmap.id, nodeId),
+      'NODE_DELETE_PREVIEW_STALE',
+      'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
+    );
     const resources = await tx.resource.findMany({
       where: { roadmapNodeId: nodeId, fileKey: { not: null } },
       select: { fileKey: true },
@@ -477,6 +513,8 @@ async function decideRoadmapDependency(
     transaction.roadmapNode.findMany({
       where: { roadmapId },
       select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
+      // Equal titles keep one order, so the preview's version is stable.
+      orderBy: { id: 'asc' },
     }),
     transaction.dependency.findMany({
       where: { sourceNode: { roadmapId } },
@@ -493,21 +531,32 @@ async function decideRoadmapDependency(
   return {
     sourceNode: nodeFacts(sourceNodeId),
     targetNode: nodeFacts(targetNodeId),
-    teacherBlockedNodes: decision.teacherBlockedNodes,
+    /** The Dependency preview: the dependents its source's Teacher block would block. */
+    preview: versioned({ nodes: decision.teacherBlockedNodes }),
   };
 }
 
 export const createRoadmapDependency = roadmapCommand({
   capability: 'edit',
-  parse: parseDependency,
+  parse: ({ previewVersion, ...request }: { input: JsonObject; previewVersion?: string }) => ({
+    dependency: parseDependency(request),
+    previewVersion,
+  }),
   access: 'roadmap',
   conflictMessage: 'La dependencia entra en conflicto con otra modificación.',
-  run: async ({ tx, roadmap, input }) => {
-    const {
-      sourceNode,
-      targetNode,
-      teacherBlockedNodes: nodes,
-    } = await decideRoadmapDependency(tx, roadmap.id, input);
+  run: async ({ tx, roadmap, input: { dependency: input, previewVersion } }) => {
+    const { sourceNode, targetNode, preview } = await decideRoadmapDependency(
+      tx,
+      roadmap.id,
+      input,
+    );
+    rejectStalePreview(
+      previewVersion,
+      preview,
+      'DEPENDENCY_PREVIEW_STALE',
+      'El impacto de la dependencia cambió. Revisa y confirma la previsualización actualizada.',
+    );
+    const { nodes } = preview;
     const dependency = await tx.dependency.create({ data: input });
     if (nodes.length > 0) {
       await tx.roadmapNode.updateMany({
@@ -538,9 +587,11 @@ export const previewRoadmapDependency = async ({
   ...participant
 }: RoadmapParticipant & { input: JsonObject }) => {
   const dependency = parseDependency({ input });
-  return roadmapRead(participant, 'edit', async ({ tx, roadmap }) => ({
-    nodes: (await decideRoadmapDependency(tx, roadmap.id, dependency)).teacherBlockedNodes,
-  }));
+  return roadmapRead(
+    participant,
+    'edit',
+    async ({ tx, roadmap }) => (await decideRoadmapDependency(tx, roadmap.id, dependency)).preview,
+  );
 };
 
 export const deleteRoadmapDependency = roadmapCommand({
@@ -588,12 +639,7 @@ export const previewNodeVisibility = async ({
   const nodeId = requireUuid(id, 'nodeId');
   return roadmapRead(participant, 'edit', async ({ tx, roadmap }) => {
     const node = await requireNode(tx, nodeId, roadmap.id);
-    const dependencies = await tx.dependency.findMany({
-      where: touchingNode(node.id),
-      select: { id: true, sourceNodeId: true, targetNodeId: true },
-      orderBy: { id: 'asc' },
-    });
-    return { dependencies };
+    return versioned({ dependencies: await dependenciesTouching(tx, node.id) });
   });
 };
 
@@ -618,7 +664,8 @@ async function teacherBlockPreview(
         isTeacherBlocked: true,
         nodeType: { select: { name: true, icon: true, color: true } },
       },
-      orderBy: { title: 'asc' },
+      // Equal titles keep one order, so the preview's version is stable.
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
     }),
     transaction.dependency.findMany({
       where: { sourceNode: { roadmapId } },
@@ -627,8 +674,10 @@ async function teacherBlockPreview(
   ]);
   const decision = decideTeacherBlock({ nodes, dependencies, nodeId, operation });
   if (decision.kind === 'REJECTED') throw ruleError(decision);
-  const preview = { mode: decision.mode, nodes: decision.nodes };
-  return { ...preview, version: versionHash(preview) } satisfies TeacherBlockPreview;
+  return versioned({
+    mode: decision.mode,
+    nodes: decision.nodes,
+  }) satisfies TeacherBlockPreview;
 }
 
 export const previewTeacherBlock = async ({
@@ -651,16 +700,15 @@ export const changeTeacherBlock = roadmapCommand({
   access: 'roadmap',
   run: async ({ tx, roadmap, input }) => {
     const preview = await teacherBlockPreview(tx, roadmap.id, input);
-    if (
-      input.operation !== 'BLOCK' &&
-      (!input.previewVersion || input.previewVersion !== preview.version)
-    ) {
-      throw new ApplicationError(
-        409,
-        'TEACHER_BLOCK_PREVIEW_STALE',
-        'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
-      );
-    }
+    const blocks = input.operation === 'BLOCK';
+    rejectStalePreview(
+      input.previewVersion,
+      preview,
+      'TEACHER_BLOCK_PREVIEW_STALE',
+      `El impacto del ${blocks ? 'bloqueo' : 'desbloqueo'} cambió. Revisa y confirma la previsualización actualizada.`,
+      // An unlock must confirm its previewed impact; a BLOCK only when it sends a version.
+      { required: !blocks },
+    );
     if (preview.nodes.length > 0) {
       await tx.roadmapNode.updateMany({
         where: { id: { in: preview.nodes.map((node) => node.id) } },

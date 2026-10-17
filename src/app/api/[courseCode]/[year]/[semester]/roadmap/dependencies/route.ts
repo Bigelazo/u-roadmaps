@@ -26,11 +26,14 @@ export const GET = courseRoute(async ({ identifier, user, request }) => {
 });
 
 export const POST = courseRoute(
-  async ({ identifier, user, body }) => {
-    const result = await createRoadmapDependency(
-      { userId: user.id, identifier, input: body },
-      roadmapChangePort,
-    );
+  async ({ identifier, user, body, request }) => {
+    const input = {
+      userId: user.id,
+      identifier,
+      input: body,
+      previewVersion: request.headers.get('x-dependency-preview') ?? undefined,
+    };
+    const result = await createRoadmapDependency(input, roadmapChangePort);
     return NextResponse.json(result, { status: 201 });
   },
   { body: true },
