@@ -42,7 +42,7 @@ export function participantNodeAccess<
           dependencies: graph.dependencies,
           completedNodeIds: participant.completedNodeIds,
         })
-      : // Teaching staff, as notice recipients: visible and not Teacher-blocked (ADR-0014).
+      : // Teaching staff, as notice recipients: visible and not Teacher-blocked (ADR-0030).
         new Map(graph.nodes.map((node) => [node.id, teachingStaffAccess(node)]));
   const accessibleNodeIds: ReadonlySet<string> = new Set(
     [...accessByNodeId].filter(([, access]) => access.status === 'ACCESSIBLE').map(([id]) => id),

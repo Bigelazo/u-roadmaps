@@ -22,7 +22,7 @@ const aboutNodeTypes = ['type', 'hidden-type', 'unused-type'].map((nodeTypeId) =
   nodeTypeId,
 }));
 
-// ADR-0014 decision 10, per Notice target: whether each stored notice above is shown.
+// ADR-0030 decision 3, per Notice target: whether each stored notice above is shown.
 const SHOWN: Record<string, [Record<string, string>[], boolean[]]> = {
   'node-title': [aboutNodes, [true, true, false, false]],
   'node-type': [aboutNodes, [true, true, false, false]],

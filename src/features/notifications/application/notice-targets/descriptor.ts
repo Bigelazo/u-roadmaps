@@ -122,7 +122,7 @@ export type NoticeReadSide = Readonly<{
 }>;
 
 /**
- * Who a recipient's stored notices of a target are shown to (ADR-0014 decision 10):
+ * Who a recipient's stored notices of a target are shown to (ADR-0030 decision 3):
  * - `everyone`: every recipient;
  * - `node-viewers`: while its Node exists and is visible, even if Blocked;
  * - `node-openers`: while its Node is visible and accessible to the recipient;
