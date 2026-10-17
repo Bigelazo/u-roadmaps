@@ -29,7 +29,7 @@ import { courseParticipantsUrl, termLabel } from '@/shared/course-offering';
 import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
-import { buttonVariants } from '@/shared/ui/button';
+import { buttonVariants } from '@/shared/ui/button-variants';
 import { cn } from 'cn';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 

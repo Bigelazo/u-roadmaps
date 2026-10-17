@@ -7,7 +7,8 @@ import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/gr
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
-import { Button, buttonVariants } from '@/shared/ui/button';
+import { Button } from '@/shared/ui/button';
+import { buttonVariants } from '@/shared/ui/button-variants';
 import { Card, CardContent, CardHeader } from '@/shared/ui/card';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import type { RoadmapVersion } from '@/features/roadmap/version-types';

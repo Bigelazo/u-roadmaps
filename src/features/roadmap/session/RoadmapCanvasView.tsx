@@ -53,7 +53,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { Spinner } from '@/shared/ui/spinner';
 import { notify } from '@/shared/ui/notify';
 import { Badge } from '@/shared/ui/badge';
-import { Button, buttonVariants } from '@/shared/ui/button';
+import { Button } from '@/shared/ui/button';
+import { buttonVariants } from '@/shared/ui/button-variants';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 import {

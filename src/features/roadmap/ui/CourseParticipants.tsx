@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft, Route, Users } from 'lucide-react';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Badge } from '@/shared/ui/badge';
-import { buttonVariants } from '@/shared/ui/button';
+import { buttonVariants } from '@/shared/ui/button-variants';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { dividedListClassName, PageEyebrow, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { termLabel } from '@/shared/course-offering';

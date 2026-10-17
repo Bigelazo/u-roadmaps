@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { History } from 'lucide-react';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
-import { buttonVariants } from '@/shared/ui/button';
+import { buttonVariants } from '@/shared/ui/button-variants';
 import { dividedListClassName, PageEyebrow, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
 import { versionUrl } from '@/shared/version-history-url';
