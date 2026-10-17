@@ -45,7 +45,7 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
     fallback: 'No se pudo guardar el nodo.',
     success: () => 'Cambios guardados exitosamente.',
   },
-  // No toast on purpose: a drag is its own feedback, and a failed move still is the session error.
+  // No toast on purpose: each drag-stop writes and shows itself; a failure is the session error.
   'move-nodes': {
     /** Each Node moves on its own, so a failed move keeps the others; it fails with the first. */
     write: async (persistence, input, { positions }) => {

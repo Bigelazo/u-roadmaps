@@ -978,7 +978,10 @@ describe('canvas commands', () => {
 
   describe('unconfirmed writes', () => {
     const guide = { id: 'guide', title: 'Guía', url: 'https://example.test/guia', type: 'LINK' };
-    /** Límites is Teacher-blocked, so it can be scheduled, and links a guide; Laboratorio is a Custom node type. */
+    /**
+     * Límites is Teacher-blocked, so it can be scheduled, and links a guide; Laboratorio is a
+     * Custom node type that can be edited.
+     */
     const editable: RoadmapDto = {
       ...withTeacherBlocks('limits'),
       nodeTypes: [...roadmap.nodeTypes, laboratory],
