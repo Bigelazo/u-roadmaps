@@ -11,8 +11,16 @@ import { roadmapCommand, type AccessScope } from '@/features/roadmap/application
 import {
   completeNode,
   completeSimulatedNode,
+  createRoadmapNodeType,
+  createRoadmapResource,
+  deleteRoadmapDependency,
+  previewNodeDeletion,
+  previewNodeVisibility,
+  previewRoadmapDependency,
+  previewTeacherBlock,
   readRoadmapForParticipant,
   resetSimulatedCompletions,
+  scheduleTeacherUnlock,
   updateRoadmapNode,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
@@ -25,6 +33,30 @@ function teacher(course: IntegrationCourse) {
 
 function student(course: IntegrationCourse) {
   return { userId: course.studentId, identifier: course.identifier };
+}
+
+/** Starts the four editor previews, over the course's Node and a second Node. */
+async function editorPreviews(course: IntegrationCourse) {
+  const nodeId = course.change.nodeId;
+  const target = await prisma.roadmapNode.create({
+    data: {
+      roadmapId: course.roadmapId,
+      nodeTypeId: course.nodeTypeId,
+      title: 'Colas',
+      positionX: 0,
+      positionY: 0,
+    },
+  });
+  const editor = teacher(course);
+  return (): Promise<unknown>[] => [
+    previewNodeDeletion({ ...editor, id: nodeId }),
+    previewNodeVisibility({ ...editor, id: nodeId }),
+    previewRoadmapDependency({
+      ...editor,
+      input: { sourceNodeId: nodeId, targetNodeId: target.id },
+    }),
+    previewTeacherBlock({ ...editor, id: nodeId, operation: 'BLOCK' }),
+  ];
 }
 
 /** Holds the Roadmap row FOR UPDATE in another transaction, as an editor or closure would. */
@@ -122,18 +154,20 @@ test('a declared access scope reports access facts, and none reports none', asyn
   expect(recording.changes).toEqual([]);
 });
 
-test('a closed Roadmap answers one code for edit, Completion and Canvas preview', async ({
+test('a closed Roadmap answers one code for edit, previews, Completion and Canvas preview', async ({
   course,
 }) => {
   await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
   const { port } = recordingChangePort();
   const nodeId = course.change.nodeId;
+  const previews = await editorPreviews(course);
   const refusals = await Promise.allSettled([
     updateRoadmapNode({ ...teacher(course), id: nodeId, input: { title: 'Colas' } }, port),
     blockNode('roadmap')({ ...teacher(course), nodeId }, port),
     completeNode({ ...student(course), nodeId }, port),
     completeSimulatedNode({ ...teacher(course), nodeId }, port),
     resetSimulatedCompletions(teacher(course), port),
+    ...previews(),
   ]);
   for (const refusal of refusals)
     expect(refusal).toMatchObject({
@@ -157,23 +191,45 @@ test('a Completion racing with the Roadmap closure is refused as a closed Roadma
   await expect(completion).rejects.toMatchObject({ status: 409, code: 'ROADMAP_CLOSED' });
 });
 
-test('invalid input is refused before the Roadmap lock', async ({ course }) => {
+test('invalid input is refused before authorisation and before the Roadmap lock', async ({
+  course,
+}) => {
   const editing = await holdRoadmapLock(course.roadmapId);
+  const { port } = recordingChangePort();
+  // A student may not edit, so a refusal other than 400 would come from the guard.
+  const nonEditor = student(course);
+  const nodeId = course.change.nodeId;
   try {
-    const outcome = await settledWithin(
-      blockNode('none')({ ...teacher(course), nodeId: 'not-a-node' }, recordingChangePort().port),
+    const outcomes = await Promise.all(
+      [
+        blockNode('none')({ ...nonEditor, nodeId: 'not-a-node' }, port),
+        updateRoadmapNode({ ...nonEditor, id: nodeId, input: {} }, port),
+        createRoadmapNodeType({ ...nonEditor, input: { name: '' } }, port),
+        createRoadmapResource(
+          { ...nonEditor, id: nodeId, input: { title: 'Guía', url: 'sin-url', type: 'LINK' } },
+          port,
+        ),
+        scheduleTeacherUnlock({ ...nonEditor, id: nodeId, unlockOn: '17-10-2026' }, port),
+        deleteRoadmapDependency({ ...nonEditor, id: 'not-a-dependency' }, port),
+      ].map((operation) => settledWithin(operation)),
     );
-    expect(outcome).toMatchObject({ error: { status: 400, code: 'INVALID_REQUEST' } });
+    for (const outcome of outcomes) expect(outcome).toMatchObject({ error: { status: 400 } });
   } finally {
     await editing.release();
   }
 });
 
-test('a participant read takes no Roadmap lock', async ({ course }) => {
+test('reads and editor previews take no Roadmap lock', async ({ course }) => {
+  const previews = await editorPreviews(course);
   const editing = await holdRoadmapLock(course.roadmapId);
   try {
-    const outcome = await settledWithin(readRoadmapForParticipant(student(course)));
-    expect(outcome).toMatchObject({ value: { nodes: expect.any(Array) } });
+    const outcomes = await Promise.all(
+      [readRoadmapForParticipant(student(course)), ...previews()].map((operation) =>
+        settledWithin(operation),
+      ),
+    );
+    expect(outcomes[0]).toMatchObject({ value: { nodes: expect.any(Array) } });
+    for (const outcome of outcomes) expect(outcome).toHaveProperty('value');
   } finally {
     await editing.release();
   }

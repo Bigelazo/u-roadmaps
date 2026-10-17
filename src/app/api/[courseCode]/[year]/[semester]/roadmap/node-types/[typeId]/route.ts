@@ -15,6 +15,9 @@ export const PATCH = courseRoute(
 );
 
 export const DELETE = courseRoute(async ({ identifier, user, params }) => {
-  await deleteRoadmapNodeType({ userId: user.id, identifier, id: params.typeId });
+  await deleteRoadmapNodeType(
+    { userId: user.id, identifier, id: params.typeId },
+    roadmapChangePort,
+  );
   return new NextResponse(null, { status: 204 });
 });
