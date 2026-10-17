@@ -194,6 +194,7 @@ export function RoadmapTutorial<Action = never>({
       else tour.refresh();
     }, 150);
 
+    let exitTimer: ReturnType<typeof setTimeout> | undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (confirmingRef.current || !tour.isActive()) return;
       // Within a page dialog or menu, Esc belongs to it: an action step then follows back.
@@ -206,8 +207,10 @@ export function RoadmapTutorial<Action = never>({
       )
         return;
       // Deferred, so the confirmation opened here does not also receive this Esc.
-      if (event.key === 'Escape') setTimeout(askExit, 0);
-      else if (event.key === 'ArrowRight') void move(tour, 1);
+      if (event.key === 'Escape') {
+        clearTimeout(exitTimer);
+        exitTimer = setTimeout(askExit, 0);
+      } else if (event.key === 'ArrowRight') void move(tour, 1);
       else if (event.key === 'ArrowLeft') void move(tour, -1);
     };
     // Capture runs before the exit confirmation handles its own Esc.
@@ -222,6 +225,7 @@ export function RoadmapTutorial<Action = never>({
       cancelled = true;
       unsubscribe?.();
       clearInterval(followTimer);
+      clearTimeout(exitTimer);
       document.body.classList.remove(actingClass);
       window.removeEventListener('keydown', onKeyDown, true);
       tour.destroy();
