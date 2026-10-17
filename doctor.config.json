@@ -1,0 +1,91 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "ignore": {
+    "files": [".next-e2e/**"],
+    "overrides": [
+      {
+        "files": ["src/app/practice-roadmap/[experience]/page.tsx"],
+        "rules": ["react-doctor/server-sequential-independent-await"]
+      },
+      {
+        "files": ["src/development/server/data.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/notifications/application/notice-targets/node-creation.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/notifications/application/notice-targets/resource.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/notifications/components/ChangeSummaryDialog.tsx"],
+        "rules": ["react-doctor/no-array-index-as-key"]
+      },
+      {
+        "files": ["src/features/notifications/components/NotificationsInbox.tsx"],
+        "rules": ["react-doctor/no-locale-format-in-render"]
+      },
+      {
+        "files": ["src/features/notifications/components/inbox-driver.tsx"],
+        "rules": [
+          "react-doctor/effect-needs-cleanup",
+          "react-doctor/no-loading-flag-reset-outside-finally"
+        ]
+      },
+      {
+        "files": ["src/features/notifications/components/own-realtime.tsx"],
+        "rules": ["react-doctor/effect-needs-cleanup"]
+      },
+      {
+        "files": ["src/features/notifications/infrastructure/notice-lifecycle/entry.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/notifications/infrastructure/notice-lifecycle/known-values.ts"],
+        "rules": ["react-doctor/async-await-in-loop", "react-doctor/raw-sql-injection-risk"]
+      },
+      {
+        "files": ["src/features/notifications/infrastructure/notice-lifecycle/own-changes.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/notifications/infrastructure/notice-lifecycle/recognize.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/notifications/infrastructure/notice-lifecycle/reconcile.ts"],
+        "rules": ["react-doctor/server-sequential-independent-await"]
+      },
+      {
+        "files": ["src/features/notifications/infrastructure/own-inbox.ts"],
+        "rules": ["react-doctor/server-sequential-independent-await"]
+      },
+      {
+        "files": ["src/features/roadmap/application/academic-participation.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/roadmap/application/change-transaction.ts"],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["src/features/roadmap/application/editor.ts"],
+        "rules": [
+          "react-doctor/async-await-in-loop",
+          "react-doctor/async-parallel",
+          "react-doctor/server-sequential-independent-await"
+        ]
+      },
+      {
+        "files": ["src/features/roadmap/editor/MarkdownEditor.tsx"],
+        "rules": ["react-doctor/no-array-index-as-key"]
+      },
+      {
+        "files": ["src/shared/ui/toast.tsx"],
+        "rules": ["react-doctor/shadcn-icon-button-requires-label"]
+      }
+    ]
+  }
+}
