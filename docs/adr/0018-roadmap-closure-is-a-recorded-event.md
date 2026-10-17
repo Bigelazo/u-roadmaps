@@ -46,10 +46,10 @@ congela es peor que uno que se congela tarde.
 - **Resincronizar el calendario semanalmente** para seguir postergaciones: descartado
   por innecesario; la fecha de respaldo cubre los atrasos.
 
-## Note — 2026-10-16: one refusal for a closed Roadmap
+## Nota — 2026-10-16: un único rechazo para un Roadmap cerrado
 
-Every operation on a closed Roadmap, including Completion and Canvas preview, is refused
-with the single error `ROADMAP_CLOSED` (409). Completion and Canvas preview used to answer
-403 `ROADMAP_FROZEN`, which the client did not recognise as a closed Roadmap; that code no
-longer exists. One pure Roadmap capability decision derives the refusal for every guard
-(#267).
+Toda operación sobre un Roadmap cerrado, incluidas las Completions y el Canvas preview,
+se rechaza con el único error `ROADMAP_CLOSED` (409). Las Completions y el Canvas preview
+respondían 403 `ROADMAP_FROZEN`, que el cliente no reconocía como un Roadmap cerrado; ese
+código ya no existe. Una sola decisión pura de capacidades del Roadmap deriva el rechazo
+para todas las guardas (#267).
