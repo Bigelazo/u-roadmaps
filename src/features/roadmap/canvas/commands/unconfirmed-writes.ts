@@ -34,6 +34,7 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
   'add-node': {
     write: (persistence, input, { node, position }) => persistence.addNode(input, node, position),
     fallback: 'No se pudo crear el nodo.',
+    success: () => 'Nodo creado exitosamente.',
     report: (_, nodeId) => (nodeId ? { type: 'addNode', nodeId } : null),
   },
   'update-node': {
@@ -41,6 +42,7 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
     fallback: 'No se pudo guardar el nodo.',
     success: () => 'Cambios guardados exitosamente.',
   },
+  // No toast on purpose: a drag is its own feedback, and a failed move still is the session error.
   'move-nodes': {
     /** Each Node moves on its own, so a failed move keeps the others; it fails with the first. */
     write: async (persistence, input, { positions }) => {
@@ -87,11 +89,13 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
   'add-node-type': {
     write: (persistence, input, { nodeType }) => persistence.addNodeType(input, nodeType),
     fallback: 'No se pudo crear el tipo de nodo.',
+    success: () => 'Tipo de nodo creado exitosamente.',
   },
   'update-node-type': {
     write: (persistence, input, { nodeTypeId, nodeType }) =>
       persistence.updateNodeType(input, nodeTypeId, nodeType),
     fallback: 'No se pudo guardar el tipo de nodo.',
+    success: () => 'Tipo de nodo guardado exitosamente.',
   },
   'complete-node': {
     write: (persistence, input, { nodeId }) => persistence.complete(input, nodeId),

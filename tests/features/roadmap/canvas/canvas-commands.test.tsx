@@ -869,9 +869,17 @@ describe('canvas commands', () => {
 
   describe('unconfirmed writes', () => {
     const guide = { id: 'guide', title: 'Guía', url: 'https://example.test/guia', type: 'LINK' };
-    /** Límites is Teacher-blocked, so it can be scheduled, and links a guide. */
+    const laboratory: NodeType = {
+      id: 'laboratory',
+      name: 'Laboratorio',
+      icon: 'FlaskConical',
+      color: '#024AD8',
+      isPredefined: false,
+    };
+    /** Límites is Teacher-blocked, so it can be scheduled, and links a guide; Laboratorio is a Custom node type. */
     const editable: RoadmapDto = {
       ...withTeacherBlocks('limits'),
+      nodeTypes: [...roadmap.nodeTypes, laboratory],
       nodes: withTeacherBlocks('limits').nodes.map((node) =>
         node.id === 'limits' ? { ...node, resources: [guide] as RoadmapNode['resources'] } : node,
       ),
@@ -989,9 +997,28 @@ describe('canvas commands', () => {
         ],
       ],
       [
+        'creating a Node',
+        {
+          kind: 'add-node',
+          node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
+          position: { x: 480, y: 240 },
+        },
+        'Nodo creado exitosamente.',
+        async (persistence) => (await persistence.load(teachingInput)).nodes.at(-1)?.title,
+        'Sucesiones',
+      ],
+      [
         'creating a Node type',
         { kind: 'add-node-type', nodeType: workshop },
-        null,
+        'Tipo de nodo creado exitosamente.',
+        async (persistence) =>
+          (await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name),
+        ['Contenido', 'Laboratorio', 'Taller'],
+      ],
+      [
+        'saving a Custom node type',
+        { kind: 'update-node-type', nodeTypeId: laboratory.id, nodeType: workshop },
+        'Tipo de nodo guardado exitosamente.',
         async (persistence) =>
           (await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name),
         ['Contenido', 'Taller'],
