@@ -20,6 +20,7 @@ function text({ context }: TargetValues) {
 export const roadmapAvailabilityTarget: NoticeTargetDescriptor<RoadmapCreatedFact> = {
   noticeTarget: NOTICE_TARGET.roadmapAvailability,
   noticeClass: 'roadmap-available',
+  shownTo: 'everyone',
   readSide: { changeKind: 'roadmap-available', changedFields: [], targetKind: 'roadmap' },
   scope: 'roadmap',
   matches: (fact): fact is RoadmapCreatedFact => fact.kind === 'roadmap-created',

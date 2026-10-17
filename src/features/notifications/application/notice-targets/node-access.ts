@@ -28,6 +28,7 @@ function nodeTitle({ context }: TargetValues) {
 export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   noticeTarget: NOTICE_TARGET.nodeAccess,
   noticeClass: 'roadmap-node-changed',
+  shownTo: 'everyone',
   readSide: { changeKind: 'node-available', changedFields: ['access'], targetKind: 'node' },
   valueReadSide: ({ currentValue }) => accessNoticeDestination(currentValue),
   matches: (fact): fact is NodeAccessFact => fact.kind === 'node-access',

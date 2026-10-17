@@ -36,6 +36,7 @@ async function typeRecipients(
 export const typeNameTarget: NoticeTargetDescriptor<NodeTypeNameFact> = {
   noticeTarget: NOTICE_TARGET.nodeTypeName,
   noticeClass: 'roadmap-classification-changed',
+  shownTo: 'node-type-viewers',
   readSide: { changeKind: 'classification-updated', changedFields: [], targetKind: 'roadmap' },
   matches: (fact): fact is NodeTypeNameFact => fact.kind === 'node-type-name',
   target: (fact) => typeNameRef(fact.nodeTypeId),

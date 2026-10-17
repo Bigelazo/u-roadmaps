@@ -74,7 +74,7 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
   );
   await prisma.completion.create({ data: { userId: studentId, roadmapNodeId: chain[0].id } });
 
-  const targets = [
+  const targets: { nodeId?: string; [key: string]: unknown }[] = [
     ...chain.flatMap((node) => [
       { noticeTarget: 'node-title', changeKind: 'node-updated', nodeId: node.id },
       { noticeTarget: 'node-description', changeKind: 'node-updated', nodeId: node.id },
@@ -91,6 +91,12 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
       changeKind: 'classification-updated',
       nodeTypeId: specialType.id,
     },
+    { noticeTarget: 'node-access', changeKind: 'node-available', nodeId: chain[1].id },
+    // A Node that no longer exists shows neither its title nor its description.
+    { noticeTarget: 'node-title', changeKind: 'node-updated', nodeId: randomUUID() },
+    { noticeTarget: 'node-description', changeKind: 'node-updated', nodeId: randomUUID() },
+    // A row no descriptor owns is shown as stored; its legacy keys decide nothing.
+    { changeKind: 'node-updated', changedFields: ['description'], nodeId: chain[1].id },
   ];
   const occurredAt = new Date();
   const notices = [studentId, teacherId].flatMap((recipientId) =>
@@ -142,7 +148,7 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
       const pending = visible.filter(({ acknowledgedAt }) => acknowledgedAt === null);
       const marks: Record<string, number> = {};
       for (const { data } of visible)
-        if ('nodeId' in data) marks[data.nodeId] = (marks[data.nodeId] ?? 0) + 1;
+        if (data.nodeId) marks[data.nodeId] = (marks[data.nodeId] ?? 0) + 1;
       const params = new URLSearchParams({ roadmapId });
       // One comparison per recipient and state, labelled so a mismatch names both.
       expect({

@@ -28,6 +28,7 @@ export type {
   RoadmapViewNode,
   RoadmapViewNodeType,
   RoadmapViewResource,
+  ShownTo,
   TargetContext,
   TargetCurrent,
   TargetValues,

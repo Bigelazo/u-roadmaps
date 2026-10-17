@@ -1,78 +1,86 @@
 import { describe, expect, it } from 'vitest';
-import { isNoticeVisible } from '@/features/notifications/application/notice-visibility';
+import { noticeTargetDescriptors } from '@/features/notifications/application/notice-targets';
+import {
+  isNoticeVisible,
+  NOTICE_TARGETS_SHOWN_TO,
+} from '@/features/notifications/application/notice-visibility';
 
-const nodes = [{ id: 'node', isVisible: true }];
+const nodes = [
+  { id: 'open', isVisible: true, nodeTypeId: 'type' },
+  { id: 'blocked', isVisible: true, nodeTypeId: 'type' },
+  { id: 'hidden', isVisible: false, nodeTypeId: 'hidden-type' },
+];
+const accessible = new Set(['open']);
 
-describe('pending Notice target visibility', () => {
-  it('hides description and Resource notices while blocked, then restores them', () => {
-    for (const data of [
-      { nodeId: 'node', noticeTarget: 'node-description' },
-      { nodeId: 'node', changeKind: 'resource-updated' },
-    ]) {
-      expect(isNoticeVisible(data, nodes, new Set())).toBe(false);
-      expect(isNoticeVisible(data, nodes, new Set(['node']))).toBe(true);
-    }
+// An accessible Node, a Blocked node, a hidden Node and a missing Node.
+const aboutNodes = ['open', 'blocked', 'hidden', 'missing'].map((nodeId) => ({ nodeId }));
+// Both endpoints visible (one Blocked), a hidden endpoint, a missing endpoint.
+const aboutDependencies = [
+  ['open', 'blocked'],
+  ['open', 'hidden'],
+  ['missing', 'open'],
+].map(([sourceNodeId, targetNodeId]) => ({ sourceNodeId, targetNodeId }));
+// A type with a visible (Blocked) Node, a type with only hidden Nodes, an unused type.
+const aboutNodeTypes = ['type', 'hidden-type', 'unused-type'].map((nodeTypeId) => ({
+  nodeTypeId,
+}));
+
+// ADR-0014 decision 10, per Notice target: whether each stored notice above is shown.
+const SHOWN: Record<string, [Record<string, string>[], boolean[]]> = {
+  'node-title': [aboutNodes, [true, true, false, false]],
+  'node-type': [aboutNodes, [true, true, false, false]],
+  'node-creation': [aboutNodes, [true, true, false, false]],
+  'node-description': [aboutNodes, [true, false, false, false]],
+  resource: [aboutNodes, [true, false, false, false]],
+  'node-access': [aboutNodes, [true, true, true, true]],
+  'node-deletion': [aboutNodes, [true, true, true, true]],
+  'roadmap-availability': [[{}], [true]],
+  dependency: [aboutDependencies, [true, false, false]],
+  'node-type-name': [aboutNodeTypes, [true, false, false]],
+};
+
+describe('who a Notice target is shown to', () => {
+  it.each(Object.entries(SHOWN))('%s', (noticeTarget, [stored, shown]) => {
+    expect(
+      stored.map((data) => isNoticeVisible({ noticeTarget, ...data }, nodes, accessible)),
+    ).toEqual(shown);
+  });
+
+  it('covers every Notice target', () => {
+    expect(Object.keys(SHOWN).sort()).toEqual(
+      noticeTargetDescriptors.map(({ noticeTarget }) => noticeTarget).sort(),
+    );
+  });
+
+  it('never decides by the legacy changeKind or changedFields', () => {
+    const legacy = { changeKind: 'node-deleted', changedFields: ['title'] };
+    expect(
+      isNoticeVisible(
+        { ...legacy, noticeTarget: 'resource', nodeId: 'blocked' },
+        nodes,
+        accessible,
+      ),
+    ).toBe(false);
+    // Rows no descriptor owns are shown as stored.
+    expect(
+      isNoticeVisible(
+        { changeKind: 'node-updated', changedFields: ['description'], nodeId: 'hidden' },
+        nodes,
+        accessible,
+      ),
+    ).toBe(true);
   });
 });
 
-it('hides every content target of a hidden Node, but keeps Roadmap withdrawal and deletion notices', () => {
-  const hidden = [{ id: 'node', isVisible: false }];
-  for (const noticeTarget of ['node-title', 'node-type', 'node-description', 'resource']) {
-    expect(isNoticeVisible({ nodeId: 'node', noticeTarget }, hidden, new Set())).toBe(false);
-    expect(isNoticeVisible({ nodeId: 'node', noticeTarget }, nodes, new Set(['node']))).toBe(true);
-  }
-  expect(isNoticeVisible({ nodeId: 'node', noticeTarget: 'node-access' }, hidden, new Set())).toBe(
-    true,
-  );
-  expect(isNoticeVisible({ nodeId: 'deleted', changeKind: 'node-deleted' }, nodes, new Set())).toBe(
-    true,
-  );
-});
-
-it('keeps title and type notices visible on blocked Nodes', () => {
-  for (const noticeTarget of ['node-title', 'node-type'])
-    expect(isNoticeVisible({ nodeId: 'node', noticeTarget }, nodes, new Set())).toBe(true);
-});
-
-it('requires both Dependency endpoints to remain visible, including removed edges', () => {
-  const endpoints = [
-    { id: 'source', isVisible: true },
-    { id: 'target', isVisible: true },
-  ];
-  for (const changeKind of ['dependency-added', 'dependency-removed']) {
-    const data = {
-      noticeTarget: 'dependency',
-      changeKind,
-      sourceNodeId: 'source',
-      targetNodeId: 'target',
-    };
-    expect(isNoticeVisible(data, endpoints, new Set())).toBe(true);
-    for (const hiddenId of ['source', 'target']) {
-      const hidden = endpoints.map((node) => ({ ...node, isVisible: node.id !== hiddenId }));
-      expect(isNoticeVisible(data, hidden, new Set())).toBe(false);
-    }
-    expect(isNoticeVisible(data, endpoints.slice(0, 1), new Set())).toBe(false);
-  }
-});
-
-it('requires at least one visible Node of the renamed type, even if blocked', () => {
-  const data = {
-    noticeTarget: 'node-type-name',
-    changeKind: 'classification-updated',
-    nodeTypeId: 'type',
-  };
-  const typedNodes = [
-    { id: 'one', nodeTypeId: 'type', isVisible: false },
-    { id: 'two', nodeTypeId: 'type', isVisible: true },
-    { id: 'other', nodeTypeId: 'other-type', isVisible: true },
-  ];
-  expect(isNoticeVisible(data, typedNodes, new Set())).toBe(true);
-  expect(
-    isNoticeVisible(
-      data,
-      typedNodes.map((node) => ({ ...node, isVisible: node.nodeTypeId !== 'type' })),
-      new Set(),
-    ),
-  ).toBe(false);
-  expect(isNoticeVisible(data, [], new Set())).toBe(false);
+it('gives the Inbox SQL every Notice target under exactly one shownTo class', () => {
+  const classes = Object.entries(NOTICE_TARGETS_SHOWN_TO);
+  expect(classes.map(([shownTo]) => shownTo).sort()).toEqual([
+    'dependency-viewers',
+    'everyone',
+    'node-openers',
+    'node-type-viewers',
+    'node-viewers',
+  ]);
+  for (const [, targets] of classes) expect(targets).not.toHaveLength(0);
+  expect(classes.flatMap(([, targets]) => targets).sort()).toEqual(Object.keys(SHOWN).sort());
 });

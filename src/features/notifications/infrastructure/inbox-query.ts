@@ -1,6 +1,8 @@
 import 'server-only';
 import { prisma, Prisma } from '@/shared/server/db';
 import { groupedRoadmapNotice } from '../application/group-roadmap-notices';
+import { NOTICE_TARGETS_SHOWN_TO } from '../application/notice-visibility';
+import type { ShownTo } from '../application/notice-targets';
 
 export type InboxFilter = {
   roadmapId?: string;
@@ -78,28 +80,34 @@ function visibleNotices(
     ), visible AS (
       SELECT pending.* FROM pending LEFT JOIN nodes node ON node.id::text = pending.data->>'nodeId'
         AND node."roadmapId" = pending."roadmapId"
-      WHERE jsonb_typeof(pending.data) = 'object' AND CASE
-        WHEN pending.data->>'noticeTarget' = 'dependency' THEN
-          EXISTS (SELECT 1 FROM nodes source WHERE source.id::text = pending.data->>'sourceNodeId'
-            AND source."roadmapId" = pending."roadmapId" AND source."isVisible")
-          AND EXISTS (SELECT 1 FROM nodes target WHERE target.id::text = pending.data->>'targetNodeId'
-            AND target."roadmapId" = pending."roadmapId" AND target."isVisible")
-        WHEN pending.data->>'noticeTarget' = 'node-type-name' THEN
-          EXISTS (SELECT 1 FROM nodes typed WHERE typed."nodeTypeId"::text = pending.data->>'nodeTypeId'
-            AND typed."roadmapId" = pending."roadmapId" AND typed."isVisible")
-        WHEN pending.data->>'noticeTarget' = 'node-access' OR pending.data->>'changeKind' = 'node-deleted' THEN TRUE
-        WHEN node.id IS NULL THEN pending.data->>'noticeTarget' IS DISTINCT FROM 'node-creation'
-        WHEN NOT node."isVisible" THEN FALSE
-        WHEN pending.data->>'noticeTarget' = 'node-description'
-          OR pending.data->>'changeKind' IN ('resource-added', 'resource-updated', 'resource-removed')
-          OR (pending.data->>'changeKind' = 'node-updated'
-            AND NOT COALESCE(pending.data->'changedFields' @> '["title"]'::jsonb, FALSE)
-            AND NOT COALESCE(pending.data->'changedFields' @> '["nodeType"]'::jsonb, FALSE)
-            AND NOT COALESCE((pending.data->'noticeTarget') <> 'null'::jsonb, FALSE))
-          THEN node.id = ANY(${accessibleNodeIds}::uuid[])
-        ELSE TRUE
+      WHERE jsonb_typeof(pending.data) = 'object' AND CASE ${shownToCases(accessibleNodeIds)}
+        ELSE TRUE -- rows no descriptor owns are shown as stored
       END
     )`;
+}
+
+/** One `WHEN` per `shownTo` class over its Notice targets, as `isNoticeVisible` decides it. */
+function shownToCases(accessibleNodeIds: readonly string[]) {
+  const visibleNode = (column: string) => Prisma.sql`EXISTS (SELECT 1 FROM nodes other
+    WHERE other.id::text = pending.data->>${column}::text AND other."roadmapId" = pending."roadmapId"
+      AND other."isVisible")`;
+  const conditions: Record<ShownTo, Prisma.Sql> = {
+    everyone: Prisma.sql`TRUE`,
+    'node-viewers': Prisma.sql`COALESCE(node."isVisible", FALSE)`,
+    'node-openers': Prisma.sql`COALESCE(node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[]), FALSE)`,
+    'dependency-viewers': Prisma.sql`${visibleNode('sourceNodeId')} AND ${visibleNode('targetNodeId')}`,
+    'node-type-viewers': Prisma.sql`EXISTS (SELECT 1 FROM nodes typed
+      WHERE typed."nodeTypeId"::text = pending.data->>'nodeTypeId'
+        AND typed."roadmapId" = pending."roadmapId" AND typed."isVisible")`,
+  };
+  return Prisma.join(
+    (Object.keys(conditions) as ShownTo[]).map(
+      (shownTo) => Prisma.sql`
+        WHEN pending.data->>'noticeTarget' = ANY(${NOTICE_TARGETS_SHOWN_TO[shownTo]}::text[])
+          THEN ${conditions[shownTo]}`,
+    ),
+    '',
+  );
 }
 
 export async function queryInboxPage(
