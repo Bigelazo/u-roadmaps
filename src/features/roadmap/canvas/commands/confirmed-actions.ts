@@ -1,6 +1,7 @@
 import {
-  roadmapConfirmationActionIds,
+  canvasConfirmationChoices,
   type CanvasCommandOf,
+  type CanvasConfirmationChoice,
   type ChangeImpactOf,
   type ConfirmedActionKind,
   type TeacherBlockChangeImpact,
@@ -21,7 +22,7 @@ type Operation<T> = (
 /** What a Confirmed action can do: read and write through the session. */
 export type ConfirmedActionContext = {
   /** Resolves `null` when the read fails; the session reports the failure. */
-  preview: <T>(operation: Operation<T>, fallback: string) => Promise<T | null>;
+  read: <T>(operation: Operation<T>, fallback: string) => Promise<T | null>;
   /** Resolves whether the write succeeded; the session reports a failure and reloads. */
   mutate: (operation: Operation<unknown>, fallback: string) => Promise<boolean>;
   /** Like `mutate`, but for a Canvas preview write: it reloads the Canvas preview instead. */
@@ -29,12 +30,12 @@ export type ConfirmedActionContext = {
 };
 
 /**
- * One Confirmed action. Without `preview` it has no Change impact; with one, the engine
- * shows the impact, previews it again on confirmation and applies `run` only when it is
+ * One Confirmed action. Without `readImpact` it has no Change impact; with it, the engine
+ * shows the impact, reads it again on confirmation and applies `run` only when it is
  * unchanged.
  */
 export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
-  preview?: (
+  readImpact?: (
     context: ConfirmedActionContext,
     request: CanvasCommandOf<Kind>,
   ) => Promise<ChangeImpactOf[Kind] | null>;
@@ -49,39 +50,48 @@ export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
     context: ConfirmedActionContext,
     request: CanvasCommandOf<Kind>,
     impact: ChangeImpactOf[Kind],
-    choice: string | undefined,
+    choice: CanvasConfirmationChoice | undefined,
   ) => Promise<boolean | { retry: CanvasCommandOf<Kind> }>;
   /** The toast shown once the request took effect, except for the `remaining` part. */
   success?: (request: CanvasCommandOf<Kind>, remaining?: CanvasCommandOf<Kind>) => string;
   /** What the Practice roadmap is told once the whole request took effect. */
-  report?: (request: CanvasCommandOf<Kind>, choice: string | undefined) => PracticeCanvasAction;
+  report?: (
+    request: CanvasCommandOf<Kind>,
+    choice: CanvasConfirmationChoice | undefined,
+  ) => PracticeCanvasAction;
 };
 
-/** The unlock scopes teaching staff can choose between; blocking previews only itself. */
-const teacherBlockPreviewOperations = (operation: TeacherBlockOperation) =>
+/** The unlock scopes teaching staff can choose between; blocking reads only its own impact. */
+const teacherBlockImpactOperations = (operation: TeacherBlockOperation) =>
   operation === 'BLOCK' ? (['BLOCK'] as const) : (['UNBLOCK', 'BRANCH_UNLOCK'] as const);
 
 /** The operation each Teacher block choice applies; any other choice applies the requested one. */
-const teacherBlockOperationByChoice: Readonly<Record<string, TeacherBlockOperation>> = {
-  [roadmapConfirmationActionIds.blockTeacher]: 'BLOCK',
-  [roadmapConfirmationActionIds.unlockNode]: 'UNBLOCK',
-  [roadmapConfirmationActionIds.unlockBranch]: 'BRANCH_UNLOCK',
+const teacherBlockOperationByChoice: Partial<
+  Readonly<Record<CanvasConfirmationChoice, TeacherBlockOperation>>
+> = {
+  [canvasConfirmationChoices.blockTeacher]: 'BLOCK',
+  [canvasConfirmationChoices.unlockNode]: 'UNBLOCK',
+  [canvasConfirmationChoices.unlockBranch]: 'BRANCH_UNLOCK',
 };
 
-const chosenTeacherBlockOperation = (requested: TeacherBlockOperation, choice?: string) =>
-  (choice && teacherBlockOperationByChoice[choice]) || requested;
+const chosenTeacherBlockOperation = (
+  requested: TeacherBlockOperation,
+  choice?: CanvasConfirmationChoice,
+) => (choice && teacherBlockOperationByChoice[choice]) || requested;
+
+const visibilityFailure = 'No se pudo cambiar la visibilidad.';
 
 export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<Kind> } = {
   'hide-node': {
-    preview: ({ preview }, { nodeId }) =>
-      preview(
+    readImpact: ({ read }, { nodeId }) =>
+      read(
         (persistence, input) => persistence.previewNodeHiding(input, nodeId),
         'No se pudo calcular el impacto de ocultar el nodo.',
       ),
     run: ({ mutate }, { nodeId }, impact) =>
       mutate(
         (persistence, input) => persistence.setVisibility(input, nodeId, false, impact.version),
-        'No se pudo cambiar la visibilidad.',
+        visibilityFailure,
       ),
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: false }),
   },
@@ -89,13 +99,13 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
     run: ({ mutate }, { nodeId }) =>
       mutate(
         (persistence, input) => persistence.setVisibility(input, nodeId, true),
-        'No se pudo cambiar la visibilidad.',
+        visibilityFailure,
       ),
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: true }),
   },
   'delete-node': {
-    preview: ({ preview }, { nodeId }) =>
-      preview(
+    readImpact: ({ read }, { nodeId }) =>
+      read(
         (persistence, input) => persistence.previewNodeDeletion(input, nodeId),
         'No se pudo calcular el impacto de eliminar el nodo.',
       ),
@@ -107,20 +117,18 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   },
   'change-teacher-block': {
-    preview: async ({ preview }, { nodeId, operation }) => {
-      const operations = teacherBlockPreviewOperations(operation);
-      const previews = await Promise.all(
-        operations.map((previewed) =>
-          preview(
-            (persistence, input) => persistence.previewTeacherBlock(input, nodeId, previewed),
+    readImpact: async ({ read }, { nodeId, operation }) => {
+      const operations = teacherBlockImpactOperations(operation);
+      const impacts = await Promise.all(
+        operations.map((scope) =>
+          read(
+            (persistence, input) => persistence.previewTeacherBlock(input, nodeId, scope),
             'No se pudo calcular el impacto del bloqueo docente.',
           ),
         ),
       );
       const impact: TeacherBlockChangeImpact = Object.fromEntries(
-        operations.flatMap((previewed, index) =>
-          previews[index] ? [[previewed, previews[index]]] : [],
-        ),
+        operations.flatMap((scope, index) => (impacts[index] ? [[scope, impacts[index]]] : [])),
       );
       return impact[operation] ? impact : null;
     },
@@ -139,8 +147,8 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
     }),
   },
   'create-dependency': {
-    preview: ({ preview }, dependency) =>
-      preview(
+    readImpact: ({ read }, dependency) =>
+      read(
         (persistence, input) => persistence.previewRoadmapDependency(input, dependency),
         'No se pudo calcular el impacto de la dependencia.',
       ),

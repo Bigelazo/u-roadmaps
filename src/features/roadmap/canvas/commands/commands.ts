@@ -78,13 +78,12 @@ export type CanvasCommandOf<Kind extends CanvasCommand['kind']> = Extract<
   { kind: Kind }
 >;
 
-/** The confirmation choices every Roadmap confirmation dialog can offer, by identifier. */
-export const roadmapConfirmationActionIds = {
+/** The choices teaching staff can confirm a pending Confirmed action with, by identifier. */
+export const canvasConfirmationChoices = {
   autoLayout: 'auto-layout',
   hideNode: 'hide-node',
   showNode: 'show-node',
   deleteNode: 'delete-node',
-  deleteResource: 'delete-resource',
   deleteNodeType: 'delete-node-type',
   resetCanvasPreview: 'reset-canvas-preview',
   createDependency: 'create-dependency',
@@ -93,19 +92,21 @@ export const roadmapConfirmationActionIds = {
   unlockNode: 'unlock-node',
   unlockBranch: 'unlock-branch',
   unlockPrerequisites: 'unlock-prerequisites',
-  discardEditorDraft: 'discard-draft',
 } as const;
 
+export type CanvasConfirmationChoice =
+  (typeof canvasConfirmationChoices)[keyof typeof canvasConfirmationChoices];
+
 /**
- * The Teacher block previews a confirmation offers, by operation: blocking previews BLOCK
- * alone, and an unlock previews both scopes so teaching staff can unlock only the Node or
+ * The Teacher block impacts a confirmation offers, by operation: blocking reads BLOCK
+ * alone, and an unlock reads both scopes so teaching staff can unlock only the Node or
  * also its dependents.
  */
 export type TeacherBlockChangeImpact = {
   readonly [Operation in TeacherBlockOperation]?: TeacherBlockPreview;
 };
 
-/** The Change impact each Confirmed action shows; `null` when it has none to preview. */
+/** The Change impact each Confirmed action shows; `null` when it has none. */
 export type ChangeImpactOf = {
   'hide-node': NodeHidingImpact;
   'show-node': null;
@@ -128,15 +129,15 @@ export type UnconfirmedCommand = CanvasCommandOf<UnconfirmedCommandKind>;
 
 /**
  * The single pending Confirmed action of a Roadmap canvas session, as plain data.
- * `previewing` reads its Change impact, `awaiting` waits for a choice and `confirming`
- * revalidates the impact and applies `choice`.
+ * `reading-impact` reads its Change impact, `awaiting` waits for a choice and `confirming`
+ * reads the impact again and applies `choice`.
  */
 export type PendingConfirmation = {
   [Kind in ConfirmedActionKind]: {
     readonly kind: Kind;
     readonly request: CanvasCommandOf<Kind>;
     readonly impact: ChangeImpactOf[Kind] | null;
-    readonly phase: 'previewing' | 'awaiting' | 'confirming';
-    readonly choice?: string;
+    readonly phase: 'reading-impact' | 'awaiting' | 'confirming';
+    readonly choice?: CanvasConfirmationChoice;
   };
 }[ConfirmedActionKind];

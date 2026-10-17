@@ -10,9 +10,9 @@ import {
   useReducer,
   useRef,
 } from 'react';
-import { roadmapConfirmationActionIds } from '@/features/roadmap/canvas/commands/commands';
 import {
   editorDraftDiscardConfirmation,
+  nodeEditorConfirmationActionIds,
   resourceDeletionConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
@@ -296,7 +296,7 @@ function useNodeEditorController(
       const current = stateRef.current;
       const resource = current.pendingResourceDeletion;
       if (
-        actionId !== roadmapConfirmationActionIds.deleteResource ||
+        actionId !== nodeEditorConfirmationActionIds.deleteResource ||
         !resource ||
         current.pendingEditorEffect
       )
@@ -416,7 +416,7 @@ function useNodeEditorController(
   const confirmGuard = useCallback(
     (actionId: string) => {
       if (
-        actionId !== roadmapConfirmationActionIds.discardEditorDraft ||
+        actionId !== nodeEditorConfirmationActionIds.discardEditorDraft ||
         !stateRef.current.pendingGuard
       )
         return;
@@ -457,7 +457,7 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(
           }
           pendingActionId={
             state.pendingEditorEffect?.effect.kind === 'delete-resource'
-              ? roadmapConfirmationActionIds.deleteResource
+              ? nodeEditorConfirmationActionIds.deleteResource
               : undefined
           }
           onCancel={transitions.cancelResourceDeletion}

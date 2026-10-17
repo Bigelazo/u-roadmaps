@@ -49,7 +49,10 @@ de igualdad. Se decide que las escrituras del canvas pasen por un módulo de com
   práctica y si recarga el Roadmap o solo la Canvas preview. Los mensajes de éxito solo
   los muestra el módulo; los errores siguen siendo el error de la sesión.
 - **Un solo canal de avisos al Mapa de práctica.** El módulo avisa cada comando que tuvo
-  efecto, una vez y con la operación elegida. La vista avisa solo eventos de la interfaz
+  efecto, una vez y con la operación elegida. Un comando tuvo efecto cuando su escritura
+  se guardó: si la recarga que la sigue falla, la falla es el error de la sesión, y si
+  otra recarga la reemplaza, esa otra muestra el resultado; ninguna de las dos pierde el
+  aviso. La vista avisa solo eventos de la interfaz
   (seleccionar un Nodo, centrar el mapa, salir de la Canvas preview). Entrar a la Canvas
   preview se avisa una vez por entrada, no en cada recarga de la previsualización.
 - **La vista solo dibuja la confirmación pendiente.** El canvas muestra un único diálogo

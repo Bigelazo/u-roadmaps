@@ -40,7 +40,10 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type {
+  CanvasCommand,
+  CanvasConfirmationChoice,
+} from '@/features/roadmap/canvas/commands/commands';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type {
   RoadmapDto,
@@ -224,12 +227,12 @@ function useRoadmapCanvasController({ input }: Props) {
   });
   useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
 
-  const { request, perform } = canvasCommands;
+  const { request } = canvasCommands;
   const performEditorEffect = useCallback(
     async (effect: NodeEditorEffect): Promise<NodeEditorPerformResult> => ({
-      status: (await perform(effect)) ? 'committed' : 'rejected',
+      status: (await request(effect)) ? 'committed' : 'rejected',
     }),
-    [perform],
+    [request],
   );
 
   const canvasMode = deriveCanvasMode({
@@ -377,10 +380,6 @@ function useRoadmapCanvasController({ input }: Props) {
     requestNodeFocusReturn,
     selectedNodeId,
   ]);
-  const runCanvasCommand = useCallback(
-    (command: CanvasCommand) => void request(command),
-    [request],
-  );
   const handleNodeEditorIntent = useCallback(
     (intent: NodeEditorIntent) => {
       switch (intent.kind) {
@@ -395,17 +394,17 @@ function useRoadmapCanvasController({ input }: Props) {
           });
           return;
         default:
-          runCanvasCommand(intent);
+          void request(intent);
       }
     },
-    [closeSelectedNodeNow, runCanvasCommand],
+    [closeSelectedNodeNow, request],
   );
   const handleGraphEditingIntent = useCallback(
     (intent: RoadmapGraphEditingIntent) => {
       if (intent.kind === 'add-resource') openResourceComposer(intent.nodeId);
-      else runCanvasCommand(intent);
+      else void request(intent);
     },
-    [openResourceComposer, runCanvasCommand],
+    [openResourceComposer, request],
   );
   const graphEditing = useMemo<RoadmapGraphEditing | undefined>(
     () =>
@@ -449,7 +448,6 @@ function useRoadmapCanvasController({ input }: Props) {
     canvasCommands,
     canvasPreviewWorkflow,
     confirmedAutomaticLayout,
-    runCanvasCommand,
     performEditorEffect,
     canvasMode,
     isHistoricalRoadmap,
@@ -524,7 +522,7 @@ export function RoadmapCanvasView({ input }: Props) {
   ) => {
     const position = findOpenPosition(node.title);
     if (!position) return Promise.resolve(false);
-    return canvasCommands.perform({ kind: 'add-node', node, position });
+    return canvasCommands.request({ kind: 'add-node', node, position });
   };
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
@@ -632,7 +630,8 @@ function RoadmapCanvasConfirmation({
       confirmation={pending && roadmap ? canvasConfirmation(pending, roadmap) : null}
       pendingActionId={pending?.phase === 'confirming' ? pending.choice : undefined}
       onCancel={cancel}
-      onAction={(choice) => void confirm(choice)}
+      // The dialog offers only the choices the canvas confirmation built from the module's.
+      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice)}
     />
   );
 }
@@ -730,7 +729,7 @@ function RoadmapStudentPanel({
           onComplete={(node) => {
             if (canvasPreviewWorkflow.completeNode(node.id)) return;
             if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
-            else void canvasCommands.perform({ kind: 'complete-node', nodeId: node.id });
+            else void canvasCommands.request({ kind: 'complete-node', nodeId: node.id });
           }}
           isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
           isTeacherPreview={Boolean(teacherPreviewNode)}
@@ -787,7 +786,6 @@ function RoadmapCanvasGraph({
     canvasCommands,
     canvasPreviewWorkflow,
     confirmedAutomaticLayout,
-    runCanvasCommand,
     canvasMode,
     isHistoricalRoadmap,
     isCanvasPreview,
@@ -881,13 +879,13 @@ function RoadmapCanvasGraph({
                 nodeTypes={roadmap.nodeTypes}
                 onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
                 onCreateNodeType={(nodeType) =>
-                  canvasCommands.perform({ kind: 'add-node-type', nodeType })
+                  canvasCommands.request({ kind: 'add-node-type', nodeType })
                 }
                 onUpdateNodeType={(nodeTypeId, nodeType) =>
-                  canvasCommands.perform({ kind: 'update-node-type', nodeTypeId, nodeType })
+                  canvasCommands.request({ kind: 'update-node-type', nodeTypeId, nodeType })
                 }
                 onRequestDeleteNodeType={(nodeType) =>
-                  runCanvasCommand({ kind: 'delete-node-type', nodeTypeId: nodeType.id })
+                  void canvasCommands.request({ kind: 'delete-node-type', nodeTypeId: nodeType.id })
                 }
               />
             )
@@ -908,7 +906,7 @@ function RoadmapCanvasGraph({
           <CanvasPreviewToolbar
             canReset={canResetCanvasPreview}
             isHistorical={isHistoricalRoadmap}
-            onRequestReset={() => runCanvasCommand({ kind: 'reset-canvas-preview' })}
+            onRequestReset={() => void canvasCommands.request({ kind: 'reset-canvas-preview' })}
             onExit={() => {
               if (!canvasPreviewWorkflow.isActive) return;
               canvasPreviewWorkflow.exit();

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import type {
   CanvasCommand,
   CanvasCommandOf,
+  CanvasConfirmationChoice,
   ConfirmedActionKind,
   PendingConfirmation,
   UnconfirmedCommand,
@@ -30,7 +31,7 @@ import { notify } from '@/shared/ui/notify';
 export type CanvasCommandSession = {
   persistence: RoadmapCanvasSessionPersistence;
   stableInput: RoadmapCanvasSessionInput;
-  preview: <T>(operation: () => Promise<T>, fallback: string) => Promise<T | null>;
+  read: <T>(operation: () => Promise<T>, fallback: string) => Promise<T | null>;
   mutate: <T>(
     operation: () => Promise<T>,
     fallback: string,
@@ -52,6 +53,21 @@ type CanvasCommandsOptions = {
   report?: (action: PracticeCanvasAction) => void;
 };
 
+/** The canvas commands of a Roadmap canvas session and its single pending Confirmed action. */
+export type CanvasCommands = {
+  pending: PendingConfirmation | null;
+  /**
+   * Runs a command: an unconfirmed write applies at once, and a Confirmed action opens,
+   * unless another one is pending. Resolves whether the command took effect; a Confirmed
+   * action waiting for a choice has not yet.
+   */
+  request: (command: CanvasCommand) => Promise<boolean>;
+  /** Confirms the awaiting Confirmed action with this choice. */
+  confirm: (choice: CanvasConfirmationChoice) => Promise<void>;
+  /** Drops the awaiting Confirmed action without changing anything. */
+  cancel: () => void;
+};
+
 type AnyConfirmedAction = ConfirmedAction<ConfirmedActionKind>;
 
 /** The declarations are typed per kind; the engine runs any of them on its own pending data. */
@@ -67,7 +83,7 @@ function unconfirmedWriteOf(kind: UnconfirmedCommandKind) {
   return unconfirmedWrites[kind] as unknown as UnconfirmedWrite<UnconfirmedCommandKind>;
 }
 
-/** Change impacts come from deterministic previews, so equal content serializes equally. */
+/** Change impacts come from deterministic reads, so equal content serializes equally. */
 function sameChangeImpact(first: unknown, second: unknown) {
   return JSON.stringify(first) === JSON.stringify(second);
 }
@@ -81,7 +97,7 @@ function pendingConfirmation(
   { kind, request }: OpenedRequest,
   impact: unknown,
   phase: PendingConfirmation['phase'],
-  choice?: string,
+  choice?: CanvasConfirmationChoice,
 ) {
   return { kind, request, impact, phase, ...(choice ? { choice } : {}) } as PendingConfirmation;
 }
@@ -93,20 +109,21 @@ function needsConfirmation(kind: ConfirmedActionKind, impact: unknown) {
 
 /**
  * Runs every canvas write. Confirmed actions share a single pending slot: at most one is
- * previewing, awaiting a choice or confirming at a time. On confirmation the Change impact
- * is previewed again; a changed impact is shown instead of taking effect, and a failed write
- * shows the latest one. Unconfirmed writes apply at once. Each write that took effect shows
- * its toast and is reported to the Practice roadmap; a failure is the session error.
+ * reading its Change impact, awaiting a choice or confirming at a time. On confirmation the
+ * Change impact is read again; a changed impact is shown instead of taking effect, and a
+ * failed write shows the latest one. Unconfirmed writes apply at once. Each write that took
+ * effect shows its toast and is reported to the Practice roadmap; a failure is the session
+ * error.
  */
 export function useCanvasCommands({
   session,
   guardDraft,
   onCommandApplied,
   report,
-}: CanvasCommandsOptions) {
+}: CanvasCommandsOptions): CanvasCommands {
   const [pending, setPendingState] = useState<PendingConfirmation | null>(null);
   const pendingRef = useRef<PendingConfirmation | null>(null);
-  const { persistence, stableInput, preview, mutate, loadSimulation } = session;
+  const { persistence, stableInput, read, mutate, loadSimulation } = session;
 
   const commands = useMemo(() => {
     const setPending = (next: PendingConfirmation | null) => {
@@ -128,8 +145,7 @@ export function useCanvasCommands({
       return written;
     }
     const context: ConfirmedActionContext = {
-      preview: (operation, fallback) =>
-        preview(() => operation(persistence, stableInput), fallback),
+      read: (operation, fallback) => read(() => operation(persistence, stableInput), fallback),
       mutate: async (operation, fallback) =>
         (await write(() => operation(persistence, stableInput), fallback)).success,
       mutateCanvasPreview: async (operation, fallback) =>
@@ -137,17 +153,6 @@ export function useCanvasCommands({
           .success,
     };
     const isSlotFree = () => pendingRef.current === null;
-
-    /** The view and the Practice roadmap follow up on a command that took effect. */
-    function tookEffect(
-      command: CanvasCommand,
-      action: PracticeCanvasAction | null | undefined,
-      createdNodeId?: string,
-    ) {
-      if (action) report?.(action);
-      if (createdNodeId) onCommandApplied(command, createdNodeId);
-      else onCommandApplied(command);
-    }
 
     /** Applies an unconfirmed write; resolves whether it took effect. */
     async function perform(command: UnconfirmedCommand) {
@@ -160,15 +165,22 @@ export function useCanvasCommands({
       if (!success) return false;
       const message = declaration.success?.(command);
       if (message) notify.success(message);
-      tookEffect(command, declaration.report?.(command, result), result || undefined);
+      const action = declaration.report?.(command, result);
+      if (action) report?.(action);
+      onCommandApplied(command, result || undefined);
       return true;
     }
 
     /**
-     * Runs the request. A partial success opens what remains; a failure shows the latest
-     * Change impact again, or frees the slot when it no longer needs confirming.
+     * Runs the request; resolves whether all of it took effect. A partial success opens
+     * what remains; a failure shows the latest Change impact again, or frees the slot when
+     * it no longer needs confirming.
      */
-    async function apply(opened: OpenedRequest, impact: unknown, choice?: string) {
+    async function apply(
+      opened: OpenedRequest,
+      impact: unknown,
+      choice?: CanvasConfirmationChoice,
+    ): Promise<boolean> {
       const action = declarationOf(opened.kind);
       setPending(pendingConfirmation(opened, impact, 'confirming', choice));
       const result = await action.run(context, opened.request, impact as never, choice);
@@ -178,58 +190,60 @@ export function useCanvasCommands({
         if (message) notify.success(message);
         if (remaining) return open({ kind: opened.kind, request: remaining });
         setPending(null);
-        tookEffect(opened.request, action.report?.(opened.request, choice));
-        return;
+        const practiceAction = action.report?.(opened.request, choice);
+        if (practiceAction) report?.(practiceAction);
+        onCommandApplied(opened.request);
+        return true;
       }
-      const latest = (action.preview && (await action.preview(context, opened.request))) ?? impact;
+      const latest =
+        (action.readImpact && (await action.readImpact(context, opened.request))) ?? impact;
       setPending(
         needsConfirmation(opened.kind, latest)
           ? pendingConfirmation(opened, latest, 'awaiting')
           : null,
       );
+      return false;
     }
 
     /** Waits for a choice on this impact, or applies it at once when it needs none. */
     async function present(opened: OpenedRequest, impact: unknown) {
-      if (needsConfirmation(opened.kind, impact)) {
-        setPending(pendingConfirmation(opened, impact, 'awaiting'));
-      } else {
-        await apply(opened, impact);
-      }
+      if (!needsConfirmation(opened.kind, impact)) return apply(opened, impact);
+      setPending(pendingConfirmation(opened, impact, 'awaiting'));
+      return false;
     }
 
     /** Reads the request's Change impact and presents it; a failed read frees the slot. */
     async function open(opened: OpenedRequest) {
       const action = declarationOf(opened.kind);
-      if (!action.preview) return present(opened, null);
-      setPending(pendingConfirmation(opened, null, 'previewing'));
-      const impact = await action.preview(context, opened.request);
-      if (impact) await present(opened, impact);
-      else setPending(null);
+      if (!action.readImpact) return present(opened, null);
+      setPending(pendingConfirmation(opened, null, 'reading-impact'));
+      const impact = await action.readImpact(context, opened.request);
+      if (impact) return present(opened, impact);
+      setPending(null);
+      return false;
     }
 
-    /** Opens a Confirmed action, or applies an unconfirmed write at once. */
     async function request(command: CanvasCommand) {
-      if (!isConfirmed(command)) {
-        await perform(command);
-        return;
-      }
-      if (!isSlotFree()) return;
+      if (!isConfirmed(command)) return perform(command);
+      if (!isSlotFree()) return false;
       // The draft question finishes before the slot is claimed, so it never locks the canvas.
       if (command.kind === 'delete-node') {
         const proceed = await guardDraft({ kind: 'delete-node', nodeId: command.nodeId });
-        if (!proceed || !isSlotFree()) return;
+        if (!proceed || !isSlotFree()) return false;
       }
-      await open({ kind: command.kind, request: command });
+      return open({ kind: command.kind, request: command });
     }
 
-    async function confirm(choice: string) {
+    async function confirm(choice: CanvasConfirmationChoice) {
       const awaiting = pendingRef.current;
       if (awaiting?.phase !== 'awaiting') return;
       const action = declarationOf(awaiting.kind);
-      if (!action.preview) return apply(awaiting, awaiting.impact, choice);
+      if (!action.readImpact) {
+        await apply(awaiting, awaiting.impact, choice);
+        return;
+      }
       setPending(pendingConfirmation(awaiting, awaiting.impact, 'confirming', choice));
-      const latest = await action.preview(context, awaiting.request);
+      const latest = await action.readImpact(context, awaiting.request);
       if (!latest) setPending(awaiting);
       else if (!sameChangeImpact(latest, awaiting.impact)) await present(awaiting, latest);
       else await apply(awaiting, latest, choice);
@@ -239,14 +253,14 @@ export function useCanvasCommands({
       if (pendingRef.current?.phase === 'awaiting') setPending(null);
     };
 
-    return { request, perform, confirm, cancel };
+    return { request, confirm, cancel };
   }, [
     guardDraft,
     loadSimulation,
     mutate,
     onCommandApplied,
     persistence,
-    preview,
+    read,
     report,
     stableInput,
   ]);

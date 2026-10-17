@@ -248,7 +248,7 @@ describe('canvasConfirmation', () => {
           kind: 'delete-node',
           request: { kind: 'delete-node', nodeId: 'b' },
           impact: null,
-          phase: 'previewing',
+          phase: 'reading-impact',
         },
         roadmap,
       ),

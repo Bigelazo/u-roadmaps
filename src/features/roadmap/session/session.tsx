@@ -11,7 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
-import { useCanvasCommands } from '@/features/roadmap/canvas/commands/use-canvas-commands';
+import {
+  useCanvasCommands,
+  type CanvasCommandSession,
+  type CanvasCommands,
+} from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type { AnyRoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
@@ -71,10 +75,27 @@ export function RoadmapCanvasSessionPersistenceProvider({
   return <persistenceContext.Provider value={persistence}>{children}</persistenceContext.Provider>;
 }
 
+/** What a Roadmap canvas session shows; its writes run through `canvasCommands`. */
+type RoadmapCanvasSessionState = {
+  roadmap: AnyRoadmapDto | null;
+  simulationRoadmap: StudentRoadmapDto | null;
+  error: string | null;
+  dismissError: () => void;
+  retryRefresh: () => void;
+  accessLost: boolean;
+  isClosed: boolean;
+  loadSimulation: () => Promise<boolean>;
+};
+
+export type RoadmapCanvasSession = RoadmapCanvasSessionState & {
+  canvasPreviewWorkflow: ReturnType<typeof useCanvasPreviewWorkflow>;
+  canvasCommands: CanvasCommands;
+};
+
 function useInjectedSession(
   input: RoadmapCanvasSessionInput,
   persistence: RoadmapCanvasSessionPersistence,
-) {
+): { state: RoadmapCanvasSessionState; commandSession: CanvasCommandSession } {
   const [roadmap, setRoadmap] = useState<AnyRoadmapDto | null>(null);
   const [simulationRoadmap, setSimulationRoadmap] = useState<StudentRoadmapDto | null>(null);
   const [roadmapKey, setRoadmapKey] = useState<string | null>(null);
@@ -251,9 +272,9 @@ function useInjectedSession(
   );
 
   /**
-   * Runs a write, then reloads the Roadmap; a failed write is the session error. The write
-   * took effect once it resolves: a failed reload is shown as the session error but does
-   * not undo it.
+   * Runs a write, then reloads the Roadmap unless `reload` is false; a failed write is the
+   * session error. The write took effect once it resolves: a failed reload is shown as the
+   * session error but does not undo it.
    */
   const mutate = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string, reload = true) => {
@@ -279,7 +300,7 @@ function useInjectedSession(
   );
 
   /** Runs a read whose failure is reported as the session error; resolves `null` then. */
-  const preview = useCallback(
+  const read = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
       try {
@@ -317,43 +338,41 @@ function useInjectedSession(
   }, [persistence, stableInput]);
 
   return {
-    roadmap: roadmapKey === key ? roadmap : null,
-    simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
-    error: error?.key === key ? error.message : null,
-    dismissError,
-    retryRefresh,
-    accessLost,
-    isClosed:
-      input.experience.term === 'historical' ||
-      closedKey === key ||
-      (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
-    loadSimulation,
-    persistence,
-    /** The session input without the fields only the view reads, so its identity stays stable. */
-    stableInput,
-    mutate,
-    preview,
+    state: {
+      roadmap: roadmapKey === key ? roadmap : null,
+      simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
+      error: error?.key === key ? error.message : null,
+      dismissError,
+      retryRefresh,
+      accessLost,
+      isClosed:
+        input.experience.term === 'historical' ||
+        closedKey === key ||
+        (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
+      loadSimulation,
+    },
+    commandSession: { persistence, stableInput, read, mutate, loadSimulation },
   };
 }
 
 export function useRoadmapCanvasSession(
   input: RoadmapCanvasSessionInput,
   options: RoadmapCanvasSessionOptions = {},
-) {
+): RoadmapCanvasSession {
   const persistence = useContext(persistenceContext);
-  const active = useInjectedSession(input, persistence);
+  const { state: active, commandSession } = useInjectedSession(input, persistence);
   const guardDraft = options.guardDraft ?? allowAnyDraft;
   const report = input.practice?.onAction;
   const canvasCommands = useCanvasCommands({
-    session: active,
+    session: commandSession,
     guardDraft,
     onCommandApplied: options.onCommandApplied ?? noop,
     report,
   });
-  const { perform } = canvasCommands;
+  const { request } = canvasCommands;
   const completeSimulatedNode = useCallback(
-    (nodeId: string) => perform({ kind: 'complete-simulated-node', nodeId }),
-    [perform],
+    (nodeId: string) => request({ kind: 'complete-simulated-node', nodeId }),
+    [request],
   );
   const prepareCanvasPreview = options.canvasPreview?.onEnter ?? noop;
   // Reported once per entry, although the Canvas preview reloads on every Roadmap change.

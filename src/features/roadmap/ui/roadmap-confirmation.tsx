@@ -1,5 +1,5 @@
 import {
-  roadmapConfirmationActionIds,
+  canvasConfirmationChoices,
   type PendingConfirmation,
 } from '@/features/roadmap/canvas/commands/commands';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
@@ -56,7 +56,7 @@ const roadmapAutoLayoutConfirmation = {
   title: 'Confirmar ordenamiento',
   description: 'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
   intent: 'warning',
-  actions: [{ id: roadmapConfirmationActionIds.autoLayout, label: 'Ordenar nodos' }],
+  actions: [{ id: canvasConfirmationChoices.autoLayout, label: 'Ordenar nodos' }],
 } as const satisfies ConfirmationPresentation;
 
 const canvasPreviewResetConfirmation = {
@@ -64,8 +64,14 @@ const canvasPreviewResetConfirmation = {
   description:
     'Eliminarás las completaciones simuladas de este Canvas preview. No se eliminarán las Completions estudiantiles. Esta acción no se puede deshacer.',
   intent: 'destructive',
-  actions: [{ id: roadmapConfirmationActionIds.resetCanvasPreview, label: 'Reiniciar progreso' }],
+  actions: [{ id: canvasConfirmationChoices.resetCanvasPreview, label: 'Reiniciar progreso' }],
 } as const satisfies ConfirmationPresentation;
+
+/** The choices of the Node editor's own confirmations, which never reach the canvas module. */
+export const nodeEditorConfirmationActionIds = {
+  deleteResource: 'delete-resource',
+  discardEditorDraft: 'discard-draft',
+} as const;
 
 const editorDraftDiscardDescriptions: Record<NodeEditorGuardReason['kind'], string> = {
   'replace-node':
@@ -90,7 +96,7 @@ export function editorDraftDiscardConfirmation(
     cancelLabel: 'Seguir editando',
     actions: [
       {
-        id: roadmapConfirmationActionIds.discardEditorDraft,
+        id: nodeEditorConfirmationActionIds.discardEditorDraft,
         label:
           destination.kind === 'enter-canvas-preview'
             ? 'Descartar y previsualizar'
@@ -216,7 +222,7 @@ export function roadmapDependencyConfirmation({
         emptyMessage: teacherBlockEmptyMessage,
       },
     ],
-    actions: [{ id: roadmapConfirmationActionIds.createDependency, label: 'Conectar y bloquear' }],
+    actions: [{ id: canvasConfirmationChoices.createDependency, label: 'Conectar y bloquear' }],
   };
 }
 
@@ -229,7 +235,7 @@ export function roadmapDependencyDeletionConfirmation(
     title: 'Confirmar eliminación',
     description: `Eliminarás ${dependencyLabel}. Esta acción no se puede deshacer.`,
     intent: 'destructive',
-    actions: [{ id: roadmapConfirmationActionIds.deleteDependencies, label: 'Eliminar' }],
+    actions: [{ id: canvasConfirmationChoices.deleteDependencies, label: 'Eliminar' }],
   };
 }
 
@@ -294,8 +300,8 @@ export function roadmapTeacherBlockConfirmation({
       }`,
       intent: 'warning',
       actions: [
-        { id: roadmapConfirmationActionIds.unlockNode, label: 'Solo este nodo' },
-        { id: roadmapConfirmationActionIds.unlockBranch, label: 'Incluir dependientes' },
+        { id: canvasConfirmationChoices.unlockNode, label: 'Solo este nodo' },
+        { id: canvasConfirmationChoices.unlockBranch, label: 'Incluir dependientes' },
       ],
     };
   }
@@ -346,7 +352,7 @@ export function roadmapTeacherBlockConfirmation({
         </>
       ),
       intent: 'warning',
-      actions: [{ id: roadmapConfirmationActionIds.blockTeacher, label: 'Bloquear nodo' }],
+      actions: [{ id: canvasConfirmationChoices.blockTeacher, label: 'Bloquear nodo' }],
     };
   }
 
@@ -361,7 +367,7 @@ export function roadmapTeacherBlockConfirmation({
       intent: 'warning',
       actions: [
         {
-          id: roadmapConfirmationActionIds.unlockPrerequisites,
+          id: canvasConfirmationChoices.unlockPrerequisites,
           label: `Desbloquear ${nodes} ${countLabel(nodes)}`,
         },
       ],
@@ -380,8 +386,8 @@ export function roadmapTeacherBlockConfirmation({
       {
         id:
           preview.mode === 'BRANCH'
-            ? roadmapConfirmationActionIds.unlockBranch
-            : roadmapConfirmationActionIds.unlockNode,
+            ? canvasConfirmationChoices.unlockBranch
+            : canvasConfirmationChoices.unlockNode,
         label: 'Desbloquear nodo',
       },
     ],
@@ -417,7 +423,7 @@ export function nodeDeletionConfirmation({
       losses.length ? `También se eliminarán ${losses.join(' y ')}. ` : ''
     }Esta acción no se puede deshacer.`,
     intent: 'destructive',
-    actions: [{ id: roadmapConfirmationActionIds.deleteNode, label: 'Eliminar nodo' }],
+    actions: [{ id: canvasConfirmationChoices.deleteNode, label: 'Eliminar nodo' }],
   };
 }
 
@@ -437,7 +443,7 @@ export function roadmapNodeVisibilityConfirmation(
       description:
         'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
       intent: 'default',
-      actions: [{ id: roadmapConfirmationActionIds.showNode, label: 'Mostrar' }],
+      actions: [{ id: canvasConfirmationChoices.showNode, label: 'Mostrar' }],
     };
   }
 
@@ -462,7 +468,7 @@ export function roadmapNodeVisibilityConfirmation(
     title: `¿Ocultar ${title}?`,
     description: `Dejará de aparecer en el roadmap de los estudiantes.${consequences}`,
     intent: 'destructive',
-    actions: [{ id: roadmapConfirmationActionIds.hideNode, label: 'Ocultar' }],
+    actions: [{ id: canvasConfirmationChoices.hideNode, label: 'Ocultar' }],
   };
 }
 
@@ -471,7 +477,7 @@ export function canvasConfirmation(
   pending: PendingConfirmation,
   roadmap: RoadmapConfirmationRoadmap,
 ): ConfirmationPresentation | null {
-  if (pending.phase === 'previewing') return null;
+  if (pending.phase === 'reading-impact') return null;
   switch (pending.kind) {
     case 'hide-node':
     case 'show-node': {
@@ -541,7 +547,7 @@ export function resourceDeletionConfirmation(resource: Resource): ConfirmationPr
         ],
       },
     ],
-    actions: [{ id: roadmapConfirmationActionIds.deleteResource, label: 'Eliminar' }],
+    actions: [{ id: nodeEditorConfirmationActionIds.deleteResource, label: 'Eliminar' }],
   };
 }
 
@@ -566,6 +572,6 @@ function nodeTypeDeletionConfirmation(
         ],
       },
     ],
-    actions: [{ id: roadmapConfirmationActionIds.deleteNodeType, label: 'Eliminar' }],
+    actions: [{ id: canvasConfirmationChoices.deleteNodeType, label: 'Eliminar' }],
   };
 }

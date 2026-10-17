@@ -13,6 +13,7 @@ import type {
 } from '@/features/roadmap/session/types';
 import type {
   CanvasCommandOf,
+  CanvasConfirmationChoice,
   ConfirmedActionKind,
   UnconfirmedCommand,
 } from '@/features/roadmap/canvas/commands/commands';
@@ -92,7 +93,7 @@ async function openCanvas(
       await waitFor(() => expect(commands().pending?.phase).toBe('awaiting'));
       return commands().pending!;
     },
-    async confirm(choice: string) {
+    async confirm(choice: CanvasConfirmationChoice) {
       await act(() => commands().confirm(choice));
     },
   };
@@ -306,7 +307,7 @@ describe('canvas commands', () => {
     const guardDraft = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)));
     const canvas = await openCanvas(undefined, { guardDraft });
 
-    let deletion: Promise<void> = Promise.resolve();
+    let deletion: Promise<boolean> = Promise.resolve(false);
     act(() => {
       deletion = canvas.commands().request({ kind: 'delete-node', nodeId: 'limits' });
     });
@@ -715,7 +716,7 @@ describe('canvas commands', () => {
     const canvas = await openCanvas();
     await act(async () => {
       await canvas.session().loadSimulation();
-      await canvas.commands().perform({ kind: 'complete-simulated-node', nodeId: 'limits' });
+      await canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' });
     });
     const simulatedCompletion = () =>
       canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits');
@@ -1007,7 +1008,7 @@ describe('canvas commands', () => {
 
       let applied: boolean | undefined;
       await act(async () => {
-        applied = await canvas.commands().perform(command);
+        applied = await canvas.commands().request(command);
       });
 
       expect(applied).toBe(true);
@@ -1023,7 +1024,7 @@ describe('canvas commands', () => {
 
       let applied: boolean | undefined;
       await act(async () => {
-        applied = await canvas.commands().perform({
+        applied = await canvas.commands().request({
           kind: 'update-node-type',
           nodeTypeId: 'content',
           nodeType: workshop,
@@ -1049,7 +1050,7 @@ describe('canvas commands', () => {
 
       let applied: boolean | undefined;
       await act(async () => {
-        applied = await canvas.commands().perform({
+        applied = await canvas.commands().request({
           kind: 'add-resource',
           nodeId: 'limits',
           resource: { title: 'Apuntes', url: 'https://example.test/apuntes', type: 'LINK' },
@@ -1093,7 +1094,7 @@ describe('canvas commands', () => {
 
       let applied: boolean | undefined;
       await act(async () => {
-        applied = await canvas.commands().perform({
+        applied = await canvas.commands().request({
           kind: 'move-nodes',
           positions: [
             { nodeId: 'limits', position: { x: 40, y: 80 } },
@@ -1117,7 +1118,7 @@ describe('canvas commands', () => {
         position: { x: 480, y: 240 },
       } as const;
 
-      await act(() => canvas.commands().perform(command));
+      await act(() => canvas.commands().request(command));
 
       const created = (await canvas.persistence.load(teachingInput)).nodes.at(-1)!;
       expect(created).toMatchObject({ title: 'Sucesiones', positionX: 480, positionY: 240 });
@@ -1133,7 +1134,7 @@ describe('canvas commands', () => {
       });
 
       await act(() =>
-        canvas.commands().perform({ kind: 'complete-simulated-node', nodeId: 'limits' }),
+        canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' }),
       );
 
       expect(
@@ -1149,7 +1150,10 @@ describe('canvas commands', () => {
       const canvas = await openCanvas(
         createInMemoryRoadmapSessionPersistence(withTeacherBlocks('derivatives')),
       );
-      const confirmed = async (command: CanvasCommandOf<ConfirmedActionKind>, choice: string) => {
+      const confirmed = async (
+        command: CanvasCommandOf<ConfirmedActionKind>,
+        choice: CanvasConfirmationChoice,
+      ) => {
         await act(() => canvas.commands().request(command));
         await canvas.awaiting();
         await canvas.confirm(choice);
@@ -1207,7 +1211,7 @@ describe('canvas commands', () => {
       holdNextPreviewLoad = true;
       let completion: Promise<boolean> | undefined;
       act(() => {
-        completion = canvas.commands().perform({
+        completion = canvas.commands().request({
           kind: 'complete-simulated-node',
           nodeId: 'limits',
         });
@@ -1268,11 +1272,11 @@ describe('canvas commands', () => {
 
       await enter();
       await act(() =>
-        canvas.commands().perform({ kind: 'complete-simulated-node', nodeId: 'limits' }),
+        canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' }),
       );
       // A Roadmap change reloads the Canvas preview too.
       await act(() =>
-        canvas.commands().perform({
+        canvas.commands().request({
           kind: 'move-nodes',
           positions: [{ nodeId: 'limits', position: { x: 1, y: 1 } }],
         }),
