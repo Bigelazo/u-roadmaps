@@ -327,7 +327,10 @@ export default defineConfig([
     settings: { vitest: { vitestImports: ['./fixtures'] } },
   },
   {
-    files: ['tests/features/roadmap/change-port-operations.test.ts'],
+    files: [
+      'tests/features/roadmap/change-port-operations.test.ts',
+      'tests/features/roadmap/roadmap-command.test.ts',
+    ],
     settings: { vitest: { vitestImports: ['../../notifications-integration/fixtures'] } },
   },
   {
