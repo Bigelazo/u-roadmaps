@@ -76,7 +76,7 @@ The ordered succession of roadmap versions for the same course across academic t
 _Avoid_: Course offering, edit history
 
 **Roadmap closure (Cierre del roadmap)**:
-The one-time, irreversible event, at 00:00 America/Santiago on the day after the Roadmap freeze date, that removes every Teacher block, discards every Scheduled unlock, and freezes the Roadmap. It is silent: it produces no Roadmap notices and leaves notices already pending untouched. Once closed, a Roadmap is a frozen version of its lineage that no participant can modify; its frozen state is a recorded fact, not re-evaluated from the calendar.
+The one-time, irreversible event, at 00:00 America/Santiago on the day after the Roadmap freeze date, that removes every Teacher block, discards every Scheduled unlock, and freezes the Roadmap. It is silent: it produces no Roadmap notices and leaves notices already pending untouched. Once closed, a Roadmap is a frozen version of its lineage that no participant can modify; its frozen state is a recorded fact, not re-evaluated from the calendar. Any attempt to modify a closed Roadmap, including Completions and Canvas preview progress, is refused as a closed Roadmap.
 _Avoid_: Freeze check, archive, deactivation
 
 **Roadmap freeze date (Fecha de congelamiento)**:
@@ -140,7 +140,7 @@ The reconciliation of a course offering's participants against a complete U-Camp
 _Avoid_: Authentication, additive import
 
 **Participation role (Rol de participación)**:
-The student, observer, or teaching-staff role held by a participation in one course offering. U-Campus students become students; observers retain a distinct observer role and follow the same Roadmap access and Completion rules as students, but are not academically evaluated and receive no passing or failing outcome for the Course offering; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections.
+The student, observer, or teaching-staff role held by a participation in one course offering. U-Campus students become students; observers retain a distinct observer role and follow the same Roadmap access and Completion rules as students, but are not academically evaluated and receive no passing or failing outcome for the Course offering; course professors, auxiliary professors, teaching assistants, and coordinating professors become teaching staff. All teaching staff can edit the shared roadmap and view entry and completion information across all its sections. Editing the Roadmap follows the Participation role; only Roadmap creation follows the Institutional course position.
 _Avoid_: Function, global user role
 
 **Institutional course position (Cargo institucional de curso)**:
@@ -228,7 +228,7 @@ The dated fact that a participating student completed a node in their course off
 _Avoid_: Progress state, mutable progress
 
 **Canvas preview (Previsualización del canvas)**:
-A teaching-staff simulation of a Roadmap's student experience that follows the same access and progress rules without representing or changing any actual student's Participation or Completion.
+A teaching-staff simulation of a Roadmap's student experience that follows the same access and progress rules without representing or changing any actual student's Participation or Completion. It cannot change on a closed Roadmap.
 _Avoid_: Preview, teacher progress, student impersonation, preview completion
 
 **Roadmap canvas session (Sesión del canvas del roadmap)**:

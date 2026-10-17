@@ -45,3 +45,11 @@ congela es peor que uno que se congela tarde.
   períodos sin calendario.
 - **Resincronizar el calendario semanalmente** para seguir postergaciones: descartado
   por innecesario; la fecha de respaldo cubre los atrasos.
+
+## Note — 2026-10-16: one refusal for a closed Roadmap
+
+Every operation on a closed Roadmap, including Completion and Canvas preview, is refused
+with the single error `ROADMAP_CLOSED` (409). Completion and Canvas preview used to answer
+403 `ROADMAP_FROZEN`, which the client did not recognise as a closed Roadmap; that code no
+longer exists. One pure Roadmap capability decision derives the refusal for every guard
+(#267).
