@@ -257,11 +257,11 @@ function RoadmapGraphToolbar({
   const getViewport = useCallback(() => {
     const bounds = containerRef.current?.getBoundingClientRect();
     if (!bounds) return { x: 0, y: 0, width: 0, height: 0 };
-    const topLeft = screenToFlowPosition({ x: bounds.left, y: bounds.top });
-    const bottomRight = screenToFlowPosition({
-      x: bounds.right,
-      y: bounds.bottom,
-    });
+    const topLeft = screenToFlowPosition({ x: bounds.left, y: bounds.top }, { snapToGrid: false });
+    const bottomRight = screenToFlowPosition(
+      { x: bounds.right, y: bounds.bottom },
+      { snapToGrid: false },
+    );
     return {
       x: topLeft.x,
       y: topLeft.y,
@@ -908,7 +908,6 @@ function RoadmapGraphContents({
         variant={BackgroundVariant.Lines}
         color="var(--fog)"
         gap={roadmapGridSize}
-        size={1}
       />
     </>
   );

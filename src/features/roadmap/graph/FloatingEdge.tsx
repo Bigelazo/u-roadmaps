@@ -13,6 +13,7 @@ import {
   type ReactFlowState,
 } from '@xyflow/react';
 import { floatingEdgeGeometry, type NodeRect } from '@/features/roadmap/graph/geometry';
+import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { Button } from '@/shared/ui/button';
 
 function nodeRect(state: ReactFlowState, nodeId: string): NodeRect | null {
@@ -41,7 +42,7 @@ export const FloatingEdge = memo(function FloatingEdge({
   style,
   interactionWidth,
   data,
-}: EdgeProps) {
+}: EdgeProps<RoadmapFlowEdge>) {
   const sourceRect = useStore(
     useCallback((state: ReactFlowState) => nodeRect(state, source), [source]),
     sameRect,
@@ -58,10 +59,7 @@ export const FloatingEdge = memo(function FloatingEdge({
     borderRadius: 8,
   });
 
-  const onDelete =
-    typeof data?.onDelete === 'function'
-      ? (data.onDelete as (dependencyId: string) => void)
-      : undefined;
+  const onDelete = data?.onDelete;
 
   return (
     <>

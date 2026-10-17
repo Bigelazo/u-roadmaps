@@ -8,4 +8,4 @@ export type RoadmapDependencyEdgeData = Record<string, unknown> & {
 
 export type RoadmapFlowEdge = Edge<RoadmapDependencyEdgeData, 'dependency'>;
 
-export const roadmapEdgeTypes = { dependency: FloatingEdge } as EdgeTypes;
+export const roadmapEdgeTypes = { dependency: FloatingEdge } satisfies EdgeTypes;

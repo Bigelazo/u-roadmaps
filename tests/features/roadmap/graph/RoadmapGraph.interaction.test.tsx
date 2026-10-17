@@ -7,7 +7,12 @@ import { mockViewport } from '../../../support/viewport';
 const { fitViewMock, screenToFlowPositionMock, setViewportMock, reactFlowHandlers } = vi.hoisted(
   () => ({
     fitViewMock: vi.fn(),
-    screenToFlowPositionMock: vi.fn((position: { x: number; y: number }) => position),
+    screenToFlowPositionMock: vi.fn<
+      (
+        position: { x: number; y: number },
+        options?: { snapToGrid?: boolean },
+      ) => { x: number; y: number }
+    >((position) => position),
     setViewportMock: vi.fn(),
     reactFlowHandlers: {
       onMoveEnd: undefined as
@@ -518,6 +523,40 @@ test('offers toolbar content a snapped open position without exposing viewport g
   await user.click(screen.getByRole('button', { name: 'Solicitar posición' }));
 
   expect(requests).toEqual([{ x: 420, y: 460 }]);
+});
+
+test.each([
+  { width: 139, expected: { x: 0, y: 0 } },
+  { width: 119, expected: null },
+])('keeps new cards inside the unsnapped viewport at width $width', async ({ width, expected }) => {
+  const user = userEvent.setup();
+  mockCanvasRect(width, 99);
+  // React Flow inherits snapToGrid unless the conversion explicitly opts out.
+  screenToFlowPositionMock.mockImplementation(({ x, y }, options) => {
+    const position = { x: x - 7, y: y - 9 };
+    return options?.snapToGrid === false
+      ? position
+      : {
+          x: Math.round(position.x / 20) * 20,
+          y: Math.round(position.y / 20) * 20,
+        };
+  });
+  const responses: unknown[] = [];
+  renderGraph({
+    roadmap: { ...roadmap, nodes: [] },
+    editing: {},
+    bottomLeftActions: (findOpenPosition) => (
+      <button type="button" onClick={() => responses.push(findOpenPosition('Corto'))}>
+        Solicitar posición en viewport desplazado
+      </button>
+    ),
+  });
+
+  await user.click(
+    screen.getByRole('button', { name: 'Solicitar posición en viewport desplazado' }),
+  );
+
+  expect(responses).toEqual([expected]);
 });
 
 test('finds a grid-aligned gap when toolbar content requests an occupied position', async () => {

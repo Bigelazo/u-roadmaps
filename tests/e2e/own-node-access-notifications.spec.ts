@@ -155,7 +155,7 @@ test('a PostgreSQL access-notice failure leaves the Node visibility change commi
   );
   expect((await hidden.json()).node).toMatchObject({ id: nodeId, isVisible: false });
 
-  const persistedNodes = await ok(await author.get(roadmapPath('/nodes')));
+  const persistedNodes = await ok(await author.get(roadmapPath()));
   expect(
     (await persistedNodes.json()).nodes.find(({ id }: { id: string }) => id === nodeId),
   ).toMatchObject({ id: nodeId, isVisible: false });

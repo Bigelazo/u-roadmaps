@@ -1028,7 +1028,7 @@ test('creating consecutive nodes keeps them visible, separated, selected, and pe
   page,
   course,
   teacherApi: api,
-}) => {
+}, testInfo) => {
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());
   const titles = [
@@ -1058,9 +1058,14 @@ test('creating consecutive nodes keeps them visible, separated, selected, and pe
   const nodeBoxes = await Promise.all(
     nodeIds.map((nodeId) => page.locator(`.react-flow__node[data-id="${nodeId}"]`).boundingBox()),
   );
+  const viewport = (await page.locator('.react-flow__pane').boundingBox())!;
   for (let index = 0; index < nodeBoxes.length; index += 1) {
     const current = nodeBoxes[index];
     if (!current) throw new Error('No se pudo medir un nodo creado.');
+    expect(current.x).toBeGreaterThanOrEqual(viewport.x);
+    expect(current.y).toBeGreaterThanOrEqual(viewport.y);
+    expect(current.x + current.width).toBeLessThanOrEqual(viewport.x + viewport.width);
+    expect(current.y + current.height).toBeLessThanOrEqual(viewport.y + viewport.height);
     for (const other of nodeBoxes.slice(index + 1)) {
       if (!other) throw new Error('No se pudo medir un nodo creado.');
       expect(
@@ -1078,6 +1083,7 @@ test('creating consecutive nodes keeps them visible, separated, selected, and pe
     `.react-flow__node[data-id="${lastNode.id}"] [data-slot="roadmap-card"]`,
   );
   await expect(lastCard).toHaveClass(/ring-2/);
+  await page.locator('.react-flow').screenshot({ path: testInfo.outputPath('created-nodes.png') });
 
   await page.reload();
   for (const nodeId of nodeIds) {
