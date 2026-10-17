@@ -8,7 +8,7 @@ import {
   roadmapTeacherBlockConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
-import type { TeacherBlockPreview } from '@/features/roadmap/types';
+import type { NodeType, TeacherBlockPreview } from '@/features/roadmap/types';
 
 const continueText = 'Puedes seguir editando o descartarlo para continuar.';
 
@@ -224,7 +224,15 @@ describe('canvasConfirmation', () => {
       { id: 'a', title: 'Conjuntos', nodeTypeId: 't' },
       { id: 'b', title: 'Funciones', nodeTypeId: 't' },
     ],
-    nodeTypes: [],
+    nodeTypes: [
+      {
+        id: 't',
+        name: 'Taller',
+        icon: 'Shapes',
+        color: '#024AD8',
+        isPredefined: false,
+      } as NodeType,
+    ],
   };
   const deletionImpact = {
     node: { title: 'Funciones', nodeType: { name: 'Clase', icon: 'Book', color: '#000' } },
@@ -393,6 +401,60 @@ describe('canvasConfirmation', () => {
     ).toMatchObject({
       description: 'Eliminarás esta dependencia. Esta acción no se puede deshacer.',
       actions: [{ id: 'delete-dependencies', label: 'Eliminar' }],
+    });
+  });
+
+  it('presents an automatic layout', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'apply-automatic-layout',
+          request: { kind: 'apply-automatic-layout', positions: [], direction: 'LR' },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: 'Confirmar ordenamiento',
+      actions: [{ id: 'auto-layout', label: 'Ordenar nodos' }],
+    });
+  });
+
+  it('presents a Node type deletion, and nothing for a Node type the Roadmap no longer has', () => {
+    const deletion = (nodeTypeId: string) =>
+      canvasConfirmation(
+        {
+          kind: 'delete-node-type',
+          request: { kind: 'delete-node-type', nodeTypeId },
+          impact: null,
+          phase: 'confirming',
+          choice: 'delete-node-type',
+        },
+        roadmap,
+      );
+    expect(deletion('t')).toMatchObject({
+      description: 'Eliminarás el Tipo de nodo Taller. Esta acción no se puede deshacer.',
+      actions: [{ id: 'delete-node-type', label: 'Eliminar' }],
+    });
+    expect(deletion('missing')).toBeNull();
+  });
+
+  it('presents a Canvas preview progress reset', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'reset-canvas-preview',
+          request: { kind: 'reset-canvas-preview' },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: 'Reiniciar progreso de previsualización',
+      intent: 'destructive',
+      actions: [{ id: 'reset-canvas-preview', label: 'Reiniciar progreso' }],
     });
   });
 });

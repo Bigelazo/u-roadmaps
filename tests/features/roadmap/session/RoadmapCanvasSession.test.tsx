@@ -620,6 +620,29 @@ describe('RoadmapCanvasSession', () => {
     });
   });
 
+  test('confirms a Node type deletion through the public session', async () => {
+    const user = userEvent.setup();
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    await persistence.addNodeType(teachingInput, {
+      name: 'Taller',
+      icon: 'Shapes',
+      color: '#024AD8',
+    });
+    renderSession(persistence);
+
+    await user.click(await screen.findByRole('button', { name: 'Crear en el mapa' }));
+    await user.click(await screen.findByText('Tipos de nodo'));
+    await user.click(await screen.findByRole('button', { name: 'Eliminar tipo Taller' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
+
+    await waitFor(async () =>
+      expect((await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name)).toEqual([
+        'Contenido',
+      ]),
+    );
+  });
+
   test('routes Dependency creation and deletion through the public session', async () => {
     const user = userEvent.setup();
     const persistence = createInMemoryRoadmapSessionPersistence({
@@ -654,7 +677,7 @@ describe('RoadmapCanvasSession', () => {
       name: '¿Ocultar “Límites”?',
     });
 
-    // Neither another Confirmed action nor a confirmation the view coordinates can open beside it.
+    // No other Confirmed action, Node deletion or automatic layout, can open beside it.
     fireEvent.click(deleteNodeButton);
     fireEvent.click(layoutButton);
     await act(() => Promise.resolve());

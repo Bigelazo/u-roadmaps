@@ -16,13 +16,14 @@ type Operation<T> = (
   input: RoadmapCanvasSessionInput,
 ) => Promise<T>;
 
-/** What a Confirmed action can do: read through the session, write through it, and close the editor. */
+/** What a Confirmed action can do: read and write through the session. */
 export type ConfirmedActionContext = {
   /** Resolves `null` when the read fails; the session reports the failure. */
   preview: <T>(operation: Operation<T>, fallback: string) => Promise<T | null>;
   /** Resolves whether the write succeeded; the session reports a failure and reloads. */
   mutate: (operation: Operation<unknown>, fallback: string) => Promise<boolean>;
-  closeEditor: () => void;
+  /** Like `mutate`, but for a Canvas preview write: it reloads the Canvas preview instead. */
+  mutateCanvasPreview: (operation: Operation<unknown>, fallback: string) => Promise<boolean>;
 };
 
 /**
@@ -89,14 +90,11 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.previewNodeDeletion(input, nodeId),
         'No se pudo calcular el impacto de eliminar el nodo.',
       ),
-    run: async ({ mutate, closeEditor }, { nodeId }, impact) => {
-      const deleted = await mutate(
+    run: ({ mutate }, { nodeId }, impact) =>
+      mutate(
         (persistence, input) => persistence.deleteNode(input, nodeId, impact.version),
         'No se pudo eliminar el nodo.',
-      );
-      if (deleted) closeEditor();
-      return deleted;
-    },
+      ),
   },
   'change-teacher-block': {
     preview: async ({ preview }, { nodeId, operation }) => {
@@ -158,5 +156,32 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
       dependencyIds.length - (remaining?.dependencyIds.length ?? 0) === 1
         ? 'Dependencia eliminada exitosamente.'
         : 'Dependencias eliminadas exitosamente.',
+  },
+  'apply-automatic-layout': {
+    run: async ({ mutate }, { positions }) => {
+      const moved = await Promise.all(
+        positions.map(({ nodeId, position }) =>
+          mutate(
+            (persistence, input) => persistence.moveNode(input, nodeId, position),
+            'No se pudo guardar la posición.',
+          ),
+        ),
+      );
+      return moved.every(Boolean);
+    },
+  },
+  'delete-node-type': {
+    run: ({ mutate }, { nodeTypeId }) =>
+      mutate(
+        (persistence, input) => persistence.deleteNodeType(input, nodeTypeId),
+        'No se pudo eliminar el tipo de nodo.',
+      ),
+  },
+  'reset-canvas-preview': {
+    run: ({ mutateCanvasPreview }) =>
+      mutateCanvasPreview(
+        (persistence, input) => persistence.resetSimulation(input),
+        'No se pudo reiniciar el progreso de previsualización.',
+      ),
   },
 };

@@ -23,15 +23,22 @@ export type CanvasCommandSession = {
   persistence: RoadmapCanvasSessionPersistence;
   stableInput: RoadmapCanvasSessionInput;
   preview: <T>(operation: () => Promise<T>, fallback: string) => Promise<T | null>;
-  mutate: <T>(operation: () => Promise<T>, fallback: string) => Promise<{ success: boolean }>;
+  mutate: <T>(
+    operation: () => Promise<T>,
+    fallback: string,
+    reload?: boolean,
+  ) => Promise<{ success: boolean }>;
+  loadSimulation: () => Promise<boolean>;
 };
 
 type CanvasCommandsOptions = {
   session: CanvasCommandSession;
   guardDraft: NodeEditorHandle['guardDraft'];
-  closeEditor: () => void;
-  /** Confirmations the view still coordinates itself; none may open beside the pending one. */
-  isOtherConfirmationOpen: () => boolean;
+  /**
+   * Tells the view a command took effect, so it can follow up on its own state: close the
+   * editor after a Node deletion, or keep the direction of an automatic layout.
+   */
+  onCommandApplied: (command: CanvasCommandOf<ConfirmedActionKind>) => void;
 };
 
 type AnyConfirmedAction = ConfirmedAction<ConfirmedActionKind>;
@@ -73,12 +80,11 @@ function needsConfirmation(kind: ConfirmedActionKind, impact: unknown) {
 export function useCanvasCommands({
   session,
   guardDraft,
-  closeEditor,
-  isOtherConfirmationOpen,
+  onCommandApplied,
 }: CanvasCommandsOptions) {
   const [pending, setPendingState] = useState<PendingConfirmation | null>(null);
   const pendingRef = useRef<PendingConfirmation | null>(null);
-  const { persistence, stableInput, preview, mutate } = session;
+  const { persistence, stableInput, preview, mutate, loadSimulation } = session;
 
   const commands = useMemo(() => {
     const setPending = (next: PendingConfirmation | null) => {
@@ -90,9 +96,11 @@ export function useCanvasCommands({
         preview(() => operation(persistence, stableInput), fallback),
       mutate: async (operation, fallback) =>
         (await mutate(() => operation(persistence, stableInput), fallback)).success,
-      closeEditor,
+      mutateCanvasPreview: async (operation, fallback) =>
+        (await mutate(() => operation(persistence, stableInput), fallback, false)).success &&
+        loadSimulation(),
     };
-    const isSlotFree = () => pendingRef.current === null && !isOtherConfirmationOpen();
+    const isSlotFree = () => pendingRef.current === null;
 
     /**
      * Runs the request. A partial success opens what remains; a failure shows the latest
@@ -106,8 +114,9 @@ export function useCanvasCommands({
         const remaining = result === true ? undefined : result.retry;
         const message = action.success?.(opened.request, remaining);
         if (message) notify.success(message);
-        if (remaining) await open({ kind: opened.kind, request: remaining });
-        else setPending(null);
+        if (remaining) return open({ kind: opened.kind, request: remaining });
+        setPending(null);
+        onCommandApplied(opened.request);
         return;
       }
       const latest = (action.preview && (await action.preview(context, opened.request))) ?? impact;
@@ -162,10 +171,9 @@ export function useCanvasCommands({
     const cancel = () => {
       if (pendingRef.current?.phase === 'awaiting') setPending(null);
     };
-    const hasPending = () => pendingRef.current !== null;
 
-    return { hasPending, request, confirm, cancel };
-  }, [closeEditor, guardDraft, isOtherConfirmationOpen, mutate, persistence, preview, stableInput]);
+    return { request, confirm, cancel };
+  }, [guardDraft, loadSimulation, mutate, onCommandApplied, persistence, preview, stableInput]);
 
   return { pending, ...commands };
 }

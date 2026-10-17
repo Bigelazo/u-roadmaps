@@ -5,7 +5,6 @@ import type {
   RoadmapViewport,
   RoadmapViewportRestoration,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
-import type { ConfirmationDialogProps } from '@/shared/ui/confirmation-dialog';
 
 type CanvasPreviewReturnState = {
   selectedNodeId: string | null;
@@ -18,28 +17,15 @@ type CanvasPreviewSessionState =
   | { kind: 'inactive'; viewportRestoration: RoadmapViewportRestoration | null }
   | { kind: 'active'; returnState: CanvasPreviewReturnState };
 
-type SimulationResetState = 'idle' | 'awaiting-confirmation' | 'resetting';
-
 type CanvasPreviewWorkflowOptions = {
   currentView: Omit<CanvasPreviewReturnState, 'viewport'>;
   isHistorical: boolean;
   guardDraft: () => Promise<boolean>;
   loadSimulation: () => Promise<boolean>;
   completeSimulatedNode: (nodeId: string) => Promise<boolean>;
-  resetSimulation: () => Promise<boolean>;
   onEnter: () => void;
   onExit: (returnState: Omit<CanvasPreviewReturnState, 'viewport'>) => void;
 };
-
-const resetSimulationActionId = 'reset-simulation';
-
-const resetSimulationConfirmation = {
-  title: 'Reiniciar progreso de previsualización',
-  description:
-    'Eliminarás las completaciones simuladas de este Canvas preview. No se eliminarán las Completions estudiantiles. Esta acción no se puede deshacer.',
-  intent: 'destructive',
-  actions: [{ id: resetSimulationActionId, label: 'Reiniciar progreso' }],
-} as const;
 
 export function useCanvasPreviewWorkflow({
   currentView,
@@ -47,7 +33,6 @@ export function useCanvasPreviewWorkflow({
   guardDraft,
   loadSimulation,
   completeSimulatedNode,
-  resetSimulation,
   onEnter,
   onExit,
 }: CanvasPreviewWorkflowOptions) {
@@ -56,8 +41,6 @@ export function useCanvasPreviewWorkflow({
     viewportRestoration: null,
   });
   const sessionRef = useRef<CanvasPreviewSessionState>(session);
-  const [resetState, setResetState] = useState<SimulationResetState>('idle');
-  const resetStateRef = useRef<SimulationResetState>('idle');
   const currentViewRef = useRef(currentView);
   const lastViewportRef = useRef<RoadmapViewport | null>(null);
   const viewportRestorationTokenRef = useRef(0);
@@ -71,11 +54,6 @@ export function useCanvasPreviewWorkflow({
   const transitionSession = useCallback((next: CanvasPreviewSessionState) => {
     sessionRef.current = next;
     setSession(next);
-  }, []);
-
-  const transitionReset = useCallback((next: SimulationResetState) => {
-    resetStateRef.current = next;
-    setResetState(next);
   }, []);
 
   const enter = useCallback(async () => {
@@ -109,7 +87,6 @@ export function useCanvasPreviewWorkflow({
     if (activeSession.kind !== 'active') return;
 
     const { viewport, ...returnView } = activeSession.returnState;
-    transitionReset('idle');
     transitionSession({
       kind: 'inactive',
       viewportRestoration: viewport
@@ -121,40 +98,12 @@ export function useCanvasPreviewWorkflow({
     });
     onExit(returnView);
     requestAnimationFrame(() => entryButtonRef.current?.focus());
-  }, [onExit, transitionReset, transitionSession]);
+  }, [onExit, transitionSession]);
 
   const onViewportChange = useCallback((viewport: RoadmapViewport) => {
     if (sessionRef.current.kind === 'active') return;
     lastViewportRef.current = viewport;
   }, []);
-
-  const requestReset = useCallback(() => {
-    if (sessionRef.current.kind !== 'active' || isHistorical) return;
-    transitionReset('awaiting-confirmation');
-  }, [isHistorical, transitionReset]);
-
-  const cancelReset = useCallback(() => {
-    if (resetStateRef.current === 'resetting') return;
-    transitionReset('idle');
-  }, [transitionReset]);
-
-  const handleResetAction = useCallback(
-    (actionId: string) => {
-      if (actionId !== resetSimulationActionId || resetStateRef.current !== 'awaiting-confirmation')
-        return;
-
-      transitionReset('resetting');
-      void (async () => {
-        try {
-          const succeeded = await resetSimulation();
-          transitionReset(succeeded ? 'idle' : 'awaiting-confirmation');
-        } catch {
-          transitionReset('awaiting-confirmation');
-        }
-      })();
-    },
-    [resetSimulation, transitionReset],
-  );
 
   const completeNode = useCallback(
     (nodeId: string) => {
@@ -165,13 +114,6 @@ export function useCanvasPreviewWorkflow({
     [completeSimulatedNode, isHistorical],
   );
 
-  const confirmationDialog: ConfirmationDialogProps = {
-    confirmation: resetState === 'idle' ? null : resetSimulationConfirmation,
-    pendingActionId: resetState === 'resetting' ? resetSimulationActionId : undefined,
-    onCancel: cancelReset,
-    onAction: handleResetAction,
-  };
-
   return {
     isActive: session.kind === 'active',
     viewportRestoration: session.kind === 'inactive' ? session.viewportRestoration : null,
@@ -179,9 +121,6 @@ export function useCanvasPreviewWorkflow({
     requestEntry,
     exit,
     onViewportChange,
-    requestReset,
-    isResetPending: resetState !== 'idle',
     completeNode,
-    confirmationDialog,
   };
 }

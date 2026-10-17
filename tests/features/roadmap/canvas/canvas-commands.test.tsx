@@ -8,7 +8,7 @@ import {
   type RoadmapCanvasSessionOptions,
 } from '@/features/roadmap/session/session';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
-import type { RoadmapDto } from '@/features/roadmap/types';
+import type { NodeType, RoadmapDto } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
 
 const teachingInput = {
@@ -58,7 +58,7 @@ async function openCanvas(
   persistence: RoadmapCanvasSessionPersistence = createInMemoryRoadmapSessionPersistence(roadmap),
   options: RoadmapCanvasSessionOptions = {},
 ) {
-  const closeEditor = vi.fn();
+  const onCommandApplied = vi.fn();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
       {children}
@@ -66,14 +66,14 @@ async function openCanvas(
   );
   vi.spyOn(notify, 'success');
   const { result } = renderHook(
-    () => useRoadmapCanvasSession(teachingInput, { closeEditor, ...options }),
+    () => useRoadmapCanvasSession(teachingInput, { onCommandApplied, ...options }),
     { wrapper },
   );
   await waitFor(() => expect(result.current.roadmap).not.toBeNull());
   const commands = () => result.current.canvasCommands;
   return {
     persistence,
-    closeEditor,
+    onCommandApplied,
     commands,
     session: () => result.current,
     async awaiting() {
@@ -144,7 +144,7 @@ describe('canvas commands', () => {
     expect(await nodeOf(canvas.persistence, 'series')).toMatchObject({ isVisible: true });
   });
 
-  test('deleting a Node shows its Change impact, deletes it and closes the editor', async () => {
+  test('deleting a Node shows its Change impact, deletes it and reports it applied', async () => {
     const canvas = await openCanvas();
 
     await act(() => canvas.commands().request({ kind: 'delete-node', nodeId: 'limits' }));
@@ -160,7 +160,10 @@ describe('canvas commands', () => {
 
     expect(canvas.commands().pending).toBeNull();
     expect(await nodeOf(canvas.persistence, 'limits')).toBeUndefined();
-    expect(canvas.closeEditor).toHaveBeenCalledOnce();
+    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith({
+      kind: 'delete-node',
+      nodeId: 'limits',
+    });
   });
 
   test('cancelling an awaiting confirmation changes nothing and frees the slot', async () => {
@@ -258,24 +261,33 @@ describe('canvas commands', () => {
     },
   );
 
-  test('keeps one Confirmed action pending at a time', async () => {
-    const canvas = await openCanvas();
-    await act(() => canvas.commands().request({ kind: 'hide-node', nodeId: 'limits' }));
-    const pending = await canvas.awaiting();
+  const confirmedActionRequests = [
+    { kind: 'hide-node', nodeId: 'limits' },
+    { kind: 'show-node', nodeId: 'series' },
+    { kind: 'delete-node', nodeId: 'derivatives' },
+    {
+      kind: 'apply-automatic-layout',
+      positions: [{ nodeId: 'limits', position: { x: 0, y: 200 } }],
+      direction: 'LR',
+    },
+    { kind: 'delete-node-type', nodeTypeId: 'content' },
+    { kind: 'reset-canvas-preview' },
+  ] as const;
 
-    await act(() => canvas.commands().request({ kind: 'delete-node', nodeId: 'derivatives' }));
-    await act(() => canvas.commands().request({ kind: 'show-node', nodeId: 'series' }));
+  test.each(confirmedActionRequests)(
+    'keeps $kind as the only pending Confirmed action',
+    async (first) => {
+      const canvas = await openCanvas();
+      await act(() => canvas.commands().request(first));
+      const pending = await canvas.awaiting();
 
-    expect(canvas.commands().pending).toBe(pending);
-  });
+      for (const other of confirmedActionRequests) {
+        await act(() => canvas.commands().request(other));
+      }
 
-  test('opens no Confirmed action while a confirmation the view coordinates is open', async () => {
-    const canvas = await openCanvas(undefined, { isOtherConfirmationOpen: () => true });
-
-    await act(() => canvas.commands().request({ kind: 'hide-node', nodeId: 'limits' }));
-
-    expect(canvas.commands().pending).toBeNull();
-  });
+      expect(canvas.commands().pending).toBe(pending);
+    },
+  );
 
   test('asks about the unsaved draft once, before the deletion claims the slot', async () => {
     let answer: (proceed: boolean) => void = () => undefined;
@@ -618,6 +630,143 @@ describe('canvas commands', () => {
       await canvas.confirm('create-dependency');
       expect(canvas.commands().pending).toBeNull();
       expect(await dependencyPairs(persistence)).toContain('limits→integrals');
+    });
+  });
+
+  test('applying an automatic layout asks first, then moves every Node and reports it applied', async () => {
+    const canvas = await openCanvas();
+    const layout = {
+      kind: 'apply-automatic-layout',
+      positions: [
+        { nodeId: 'limits', position: { x: 0, y: 200 } },
+        { nodeId: 'derivatives', position: { x: 300, y: 200 } },
+      ],
+      direction: 'LR',
+    } as const;
+
+    await act(() => canvas.commands().request(layout));
+    expect(canvas.commands().pending).toEqual({
+      kind: 'apply-automatic-layout',
+      request: layout,
+      impact: null,
+      phase: 'awaiting',
+    });
+    expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ positionY: 0 });
+
+    await canvas.confirm('auto-layout');
+
+    expect(canvas.commands().pending).toBeNull();
+    expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({
+      positionX: 0,
+      positionY: 200,
+    });
+    expect(await nodeOf(canvas.persistence, 'derivatives')).toMatchObject({
+      positionX: 300,
+      positionY: 200,
+    });
+    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout);
+  });
+
+  test('resetting the Canvas preview asks first, then clears simulated Completions and reloads the preview', async () => {
+    const canvas = await openCanvas();
+    await act(async () => {
+      await canvas.session().loadSimulation();
+      await canvas.session().completeSimulatedNode('limits');
+    });
+    const simulatedCompletion = () =>
+      canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits');
+    expect(simulatedCompletion()).toMatchObject({ isCompleted: true });
+
+    await act(() => canvas.commands().request({ kind: 'reset-canvas-preview' }));
+    expect(await canvas.awaiting()).toEqual({
+      kind: 'reset-canvas-preview',
+      request: { kind: 'reset-canvas-preview' },
+      impact: null,
+      phase: 'awaiting',
+    });
+    expect(simulatedCompletion()).toMatchObject({ isCompleted: true });
+
+    await canvas.confirm('reset-canvas-preview');
+
+    expect(canvas.commands().pending).toBeNull();
+    expect(simulatedCompletion()).toMatchObject({ isCompleted: false });
+    expect((await canvas.persistence.loadSimulation(teachingInput)).nodes[0]).toMatchObject({
+      isCompleted: false,
+    });
+  });
+
+  describe('Node type deletion', () => {
+    const workshop: NodeType = {
+      id: 'workshop',
+      name: 'Taller',
+      icon: 'Shapes',
+      color: '#024AD8',
+      isPredefined: false,
+    };
+    const withWorkshop = (usedBy?: string): RoadmapDto => ({
+      ...roadmap,
+      nodeTypes: [...roadmap.nodeTypes, workshop],
+      nodes: roadmap.nodes.map((node) =>
+        node.id === usedBy ? { ...node, nodeTypeId: workshop.id } : node,
+      ),
+    });
+    const deleteWorkshop = { kind: 'delete-node-type', nodeTypeId: workshop.id } as const;
+    const nodeTypeIds = async (persistence: RoadmapCanvasSessionPersistence) =>
+      (await persistence.load(teachingInput)).nodeTypes.map(({ id }) => id);
+
+    test('asks first and keeps the choice pending while the Node type is deleted', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(withWorkshop());
+      let finishDeletion: () => void = () => undefined;
+      const persistence: RoadmapCanvasSessionPersistence = {
+        ...adapter,
+        async deleteNodeType(...args) {
+          await new Promise<void>((resolve) => (finishDeletion = resolve));
+          return adapter.deleteNodeType(...args);
+        },
+      };
+      const canvas = await openCanvas(persistence);
+
+      await act(() => canvas.commands().request(deleteWorkshop));
+      expect(await canvas.awaiting()).toEqual({
+        kind: 'delete-node-type',
+        request: deleteWorkshop,
+        impact: null,
+        phase: 'awaiting',
+      });
+
+      let confirmation: Promise<void> = Promise.resolve();
+      act(() => {
+        confirmation = canvas.commands().confirm('delete-node-type');
+      });
+      expect(canvas.commands().pending).toMatchObject({
+        phase: 'confirming',
+        choice: 'delete-node-type',
+      });
+
+      await act(async () => {
+        finishDeletion();
+        await confirmation;
+      });
+      expect(canvas.commands().pending).toBeNull();
+      expect(await nodeTypeIds(persistence)).toEqual(['content']);
+    });
+
+    test('keeps the confirmation open with the refusal when Nodes still use the Node type', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withWorkshop('limits')),
+      );
+
+      await act(() => canvas.commands().request(deleteWorkshop));
+      await canvas.awaiting();
+      await canvas.confirm('delete-node-type');
+
+      expect(canvas.session().error).toBe('No se puede eliminar un tipo utilizado por nodos.');
+      expect(canvas.commands().pending).toMatchObject({
+        kind: 'delete-node-type',
+        phase: 'awaiting',
+      });
+      expect(await nodeTypeIds(canvas.persistence)).toEqual(['content', 'workshop']);
+      expect(canvas.onCommandApplied).not.toHaveBeenCalled();
     });
   });
 

@@ -671,9 +671,12 @@ function useRoadmapGraphController({
   const proposeAutoLayout = useCallback(() => {
     const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
     const positions = immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction));
+    const changed = changedNodePositions(flow.nodes, positions);
+    // A layout that moves no Node has nothing to confirm.
+    if (changed.length === 0) return;
     emitEditingIntent({
       kind: 'apply-automatic-layout',
-      positions: freezeNodePositions(changedNodePositions(flow.nodes, positions)),
+      positions: freezeNodePositions(changed),
       direction,
     });
   }, [emitEditingIntent, flow.edges, flow.nodes, layoutDirection]);

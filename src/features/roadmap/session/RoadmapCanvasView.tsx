@@ -39,11 +39,12 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
-import {
-  roadmapConfirmationActionIds,
-  type CanvasCommand,
-  type CanvasCommandOf,
+import type {
+  CanvasCommand,
+  CanvasCommandOf,
+  ConfirmedActionKind,
 } from '@/features/roadmap/canvas/commands/commands';
+import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type {
   RoadmapDto,
   RoadmapNode,
@@ -69,19 +70,7 @@ import {
 import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
 import { termLabel } from '@/shared/course-offering';
-import {
-  canvasConfirmation,
-  nodeTypeDeletionConfirmation,
-  roadmapAutoLayoutConfirmation,
-} from '@/features/roadmap/ui/roadmap-confirmation';
-
-/** Confirmations not yet run by the canvas commands; they share its single pending slot. */
-type ExclusiveConfirmationSource = 'automatic-layout' | 'canvas-preview' | 'node-type-deletion';
-
-type AutomaticLayoutRequest = Pick<
-  CanvasCommandOf<'apply-automatic-layout'>,
-  'positions' | 'direction'
-> & { isPending: boolean };
+import { canvasConfirmation } from '@/features/roadmap/ui/roadmap-confirmation';
 
 const NodeEditor = dynamic(
   () => import('@/features/roadmap/editor/NodeEditor').then(({ NodeEditor }) => NodeEditor),
@@ -116,22 +105,6 @@ function RoadmapCanvasLoading({ isSimulation = false }: { isSimulation?: boolean
   );
 }
 
-type NodeType = RoadmapDto['nodeTypes'][number];
-
-type RequestExclusiveConfirmation = (
-  source: ExclusiveConfirmationSource,
-  request: () => void,
-) => boolean;
-
-/** Wraps a workflow request so it only starts when no other exclusive confirmation is open. */
-function exclusive<Args extends unknown[]>(
-  requestExclusiveConfirmation: RequestExclusiveConfirmation,
-  source: ExclusiveConfirmationSource,
-  request: (...args: Args) => unknown,
-) {
-  return (...args: Args) => requestExclusiveConfirmation(source, () => void request(...args));
-}
-
 /** Shows `message` when the session mutation succeeds. */
 async function withSuccess(mutation: Promise<boolean>, message: string) {
   const succeeded = await mutation;
@@ -158,85 +131,6 @@ function useStateToast(
     else notify.close(id);
   }, [id, message, tone]);
   useEffect(() => () => notify.close(id), [id]);
-}
-
-/** Automatic-layout and Node type deletion confirmation state. */
-function useCanvasConfirmations({
-  requestExclusiveConfirmation,
-  moveNode,
-  deleteNodeType,
-}: {
-  requestExclusiveConfirmation: RequestExclusiveConfirmation;
-} & Pick<ReturnType<typeof useRoadmapCanvasSession>, 'moveNode' | 'deleteNodeType'>) {
-  const [automaticLayout, setAutomaticLayout] = useState<AutomaticLayoutRequest | null>(null);
-  const [confirmedAutomaticLayout, setConfirmedAutomaticLayout] = useState<{
-    token: string;
-    direction: AutomaticLayoutRequest['direction'];
-  } | null>(null);
-  const automaticLayoutTokenRef = useRef(0);
-  const [nodeTypeDeletion, setNodeTypeDeletion] = useState<{
-    nodeType: NodeType;
-    isPending: boolean;
-  } | null>(null);
-  const requestAutomaticLayout = useCallback(
-    (
-      positions: AutomaticLayoutRequest['positions'],
-      direction: AutomaticLayoutRequest['direction'],
-    ) => {
-      if (positions.length === 0) return;
-      requestExclusiveConfirmation('automatic-layout', () =>
-        setAutomaticLayout({ positions, direction, isPending: false }),
-      );
-    },
-    [requestExclusiveConfirmation],
-  );
-  const confirmAutomaticLayout = useCallback(
-    async (actionId: string) => {
-      if (
-        actionId !== roadmapConfirmationActionIds.autoLayout ||
-        !automaticLayout?.positions.length
-      )
-        return;
-      setAutomaticLayout((current) => (current ? { ...current, isPending: true } : null));
-      await Promise.all(
-        automaticLayout.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
-      );
-      setConfirmedAutomaticLayout({
-        token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
-        direction: automaticLayout.direction,
-      });
-      setAutomaticLayout(null);
-    },
-    [automaticLayout, moveNode],
-  );
-  const requestNodeTypeDeletion = useMemo(
-    () =>
-      exclusive(requestExclusiveConfirmation, 'node-type-deletion', (nodeType: NodeType) =>
-        setNodeTypeDeletion({ nodeType, isPending: false }),
-      ),
-    [requestExclusiveConfirmation],
-  );
-  const confirmNodeTypeDeletion = useCallback(
-    async (actionId: string) => {
-      if (actionId !== roadmapConfirmationActionIds.deleteNodeType || !nodeTypeDeletion) return;
-      setNodeTypeDeletion((current) => (current ? { ...current, isPending: true } : null));
-      const deleted = await deleteNodeType(nodeTypeDeletion.nodeType.id);
-      if (deleted) setNodeTypeDeletion(null);
-      else setNodeTypeDeletion((current) => (current ? { ...current, isPending: false } : null));
-    },
-    [deleteNodeType, nodeTypeDeletion],
-  );
-  return {
-    automaticLayout,
-    setAutomaticLayout,
-    confirmedAutomaticLayout,
-    requestAutomaticLayout,
-    confirmAutomaticLayout,
-    nodeTypeDeletion,
-    setNodeTypeDeletion,
-    requestNodeTypeDeletion,
-    confirmNodeTypeDeletion,
-  };
 }
 
 function useRoadmapCanvasController({ input }: Props) {
@@ -276,10 +170,25 @@ function useRoadmapCanvasController({ input }: Props) {
       nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
     [],
   );
-  const closeEditorAfterNodeDeletion = useCallback(() => {
-    dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
-    requestNodeFocusReturn();
-  }, [requestNodeFocusReturn]);
+  const [confirmedAutomaticLayout, setConfirmedAutomaticLayout] = useState<{
+    token: string;
+    direction: RoadmapLayoutDirection;
+  } | null>(null);
+  const automaticLayoutTokenRef = useRef(0);
+  const followAppliedCommand = useCallback(
+    (command: CanvasCommandOf<ConfirmedActionKind>) => {
+      if (command.kind === 'delete-node') {
+        dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
+        requestNodeFocusReturn();
+      } else if (command.kind === 'apply-automatic-layout') {
+        setConfirmedAutomaticLayout({
+          token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
+          direction: command.direction,
+        });
+      }
+    },
+    [requestNodeFocusReturn],
+  );
   const prepareCanvasPreview = useCallback(() => {
     dispatchCanvas({ type: 'prepareCanvasPreview' });
   }, []);
@@ -302,11 +211,6 @@ function useRoadmapCanvasController({ input }: Props) {
     },
     [],
   );
-  const exclusiveConfirmationRef = useRef<ExclusiveConfirmationSource | null>(null);
-  const isExclusiveConfirmationOpen = useCallback(
-    () => exclusiveConfirmationRef.current !== null,
-    [],
-  );
   const {
     roadmap,
     error,
@@ -324,43 +228,19 @@ function useRoadmapCanvasController({ input }: Props) {
     deleteResource,
     addNodeType,
     updateNodeType,
-    deleteNodeType,
     completeNode,
     simulationRoadmap,
     canvasPreviewWorkflow,
     isClosed,
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
-    closeEditor: closeEditorAfterNodeDeletion,
-    isOtherConfirmationOpen: isExclusiveConfirmationOpen,
+    onCommandApplied: followAppliedCommand,
     canvasPreview: {
       currentView: { selectedNodeId, isEditorOpen, isStudentDetailOpen },
       onEnter: prepareCanvasPreview,
       onExit: restoreCanvasPreview,
     },
   });
-  const [exclusiveConfirmationRequest, setExclusiveConfirmationRequest] = useState<{
-    source: ExclusiveConfirmationSource;
-  } | null>(null);
-  const exclusiveBusySeenRef = useRef(false);
-  const { hasPending: hasPendingConfirmedAction } = canvasCommands;
-  const requestExclusiveConfirmation = useCallback(
-    (source: ExclusiveConfirmationSource, request: () => void) => {
-      if (exclusiveConfirmationRef.current || hasPendingConfirmedAction()) return false;
-      exclusiveConfirmationRef.current = source;
-      exclusiveBusySeenRef.current = false;
-      setExclusiveConfirmationRequest({ source });
-      request();
-      return true;
-    },
-    [hasPendingConfirmedAction],
-  );
-  const confirmations = useCanvasConfirmations({
-    requestExclusiveConfirmation,
-    moveNode,
-    deleteNodeType,
-  });
-  const { automaticLayout, nodeTypeDeletion, requestAutomaticLayout } = confirmations;
   useStateToast('error', 'roadmap-session-error', roadmap ? error : null, dismissError);
 
   const performEditorEffect = useCallback(
@@ -389,25 +269,6 @@ function useRoadmapCanvasController({ input }: Props) {
     },
     [addResource, deleteResource, updateNode, updateResource, uploadResource],
   );
-
-  const exclusiveConfirmationSource = exclusiveConfirmationRequest?.source;
-  const exclusiveSourceIsBusy = exclusiveConfirmationSource
-    ? {
-        'automatic-layout': automaticLayout !== null,
-        'canvas-preview': canvasPreviewWorkflow.isResetPending,
-        'node-type-deletion': nodeTypeDeletion !== null,
-      }[exclusiveConfirmationSource]
-    : false;
-  const exclusiveConfirmation =
-    exclusiveBusySeenRef.current && !exclusiveSourceIsBusy ? null : exclusiveConfirmationSource;
-  useEffect(() => {
-    if (!exclusiveConfirmationSource) return;
-    if (exclusiveSourceIsBusy) {
-      exclusiveBusySeenRef.current = true;
-      return;
-    }
-    if (exclusiveBusySeenRef.current) exclusiveConfirmationRef.current = null;
-  }, [exclusiveConfirmationSource, exclusiveSourceIsBusy]);
 
   const canvasMode = deriveCanvasMode({
     experience: { ...input.experience, term: isClosed ? 'historical' : 'current' },
@@ -564,6 +425,9 @@ function useRoadmapCanvasController({ input }: Props) {
         case 'change-teacher-block':
         case 'create-dependency':
         case 'delete-dependencies':
+        case 'apply-automatic-layout':
+        case 'delete-node-type':
+        case 'reset-canvas-preview':
           void requestConfirmedAction(command);
           return;
         case 'schedule-teacher-unlock':
@@ -577,12 +441,9 @@ function useRoadmapCanvasController({ input }: Props) {
             command.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
           );
           return;
-        case 'apply-automatic-layout':
-          requestAutomaticLayout(command.positions, command.direction);
-          return;
       }
     },
-    [moveNode, scheduleTeacherUnlock, requestConfirmedAction, requestAutomaticLayout],
+    [moveNode, scheduleTeacherUnlock, requestConfirmedAction],
   );
   const handleNodeEditorIntent = useCallback(
     (intent: NodeEditorIntent) => {
@@ -653,12 +514,10 @@ function useRoadmapCanvasController({ input }: Props) {
     canvasCommands,
     addNodeType,
     updateNodeType,
-    deleteNodeType,
     completeNode,
     canvasPreviewWorkflow,
-    exclusiveConfirmation,
-    ...confirmations,
-    requestExclusiveConfirmation,
+    confirmedAutomaticLayout,
+    runCanvasCommand,
     performEditorEffect,
     canvasMode,
     isHistoricalRoadmap,
@@ -836,66 +695,17 @@ function RoadmapCanvasConfirmation({
   model: ReturnType<typeof useRoadmapCanvasController>;
 }) {
   const {
-    exclusiveConfirmation,
-    automaticLayout,
-    setAutomaticLayout,
-    confirmAutomaticLayout,
-    nodeTypeDeletion,
-    setNodeTypeDeletion,
-    confirmNodeTypeDeletion,
-    canvasCommands,
-    canvasPreviewWorkflow,
+    canvasCommands: { pending, cancel, confirm },
     roadmap,
   } = model;
-  const { pending } = canvasCommands;
-  if (pending) {
-    return (
-      <ConfirmationDialog
-        confirmation={roadmap ? canvasConfirmation(pending, roadmap) : null}
-        pendingActionId={pending.phase === 'confirming' ? pending.choice : undefined}
-        onCancel={canvasCommands.cancel}
-        onAction={(choice) => void canvasCommands.confirm(choice)}
-      />
-    );
-  }
-  switch (exclusiveConfirmation) {
-    case 'automatic-layout':
-      return (
-        <ConfirmationDialog
-          confirmation={automaticLayout ? roadmapAutoLayoutConfirmation : null}
-          pendingActionId={
-            automaticLayout?.isPending ? roadmapConfirmationActionIds.autoLayout : undefined
-          }
-          onCancel={() => setAutomaticLayout(null)}
-          onAction={(actionId) => void confirmAutomaticLayout(actionId)}
-        />
-      );
-    case 'node-type-deletion':
-      return (
-        <ConfirmationDialog
-          confirmation={
-            nodeTypeDeletion ? nodeTypeDeletionConfirmation(nodeTypeDeletion.nodeType) : null
-          }
-          pendingActionId={
-            nodeTypeDeletion?.isPending ? roadmapConfirmationActionIds.deleteNodeType : undefined
-          }
-          onCancel={() => {
-            if (!nodeTypeDeletion?.isPending) setNodeTypeDeletion(null);
-          }}
-          onAction={(actionId) => void confirmNodeTypeDeletion(actionId)}
-        />
-      );
-    case 'canvas-preview':
-      return <ConfirmationDialog {...canvasPreviewWorkflow.confirmationDialog} />;
-    default:
-      return (
-        <ConfirmationDialog
-          confirmation={null}
-          onCancel={() => undefined}
-          onAction={() => undefined}
-        />
-      );
-  }
+  return (
+    <ConfirmationDialog
+      confirmation={pending && roadmap ? canvasConfirmation(pending, roadmap) : null}
+      pendingActionId={pending?.phase === 'confirming' ? pending.choice : undefined}
+      onCancel={cancel}
+      onAction={(choice) => void confirm(choice)}
+    />
+  );
 }
 
 function RoadmapCanvasPanels({
@@ -1053,7 +863,7 @@ function RoadmapCanvasGraph({
     updateNodeType,
     canvasPreviewWorkflow,
     confirmedAutomaticLayout,
-    requestExclusiveConfirmation,
+    runCanvasCommand,
     canvasMode,
     isHistoricalRoadmap,
     isCanvasPreview,
@@ -1063,7 +873,6 @@ function RoadmapCanvasGraph({
     canEnterCanvasPreview,
     canResetCanvasPreview,
     closeSelectedNode,
-    requestNodeTypeDeletion,
   } = model;
   return (
     <RoadmapGraph
@@ -1149,7 +958,9 @@ function RoadmapCanvasGraph({
                 onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
                 onCreateNodeType={addNodeType}
                 onUpdateNodeType={updateNodeType}
-                onRequestDeleteNodeType={requestNodeTypeDeletion}
+                onRequestDeleteNodeType={(nodeType) =>
+                  runCanvasCommand({ kind: 'delete-node-type', nodeTypeId: nodeType.id })
+                }
               />
             )
           : undefined
@@ -1169,9 +980,7 @@ function RoadmapCanvasGraph({
           <CanvasPreviewToolbar
             canReset={canResetCanvasPreview}
             isHistorical={isHistoricalRoadmap}
-            onRequestReset={() =>
-              requestExclusiveConfirmation('canvas-preview', canvasPreviewWorkflow.requestReset)
-            }
+            onRequestReset={() => runCanvasCommand({ kind: 'reset-canvas-preview' })}
             onExit={() => {
               if (!canvasPreviewWorkflow.isActive) return;
               canvasPreviewWorkflow.exit();

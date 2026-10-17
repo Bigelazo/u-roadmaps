@@ -52,11 +52,19 @@ type RoadmapNodeIdentity = {
   isTeacherBlocked?: boolean;
 };
 
-export const roadmapAutoLayoutConfirmation = {
+const roadmapAutoLayoutConfirmation = {
   title: 'Confirmar ordenamiento',
   description: 'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
   intent: 'warning',
   actions: [{ id: roadmapConfirmationActionIds.autoLayout, label: 'Ordenar nodos' }],
+} as const satisfies ConfirmationPresentation;
+
+const canvasPreviewResetConfirmation = {
+  title: 'Reiniciar progreso de previsualización',
+  description:
+    'Eliminarás las completaciones simuladas de este Canvas preview. No se eliminarán las Completions estudiantiles. Esta acción no se puede deshacer.',
+  intent: 'destructive',
+  actions: [{ id: roadmapConfirmationActionIds.resetCanvasPreview, label: 'Reiniciar progreso' }],
 } as const satisfies ConfirmationPresentation;
 
 const editorDraftDiscardDescriptions: Record<NodeEditorGuardReason['kind'], string> = {
@@ -504,6 +512,14 @@ export function canvasConfirmation(
         : null;
     case 'delete-dependencies':
       return roadmapDependencyDeletionConfirmation(pending.request.dependencyIds);
+    case 'apply-automatic-layout':
+      return roadmapAutoLayoutConfirmation;
+    case 'delete-node-type': {
+      const nodeType = roadmap.nodeTypes.find(({ id }) => id === pending.request.nodeTypeId);
+      return nodeType ? nodeTypeDeletionConfirmation(nodeType) : null;
+    }
+    case 'reset-canvas-preview':
+      return canvasPreviewResetConfirmation;
   }
 }
 
@@ -529,7 +545,7 @@ export function resourceDeletionConfirmation(resource: Resource): ConfirmationPr
   };
 }
 
-export function nodeTypeDeletionConfirmation(
+function nodeTypeDeletionConfirmation(
   nodeType: NodeTypePresentation & { id: string },
 ): ConfirmationPresentation {
   return {

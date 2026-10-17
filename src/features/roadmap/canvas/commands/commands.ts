@@ -45,7 +45,9 @@ export type CanvasCommand =
       readonly kind: 'apply-automatic-layout';
       readonly positions: readonly RoadmapNodePlacement[];
       readonly direction: RoadmapLayoutDirection;
-    };
+    }
+  | { readonly kind: 'delete-node-type'; readonly nodeTypeId: string }
+  | { readonly kind: 'reset-canvas-preview' };
 
 export type CanvasCommandOf<Kind extends CanvasCommand['kind']> = Extract<
   CanvasCommand,
@@ -60,6 +62,7 @@ export const roadmapConfirmationActionIds = {
   deleteNode: 'delete-node',
   deleteResource: 'delete-resource',
   deleteNodeType: 'delete-node-type',
+  resetCanvasPreview: 'reset-canvas-preview',
   createDependency: 'create-dependency',
   deleteDependencies: 'delete-dependencies',
   blockTeacher: 'block-teacher',
@@ -86,6 +89,9 @@ export type ChangeImpactOf = {
   'change-teacher-block': TeacherBlockChangeImpact;
   'create-dependency': DependencyImpact;
   'delete-dependencies': null;
+  'apply-automatic-layout': null;
+  'delete-node-type': null;
+  'reset-canvas-preview': null;
 };
 
 /** Canvas commands that take effect only after teaching staff confirm them. */

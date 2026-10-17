@@ -85,10 +85,8 @@ type InjectedSessionResult = {
   deleteResource: (resourceId: string) => Promise<boolean>;
   addNodeType: (nodeType: RoadmapNodeTypeInput) => Promise<boolean>;
   updateNodeType: (nodeTypeId: string, nodeType: RoadmapNodeTypeInput) => Promise<boolean>;
-  deleteNodeType: (nodeTypeId: string) => Promise<boolean>;
   completeNode: (nodeId: string) => Promise<boolean>;
   completeSimulatedNode: (nodeId: string) => Promise<boolean>;
-  resetSimulation: () => Promise<boolean>;
 };
 
 type RoadmapCanvasSessionWorkflows = {
@@ -104,9 +102,7 @@ type CanvasPreviewView = {
 
 export type RoadmapCanvasSessionOptions = {
   guardDraft?: NodeEditorHandle['guardDraft'];
-  closeEditor?: () => void;
-  /** Whether a confirmation the view still coordinates itself is open. */
-  isOtherConfirmationOpen?: () => boolean;
+  onCommandApplied?: Parameters<typeof useCanvasCommands>[0]['onCommandApplied'];
   canvasPreview?: {
     currentView: CanvasPreviewView;
     onEnter: () => void;
@@ -116,7 +112,6 @@ export type RoadmapCanvasSessionOptions = {
 
 const allowAnyDraft = async () => true;
 const noop = () => undefined;
-const noOtherConfirmation = () => false;
 const initialCanvasPreviewView: CanvasPreviewView = {
   selectedNodeId: null,
   isEditorOpen: false,
@@ -403,7 +398,6 @@ function useInjectedSession(
       deleteResource: bindMutation('deleteResource', 'No se pudo eliminar el recurso.'),
       addNodeType: bindMutation('addNodeType', 'No se pudo crear el tipo de nodo.'),
       updateNodeType: bindMutation('updateNodeType', 'No se pudo guardar el tipo de nodo.'),
-      deleteNodeType: bindMutation('deleteNodeType', 'No se pudo eliminar el tipo de nodo.'),
     };
   }, [mutate, persistence, stableInput]);
 
@@ -431,16 +425,6 @@ function useInjectedSession(
     [loadSimulation, mutate, persistence, stableInput],
   );
 
-  const resetSimulation = useCallback(async () => {
-    const result = await mutate(
-      () => persistence.resetSimulation(stableInput),
-      'No se pudo reiniciar el progreso de previsualización.',
-      false,
-    );
-    if (!result.success) return false;
-    return loadSimulation();
-  }, [loadSimulation, mutate, persistence, stableInput]);
-
   return {
     roadmap: roadmapKey === key ? roadmap : null,
     simulationRoadmap: simulationKey === key ? simulationRoadmap : null,
@@ -461,7 +445,6 @@ function useInjectedSession(
     ...operations,
     completeNode,
     completeSimulatedNode,
-    resetSimulation,
   };
 }
 
@@ -478,7 +461,6 @@ export function useRoadmapCanvasSession(
     guardDraft: () => guardDraft({ kind: 'enter-canvas-preview' }),
     loadSimulation: active.loadSimulation,
     completeSimulatedNode: active.completeSimulatedNode,
-    resetSimulation: active.resetSimulation,
     onEnter: options.canvasPreview?.onEnter ?? noop,
     onExit: options.canvasPreview?.onExit ?? noop,
   });
@@ -489,8 +471,7 @@ export function useRoadmapCanvasSession(
   const canvasCommands = useCanvasCommands({
     session: active,
     guardDraft,
-    closeEditor: options.closeEditor ?? noop,
-    isOtherConfirmationOpen: options.isOtherConfirmationOpen ?? noOtherConfirmation,
+    onCommandApplied: options.onCommandApplied ?? noop,
   });
 
   return {

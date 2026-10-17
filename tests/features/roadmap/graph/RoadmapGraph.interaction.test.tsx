@@ -212,6 +212,7 @@ import {
   type RoadmapGraphProps,
 } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 
 const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },
@@ -679,6 +680,29 @@ test('translates automatic-layout geometry into an automatic-layout command with
   expect(Object.isFrozen(intent.positions[0].position)).toBe(true);
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
   expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
+});
+
+test('emits no automatic-layout command when every Node already sits where the layout puts it', async () => {
+  const user = userEvent.setup();
+  const onEditingIntent = vi.fn();
+  const { rerenderGraph } = renderGraph({ editing: { onEditingIntent } });
+  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  const [layout] = onEditingIntent.mock.calls[0] as [CanvasCommandOf<'apply-automatic-layout'>];
+  const laidOut: RoadmapDto = {
+    ...roadmap,
+    nodes: roadmap.nodes.map((node) => {
+      const placement = layout.positions.find(({ nodeId }) => nodeId === node.id);
+      return placement
+        ? { ...node, positionX: placement.position.x, positionY: placement.position.y }
+        : node;
+    }),
+  };
+  onEditingIntent.mockClear();
+
+  rerenderGraph({ roadmap: laidOut, editing: { onEditingIntent } });
+  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+
+  expect(onEditingIntent).not.toHaveBeenCalled();
 });
 
 test('emits a fresh automatic-layout request for each gesture', async () => {
