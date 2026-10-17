@@ -1,4 +1,5 @@
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
+import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
   Resource,
   RoadmapDto,
@@ -138,13 +139,7 @@ function nodeTypeFor(
   roadmap: Pick<RoadmapDto, 'nodeTypes'>,
   nodeTypeId: string,
 ): NodeTypePresentation {
-  return (
-    roadmap.nodeTypes.find((candidate) => candidate.id === nodeTypeId) ?? {
-      name: 'Tipo de nodo',
-      icon: 'Shapes',
-      color: 'currentColor',
-    }
-  );
+  return roadmap.nodeTypes.find((candidate) => candidate.id === nodeTypeId) ?? unknownNodeType;
 }
 
 function nodeTitleLookup(roadmap: RoadmapConfirmationRoadmap) {

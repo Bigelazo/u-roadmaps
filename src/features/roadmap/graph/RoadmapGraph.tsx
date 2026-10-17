@@ -49,6 +49,7 @@ import type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import {
   layoutRoadmapGraph,
@@ -108,8 +109,8 @@ function mapProjectionToFlow(
         notificationsEnabled,
         title: node.title,
         typeColor: nodeType?.color ?? 'var(--primary)',
-        typeName: nodeType?.name ?? 'Sin tipo',
-        typeIcon: nodeType?.icon ?? 'Shapes',
+        typeName: nodeType?.name ?? unknownNodeType.name,
+        typeIcon: nodeType?.icon ?? unknownNodeType.icon,
         status: isTeacherView ? 'editing' : studentNodeStatus(node),
         isHidden,
         isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
