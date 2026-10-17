@@ -1,6 +1,6 @@
 import type { RoadmapChangePort } from './change-port';
 import { roadmapChangeTransaction } from './roadmap-command';
-import { roadmapClosed } from './roadmap-command/errors';
+import { roadmapClosed } from './errors';
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';

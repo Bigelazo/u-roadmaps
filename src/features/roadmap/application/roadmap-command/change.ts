@@ -5,10 +5,10 @@ import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import type { RoadmapChangeFact, RoadmapChangePort, RoadmapChanges } from '../change-port';
 import { accessChanges } from '../access-changes';
 import { readAccessSnapshot } from '../access-snapshot';
-import { conflict, roadmapClosed, roadmapNotFound } from './errors';
+import { conflict, roadmapClosed, roadmapNotFound } from '../errors';
 
 /** Attempts of one serializable change before a serialization failure becomes a 409. */
-export const SERIALIZABLE_MAX_ATTEMPTS = 5;
+const SERIALIZABLE_MAX_ATTEMPTS = 5;
 
 export type RoadmapChangeReporter = (changes: RoadmapChanges) => Promise<void>;
 

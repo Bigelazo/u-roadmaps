@@ -10,7 +10,7 @@ import {
 } from '../domain/version-history';
 import type { RoadmapActor } from './participation';
 import { getAvailableTypes, nodeDto, resourceDto } from './roadmap';
-import { forbidden } from './roadmap-command/errors';
+import { forbidden } from './errors';
 import type {
   CourseOfferingIdentifier,
   NodeType,

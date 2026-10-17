@@ -8,11 +8,8 @@ import {
   type RoadmapReadContext,
 } from '@/features/roadmap/application/roadmap-command';
 import { readUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { nodeNotFound, resourceNotFound } from '@/features/roadmap/application/errors';
 import { requireUuid } from '@/shared/validation';
-import { ApplicationError } from '@/shared/errors/server';
-
-const nodeNotFound = () =>
-  new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
 
 /** Students reach a Node's Resources only while the Node is visible and accessible to them. */
 async function requireStudentResourceAccess(
@@ -58,13 +55,7 @@ export async function downloadRoadmapResource({
       },
       include: { roadmapNode: { select: { isVisible: true } } },
     });
-    if (!found?.fileKey) {
-      throw new ApplicationError(
-        404,
-        'RESOURCE_NOT_FOUND',
-        'El recurso no existe en este roadmap.',
-      );
-    }
+    if (!found?.fileKey) throw resourceNotFound();
     await requireStudentResourceAccess(context, {
       id: found.roadmapNodeId,
       isVisible: found.roadmapNode.isVisible,
@@ -80,6 +71,6 @@ export async function downloadRoadmapResource({
       title: resource.title,
     };
   } catch {
-    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
+    throw resourceNotFound('El archivo ya no está disponible.');
   }
 }

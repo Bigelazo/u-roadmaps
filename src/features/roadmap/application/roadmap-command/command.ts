@@ -1,9 +1,14 @@
 import 'server-only';
 import { Prisma, prisma } from '@/shared/server/db';
+import type { ApplicationError } from '@/shared/errors/server';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import {
+  decideRoadmapCapability,
   participationGrants,
+  type CapabilityParticipation,
+  type CapabilityRoadmap,
   type RoadmapCapability,
+  type RoadmapRefusal,
 } from '@/features/roadmap/domain/roadmap-capability';
 import type { RoadmapChangePort } from '../change-port';
 import {
@@ -14,7 +19,7 @@ import {
   type RoadmapChangeOutcome,
   type RoadmapLock,
 } from './change';
-import { forbidden, requireRoadmapCapability, roadmapNotFound } from './errors';
+import { forbidden, roadmapClosed, roadmapNotFound } from '../errors';
 
 /** Who asks, and for which Course offering's Roadmap. */
 export type RoadmapParticipant = Readonly<{
@@ -23,6 +28,26 @@ export type RoadmapParticipant = Readonly<{
 }>;
 
 type Participation = Prisma.ParticipationGetPayload<true>;
+
+const REFUSAL_ERRORS: Readonly<Record<RoadmapRefusal, () => ApplicationError>> = {
+  ROADMAP_NOT_FOUND: roadmapNotFound,
+  FORBIDDEN: () => forbidden(),
+  ROADMAP_CLOSED: () => roadmapClosed(),
+};
+
+/** Decides the Roadmap capability and throws its refusal, or returns what it decided over. */
+function requireRoadmapCapability<
+  Participation extends CapabilityParticipation,
+  Roadmap extends CapabilityRoadmap,
+>(input: {
+  capability: RoadmapCapability;
+  participation: Participation | null;
+  roadmap: Roadmap | null;
+}) {
+  const decision = decideRoadmapCapability(input);
+  if (decision.kind === 'REJECTED') throw REFUSAL_ERRORS[decision.reason]();
+  return decision;
+}
 
 export type RoadmapCommandContext<Parsed> = Readonly<{
   tx: Prisma.TransactionClient;

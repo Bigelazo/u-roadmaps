@@ -4,6 +4,7 @@ import type { Prisma } from '@/shared/server/db';
 import type { StudentNodeAccess } from '@/features/roadmap/types';
 import { ApplicationError } from '@/shared/errors/server';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
+import { nodeNotFound } from './errors';
 import { roadmapCommand, roadmapRead, type RoadmapParticipant } from './roadmap-command';
 import {
   loadRoadmapProjectionData,
@@ -31,9 +32,7 @@ async function requireNodeAccess(
     roadmapId,
     completedNodeIds,
   });
-  if (!nodes.some((node) => node.id === nodeId)) {
-    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
-  }
+  if (!nodes.some((node) => node.id === nodeId)) throw nodeNotFound();
   const access = accessByNodeId.get(nodeId);
   if (!access || access.status === 'ACCESSIBLE') return;
   throw blockedNodeAccessError(access);

@@ -10,7 +10,7 @@ import {
   roadmapRead,
   type RoadmapParticipant,
 } from './roadmap-command';
-import { roadmapClosed, roadmapNotFound } from './roadmap-command/errors';
+import { nodeNotFound } from './errors';
 import { nodeDto, nodeTypeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import {
   nodeDescription,
@@ -92,17 +92,21 @@ function versioned<Impact extends object>(impact: Impact) {
 
 /**
  * Rejects a confirmation whose sent preview version no longer matches the current impact.
- * A missing version passes unless it is `required`.
+ * A missing version passes unless it is `required`. `impact` names what the preview showed.
  */
 function rejectStalePreview(
   sentVersion: string | undefined,
   { version }: { version: string },
   code: string,
-  message: string,
+  impact: string,
   { required = false } = {},
 ) {
   if (sentVersion ? sentVersion !== version : required) {
-    throw new ApplicationError(409, code, message);
+    throw new ApplicationError(
+      409,
+      code,
+      `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`,
+    );
   }
 }
 
@@ -124,8 +128,7 @@ export async function requireNode(
   roadmapId: string,
 ) {
   const node = await transaction.roadmapNode.findFirst({ where: { id, roadmapId } });
-  if (!node)
-    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!node) throw nodeNotFound();
   return node;
 }
 
@@ -252,7 +255,7 @@ export const updateRoadmapNode = roadmapCommand({
         previewVersion,
         versioned({ dependencies }),
         'NODE_VISIBILITY_PREVIEW_STALE',
-        'El impacto de ocultar el nodo cambió. Revisa y confirma la previsualización actualizada.',
+        'de ocultar el nodo',
       );
     }
     const { removedDependencies, clearsTeacherBlock } = decideVisibilityChange({
@@ -331,8 +334,7 @@ async function nodeDeletionPreview(
       resources: { select: { id: true, title: true }, orderBy: [{ title: 'asc' }, { id: 'asc' }] },
     },
   });
-  if (!node)
-    throw new ApplicationError(404, 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!node) throw nodeNotFound();
   const dependencies = await transaction.dependency.findMany({
     where: touchingNode(node.id),
     select: {
@@ -380,7 +382,7 @@ const nodeDeletion = roadmapCommand({
       previewVersion,
       await nodeDeletionPreview(tx, roadmap.id, nodeId),
       'NODE_DELETE_PREVIEW_STALE',
-      'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
+      'de la eliminación',
     );
     const resources = await tx.resource.findMany({
       where: { roadmapNodeId: nodeId, fileKey: { not: null } },
@@ -550,12 +552,7 @@ export const createRoadmapDependency = roadmapCommand({
       roadmap.id,
       input,
     );
-    rejectStalePreview(
-      previewVersion,
-      preview,
-      'DEPENDENCY_PREVIEW_STALE',
-      'El impacto de la dependencia cambió. Revisa y confirma la previsualización actualizada.',
-    );
+    rejectStalePreview(previewVersion, preview, 'DEPENDENCY_PREVIEW_STALE', 'de la dependencia');
     const { nodes } = preview;
     const dependency = await tx.dependency.create({ data: input });
     if (nodes.length > 0) {
@@ -705,7 +702,7 @@ export const changeTeacherBlock = roadmapCommand({
       input.previewVersion,
       preview,
       'TEACHER_BLOCK_PREVIEW_STALE',
-      `El impacto del ${blocks ? 'bloqueo' : 'desbloqueo'} cambió. Revisa y confirma la previsualización actualizada.`,
+      blocks ? 'del bloqueo' : 'del desbloqueo',
       // An unlock must confirm its previewed impact; a BLOCK only when it sends a version.
       { required: !blocks },
     );
@@ -796,7 +793,7 @@ export const scheduleTeacherUnlock = roadmapCommand({
 
 /** A Roadmap closed (or removed) since the pass listed it releases nothing. */
 function nothingReleasedOnClosure(error: unknown): string[] {
-  const refusals = [roadmapClosed().code, roadmapNotFound().code];
+  const refusals = ['ROADMAP_CLOSED', 'ROADMAP_NOT_FOUND'];
   if (error instanceof ApplicationError && refusals.includes(error.code)) return [];
   throw error;
 }

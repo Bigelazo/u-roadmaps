@@ -1,18 +1,7 @@
 export {
   roadmapCommand,
   roadmapRead,
-  type RoadmapCommand,
-  type RoadmapCommandContext,
   type RoadmapParticipant,
   type RoadmapReadContext,
 } from './command';
-export {
-  changeRoadmap,
-  isSerializationFailure,
-  lockRoadmap,
-  roadmapChangeTransaction,
-  SERIALIZABLE_MAX_ATTEMPTS,
-  type AccessScope,
-  type RoadmapChangeReporter,
-  type RoadmapLock,
-} from './change';
+export { changeRoadmap, lockRoadmap, roadmapChangeTransaction, type AccessScope } from './change';

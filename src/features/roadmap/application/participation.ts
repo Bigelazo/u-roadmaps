@@ -1,5 +1,5 @@
 import type { RoadmapChangePort } from './change-port';
-import { forbidden } from './roadmap-command/errors';
+import { forbidden } from './errors';
 import 'server-only';
 
 import {

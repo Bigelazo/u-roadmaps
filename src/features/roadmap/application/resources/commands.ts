@@ -3,6 +3,7 @@ import { resourceContentState } from '@/shared/server/resource-content-state';
 
 import type { Prisma } from '@/shared/server/db';
 import type { RoadmapChangePort } from '../change-port';
+import { resourceNotFound } from '../errors';
 import { roadmapCommand } from '../roadmap-command';
 import { resourceDto } from '@/features/roadmap/application/roadmap';
 import { requireNode } from '@/features/roadmap/application/editor';
@@ -30,8 +31,7 @@ async function requireResource(
   const resource = await transaction.resource.findFirst({
     where: { id, roadmapNode: { roadmapId } },
   });
-  if (!resource)
-    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en este roadmap.');
+  if (!resource) throw resourceNotFound();
   return resource;
 }
 
