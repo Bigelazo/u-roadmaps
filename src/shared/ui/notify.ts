@@ -1,4 +1,4 @@
-import { toast } from '@/shared/ui/toast';
+import { toast } from '@/shared/ui/toast-manager';
 
 type Tone = 'success' | 'error' | 'neutral';
 

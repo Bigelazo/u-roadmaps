@@ -6,11 +6,10 @@ import { CircleAlert, CircleCheck, X } from 'lucide-react';
 import { cn } from 'cn';
 
 import { Button } from '@/shared/ui/button';
+import { toast } from '@/shared/ui/toast-manager';
 
 // Adapted from the shadcn base-nova registry: the viewport is anchored top-right below the
 // global navigation, so the stack grows downward and toasts enter/leave through the top.
-const toast = ToastPrimitive.createToastManager();
-
 function ToastProvider({ ...props }: ToastPrimitive.Provider.Props) {
   return <ToastPrimitive.Provider {...props} />;
 }
@@ -206,9 +205,6 @@ function Toaster({ children, toastManager = toast, ...props }: ToastPrimitive.Pr
   );
 }
 
-const createToastManager = ToastPrimitive.createToastManager;
-const useToastManager = ToastPrimitive.useToastManager;
-
 export {
   Toaster,
   Toast,
@@ -220,7 +216,4 @@ export {
   ToastProvider,
   ToastTitle,
   ToastViewport,
-  createToastManager,
-  toast,
-  useToastManager,
 };
