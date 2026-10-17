@@ -2,6 +2,7 @@
 import 'dotenv/config';
 import '../../notifications-integration/setup';
 import databaseSetup from '../../notifications-integration/global-setup';
+import { randomUUID } from 'node:crypto';
 import { beforeAll, expect } from 'vitest';
 import { test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma, type Prisma } from '@/shared/server/db';
@@ -208,12 +209,25 @@ test('invalid input is refused before authorisation and before the Roadmap lock'
         ),
         scheduleTeacherUnlock({ ...nonEditor, id: nodeId, unlockOn: '17-10-2026' }, port),
         deleteRoadmapDependency({ ...nonEditor, id: 'not-a-dependency' }, port),
+        // A student may complete, so only parsing first keeps this off the lock.
+        completeNode({ ...nonEditor, nodeId: 'not-a-node' }, port),
+        completeSimulatedNode({ ...nonEditor, nodeId: 'not-a-node' }, port),
       ].map((operation) => settledWithin(operation)),
     );
     for (const outcome of outcomes) expect(outcome).toMatchObject({ error: { status: 400 } });
   } finally {
     await editing.release();
   }
+});
+
+test('invalid read ids are refused before authorisation', async ({ course }) => {
+  const outsider = { userId: randomUUID(), identifier: course.identifier };
+  const refusals = await Promise.allSettled([
+    getRoadmapNodeResources({ ...outsider, nodeId: 'not-a-node' }),
+    downloadRoadmapResource({ ...outsider, resourceId: 'not-a-resource' }),
+  ]);
+  for (const refusal of refusals)
+    expect(refusal).toMatchObject({ status: 'rejected', reason: { status: 400 } });
 });
 
 /** Every Roadmap read, each asked by the participant it serves. */

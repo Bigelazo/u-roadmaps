@@ -4,6 +4,7 @@ import type { Prisma } from '@/shared/server/db';
 import type { StudentNodeAccess } from '@/features/roadmap/types';
 import { ApplicationError } from '@/shared/errors/server';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
+import { requireUuid } from '@/shared/validation';
 import { nodeNotFound } from './errors';
 import { roadmapCommand, roadmapRead, type RoadmapParticipant } from './roadmap-command';
 import {
@@ -80,7 +81,7 @@ export function readRoadmapForParticipant(participant: RoadmapParticipant) {
 export const completeNode = roadmapCommand({
   capability: 'complete',
   lock: 'key-share',
-  parse: ({ nodeId }: { nodeId: string }) => nodeId,
+  parse: ({ nodeId }: { nodeId: string }) => requireUuid(nodeId, 'nodeId'),
   access: 'actor',
   run: async ({ tx, roadmap, actor, input: nodeId }) => {
     await requireStudentNodeAccess(tx, { userId: actor.userId, roadmapId: roadmap.id, nodeId });
@@ -115,7 +116,7 @@ export function readSimulatedRoadmap(participant: RoadmapParticipant) {
 export const completeSimulatedNode = roadmapCommand({
   capability: 'edit',
   lock: 'key-share',
-  parse: ({ nodeId }: { nodeId: string }) => nodeId,
+  parse: ({ nodeId }: { nodeId: string }) => requireUuid(nodeId, 'nodeId'),
   access: 'none',
   run: async ({ tx, roadmap, participation, input: nodeId }) => {
     const completedNodeIds = await loadCompletedNodeIds(tx, {

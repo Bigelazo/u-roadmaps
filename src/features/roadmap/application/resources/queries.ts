@@ -25,13 +25,14 @@ async function requireStudentResourceAccess(
   });
 }
 
-export function getRoadmapNodeResources({
+export async function getRoadmapNodeResources({
   nodeId,
   ...participant
 }: RoadmapParticipant & { nodeId: string }) {
+  const id = requireUuid(nodeId, 'nodeId');
   return roadmapRead(participant, 'read', async (context) => {
     const node = await context.tx.roadmapNode.findFirst({
-      where: { id: requireUuid(nodeId, 'nodeId'), roadmapId: context.roadmap.id },
+      where: { id, roadmapId: context.roadmap.id },
     });
     if (!node) throw nodeNotFound();
     await requireStudentResourceAccess(context, node);
@@ -47,12 +48,10 @@ export async function downloadRoadmapResource({
   resourceId,
   ...participant
 }: RoadmapParticipant & { resourceId: string }) {
+  const id = requireUuid(resourceId, 'resourceId');
   const resource = await roadmapRead(participant, 'read', async (context) => {
     const found = await context.tx.resource.findFirst({
-      where: {
-        id: requireUuid(resourceId, 'resourceId'),
-        roadmapNode: { roadmapId: context.roadmap.id },
-      },
+      where: { id, roadmapNode: { roadmapId: context.roadmap.id } },
       include: { roadmapNode: { select: { isVisible: true } } },
     });
     if (!found?.fileKey) throw resourceNotFound();
