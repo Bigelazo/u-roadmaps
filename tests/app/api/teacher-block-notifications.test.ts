@@ -38,20 +38,12 @@ const context = {
   }),
 };
 
-function result<T>(value: T) {
-  return { match: async (onSuccess: (value: T) => unknown) => onSuccess(value) };
-}
-
-function mutationResult() {
-  return result({ mode: 'BRANCH', nodes: [], version: 'preview-version' });
-}
+const preview = { mode: 'BRANCH', nodes: [], version: 'preview-version' };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  changeTeacherBlock.mockReturnValue(mutationResult());
-  previewTeacherBlock.mockReturnValue(
-    result({ mode: 'BRANCH', nodes: [], version: 'preview-version' }),
-  );
+  changeTeacherBlock.mockResolvedValue(preview);
+  previewTeacherBlock.mockResolvedValue(preview);
 });
 
 test.each([
@@ -95,10 +87,7 @@ test('a preview returns its result without a mutation', async () => {
 
 test('a failed confirmed action returns its error', async () => {
   const error = new Error('TEACHER_BLOCK_PREVIEW_STALE');
-  changeTeacherBlock.mockReturnValue({
-    match: async (_onSuccess: (value: unknown) => unknown, onError: (error: Error) => unknown) =>
-      onError(error),
-  });
+  changeTeacherBlock.mockRejectedValue(error);
 
   await expect(
     DELETE(

@@ -10,13 +10,7 @@ import {
   countOwnNotices,
   prepareOwnRoadmapOpening,
 } from '@/features/notifications/server';
-import {
-  confirmed,
-  deferredNoticePort,
-  enterRoadmap,
-  pendingNotices,
-  teacherEdits,
-} from './roadmap';
+import { deferredNoticePort, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
 const data = (notice: Notice) => notice.data as Record<string, unknown>;
@@ -198,13 +192,11 @@ async function newRoadmap(course: IntegrationCourse, copy: boolean) {
       },
     },
   });
-  const { roadmap } = await confirmed(
-    createRoadmap(
-      identifier,
-      copy ? { source: course.identifier } : {},
-      { id: course.teacherId, name: 'Docente' },
-      scheduledRoadmapChangePort,
-    ),
+  const { roadmap } = await createRoadmap(
+    identifier,
+    copy ? { source: course.identifier } : {},
+    { id: course.teacherId, name: 'Docente' },
+    scheduledRoadmapChangePort,
   );
   const nodeTypeId = (
     (await prisma.nodeType.findFirst({ where: { roadmapId: roadmap.id } })) ??

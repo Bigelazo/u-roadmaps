@@ -4,14 +4,7 @@ import { test, type IntegrationCourse } from './fixtures';
 import { prisma } from '@/shared/server/db';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { releaseScheduledTeacherUnlocks } from '@/features/roadmap/server';
-import {
-  addNode,
-  confirmed,
-  deferredNoticePort,
-  enterRoadmap,
-  pendingNotices,
-  teacherEdits,
-} from './roadmap';
+import { addNode, deferredNoticePort, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
 
@@ -187,7 +180,7 @@ test('a Scheduled unlock release notifies like a manual unlock, from teaching st
     where: { id: node.id },
     data: { teacherUnlockOn: new Date('2026-01-01T00:00:00.000Z') },
   });
-  await confirmed(releaseScheduledTeacherUnlocks(scheduledRoadmapChangePort, '2026-01-02'));
+  await releaseScheduledTeacherUnlocks(scheduledRoadmapChangePort, '2026-01-02');
   expect(accessNotices(await pendingNotices(course.studentId, course.roadmapId))).toMatchObject([
     {
       body: '«Colas» fue desbloqueado.',

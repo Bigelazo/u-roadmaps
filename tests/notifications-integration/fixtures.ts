@@ -64,6 +64,21 @@ async function createCourse(
 
 export type IntegrationCourse = Awaited<ReturnType<typeof createCourse>>;
 
+type CourseParticipants = Pick<IntegrationCourse, 'teacherId' | 'studentId' | 'identifier'>;
+
+/**
+ * The course teacher, as Roadmap operations receive them. Computed from the fields, so a
+ * course derived with another teacher or Course offering stays consistent.
+ */
+export function teacher({ teacherId, identifier }: Omit<CourseParticipants, 'studentId'>) {
+  return { userId: teacherId, identifier };
+}
+
+/** The course student, as Roadmap operations receive them. */
+export function student({ studentId, identifier }: Omit<CourseParticipants, 'teacherId'>) {
+  return { userId: studentId, identifier };
+}
+
 async function course(
   { task }: { task: unknown },
   provide: (course: IntegrationCourse) => Promise<void>,

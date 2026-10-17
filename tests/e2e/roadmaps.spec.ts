@@ -442,6 +442,51 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   );
 });
 
+test('hiding a Node with a stale visibility preview is refused until it is previewed again', async ({
+  course,
+  teacherApi: api,
+}) => {
+  const [nodeId, dependentId, prerequisiteId] = await Promise.all(
+    ['Ocultar', 'Dependiente', 'Prerrequisito'].map(async (name, index) => {
+      const response = await api.post(course.apiPath('/nodes'), {
+        data: {
+          title: uniqueName(`Nodo para ${name}`),
+          nodeTypeId: '00000000-0000-4000-8000-000000000001',
+          positionX: index * 240,
+          positionY: 0,
+        },
+      });
+      await ok(response, 201);
+      return (await response.json()).node.id as string;
+    }),
+  );
+  await createDependency(api, course, nodeId, dependentId);
+  const previewPath = course.apiPath(`/nodes/${nodeId}?operation=HIDE`);
+  const confirmed = await api.get(previewPath);
+  await ok(confirmed);
+  await createDependency(api, course, prerequisiteId, nodeId);
+
+  const hide = (version: string) =>
+    api.patch(course.apiPath(`/nodes/${nodeId}`), {
+      data: { isVisible: false },
+      headers: { 'x-node-visibility-preview': version },
+    });
+  const staleHide = await hide((await confirmed.json()).version);
+  await ok(staleHide, 409);
+  expect((await staleHide.json()).error.code).toBe('NODE_VISIBILITY_PREVIEW_STALE');
+
+  const refreshed = await api.get(previewPath);
+  await ok(refreshed);
+  const preview = await refreshed.json();
+  expect(preview.dependencies).toHaveLength(2);
+  const hidden = await hide(preview.version);
+  await ok(hidden);
+  expect(await hidden.json()).toMatchObject({
+    node: { id: nodeId, isVisible: false },
+    dependencies: preview.dependencies,
+  });
+});
+
 test('teacher uploads a file resource through the protected multipart endpoint', async ({
   course,
   teacherApi: api,

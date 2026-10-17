@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
 import { downloadRoadmapVersionResource } from '@/features/roadmap/server';
-import { unwrap } from '@/shared/errors/server';
 
 export const GET = courseRoute(async ({ identifier, user, params }) => {
-  const download = await unwrap(() =>
-    downloadRoadmapVersionResource(user, identifier, params.resourceId),
-  );
+  const download = await downloadRoadmapVersionResource(user, identifier, params.resourceId);
   return new NextResponse(Uint8Array.from(download.bytes).buffer, {
     headers: {
       'Content-Type': download.contentType,
