@@ -3,7 +3,7 @@ import 'dotenv/config';
 import '../../notifications-integration/setup';
 import databaseSetup from '../../notifications-integration/global-setup';
 import { beforeAll, expect } from 'vitest';
-import { test, type IntegrationCourse } from '../../notifications-integration/fixtures';
+import { teacher, test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma } from '@/shared/server/db';
 import { recordingChangePort } from './support/recording-change-port';
 import {
@@ -43,11 +43,11 @@ test('hiding a Node checks a sent visibility preview version against the removed
     await addNode(course, 'Colas'),
   ];
   await connect(nodeId, dependent.id);
-  const preview = await previewNodeVisibility({ ...course.teacher, id: nodeId });
+  const preview = await previewNodeVisibility({ ...teacher(course), id: nodeId });
   await connect(prerequisite.id, nodeId);
   const hide = (previewVersion?: string) =>
     updateRoadmapNode(
-      { ...course.teacher, id: nodeId, input: { isVisible: false }, previewVersion },
+      { ...teacher(course), id: nodeId, input: { isVisible: false }, previewVersion },
       recording.port,
     );
 
@@ -57,7 +57,7 @@ test('hiding a Node checks a sent visibility preview version against the removed
   });
   expect(recording.changes).toEqual([]);
 
-  const current = await previewNodeVisibility({ ...course.teacher, id: nodeId });
+  const current = await previewNodeVisibility({ ...teacher(course), id: nodeId });
   expect(current.dependencies).toHaveLength(2);
   await expect(hide(current.version)).resolves.toMatchObject({
     node: { isVisible: false },
@@ -68,7 +68,7 @@ test('hiding a Node checks a sent visibility preview version against the removed
   await connect(unconfirmed.id, dependent.id);
   await expect(
     updateRoadmapNode(
-      { ...course.teacher, id: unconfirmed.id, input: { isVisible: false } },
+      { ...teacher(course), id: unconfirmed.id, input: { isVisible: false } },
       recording.port,
     ),
   ).resolves.toMatchObject({ node: { isVisible: false }, dependencies: [expect.anything()] });
@@ -80,7 +80,7 @@ test('BLOCK checks a sent Teacher block preview version against the Nodes it blo
   const recording = recordingChangePort();
   const nodeId = course.change.nodeId;
   await connect(nodeId, (await addNode(course, 'Pilas')).id);
-  const request = { ...course.teacher, id: nodeId, operation: 'BLOCK' as const };
+  const request = { ...teacher(course), id: nodeId, operation: 'BLOCK' as const };
   const preview = await previewTeacherBlock(request);
   await connect(nodeId, (await addNode(course, 'Colas')).id);
   const block = (previewVersion?: string) =>
@@ -112,7 +112,7 @@ test('Dependency creation checks a sent Dependency preview version against the T
   });
   const target = await addNode(course, 'Pilas');
   const request = {
-    ...course.teacher,
+    ...teacher(course),
     input: { sourceNodeId: source.id, targetNodeId: target.id },
   };
   const preview = await previewRoadmapDependency(request);

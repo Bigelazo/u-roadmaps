@@ -3,7 +3,7 @@ import 'dotenv/config';
 import '../../notifications-integration/setup';
 import databaseSetup from '../../notifications-integration/global-setup';
 import { beforeAll, expect } from 'vitest';
-import { test, type IntegrationCourse } from '../../notifications-integration/fixtures';
+import { teacher, test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma } from '@/shared/server/db';
 import { recordingChangePort } from './support/recording-change-port';
 import {
@@ -55,7 +55,7 @@ test('node creation and edits report per-object previous values and return plain
   course,
 }) => {
   const recording = recordingChangePort();
-  const input = course.teacher;
+  const input = teacher(course);
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
   const node = await createRoadmapNode(
     {
@@ -117,7 +117,7 @@ test('description and type edits report previous values and write no notice base
   const nodeId = course.change.nodeId;
   await updateRoadmapNode(
     {
-      ...course.teacher,
+      ...teacher(course),
       id: nodeId,
       input: { description: 'Nueva', nodeTypeId: nextType.id },
     },
@@ -140,7 +140,7 @@ test('visibility and deletion report their facts and recipient access transition
   course,
 }) => {
   const recording = recordingChangePort();
-  const input = course.teacher;
+  const input = teacher(course);
   const nodeId = course.change.nodeId;
   await updateRoadmapNode({ ...input, id: nodeId, input: { isVisible: false } }, recording.port);
   expect(recording.facts()).toContainEqual({
@@ -175,7 +175,7 @@ test('Dependencies removed by hiding a Node are not reported as Dependency facts
   course,
 }) => {
   const recording = recordingChangePort();
-  const input = course.teacher;
+  const input = teacher(course);
   const target = await addNode(course);
   await prisma.dependency.create({
     data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
@@ -189,7 +189,7 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   course,
 }) => {
   const recording = recordingChangePort();
-  const input = course.teacher;
+  const input = teacher(course);
   const target = await addNode(course);
   const result = await createRoadmapDependency(
     { ...input, input: { sourceNodeId: course.change.nodeId, targetNodeId: target.id } },
@@ -251,7 +251,7 @@ test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
   'Teacher block and %s report access changes',
   async (operation, { course }) => {
     const recording = recordingChangePort();
-    const input = { ...course.teacher, id: course.change.nodeId };
+    const input = { ...teacher(course), id: course.change.nodeId };
     await changeTeacherBlock({ ...input, operation: 'BLOCK' }, recording.port);
     expect(recording.facts()).toContainEqual(
       access({
@@ -302,7 +302,7 @@ test('Resource lifecycle reports absence and exact previous content, including u
   course,
 }) => {
   const recording = recordingChangePort();
-  const input = course.teacher;
+  const input = teacher(course);
   const resource = await createRoadmapResource(
     {
       ...input,
@@ -361,7 +361,7 @@ test('Resource lifecycle reports absence and exact previous content, including u
 test('type rename reports its previous name; appearance edits stay silent', async ({ course }) => {
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
   const recording = recordingChangePort();
-  const input = { ...course.teacher, id: type.id };
+  const input = { ...teacher(course), id: type.id };
   const result = await updateRoadmapNodeType(
     { ...input, input: { name: 'Lectura' } },
     recording.port,
@@ -441,7 +441,7 @@ test('a failed uploaded Resource transaction compensates its stored bytes', asyn
   let storedFileKey: string | null = null;
   const upload = uploadRoadmapResource(
     {
-      ...course.teacher,
+      ...teacher(course),
       id: course.change.nodeId,
       file: new File(['Contenido'], 'guide.txt', { type: 'text/plain' }),
     },

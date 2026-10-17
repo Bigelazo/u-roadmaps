@@ -22,14 +22,14 @@ import {
   updateRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
-import type { IntegrationCourse } from './fixtures';
+import { teacher, type IntegrationCourse } from './fixtures';
 
 /** Real Roadmap edits by the course teacher, delivered immediately after commit. */
 export function teacherEdits(
   course: IntegrationCourse,
   port: RoadmapChangePort = scheduledRoadmapChangePort,
 ) {
-  const editor = course.teacher;
+  const editor = teacher(course);
   return {
     create: (title: string) =>
       createRoadmapNode(

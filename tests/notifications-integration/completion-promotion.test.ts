@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { test, type IntegrationCourse } from './fixtures';
+import { student, test, type IntegrationCourse } from './fixtures';
 import { prisma } from '@/shared/server/db';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { completeNode } from '@/features/roadmap/server';
@@ -15,7 +15,7 @@ const accessBodies = (notices: Notice[]) =>
     .sort();
 
 const complete = (course: IntegrationCourse, nodeId: string) =>
-  completeNode({ ...course.student, nodeId }, scheduledRoadmapChangePort);
+  completeNode({ ...student(course), nodeId }, scheduledRoadmapChangePort);
 
 const promote = (course: IntegrationCourse) =>
   materializeParticipation(

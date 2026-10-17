@@ -4,7 +4,12 @@ import '../../notifications-integration/setup';
 import databaseSetup from '../../notifications-integration/global-setup';
 import { randomUUID } from 'node:crypto';
 import { beforeAll, expect, onTestFinished, vi } from 'vitest';
-import { test, type IntegrationCourse } from '../../notifications-integration/fixtures';
+import {
+  student,
+  teacher,
+  test,
+  type IntegrationCourse,
+} from '../../notifications-integration/fixtures';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { requireUuid } from '@/shared/validation';
 import { recordingChangePort } from './support/recording-change-port';
@@ -46,7 +51,7 @@ async function editorPreviews(course: IntegrationCourse) {
       positionY: 0,
     },
   });
-  const editor = course.teacher;
+  const editor = teacher(course);
   return (): Promise<unknown>[] => [
     previewNodeDeletion({ ...editor, id: nodeId }),
     previewNodeVisibility({ ...editor, id: nodeId }),
@@ -137,7 +142,7 @@ const blockNode = (access: AccessScope) =>
 
 test('a declared access scope reports access facts, and none reports none', async ({ course }) => {
   const recording = recordingChangePort();
-  const request = { ...course.teacher, nodeId: course.change.nodeId };
+  const request = { ...teacher(course), nodeId: course.change.nodeId };
   await blockNode('roadmap')(request, recording.port);
   const recipients = recording
     .facts()
@@ -161,11 +166,11 @@ test('a closed Roadmap answers one code for edit, previews, Completion and Canva
   const nodeId = course.change.nodeId;
   const previews = await editorPreviews(course);
   const refusals = await Promise.allSettled([
-    updateRoadmapNode({ ...course.teacher, id: nodeId, input: { title: 'Colas' } }, port),
-    blockNode('roadmap')({ ...course.teacher, nodeId }, port),
-    completeNode({ ...course.student, nodeId }, port),
-    completeSimulatedNode({ ...course.teacher, nodeId }, port),
-    resetSimulatedCompletions(course.teacher, port),
+    updateRoadmapNode({ ...teacher(course), id: nodeId, input: { title: 'Colas' } }, port),
+    blockNode('roadmap')({ ...teacher(course), nodeId }, port),
+    completeNode({ ...student(course), nodeId }, port),
+    completeSimulatedNode({ ...teacher(course), nodeId }, port),
+    resetSimulatedCompletions(teacher(course), port),
     ...previews(),
   ]);
   for (const refusal of refusals)
@@ -182,7 +187,7 @@ test('a Completion racing with the Roadmap closure is refused as a closed Roadma
     tx.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } }),
   );
   const completion = completeNode(
-    { ...course.student, nodeId: course.change.nodeId },
+    { ...student(course), nodeId: course.change.nodeId },
     recordingChangePort().port,
   );
   await closure.blocksAnother();
@@ -196,7 +201,7 @@ test('invalid input is refused before authorisation and before the Roadmap lock'
   const editing = await holdRoadmapLock(course.roadmapId);
   const { port } = recordingChangePort();
   // A student may not edit, so a refusal other than 400 would come from the guard.
-  const nonEditor = course.student;
+  const nonEditor = student(course);
   const nodeId = course.change.nodeId;
   try {
     const outcomes = await Promise.all(
@@ -233,7 +238,7 @@ test('invalid read ids are refused before authorisation', async ({ course }) => 
 
 test('an upload is parsed and authorised before its bytes are saved', async ({ course }) => {
   const { port } = recordingChangePort();
-  const upload = async (participant: typeof course.teacher, id: string) => {
+  const upload = async (participant: ReturnType<typeof teacher>, id: string) => {
     const file = new File(['Contenido'], 'guide.txt', { type: 'text/plain' });
     const read = vi.spyOn(file, 'arrayBuffer');
     const outcome = await uploadRoadmapResource({ ...participant, id, file }, port).catch(
@@ -242,13 +247,13 @@ test('an upload is parsed and authorised before its bytes are saved', async ({ c
     expect(read).not.toHaveBeenCalled();
     return outcome;
   };
-  expect(await upload(course.teacher, 'not-a-node')).toMatchObject({ status: 400 });
-  expect(await upload(course.student, course.change.nodeId)).toMatchObject({
+  expect(await upload(teacher(course), 'not-a-node')).toMatchObject({ status: 400 });
+  expect(await upload(student(course), course.change.nodeId)).toMatchObject({
     status: 403,
     code: 'FORBIDDEN',
   });
   await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
-  expect(await upload(course.teacher, course.change.nodeId)).toMatchObject({
+  expect(await upload(teacher(course), course.change.nodeId)).toMatchObject({
     status: 409,
     code: 'ROADMAP_CLOSED',
   });
@@ -258,10 +263,10 @@ test('an upload is parsed and authorised before its bytes are saved', async ({ c
 function roadmapReads(course: IntegrationCourse): Promise<unknown>[] {
   const nodeId = course.change.nodeId;
   return [
-    readRoadmapForParticipant(course.student),
-    getNodeTypesForActor(course.student),
-    getRoadmapNodeResources({ ...course.student, nodeId }),
-    readSimulatedRoadmap(course.teacher),
+    readRoadmapForParticipant(student(course)),
+    getNodeTypesForActor(student(course)),
+    getRoadmapNodeResources({ ...student(course), nodeId }),
+    readSimulatedRoadmap(teacher(course)),
     // Without a RUT, Student progress tracking lists the local roster only.
     readCourseParticipants({ id: course.teacherId, rut: null }, course.identifier),
   ];
@@ -291,7 +296,7 @@ test('an inactive Participation is refused by every Roadmap read', async ({ cour
   await prisma.participation.updateMany({ where: offering, data: { isActive: false } });
   const refusals = await Promise.allSettled([
     ...roadmapReads(course),
-    downloadRoadmapResource({ ...course.student, resourceId: course.change.nodeId }),
+    downloadRoadmapResource({ ...student(course), resourceId: course.change.nodeId }),
   ]);
   for (const refusal of refusals)
     expect(refusal).toMatchObject({
@@ -314,7 +319,7 @@ test('delivery runs only after commit', async ({ course }) => {
       };
     },
   };
-  await blockNode('roadmap')({ ...course.teacher, nodeId: course.change.nodeId }, port);
+  await blockNode('roadmap')({ ...teacher(course), nodeId: course.change.nodeId }, port);
   expect(delivered).toEqual([true]);
 });
 
@@ -332,7 +337,7 @@ test('a failed delivery is logged with context and does not change the response'
     },
   };
   const nodeId = course.change.nodeId;
-  await expect(blockNode('roadmap')({ ...course.teacher, nodeId }, port)).resolves.toBe(nodeId);
+  await expect(blockNode('roadmap')({ ...teacher(course), nodeId }, port)).resolves.toBe(nodeId);
   expect(logged).toHaveBeenCalledWith('Roadmap change delivery failed', {
     roadmapId: course.roadmapId,
     actorId: course.teacherId,
@@ -354,7 +359,7 @@ test('a failed commit discards delivery', async ({ course }) => {
     },
   };
   await expect(
-    blockNode('roadmap')({ ...course.teacher, nodeId: course.change.nodeId }, port),
+    blockNode('roadmap')({ ...teacher(course), nodeId: course.change.nodeId }, port),
   ).rejects.toThrow();
   expect(delivered).toEqual([]);
   const node = await prisma.roadmapNode.findUniqueOrThrow({ where: { id: course.change.nodeId } });
@@ -373,6 +378,6 @@ test('only the committed retry attempt delivers', async ({ course }) => {
       };
     },
   };
-  await blockNode('roadmap')({ ...course.teacher, nodeId: course.change.nodeId }, port);
+  await blockNode('roadmap')({ ...teacher(course), nodeId: course.change.nodeId }, port);
   expect(delivered).toEqual([2]);
 });

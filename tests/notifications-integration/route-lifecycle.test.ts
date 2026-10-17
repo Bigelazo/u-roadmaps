@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { test } from './fixtures';
+import { student, test } from './fixtures';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { completeNode } from '@/features/roadmap/server';
 import { prisma } from '@/shared/server/db';
@@ -102,7 +102,7 @@ test('a student who completed the prerequisite is still told the route changed',
 }) => {
   const prerequisite = await addNode(course, 'Pilas');
   const dependent = await addNode(course, 'Colas');
-  await completeNode({ ...course.student, nodeId: prerequisite.id }, scheduledRoadmapChangePort);
+  await completeNode({ ...student(course), nodeId: prerequisite.id }, scheduledRoadmapChangePort);
   await teacherEdits(course).connect(prerequisite.id, dependent.id);
   expect(await routeNotices(course.studentId, course.roadmapId)).toMatchObject([
     { body: '«Colas» ahora requiere «Pilas».' },
