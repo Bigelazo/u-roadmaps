@@ -98,6 +98,18 @@ export function RoadmapTutorial<Action = never>({
       index !== undefined && steps[index]?.advanceWhen !== undefined;
     const isRequiredActionStep = (index: number | undefined): index is number =>
       isActionStep(index) && !steps[index].allowManualAdvance;
+    const disablesInteraction = (step: TutorialStep<Action>) =>
+      !step.advanceWhen && !step.allowInteraction;
+    // React can rewrite a highlighted element's classes after driver.js added its own (a
+    // React Flow node toggles its interaction classes once a Node menu finishes closing),
+    // which would leave the step without its highlight. driver.js 1.9.0 marks the element
+    // with these classes; check them on upgrading driver.js.
+    const restoreHighlight = (index: number) => {
+      const element = tour.getActiveElement();
+      if (!element || element.classList.contains('driver-active-element')) return;
+      element.classList.add('driver-active-element');
+      if (disablesInteraction(steps[index])) element.classList.add('driver-no-interaction');
+    };
     const move = async (tour: Driver, offset: 1 | -1, byAction = false) => {
       if (confirmingRef.current || moving) return;
       if (offset === 1 && !byAction && isRequiredActionStep(tour.getActiveIndex())) return;
@@ -127,7 +139,7 @@ export function RoadmapTutorial<Action = never>({
       disableActiveInteraction: true,
       steps: steps.map((step, index): DriveStep => ({
         element: () => resolveHighlight(step),
-        disableActiveInteraction: !step.advanceWhen && !step.allowInteraction,
+        disableActiveInteraction: disablesInteraction(step),
         popover: {
           title: step.title,
           description: step.description,
@@ -182,6 +194,7 @@ export function RoadmapTutorial<Action = never>({
       const index = tour.getActiveIndex();
       document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
       if (confirmingRef.current || index === undefined || !tour.isActive()) return;
+      restoreHighlight(index);
       if (steps[index].highlightElements) {
         resolveHighlight(steps[index]);
         tour.refresh();

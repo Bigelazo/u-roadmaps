@@ -19,9 +19,9 @@ Ambos adapters la llaman y solo aplican el resultado.
 ## Decisiones
 
 - **Una decisión por concepto.** `decideDependency` (`domain/dependency.ts`),
-  `decideVisibilityChange` (`domain/node-visibility.ts`) y `decideScheduledUnlock`
-  (`domain/scheduled-unlock.ts`), junto a `decideTeacherBlock`. La Completación reutiliza
-  `studentNodeAccessById`.
+  `decideVisibilityChange` (`domain/node-visibility.ts`), `decideScheduledUnlock`
+  (`domain/scheduled-unlock.ts`) y `decideNodeTypeChange` (`domain/node-type.ts`), junto
+  a `decideTeacherBlock`. La Completación reutiliza `studentNodeAccessById`.
 - **El mensaje vive en el dominio; el código HTTP, en el servidor.** El tutorial y el
   servidor muestran el mismo texto.
 - **Los hechos de cambio no son parte de la decisión.** Los de acceso siguen saliendo de
@@ -39,3 +39,13 @@ Ambos adapters la llaman y solo aplican el resultado.
 - **Suite de contrato contra ambos adapters:** exige Postgres para el servidor; como ambos
   llaman las mismas decisiones, la interfaz que vale la pena probar es la decisión.
 - **Partir `editor.ts` por agregado:** mueve código sin concentrarlo.
+
+## Nota — 2026-10-17: las reglas de los Tipos de nodo
+
+Crear, editar y eliminar un Tipo de nodo pasan por `decideNodeTypeChange`
+(`domain/node-type.ts`). Un Tipo de nodo predefinido es inmutable, el nombre normalizado
+es único entre los Tipos de nodo predefinidos y los del Roadmap, y no se elimina un Tipo
+de nodo que algún Nodo usa. El Mapa de práctica no aplicaba ninguna de las tres reglas:
+dejaba Nodos sin Tipo de nodo y aceptaba nombres que el servidor rechaza. Ahora ambos
+adapters llaman la decisión y muestran sus mensajes; los códigos HTTP siguen en el
+servidor (#263).

@@ -1,5 +1,5 @@
-import { forwardRef, useImperativeHandle, type ComponentProps, type ReactNode } from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ComponentProps, ReactNode } from 'react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
@@ -7,10 +7,9 @@ import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/sess
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
 import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change-signal';
 import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
-import type { NodeEditorProps } from '@/features/roadmap/editor/types';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
-import { closeToast, findToast, queryToast, queryToasts } from '../../../support/toast';
+import { closeToast, findToast, queryToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
 
 // The public canvas seam renders a mobile sidebar in these scenarios.
@@ -18,173 +17,46 @@ beforeEach(() => mockViewport(640));
 // The runner cleans up each canvas before these file-scoped globals are restored.
 afterAll(() => vi.unstubAllGlobals());
 
-vi.mock('next/dynamic', () => ({
-  default: () =>
-    forwardRef(function NodeEditorMock({ session, perform, onIntent }: NodeEditorProps, ref) {
-      useImperativeHandle(ref, () => ({ guardDraft: vi.fn().mockResolvedValue(true) }), []);
-      if (!session.node) return null;
-      const node = session.node;
-      const resource = node.resources[0];
-      const actions: [label: string, run: () => void][] = [
-        [
-          'Bloquear nodo',
-          () => onIntent({ kind: 'change-teacher-block', nodeId: node.id, operation: 'BLOCK' }),
-        ],
-        [
-          'Ocultar para estudiantes',
-          () => onIntent({ kind: 'change-visibility', nodeId: node.id, isVisible: true }),
-        ],
-        ['Eliminar nodo', () => onIntent({ kind: 'delete-node', nodeId: node.id })],
-        [
-          'Guardar cambios',
-          () =>
-            void perform({
-              kind: 'update-node',
-              nodeId: node.id,
-              value: {
-                title: 'Límites y continuidad',
-                description: node.description ?? '',
-                nodeTypeId: node.nodeTypeId,
-              },
-            }),
-        ],
-        [
-          'Guardar enlace',
-          () =>
-            void perform({
-              kind: 'add-resource',
-              nodeId: node.id,
-              resource: {
-                title: 'Guía de ejercicios',
-                url: 'https://example.test/guia',
-                type: 'LINK',
-              },
-            }),
-        ],
-        [
-          'Subir archivo',
-          () =>
-            void perform({
-              kind: 'upload-resource',
-              nodeId: node.id,
-              file: new File(['contenido'], 'apuntes.pdf', { type: 'application/pdf' }),
-            }),
-        ],
-      ];
-      if (resource) {
-        actions.push(
-          [
-            'Actualizar recurso',
-            () =>
-              void perform({
-                kind: 'update-resource',
-                resourceId: resource.id,
-                resource: { ...resource, title: 'Guía actualizada' },
-              }),
-          ],
-          [
-            'Eliminar recurso',
-            () => void perform({ kind: 'delete-resource', resourceId: resource.id }),
-          ],
-        );
-      }
-      return (
-        <aside>
-          {actions.map(([label, run]) => (
-            <button key={label} type="button" onClick={run}>
-              {label}
-            </button>
-          ))}
-          <output data-testid="session-resource-count">{node.resources.length}</output>
-        </aside>
-      );
-    }),
-}));
+// Canvas commands are covered by the canvas command module tests; the editor is not needed.
+vi.mock('next/dynamic', () => ({ default: () => () => null }));
 
-vi.mock('@/features/roadmap/graph/RoadmapGraph', () => {
-  const editingIntents: [label: string, intent: object][] = [
-    [
-      'Mover nodo',
-      {
-        kind: 'node-positions',
-        cause: 'pointer',
-        positions: [{ nodeId: 'node-1', position: { x: 120, y: 80 } }],
-      },
-    ],
-    [
-      'Solicitar ordenamiento',
-      {
-        kind: 'request-automatic-layout',
-        positions: [{ nodeId: 'node-1', position: { x: 320, y: 160 } }],
-        direction: 'LR',
-      },
-    ],
-    [
-      'Crear dependencia',
-      {
-        kind: 'create-dependency',
-        sourceNodeId: 'node-1',
-        targetNodeId: 'node-2',
-        sourceHandle: 'right',
-        targetHandle: 'left',
-      },
-    ],
-    ['Eliminar dependencia', { kind: 'delete-dependencies', dependencyIds: ['dependency-1'] }],
-    [
-      'Eliminar dependencias',
-      { kind: 'delete-dependencies', dependencyIds: ['dependency-1', 'dependency-2'] },
-    ],
-  ];
-  return {
-    RoadmapGraph: ({
-      projection,
-      onSelectNode,
-      selectedNodeId,
-      bottomLeftActions,
-      bottomRightActions,
-      overlaySlots,
-    }: {
-      projection: {
-        roadmap: { nodes: Array<{ id: string; title: string }> };
-        kind: 'teaching' | 'student';
-        editing?: { onEditingIntent: (intent: unknown) => void };
-      };
-      onSelectNode: (nodeId: string) => void;
-      selectedNodeId?: string | null;
-      bottomLeftActions?: (
-        findOpenPosition: (title: string) => { x: number; y: number } | null,
-      ) => ReactNode;
-      bottomRightActions?: (
-        findOpenPosition: (title: string) => { x: number; y: number } | null,
-      ) => ReactNode;
-      overlaySlots?: { topCenter?: ReactNode };
-    }) => (
-      <>
-        {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
-        {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
-        <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
-        <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
-        <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
-        {projection.roadmap.nodes[0] ? (
-          <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
-            {projection.roadmap.nodes[0].title}
-          </button>
-        ) : null}
-        {projection.kind === 'teaching' && projection.editing
-          ? editingIntents.map(([label, intent]) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => projection.editing?.onEditingIntent(intent)}
-              >
-                {label}
-              </button>
-            ))
-          : null}
-      </>
-    ),
-  };
-});
+vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
+  RoadmapGraph: ({
+    projection,
+    onSelectNode,
+    selectedNodeId,
+    bottomLeftActions,
+    bottomRightActions,
+    overlaySlots,
+  }: {
+    projection: {
+      roadmap: { nodes: Array<{ id: string; title: string }> };
+      editing?: unknown;
+    };
+    onSelectNode: (nodeId: string) => void;
+    selectedNodeId?: string | null;
+    bottomLeftActions?: (
+      findOpenPosition: (title: string) => { x: number; y: number } | null,
+    ) => ReactNode;
+    bottomRightActions?: (
+      findOpenPosition: (title: string) => { x: number; y: number } | null,
+    ) => ReactNode;
+    overlaySlots?: { topCenter?: ReactNode };
+  }) => (
+    <>
+      {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
+      {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
+      <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
+      <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
+      <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
+      {projection.roadmap.nodes[0] ? (
+        <button type="button" onClick={() => onSelectNode(projection.roadmap.nodes[0].id)}>
+          {projection.roadmap.nodes[0].title}
+        </button>
+      ) : null}
+    </>
+  ),
+}));
 
 vi.mock('@/features/roadmap/student/NodeDetail', () => ({
   StudentNodeDetail: ({
@@ -245,44 +117,7 @@ const limitsNode: RoadmapDto['nodes'][number] = {
   resources: [],
 };
 
-const derivativesNode: RoadmapDto['nodes'][number] = {
-  id: 'node-2',
-  title: 'Derivadas',
-  description: null,
-  nodeTypeId: 'content',
-  positionX: 160,
-  positionY: 0,
-  isVisible: true,
-  isTeacherBlocked: false,
-  resources: [],
-};
-
 const teachingRoadmap: RoadmapDto = { ...roadmap, nodes: [limitsNode] };
-
-const teacherBlockedRoadmap: RoadmapDto = {
-  ...teachingRoadmap,
-  nodes: [{ ...limitsNode, isTeacherBlocked: true }, derivativesNode],
-};
-
-const twoDependenciesRoadmap: RoadmapDto = {
-  ...teacherBlockedRoadmap,
-  dependencies: [
-    {
-      id: 'dependency-1',
-      sourceNodeId: 'node-1',
-      targetNodeId: 'node-2',
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    },
-    {
-      id: 'dependency-2',
-      sourceNodeId: 'node-2',
-      targetNodeId: 'node-1',
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    },
-  ],
-};
 
 function courseInput(courseCode = 'CC1001', title = 'Programación I') {
   return { identifier: { courseCode, year: 2026, semester: 2 }, title };
@@ -342,6 +177,7 @@ describe('RoadmapCanvasSession', () => {
       nodes: [{ ...roadmap.nodes[0], title: 'Integrales' }],
     };
     const persistence = {
+      ...createInMemoryRoadmapSessionPersistence(roadmap),
       load: vi.fn(
         ({ courseOffering }: { courseOffering: { identifier: { courseCode: string } } }) =>
           courseOffering.identifier.courseCode === 'CC1001'
@@ -447,6 +283,7 @@ describe('RoadmapCanvasSession', () => {
     });
     let loadCount = 0;
     const persistence = {
+      ...createInMemoryRoadmapSessionPersistence(roadmap),
       load: vi.fn(() => {
         loadCount += 1;
         return loadCount === 1
@@ -503,6 +340,7 @@ describe('RoadmapCanvasSession', () => {
   test('keeps the loaded offering visible after a later completion failure and lets the student dismiss it', async () => {
     const user = userEvent.setup();
     const persistence = {
+      ...createInMemoryRoadmapSessionPersistence(roadmap),
       load: vi.fn().mockResolvedValue(roadmap),
       complete: vi.fn().mockRejectedValue(new Error('No se pudo completar el nodo.')),
     };
@@ -530,7 +368,7 @@ describe('RoadmapCanvasSession', () => {
     await user.click(screen.getByRole('button', { name: 'Límites' }));
     await user.click(screen.getByRole('button', { name: 'Completar Límites' }));
     await waitFor(async () =>
-      expect((await persistence.loadSimulation!(teachingInput)).nodes[0]).toMatchObject({
+      expect((await persistence.loadSimulation(teachingInput)).nodes[0]).toMatchObject({
         isCompleted: true,
       }),
     );
@@ -542,7 +380,7 @@ describe('RoadmapCanvasSession', () => {
     });
     await user.click(within(dialog).getByRole('button', { name: 'Reiniciar progreso' }));
     await waitFor(async () =>
-      expect((await persistence.loadSimulation!(teachingInput)).nodes[0]).toMatchObject({
+      expect((await persistence.loadSimulation(teachingInput)).nodes[0]).toMatchObject({
         isCompleted: false,
       }),
     );
@@ -571,170 +409,38 @@ describe('RoadmapCanvasSession', () => {
     expect(screen.queryByText('Previsualización del canvas')).toBeNull();
   });
 
-  test('routes current teaching Node and Resource edits through the public session', async () => {
+  test('routes the Node creator through the public session and selects the created Node', async () => {
     const user = userEvent.setup();
     const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
-    renderSession(persistence);
-
-    await user.click(await screen.findByRole('button', { name: 'Límites' }));
-    await user.click(await screen.findByRole('button', { name: 'Guardar cambios' }));
-    expect(await findToast('Cambios guardados exitosamente.')).toBeTruthy();
-
-    await user.click(screen.getByRole('button', { name: 'Guardar enlace' }));
-    expect(await findToast('Enlace guardado exitosamente.')).toBeTruthy();
-    await user.click(await screen.findByRole('button', { name: 'Actualizar recurso' }));
-    // Successes stack, so the second save adds a second toast with the same message.
-    await waitFor(() => expect(queryToasts('Enlace guardado exitosamente.')).toHaveLength(2));
-    await user.click(await screen.findByRole('button', { name: 'Eliminar recurso' }));
-    await user.click(screen.getByRole('button', { name: 'Subir archivo' }));
-    expect(await findToast('Recurso guardado exitosamente.')).toBeTruthy();
-
-    const saved = await persistence.load(teachingInput);
-    expect(saved.nodes[0]).toMatchObject({ title: 'Límites y continuidad' });
-    expect(saved.nodes[0]).toHaveProperty('resources', [
-      { id: 'resource-1', title: 'apuntes.pdf', url: 'apuntes.pdf', type: 'FILE' },
-    ]);
-  });
-
-  test('routes construction through the public session and persists the confirmed layout', async () => {
-    const user = userEvent.setup();
-    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    await persistence.addNodeType(teachingInput, {
+      name: 'Taller',
+      icon: 'Shapes',
+      color: '#024AD8',
+    });
     renderSession(persistence);
 
     await user.click(await screen.findByRole('button', { name: 'Crear en el mapa' }));
     await user.click(await screen.findByText('Crear nodo'));
     await user.type(screen.getByLabelText('Título'), 'Derivadas');
     await user.click(screen.getByRole('button', { name: 'Agregar nodo' }));
-    await waitFor(() => expect(screen.getByTestId('selected-node-id').textContent).toBe('node-2'));
-
-    await user.click(screen.getByRole('button', { name: 'Mover nodo' }));
     await waitFor(async () => {
-      const saved = await persistence.load(teachingInput);
-      expect(saved.nodes[0]).toMatchObject({ positionX: 120, positionY: 80 });
+      const created = (await persistence.load(teachingInput)).nodes.find(
+        ({ title }) => title === 'Derivadas',
+      );
+      expect(screen.getByTestId('selected-node-id').textContent).toBe(created?.id);
     });
 
-    await user.click(screen.getByRole('button', { name: 'Solicitar ordenamiento' }));
-    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar ordenamiento' });
-    await user.click(within(dialog).getByRole('button', { name: 'Ordenar nodos' }));
-    await waitFor(async () => {
-      const saved = await persistence.load(teachingInput);
-      expect(saved.nodes[0]).toMatchObject({ positionX: 320, positionY: 160 });
-    });
-  });
-
-  test('routes Dependency creation and deletion through the public session', async () => {
-    const user = userEvent.setup();
-    const persistence = createInMemoryRoadmapSessionPersistence({
-      ...teachingRoadmap,
-      nodes: [limitsNode, derivativesNode],
-    });
-    renderSession(persistence);
-
-    await user.click(await screen.findByRole('button', { name: 'Crear dependencia' }));
-    expect(await findToast('Dependencia creada exitosamente.')).toBeTruthy();
-    expect((await persistence.load(teachingInput)).dependencies).toHaveLength(1);
-
-    await user.click(screen.getByRole('button', { name: 'Eliminar dependencia' }));
+    await user.click(screen.getByRole('button', { name: 'Crear en el mapa' }));
+    await user.click(await screen.findByText('Tipos de nodo'));
+    await user.click(await screen.findByRole('button', { name: 'Eliminar tipo Taller' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
-    expect(await findToast('Dependencia eliminada exitosamente.')).toBeTruthy();
-    await waitFor(async () =>
-      expect((await persistence.load(teachingInput)).dependencies).toEqual([]),
-    );
-  });
-
-  test('routes Node visibility and deletion through one public session confirmation', async () => {
-    const user = userEvent.setup();
-    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
-    renderSession(persistence);
-
-    await user.click(await screen.findByRole('button', { name: 'Límites' }));
-    const deleteNodeButton = screen.getByRole('button', { name: 'Eliminar nodo' });
-    await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
-    const visibilityDialog = await screen.findByRole('alertdialog', {
-      name: '¿Ocultar “Límites”?',
-    });
-
-    fireEvent.click(deleteNodeButton);
-    expect(screen.getByRole('alertdialog', { name: '¿Ocultar “Límites”?' })).toBe(visibilityDialog);
-
-    await user.click(within(visibilityDialog).getByRole('button', { name: 'Ocultar' }));
-    await waitFor(async () =>
-      expect((await persistence.load(teachingInput)).nodes[0]).toMatchObject({ isVisible: false }),
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Eliminar nodo' }));
-    const deletionDialog = await screen.findByRole('alertdialog', {
-      name: '¿Eliminar “Límites”?',
-    });
-    await user.click(within(deletionDialog).getByRole('button', { name: 'Eliminar nodo' }));
-    await waitFor(async () => expect((await persistence.load(teachingInput)).nodes).toEqual([]));
-  });
-
-  test('routes Teacher block through the public session workflow', async () => {
-    const user = userEvent.setup();
-    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
-    renderSession(persistence);
-
-    await user.click(await screen.findByRole('button', { name: 'Límites' }));
-    await user.click(screen.getByRole('button', { name: 'Bloquear nodo' }));
-    const dialog = await screen.findByRole('alertdialog', { name: '¿Bloquear “Límites”?' });
-    await user.click(within(dialog).getByRole('button', { name: 'Bloquear nodo' }));
 
     await waitFor(async () =>
-      expect((await persistence.load(teachingInput)).nodes[0]).toMatchObject({
-        isTeacherBlocked: true,
-      }),
+      expect((await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name)).toEqual([
+        'Contenido',
+      ]),
     );
-  });
-
-  test('confirms an impacted Dependency creation through the public session', async () => {
-    const user = userEvent.setup();
-    const persistence = createInMemoryRoadmapSessionPersistence(teacherBlockedRoadmap);
-    renderSession(persistence);
-
-    await user.click(await screen.findByRole('button', { name: 'Crear dependencia' }));
-    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo' });
-    expect(dialog.textContent).toContain('Derivadas');
-    expect((await persistence.load(teachingInput)).dependencies).toEqual([]);
-
-    await user.click(within(dialog).getByRole('button', { name: 'Conectar y bloquear' }));
-    expect(await findToast('Dependencia creada exitosamente.')).toBeTruthy();
-    expect((await persistence.load(teachingInput)).nodes).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: 'node-2', isTeacherBlocked: true })]),
-    );
-  });
-
-  test('retries only failed Dependency deletions through the public session', async () => {
-    const user = userEvent.setup();
-    const memory = createInMemoryRoadmapSessionPersistence(twoDependenciesRoadmap);
-    let shouldFail = true;
-    renderSession({
-      ...memory,
-      async deleteDependency(...args: Parameters<NonNullable<typeof memory.deleteDependency>>) {
-        if (args[1] === 'dependency-2' && shouldFail) {
-          shouldFail = false;
-          throw new Error('No se pudo eliminar la dependencia.');
-        }
-        return memory.deleteDependency!(...args);
-      },
-    });
-
-    await user.click(await screen.findByRole('button', { name: 'Eliminar dependencias' }));
-    await user.click(
-      within(await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' })).getByRole(
-        'button',
-        { name: 'Eliminar' },
-      ),
-    );
-    const retryDialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
-    expect(retryDialog.textContent).toContain('esta dependencia');
-    expect((await memory.load(teachingInput)).dependencies).toEqual([
-      expect.objectContaining({ id: 'dependency-2' }),
-    ]);
-
-    await user.click(within(retryDialog).getByRole('button', { name: 'Eliminar' }));
-    await waitFor(async () => expect((await memory.load(teachingInput)).dependencies).toEqual([]));
   });
 });
 
@@ -743,7 +449,7 @@ test('current teaching sessions recover missed changes and retain the last proje
   const load = vi.spyOn(persistence, 'load');
   renderSession(persistence);
   await screen.findByRole('button', { name: 'Límites' });
-  await persistence.updateNode!(teachingInput, 'node-1', {
+  await persistence.updateNode(teachingInput, 'node-1', {
     title: 'Cambio remoto',
     description: '',
     nodeTypeId: teachingRoadmap.nodes[0].nodeTypeId,

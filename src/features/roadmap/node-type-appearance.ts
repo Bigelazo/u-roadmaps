@@ -136,6 +136,13 @@ export const teachingIconCatalog = [
 
 export const defaultCustomNodeTypeIcon = { id: 'Shapes', label: 'Forma' } as const;
 
+/** How a Node whose Node type is missing from its Roadmap is presented, wherever it shows. */
+export const unknownNodeType = {
+  name: 'Sin tipo',
+  icon: defaultCustomNodeTypeIcon.id,
+  color: 'currentColor',
+} as const;
+
 export type NodeTypeIconId =
   typeof defaultCustomNodeTypeIcon.id | (typeof teachingIconCatalog)[number]['icons'][number][0];
 

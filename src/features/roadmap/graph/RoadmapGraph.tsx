@@ -49,6 +49,7 @@ import type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import {
   layoutRoadmapGraph,
@@ -61,7 +62,6 @@ export type {
   RoadmapGraphProjection,
   RoadmapNodePlacement,
   RoadmapNodePosition,
-  RoadmapNodePositionCause,
   RoadmapViewport,
   RoadmapViewportRestoration,
   StudentRoadmapGraphProjection,
@@ -109,8 +109,8 @@ function mapProjectionToFlow(
         notificationsEnabled,
         title: node.title,
         typeColor: nodeType?.color ?? 'var(--primary)',
-        typeName: nodeType?.name ?? 'Sin tipo',
-        typeIcon: nodeType?.icon ?? 'Shapes',
+        typeName: nodeType?.name ?? unknownNodeType.name,
+        typeIcon: nodeType?.icon ?? unknownNodeType.icon,
         status: isTeacherView ? 'editing' : studentNodeStatus(node),
         isHidden,
         isTeacherBlocked: isTeacherView && 'isTeacherBlocked' in node && node.isTeacherBlocked,
@@ -626,10 +626,7 @@ function useRoadmapGraphController({
   }, [actionMenu, deleteDependency, notificationsEnabled, stableProjection]);
 
   const applyNodePositions = useCallback(
-    (
-      cause: 'pointer' | 'keyboard' | 'automatic-layout',
-      positions: readonly RoadmapNodePlacement[],
-    ) => {
+    (positions: readonly RoadmapNodePlacement[]) => {
       const immutablePositions = freezeNodePositions(positions);
       if (immutablePositions.length === 0) return;
       const positionsByNodeId = new Map(
@@ -642,7 +639,7 @@ function useRoadmapGraphController({
           return position ? { ...node, position } : node;
         }),
       }));
-      emitEditingIntent({ kind: 'node-positions', cause, positions: immutablePositions });
+      emitEditingIntent({ kind: 'move-nodes', positions: immutablePositions });
     },
     [emitEditingIntent],
   );
@@ -674,9 +671,12 @@ function useRoadmapGraphController({
   const proposeAutoLayout = useCallback(() => {
     const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
     const positions = immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction));
+    const changed = changedNodePositions(flow.nodes, positions);
+    // A layout that moves no Node has nothing to confirm.
+    if (changed.length === 0) return;
     emitEditingIntent({
-      kind: 'request-automatic-layout',
-      positions: freezeNodePositions(changedNodePositions(flow.nodes, positions)),
+      kind: 'apply-automatic-layout',
+      positions: freezeNodePositions(changed),
       direction,
     });
   }, [emitEditingIntent, flow.edges, flow.nodes, layoutDirection]);
@@ -783,7 +783,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         current.nodes,
       ),
     }));
-    if (movedWithKeyboard) applyNodePositions('keyboard', snappedNodePositions(positions));
+    if (movedWithKeyboard) applyNodePositions(snappedNodePositions(positions));
   };
 
   const setEdgeHover = (edgeId: string, isHovered: boolean) =>
@@ -838,10 +838,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
           onNodeDragStop={
             canInteract
               ? (_event, node) => {
-                  applyNodePositions(
-                    'pointer',
-                    snappedNodePositions(immutableNodePositions([node])),
-                  );
+                  applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
                 }
               : undefined
           }
