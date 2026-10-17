@@ -21,8 +21,11 @@ de igualdad. Se decide que las escrituras del canvas pasen por un módulo de com
   o se confirma, ninguna otra puede abrirse. La exclusividad no depende de que la vista
   coordine nada.
 - **Cada Acción confirmada es una declaración simple:** una previsualización opcional de
-  su Impacto del cambio y su escritura. Un solo motor (un hook de React) las ejecuta.
-  No hay registro de plugins ni middleware.
+  su Impacto del cambio, si ese impacto necesita confirmación (una Dependencia que no
+  bloquea ningún Nodo se crea sin preguntar), su escritura y su mensaje de éxito. La
+  escritura puede dejar pendiente solo la parte que falló (al eliminar varias
+  Dependencias). Un solo motor (un hook de React) las ejecuta. No hay registro de plugins
+  ni middleware.
 - **El módulo devuelve la confirmación pendiente como datos** (tipo, solicitud, impacto,
   fase y elección). Un único mapeador en la UI de confirmaciones del Roadmap la convierte
   en el diálogo. Los identificadores de las elecciones viven en el vocabulario del
@@ -32,7 +35,9 @@ de igualdad. Se decide que las escrituras del canvas pasen por un módulo de com
   es determinista). Si cambió, se muestra el nuevo impacto en vez de aplicar el cambio.
   Si no cambió, se escribe enviando la versión de la previsualización. Si la escritura
   falla, se previsualiza otra vez y se muestra el último impacto. Esto suma una petición
-  al confirmar una ocultación, y es independiente de que el servidor verifique versiones.
+  al confirmar una ocultación o una Dependencia con impacto, y dos al desbloquear (se
+  vuelven a pedir ambos alcances), y es independiente de que el servidor verifique
+  versiones.
 - **La pregunta por el borrador sin guardar se hace una sola vez,** en el módulo, antes
   de ocupar el espacio pendiente, venga la eliminación del menú de acciones del Nodo o
   del editor de Nodos. Así el canvas nunca queda bloqueado detrás de una pregunta sin
