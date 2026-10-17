@@ -3,6 +3,7 @@ import { createExistingNode } from './existing-node';
 import { insert, sql } from './database';
 import { ok } from './helpers';
 import { listNotices, prepareOpening } from './notices';
+import { hideNode } from './previewed-writes';
 
 for (const target of ['dependency', 'node-type-name'] as const)
   test(`hidden ${target} notices leave Inbox/counts, return when visible, and recognize without summary`, async ({
@@ -67,20 +68,21 @@ for (const target of ['dependency', 'node-type-name'] as const)
           await recipient.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)
         ).json()
       ).count;
-    const setVisible = async (isVisible: boolean) =>
-      ok(await author.patch(course.apiPath(`/nodes/${hiddenId}`), { data: { isVisible } }));
+    const nodePath = course.apiPath(`/nodes/${hiddenId}`);
+    const hide = async () => ok(await hideNode(author, nodePath));
+    const show = async () => ok(await author.patch(nodePath, { data: { isVisible: true } }));
     await expect.poll(targetNotices).toHaveLength(1);
     const id = (await targetNotices())[0].id;
     expect(await count()).toBe(1);
-    await setVisible(false);
+    await hide();
     await expect.poll(targetNotices).toHaveLength(0);
     // Only the access withdrawal remains visible; the route target stays pending.
     await expect.poll(count).toBe(1);
     await ok(await recipient.get(`/api/notifications/${id}`), 404);
-    await setVisible(true);
+    await show();
     await expect.poll(async () => (await targetNotices()).map((notice) => notice.id)).toEqual([id]);
     await expect.poll(count).toBe(1);
-    await setVisible(false);
+    await hide();
     await expect.poll(targetNotices).toHaveLength(0);
     const recognized = await recognize();
     expect(recognized.acknowledged).toBe(2);
@@ -90,7 +92,7 @@ for (const target of ['dependency', 'node-type-name'] as const)
       ),
     ).toBe(false);
     expect(await allNotices()).toHaveLength(0);
-    await setVisible(true);
+    await show();
     await expect.poll(allNotices).toHaveLength(1);
     expect(await targetNotices()).toHaveLength(0);
   });

@@ -5,6 +5,7 @@ import { expect, test, type E2EUser } from './fixtures';
 import { sql } from './database';
 import { authenticateAs, ok } from './helpers';
 import { listNotices, recognize } from './notices';
+import { changeTeacherBlock } from './previewed-writes';
 
 async function noticeCount(api: APIRequestContext, query: string) {
   return (await (await api.get(`/api/notifications/counts?${query}`)).json()).count;
@@ -345,7 +346,7 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
     404,
   );
   await ok(await withProgressApi.post('/api/notifications/openings', { data: opening }));
-  await ok(await author.post(roadmapPath(`/nodes/${nodeId}/teacher-block`)));
+  await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${nodeId}`)));
   await expect.poll(() => latestKind(withProgress)).toBe('node-blocked');
   await expect.poll(() => latestKind(assistant)).toBe('node-blocked');
   const teacherCountAfterBlock = await count(assistant, nodeId);

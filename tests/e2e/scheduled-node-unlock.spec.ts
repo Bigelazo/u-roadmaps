@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { ok } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { literal, sql } from './database';
+import { changeTeacherBlock } from './previewed-writes';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -52,7 +53,7 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   expect((await unblocked.json()).error.code).toBe('TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK');
 
   for (const node of [prerequisite, standalone]) {
-    await ok(await teacher.post(course.apiPath(`/nodes/${node.id}/teacher-block`)));
+    await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${node.id}`)));
   }
   await ok(
     await teacher.put(schedulePath(scheduled.id), {
@@ -116,13 +117,8 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
     .toEqual([{ changeKind: 'node-available', actorName: 'Equipo docente' }]);
 
   // Unlocking the prerequisite releases the overdue schedule in the same operation.
-  const preview = await (
-    await teacher.get(course.apiPath(`/nodes/${prerequisite.id}/teacher-block?operation=UNBLOCK`))
-  ).json();
   await ok(
-    await teacher.delete(course.apiPath(`/nodes/${prerequisite.id}/teacher-block`), {
-      headers: { 'x-teacher-block-preview': preview.version },
-    }),
+    await changeTeacherBlock(teacher, course.apiPath(`/nodes/${prerequisite.id}`), 'UNBLOCK'),
   );
   // Only the student's own pending prerequisite remains.
   expect(await studentAccess(scheduled.id)).toEqual({

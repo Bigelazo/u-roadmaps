@@ -5,6 +5,7 @@ import { createDependency, prepareNodeCreator } from './create-node';
 import { createExistingNode } from './existing-node';
 import { authenticateAs, escapeRegExp, ok } from './helpers';
 import { listNotices, type StoredNotice } from './notices';
+import { hideNode } from './previewed-writes';
 
 test('Dependency notices preserve route and access changes with Roadmap entry recognition', async ({
   course,
@@ -223,9 +224,7 @@ test('cascade Dependency removals from Node visibility and deletion do not creat
   const hiddenSource = await createNode(`Ocultamiento origen ${crypto.randomUUID()}`);
   const hiddenTarget = await createNode(`Ocultamiento destino ${crypto.randomUUID()}`);
   const hiddenDependency = await insertDependency(hiddenSource, hiddenTarget);
-  await ok(
-    await author.patch(roadmapPath(`/nodes/${hiddenTarget}`), { data: { isVisible: false } }),
-  );
+  await ok(await hideNode(author, roadmapPath(`/nodes/${hiddenTarget}`)));
   expect(await routeNotices(hiddenDependency)).toHaveLength(0);
 
   const deleteSource = await createNode(`Eliminación origen ${crypto.randomUUID()}`);

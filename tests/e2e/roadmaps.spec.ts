@@ -3,6 +3,7 @@ import { SignJWT } from 'jose';
 import { expect, test, type E2EUser } from './fixtures';
 import { authenticateAs, ok } from './helpers';
 import { createDependency } from './create-node';
+import { changeTeacherBlock, connectNodes } from './previewed-writes';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -319,13 +320,11 @@ test('teacher API manages a node type, resources, and dependencies through their
     400,
   );
 
-  const dependency = await api.post(course.apiPath('/dependencies'), {
-    data: {
-      sourceNodeId: sourceId,
-      targetNodeId: targetId,
-      sourceHandle: 'bottom',
-      targetHandle: 'top',
-    },
+  const dependency = await connectNodes(api, course.apiPath('/dependencies'), {
+    sourceNodeId: sourceId,
+    targetNodeId: targetId,
+    sourceHandle: 'bottom',
+    targetHandle: 'top',
   });
   await ok(dependency, 201);
   const dependencyId = (await dependency.json()).dependency.id;
@@ -378,13 +377,11 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   });
   await ok(resourceResponse, 201);
 
-  const dependencyResponse = await api.post(course.apiPath('/dependencies'), {
-    data: {
-      sourceNodeId,
-      targetNodeId,
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    },
+  const dependencyResponse = await connectNodes(api, course.apiPath('/dependencies'), {
+    sourceNodeId,
+    targetNodeId,
+    sourceHandle: 'right',
+    targetHandle: 'left',
   });
   await ok(dependencyResponse, 201);
 
@@ -733,7 +730,7 @@ test('keeps the two-scope unlock confirmation within the dialog at every viewpor
 
   await createDependency(teacher, course, source.id, target.id);
 
-  await ok(await teacher.post(course.apiPath(`/nodes/${source.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${source.id}`)));
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.emulateMedia({ reducedMotion: 'reduce' });

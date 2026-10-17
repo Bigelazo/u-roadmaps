@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { ok } from './helpers';
 import { acknowledgeOpening, listNotices, prepareOpening, recognize } from './notices';
+import { changeTeacherBlock, hideNode } from './previewed-writes';
 
 test('entry establishes Node knowledge even when creation delivery has not reached the Inbox', async ({
   course,
@@ -71,11 +72,11 @@ test('new Node absorbs content, Resources and blocking, withdraws on hiding and 
     }),
   ]);
   expect((await notices())[0].data.nodeTypeName).toBe(type.name);
-  await ok(await author.post(`${path}/teacher-block`));
+  await ok(await changeTeacherBlock(author, path));
   await expect.poll(async () => (await notices())[0]?.data.nodeAccess).toBe('Bloqueado');
   expect(await notices()).toHaveLength(1);
   expect((await notices())[0].body).toContain('(bloqueado)');
-  await ok(await author.patch(path, { data: { isVisible: false } }));
+  await ok(await hideNode(author, path));
   await expect.poll(notices).toHaveLength(0);
   const directlyDeleted = await creator.createNode('Eliminado sin reconocer', 400);
   await ok(await author.delete(course.apiPath(`/nodes/${directlyDeleted.id}`)), 204);
@@ -215,7 +216,7 @@ test('deleting a known Node absorbs pending title, access and Resource targets',
     201,
   );
   await expect.poll(notices).toHaveLength(2);
-  await ok(await author.post(`${path}/teacher-block`));
+  await ok(await changeTeacherBlock(author, path));
   await expect
     .poll(async () => (await notices()).map((notice) => notice.data.noticeTarget).sort())
     .toEqual(['node-access', 'node-title']);

@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { authenticateAs, ok, toast } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
+import { changeTeacherBlock, hideNode } from './previewed-writes';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -25,8 +26,8 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
 
     const endpoint = course.apiPath(`/nodes/${node.id}`);
     const restrict = {
-      blocked: () => teacher.post(`${endpoint}/teacher-block`),
-      hidden: () => teacher.patch(endpoint, { data: { isVisible: false } }),
+      blocked: () => changeTeacherBlock(teacher, endpoint),
+      hidden: () => hideNode(teacher, endpoint),
       deleted: () => teacher.delete(endpoint),
     };
     expect((await restrict[restriction]()).status()).toBe(restriction === 'deleted' ? 204 : 200);
@@ -198,7 +199,7 @@ test('student roadmap shows effective block reasons and restores a completed nod
     dependencyIds.push(await createDependency(teacher, course, prerequisite.id, targetNodeId));
   }
 
-  await ok(await teacher.post(course.apiPath(`/nodes/${completedTarget.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${completedTarget.id}`)));
 
   const studentRoadmap = await ok(await student.get(course.apiPath()));
   const studentNodes = (await studentRoadmap.json()).nodes as Array<{
@@ -258,15 +259,8 @@ test('student roadmap shows effective block reasons and restores a completed nod
 
   const targetDependencyId = dependencyIds.shift();
   await ok(await teacher.delete(course.apiPath(`/dependencies/${targetDependencyId}`)), 204);
-  const unlockPreview = await teacher.get(
-    course.apiPath(`/nodes/${completedTarget.id}/teacher-block?operation=UNBLOCK`),
-  );
-  await ok(unlockPreview);
-  const { version } = await unlockPreview.json();
   await ok(
-    await teacher.delete(course.apiPath(`/nodes/${completedTarget.id}/teacher-block`), {
-      headers: { 'x-teacher-block-preview': version },
-    }),
+    await changeTeacherBlock(teacher, course.apiPath(`/nodes/${completedTarget.id}`), 'UNBLOCK'),
   );
 
   await expect

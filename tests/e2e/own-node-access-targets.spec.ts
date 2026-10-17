@@ -5,6 +5,7 @@ import { createExistingNode } from './existing-node';
 import { sql } from './database';
 import { ok } from './helpers';
 import { acknowledgeOpening, findNode, listNotices, prepareOpening, recognize } from './notices';
+import { changeTeacherBlock, hideNode } from './previewed-writes';
 
 test('a Teacher block cascade reconciles one access target per changed Node for each student', async ({
   course,
@@ -41,7 +42,7 @@ test('a Teacher block cascade reconciles one access target per changed Node for 
   );
   const notices = (api: APIRequestContext) =>
     listNotices(api, { roadmapId: course.roadmapId, limit: 100 });
-  await ok(await author.post(course.apiPath(`/nodes/${ids[0]}/teacher-block`)));
+  await ok(await changeTeacherBlock(author, course.apiPath(`/nodes/${ids[0]}`)));
   await expect.poll(() => notices(complete)).toHaveLength(6);
   await expect.poll(() => notices(pending)).toHaveLength(1);
   for (const notice of await notices(complete)) {
@@ -51,14 +52,7 @@ test('a Teacher block cascade reconciles one access target per changed Node for 
       currentValue: 'Bloqueado',
     });
   }
-  const preview = await (
-    await author.get(course.apiPath(`/nodes/${ids[0]}/teacher-block?operation=BRANCH_UNLOCK`))
-  ).json();
-  await ok(
-    await author.patch(course.apiPath(`/nodes/${ids[0]}/teacher-block`), {
-      headers: { 'x-teacher-block-preview': preview.version },
-    }),
-  );
+  await ok(await changeTeacherBlock(author, course.apiPath(`/nodes/${ids[0]}`), 'BRANCH_UNLOCK'));
   await expect.poll(() => notices(complete)).toHaveLength(0);
   await expect.poll(() => notices(pending)).toHaveLength(0);
 });
@@ -71,20 +65,20 @@ test('hide → show → block collapses to one access notice and recognition reb
   const nodeId = course.nodes.first;
   const path = course.apiPath(`/nodes/${nodeId}`);
   const notices = () => listNotices(recipient, { nodeId, limit: 100 });
-  await ok(await author.patch(path, { data: { isVisible: false } }));
+  await ok(await hideNode(author, path));
   await expect
     .poll(async () => (await notices())[0]?.data)
     .toMatchObject({ knownValue: 'Disponible', currentValue: 'Retirado' });
   await ok(await author.patch(path, { data: { isVisible: true } }));
   await expect.poll(notices).toHaveLength(0);
-  await ok(await author.post(`${path}/teacher-block`));
+  await ok(await changeTeacherBlock(author, path));
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0]).toMatchObject({
     body: expect.stringContaining('fue bloqueado.'),
     data: { noticeTarget: 'node-access', knownValue: 'Disponible', currentValue: 'Bloqueado' },
   });
   const opening = await prepareOpening(recipient, course.roadmapId);
-  await ok(await author.patch(path, { data: { isVisible: false } }));
+  await ok(await hideNode(author, path));
   await expect.poll(async () => (await notices())[0]?.data.currentValue).toBe('Retirado');
   await acknowledgeOpening(recipient, opening);
   await expect
@@ -118,7 +112,7 @@ test('a student Completion advances known access before a later Teacher block', 
   const nodeId = course.nodes.second;
   const roadmap = await (await student.get(course.apiPath())).json();
   expect(findNode(roadmap, nodeId).access).toMatchObject({ status: 'ACCESSIBLE' });
-  await ok(await author.post(course.apiPath(`/nodes/${nodeId}/teacher-block`)));
+  await ok(await changeTeacherBlock(author, course.apiPath(`/nodes/${nodeId}`)));
   const notices = () => listNotices(student, { nodeId });
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0].data).toMatchObject({
@@ -151,7 +145,7 @@ test('Completion withdraws returned access and preserves a genuinely pending pub
     nodeTypeId,
     title: 'Publicación pendiente',
   });
-  await ok(await author.patch(course.apiPath(`/nodes/${hidden}`), { data: { isVisible: false } }));
+  await ok(await hideNode(author, course.apiPath(`/nodes/${hidden}`)));
   const hiddenNotices = () => listNotices(student, { nodeId: hidden });
   await expect.poll(hiddenNotices).toHaveLength(1);
   await recognize(student, course.roadmapId);

@@ -1,6 +1,7 @@
 import { expect, test } from './fixtures';
 import { ok } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
+import { changeTeacherBlock, connectNodes, hideNode } from './previewed-writes';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -43,11 +44,12 @@ test('hiding a node previews and removes every incident dependency atomically', 
     dependencyIds.push(await createDependency(teacher, course, sourceNodeId, targetNodeId));
   }
 
-  await ok(await teacher.post(course.apiPath(`/nodes/${selected.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${selected.id}`)));
 
   const preview = await teacher.get(course.apiPath(`/nodes/${selected.id}?operation=HIDE`));
   await ok(preview);
-  expect((await preview.json()).dependencies).toEqual(
+  const hidingImpact = await preview.json();
+  expect(hidingImpact.dependencies).toEqual(
     expect.arrayContaining(
       dependencyIds.map((id, index) => ({
         id,
@@ -59,6 +61,7 @@ test('hiding a node previews and removes every incident dependency atomically', 
 
   const hidden = await teacher.patch(course.apiPath(`/nodes/${selected.id}`), {
     data: { isVisible: false },
+    headers: { 'x-node-visibility-preview': hidingImpact.version },
   });
   await ok(hidden);
   const hiddenBody = await hidden.json();
@@ -138,13 +141,14 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
     await createDependency(teacher, course, sourceNodeId, targetNodeId);
   }
 
-  await ok(await teacher.post(course.apiPath(`/nodes/${blockedSource.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${blockedSource.id}`)));
 
   const preview = await teacher.get(
     course.apiPath(`/dependencies?sourceNodeId=${blockedSource.id}&targetNodeId=${target.id}`),
   );
   await ok(preview);
-  expect((await preview.json()).nodes).toEqual(
+  const impact = await preview.json();
+  expect(impact.nodes).toEqual(
     expect.arrayContaining([
       { id: target.id, title: target.title },
       { id: descendant.id, title: descendant.title },
@@ -154,6 +158,7 @@ test('connecting from a teacher-blocked branch previews and persists descendant 
 
   const dependency = await teacher.post(course.apiPath('/dependencies'), {
     data: { sourceNodeId: blockedSource.id, targetNodeId: target.id },
+    headers: { 'x-dependency-preview': impact.version },
   });
   await ok(dependency, 201);
   const dependencyBody = await dependency.json();
@@ -212,10 +217,8 @@ test('a partially hidden diamond loses only incident edges and never infers a re
     await createDependency(teacher, course, sourceNodeId, targetNodeId);
   }
 
-  await ok(await teacher.post(course.apiPath(`/nodes/${left.id}/teacher-block`)));
-  const hidden = await teacher.patch(course.apiPath(`/nodes/${left.id}`), {
-    data: { isVisible: false },
-  });
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${left.id}`)));
+  const hidden = await hideNode(teacher, course.apiPath(`/nodes/${left.id}`));
   await ok(hidden);
   expect((await hidden.json()).node).toMatchObject({
     id: left.id,
@@ -306,9 +309,7 @@ test('independent Course offerings retain concurrent Dependency changes', async 
 
   const responses = await Promise.all(
     branches.map(({ offering, sourceNodeId, targetNodeId }) =>
-      teacher.post(offering.apiPath('/dependencies'), {
-        data: { sourceNodeId, targetNodeId },
-      }),
+      connectNodes(teacher, offering.apiPath('/dependencies'), { sourceNodeId, targetNodeId }),
     ),
   );
   const changes = [];
