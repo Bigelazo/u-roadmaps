@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  canvasConfirmation,
   editorDraftDiscardConfirmation,
   nodeDeletionConfirmation,
   roadmapNodeVisibilityConfirmation,
@@ -202,7 +203,7 @@ describe('roadmapNodeVisibilityConfirmation', () => {
       description:
         'Dejará de aparecer en el roadmap de los estudiantes. Además, se quitará su bloqueo docente y se eliminarán sus conexiones con “Conjuntos” y “Gráficas”; al volver a mostrarlo, tendrás que conectarlo de nuevo.',
       intent: 'destructive',
-      actions: [{ id: 'toggle-visibility', label: 'Ocultar' }],
+      actions: [{ id: 'hide-node', label: 'Ocultar' }],
     });
   });
 
@@ -212,7 +213,103 @@ describe('roadmapNodeVisibilityConfirmation', () => {
       description:
         'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
       intent: 'default',
-      actions: [{ id: 'toggle-visibility', label: 'Mostrar' }],
+      actions: [{ id: 'show-node', label: 'Mostrar' }],
     });
+  });
+});
+
+describe('canvasConfirmation', () => {
+  const roadmap = {
+    nodes: [
+      { id: 'a', title: 'Conjuntos', nodeTypeId: 't' },
+      { id: 'b', title: 'Funciones', nodeTypeId: 't' },
+    ],
+    nodeTypes: [],
+  };
+  const deletionImpact = {
+    node: { title: 'Funciones', nodeType: { name: 'Clase', icon: 'Book', color: '#000' } },
+    dependencies: [{ id: 'd1', sourceTitle: 'Conjuntos', targetTitle: 'Funciones' }],
+    resources: [],
+    version: 'v1',
+  };
+
+  it('shows nothing while the Change impact is being previewed', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'delete-node',
+          request: { kind: 'delete-node', nodeId: 'b' },
+          impact: null,
+          phase: 'previewing',
+        },
+        roadmap,
+      ),
+    ).toBeNull();
+  });
+
+  it('presents hiding with the connections its Change impact removes', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'hide-node',
+          request: { kind: 'hide-node', nodeId: 'b' },
+          impact: {
+            dependencies: [{ id: 'd1', sourceNodeId: 'a', targetNodeId: 'b' }],
+            version: 'v1',
+          },
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: '¿Ocultar “Funciones”?',
+      description: expect.stringContaining('sus conexiones con “Conjuntos”'),
+      actions: [{ id: 'hide-node', label: 'Ocultar' }],
+    });
+  });
+
+  it('presents showing, and keeps presenting a choice while it is being confirmed', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'show-node',
+          request: { kind: 'show-node', nodeId: 'a' },
+          impact: null,
+          phase: 'confirming',
+          choice: 'show-node',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({ title: '¿Mostrar “Conjuntos”?', actions: [{ id: 'show-node' }] });
+  });
+
+  it('presents a Node deletion from its Change impact', () => {
+    const confirmation = canvasConfirmation(
+      {
+        kind: 'delete-node',
+        request: { kind: 'delete-node', nodeId: 'b' },
+        impact: deletionImpact,
+        phase: 'awaiting',
+      },
+      roadmap,
+    );
+    expect(renderToStaticMarkup(confirmation?.title)).toContain('¿Eliminar “Funciones”?');
+    expect(confirmation?.description).toBe(
+      'También se eliminarán sus conexiones con “Conjuntos”. Esta acción no se puede deshacer.',
+    );
+  });
+
+  it('shows nothing for a Node the Roadmap no longer has', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'show-node',
+          request: { kind: 'show-node', nodeId: 'missing' },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toBeNull();
   });
 });

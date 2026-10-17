@@ -1,5 +1,10 @@
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
-import type { RoadmapDependencyRequest, TeacherBlockOperation } from '@/features/roadmap/types';
+import type {
+  NodeDeletionImpact,
+  NodeHidingImpact,
+  RoadmapDependencyRequest,
+  TeacherBlockOperation,
+} from '@/features/roadmap/types';
 
 export type RoadmapNodePosition = {
   readonly x: number;
@@ -44,3 +49,45 @@ export type CanvasCommandOf<Kind extends CanvasCommand['kind']> = Extract<
   CanvasCommand,
   { kind: Kind }
 >;
+
+/** The confirmation choices every Roadmap confirmation dialog can offer, by identifier. */
+export const roadmapConfirmationActionIds = {
+  autoLayout: 'auto-layout',
+  hideNode: 'hide-node',
+  showNode: 'show-node',
+  deleteNode: 'delete-node',
+  deleteResource: 'delete-resource',
+  deleteNodeType: 'delete-node-type',
+  createDependency: 'create-dependency',
+  deleteDependencies: 'delete-dependencies',
+  blockTeacher: 'block-teacher',
+  unlockNode: 'unlock-node',
+  unlockBranch: 'unlock-branch',
+  unlockPrerequisites: 'unlock-prerequisites',
+  discardEditorDraft: 'discard-draft',
+} as const;
+
+/** The Change impact each Confirmed action shows; `null` when it has none to preview. */
+export type ChangeImpactOf = {
+  'hide-node': NodeHidingImpact;
+  'show-node': null;
+  'delete-node': NodeDeletionImpact;
+};
+
+/** Canvas commands that take effect only after teaching staff confirm them. */
+export type ConfirmedActionKind = keyof ChangeImpactOf;
+
+/**
+ * The single pending Confirmed action of a Roadmap canvas session, as plain data.
+ * `previewing` reads its Change impact, `awaiting` waits for a choice and `confirming`
+ * revalidates the impact and applies `choice`.
+ */
+export type PendingConfirmation = {
+  [Kind in ConfirmedActionKind]: {
+    readonly kind: Kind;
+    readonly request: CanvasCommandOf<Kind>;
+    readonly impact: ChangeImpactOf[Kind] | null;
+    readonly phase: 'previewing' | 'awaiting' | 'confirming';
+    readonly choice?: string;
+  };
+}[ConfirmedActionKind];

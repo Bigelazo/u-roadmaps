@@ -668,13 +668,17 @@ describe('RoadmapCanvasSession', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));
     const deleteNodeButton = screen.getByRole('button', { name: 'Eliminar nodo' });
+    const blockButton = screen.getByRole('button', { name: 'Bloquear nodo' });
     await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
     const visibilityDialog = await screen.findByRole('alertdialog', {
       name: '¿Ocultar “Límites”?',
     });
 
+    // Neither another Confirmed action nor a confirmation the view coordinates can open beside it.
     fireEvent.click(deleteNodeButton);
-    expect(screen.getByRole('alertdialog', { name: '¿Ocultar “Límites”?' })).toBe(visibilityDialog);
+    fireEvent.click(blockButton);
+    await act(() => Promise.resolve());
+    expect(screen.getAllByRole('alertdialog')).toEqual([visibilityDialog]);
 
     await user.click(within(visibilityDialog).getByRole('button', { name: 'Ocultar' }));
     await waitFor(async () =>
@@ -694,36 +698,6 @@ describe('RoadmapCanvasSession', () => {
     });
     await user.click(within(deletionDialog).getByRole('button', { name: 'Eliminar nodo' }));
     await waitFor(async () => expect((await persistence.load(teachingInput)).nodes).toEqual([]));
-  });
-
-  test('refuses a hide whose Change impact changed after its confirmation opened', async () => {
-    const user = userEvent.setup();
-    const persistence = createInMemoryRoadmapSessionPersistence({
-      ...teachingRoadmap,
-      nodes: [limitsNode, derivativesNode],
-    });
-    renderSession(persistence);
-
-    await user.click(await screen.findByRole('button', { name: 'Límites' }));
-    await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
-    const dialog = await screen.findByRole('alertdialog', { name: '¿Ocultar “Límites”?' });
-    await persistence.connectNodes(teachingInput, {
-      sourceNodeId: 'node-1',
-      targetNodeId: 'node-2',
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    });
-    await user.click(within(dialog).getByRole('button', { name: 'Ocultar' }));
-
-    expect(
-      await findToast(
-        'El impacto de ocultar el nodo cambió. Revisa y confirma la previsualización actualizada.',
-      ),
-    ).toBeTruthy();
-    expect(await persistence.load(teachingInput)).toMatchObject({
-      nodes: expect.arrayContaining([expect.objectContaining({ id: 'node-1', isVisible: true })]),
-      dependencies: [expect.objectContaining({ sourceNodeId: 'node-1' })],
-    });
   });
 
   test('refuses an impacted Dependency creation whose Change impact changed after its confirmation opened', async () => {

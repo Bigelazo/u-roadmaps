@@ -554,28 +554,19 @@ test('resets the complete editing session before a guarded caller resumes', asyn
   expect(onIntent).toHaveBeenCalledWith({ kind: 'close', nodeId: node.id });
 });
 
-test('guards Node deletion in the editor and emits its intent only after discard', async () => {
+test('leaves the draft question of a Node deletion to the canvas, which asks it once', async () => {
   const user = userEvent.setup();
   const ref = createRef<NodeEditorHandle>();
   const { onIntent } = renderEditor(withNode({ resources: [resource] }), ref);
 
   await retitle(user, 'Borrador');
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
-  await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
-  expect(onIntent).not.toHaveBeenCalledWith({ kind: 'delete-node', nodeId: node.id });
-  expect(
-    (screen.getByLabelText('Título', { selector: '#edit-node-title' }) as HTMLInputElement).value,
-  ).toBe('Borrador');
 
-  await user.click(screen.getByRole('button', { name: 'Eliminar' }));
-  await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
-  await waitFor(() =>
-    expect(onIntent).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: node.id }),
-  );
-  expect(
-    (screen.getByLabelText('Título', { selector: '#edit-node-title' }) as HTMLInputElement).value,
-  ).toBe(node.title);
+  expect(onIntent).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: node.id });
+  expect(screen.queryByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeNull();
+  const decision = ref.current!.guardDraft({ kind: 'delete-node', nodeId: node.id });
+  await user.click(await screen.findByRole('button', { name: 'Descartar y continuar' }));
+  await expect(decision).resolves.toBe(true);
 });
 
 test('projects the current draft through a preview intent and carries an opaque focus callback', async () => {

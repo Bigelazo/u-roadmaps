@@ -15,16 +15,13 @@ import {
   type RoadmapDependencyWorkflow,
 } from '@/features/roadmap/session/dependency-workflow';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
-import { useNodeDeletionWorkflow } from '@/features/roadmap/canvas/node-deletion-workflow';
-import { useNodeVisibilityWorkflow } from '@/features/roadmap/canvas/node-visibility-workflow';
+import { useCanvasCommands } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
 import { notify } from '@/shared/ui/notify';
 import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type {
   AnyRoadmapDto,
   DependencyImpact,
-  NodeDeletionImpact,
-  NodeHidingImpact,
   RoadmapDependencyRequest,
   StudentRoadmapDto,
   TeacherBlockOperation,
@@ -76,6 +73,17 @@ type InjectedSessionResult = {
   accessLost: boolean;
   isClosed: boolean;
   loadSimulation: () => Promise<boolean>;
+  persistence: RoadmapCanvasSessionPersistence;
+  /** The session input without the fields only the view reads, so its identity stays stable. */
+  stableInput: RoadmapCanvasSessionInput;
+  /** Runs a write, reloads the Roadmap and reports a failure as the session error. */
+  mutate: <T>(
+    operation: () => Promise<T>,
+    fallback: string,
+    reload?: boolean,
+  ) => Promise<{ success: boolean; result: T | undefined }>;
+  /** Runs a read whose failure is reported as the session error; resolves `null` then. */
+  preview: <T>(operation: () => Promise<T>, fallback: string) => Promise<T | null>;
   addNode: (
     node: NewRoadmapNode,
     position: Point,
@@ -98,10 +106,6 @@ type InjectedSessionResult = {
   ) => Promise<boolean>;
   scheduleTeacherUnlock: (nodeId: string, unlockOn: string | null) => Promise<boolean>;
   deleteDependency: (dependencyId: string) => Promise<boolean>;
-  setVisibility: (nodeId: string, visible: boolean, previewVersion?: string) => Promise<boolean>;
-  previewNodeHiding: (nodeId: string) => Promise<NodeHidingImpact | null>;
-  previewNodeDeletion: (nodeId: string) => Promise<NodeDeletionImpact | null>;
-  deleteNode: (nodeId: string, previewVersion?: string) => Promise<boolean>;
   addResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
   uploadResource: (nodeId: string, file: File) => Promise<boolean>;
   updateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
@@ -118,8 +122,7 @@ type RoadmapCanvasSessionWorkflows = {
   dependencyWorkflow: RoadmapDependencyWorkflow;
   canvasPreviewWorkflow: ReturnType<typeof useCanvasPreviewWorkflow>;
   teacherBlockWorkflow: ReturnType<typeof useTeacherBlockWorkflow>;
-  nodeVisibilityWorkflow: ReturnType<typeof useNodeVisibilityWorkflow>;
-  nodeDeletionWorkflow: ReturnType<typeof useNodeDeletionWorkflow>;
+  canvasCommands: ReturnType<typeof useCanvasCommands>;
 };
 
 type CanvasPreviewView = {
@@ -131,6 +134,8 @@ type CanvasPreviewView = {
 export type RoadmapCanvasSessionOptions = {
   guardDraft?: NodeEditorHandle['guardDraft'];
   closeEditor?: () => void;
+  /** Whether a confirmation the view still coordinates itself is open. */
+  isOtherConfirmationOpen?: () => boolean;
   canvasPreview?: {
     currentView: CanvasPreviewView;
     onEnter: () => void;
@@ -140,6 +145,7 @@ export type RoadmapCanvasSessionOptions = {
 
 const allowAnyDraft = async () => true;
 const noop = () => undefined;
+const noOtherConfirmation = () => false;
 const initialCanvasPreviewView: CanvasPreviewView = {
   selectedNodeId: null,
   isEditorOpen: false,
@@ -438,16 +444,6 @@ function useInjectedSession(
         'No se pudo programar el desbloqueo.',
       ),
       deleteDependency: bindMutation('deleteDependency', 'No se pudo eliminar la dependencia.'),
-      setVisibility: bindMutation('setVisibility', 'No se pudo cambiar la visibilidad.'),
-      previewNodeHiding: bindPreview(
-        'previewNodeHiding',
-        'No se pudo calcular el impacto de ocultar el nodo.',
-      ),
-      previewNodeDeletion: bindPreview(
-        'previewNodeDeletion',
-        'No se pudo calcular el impacto de eliminar el nodo.',
-      ),
-      deleteNode: bindMutation('deleteNode', 'No se pudo eliminar el nodo.'),
       addResource: bindMutation('addResource', 'No se pudo agregar el recurso.'),
       uploadResource: bindMutation('uploadResource', 'No se pudo subir el archivo.'),
       updateResource: bindMutation('updateResource', 'No se pudo guardar el recurso.'),
@@ -504,6 +500,10 @@ function useInjectedSession(
       closedKey === key ||
       (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
     loadSimulation,
+    persistence,
+    stableInput,
+    mutate,
+    preview,
     addNode,
     ...operations,
     completeNode,
@@ -551,16 +551,11 @@ export function useRoadmapCanvasSession(
     previewTeacherBlock: active.previewTeacherBlock,
     changeTeacherBlock: active.changeTeacherBlock,
   });
-  const nodeVisibilityWorkflow = useNodeVisibilityWorkflow({
-    roadmap: active.roadmap,
-    previewNodeHiding: active.previewNodeHiding,
-    setVisibility: active.setVisibility,
-  });
-  const nodeDeletionWorkflow = useNodeDeletionWorkflow({
-    previewNodeDeletion: active.previewNodeDeletion,
-    deleteNode: active.deleteNode,
+  const canvasCommands = useCanvasCommands({
+    session: active,
     guardDraft,
     closeEditor: options.closeEditor ?? noop,
+    isOtherConfirmationOpen: options.isOtherConfirmationOpen ?? noOtherConfirmation,
   });
 
   return {
@@ -568,7 +563,6 @@ export function useRoadmapCanvasSession(
     canvasPreviewWorkflow,
     dependencyWorkflow,
     teacherBlockWorkflow,
-    nodeVisibilityWorkflow,
-    nodeDeletionWorkflow,
+    canvasCommands,
   };
 }

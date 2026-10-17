@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { roadmapConfirmationActionIds } from '@/features/roadmap/canvas/commands/commands';
 import {
-  roadmapConfirmationActionIds,
   roadmapDependencyConfirmation,
   roadmapDependencyDeletionConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';

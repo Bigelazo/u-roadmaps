@@ -1,3 +1,7 @@
+import {
+  roadmapConfirmationActionIds,
+  type PendingConfirmation,
+} from '@/features/roadmap/canvas/commands/commands';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
@@ -47,21 +51,6 @@ type RoadmapNodeIdentity = {
   nodeTypeId: string;
   isTeacherBlocked?: boolean;
 };
-
-export const roadmapConfirmationActionIds = {
-  autoLayout: 'auto-layout',
-  toggleVisibility: 'toggle-visibility',
-  deleteNode: 'delete-node',
-  deleteResource: 'delete-resource',
-  deleteNodeType: 'delete-node-type',
-  createDependency: 'create-dependency',
-  deleteDependencies: 'delete-dependencies',
-  blockTeacher: 'block-teacher',
-  unlockNode: 'unlock-node',
-  unlockBranch: 'unlock-branch',
-  unlockPrerequisites: 'unlock-prerequisites',
-  discardEditorDraft: 'discard-draft',
-} as const;
 
 export const roadmapAutoLayoutConfirmation = {
   title: 'Confirmar ordenamiento',
@@ -440,7 +429,7 @@ export function roadmapNodeVisibilityConfirmation(
       description:
         'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
       intent: 'default',
-      actions: [{ id: roadmapConfirmationActionIds.toggleVisibility, label: 'Mostrar' }],
+      actions: [{ id: roadmapConfirmationActionIds.showNode, label: 'Mostrar' }],
     };
   }
 
@@ -465,8 +454,32 @@ export function roadmapNodeVisibilityConfirmation(
     title: `¿Ocultar ${title}?`,
     description: `Dejará de aparecer en el roadmap de los estudiantes.${consequences}`,
     intent: 'destructive',
-    actions: [{ id: roadmapConfirmationActionIds.toggleVisibility, label: 'Ocultar' }],
+    actions: [{ id: roadmapConfirmationActionIds.hideNode, label: 'Ocultar' }],
   };
+}
+
+/** Presents the pending Confirmed action; nothing while its Change impact is being read. */
+export function canvasConfirmation(
+  pending: PendingConfirmation,
+  roadmap: RoadmapConfirmationRoadmap,
+): ConfirmationPresentation | null {
+  if (pending.phase === 'previewing') return null;
+  switch (pending.kind) {
+    case 'hide-node':
+    case 'show-node': {
+      const node = roadmap.nodes.find(({ id }) => id === pending.request.nodeId);
+      if (!node) return null;
+      const dependencies = pending.kind === 'hide-node' ? (pending.impact?.dependencies ?? []) : [];
+      return roadmapNodeVisibilityConfirmation(
+        roadmap,
+        node,
+        pending.kind === 'hide-node',
+        dependencies,
+      );
+    }
+    case 'delete-node':
+      return pending.impact ? nodeDeletionConfirmation(pending.impact) : null;
+  }
 }
 
 export function resourceDeletionConfirmation(resource: Resource): ConfirmationPresentation {

@@ -1,10 +1,8 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import {
-  roadmapConfirmationActionIds,
-  roadmapTeacherBlockConfirmation,
-} from '@/features/roadmap/ui/roadmap-confirmation';
+import { roadmapConfirmationActionIds } from '@/features/roadmap/canvas/commands/commands';
+import { roadmapTeacherBlockConfirmation } from '@/features/roadmap/ui/roadmap-confirmation';
 import type {
   AnyRoadmapDto,
   TeacherBlockOperation,
