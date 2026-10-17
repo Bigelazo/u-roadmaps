@@ -124,6 +124,163 @@ type RoadmapCreationAction = (props: {
 
 type CourseHeadingLevel = 'h3' | 'h4';
 
+function CourseRoadmapStatus({
+  hasRoadmap,
+  isPastOffering,
+}: Readonly<{ hasRoadmap: boolean; isPastOffering: boolean }>) {
+  if (hasRoadmap && isPastOffering) {
+    return (
+      <p className="flex items-center gap-2 text-sm font-medium text-graphite">
+        <Archive aria-hidden="true" size={17} />
+        Cerrado · solo lectura
+      </p>
+    );
+  }
+  return (
+    <p
+      className={
+        hasRoadmap
+          ? 'flex items-center gap-2 text-sm font-medium text-progress-deep'
+          : 'flex items-center gap-2 text-sm text-muted-foreground'
+      }
+    >
+      {hasRoadmap ? (
+        <Route aria-hidden="true" size={17} />
+      ) : (
+        <BookOpen aria-hidden="true" size={17} />
+      )}
+      {hasRoadmap ? 'Roadmap disponible' : 'Sin roadmap'}
+    </p>
+  );
+}
+
+function CourseRoadmapAction({
+  course,
+  isPastOffering,
+  awaitsCreation,
+  renderRoadmapCreation,
+  notificationsEnabled,
+}: Readonly<{
+  course: AcademicOverviewCourse;
+  isPastOffering: boolean;
+  awaitsCreation: boolean;
+  renderRoadmapCreation: RoadmapCreationAction;
+  notificationsEnabled: boolean;
+}>) {
+  if (course.hasRoadmap) {
+    return (
+      <>
+        {notificationsEnabled ? (
+          <NotificationCountButton
+            filter={{
+              courseCode: course.courseCode,
+              year: course.year,
+              semester: course.semester,
+            }}
+            label={`el curso ${course.name}`}
+          />
+        ) : null}
+        {isPastOffering ? (
+          // A closed Roadmap is read-only history, so it is not the row's primary action.
+          <Link
+            aria-label={`Ver roadmap de ${course.name}`}
+            className={buttonVariants({ variant: 'outline' })}
+            href={roadmapUrl(course)}
+          >
+            Ver roadmap
+          </Link>
+        ) : (
+          <Link
+            aria-label={`Abrir roadmap de ${course.name}`}
+            className={buttonVariants()}
+            href={roadmapUrl(course)}
+          >
+            Abrir roadmap
+          </Link>
+        )}
+      </>
+    );
+  }
+  if (course.canCreateRoadmap) {
+    return renderRoadmapCreation({
+      courseCode: course.courseCode,
+      courseName: course.name,
+      semester: course.semester,
+      year: course.year,
+    });
+  }
+  if (awaitsCreation) {
+    return (
+      <p className="max-w-64 text-sm text-muted-foreground">
+        Solo el profesor de cátedra puede crear el roadmap. Mientras tanto, revisa sus versiones
+        anteriores.
+      </p>
+    );
+  }
+  if (course.role === 'STUDENT') {
+    return (
+      <p className="max-w-64 text-sm text-muted-foreground">
+        {isPastOffering
+          ? 'Este curso cerró sin una ruta publicada.'
+          : 'Tu equipo docente aún no publica la ruta de este curso.'}
+      </p>
+    );
+  }
+  return null;
+}
+
+function CourseActions({
+  course,
+  isPastOffering,
+  renderRoadmapCreation,
+  notificationsEnabled,
+}: Readonly<{
+  course: AcademicOverviewCourse;
+  isPastOffering: boolean;
+  renderRoadmapCreation: RoadmapCreationAction;
+  notificationsEnabled: boolean;
+}>) {
+  // Teaching staff who cannot create the Roadmap still reach the version history.
+  const awaitsCreation =
+    course.role === 'TEACHER' &&
+    !course.hasRoadmap &&
+    !course.canCreateRoadmap &&
+    !course.isPastClosure;
+
+  return (
+    <>
+      <CourseRoadmapStatus hasRoadmap={course.hasRoadmap} isPastOffering={isPastOffering} />
+      <CourseRoadmapAction
+        course={course}
+        isPastOffering={isPastOffering}
+        awaitsCreation={awaitsCreation}
+        renderRoadmapCreation={renderRoadmapCreation}
+        notificationsEnabled={notificationsEnabled}
+      />
+      {(isPastOffering && course.role === 'TEACHER') || awaitsCreation ? (
+        <Link
+          aria-label={`Historial de versiones de ${course.name}`}
+          className={buttonVariants({ variant: 'outline' })}
+          href={versionHistoryUrl(course.courseCode)}
+        >
+          <History aria-hidden="true" size={16} />
+          Historial de versiones
+        </Link>
+      ) : null}
+      {course.role === 'TEACHER' && course.hasRoadmap ? (
+        <Link
+          aria-label={`Integrantes de ${course.name}`}
+          className={buttonVariants({ variant: 'outline' })}
+          href={courseParticipantsUrl(course)}
+        >
+          <Users aria-hidden="true" size={16} />
+          Integrantes
+        </Link>
+      ) : null}
+    </>
+  );
+}
+
 function CourseRow({
   course,
   headingLevel: Heading,
@@ -141,14 +298,6 @@ function CourseRow({
     positionDetails[
       course.institutionalPosition ?? (course.role === 'TEACHER' ? 'TEACHING_STAFF' : 'STUDENT')
     ];
-  // Teaching staff who cannot create the Roadmap still reach the version history.
-  const awaitsCreation =
-    course.role === 'TEACHER' &&
-    !course.hasRoadmap &&
-    !course.canCreateRoadmap &&
-    !course.isPastClosure;
-  // A listed current term can already be past its closure instant.
-  const isPastOffering = isPastTerm || course.isPastClosure;
 
   return (
     <li className="min-w-0 sm:col-span-2 sm:grid sm:grid-cols-subgrid">
@@ -173,97 +322,13 @@ function CourseRow({
           {course.progress ? <CourseProgress progress={course.progress} /> : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:justify-end">
-          {course.hasRoadmap && isPastOffering ? (
-            <p className="flex items-center gap-2 text-sm font-medium text-graphite">
-              <Archive aria-hidden="true" size={17} />
-              Cerrado · solo lectura
-            </p>
-          ) : (
-            <p
-              className={
-                course.hasRoadmap
-                  ? 'flex items-center gap-2 text-sm font-medium text-progress-deep'
-                  : 'flex items-center gap-2 text-sm text-muted-foreground'
-              }
-            >
-              {course.hasRoadmap ? (
-                <Route aria-hidden="true" size={17} />
-              ) : (
-                <BookOpen aria-hidden="true" size={17} />
-              )}
-              {course.hasRoadmap ? 'Roadmap disponible' : 'Sin roadmap'}
-            </p>
-          )}
-          {course.hasRoadmap ? (
-            <>
-              {notificationsEnabled ? (
-                <NotificationCountButton
-                  filter={{
-                    courseCode: course.courseCode,
-                    year: course.year,
-                    semester: course.semester,
-                  }}
-                  label={`el curso ${course.name}`}
-                />
-              ) : null}
-              {isPastOffering ? (
-                // A closed Roadmap is read-only history, so it is not the row's primary action.
-                <Link
-                  aria-label={`Ver roadmap de ${course.name}`}
-                  className={buttonVariants({ variant: 'outline' })}
-                  href={roadmapUrl(course)}
-                >
-                  Ver roadmap
-                </Link>
-              ) : (
-                <Link
-                  aria-label={`Abrir roadmap de ${course.name}`}
-                  className={buttonVariants()}
-                  href={roadmapUrl(course)}
-                >
-                  Abrir roadmap
-                </Link>
-              )}
-            </>
-          ) : course.canCreateRoadmap ? (
-            renderRoadmapCreation({
-              courseCode: course.courseCode,
-              courseName: course.name,
-              semester: course.semester,
-              year: course.year,
-            })
-          ) : awaitsCreation ? (
-            <p className="max-w-64 text-sm text-muted-foreground">
-              Solo el profesor de cátedra puede crear el roadmap. Mientras tanto, revisa sus
-              versiones anteriores.
-            </p>
-          ) : course.role === 'STUDENT' ? (
-            <p className="max-w-64 text-sm text-muted-foreground">
-              {isPastOffering
-                ? 'Este curso cerró sin una ruta publicada.'
-                : 'Tu equipo docente aún no publica la ruta de este curso.'}
-            </p>
-          ) : null}
-          {(isPastOffering && course.role === 'TEACHER') || awaitsCreation ? (
-            <Link
-              aria-label={`Historial de versiones de ${course.name}`}
-              className={buttonVariants({ variant: 'outline' })}
-              href={versionHistoryUrl(course.courseCode)}
-            >
-              <History aria-hidden="true" size={16} />
-              Historial de versiones
-            </Link>
-          ) : null}
-          {course.role === 'TEACHER' && course.hasRoadmap ? (
-            <Link
-              aria-label={`Integrantes de ${course.name}`}
-              className={buttonVariants({ variant: 'outline' })}
-              href={courseParticipantsUrl(course)}
-            >
-              <Users aria-hidden="true" size={16} />
-              Integrantes
-            </Link>
-          ) : null}
+          <CourseActions
+            course={course}
+            // A listed current term can already be past its closure instant.
+            isPastOffering={isPastTerm || course.isPastClosure}
+            renderRoadmapCreation={renderRoadmapCreation}
+            notificationsEnabled={notificationsEnabled}
+          />
         </div>
       </div>
     </li>
@@ -346,6 +411,81 @@ function AcademicTermSection({
   );
 }
 
+function PreviousTermsSection({
+  previousTerms,
+  renderRoadmapCreation,
+  notificationsEnabled,
+}: Readonly<{
+  previousTerms: AcademicOverviewTerm[];
+  renderRoadmapCreation: RoadmapCreationAction;
+  notificationsEnabled: boolean;
+}>) {
+  return (
+    <Collapsible>
+      <div className="flex flex-col items-start gap-1">
+        <h2>
+          <CollapsibleTrigger className="group/previous-terms inline-flex cursor-pointer items-center gap-2 text-left font-heading text-2xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+            <span>Semestres anteriores</span>
+            <ChevronDown
+              aria-hidden="true"
+              className="shrink-0 transition-transform group-data-panel-open/previous-terms:rotate-180"
+              size={20}
+            />
+          </CollapsibleTrigger>
+        </h2>
+        <span className="text-sm text-muted-foreground">
+          {previousTerms.length} {previousTerms.length === 1 ? 'semestre' : 'semestres'}
+        </span>
+      </div>
+      <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
+        <div className="pt-6">
+          <Separator />
+          {previousTerms.length === 1 ? (
+            // A single past term needs no second disclosure.
+            <div className="pt-6">
+              <AcademicTermSection
+                isPastTerm
+                notificationsEnabled={notificationsEnabled}
+                renderRoadmapCreation={renderRoadmapCreation}
+                term={previousTerms[0]}
+              />
+            </div>
+          ) : (
+            <Accordion className="pt-4" multiple>
+              {previousTerms.map((term, index) => (
+                <AccordionItem
+                  className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-x-8 md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
+                  key={`${term.year}-${term.semester}`}
+                  value={`${term.year}-${term.semester}`}
+                >
+                  {index > 0 ? <Separator /> : null}
+                  <div className="flex flex-col items-start gap-1 pb-4">
+                    <AccordionTrigger className="w-fit flex-none cursor-pointer gap-2 py-0 font-heading text-xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50">
+                      <span>{termLabel(term)}</span>
+                    </AccordionTrigger>
+                    <span className="text-sm text-muted-foreground">
+                      {courseCountLabel(term.courses.length)}
+                    </span>
+                  </div>
+                  <AccordionContent className="pb-4 [&_a]:no-underline">
+                    <CourseList
+                      headingLevel="h4"
+                      isPastTerm
+                      notificationsEnabled={notificationsEnabled}
+                      renderRoadmapCreation={renderRoadmapCreation}
+                      term={term}
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function AcademicOverview({
   overview,
   renderRoadmapCreation,
@@ -410,68 +550,11 @@ export function AcademicOverview({
               />
             ) : null}
             {previousTerms.length > 0 ? (
-              <Collapsible>
-                <div className="flex flex-col items-start gap-1">
-                  <h2>
-                    <CollapsibleTrigger className="group/previous-terms inline-flex cursor-pointer items-center gap-2 text-left font-heading text-2xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
-                      <span>Semestres anteriores</span>
-                      <ChevronDown
-                        aria-hidden="true"
-                        className="shrink-0 transition-transform group-data-panel-open/previous-terms:rotate-180"
-                        size={20}
-                      />
-                    </CollapsibleTrigger>
-                  </h2>
-                  <span className="text-sm text-muted-foreground">
-                    {previousTerms.length} {previousTerms.length === 1 ? 'semestre' : 'semestres'}
-                  </span>
-                </div>
-                <CollapsibleContent className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0">
-                  <div className="pt-6">
-                    <Separator />
-                    {previousTerms.length === 1 ? (
-                      // A single past term needs no second disclosure.
-                      <div className="pt-6">
-                        <AcademicTermSection
-                          isPastTerm
-                          notificationsEnabled={notificationsEnabled}
-                          renderRoadmapCreation={renderRoadmapCreation}
-                          term={previousTerms[0]}
-                        />
-                      </div>
-                    ) : (
-                      <Accordion className="pt-4" multiple>
-                        {previousTerms.map((term, index) => (
-                          <AccordionItem
-                            className="grid gap-4 not-last:border-b-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-x-8 md:*:data-[slot=accordion-content]:col-start-2 md:*:data-[slot=separator]:col-span-2"
-                            key={`${term.year}-${term.semester}`}
-                            value={`${term.year}-${term.semester}`}
-                          >
-                            {index > 0 ? <Separator /> : null}
-                            <div className="flex flex-col items-start gap-1 pb-4">
-                              <AccordionTrigger className="w-fit flex-none cursor-pointer gap-2 py-0 font-heading text-xl font-semibold tracking-[-0.02em] transition-colors hover:text-primary hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50">
-                                <span>{termLabel(term)}</span>
-                              </AccordionTrigger>
-                              <span className="text-sm text-muted-foreground">
-                                {courseCountLabel(term.courses.length)}
-                              </span>
-                            </div>
-                            <AccordionContent className="pb-4 [&_a]:no-underline">
-                              <CourseList
-                                headingLevel="h4"
-                                isPastTerm
-                                notificationsEnabled={notificationsEnabled}
-                                renderRoadmapCreation={renderRoadmapCreation}
-                                term={term}
-                              />
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                    )}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+              <PreviousTermsSection
+                previousTerms={previousTerms}
+                renderRoadmapCreation={renderRoadmapCreation}
+                notificationsEnabled={notificationsEnabled}
+              />
             ) : null}
           </div>
         )}
