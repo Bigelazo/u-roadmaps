@@ -984,7 +984,7 @@ describe('canvas commands', () => {
      */
     const editable: RoadmapDto = {
       ...withTeacherBlocks('limits'),
-      nodeTypes: [...roadmap.nodeTypes, laboratory],
+      nodeTypes: withLaboratory.nodeTypes,
       nodes: withTeacherBlocks('limits').nodes.map((node) =>
         node.id === 'limits' ? { ...node, resources: [guide] as RoadmapNode['resources'] } : node,
       ),
