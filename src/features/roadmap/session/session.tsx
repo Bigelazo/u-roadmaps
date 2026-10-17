@@ -35,6 +35,8 @@ function messageFor(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
+const refreshFailure = 'No se pudo actualizar el roadmap. Puedes reintentar.';
+
 type CanvasPreviewView = {
   selectedNodeId: string | null;
   isEditorOpen: boolean;
@@ -155,7 +157,7 @@ function useInjectedSession(
             retryDelay = Math.min(retryDelay * 2, 30_000);
           }
           setError({
-            message: messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'),
+            message: messageFor(cause, refreshFailure),
             key,
           });
         },
@@ -222,7 +224,7 @@ function useInjectedSession(
       (cause: unknown) => {
         if (activeKeyRef.current !== key) return;
         setError({
-          message: messageFor(cause, 'No se pudo actualizar el roadmap. Puedes reintentar.'),
+          message: messageFor(cause, refreshFailure),
           key,
         });
       },
@@ -248,20 +250,30 @@ function useInjectedSession(
     [refresh],
   );
 
-  /** Runs a write, reloads the Roadmap and reports a failure as the session error. */
+  /**
+   * Runs a write, then reloads the Roadmap; a failed write is the session error. The write
+   * took effect once it resolves: a failed reload is shown as the session error but does
+   * not undo it.
+   */
   const mutate = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string, reload = true) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
+      let result: T;
       try {
-        const result = await operation();
-        if (reload) await refresh();
-        if (activeKeyRef.current !== requestKey) return { success: false, result };
-        setError(null);
-        return { success: true, result };
+        result = await operation();
       } catch (cause) {
         await reportFailure(cause, fallback, requestKey);
         return { success: false, result: undefined };
       }
+      try {
+        if (reload) await refresh();
+        if (activeKeyRef.current === requestKey) setError(null);
+      } catch (cause) {
+        if (activeKeyRef.current === requestKey) {
+          setError({ message: messageFor(cause, refreshFailure), key: requestKey });
+        }
+      }
+      return { success: activeKeyRef.current === requestKey, result };
     },
     [refresh, reportFailure, stableInput],
   );

@@ -113,15 +113,19 @@ export function useCanvasCommands({
       pendingRef.current = next;
       setPendingState(next);
     };
-    /** Writes, then reloads the Roadmap, or only the Canvas preview for a simulated write. */
+    /**
+     * Writes, then reloads the Roadmap, or only the Canvas preview for a simulated write.
+     * The write took effect once it succeeded: a failed reload is the session error, and a
+     * superseded one leaves the newer reload to show it.
+     */
     async function write<T>(
       operation: () => Promise<T>,
       fallback: string,
       reloads: 'roadmap' | 'canvas-preview' = 'roadmap',
     ) {
-      const { success, result } = await mutate(operation, fallback, reloads === 'roadmap');
-      const reloaded = success && (reloads === 'roadmap' || (await loadSimulation()));
-      return { success: reloaded, result };
+      const written = await mutate(operation, fallback, reloads === 'roadmap');
+      if (written.success && reloads === 'canvas-preview') await loadSimulation();
+      return written;
     }
     const context: ConfirmedActionContext = {
       preview: (operation, fallback) =>

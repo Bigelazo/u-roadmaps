@@ -1124,6 +1124,78 @@ describe('canvas commands', () => {
       ]);
     });
 
+    test('reports a simulated Completion whose preview reload a newer one superseded', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+      let holdNextPreviewLoad = false;
+      let releasePreviewLoad: (() => void) | undefined;
+      const canvas = await openCanvas({
+        ...adapter,
+        async loadSimulation(input) {
+          if (holdNextPreviewLoad) {
+            holdNextPreviewLoad = false;
+            await new Promise<void>((resolve) => (releasePreviewLoad = resolve));
+          }
+          return adapter.loadSimulation(input);
+        },
+      });
+      await act(async () => {
+        await canvas.session().loadSimulation();
+      });
+
+      holdNextPreviewLoad = true;
+      let completion: Promise<boolean> | undefined;
+      act(() => {
+        completion = canvas.commands().perform({
+          kind: 'complete-simulated-node',
+          nodeId: 'limits',
+        });
+      });
+      await waitFor(() => expect(releasePreviewLoad).toBeDefined());
+      await act(async () => {
+        await canvas.session().loadSimulation();
+      });
+      let applied: boolean | undefined;
+      await act(async () => {
+        releasePreviewLoad!();
+        applied = await completion;
+      });
+
+      expect(applied).toBe(true);
+      expect(canvas.session().error).toBeNull();
+      expect(
+        canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits'),
+      ).toMatchObject({ isCompleted: true });
+      expect(canvas.reported()).toEqual([{ type: 'completeSimulatedNode', nodeId: 'limits' }]);
+    });
+
+    test('a confirmed write whose Roadmap reload fails still took effect: it is reported and the reload failure shown', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+      let failLoads = false;
+      const canvas = await openCanvas({
+        ...adapter,
+        async load(input) {
+          if (failLoads) throw new Error();
+          return adapter.load(input);
+        },
+      });
+
+      await act(() => canvas.commands().request({ kind: 'hide-node', nodeId: 'integrals' }));
+      await canvas.awaiting();
+      failLoads = true;
+      await canvas.confirm('hide-node');
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(await nodeOf(adapter, 'integrals')).toMatchObject({ isVisible: false });
+      expect(canvas.reported()).toEqual([
+        { type: 'changeVisibility', nodeId: 'integrals', isVisible: false },
+      ]);
+      expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith({
+        kind: 'hide-node',
+        nodeId: 'integrals',
+      });
+      expect(canvas.session().error).toBe('No se pudo actualizar el roadmap. Puedes reintentar.');
+    });
+
     test('reports entering the Canvas preview once per entry, not on every preview reload', async () => {
       const canvas = await openCanvas();
       const preview = () => canvas.session().canvasPreviewWorkflow;
