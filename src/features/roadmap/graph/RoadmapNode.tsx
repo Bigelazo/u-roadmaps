@@ -159,16 +159,68 @@ function StaffStateBadge({ state }: { state: keyof typeof staffStateBadges }) {
   );
 }
 
-function NodeActionMenu({
-  nodeId,
-  hidden,
-  teacherBlocked,
-  isOpen,
-  isClosing,
-  useActionSheet,
-  onToggle,
-  onAction,
-}: NodeActionCallbacks & {
+type NodeMenuAction = ReturnType<typeof nodeMenuActions>[number];
+
+function NodeActionMenuItem({
+  action: { id, label, Icon, HoverIcon, onSelect, angle },
+  index,
+  total,
+}: {
+  action: NodeMenuAction;
+  index: number;
+  total: number;
+}) {
+  const itemStyle = {
+    '--i': index,
+    '--total': total,
+    '--angle': `${angle}deg`,
+  } as CSSProperties;
+  return (
+    <div className={styles.actionItem} style={itemStyle}>
+      <Tooltip>
+        <TooltipTrigger
+          delay={200}
+          render={
+            <button
+              type="button"
+              aria-label={label}
+              data-slot={id === 'visibility' ? 'node-action-visibility' : undefined}
+              data-angle={id === 'resource' ? 60 : undefined}
+              className={cn(
+                styles.actionButton,
+                id === 'resource' && styles.resourceAction,
+                id === 'delete' && styles.deleteAction,
+              )}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelect();
+              }}
+            >
+              {HoverIcon ? (
+                <span className={styles.actionIcon} aria-hidden="true">
+                  <Icon
+                    className={cn('size-4', styles.actionDefaultIcon)}
+                    data-testid={`node-action-${id}-default-icon`}
+                  />
+                  <HoverIcon
+                    className={cn('size-4', styles.actionHoverIcon)}
+                    data-testid={`node-action-${id}-hover-icon`}
+                  />
+                </span>
+              ) : (
+                <Icon aria-hidden="true" className="size-4" />
+              )}
+            </button>
+          }
+        />
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+}
+
+type NodeActionTriggerProps = {
   nodeId: string;
   hidden: boolean;
   teacherBlocked: boolean;
@@ -176,9 +228,40 @@ function NodeActionMenu({
   isClosing: boolean;
   useActionSheet: boolean;
   onToggle?: (nodeId: string, trigger: HTMLButtonElement) => void;
-}) {
-  const ClosedIcon = hidden ? EyeOff : teacherBlocked ? LockKeyhole : Settings;
-  const actions = nodeMenuActions(nodeId, hidden, teacherBlocked, onAction);
+};
+
+function NodeActionTriggerIcon({
+  hidden,
+  teacherBlocked,
+  isOpen,
+  isClosing,
+}: Pick<NodeActionTriggerProps, 'hidden' | 'teacherBlocked' | 'isOpen' | 'isClosing'>) {
+  if (isOpen) {
+    return (
+      <X
+        data-testid="node-action-trigger-close"
+        className={cn('size-5 transition-all duration-150', isClosing && 'scale-75 opacity-0')}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  const state = hidden ? 'hidden' : teacherBlocked ? 'blocked' : 'default';
+  const Icon = { hidden: EyeOff, blocked: LockKeyhole, default: Settings }[state];
+  return (
+    <Icon data-testid={`node-action-trigger-${state}`} className="size-5" aria-hidden="true" />
+  );
+}
+
+function NodeActionTrigger({
+  nodeId,
+  hidden,
+  teacherBlocked,
+  isOpen,
+  isClosing,
+  useActionSheet,
+  onToggle,
+}: NodeActionTriggerProps) {
   const trigger = (
     <button
       type="button"
@@ -193,21 +276,38 @@ function NodeActionMenu({
         onToggle?.(nodeId, event.currentTarget);
       }}
     >
-      {isOpen ? (
-        <X
-          data-testid="node-action-trigger-close"
-          className={cn('size-5 transition-all duration-150', isClosing && 'scale-75 opacity-0')}
-          aria-hidden="true"
-        />
-      ) : (
-        <ClosedIcon
-          data-testid={`node-action-trigger-${hidden ? 'hidden' : teacherBlocked ? 'blocked' : 'default'}`}
-          className="size-5"
-          aria-hidden="true"
-        />
-      )}
+      <NodeActionTriggerIcon
+        hidden={hidden}
+        teacherBlocked={teacherBlocked}
+        isOpen={isOpen}
+        isClosing={isClosing}
+      />
     </button>
   );
+
+  if (useActionSheet) return trigger;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger delay={200} render={trigger} />
+      <TooltipContent side="bottom">
+        {isOpen ? 'Cerrar acciones' : 'Acciones del nodo'}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function NodeActionMenu({
+  nodeId,
+  hidden,
+  teacherBlocked,
+  isOpen,
+  isClosing,
+  useActionSheet,
+  onToggle,
+  onAction,
+}: NodeActionCallbacks & NodeActionTriggerProps) {
+  const actions = nodeMenuActions(nodeId, hidden, teacherBlocked, onAction);
 
   return (
     <div
@@ -223,68 +323,25 @@ function NodeActionMenu({
           id={`node-actions-${nodeId}`}
           role="group"
         >
-          {actions.map(({ id, label, Icon, HoverIcon, onSelect, angle }, index) => {
-            const itemStyle = {
-              '--i': index,
-              '--total': actions.length,
-              '--angle': `${angle}deg`,
-            } as CSSProperties;
-            return (
-              <div key={id} className={styles.actionItem} style={itemStyle}>
-                <Tooltip>
-                  <TooltipTrigger
-                    delay={200}
-                    render={
-                      <button
-                        type="button"
-                        aria-label={label}
-                        data-slot={id === 'visibility' ? 'node-action-visibility' : undefined}
-                        data-angle={id === 'resource' ? 60 : undefined}
-                        className={cn(
-                          styles.actionButton,
-                          id === 'resource' && styles.resourceAction,
-                          id === 'delete' && styles.deleteAction,
-                        )}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onSelect();
-                        }}
-                      >
-                        {HoverIcon ? (
-                          <span className={styles.actionIcon} aria-hidden="true">
-                            <Icon
-                              className={cn('size-4', styles.actionDefaultIcon)}
-                              data-testid={`node-action-${id}-default-icon`}
-                            />
-                            <HoverIcon
-                              className={cn('size-4', styles.actionHoverIcon)}
-                              data-testid={`node-action-${id}-hover-icon`}
-                            />
-                          </span>
-                        ) : (
-                          <Icon aria-hidden="true" className="size-4" />
-                        )}
-                      </button>
-                    }
-                  />
-                  <TooltipContent side="right">{label}</TooltipContent>
-                </Tooltip>
-              </div>
-            );
-          })}
+          {actions.map((action, index) => (
+            <NodeActionMenuItem
+              key={action.id}
+              action={action}
+              index={index}
+              total={actions.length}
+            />
+          ))}
         </div>
       ) : null}
-      {useActionSheet ? (
-        trigger
-      ) : (
-        <Tooltip>
-          <TooltipTrigger delay={200} render={trigger} />
-          <TooltipContent side="bottom">
-            {isOpen ? 'Cerrar acciones' : 'Acciones del nodo'}
-          </TooltipContent>
-        </Tooltip>
-      )}
+      <NodeActionTrigger
+        nodeId={nodeId}
+        hidden={hidden}
+        teacherBlocked={teacherBlocked}
+        isOpen={isOpen}
+        isClosing={isClosing}
+        useActionSheet={useActionSheet}
+        onToggle={onToggle}
+      />
     </div>
   );
 }
