@@ -53,14 +53,16 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
     status: 'BLOCKED',
     reason: 'PREREQUISITE_BLOCK',
   });
-  const completion = await ok(
+  // Completion and Canvas preview progress share the editing refusal of a closed Roadmap.
+  for (const refused of [
     await student.post(offering.apiPath(`/nodes/${first.id}/completion`)),
-    403,
-  );
-  expect((await completion.json()).error.code).toBe('ROADMAP_FROZEN');
+    await teacher.delete(offering.apiPath('/simulation')),
+    await teacher.post(offering.apiPath(`/simulation/nodes/${first.id}/completion`)),
+  ]) {
+    await ok(refused, 409);
+    expect((await refused.json()).error.code).toBe('ROADMAP_CLOSED');
+  }
   expect(studentNodes.find((node: { id: string }) => node.id === first.id).canComplete).toBe(false);
-  await ok(await teacher.delete(offering.apiPath('/simulation')), 403);
-  await ok(await teacher.post(offering.apiPath(`/simulation/nodes/${first.id}/completion`)), 403);
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(offering.pagePath());
   await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeVisible();

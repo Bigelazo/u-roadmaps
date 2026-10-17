@@ -6,7 +6,6 @@ vi.mock('@/shared/server/db', () => ({ prisma: {} }));
 
 import {
   academicRole,
-  canCreateRoadmap,
   canEditRoadmap,
   getMufasaCourseAccess,
 } from '@/features/roadmap/application/academic-participation';
@@ -44,18 +43,16 @@ it.each([
   const access = { name: 'Curso', positions: position ? [position] : [] };
   expect(academicRole(access)).toBe(role);
   expect(canEditRoadmap(access)).toBe(edit);
-  expect(canCreateRoadmap(access)).toBe(create);
   expect(isCourseLeadPosition(position)).toBe(create);
 });
 
 it.each([
-  [['OBSERVER', 'TEACHING_ASSISTANT'], 'TEACHER', false],
-  [['TEACHING_ASSISTANT', 'AUXILIARY_PROFESSOR'], 'TEACHER', false],
-  [['COORDINATING_PROFESSOR', 'COURSE_PROFESSOR'], 'TEACHER', true],
-] as const)('uses the highest applicable rights for %s', (positions, role, create) => {
+  [['OBSERVER', 'TEACHING_ASSISTANT'], 'TEACHER'],
+  [['TEACHING_ASSISTANT', 'AUXILIARY_PROFESSOR'], 'TEACHER'],
+  [['COORDINATING_PROFESSOR', 'COURSE_PROFESSOR'], 'TEACHER'],
+] as const)('uses the highest applicable rights for %s', (positions, role) => {
   const access = { name: 'Curso', positions };
   expect(academicRole(access)).toBe(role);
-  expect(canCreateRoadmap(access)).toBe(create);
 });
 
 it('collects every position the person holds in one course offering', async () => {
@@ -90,7 +87,6 @@ it('collects every position the person holds in one course offering', async () =
     name: 'Metodologías de Diseño y Programación',
     positions: ['COURSE_PROFESSOR', 'AUXILIARY_PROFESSOR'],
   });
-  expect(canCreateRoadmap(access!)).toBe(true);
 });
 
 it('reports no access when U-Campus does not place the person in the offering', async () => {

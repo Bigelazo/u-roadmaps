@@ -9,6 +9,8 @@ import { Prisma, prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier, StudentNodeAccess } from '@/features/roadmap/types';
 import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
+import type { RoadmapCapability } from '@/features/roadmap/domain/roadmap-capability';
+import { requireRoadmapCapability, roadmapNotFound } from './roadmap-command/errors';
 import {
   loadRoadmapProjectionData,
   loadCompletedNodeIds,
@@ -20,7 +22,6 @@ import {
 type ParticipantRoadmapInput = { userId: string; identifier: CourseOfferingIdentifier };
 type CompleteNodeInput = ParticipantRoadmapInput & { nodeId: string };
 type StudentNodeAccessInput = { userId: string; roadmapId: string; nodeId: string };
-type RequiredRole = 'STUDENT' | 'TEACHER';
 
 function blockedNodeAccessError(access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>) {
   return new ApplicationError(403, access.reason, blockedNodeAccessMessage(access));
@@ -65,43 +66,22 @@ export async function requireStudentNodeAccess(
 async function requireParticipantRoadmap(
   transaction: Prisma.TransactionClient,
   { userId, identifier }: ParticipantRoadmapInput,
-  requiredRole?: RequiredRole,
+  capability: RoadmapCapability,
 ) {
   const courseOffering = await transaction.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
     include: { course: true, roadmap: true },
   });
-  if (!courseOffering) {
-    throw new ApplicationError(
-      404,
-      'ROADMAP_NOT_FOUND',
-      'El profesor todavía no ha creado un roadmap para este curso.',
-    );
-  }
+  if (!courseOffering) throw roadmapNotFound();
   const participation = await transaction.participation.findUnique({
     where: { userId_courseOfferingId: { userId, courseOfferingId: courseOffering.id } },
   });
-  if (!participation?.isActive || (requiredRole && participation.role !== requiredRole)) {
-    throw new ApplicationError(
-      403,
-      'FORBIDDEN',
-      'No tienes participación vigente para esta operación.',
-    );
-  }
-  if (!courseOffering.roadmap) {
-    throw new ApplicationError(
-      404,
-      'ROADMAP_NOT_FOUND',
-      'El profesor todavía no ha creado un roadmap para este curso.',
-    );
-  }
-  return { courseOffering, participation, roadmap: courseOffering.roadmap };
-}
-
-function requireCurrentRoadmap(roadmap: { closedAt: Date | null }) {
-  if (roadmap.closedAt) {
-    throw new ApplicationError(403, 'ROADMAP_FROZEN', 'Este roadmap histórico es de sólo lectura.');
-  }
+  const allowed = requireRoadmapCapability({
+    capability,
+    participation,
+    roadmap: courseOffering.roadmap,
+  });
+  return { courseOffering, participation: allowed.participation, roadmap: allowed.roadmap };
 }
 
 export const readRoadmapForParticipant = withApplicationResult(
@@ -111,6 +91,7 @@ export const readRoadmapForParticipant = withApplicationResult(
         const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
           transaction,
           { userId, identifier },
+          'read',
         );
         if (participation.role === 'TEACHER') {
           const data = await loadRoadmapProjectionData(transaction, { courseOffering, roadmap });
@@ -138,8 +119,7 @@ function withTeacherRoadmapTransaction<Result>(
   operation: (transaction: Prisma.TransactionClient, roadmap: TeacherRoadmap) => Promise<Result>,
 ) {
   return serializableTransaction(async (transaction) => {
-    const roadmap = await requireParticipantRoadmap(transaction, { userId, identifier }, 'TEACHER');
-    requireCurrentRoadmap(roadmap.roadmap);
+    const roadmap = await requireParticipantRoadmap(transaction, { userId, identifier }, 'edit');
     return operation(transaction, roadmap);
   });
 }
@@ -154,10 +134,9 @@ export const completeNode = withApplicationResult(async function completeNode(
       const { roadmap } = await requireParticipantRoadmap(
         transaction,
         { userId, identifier },
-        'STUDENT',
+        'complete',
       );
       await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
-      requireCurrentRoadmap(roadmap);
       await requireStudentNodeAccess(transaction, { userId, roadmapId: roadmap.id, nodeId });
       const before = await readAccessSnapshot(transaction, roadmap.id, userId);
       const completion = await transaction.completion.upsert({
@@ -187,7 +166,7 @@ export const readSimulatedRoadmap = withApplicationResult(async function readSim
       const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
         transaction,
         { userId, identifier },
-        'TEACHER',
+        'oversee',
       );
       const [data, completedNodeIds] = await Promise.all([
         loadRoadmapProjectionData(transaction, { courseOffering, roadmap }),

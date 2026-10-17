@@ -8,6 +8,7 @@ import {
   type RoadmapActor,
 } from '@/features/roadmap/application/participation';
 import { requireStudentNodeAccess } from '@/features/roadmap/application/completion';
+import { requireRoadmapCapability } from '@/features/roadmap/application/roadmap-command/errors';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import { readUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
 import { requireUuid } from '@/shared/validation';
@@ -33,7 +34,7 @@ async function requireResourceRoadmap(
   const { participation, courseOffering } = await requireCourseOfferingParticipation(
     actor,
     identifier,
-    ['STUDENT', 'TEACHER'],
+    'read',
     changePort,
   ).match(
     (value) => value,
@@ -41,15 +42,11 @@ async function requireResourceRoadmap(
       throw error;
     },
   );
-  const roadmap = courseOffering.roadmap;
-  if (!roadmap) {
-    throw new ApplicationError(
-      404,
-      'ROADMAP_NOT_FOUND',
-      'El profesor todavía no ha creado un roadmap para este curso.',
-    );
-  }
-  return { participation, roadmap };
+  return requireRoadmapCapability({
+    capability: 'read',
+    participation,
+    roadmap: courseOffering.roadmap,
+  });
 }
 
 type ResourceParticipation = Awaited<ReturnType<typeof requireResourceRoadmap>>['participation'];

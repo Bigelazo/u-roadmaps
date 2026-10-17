@@ -1,6 +1,6 @@
 import type { RoadmapChangePort } from './change-port';
 import { roadmapChangeTransaction } from './change-transaction';
-import { concurrentModificationError } from './serializable';
+import { conflict, roadmapClosed } from './roadmap-command/errors';
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
@@ -46,21 +46,6 @@ export function resourceDto(
     type: resource.type,
   };
 }
-
-const roadmapNotFound = () =>
-  new ApplicationError(
-    404,
-    'ROADMAP_NOT_FOUND',
-    'El profesor todavía no ha creado un roadmap para este curso.',
-  );
-
-export const requireRoadmap = withApplicationResult(
-  async (identifier: CourseOfferingIdentifier) => {
-    const roadmap = await prisma.roadmap.findFirst({ where: { courseOffering: identifier } });
-    if (!roadmap) throw roadmapNotFound();
-    return roadmap;
-  },
-);
 
 export function nodeDto(node: {
   id: string;
@@ -115,14 +100,10 @@ export function nodeTypeDto(nodeType: {
 function handlePrismaError(error: unknown): never {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002')
-      throw new ApplicationError(
-        409,
-        'CONFLICT',
-        'La operación entra en conflicto con un recurso existente.',
-      );
+      throw conflict('La operación entra en conflicto con un recurso existente.');
     if (error.code === 'P2025')
       throw new ApplicationError(404, 'NOT_FOUND', 'El recurso solicitado no existe.');
-    if (error.code === 'P2034') throw concurrentModificationError();
+    if (error.code === 'P2034') throw conflict();
   }
   throw error;
 }
@@ -335,11 +316,7 @@ export const createRoadmap = withApplicationResult(async function createRoadmap(
             new Date(),
           )
         ) {
-          throw new ApplicationError(
-            409,
-            'ROADMAP_CLOSED',
-            'El período de este curso terminó. No se puede crear un roadmap.',
-          );
+          throw roadmapClosed('El período de este curso terminó. No se puede crear un roadmap.');
         }
         const name =
           courseBody?.name === undefined && existingCourse

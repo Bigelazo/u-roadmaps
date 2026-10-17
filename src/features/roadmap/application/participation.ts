@@ -1,21 +1,24 @@
 import type { RoadmapChangePort } from './change-port';
+import { forbidden, roadmapNotFound } from './roadmap-command/errors';
 import 'server-only';
 
 import {
-  canCreateRoadmap,
   readMufasaCourseAccess,
   materializeParticipation,
   synchronizeParticipation,
   type AcademicUser,
 } from './academic-participation';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import { positionCapabilities } from '@/shared/institutional-position';
+import {
+  decideRoadmapCreation,
+  participationGrants,
+  type RoadmapCapability,
+} from '@/features/roadmap/domain/roadmap-capability';
+import { effectivePosition } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
-import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import { withApplicationResult } from '@/shared/errors/server';
 
 export { synchronizeParticipation } from './academic-participation';
-
-type ParticipationRole = 'STUDENT' | 'TEACHER';
 
 export type RoadmapActor = AcademicUser;
 
@@ -23,49 +26,41 @@ async function resolveParticipation(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
   courseOfferingId: string,
-  allowedRoles: readonly ParticipationRole[],
+  capability: RoadmapCapability,
   changePort: RoadmapChangePort,
 ) {
   const participation = await prisma.participation.findFirst({
     where: { userId: actor.id, courseOfferingId, isActive: true },
   });
-  if (participation && allowedRoles.includes(participation.role)) return participation;
+  if (participationGrants(participation, capability)) return participation;
   const synchronized = await synchronizeParticipation(actor, identifier, changePort);
-  return synchronized && allowedRoles.includes(synchronized.role) ? synchronized : null;
+  return participationGrants(synchronized, capability) ? synchronized : null;
 }
 
+/**
+ * The Course offering and the actor's Participation in it. The offering may have no
+ * Roadmap yet, so callers that need one refuse its absence themselves.
+ */
 export const requireCourseOfferingParticipation = withApplicationResult(
   async function requireCourseOfferingParticipation(
     actor: RoadmapActor,
     identifier: CourseOfferingIdentifier,
-    allowedRoles: readonly ParticipationRole[],
+    capability: RoadmapCapability,
     changePort: RoadmapChangePort,
   ) {
     const courseOffering = await prisma.courseOffering.findUnique({
       where: { courseCode_year_semester: identifier },
       include: { roadmap: true },
     });
-    if (!courseOffering) {
-      throw new ApplicationError(
-        404,
-        'ROADMAP_NOT_FOUND',
-        'El profesor todavía no ha creado un roadmap para este curso.',
-      );
-    }
+    if (!courseOffering) throw roadmapNotFound();
     const participation = await resolveParticipation(
       actor,
       identifier,
       courseOffering.id,
-      allowedRoles,
+      capability,
       changePort,
     );
-    if (!participation) {
-      throw new ApplicationError(
-        403,
-        'FORBIDDEN',
-        'No tienes participación vigente para esta operación.',
-      );
-    }
+    if (!participation) throw forbidden();
     return { actor, courseOffering, participation };
   },
 );
@@ -80,29 +75,22 @@ export const requireRoadmapCreationAccess = withApplicationResult(
       readMufasaCourseAccess(actor, identifier),
       prisma.courseOffering.findUnique({ where: { courseCode_year_semester: identifier } }),
     ]);
-    const forbidden = new ApplicationError(
-      403,
-      'FORBIDDEN',
-      'Solo el profesor de cátedra puede crear el roadmap de este curso.',
-    );
-    if (access) {
-      await materializeParticipation(actor, identifier, access, changePort);
-      if (!canCreateRoadmap(access)) throw forbidden;
-      return { actor, courseOffering };
-    }
-    if (!isComplete && courseOffering) {
-      const participation = await prisma.participation.findUnique({
-        where: {
-          userId_courseOfferingId: { userId: actor.id, courseOfferingId: courseOffering.id },
-        },
-      });
-      if (
-        participation?.isActive &&
-        positionCapabilities(participation.institutionalPosition).canCreateRoadmap
-      ) {
-        return { actor, courseOffering };
-      }
-    }
-    throw forbidden;
+    if (access) await materializeParticipation(actor, identifier, access, changePort);
+    // The stored position counts only while U-Campus cannot report completely.
+    const participation =
+      !isComplete && courseOffering
+        ? await prisma.participation.findUnique({
+            where: {
+              userId_courseOfferingId: { userId: actor.id, courseOfferingId: courseOffering.id },
+            },
+          })
+        : null;
+    const decision = decideRoadmapCreation({
+      report: isComplete ? { position: access && effectivePosition(access.positions) } : null,
+      participation,
+    });
+    if (decision.kind === 'REJECTED')
+      throw forbidden('Solo el profesor de cátedra puede crear el roadmap de este curso.');
+    return { actor, courseOffering };
   },
 );

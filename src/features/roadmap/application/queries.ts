@@ -1,12 +1,9 @@
 import type { RoadmapChangePort } from './change-port';
+import { requireRoadmapCapability } from './roadmap-command/errors';
 import 'server-only';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import {
-  createRoadmap,
-  getAvailableTypes,
-  requireRoadmap,
-} from '@/features/roadmap/application/roadmap';
+import { createRoadmap, getAvailableTypes } from '@/features/roadmap/application/roadmap';
 import {
   requireCourseOfferingParticipation,
   requireRoadmapCreationAccess,
@@ -33,13 +30,14 @@ export function getNodeTypesForActor(
   changePort: RoadmapChangePort,
 ) {
   return applicationResult(async () => {
-    const { courseOffering } = await unwrap(() =>
-      requireCourseOfferingParticipation(actor, identifier, ['STUDENT', 'TEACHER'], changePort),
+    const { courseOffering, participation } = await unwrap(() =>
+      requireCourseOfferingParticipation(actor, identifier, 'read', changePort),
     );
-    if (!courseOffering.roadmap) {
-      const roadmap = await unwrap(() => requireRoadmap(identifier));
-      return getAvailableTypes(roadmap.id);
-    }
-    return getAvailableTypes(courseOffering.roadmap.id);
+    const { roadmap } = requireRoadmapCapability({
+      capability: 'read',
+      participation,
+      roadmap: courseOffering.roadmap,
+    });
+    return getAvailableTypes(roadmap.id);
   });
 }

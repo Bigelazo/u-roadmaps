@@ -152,7 +152,7 @@ export const readCourseParticipants = withApplicationResult(async function readC
   changePort: RoadmapChangePort,
 ): Promise<CourseParticipants> {
   const { courseOffering } = await unwrap(() =>
-    requireCourseOfferingParticipation(actor, identifier, ['TEACHER'], changePort),
+    requireCourseOfferingParticipation(actor, identifier, 'oversee', changePort),
   );
   const [institutionalRoster, course, visibleNodes] = await Promise.all([
     readInstitutionalRoster(actor, identifier),

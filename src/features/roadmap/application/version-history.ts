@@ -11,6 +11,7 @@ import {
 } from '../domain/version-history';
 import type { RoadmapActor } from './participation';
 import { getAvailableTypes, nodeDto, resourceDto } from './roadmap';
+import { forbidden } from './roadmap-command/errors';
 import type {
   CourseOfferingIdentifier,
   NodeType,
@@ -68,11 +69,7 @@ async function requireCourseWithHorizon(actor: RoadmapActor, courseCode: string)
     ),
   );
   if (!horizon)
-    throw new ApplicationError(
-      403,
-      'FORBIDDEN',
-      'Solo el equipo docente del ramo puede consultar su historial de versiones.',
-    );
+    throw forbidden('Solo el equipo docente del ramo puede consultar su historial de versiones.');
   return { course, horizon };
 }
 

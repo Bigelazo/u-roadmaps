@@ -21,10 +21,6 @@ export type MufasaCourseAccess = Readonly<{
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
 
-export function canCreateRoadmap(access: MufasaCourseAccess) {
-  return positionCapabilities(effectivePosition(access.positions)).canCreateRoadmap;
-}
-
 export function canEditRoadmap(access: MufasaCourseAccess) {
   return positionCapabilities(effectivePosition(access.positions)).canEdit;
 }

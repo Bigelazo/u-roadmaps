@@ -3,6 +3,7 @@ import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-t
 import { serializableTransaction } from './serializable';
 import { accessChanges } from './access-changes';
 import { readAccessSnapshot } from './access-snapshot';
+import { conflict } from './roadmap-command/errors';
 import 'server-only';
 
 import { createHash } from 'node:crypto';
@@ -415,12 +416,7 @@ export const deleteRoadmapNode = withApplicationResult(
         return { fileKeys: resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : [])) };
       },
       changePort,
-      () =>
-        new ApplicationError(
-          409,
-          'CONFLICT',
-          'La eliminación entra en conflicto con otra modificación.',
-        ),
+      () => conflict('La eliminación entra en conflicto con otra modificación.'),
     );
     await Promise.all(
       deletion.fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)),
@@ -834,12 +830,7 @@ export const releaseScheduledTeacherUnlocks = withApplicationResult(
           return { releasedNodeIds: [...releasedNodeIds] };
         },
         changePort,
-        () =>
-          new ApplicationError(
-            409,
-            'CONFLICT',
-            'El desbloqueo programado entra en conflicto con otra modificación.',
-          ),
+        () => conflict('El desbloqueo programado entra en conflicto con otra modificación.'),
       );
       released.push({ identifier: roadmap.courseOffering, ...result });
     }

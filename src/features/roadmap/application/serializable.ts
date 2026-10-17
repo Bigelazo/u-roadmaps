@@ -1,7 +1,8 @@
 import 'server-only';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Prisma, prisma } from '@/shared/server/db';
-import { ApplicationError } from '@/shared/errors/server';
+import type { ApplicationError } from '@/shared/errors/server';
+import { conflict } from './roadmap-command/errors';
 
 /** Attempts of one serializable transaction before a serialization failure becomes a 409. */
 export const SERIALIZABLE_MAX_ATTEMPTS = 5;
@@ -11,10 +12,6 @@ export type SerializableOptions = Readonly<{
   /** The 409 to raise once every attempt hit a serialization failure (ADR-0015). */
   concurrentModification?: () => ApplicationError;
 }>;
-
-/** The default 409 once every serializable attempt failed (ADR-0015). */
-export const concurrentModificationError = () =>
-  new ApplicationError(409, 'CONFLICT', 'La operación entra en conflicto con otra modificación.');
 
 /**
  * Run `operation` in a SERIALIZABLE transaction that prefers index scans, retrying
@@ -37,7 +34,7 @@ export async function serializableTransaction<T>(
     } catch (error) {
       if (!isSerializationFailure(error)) throw error;
       if (attempt === SERIALIZABLE_MAX_ATTEMPTS - 1)
-        throw (options.concurrentModification ?? concurrentModificationError)();
+        throw (options.concurrentModification ?? conflict)();
       // Separate attempts so unrelated concurrent Roadmaps can finish their writes.
       await delay(50 * 2 ** attempt + Math.random() * 50);
     }
