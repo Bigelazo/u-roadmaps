@@ -1,7 +1,7 @@
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 
-/** The previewed changes whose confirmation can send back the Change impact's version. */
-export type PreviewedChange = 'hide' | 'delete' | 'dependency' | 'block' | 'unlock';
+/** The changes whose confirmation can send back the version of the Change impact it showed. */
+export type ChangeWithImpact = 'hide' | 'delete' | 'dependency' | 'block' | 'unlock';
 
 const staleChanges = {
   hide: ['NODE_VISIBILITY_PREVIEW_STALE', 'de ocultar el nodo'],
@@ -9,24 +9,24 @@ const staleChanges = {
   dependency: ['DEPENDENCY_PREVIEW_STALE', 'de la dependencia'],
   block: ['TEACHER_BLOCK_PREVIEW_STALE', 'del bloqueo'],
   unlock: ['TEACHER_BLOCK_PREVIEW_STALE', 'del desbloqueo'],
-} as const satisfies Record<PreviewedChange, readonly [string, string]>;
+} as const satisfies Record<ChangeWithImpact, readonly [string, string]>;
 
-export type StalePreviewReason = (typeof staleChanges)[PreviewedChange][0];
+export type StaleChangeImpactReason = (typeof staleChanges)[ChangeWithImpact][0];
 
 /**
- * Whether a confirmation may take effect: the preview version it sends must still match
- * the current Change impact's `version`. A missing version passes, except for an unlock,
- * which must confirm the impact it previewed.
+ * Whether a confirmation may take effect: the Change impact version it sends must still
+ * match the current impact's `version`. A missing version passes, except for an unlock,
+ * which must confirm the impact it showed.
  */
-export function decidePreviewVersion({
+export function decideChangeImpactVersion({
   change,
   sentVersion,
   version,
 }: {
-  change: PreviewedChange;
+  change: ChangeWithImpact;
   sentVersion: string | undefined;
   version: string;
-}): { kind: 'ALLOWED' } | RuleRejection<StalePreviewReason> {
+}): { kind: 'ALLOWED' } | RuleRejection<StaleChangeImpactReason> {
   const isStale = sentVersion ? sentVersion !== version : change === 'unlock';
   if (!isStale) return { kind: 'ALLOWED' };
   const [reason, impact] = staleChanges[change];

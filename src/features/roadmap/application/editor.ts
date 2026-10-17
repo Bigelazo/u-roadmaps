@@ -28,8 +28,8 @@ import {
   type NodeTypeRuleFailure,
 } from '@/features/roadmap/domain/node-type';
 import {
-  decidePreviewVersion,
-  type PreviewedChange,
+  decideChangeImpactVersion,
+  type ChangeWithImpact,
 } from '@/features/roadmap/domain/change-impact';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
@@ -108,11 +108,11 @@ function versioned<Impact extends object>(impact: Impact) {
 
 /** Rejects a confirmation whose sent preview version no longer matches the current impact. */
 function rejectStalePreview(
-  change: PreviewedChange,
+  change: ChangeWithImpact,
   sentVersion: string | undefined,
   { version }: { version: string },
 ) {
-  const decision = decidePreviewVersion({ change, sentVersion, version });
+  const decision = decideChangeImpactVersion({ change, sentVersion, version });
   if (decision.kind === 'REJECTED')
     throw new ApplicationError(409, decision.reason, decision.message);
 }

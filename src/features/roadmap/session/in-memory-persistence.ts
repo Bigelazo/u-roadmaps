@@ -1,8 +1,8 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
-  decidePreviewVersion,
-  type PreviewedChange,
+  decideChangeImpactVersion,
+  type ChangeWithImpact,
 } from '@/features/roadmap/domain/change-impact';
 import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
 import { decideDependency } from '@/features/roadmap/domain/dependency';
@@ -111,11 +111,11 @@ function versioned<Impact extends object>(impact: Impact) {
 
 /** Rejects a confirmation whose sent preview version no longer matches the current impact. */
 function rejectStalePreview(
-  change: PreviewedChange,
+  change: ChangeWithImpact,
   sentVersion: string | undefined,
   { version }: { version: string },
 ) {
-  const decision = decidePreviewVersion({ change, sentVersion, version });
+  const decision = decideChangeImpactVersion({ change, sentVersion, version });
   if (decision.kind === 'REJECTED') throw new Error(decision.message);
 }
 

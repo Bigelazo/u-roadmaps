@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { decidePreviewVersion } from '@/features/roadmap/domain/change-impact';
+import { decideChangeImpactVersion } from '@/features/roadmap/domain/change-impact';
 
 test.each([
   ['hide', 'NODE_VISIBILITY_PREVIEW_STALE', 'El impacto de ocultar el nodo cambió.'],
@@ -8,7 +8,9 @@ test.each([
   ['block', 'TEACHER_BLOCK_PREVIEW_STALE', 'El impacto del bloqueo cambió.'],
   ['unlock', 'TEACHER_BLOCK_PREVIEW_STALE', 'El impacto del desbloqueo cambió.'],
 ] as const)('rejects a stale %s preview version', (change, reason, message) => {
-  expect(decidePreviewVersion({ change, sentVersion: 'previewed', version: 'current' })).toEqual({
+  expect(
+    decideChangeImpactVersion({ change, sentVersion: 'previewed', version: 'current' }),
+  ).toEqual({
     kind: 'REJECTED',
     reason,
     message: `${message} Revisa y confirma la previsualización actualizada.`,
@@ -16,7 +18,9 @@ test.each([
 });
 
 test('allows a preview version that still matches the Change impact', () => {
-  expect(decidePreviewVersion({ change: 'unlock', sentVersion: 'same', version: 'same' })).toEqual({
+  expect(
+    decideChangeImpactVersion({ change: 'unlock', sentVersion: 'same', version: 'same' }),
+  ).toEqual({
     kind: 'ALLOWED',
   });
 });
@@ -24,7 +28,9 @@ test('allows a preview version that still matches the Change impact', () => {
 test.each(['hide', 'delete', 'dependency', 'block'] as const)(
   'allows a %s confirmation that sends no preview version',
   (change) => {
-    expect(decidePreviewVersion({ change, sentVersion: undefined, version: 'current' })).toEqual({
+    expect(
+      decideChangeImpactVersion({ change, sentVersion: undefined, version: 'current' }),
+    ).toEqual({
       kind: 'ALLOWED',
     });
   },
@@ -32,6 +38,6 @@ test.each(['hide', 'delete', 'dependency', 'block'] as const)(
 
 test('requires an unlock to confirm its previewed Change impact', () => {
   expect(
-    decidePreviewVersion({ change: 'unlock', sentVersion: undefined, version: 'current' }),
+    decideChangeImpactVersion({ change: 'unlock', sentVersion: undefined, version: 'current' }),
   ).toMatchObject({ kind: 'REJECTED', reason: 'TEACHER_BLOCK_PREVIEW_STALE' });
 });
