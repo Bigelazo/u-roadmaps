@@ -176,14 +176,16 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
   );
 }
 
+const calendarDayFormatter = new Intl.DateTimeFormat('es-CL', {
+  timeZone: 'UTC',
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
 function formatCalendarDay(day: string) {
-  return new Intl.DateTimeFormat('es-CL', {
-    timeZone: 'UTC',
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(`${day}T12:00:00.000Z`));
+  return calendarDayFormatter.format(new Date(`${day}T12:00:00.000Z`));
 }
 
 function NodeUnlockSchedule({ scheduledDay }: { scheduledDay: string | null }) {

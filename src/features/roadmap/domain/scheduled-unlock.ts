@@ -14,13 +14,15 @@ type ScheduledUnlockNode = {
   teacherUnlockOn: CalendarDay | null;
 };
 
+const chileCalendarDayFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Santiago',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 export function chileCalendarDay(now = new Date()): CalendarDay {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Santiago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
+  return chileCalendarDayFormatter.format(now);
 }
 
 export function addCalendarDays(day: CalendarDay, days: number): CalendarDay {
