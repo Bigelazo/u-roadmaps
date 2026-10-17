@@ -42,10 +42,10 @@ const CHANGES_ROADMAP: Readonly<Record<RoadmapCapability, boolean>> = {
 };
 
 /** Whether a Participation's role and activity grant `capability`, regardless of the Roadmap. */
-export function participationGrants(
-  participation: CapabilityParticipation | null,
+export function participationGrants<Participation extends CapabilityParticipation>(
+  participation: Participation | null,
   capability: RoadmapCapability,
-) {
+): participation is Participation {
   return (
     participation?.isActive === true && CAPABILITY_ROLES[capability].includes(participation.role)
   );

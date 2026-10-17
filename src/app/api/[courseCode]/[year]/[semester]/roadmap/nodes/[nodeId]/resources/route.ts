@@ -23,9 +23,10 @@ export const POST = courseRoute(async ({ identifier, user, params, request }) =>
 });
 
 export const GET = courseRoute(async ({ identifier, user, params }) => {
-  const resources = await getRoadmapNodeResources(
-    { actor: user, identifier, nodeId: params.nodeId },
-    roadmapChangePort,
-  );
+  const resources = await getRoadmapNodeResources({
+    userId: user.id,
+    identifier,
+    nodeId: params.nodeId,
+  });
   return NextResponse.json({ resources });
 });

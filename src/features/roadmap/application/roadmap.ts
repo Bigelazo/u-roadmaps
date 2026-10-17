@@ -73,10 +73,13 @@ export function nodeDto(node: {
   };
 }
 
-export async function getAvailableTypes(roadmapId: string) {
+export async function getAvailableTypes(
+  roadmapId: string,
+  client: Prisma.TransactionClient = prisma,
+) {
   const [predefined, custom] = await Promise.all([
-    prisma.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
-    prisma.nodeType.findMany({ where: { roadmapId }, orderBy: { name: 'asc' } }),
+    client.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
+    client.nodeType.findMany({ where: { roadmapId }, orderBy: { name: 'asc' } }),
   ]);
   return [...predefined, ...custom].map(nodeTypeDto);
 }

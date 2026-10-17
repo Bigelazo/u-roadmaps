@@ -14,11 +14,16 @@ import {
   createRoadmapNodeType,
   createRoadmapResource,
   deleteRoadmapDependency,
+  downloadRoadmapResource,
+  getNodeTypesForActor,
+  getRoadmapNodeResources,
   previewNodeDeletion,
   previewNodeVisibility,
   previewRoadmapDependency,
   previewTeacherBlock,
+  readCourseParticipants,
   readRoadmapForParticipant,
+  readSimulatedRoadmap,
   resetSimulatedCompletions,
   scheduleTeacherUnlock,
   updateRoadmapNode,
@@ -219,20 +224,52 @@ test('invalid input is refused before authorisation and before the Roadmap lock'
   }
 });
 
+/** Every Roadmap read, each asked by the participant it serves. */
+function roadmapReads(course: IntegrationCourse): Promise<unknown>[] {
+  const nodeId = course.change.nodeId;
+  return [
+    readRoadmapForParticipant(student(course)),
+    getNodeTypesForActor(student(course)),
+    getRoadmapNodeResources({ ...student(course), nodeId }),
+    readSimulatedRoadmap(teacher(course)),
+    // Without a RUT, Student progress tracking lists the local roster only.
+    readCourseParticipants({ id: course.teacherId, rut: null }, course.identifier),
+  ];
+}
+
 test('reads and editor previews take no Roadmap lock', async ({ course }) => {
   const previews = await editorPreviews(course);
   const editing = await holdRoadmapLock(course.roadmapId);
   try {
     const outcomes = await Promise.all(
-      [readRoadmapForParticipant(student(course)), ...previews()].map((operation) =>
-        settledWithin(operation),
-      ),
+      [...roadmapReads(course), ...previews()].map((operation) => settledWithin(operation)),
     );
-    expect(outcomes[0]).toMatchObject({ value: { nodes: expect.any(Array) } });
-    for (const outcome of outcomes) expect(outcome).toHaveProperty('value');
+    for (const outcome of outcomes) expect(outcome).toMatchObject({ value: expect.anything() });
   } finally {
     await editing.release();
   }
+});
+
+test('a closed Roadmap stays readable', async ({ course }) => {
+  await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
+  const outcomes = await Promise.allSettled(roadmapReads(course));
+  for (const outcome of outcomes) expect(outcome).toMatchObject({ status: 'fulfilled' });
+});
+
+test('an inactive Participation is refused by every Roadmap read', async ({ course }) => {
+  const offering = { courseOffering: { roadmap: { id: course.roadmapId } } };
+  await prisma.participation.updateMany({ where: offering, data: { isActive: false } });
+  const refusals = await Promise.allSettled([
+    ...roadmapReads(course),
+    downloadRoadmapResource({ ...student(course), resourceId: course.change.nodeId }),
+  ]);
+  for (const refusal of refusals)
+    expect(refusal).toMatchObject({
+      status: 'rejected',
+      reason: { status: 403, code: 'FORBIDDEN' },
+    });
+  // Reads only check the stored Participation; they never materialise one.
+  expect(await prisma.participation.count({ where: { ...offering, isActive: true } })).toBe(0);
 });
 
 test('delivery runs only after commit', async ({ course }) => {

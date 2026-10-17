@@ -1,7 +1,10 @@
 import 'server-only';
 import { Prisma, prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
-import type { RoadmapCapability } from '@/features/roadmap/domain/roadmap-capability';
+import {
+  participationGrants,
+  type RoadmapCapability,
+} from '@/features/roadmap/domain/roadmap-capability';
 import type { RoadmapChangePort } from '../change-port';
 import {
   changeRoadmap,
@@ -11,7 +14,7 @@ import {
   type RoadmapChangeOutcome,
   type RoadmapLock,
 } from './change';
-import { requireRoadmapCapability, roadmapNotFound } from './errors';
+import { forbidden, requireRoadmapCapability, roadmapNotFound } from './errors';
 
 /** Who asks, and for which Course offering's Roadmap. */
 export type RoadmapParticipant = Readonly<{
@@ -46,13 +49,13 @@ export type RoadmapCommand<Input, Parsed, Result> = Readonly<{
 }>;
 
 /**
- * Resolves the participant's Course offering, Roadmap and Participation and decides the
- * capability, without locking. A missing Course offering answers like a missing Roadmap.
+ * The participant's Course offering and stored Participation, without locking. A missing
+ * Course offering answers like a missing Roadmap. Nothing here synchronises with U-Campus:
+ * that happens only when a page is entered.
  */
-async function resolveParticipantRoadmap(
+async function resolveParticipant(
   transaction: Prisma.TransactionClient,
   { userId, identifier }: RoadmapParticipant,
-  capability: RoadmapCapability,
 ) {
   const courseOffering = await transaction.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
@@ -62,6 +65,16 @@ async function resolveParticipantRoadmap(
   const participation = await transaction.participation.findUnique({
     where: { userId_courseOfferingId: { userId, courseOfferingId: courseOffering.id } },
   });
+  return { courseOffering, participation };
+}
+
+/** Resolves the participant and decides the capability over an existing Roadmap. */
+async function resolveParticipantRoadmap(
+  transaction: Prisma.TransactionClient,
+  participant: RoadmapParticipant,
+  capability: RoadmapCapability,
+) {
+  const { courseOffering, participation } = await resolveParticipant(transaction, participant);
   const allowed = requireRoadmapCapability({
     capability,
     participation,
@@ -109,21 +122,57 @@ export function roadmapCommand<Input, Parsed, Result>(
   };
 }
 
+export type RoadmapReadContext<ReadRoadmap extends Roadmap | null = Roadmap> = Readonly<{
+  tx: Prisma.TransactionClient;
+  courseOffering: Awaited<ReturnType<typeof resolveParticipant>>['courseOffering'];
+  participation: Participation;
+  roadmap: ReadRoadmap;
+}>;
+
 /**
  * A participant's read of a Roadmap: the same resolution and capability decision as a
- * command, in one REPEATABLE READ snapshot and without a lock.
+ * command, over the stored Participation only, in one REPEATABLE READ snapshot and without
+ * a lock. A closed Roadmap stays readable.
  */
 export function roadmapRead<T>(
   participant: RoadmapParticipant,
   capability: RoadmapCapability,
-  read: (
-    context: Awaited<ReturnType<typeof resolveParticipantRoadmap>> & {
-      tx: Prisma.TransactionClient;
-    },
-  ) => Promise<T>,
+  read: (context: RoadmapReadContext) => Promise<T>,
+): Promise<T>;
+/** A read that also serves a Course offering whose Roadmap does not exist yet. */
+export function roadmapRead<T>(
+  participant: RoadmapParticipant,
+  capability: RoadmapCapability,
+  read: (context: RoadmapReadContext<Roadmap | null>) => Promise<T>,
+  options: { roadmap: 'optional' },
+): Promise<T>;
+export function roadmapRead<T>(
+  participant: RoadmapParticipant,
+  capability: RoadmapCapability,
+  read: (context: RoadmapReadContext) => Promise<T>,
+  options?: { roadmap: 'optional' },
 ): Promise<T> {
   return prisma.$transaction(
-    async (tx) => read({ tx, ...(await resolveParticipantRoadmap(tx, participant, capability)) }),
+    async (tx) => {
+      const { courseOffering, participation } = await resolveParticipant(tx, participant);
+      if (options && !courseOffering.roadmap) {
+        if (!participationGrants(participation, capability)) throw forbidden();
+        // Only the optional-Roadmap overload passes `options`, so its reader accepts null.
+        const readOffering = read as (context: RoadmapReadContext<Roadmap | null>) => Promise<T>;
+        return readOffering({ tx, courseOffering, participation, roadmap: null });
+      }
+      const allowed = requireRoadmapCapability({
+        capability,
+        participation,
+        roadmap: courseOffering.roadmap,
+      });
+      return read({
+        tx,
+        courseOffering,
+        participation: allowed.participation,
+        roadmap: allowed.roadmap,
+      });
+    },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
 }
