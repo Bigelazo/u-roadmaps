@@ -19,6 +19,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -360,9 +361,10 @@ export function RoadmapEntryNotifications({ children }: { children: ReactNode })
     (input: AcknowledgeInput) => acknowledgeOwn(input, true),
     [acknowledgeOwn],
   );
+  const acknowledgement = useMemo(() => ({ acknowledge, retry }), [acknowledge, retry]);
 
   return (
-    <NotificationAcknowledgementContext.Provider value={{ acknowledge, retry }}>
+    <NotificationAcknowledgementContext.Provider value={acknowledgement}>
       {children}
       <ChangeSummaryDialog summary={summary} close={() => setSummary(null)} />
     </NotificationAcknowledgementContext.Provider>
@@ -377,10 +379,12 @@ function NotificationInboxProvider({ children }: { children: ReactNode }) {
     setOpen(true);
   }, []);
   const resetFilter = useCallback(() => setFilter(undefined), []);
+  const inbox = useMemo(
+    () => ({ filter, openInbox, resetFilter, open, setOpen }),
+    [filter, openInbox, resetFilter, open],
+  );
   return (
-    <NotificationInboxContext.Provider value={{ filter, openInbox, resetFilter, open, setOpen }}>
-      {children}
-    </NotificationInboxContext.Provider>
+    <NotificationInboxContext.Provider value={inbox}>{children}</NotificationInboxContext.Provider>
   );
 }
 
