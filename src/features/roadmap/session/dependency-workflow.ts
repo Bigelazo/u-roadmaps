@@ -8,24 +8,16 @@ import {
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import type {
   AnyRoadmapDto,
+  DependencyImpact,
   RoadmapDependencyRequest,
-  TeacherBlockImpact,
 } from '@/features/roadmap/types';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 
 type DependencyCreationState =
   | { kind: 'idle' }
   | { kind: 'previewing'; request: RoadmapDependencyRequest }
-  | {
-      kind: 'awaiting-confirmation';
-      request: RoadmapDependencyRequest;
-      affectedNodes: TeacherBlockImpact[];
-    }
-  | {
-      kind: 'creating';
-      request: RoadmapDependencyRequest;
-      affectedNodes?: TeacherBlockImpact[];
-    };
+  | { kind: 'awaiting-confirmation'; request: RoadmapDependencyRequest; impact: DependencyImpact }
+  | { kind: 'creating'; request: RoadmapDependencyRequest; impact: DependencyImpact };
 
 type DependencyDeletionState =
   | { kind: 'idle' }
@@ -50,17 +42,9 @@ export type RoadmapDependencyWorkflow = {
 type DependencyWorkflowOptions = {
   roadmap: Pick<AnyRoadmapDto, 'nodes' | 'nodeTypes'> | null;
   previewRoadmapDependency: (
-    sourceNodeId: string,
-    targetNodeId: string,
-    sourceHandle?: string,
-    targetHandle?: string,
-  ) => Promise<TeacherBlockImpact[] | null>;
-  connectNodes: (
-    sourceNodeId: string,
-    targetNodeId: string,
-    sourceHandle?: string,
-    targetHandle?: string,
-  ) => Promise<boolean>;
+    dependency: RoadmapDependencyRequest,
+  ) => Promise<DependencyImpact | null>;
+  connectNodes: (dependency: RoadmapDependencyRequest, previewVersion?: string) => Promise<boolean>;
   deleteDependency: (dependencyId: string) => Promise<boolean>;
   onCreationSuccess: () => void;
   onDeletionSuccess: (deletedCount: number) => void;
@@ -90,13 +74,8 @@ export function useRoadmapDependencyWorkflow({
   }, []);
 
   const create = useCallback(
-    async (request: RoadmapDependencyRequest) => {
-      const succeeded = await connectNodes(
-        request.sourceNodeId,
-        request.targetNodeId,
-        request.sourceHandle,
-        request.targetHandle,
-      );
+    async (request: RoadmapDependencyRequest, impact: DependencyImpact) => {
+      const succeeded = await connectNodes(request, impact.version);
       if (succeeded) onCreationSuccess();
       return succeeded;
     },
@@ -108,23 +87,18 @@ export function useRoadmapDependencyWorkflow({
       if (creationStateRef.current.kind !== 'idle') return;
       transitionCreation({ kind: 'previewing', request });
       void (async () => {
-        const affectedNodes = await previewRoadmapDependency(
-          request.sourceNodeId,
-          request.targetNodeId,
-          request.sourceHandle,
-          request.targetHandle,
-        );
-        if (!affectedNodes) {
+        const impact = await previewRoadmapDependency(request);
+        if (!impact) {
           transitionCreation({ kind: 'idle' });
           return;
         }
-        if (affectedNodes.length > 0) {
-          transitionCreation({ kind: 'awaiting-confirmation', request, affectedNodes });
+        if (impact.nodes.length > 0) {
+          transitionCreation({ kind: 'awaiting-confirmation', request, impact });
           return;
         }
-        transitionCreation({ kind: 'creating', request });
+        transitionCreation({ kind: 'creating', request, impact });
         try {
-          await create(request);
+          await create(request, impact);
         } finally {
           transitionCreation({ kind: 'idle' });
         }
@@ -136,12 +110,8 @@ export function useRoadmapDependencyWorkflow({
   const confirmCreation = useCallback(() => {
     const state = creationStateRef.current;
     if (state.kind !== 'awaiting-confirmation') return;
-    transitionCreation({
-      kind: 'creating',
-      request: state.request,
-      affectedNodes: state.affectedNodes,
-    });
-    void create(state.request).then(
+    transitionCreation({ ...state, kind: 'creating' });
+    void create(state.request, state.impact).then(
       (succeeded) => transitionCreation(succeeded ? { kind: 'idle' } : state),
       () => transitionCreation(state),
     );
@@ -173,14 +143,13 @@ export function useRoadmapDependencyWorkflow({
     });
   }, [deleteDependency, onDeletionSuccess, transitionDeletion]);
 
-  const creationRequest =
-    creationState.kind === 'awaiting-confirmation' || creationState.kind === 'creating'
-      ? creationState.request
+  // Only a creation with impact is confirmed, so only it shows its dialog while creating.
+  const creationConfirmation =
+    creationState.kind !== 'idle' &&
+    creationState.kind !== 'previewing' &&
+    creationState.impact.nodes.length > 0
+      ? creationState
       : null;
-  const creationAffectedNodes =
-    creationState.kind === 'awaiting-confirmation' || creationState.kind === 'creating'
-      ? creationState.affectedNodes
-      : undefined;
 
   return {
     requestCreation,
@@ -188,12 +157,12 @@ export function useRoadmapDependencyWorkflow({
     isBusy: creationState.kind !== 'idle' || deletionState.kind !== 'idle',
     creationDialog: {
       confirmation:
-        creationRequest && creationAffectedNodes && roadmap
+        creationConfirmation && roadmap
           ? roadmapDependencyConfirmation({
               roadmap,
-              sourceNodeId: creationRequest.sourceNodeId,
-              targetNodeId: creationRequest.targetNodeId,
-              nodes: creationAffectedNodes,
+              sourceNodeId: creationConfirmation.request.sourceNodeId,
+              targetNodeId: creationConfirmation.request.targetNodeId,
+              nodes: creationConfirmation.impact.nodes,
             })
           : null,
       pendingActionId:

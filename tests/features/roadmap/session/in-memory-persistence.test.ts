@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import type { RoadmapDto } from '@/features/roadmap/types';
+import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 
 const input = {
   courseOffering: {
@@ -73,15 +74,15 @@ const roadmap = {
 test('sets a Node to the target visibility, as production does', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
-  await persistence.setVisibility!(input, 'selected', false);
-  await persistence.setVisibility!(input, 'selected', false);
+  await persistence.setVisibility(input, 'selected', false);
+  await persistence.setVisibility(input, 'selected', false);
   const hidden = await persistence.load(input);
   expect(hidden.nodes).toContainEqual(
     expect.objectContaining({ id: 'selected', isVisible: false, isTeacherBlocked: false }),
   );
   expect(hidden.dependencies).toEqual([]);
 
-  await persistence.setVisibility!(input, 'selected', true);
+  await persistence.setVisibility(input, 'selected', true);
   expect((await persistence.load(input)).nodes).toContainEqual(
     expect.objectContaining({ id: 'selected', isVisible: true }),
   );
@@ -91,7 +92,7 @@ test('models upstream Node unlock through the same Teacher block policy as produ
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
   await expect(
-    persistence.previewTeacherBlock!(input, 'selected', 'UNBLOCK'),
+    persistence.previewTeacherBlock(input, 'selected', 'UNBLOCK'),
   ).resolves.toMatchObject({
     mode: 'UPSTREAM',
     nodes: [
@@ -99,7 +100,8 @@ test('models upstream Node unlock through the same Teacher block policy as produ
       { id: 'selected', relation: 'SELECTED_NODE' },
     ],
   });
-  await persistence.changeTeacherBlock!(input, 'selected', 'UNBLOCK');
+  const { version } = await persistence.previewTeacherBlock(input, 'selected', 'UNBLOCK');
+  await persistence.changeTeacherBlock(input, 'selected', 'UNBLOCK', version);
 
   expect((await persistence.load(input)).nodes).toEqual(
     expect.arrayContaining([
@@ -119,7 +121,7 @@ test('models Branch unlock through the same Teacher block policy as production',
   });
 
   await expect(
-    persistence.previewTeacherBlock!(input, 'selected', 'BRANCH_UNLOCK'),
+    persistence.previewTeacherBlock(input, 'selected', 'BRANCH_UNLOCK'),
   ).resolves.toMatchObject({
     mode: 'BRANCH',
     nodes: [
@@ -128,7 +130,8 @@ test('models Branch unlock through the same Teacher block policy as production',
     ],
   });
 
-  await persistence.changeTeacherBlock!(input, 'selected', 'BRANCH_UNLOCK');
+  const { version } = await persistence.previewTeacherBlock(input, 'selected', 'BRANCH_UNLOCK');
+  await persistence.changeTeacherBlock(input, 'selected', 'BRANCH_UNLOCK', version);
   expect((await persistence.load(input)).nodes).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ id: 'prerequisite', isTeacherBlocked: false }),
@@ -141,7 +144,7 @@ test('models Branch unlock through the same Teacher block policy as production',
 test('rejects a Scheduled unlock that is not after today, as production does', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
-  await expect(persistence.scheduleTeacherUnlock!(input, 'selected', '2000-01-01')).rejects.toThrow(
+  await expect(persistence.scheduleTeacherUnlock(input, 'selected', '2000-01-01')).rejects.toThrow(
     'La fecha de desbloqueo debe ser posterior a hoy.',
   );
 });
@@ -161,5 +164,156 @@ test('rejects a student Completion of a blocked Node, as production does', async
         access: expect.objectContaining({ status: 'BLOCKED' }),
       }),
     ]),
+  );
+});
+
+const staleMessage = (impact: string) =>
+  `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`;
+
+const independent = {
+  id: 'independent',
+  title: 'Independiente',
+  description: null,
+  nodeTypeId: 'content',
+  positionX: 480,
+  positionY: 0,
+  isVisible: true,
+  isTeacherBlocked: false,
+  resources: [],
+} satisfies RoadmapDto['nodes'][number];
+
+test('versions each Change impact by its content, as production does', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence({
+    ...roadmap,
+    nodes: [...roadmap.nodes, independent],
+  });
+  const first = await persistence.previewNodeHiding(input, 'selected');
+
+  expect(await persistence.previewNodeHiding(input, 'selected')).toEqual(first);
+  expect((await persistence.previewNodeHiding(input, 'prerequisite')).version).not.toBe(
+    first.version,
+  );
+  await persistence.connectNodes(input, {
+    sourceNodeId: 'independent',
+    targetNodeId: 'selected',
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  });
+  expect((await persistence.previewNodeHiding(input, 'selected')).version).not.toBe(first.version);
+});
+
+test('rejects confirming a hide, a Dependency, a deletion or a Teacher block whose Change impact changed', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence({
+    ...roadmap,
+    nodes: [...roadmap.nodes, independent, { ...independent, id: 'later', title: 'Posterior' }],
+  });
+  const link = (sourceNodeId: string, targetNodeId: string) =>
+    ({ sourceNodeId, targetNodeId, sourceHandle: 'right', targetHandle: 'left' }) as const;
+  const hiding = await persistence.previewNodeHiding(input, 'dependent');
+  const dependency = await persistence.previewRoadmapDependency(
+    input,
+    link('selected', 'independent'),
+  );
+  const deletion = await persistence.previewNodeDeletion(input, 'prerequisite');
+  const unlock = await persistence.previewTeacherBlock(input, 'dependent', 'UNBLOCK');
+
+  // Another change lands before each confirmation.
+  await persistence.connectNodes(input, link('independent', 'later'));
+  await persistence.deleteDependency(input, 'prerequisite-selected');
+  await persistence.deleteDependency(input, 'selected-dependent');
+
+  await expect(
+    persistence.setVisibility(input, 'dependent', false, hiding.version),
+  ).rejects.toThrow(staleMessage('de ocultar el nodo'));
+  await expect(
+    persistence.connectNodes(input, link('selected', 'independent'), dependency.version),
+  ).rejects.toThrow(staleMessage('de la dependencia'));
+  await expect(persistence.deleteNode(input, 'prerequisite', deletion.version)).rejects.toThrow(
+    staleMessage('de la eliminación'),
+  );
+  await expect(
+    persistence.changeTeacherBlock(input, 'dependent', 'UNBLOCK', unlock.version),
+  ).rejects.toThrow(staleMessage('del desbloqueo'));
+  await expect(persistence.changeTeacherBlock(input, 'dependent', 'UNBLOCK')).rejects.toThrow(
+    staleMessage('del desbloqueo'),
+  );
+  expect(await persistence.load(input)).toMatchObject({
+    nodes: expect.arrayContaining([
+      expect.objectContaining({ id: 'prerequisite' }),
+      expect.objectContaining({ id: 'dependent', isVisible: true, isTeacherBlocked: true }),
+    ]),
+    dependencies: [expect.objectContaining({ sourceNodeId: 'independent', targetNodeId: 'later' })],
+  });
+
+  const current = await persistence.previewNodeDeletion(input, 'prerequisite');
+  await persistence.deleteNode(input, 'prerequisite', current.version);
+  expect((await persistence.load(input)).nodes.map(({ id }) => id)).not.toContain('prerequisite');
+});
+
+test('never reuses an identifier after a deletion', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence({ ...roadmap, dependencies: [] });
+  const node = { title: 'Nuevo', description: '', nodeTypeId: 'content', isVisible: true };
+  const nodeType = { name: 'Taller', icon: 'Shapes', color: '#024AD8' } as const;
+  const link = { title: 'Guía', url: 'https://example.test/guide', type: 'LINK' } as const;
+  const dependency = {
+    sourceNodeId: 'prerequisite',
+    targetNodeId: 'dependent',
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  } as const;
+  const created = async () => {
+    const roadmapNow = await persistence.load(input);
+    const nodeIds = roadmapNow.nodes.map(({ id }) => id);
+    return {
+      node: nodeIds.at(-1),
+      dependency: roadmapNow.dependencies.at(-1)?.id,
+      nodeType: roadmapNow.nodeTypes.at(-1)?.id,
+      resource: roadmapNow.nodes
+        .flatMap((candidate) => ('resources' in candidate ? candidate.resources : []))
+        .at(-1)?.id,
+    };
+  };
+  const createAll = async () => {
+    await persistence.addNode(input, node, { x: 0, y: 0 });
+    await persistence.connectNodes(input, dependency);
+    await persistence.addNodeType(input, nodeType);
+    await persistence.addResource(input, 'selected', link);
+    return created();
+  };
+  const deleteAll = async (ids: Awaited<ReturnType<typeof created>>) => {
+    await persistence.deleteNode(input, ids.node!);
+    await persistence.deleteDependency(input, ids.dependency!);
+    await persistence.deleteNodeType(input, ids.nodeType!);
+    await persistence.deleteResource(input, ids.resource!);
+  };
+
+  const first = await createAll();
+  await deleteAll(first);
+  const second = await createAll();
+
+  for (const kind of ['node', 'dependency', 'nodeType', 'resource'] as const) {
+    expect(second[kind]).toEqual(expect.any(String));
+    expect(second[kind]).not.toBe(first[kind]);
+  }
+});
+
+test('places created Nodes at its created-node position when it has one', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap, {
+    createdNodePosition: { x: 960, y: 360 },
+  });
+  const node = { title: 'Nuevo', description: '', nodeTypeId: 'content', isVisible: true };
+
+  const nodeId = await persistence.addNode(input, node, { x: 0, y: 0 });
+
+  expect((await persistence.load(input)).nodes).toContainEqual(
+    expect.objectContaining({ id: nodeId, positionX: 960, positionY: 360 }),
+  );
+});
+
+test('presents a Node whose Node type is missing with the shared unknown Node type', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence({ ...roadmap, nodeTypes: [] });
+
+  expect((await persistence.previewNodeDeletion(input, 'selected')).node.nodeType).toEqual(
+    unknownNodeType,
   );
 });

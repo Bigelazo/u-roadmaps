@@ -7,6 +7,7 @@ import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/sess
 import {
   PRACTICE_COURSE_CODE,
   PRACTICE_ROADMAP_TITLE,
+  practiceCreatedNodePosition,
   practiceExitHref,
   practiceNodeChangeCounts,
   practiceRoadmap,
@@ -46,7 +47,9 @@ export function PracticeRoadmapCanvas({
     reportingPracticeActions(
       createInMemoryRoadmapSessionPersistence(
         practiceRoadmap(term, today),
-        experience === 'student' ? { studentProgress: practiceStudentProgress } : {},
+        experience === 'student'
+          ? { studentProgress: practiceStudentProgress }
+          : { createdNodePosition: practiceCreatedNodePosition },
       ),
       actions.report,
     ),

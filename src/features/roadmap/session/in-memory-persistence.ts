@@ -1,5 +1,9 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
+import {
+  decidePreviewVersion,
+  type PreviewedChange,
+} from '@/features/roadmap/domain/change-impact';
 import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
 import { decideDependency } from '@/features/roadmap/domain/dependency';
 import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
@@ -8,15 +12,18 @@ import {
   decideScheduledUnlock,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
+import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
   AnyRoadmapDto,
+  DependencyImpact,
   NodeDeletionImpact,
+  NodeHidingImpact,
   Resource,
   RoadmapDependency,
+  RoadmapDependencyRequest,
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapDto,
-  TeacherBlockImpact,
   TeacherBlockOperation,
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
@@ -96,15 +103,19 @@ function resourceUpdate(
   } as AnyRoadmapDto;
 }
 
-function newResourceId(roadmap: AnyRoadmapDto) {
-  const ids = new Set(roadmap.nodes.flatMap(nodeResources).map((resource) => resource.id));
-  let index = ids.size + 1;
-  while (ids.has(`resource-${index}`)) index += 1;
-  return `resource-${index}`;
+/** A Change impact with a version derived from its content, as the server derives its own. */
+function versioned<Impact extends object>(impact: Impact) {
+  return { ...impact, version: JSON.stringify(impact) };
 }
 
-function dependencyId(roadmap: AnyRoadmapDto) {
-  return `dependency-${roadmap.dependencies.length + 1}`;
+/** Rejects a confirmation whose sent preview version no longer matches the current impact. */
+function rejectStalePreview(
+  change: PreviewedChange,
+  sentVersion: string | undefined,
+  { version }: { version: string },
+) {
+  const decision = decidePreviewVersion({ change, sentVersion, version });
+  if (decision.kind === 'REJECTED') throw new Error(decision.message);
 }
 
 function teachingNodes(roadmap: AnyRoadmapDto) {
@@ -113,9 +124,8 @@ function teachingNodes(roadmap: AnyRoadmapDto) {
 
 function dependencyImpact(
   roadmap: AnyRoadmapDto,
-  sourceNodeId: string,
-  targetNodeId: string,
-): TeacherBlockImpact[] {
+  { sourceNodeId, targetNodeId }: RoadmapDependencyRequest,
+): DependencyImpact {
   const decision = decideDependency({
     nodes: teachingNodes(roadmap),
     dependencies: roadmap.dependencies,
@@ -123,13 +133,45 @@ function dependencyImpact(
     targetNodeId,
   });
   if (decision.kind === 'REJECTED') throw new Error(decision.message);
-  return decision.teacherBlockedNodes;
+  return versioned({ nodes: decision.teacherBlockedNodes });
+}
+
+function hidingImpact(roadmap: AnyRoadmapDto, nodeId: string): NodeHidingImpact {
+  return versioned({
+    dependencies: decideVisibilityChange({
+      nodeId,
+      isVisible: false,
+      dependencies: roadmap.dependencies,
+    }).removedDependencies.map(({ id, sourceNodeId, targetNodeId }) => ({
+      id,
+      sourceNodeId,
+      targetNodeId,
+    })),
+  });
 }
 
 function nodeTypeFor(roadmap: AnyRoadmapDto, nodeId: string) {
   const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
   const nodeType = roadmap.nodeTypes.find((candidate) => candidate.id === node?.nodeTypeId);
-  return nodeType ?? { name: 'Sin tipo', icon: 'Shapes', color: '#000000' };
+  return nodeType ?? unknownNodeType;
+}
+
+function deletionImpact(roadmap: AnyRoadmapDto, nodeId: string): NodeDeletionImpact {
+  const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
+  const { name, icon, color } = nodeTypeFor(roadmap, nodeId);
+  const titleOf = (id: string) =>
+    roadmap.nodes.find((candidate) => candidate.id === id)?.title ?? '';
+  return versioned({
+    node: { title: node?.title ?? '', nodeType: { name, icon, color } },
+    dependencies: incidentDependencies(roadmap, nodeId).map(
+      ({ id, sourceNodeId, targetNodeId }) => ({
+        id,
+        sourceTitle: titleOf(sourceNodeId),
+        targetTitle: titleOf(targetNodeId),
+      }),
+    ),
+    resources: (node ? nodeResources(node) : []).map(({ id, title }) => ({ id, title })),
+  });
 }
 
 function teacherBlockDecision(
@@ -155,7 +197,7 @@ function teacherBlockPreview(
 ): TeacherBlockPreview {
   const decision = teacherBlockDecision(roadmap, nodeId, operation);
   if (decision.kind === 'REJECTED') throw new Error(decision.message);
-  return { ...decision, version: 'in-memory-preview' };
+  return versioned({ mode: decision.mode, nodes: decision.nodes });
 }
 
 export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
@@ -163,18 +205,18 @@ export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
 /**
  * A Roadmap canvas persistence held in memory that follows the server's Roadmap rules.
  * Seeded with a teaching Roadmap and `studentProgress`, it serves that student's view
- * of the Roadmap and records their Completions locally.
+ * of the Roadmap and records their Completions locally. With `createdNodePosition`, every
+ * created Node lands there instead of where it was asked to go.
  */
 export function createInMemoryRoadmapSessionPersistence(
   initialRoadmap: AnyRoadmapDto,
-  options: { studentProgress?: InMemoryStudentProgress } = {},
+  options: { studentProgress?: InMemoryStudentProgress; createdNodePosition?: Point } = {},
 ): RoadmapCanvasSessionPersistence {
   let roadmap = copy(initialRoadmap);
   const studentCompletions = options.studentProgress
     ? new Set(options.studentProgress.completedNodeIds)
     : null;
   let simulatedCompletions = new Set<string>();
-  let nextNodeNumber = roadmap.nodes.length + 1;
 
   const mutateNode = (nodeId: string, update: (node: AnyRoadmapNode) => AnyRoadmapNode) => {
     roadmap = replaceRoadmapNode(roadmap, nodeId, update);
@@ -210,8 +252,9 @@ export function createInMemoryRoadmapSessionPersistence(
       return asStudentRoadmap(roadmap, simulatedCompletions);
     },
 
-    async addNode(_input: RoadmapCanvasSessionInput, node: NewRoadmapNode, position: Point) {
-      const id = `node-${nextNodeNumber++}`;
+    async addNode(_input: RoadmapCanvasSessionInput, node: NewRoadmapNode, requested: Point) {
+      const id = crypto.randomUUID();
+      const position = options.createdNodePosition ?? requested;
       const created: RoadmapNode = {
         id,
         title: node.title,
@@ -252,34 +295,34 @@ export function createInMemoryRoadmapSessionPersistence(
       );
     },
 
+    async previewRoadmapDependency(_input, request) {
+      return dependencyImpact(roadmap, request);
+    },
+
     async connectNodes(
       _input: RoadmapCanvasSessionInput,
-      sourceNodeId: string,
-      targetNodeId: string,
-      sourceHandle = 'right',
-      targetHandle = 'left',
+      request: RoadmapDependencyRequest,
+      previewVersion?: string,
     ) {
-      const affectedNodes = dependencyImpact(roadmap, sourceNodeId, targetNodeId);
+      const impact = dependencyImpact(roadmap, request);
+      rejectStalePreview('dependency', previewVersion, impact);
+      const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = request;
       const dependency: RoadmapDependency = {
-        id: dependencyId(roadmap),
+        id: crypto.randomUUID(),
         sourceNodeId,
         targetNodeId,
-        sourceHandle: sourceHandle as RoadmapDependency['sourceHandle'],
-        targetHandle: targetHandle as RoadmapDependency['targetHandle'],
+        sourceHandle,
+        targetHandle,
       };
       roadmap = {
         ...roadmap,
         dependencies: [...roadmap.dependencies, dependency],
         nodes: roadmap.nodes.map((node) =>
-          affectedNodes.some(({ id }) => id === node.id) && 'isTeacherBlocked' in node
+          impact.nodes.some(({ id }) => id === node.id) && 'isTeacherBlocked' in node
             ? { ...node, isTeacherBlocked: true }
             : node,
         ),
       } as AnyRoadmapDto;
-    },
-
-    async previewRoadmapDependency(_input, sourceNodeId, targetNodeId) {
-      return dependencyImpact(roadmap, sourceNodeId, targetNodeId);
     },
 
     async previewTeacherBlock(
@@ -294,8 +337,10 @@ export function createInMemoryRoadmapSessionPersistence(
       _input: RoadmapCanvasSessionInput,
       nodeId: string,
       operation: TeacherBlockOperation,
+      previewVersion?: string,
     ) {
       const preview = teacherBlockPreview(roadmap, nodeId, operation);
+      rejectStalePreview(operation === 'BLOCK' ? 'block' : 'unlock', previewVersion, preview);
       const changedNodeIds = new Set(preview.nodes.map((node) => node.id));
       roadmap = {
         ...roadmap,
@@ -335,7 +380,17 @@ export function createInMemoryRoadmapSessionPersistence(
       };
     },
 
-    async setVisibility(_input: RoadmapCanvasSessionInput, nodeId: string, visible: boolean) {
+    async previewNodeHiding(_input: RoadmapCanvasSessionInput, nodeId: string) {
+      return hidingImpact(roadmap, nodeId);
+    },
+
+    async setVisibility(
+      _input: RoadmapCanvasSessionInput,
+      nodeId: string,
+      visible: boolean,
+      previewVersion?: string,
+    ) {
+      if (!visible) rejectStalePreview('hide', previewVersion, hidingImpact(roadmap, nodeId));
       const change = decideVisibilityChange({
         nodeId,
         isVisible: visible,
@@ -359,38 +414,12 @@ export function createInMemoryRoadmapSessionPersistence(
       };
     },
 
-    async previewNodeVisibility(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      return decideVisibilityChange({
-        nodeId,
-        isVisible: false,
-        dependencies: roadmap.dependencies,
-      }).removedDependencies.map(({ id, sourceNodeId, targetNodeId }) => ({
-        id,
-        sourceNodeId,
-        targetNodeId,
-      }));
-    },
-
     async previewNodeDeletion(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
-      const nodeType = nodeTypeFor(roadmap, nodeId);
-      const titleOf = (id: string) =>
-        roadmap.nodes.find((candidate) => candidate.id === id)?.title ?? '';
-      return {
-        node: { title: node?.title ?? '', nodeType },
-        dependencies: incidentDependencies(roadmap, nodeId).map(
-          ({ id, sourceNodeId, targetNodeId }) => ({
-            id,
-            sourceTitle: titleOf(sourceNodeId),
-            targetTitle: titleOf(targetNodeId),
-          }),
-        ),
-        resources: (node ? nodeResources(node) : []).map(({ id, title }) => ({ id, title })),
-        version: 'in-memory-preview',
-      } satisfies NodeDeletionImpact;
+      return deletionImpact(roadmap, nodeId);
     },
 
-    async deleteNode(_input: RoadmapCanvasSessionInput, nodeId: string) {
+    async deleteNode(_input: RoadmapCanvasSessionInput, nodeId: string, previewVersion?: string) {
+      rejectStalePreview('delete', previewVersion, deletionImpact(roadmap, nodeId));
       roadmap = {
         ...roadmap,
         nodes: roadmap.nodes.filter(({ id }) => id !== nodeId),
@@ -401,12 +430,12 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async addResource(_input: RoadmapCanvasSessionInput, nodeId: string, resource: ResourceInput) {
-      appendResource(nodeId, { ...resource, id: newResourceId(roadmap) });
+      appendResource(nodeId, { ...resource, id: crypto.randomUUID() });
     },
 
     async uploadResource(_input: RoadmapCanvasSessionInput, nodeId: string, file: File) {
       appendResource(nodeId, {
-        id: newResourceId(roadmap),
+        id: crypto.randomUUID(),
         title: file.name,
         url: file.name,
         type: 'FILE',
@@ -426,7 +455,7 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async addNodeType(_input: RoadmapCanvasSessionInput, nodeType: RoadmapNodeTypeInput) {
-      const id = `custom-${roadmap.nodeTypes.length + 1}`;
+      const id = crypto.randomUUID();
       roadmap = {
         ...roadmap,
         nodeTypes: [...roadmap.nodeTypes, { ...nodeType, id, isPredefined: false }],

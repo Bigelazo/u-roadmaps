@@ -1,4 +1,3 @@
-import { practiceCreatedNodePosition } from './practice-roadmap';
 import type {
   PracticeCanvasAction,
   RoadmapCanvasSessionPersistence,
@@ -22,34 +21,24 @@ export function reportingPracticeActions(
     loadSimulation,
     completeSimulatedNode,
   } = persistence;
-  if (
-    !addNode ||
-    !connectNodes ||
-    !changeTeacherBlock ||
-    !setVisibility ||
-    !addResource ||
-    !deleteNode ||
-    !loadSimulation ||
-    !completeSimulatedNode
-  )
-    return persistence;
   return {
     ...persistence,
-    async addNode(input, node) {
-      const nodeId = await addNode(input, node, practiceCreatedNodePosition);
+    async addNode(input, ...rest) {
+      const nodeId = await addNode(input, ...rest);
       if (nodeId) report({ type: 'addNode', nodeId });
       return nodeId;
     },
-    async connectNodes(input, sourceNodeId, targetNodeId, ...rest) {
-      await connectNodes(input, sourceNodeId, targetNodeId, ...rest);
+    async connectNodes(input, dependency, ...rest) {
+      await connectNodes(input, dependency, ...rest);
+      const { sourceNodeId, targetNodeId } = dependency;
       report({ type: 'connectNodes', sourceNodeId, targetNodeId });
     },
     async changeTeacherBlock(input, nodeId, operation, ...rest) {
       await changeTeacherBlock(input, nodeId, operation, ...rest);
       report({ type: 'changeTeacherBlock', nodeId, operation });
     },
-    async setVisibility(input, nodeId, visible) {
-      await setVisibility(input, nodeId, visible);
+    async setVisibility(input, nodeId, visible, ...rest) {
+      await setVisibility(input, nodeId, visible, ...rest);
       report({ type: 'changeVisibility', nodeId, isVisible: visible });
     },
     async addResource(input, nodeId, ...rest) {

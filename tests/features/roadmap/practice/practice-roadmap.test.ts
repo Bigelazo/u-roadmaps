@@ -40,8 +40,8 @@ it('advances "Oculta un nodo" when the Practice roadmap hides the Node, not when
     experience: { kind: 'teaching' as const, term: 'current' as const },
   };
 
-  await persistence.setVisibility!(input, practiceNodeIds.g, true);
-  await persistence.setVisibility!(input, practiceNodeIds.g, false);
+  await persistence.setVisibility(input, practiceNodeIds.g, true);
+  await persistence.setVisibility(input, practiceNodeIds.g, false);
 
   expect(reported.map((action) => hideStep.advanceWhen?.(action) ?? false)).toEqual([false, true]);
 });

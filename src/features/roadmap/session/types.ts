@@ -3,9 +3,11 @@ import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type
 import type {
   AnyRoadmapDto,
   CourseOfferingIdentifier,
+  DependencyImpact,
   NodeDeletionImpact,
+  NodeHidingImpact,
+  RoadmapDependencyRequest,
   StudentRoadmapDto,
-  TeacherBlockImpact,
   TeacherBlockOperation,
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
@@ -25,84 +27,89 @@ export type RoadmapNodeTypeInput = {
   color: NodeTypeColor;
 };
 
+/**
+ * Everything the Roadmap canvas session reads and writes. Both adapters (HTTP and the
+ * in-memory Practice roadmap) implement every operation. A previewed change accepts the
+ * version of the Change impact it confirms, so a changed impact is rejected.
+ */
 export type RoadmapCanvasSessionPersistence = {
   load(input: RoadmapCanvasSessionInput): Promise<AnyRoadmapDto>;
   complete(input: RoadmapCanvasSessionInput, nodeId: string): Promise<void>;
-  loadSimulation?(input: RoadmapCanvasSessionInput): Promise<StudentRoadmapDto>;
-  addNode?(
+  loadSimulation(input: RoadmapCanvasSessionInput): Promise<StudentRoadmapDto>;
+  addNode(
     input: RoadmapCanvasSessionInput,
     node: NewRoadmapNode,
     position: Point,
   ): Promise<string | void>;
-  updateNode?(input: RoadmapCanvasSessionInput, nodeId: string, node: NodeUpdate): Promise<void>;
-  moveNode?(input: RoadmapCanvasSessionInput, nodeId: string, position: Point): Promise<void>;
-  connectNodes?(
+  updateNode(input: RoadmapCanvasSessionInput, nodeId: string, node: NodeUpdate): Promise<void>;
+  moveNode(input: RoadmapCanvasSessionInput, nodeId: string, position: Point): Promise<void>;
+  previewRoadmapDependency(
     input: RoadmapCanvasSessionInput,
-    sourceNodeId: string,
-    targetNodeId: string,
-    sourceHandle?: string,
-    targetHandle?: string,
+    dependency: RoadmapDependencyRequest,
+  ): Promise<DependencyImpact>;
+  connectNodes(
+    input: RoadmapCanvasSessionInput,
+    dependency: RoadmapDependencyRequest,
+    previewVersion?: string,
   ): Promise<void>;
-  previewRoadmapDependency?(
-    input: RoadmapCanvasSessionInput,
-    sourceNodeId: string,
-    targetNodeId: string,
-    sourceHandle?: string,
-    targetHandle?: string,
-  ): Promise<TeacherBlockImpact[]>;
-  previewTeacherBlock?(
+  deleteDependency(input: RoadmapCanvasSessionInput, dependencyId: string): Promise<void>;
+  previewTeacherBlock(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
     operation: TeacherBlockOperation,
   ): Promise<TeacherBlockPreview>;
-  changeTeacherBlock?(
+  changeTeacherBlock(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
     operation: TeacherBlockOperation,
     previewVersion?: string,
   ): Promise<void>;
-  scheduleTeacherUnlock?(
+  scheduleTeacherUnlock(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
     unlockOn: string | null,
   ): Promise<void>;
-  deleteDependency?(input: RoadmapCanvasSessionInput, dependencyId: string): Promise<void>;
-  /** Shows (`visible`) or hides the Node: the target visibility, never the current one. */
-  setVisibility?(input: RoadmapCanvasSessionInput, nodeId: string, visible: boolean): Promise<void>;
-  previewNodeVisibility?(
+  previewNodeHiding(input: RoadmapCanvasSessionInput, nodeId: string): Promise<NodeHidingImpact>;
+  /**
+   * Shows (`visible`) or hides the Node: the target visibility, never the current one.
+   * Hiding sends the version of its previewed Change impact.
+   */
+  setVisibility(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
-  ): Promise<{ id: string; sourceNodeId: string; targetNodeId: string }[]>;
-  previewNodeDeletion?(
+    visible: boolean,
+    previewVersion?: string,
+  ): Promise<void>;
+  previewNodeDeletion(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
   ): Promise<NodeDeletionImpact>;
-  deleteNode?(
+  deleteNode(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
     previewVersion?: string,
   ): Promise<void>;
-  addResource?(
+  addResource(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
     resource: NewRoadmapResource,
   ): Promise<void>;
-  uploadResource?(input: RoadmapCanvasSessionInput, nodeId: string, file: File): Promise<void>;
-  updateResource?(
+  uploadResource(input: RoadmapCanvasSessionInput, nodeId: string, file: File): Promise<void>;
+  updateResource(
     input: RoadmapCanvasSessionInput,
     resourceId: string,
     resource: NewRoadmapResource,
   ): Promise<void>;
-  deleteResource?(input: RoadmapCanvasSessionInput, resourceId: string): Promise<void>;
-  addNodeType?(input: RoadmapCanvasSessionInput, nodeType: RoadmapNodeTypeInput): Promise<void>;
-  updateNodeType?(
+  deleteResource(input: RoadmapCanvasSessionInput, resourceId: string): Promise<void>;
+  addNodeType(input: RoadmapCanvasSessionInput, nodeType: RoadmapNodeTypeInput): Promise<void>;
+  updateNodeType(
     input: RoadmapCanvasSessionInput,
     nodeTypeId: string,
     nodeType: RoadmapNodeTypeInput,
   ): Promise<void>;
-  deleteNodeType?(input: RoadmapCanvasSessionInput, nodeTypeId: string): Promise<void>;
-  completeSimulatedNode?(input: RoadmapCanvasSessionInput, nodeId: string): Promise<void>;
-  resetSimulation?(input: RoadmapCanvasSessionInput): Promise<void>;
+  deleteNodeType(input: RoadmapCanvasSessionInput, nodeTypeId: string): Promise<void>;
+  completeSimulatedNode(input: RoadmapCanvasSessionInput, nodeId: string): Promise<void>;
+  resetSimulation(input: RoadmapCanvasSessionInput): Promise<void>;
 };
 
 export type RoadmapCanvasExperience =
