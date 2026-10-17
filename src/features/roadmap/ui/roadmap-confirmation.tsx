@@ -479,6 +479,31 @@ export function canvasConfirmation(
     }
     case 'delete-node':
       return pending.impact ? nodeDeletionConfirmation(pending.impact) : null;
+    case 'change-teacher-block': {
+      const { request, impact } = pending;
+      const preview = impact?.[request.operation];
+      return preview
+        ? roadmapTeacherBlockConfirmation({
+            roadmap,
+            nodeId: request.nodeId,
+            preview,
+            individualPreview: impact?.UNBLOCK,
+            branchPreview: impact?.BRANCH_UNLOCK,
+          })
+        : null;
+    }
+    case 'create-dependency':
+      // A creation without Change impact applies at once, so it has nothing to confirm.
+      return pending.impact?.nodes.length
+        ? roadmapDependencyConfirmation({
+            roadmap,
+            sourceNodeId: pending.request.sourceNodeId,
+            targetNodeId: pending.request.targetNodeId,
+            nodes: pending.impact.nodes,
+          })
+        : null;
+    case 'delete-dependencies':
+      return roadmapDependencyDeletionConfirmation(pending.request.dependencyIds);
   }
 }
 

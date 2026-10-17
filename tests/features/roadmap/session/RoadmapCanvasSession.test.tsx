@@ -274,26 +274,6 @@ const teacherBlockedRoadmap: RoadmapDto = {
   nodes: [{ ...limitsNode, isTeacherBlocked: true }, derivativesNode],
 };
 
-const twoDependenciesRoadmap: RoadmapDto = {
-  ...teacherBlockedRoadmap,
-  dependencies: [
-    {
-      id: 'dependency-1',
-      sourceNodeId: 'node-1',
-      targetNodeId: 'node-2',
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    },
-    {
-      id: 'dependency-2',
-      sourceNodeId: 'node-2',
-      targetNodeId: 'node-1',
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    },
-  ],
-};
-
 function courseInput(courseCode = 'CC1001', title = 'Programación I') {
   return { identifier: { courseCode, year: 2026, semester: 2 }, title };
 }
@@ -668,7 +648,7 @@ describe('RoadmapCanvasSession', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Límites' }));
     const deleteNodeButton = screen.getByRole('button', { name: 'Eliminar nodo' });
-    const blockButton = screen.getByRole('button', { name: 'Bloquear nodo' });
+    const layoutButton = screen.getByRole('button', { name: 'Solicitar ordenamiento' });
     await user.click(screen.getByRole('button', { name: 'Ocultar para estudiantes' }));
     const visibilityDialog = await screen.findByRole('alertdialog', {
       name: '¿Ocultar “Límites”?',
@@ -676,7 +656,7 @@ describe('RoadmapCanvasSession', () => {
 
     // Neither another Confirmed action nor a confirmation the view coordinates can open beside it.
     fireEvent.click(deleteNodeButton);
-    fireEvent.click(blockButton);
+    fireEvent.click(layoutButton);
     await act(() => Promise.resolve());
     expect(screen.getAllByRole('alertdialog')).toEqual([visibilityDialog]);
 
@@ -700,25 +680,7 @@ describe('RoadmapCanvasSession', () => {
     await waitFor(async () => expect((await persistence.load(teachingInput)).nodes).toEqual([]));
   });
 
-  test('refuses an impacted Dependency creation whose Change impact changed after its confirmation opened', async () => {
-    const user = userEvent.setup();
-    const persistence = createInMemoryRoadmapSessionPersistence(teacherBlockedRoadmap);
-    renderSession(persistence);
-
-    await user.click(await screen.findByRole('button', { name: 'Crear dependencia' }));
-    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar bloqueo' });
-    await persistence.changeTeacherBlock(teachingInput, 'node-2', 'BLOCK');
-    await user.click(within(dialog).getByRole('button', { name: 'Conectar y bloquear' }));
-
-    expect(
-      await findToast(
-        'El impacto de la dependencia cambió. Revisa y confirma la previsualización actualizada.',
-      ),
-    ).toBeTruthy();
-    expect((await persistence.load(teachingInput)).dependencies).toEqual([]);
-  });
-
-  test('routes Teacher block through the public session workflow', async () => {
+  test('routes Teacher block through the public session', async () => {
     const user = userEvent.setup();
     const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
     renderSession(persistence);
@@ -750,38 +712,6 @@ describe('RoadmapCanvasSession', () => {
     expect((await persistence.load(teachingInput)).nodes).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: 'node-2', isTeacherBlocked: true })]),
     );
-  });
-
-  test('retries only failed Dependency deletions through the public session', async () => {
-    const user = userEvent.setup();
-    const memory = createInMemoryRoadmapSessionPersistence(twoDependenciesRoadmap);
-    let shouldFail = true;
-    renderSession({
-      ...memory,
-      async deleteDependency(...args: Parameters<NonNullable<typeof memory.deleteDependency>>) {
-        if (args[1] === 'dependency-2' && shouldFail) {
-          shouldFail = false;
-          throw new Error('No se pudo eliminar la dependencia.');
-        }
-        return memory.deleteDependency!(...args);
-      },
-    });
-
-    await user.click(await screen.findByRole('button', { name: 'Eliminar dependencias' }));
-    await user.click(
-      within(await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' })).getByRole(
-        'button',
-        { name: 'Eliminar' },
-      ),
-    );
-    const retryDialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
-    expect(retryDialog.textContent).toContain('esta dependencia');
-    expect((await memory.load(teachingInput)).dependencies).toEqual([
-      expect.objectContaining({ id: 'dependency-2' }),
-    ]);
-
-    await user.click(within(retryDialog).getByRole('button', { name: 'Eliminar' }));
-    await waitFor(async () => expect((await memory.load(teachingInput)).dependencies).toEqual([]));
   });
 });
 

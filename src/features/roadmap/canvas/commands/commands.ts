@@ -1,9 +1,11 @@
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type {
+  DependencyImpact,
   NodeDeletionImpact,
   NodeHidingImpact,
   RoadmapDependencyRequest,
   TeacherBlockOperation,
+  TeacherBlockPreview,
 } from '@/features/roadmap/types';
 
 export type RoadmapNodePosition = {
@@ -67,11 +69,23 @@ export const roadmapConfirmationActionIds = {
   discardEditorDraft: 'discard-draft',
 } as const;
 
+/**
+ * The Teacher block previews a confirmation offers, by operation: blocking previews BLOCK
+ * alone, and an unlock previews both scopes so teaching staff can unlock only the Node or
+ * also its dependents.
+ */
+export type TeacherBlockChangeImpact = {
+  readonly [Operation in TeacherBlockOperation]?: TeacherBlockPreview;
+};
+
 /** The Change impact each Confirmed action shows; `null` when it has none to preview. */
 export type ChangeImpactOf = {
   'hide-node': NodeHidingImpact;
   'show-node': null;
   'delete-node': NodeDeletionImpact;
+  'change-teacher-block': TeacherBlockChangeImpact;
+  'create-dependency': DependencyImpact;
+  'delete-dependencies': null;
 };
 
 /** Canvas commands that take effect only after teaching staff confirm them. */

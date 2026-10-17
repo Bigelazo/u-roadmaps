@@ -10,23 +10,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import {
-  useRoadmapDependencyWorkflow,
-  type RoadmapDependencyWorkflow,
-} from '@/features/roadmap/session/dependency-workflow';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
 import { useCanvasCommands } from '@/features/roadmap/canvas/commands/use-canvas-commands';
-import { useTeacherBlockWorkflow } from '@/features/roadmap/canvas/teacher-block-workflow';
-import { notify } from '@/shared/ui/notify';
 import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
-import type {
-  AnyRoadmapDto,
-  DependencyImpact,
-  RoadmapDependencyRequest,
-  StudentRoadmapDto,
-  TeacherBlockOperation,
-  TeacherBlockPreview,
-} from '@/features/roadmap/types';
+import type { AnyRoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { Point } from '@/features/roadmap/graph/geometry';
 import type { NodeEditorHandle, NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
 import type {
@@ -51,7 +38,7 @@ function messageFor(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
-/** The persistence operations the session binds to its input as plain mutations or previews. */
+/** The persistence operations the session binds to its input as plain mutations. */
 type BoundOperation = Exclude<
   keyof RoadmapCanvasSessionPersistence,
   'load' | 'complete' | 'loadSimulation' | 'addNode' | 'completeSimulatedNode' | 'resetSimulation'
@@ -91,21 +78,7 @@ type InjectedSessionResult = {
   ) => Promise<boolean>;
   updateNode: (nodeId: string, node: NodeUpdate) => Promise<boolean>;
   moveNode: (nodeId: string, position: Point) => Promise<boolean>;
-  connectNodes: (dependency: RoadmapDependencyRequest, previewVersion?: string) => Promise<boolean>;
-  previewRoadmapDependency: (
-    dependency: RoadmapDependencyRequest,
-  ) => Promise<DependencyImpact | null>;
-  previewTeacherBlock: (
-    nodeId: string,
-    operation: TeacherBlockOperation,
-  ) => Promise<TeacherBlockPreview | null>;
-  changeTeacherBlock: (
-    nodeId: string,
-    operation: TeacherBlockOperation,
-    previewVersion?: string,
-  ) => Promise<boolean>;
   scheduleTeacherUnlock: (nodeId: string, unlockOn: string | null) => Promise<boolean>;
-  deleteDependency: (dependencyId: string) => Promise<boolean>;
   addResource: (nodeId: string, resource: ResourceInput) => Promise<boolean>;
   uploadResource: (nodeId: string, file: File) => Promise<boolean>;
   updateResource: (resourceId: string, resource: ResourceInput) => Promise<boolean>;
@@ -119,9 +92,7 @@ type InjectedSessionResult = {
 };
 
 type RoadmapCanvasSessionWorkflows = {
-  dependencyWorkflow: RoadmapDependencyWorkflow;
   canvasPreviewWorkflow: ReturnType<typeof useCanvasPreviewWorkflow>;
-  teacherBlockWorkflow: ReturnType<typeof useTeacherBlockWorkflow>;
   canvasCommands: ReturnType<typeof useCanvasCommands>;
 };
 
@@ -419,31 +390,13 @@ function useInjectedSession(
       <K extends BoundOperation>(name: K, fallback: string) =>
       async (...args: OperationArgs<K>) =>
         (await mutate(() => run(name, args), fallback)).success;
-    const bindPreview =
-      <K extends BoundOperation>(name: K, fallback: string) =>
-      (...args: OperationArgs<K>) =>
-        preview(() => run(name, args), fallback);
     return {
       updateNode: bindMutation('updateNode', 'No se pudo guardar el nodo.'),
       moveNode: bindMutation('moveNode', 'No se pudo guardar la posición.'),
-      connectNodes: bindMutation('connectNodes', 'No se pudo crear la dependencia.'),
-      previewRoadmapDependency: bindPreview(
-        'previewRoadmapDependency',
-        'No se pudo calcular el impacto de la dependencia.',
-      ),
-      previewTeacherBlock: bindPreview(
-        'previewTeacherBlock',
-        'No se pudo calcular el impacto del bloqueo docente.',
-      ),
-      changeTeacherBlock: bindMutation(
-        'changeTeacherBlock',
-        'No se pudo cambiar el bloqueo docente.',
-      ),
       scheduleTeacherUnlock: bindMutation(
         'scheduleTeacherUnlock',
         'No se pudo programar el desbloqueo.',
       ),
-      deleteDependency: bindMutation('deleteDependency', 'No se pudo eliminar la dependencia.'),
       addResource: bindMutation('addResource', 'No se pudo agregar el recurso.'),
       uploadResource: bindMutation('uploadResource', 'No se pudo subir el archivo.'),
       updateResource: bindMutation('updateResource', 'No se pudo guardar el recurso.'),
@@ -452,7 +405,7 @@ function useInjectedSession(
       updateNodeType: bindMutation('updateNodeType', 'No se pudo guardar el tipo de nodo.'),
       deleteNodeType: bindMutation('deleteNodeType', 'No se pudo eliminar el tipo de nodo.'),
     };
-  }, [mutate, persistence, preview, stableInput]);
+  }, [mutate, persistence, stableInput]);
 
   const completeNode = useCallback(
     async (nodeId: string) =>
@@ -533,24 +486,6 @@ export function useRoadmapCanvasSession(
   useEffect(() => {
     if (canvasPreviewWorkflow.isActive && canonicalRoadmap) void reloadPreview();
   }, [canonicalRoadmap, reloadPreview, canvasPreviewWorkflow.isActive]);
-  const dependencyWorkflow = useRoadmapDependencyWorkflow({
-    roadmap: active.roadmap,
-    previewRoadmapDependency: active.previewRoadmapDependency,
-    connectNodes: active.connectNodes,
-    deleteDependency: active.deleteDependency,
-    onCreationSuccess: () => notify.success('Dependencia creada exitosamente.'),
-    onDeletionSuccess: (deletedCount) =>
-      notify.success(
-        deletedCount === 1
-          ? 'Dependencia eliminada exitosamente.'
-          : 'Dependencias eliminadas exitosamente.',
-      ),
-  });
-  const teacherBlockWorkflow = useTeacherBlockWorkflow({
-    roadmap: active.roadmap,
-    previewTeacherBlock: active.previewTeacherBlock,
-    changeTeacherBlock: active.changeTeacherBlock,
-  });
   const canvasCommands = useCanvasCommands({
     session: active,
     guardDraft,
@@ -561,8 +496,6 @@ export function useRoadmapCanvasSession(
   return {
     ...active,
     canvasPreviewWorkflow,
-    dependencyWorkflow,
-    teacherBlockWorkflow,
     canvasCommands,
   };
 }

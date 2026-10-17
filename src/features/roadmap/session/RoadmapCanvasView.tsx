@@ -76,13 +76,7 @@ import {
 } from '@/features/roadmap/ui/roadmap-confirmation';
 
 /** Confirmations not yet run by the canvas commands; they share its single pending slot. */
-type ExclusiveConfirmationSource =
-  | 'automatic-layout'
-  | 'canvas-preview'
-  | 'dependency-creation'
-  | 'dependency-deletion'
-  | 'node-type-deletion'
-  | 'teacher-block';
+type ExclusiveConfirmationSource = 'automatic-layout' | 'canvas-preview' | 'node-type-deletion';
 
 type AutomaticLayoutRequest = Pick<
   CanvasCommandOf<'apply-automatic-layout'>,
@@ -323,8 +317,6 @@ function useRoadmapCanvasController({ input }: Props) {
     updateNode,
     moveNode,
     scheduleTeacherUnlock,
-    dependencyWorkflow,
-    teacherBlockWorkflow,
     canvasCommands,
     addResource,
     uploadResource,
@@ -403,10 +395,7 @@ function useRoadmapCanvasController({ input }: Props) {
     ? {
         'automatic-layout': automaticLayout !== null,
         'canvas-preview': canvasPreviewWorkflow.isResetPending,
-        'dependency-creation': dependencyWorkflow.isBusy,
-        'dependency-deletion': dependencyWorkflow.isBusy,
         'node-type-deletion': nodeTypeDeletion !== null,
-        'teacher-block': teacherBlockWorkflow.isBusy,
       }[exclusiveConfirmationSource]
     : false;
   const exclusiveConfirmation =
@@ -565,29 +554,6 @@ function useRoadmapCanvasController({ input }: Props) {
     requestNodeFocusReturn,
     selectedNodeId,
   ]);
-  const requestDependencyCreation = useMemo(
-    () =>
-      exclusive(
-        requestExclusiveConfirmation,
-        'dependency-creation',
-        dependencyWorkflow.requestCreation,
-      ),
-    [dependencyWorkflow, requestExclusiveConfirmation],
-  );
-  const requestDependencyDeletion = useMemo(
-    () =>
-      exclusive(
-        requestExclusiveConfirmation,
-        'dependency-deletion',
-        dependencyWorkflow.requestDeletion,
-      ),
-    [dependencyWorkflow, requestExclusiveConfirmation],
-  );
-  const requestTeacherBlockChange = useMemo(
-    () =>
-      exclusive(requestExclusiveConfirmation, 'teacher-block', teacherBlockWorkflow.requestChange),
-    [requestExclusiveConfirmation, teacherBlockWorkflow],
-  );
   const { request: requestConfirmedAction } = canvasCommands;
   const runCanvasCommand = useCallback(
     (command: CanvasCommand) => {
@@ -595,10 +561,10 @@ function useRoadmapCanvasController({ input }: Props) {
         case 'hide-node':
         case 'show-node':
         case 'delete-node':
-          void requestConfirmedAction(command);
-          return;
         case 'change-teacher-block':
-          requestTeacherBlockChange(command.nodeId, command.operation);
+        case 'create-dependency':
+        case 'delete-dependencies':
+          void requestConfirmedAction(command);
           return;
         case 'schedule-teacher-unlock':
           void withSuccess(
@@ -614,23 +580,9 @@ function useRoadmapCanvasController({ input }: Props) {
         case 'apply-automatic-layout':
           requestAutomaticLayout(command.positions, command.direction);
           return;
-        case 'create-dependency':
-          requestDependencyCreation(command);
-          return;
-        case 'delete-dependencies':
-          requestDependencyDeletion(command.dependencyIds);
-          return;
       }
     },
-    [
-      moveNode,
-      scheduleTeacherUnlock,
-      requestConfirmedAction,
-      requestDependencyCreation,
-      requestDependencyDeletion,
-      requestTeacherBlockChange,
-      requestAutomaticLayout,
-    ],
+    [moveNode, scheduleTeacherUnlock, requestConfirmedAction, requestAutomaticLayout],
   );
   const handleNodeEditorIntent = useCallback(
     (intent: NodeEditorIntent) => {
@@ -698,8 +650,6 @@ function useRoadmapCanvasController({ input }: Props) {
     retryRefresh,
     accessLost,
     addNode,
-    dependencyWorkflow,
-    teacherBlockWorkflow,
     canvasCommands,
     addNodeType,
     updateNodeType,
@@ -895,8 +845,6 @@ function RoadmapCanvasConfirmation({
     confirmNodeTypeDeletion,
     canvasCommands,
     canvasPreviewWorkflow,
-    dependencyWorkflow,
-    teacherBlockWorkflow,
     roadmap,
   } = model;
   const { pending } = canvasCommands;
@@ -939,12 +887,6 @@ function RoadmapCanvasConfirmation({
       );
     case 'canvas-preview':
       return <ConfirmationDialog {...canvasPreviewWorkflow.confirmationDialog} />;
-    case 'dependency-deletion':
-      return <ConfirmationDialog {...dependencyWorkflow.deletionDialog} />;
-    case 'dependency-creation':
-      return <ConfirmationDialog {...dependencyWorkflow.creationDialog} />;
-    case 'teacher-block':
-      return <ConfirmationDialog {...teacherBlockWorkflow.confirmationDialog} />;
     default:
       return (
         <ConfirmationDialog

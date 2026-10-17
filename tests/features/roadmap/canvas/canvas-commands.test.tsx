@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import {
   RoadmapCanvasSessionPersistenceProvider,
@@ -9,6 +9,7 @@ import {
 } from '@/features/roadmap/session/session';
 import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 import type { RoadmapDto } from '@/features/roadmap/types';
+import { notify } from '@/shared/ui/notify';
 
 const teachingInput = {
   courseOffering: {
@@ -63,6 +64,7 @@ async function openCanvas(
       {children}
     </RoadmapCanvasSessionPersistenceProvider>
   );
+  vi.spyOn(notify, 'success');
   const { result } = renderHook(
     () => useRoadmapCanvasSession(teachingInput, { closeEditor, ...options }),
     { wrapper },
@@ -84,11 +86,30 @@ async function openCanvas(
   };
 }
 
+/** The fixture Roadmap with these Nodes Teacher-blocked. */
+function withTeacherBlocks(...nodeIds: string[]): RoadmapDto {
+  return {
+    ...roadmap,
+    nodes: roadmap.nodes.map((node) =>
+      node.isVisible && nodeIds.includes(node.id) ? { ...node, isTeacherBlocked: true } : node,
+    ),
+  };
+}
+
+async function teacherBlockedNodeIds(persistence: RoadmapCanvasSessionPersistence) {
+  return (await persistence.load(teachingInput)).nodes.flatMap((node) =>
+    'isTeacherBlocked' in node && node.isTeacherBlocked ? [node.id] : [],
+  );
+}
+
+const successToasts = () => vi.mocked(notify.success).mock.calls.map(([message]) => message);
+
 async function nodeOf(persistence: RoadmapCanvasSessionPersistence, nodeId: string) {
   return (await persistence.load(teachingInput)).nodes.find(({ id }) => id === nodeId);
 }
 
 describe('canvas commands', () => {
+  afterEach(() => vi.restoreAllMocks());
   test('hiding a Node shows its Change impact and hides it on confirmation', async () => {
     const canvas = await openCanvas();
 
@@ -283,5 +304,372 @@ describe('canvas commands', () => {
 
     expect(canvas.commands().pending).toBeNull();
     expect(await nodeOf(canvas.persistence, 'limits')).toBeDefined();
+  });
+
+  describe('Teacher block', () => {
+    test('blocking a Node shows the dependents it blocks along and blocks them on confirmation', async () => {
+      const canvas = await openCanvas();
+
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'change-teacher-block', nodeId: 'limits', operation: 'BLOCK' }),
+      );
+      expect(await canvas.awaiting()).toMatchObject({
+        kind: 'change-teacher-block',
+        impact: {
+          BLOCK: {
+            mode: 'BLOCK',
+            nodes: [
+              { id: 'limits', relation: 'SELECTED_NODE' },
+              { id: 'derivatives', relation: 'DEPENDENT' },
+            ],
+          },
+        },
+      });
+
+      await canvas.confirm('block-teacher');
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'derivatives']);
+    });
+
+    test.each([
+      ['unlock-node', 'only the Node', ['derivatives']],
+      ['unlock-branch', 'the Node and its dependents', []],
+    ] as const)(
+      'an unlock offers both scopes, and %s unlocks %s',
+      async (choice, _, stillBlocked) => {
+        const canvas = await openCanvas(
+          createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits', 'derivatives')),
+        );
+
+        await act(() =>
+          canvas
+            .commands()
+            .request({ kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' }),
+        );
+        expect(await canvas.awaiting()).toMatchObject({
+          impact: {
+            UNBLOCK: { mode: 'SINGLE', nodes: [{ id: 'limits' }] },
+            BRANCH_UNLOCK: { mode: 'BRANCH', nodes: [{ id: 'limits' }, { id: 'derivatives' }] },
+          },
+        });
+
+        await canvas.confirm(choice);
+
+        expect(canvas.commands().pending).toBeNull();
+        expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(stillBlocked);
+      },
+    );
+
+    test('unlocking behind a blocked prerequisite unlocks the prerequisites too', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits', 'derivatives')),
+      );
+
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'change-teacher-block', nodeId: 'derivatives', operation: 'UNBLOCK' }),
+      );
+      expect((await canvas.awaiting()).impact).toMatchObject({
+        UNBLOCK: {
+          mode: 'UPSTREAM',
+          nodes: [
+            { id: 'limits', relation: 'PREREQUISITE' },
+            { id: 'derivatives', relation: 'SELECTED_NODE' },
+          ],
+        },
+      });
+
+      await canvas.confirm('unlock-prerequisites');
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual([]);
+    });
+
+    /** Connects Derivadas to Integrales, which Teacher-blocks Integrales behind the blocked branch. */
+    const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
+      persistence.connectNodes(teachingInput, {
+        sourceNodeId: 'derivatives',
+        targetNodeId: 'integrals',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      });
+
+    test('shows both new unlock scopes instead of unlocking when either changed after opening', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits', 'derivatives')),
+      );
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' }),
+      );
+      await canvas.awaiting();
+
+      await blockIntegralsBehindDerivatives(canvas.persistence);
+      await canvas.confirm('unlock-node');
+
+      expect(canvas.commands().pending).toMatchObject({
+        phase: 'awaiting',
+        impact: {
+          UNBLOCK: { mode: 'SINGLE', nodes: [{ id: 'limits' }] },
+          BRANCH_UNLOCK: { nodes: [{ id: 'limits' }, { id: 'derivatives' }, { id: 'integrals' }] },
+        },
+      });
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual([
+        'limits',
+        'derivatives',
+        'integrals',
+      ]);
+
+      await canvas.confirm('unlock-node');
+      expect(canvas.commands().pending).toBeNull();
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['derivatives', 'integrals']);
+    });
+
+    test('shows the latest unlock scopes when the chosen unlock is refused as stale, and confirms it again', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(
+        withTeacherBlocks('limits', 'derivatives'),
+      );
+      let raceOnce = true;
+      // Another editor extends the blocked branch after the confirmation revalidated.
+      const persistence: RoadmapCanvasSessionPersistence = {
+        ...adapter,
+        async changeTeacherBlock(...args) {
+          if (raceOnce) {
+            raceOnce = false;
+            await blockIntegralsBehindDerivatives(adapter);
+          }
+          return adapter.changeTeacherBlock(...args);
+        },
+      };
+      const canvas = await openCanvas(persistence);
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' }),
+      );
+      await canvas.awaiting();
+
+      await canvas.confirm('unlock-branch');
+
+      expect(canvas.session().error).toBe(
+        'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
+      );
+      expect(canvas.commands().pending).toMatchObject({
+        phase: 'awaiting',
+        impact: { BRANCH_UNLOCK: { nodes: [{}, {}, { id: 'integrals' }] } },
+      });
+      expect(await teacherBlockedNodeIds(persistence)).toHaveLength(3);
+
+      await canvas.confirm('unlock-branch');
+      expect(canvas.commands().pending).toBeNull();
+      expect(await teacherBlockedNodeIds(persistence)).toEqual([]);
+    });
+  });
+
+  describe('Dependency creation', () => {
+    const connectLimitsToIntegrals = {
+      kind: 'create-dependency',
+      sourceNodeId: 'limits',
+      targetNodeId: 'integrals',
+      sourceHandle: 'right',
+      targetHandle: 'left',
+    } as const;
+
+    async function dependencyPairs(persistence: RoadmapCanvasSessionPersistence) {
+      return (await persistence.load(teachingInput)).dependencies.map(
+        ({ sourceNodeId, targetNodeId }) => `${sourceNodeId}→${targetNodeId}`,
+      );
+    }
+
+    test('creates a Dependency without Change impact at once, without asking', async () => {
+      const canvas = await openCanvas();
+
+      await act(() => canvas.commands().request(connectLimitsToIntegrals));
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(await dependencyPairs(canvas.persistence)).toEqual([
+        'limits→derivatives',
+        'limits→integrals',
+      ]);
+      expect(successToasts()).toEqual(['Dependencia creada exitosamente.']);
+    });
+
+    test('frees the slot without asking when a creation without Change impact fails', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
+      const canvas = await openCanvas({
+        ...adapter,
+        connectNodes: async () => {
+          throw new Error('No se pudo crear la dependencia.');
+        },
+      });
+
+      await act(() => canvas.commands().request(connectLimitsToIntegrals));
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(canvas.session().error).toBe('No se pudo crear la dependencia.');
+      expect(await dependencyPairs(adapter)).toEqual(['limits→derivatives']);
+      expect(successToasts()).toEqual([]);
+    });
+
+    test('asks before creating a Dependency that Teacher-blocks Nodes, then blocks them', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits')),
+      );
+
+      await act(() => canvas.commands().request(connectLimitsToIntegrals));
+      expect(await canvas.awaiting()).toMatchObject({
+        kind: 'create-dependency',
+        impact: { nodes: [{ id: 'integrals' }] },
+      });
+      expect(await dependencyPairs(canvas.persistence)).toEqual(['limits→derivatives']);
+
+      await canvas.confirm('create-dependency');
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(await dependencyPairs(canvas.persistence)).toContain('limits→integrals');
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'integrals']);
+      expect(successToasts()).toEqual(['Dependencia creada exitosamente.']);
+    });
+
+    test('shows the new Change impact instead of creating the Dependency when it grew after opening', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits')),
+      );
+      await act(() => canvas.commands().request(connectLimitsToIntegrals));
+      await canvas.awaiting();
+
+      await canvas.persistence.connectNodes(teachingInput, {
+        sourceNodeId: 'integrals',
+        targetNodeId: 'derivatives',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      });
+      await canvas.confirm('create-dependency');
+
+      expect(canvas.commands().pending).toMatchObject({
+        phase: 'awaiting',
+        impact: { nodes: [{ id: 'derivatives' }, { id: 'integrals' }] },
+      });
+      expect(await dependencyPairs(canvas.persistence)).not.toContain('limits→integrals');
+
+      await canvas.confirm('create-dependency');
+      expect(canvas.commands().pending).toBeNull();
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual([
+        'limits',
+        'derivatives',
+        'integrals',
+      ]);
+    });
+
+    test('creates the Dependency at once when its Change impact vanished after opening', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits')),
+      );
+      await act(() => canvas.commands().request(connectLimitsToIntegrals));
+      await canvas.awaiting();
+
+      await canvas.persistence.changeTeacherBlock(teachingInput, 'integrals', 'BLOCK');
+      await canvas.confirm('create-dependency');
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(await dependencyPairs(canvas.persistence)).toContain('limits→integrals');
+      expect(successToasts()).toEqual(['Dependencia creada exitosamente.']);
+    });
+
+    test('shows the latest Change impact when the creation is refused as stale, and confirms it again', async () => {
+      const adapter = createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits'));
+      let raceOnce = true;
+      // Another editor connects Integrales onwards after the confirmation revalidated.
+      const persistence: RoadmapCanvasSessionPersistence = {
+        ...adapter,
+        async connectNodes(...args) {
+          if (raceOnce) {
+            raceOnce = false;
+            await adapter.connectNodes(teachingInput, {
+              sourceNodeId: 'integrals',
+              targetNodeId: 'derivatives',
+              sourceHandle: 'right',
+              targetHandle: 'left',
+            });
+          }
+          return adapter.connectNodes(...args);
+        },
+      };
+      const canvas = await openCanvas(persistence);
+      await act(() => canvas.commands().request(connectLimitsToIntegrals));
+      await canvas.awaiting();
+
+      await canvas.confirm('create-dependency');
+
+      expect(canvas.session().error).toBe(
+        'El impacto de la dependencia cambió. Revisa y confirma la previsualización actualizada.',
+      );
+      expect(canvas.commands().pending).toMatchObject({
+        phase: 'awaiting',
+        impact: { nodes: [{ id: 'derivatives' }, { id: 'integrals' }] },
+      });
+      expect(successToasts()).toEqual([]);
+
+      await canvas.confirm('create-dependency');
+      expect(canvas.commands().pending).toBeNull();
+      expect(await dependencyPairs(persistence)).toContain('limits→integrals');
+    });
+  });
+
+  test('retries only the Dependency deletions that failed, counting only the deleted ones', async () => {
+    const adapter = createInMemoryRoadmapSessionPersistence({
+      ...roadmap,
+      dependencies: [
+        ...roadmap.dependencies,
+        dependency('limits-integrals', 'limits', 'integrals'),
+      ],
+    });
+    let failOnce = true;
+    const persistence: RoadmapCanvasSessionPersistence = {
+      ...adapter,
+      async deleteDependency(input, dependencyId) {
+        if (dependencyId === 'limits-integrals' && failOnce) {
+          failOnce = false;
+          throw new Error('No se pudo eliminar la dependencia.');
+        }
+        return adapter.deleteDependency(input, dependencyId);
+      },
+    };
+    const canvas = await openCanvas(persistence);
+    const dependencyIds = async () =>
+      (await persistence.load(teachingInput)).dependencies.map(({ id }) => id);
+
+    await act(() =>
+      canvas.commands().request({
+        kind: 'delete-dependencies',
+        dependencyIds: ['limits-derivatives', 'limits-integrals'],
+      }),
+    );
+    expect(await canvas.awaiting()).toMatchObject({ kind: 'delete-dependencies', impact: null });
+
+    await canvas.confirm('delete-dependencies');
+
+    expect(canvas.commands().pending).toEqual({
+      kind: 'delete-dependencies',
+      request: { kind: 'delete-dependencies', dependencyIds: ['limits-integrals'] },
+      impact: null,
+      phase: 'awaiting',
+    });
+    expect(await dependencyIds()).toEqual(['limits-integrals']);
+    expect(successToasts()).toEqual(['Dependencia eliminada exitosamente.']);
+
+    await canvas.confirm('delete-dependencies');
+
+    expect(canvas.commands().pending).toBeNull();
+    expect(await dependencyIds()).toEqual([]);
+    expect(successToasts()).toEqual([
+      'Dependencia eliminada exitosamente.',
+      'Dependencia eliminada exitosamente.',
+    ]);
   });
 });

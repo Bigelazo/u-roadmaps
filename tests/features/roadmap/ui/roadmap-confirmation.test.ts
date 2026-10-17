@@ -312,4 +312,87 @@ describe('canvasConfirmation', () => {
       ),
     ).toBeNull();
   });
+
+  it('offers both unlock scopes from a Teacher block Change impact', () => {
+    const scope = (mode: 'SINGLE' | 'BRANCH', ids: readonly string[]) => ({
+      mode,
+      version: mode,
+      nodes: ids.map((id) => ({
+        id,
+        title: id === 'a' ? 'Conjuntos' : 'Funciones',
+        relation: id === 'a' ? ('SELECTED_NODE' as const) : ('DEPENDENT' as const),
+      })),
+    });
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'change-teacher-block',
+          request: { kind: 'change-teacher-block', nodeId: 'a', operation: 'UNBLOCK' },
+          impact: { UNBLOCK: scope('SINGLE', ['a']), BRANCH_UNLOCK: scope('BRANCH', ['a', 'b']) },
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: '¿Desbloquear “Conjuntos”?',
+      actions: [{ id: 'unlock-node' }, { id: 'unlock-branch' }],
+    });
+  });
+
+  const creation = {
+    kind: 'create-dependency',
+    sourceNodeId: 'a',
+    targetNodeId: 'b',
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  } as const;
+
+  it('presents a Dependency creation with the Nodes it Teacher-blocks', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'create-dependency',
+          request: creation,
+          impact: { nodes: [{ id: 'b', title: 'Funciones' }], version: 'v1' },
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: 'Confirmar bloqueo',
+      description: expect.stringContaining('bloqueará persistentemente 1 nodo.'),
+      actions: [{ id: 'create-dependency', label: 'Conectar y bloquear' }],
+    });
+  });
+
+  it('shows nothing while a Dependency creation without Change impact applies', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'create-dependency',
+          request: creation,
+          impact: { nodes: [], version: 'v1' },
+          phase: 'confirming',
+        },
+        roadmap,
+      ),
+    ).toBeNull();
+  });
+
+  it('presents the Dependencies still to delete', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'delete-dependencies',
+          request: { kind: 'delete-dependencies', dependencyIds: ['d2'] },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      description: 'Eliminarás esta dependencia. Esta acción no se puede deshacer.',
+      actions: [{ id: 'delete-dependencies', label: 'Eliminar' }],
+    });
+  });
 });
