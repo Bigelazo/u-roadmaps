@@ -1,5 +1,5 @@
 import type { RoadmapChangePort } from '../change-port';
-import { roadmapChangeTransaction } from '../change-transaction';
+import { roadmapChangeTransaction } from '../roadmap-command';
 import 'server-only';
 import { resourceContentState } from '@/shared/server/resource-content-state';
 

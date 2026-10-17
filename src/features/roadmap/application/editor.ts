@@ -1,9 +1,12 @@
 import type { RoadmapChangePort, RoadmapChangeFact } from './change-port';
-import { roadmapChangeTransaction, type RoadmapChangeReporter } from './change-transaction';
-import { serializableTransaction } from './serializable';
+import {
+  changeRoadmap,
+  roadmapChangeTransaction,
+  type RoadmapChangeReporter,
+} from './roadmap-command';
 import { accessChanges } from './access-changes';
 import { readAccessSnapshot } from './access-snapshot';
-import { conflict } from './roadmap-command/errors';
+import { roadmapClosed, roadmapNotFound } from './roadmap-command/errors';
 import 'server-only';
 
 import { createHash } from 'node:crypto';
@@ -60,13 +63,6 @@ type WithTeacherBlockOperation = WithId & {
 };
 type WithDeletePreview = WithId & { previewVersion?: string };
 type WithTeacherUnlockSchedule = WithId & { unlockOn: unknown };
-
-const dependencyConflict = () =>
-  new ApplicationError(
-    409,
-    'DEPENDENCY_CONFLICT',
-    'La dependencia entra en conflicto con otra modificación.',
-  );
 
 /** Prisma filter for the dependencies that start or end at `nodeId`. */
 function touchingNode(nodeId: string) {
@@ -164,16 +160,12 @@ async function requireCustomType(
   return nodeType;
 }
 
-async function withSerializableTransaction<T>(
+function withSerializableTransaction<T>(
   operation: (transaction: Prisma.TransactionClient, report: RoadmapChangeReporter) => Promise<T>,
-  changePort?: RoadmapChangePort,
-  concurrentModification?: () => ApplicationError,
+  changePort: RoadmapChangePort,
+  conflictMessage?: string,
 ) {
-  return changePort
-    ? roadmapChangeTransaction(changePort, operation, { serializable: { concurrentModification } })
-    : serializableTransaction((transaction) => operation(transaction, async () => undefined), {
-        concurrentModification,
-      });
+  return roadmapChangeTransaction(changePort, operation, { conflictMessage });
 }
 
 async function ensureTypeNameAvailable(
@@ -417,7 +409,7 @@ export const deleteRoadmapNode = async (
       return { fileKeys: resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : [])) };
     },
     changePort,
-    () => conflict('La eliminación entra en conflicto con otra modificación.'),
+    'La eliminación entra en conflicto con otra modificación.',
   );
   await Promise.all(
     deletion.fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)),
@@ -588,7 +580,7 @@ export const createRoadmapDependency = async (
       };
     },
     changePort,
-    dependencyConflict,
+    'La dependencia entra en conflicto con otra modificación.',
   );
 
 export const previewRoadmapDependency = async ({ input, ...editor }: WithInput) =>
@@ -637,7 +629,7 @@ export const deleteRoadmapDependency = async (
       return {};
     },
     changePort,
-    dependencyConflict,
+    'La dependencia entra en conflicto con otra modificación.',
   );
 
 export const previewNodeVisibility = async (input: WithId) =>
@@ -772,11 +764,10 @@ async function releaseDueScheduledUnlocks(
   return releasedNodeIds;
 }
 
-export const scheduleTeacherUnlock = async ({
-  id,
-  unlockOn,
-  ...editor
-}: WithTeacherUnlockSchedule) =>
+export const scheduleTeacherUnlock = async (
+  { id, unlockOn, ...editor }: WithTeacherUnlockSchedule,
+  changePort: RoadmapChangePort,
+) =>
   withSerializableTransaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
@@ -788,7 +779,14 @@ export const scheduleTeacherUnlock = async ({
       data: { teacherUnlockOn: day ? calendarDayDate(day) : null },
     });
     return { teacherUnlockOn: day };
-  });
+  }, changePort);
+
+/** A Roadmap closed (or removed) since the pass listed it releases nothing. */
+function nothingReleasedOnClosure(error: unknown): string[] {
+  const refusals = [roadmapClosed().code, roadmapNotFound().code];
+  if (error instanceof ApplicationError && refusals.includes(error.code)) return [];
+  throw error;
+}
 
 /** Releases every due scheduled unlock; run by the daily scheduled job. */
 export const releaseScheduledTeacherUnlocks = async (
@@ -812,28 +810,27 @@ export const releaseScheduledTeacherUnlocks = async (
     // A node waiting for blocked prerequisites stays due on every pass; checking outside a
     // transaction keeps those passes from contending with teaching edits on its Roadmap.
     if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
-    const result = await withSerializableTransaction(
-      async (transaction, report) => {
-        await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
-        const current = await transaction.roadmap.findUnique({ where: { id: roadmap.id } });
-        if (!current || current.closedAt) return { releasedNodeIds: [] };
-        const { result: releasedNodeIds, accessFacts } = await trackAccessChanges(
-          transaction,
-          roadmap.id,
-          () => releaseDueScheduledUnlocks(transaction, roadmap.id, today),
-        );
-        await report({
-          actorId: SCHEDULED_UNLOCK_ACTOR_ID,
-          identifier: roadmap.courseOffering,
-          roadmapId: roadmap.id,
-          facts: accessFacts,
-        });
-        return { releasedNodeIds: [...releasedNodeIds] };
-      },
+    const releasedNodeIds = await roadmapChangeTransaction(
       changePort,
-      () => conflict('El desbloqueo programado entra en conflicto con otra modificación.'),
-    );
-    released.push({ identifier: roadmap.courseOffering, ...result });
+      (transaction, report) =>
+        changeRoadmap(
+          transaction,
+          report,
+          {
+            roadmapId: roadmap.id,
+            identifier: roadmap.courseOffering,
+            actorId: SCHEDULED_UNLOCK_ACTOR_ID,
+            access: 'roadmap',
+            lock: 'update',
+          },
+          async () => ({
+            result: [...(await releaseDueScheduledUnlocks(transaction, roadmap.id, today))],
+            facts: [],
+          }),
+        ),
+      { conflictMessage: 'El desbloqueo programado entra en conflicto con otra modificación.' },
+    ).catch(nothingReleasedOnClosure);
+    released.push({ identifier: roadmap.courseOffering, releasedNodeIds });
   }
   return released;
 };

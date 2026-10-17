@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
 import { Prisma, prisma } from '@/shared/server/db';
-import { isSerializationFailure } from '@/features/roadmap/application/serializable';
+import { isSerializationFailure } from '@/features/roadmap/application/roadmap-command';
 import { test } from './fixtures';
 
 test('a raw query that hits a serialization failure is recognized', async ({ course }) => {

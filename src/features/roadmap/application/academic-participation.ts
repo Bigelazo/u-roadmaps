@@ -1,5 +1,5 @@
 import type { RoadmapChangePort } from './change-port';
-import { roadmapChangeTransaction } from './change-transaction';
+import { lockRoadmap, roadmapChangeTransaction } from './roadmap-command';
 import 'server-only';
 
 import {
@@ -78,59 +78,67 @@ export async function materializeParticipation(
   const institutionalPosition = effectivePosition(access.positions);
   if (!institutionalPosition) return null;
   const { role } = positionCapabilities(institutionalPosition);
-  return roadmapChangeTransaction(changePort, async (transaction, report) => {
-    // ON CONFLICT DO NOTHING, not an upsert: an upsert reads before it inserts, so
-    // concurrent syncs of the same Course (one per offering, or parallel requests)
-    // both insert and the second fails with a unique violation.
-    await transaction.course.createMany({
-      data: { code: identifier.courseCode, name: access.name, department: '' },
-      skipDuplicates: true,
-    });
-    const { courseCode, year, semester } = identifier;
-    await transaction.courseOffering.createMany({
-      data: { courseCode, year, semester },
-      skipDuplicates: true,
-    });
-    const courseOffering = await transaction.courseOffering.findUniqueOrThrow({
-      where: { courseCode_year_semester: { courseCode, year, semester } },
-    });
-    const roadmap = await transaction.roadmap.findUnique({
-      where: { courseOfferingId: courseOffering.id },
-      select: { id: true },
-    });
-    // Match notice delivery's parent -> Participation -> recipient lock order.
-    if (roadmap)
-      await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR KEY SHARE`;
-    const [previous] = await transaction.$queryRaw<{ role: string }[]>`
+  return roadmapChangeTransaction(
+    changePort,
+    async (transaction, report) => {
+      // ON CONFLICT DO NOTHING, not an upsert: an upsert reads before it inserts, so
+      // concurrent syncs of the same Course (one per offering, or parallel requests)
+      // both insert and the second fails with a unique violation.
+      await transaction.course.createMany({
+        data: { code: identifier.courseCode, name: access.name, department: '' },
+        skipDuplicates: true,
+      });
+      const { courseCode, year, semester } = identifier;
+      await transaction.courseOffering.createMany({
+        data: { courseCode, year, semester },
+        skipDuplicates: true,
+      });
+      const courseOffering = await transaction.courseOffering.findUniqueOrThrow({
+        where: { courseCode_year_semester: { courseCode, year, semester } },
+      });
+      const roadmap = await transaction.roadmap.findUnique({
+        where: { courseOfferingId: courseOffering.id },
+        select: { id: true },
+      });
+      // Match notice delivery's parent -> Participation -> recipient lock order.
+      if (roadmap) await lockRoadmap(transaction, roadmap.id, 'key-share');
+      const [previous] = await transaction.$queryRaw<{ role: string }[]>`
       SELECT role FROM "Participation" WHERE "userId" = ${user.id}::uuid
         AND "courseOfferingId" = ${courseOffering.id}::uuid FOR UPDATE`;
-    const participation = await transaction.participation.upsert({
-      where: {
-        userId_courseOfferingId: { userId: user.id, courseOfferingId: courseOffering.id },
-      },
-      update: { role, institutionalPosition, isActive: true },
-      create: { userId: user.id, courseOfferingId: courseOffering.id, role, institutionalPosition },
-    });
-    if (previous?.role === 'STUDENT' && role === 'TEACHER' && roadmap) {
-      await report({
-        actorId: user.id,
-        identifier,
-        roadmapId: roadmap.id,
-        facts: [
-          {
-            kind: 'participation-role',
-            recipientId: user.id,
-            previous: 'STUDENT',
-            current: 'TEACHER',
-          },
-        ],
+      const participation = await transaction.participation.upsert({
+        where: {
+          userId_courseOfferingId: { userId: user.id, courseOfferingId: courseOffering.id },
+        },
+        update: { role, institutionalPosition, isActive: true },
+        create: {
+          userId: user.id,
+          courseOfferingId: courseOffering.id,
+          role,
+          institutionalPosition,
+        },
       });
-      await transaction.simulatedCompletion.deleteMany({
-        where: { participationId: participation.id },
-      });
-    }
-    return participation;
-  });
+      if (previous?.role === 'STUDENT' && role === 'TEACHER' && roadmap) {
+        await report({
+          actorId: user.id,
+          identifier,
+          roadmapId: roadmap.id,
+          facts: [
+            {
+              kind: 'participation-role',
+              recipientId: user.id,
+              previous: 'STUDENT',
+              current: 'TEACHER',
+            },
+          ],
+        });
+        await transaction.simulatedCompletion.deleteMany({
+          where: { participationId: participation.id },
+        });
+      }
+      return participation;
+    },
+    { isolation: 'read-committed' },
+  );
 }
 
 /** Resolves and materializes participation when U-Campus grants course access. */

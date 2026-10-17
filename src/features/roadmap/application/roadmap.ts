@@ -1,5 +1,5 @@
 import type { RoadmapChangePort } from './change-port';
-import { roadmapChangeTransaction } from './change-transaction';
+import { roadmapChangeTransaction } from './roadmap-command';
 import { roadmapClosed } from './roadmap-command/errors';
 import 'server-only';
 
@@ -261,7 +261,8 @@ async function copyFrozenVersion(
 }
 
 // Copying file bytes inside the transaction can outlast Prisma's 5 s default.
-const copyTransactionOptions = { timeout: 30_000 };
+// Not serializable: copying files is not retry-safe.
+const copyTransactionOptions = { isolation: 'read-committed', timeout: 30_000 } as const;
 
 const roadmapConflict = () =>
   new ApplicationError(409, 'ROADMAP_CONFLICT', 'Ya existe un roadmap para este curso.');
