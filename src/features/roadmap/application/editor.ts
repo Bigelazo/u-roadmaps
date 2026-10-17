@@ -774,14 +774,16 @@ export const scheduleTeacherUnlock = roadmapCommand({
   capability: 'edit',
   parse: ({ id, unlockOn }: { id: string; unlockOn: unknown }) => {
     const nodeId = requireUuid(id, 'nodeId');
-    const decision = decideScheduledUnlockDay({ unlockOn, today: chileCalendarDay() });
+    // One clock read: the Node's rule in `run` decides against the same day.
+    const today = chileCalendarDay();
+    const decision = decideScheduledUnlockDay({ unlockOn, today });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
-    return { nodeId, day: decision.day };
+    return { nodeId, day: decision.day, today };
   },
   access: 'none',
-  run: async ({ tx, roadmap, input: { nodeId, day } }) => {
+  run: async ({ tx, roadmap, input: { nodeId, day, today } }) => {
     const node = await requireNode(tx, nodeId, roadmap.id);
-    const decision = decideScheduledUnlock({ node, unlockOn: day, today: chileCalendarDay() });
+    const decision = decideScheduledUnlock({ node, unlockOn: day, today });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
     await tx.roadmapNode.update({
       where: { id: node.id },
