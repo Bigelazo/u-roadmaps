@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
 import type { CourseOfferingIdentifier, TeacherBlockOperation } from '@/features/roadmap';
 import { changeTeacherBlock, previewTeacherBlock } from '@/features/roadmap/server';
-import { ApplicationError, unwrap } from '@/shared/errors/server';
+import { ApplicationError } from '@/shared/errors/server';
 
 function teacherBlockOperation(request: Request): TeacherBlockOperation {
   const operation = new URL(request.url).searchParams.get('operation');
@@ -39,9 +39,7 @@ function teacherBlockInput(
 
 export const GET = courseRoute(
   async (route) =>
-    NextResponse.json(
-      await unwrap(() => previewTeacherBlock(teacherBlockInput(route, route.prepared))),
-    ),
+    NextResponse.json(await previewTeacherBlock(teacherBlockInput(route, route.prepared))),
   { prepare: teacherBlockOperation, authWithParams: true },
 );
 
@@ -49,8 +47,9 @@ function changeTeacherBlockRoute(operation: TeacherBlockOperation) {
   return courseRoute(
     async (route) =>
       NextResponse.json(
-        await unwrap(() =>
-          changeTeacherBlock(teacherBlockInput(route, operation, route.request), roadmapChangePort),
+        await changeTeacherBlock(
+          teacherBlockInput(route, operation, route.request),
+          roadmapChangePort,
         ),
       ),
     { authWithParams: true },

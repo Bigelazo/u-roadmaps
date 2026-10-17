@@ -7,7 +7,7 @@ import 'server-only';
 
 import { Prisma, prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier, StudentNodeAccess } from '@/features/roadmap/types';
-import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import { ApplicationError } from '@/shared/errors/server';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import type { RoadmapCapability } from '@/features/roadmap/domain/roadmap-capability';
 import { requireRoadmapCapability, roadmapNotFound } from './roadmap-command/errors';
@@ -84,33 +84,31 @@ async function requireParticipantRoadmap(
   return { courseOffering, participation: allowed.participation, roadmap: allowed.roadmap };
 }
 
-export const readRoadmapForParticipant = withApplicationResult(
-  async function readRoadmapForParticipant({ userId, identifier }: ParticipantRoadmapInput) {
-    return prisma.$transaction(
-      async (transaction) => {
-        const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
-          transaction,
-          { userId, identifier },
-          'read',
-        );
-        if (participation.role === 'TEACHER') {
-          const data = await loadRoadmapProjectionData(transaction, { courseOffering, roadmap });
-          return projectTeacherRoadmap(data, identifier);
-        }
-        const [data, completedNodeIds] = await Promise.all([
-          loadRoadmapProjectionData(transaction, { courseOffering, roadmap }),
-          loadCompletedNodeIds(transaction, {
-            kind: 'COMPLETION',
-            userId,
-            roadmapId: roadmap.id,
-          }),
-        ]);
-        return projectStudentRoadmap(data, identifier, completedNodeIds);
-      },
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
-    );
-  },
-);
+export async function readRoadmapForParticipant({ userId, identifier }: ParticipantRoadmapInput) {
+  return prisma.$transaction(
+    async (transaction) => {
+      const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
+        transaction,
+        { userId, identifier },
+        'read',
+      );
+      if (participation.role === 'TEACHER') {
+        const data = await loadRoadmapProjectionData(transaction, { courseOffering, roadmap });
+        return projectTeacherRoadmap(data, identifier);
+      }
+      const [data, completedNodeIds] = await Promise.all([
+        loadRoadmapProjectionData(transaction, { courseOffering, roadmap }),
+        loadCompletedNodeIds(transaction, {
+          kind: 'COMPLETION',
+          userId,
+          roadmapId: roadmap.id,
+        }),
+      ]);
+      return projectStudentRoadmap(data, identifier, completedNodeIds);
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+  );
+}
 
 type TeacherRoadmap = Awaited<ReturnType<typeof requireParticipantRoadmap>>;
 
@@ -124,7 +122,7 @@ function withTeacherRoadmapTransaction<Result>(
   });
 }
 
-export const completeNode = withApplicationResult(async function completeNode(
+export async function completeNode(
   { userId, identifier, nodeId }: CompleteNodeInput,
   changePort: RoadmapChangePort,
 ) {
@@ -155,12 +153,9 @@ export const completeNode = withApplicationResult(async function completeNode(
     },
     { serializable: true },
   );
-});
+}
 
-export const readSimulatedRoadmap = withApplicationResult(async function readSimulatedRoadmap({
-  userId,
-  identifier,
-}: ParticipantRoadmapInput) {
+export async function readSimulatedRoadmap({ userId, identifier }: ParticipantRoadmapInput) {
   return prisma.$transaction(
     async (transaction) => {
       const { courseOffering, participation, roadmap } = await requireParticipantRoadmap(
@@ -180,13 +175,9 @@ export const readSimulatedRoadmap = withApplicationResult(async function readSim
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
   );
-});
+}
 
-export const completeSimulatedNode = withApplicationResult(async function completeSimulatedNode({
-  userId,
-  identifier,
-  nodeId,
-}: CompleteNodeInput) {
+export async function completeSimulatedNode({ userId, identifier, nodeId }: CompleteNodeInput) {
   return withTeacherRoadmapTransaction(
     { userId, identifier },
     async (transaction, { courseOffering, participation, roadmap }) => {
@@ -222,16 +213,14 @@ export const completeSimulatedNode = withApplicationResult(async function comple
       });
     },
   );
-});
+}
 
-export const resetSimulatedCompletions = withApplicationResult(
-  async function resetSimulatedCompletions({ userId, identifier }: ParticipantRoadmapInput) {
-    return withTeacherRoadmapTransaction(
-      { userId, identifier },
-      async (transaction, { participation, roadmap }) =>
-        transaction.simulatedCompletion.deleteMany({
-          where: { participationId: participation.id, roadmapId: roadmap.id },
-        }),
-    );
-  },
-);
+export async function resetSimulatedCompletions({ userId, identifier }: ParticipantRoadmapInput) {
+  return withTeacherRoadmapTransaction(
+    { userId, identifier },
+    async (transaction, { participation, roadmap }) =>
+      transaction.simulatedCompletion.deleteMany({
+        where: { participationId: participation.id, roadmapId: roadmap.id },
+      }),
+  );
+}

@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import type { ResultAsync } from 'neverthrow';
 import { prisma } from '@/shared/server/db';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import {
@@ -25,15 +24,6 @@ import {
 } from '@/features/roadmap/server';
 import type { IntegrationCourse } from './fixtures';
 
-export function confirmed<T, E>(result: ResultAsync<T, E>) {
-  return result.match(
-    (value) => value,
-    (error) => {
-      throw error;
-    },
-  );
-}
-
 /** Real Roadmap edits by the course teacher, delivered immediately after commit. */
 export function teacherEdits(
   course: IntegrationCourse,
@@ -42,47 +32,40 @@ export function teacherEdits(
   const editor = { userId: course.teacherId, identifier: course.identifier };
   return {
     create: (title: string) =>
-      confirmed(
-        createRoadmapNode(
-          {
-            ...editor,
-            input: { title, nodeTypeId: course.nodeTypeId, positionX: 30, positionY: 40 },
-          },
-          port,
-        ),
+      createRoadmapNode(
+        {
+          ...editor,
+          input: { title, nodeTypeId: course.nodeTypeId, positionX: 30, positionY: 40 },
+        },
+        port,
       ),
     rename: (nodeId: string, title: string) =>
-      confirmed(updateRoadmapNode({ ...editor, id: nodeId, input: { title } }, port)),
+      updateRoadmapNode({ ...editor, id: nodeId, input: { title } }, port),
     update: (nodeId: string, input: Record<string, unknown>) =>
-      confirmed(updateRoadmapNode({ ...editor, id: nodeId, input }, port)),
-    remove: (nodeId: string) => confirmed(deleteRoadmapNode({ ...editor, id: nodeId }, port)),
+      updateRoadmapNode({ ...editor, id: nodeId, input }, port),
+    remove: (nodeId: string) => deleteRoadmapNode({ ...editor, id: nodeId }, port),
     block: (nodeId: string) =>
-      confirmed(changeTeacherBlock({ ...editor, id: nodeId, operation: 'BLOCK' }, port)),
+      changeTeacherBlock({ ...editor, id: nodeId, operation: 'BLOCK' }, port),
     async unblock(nodeId: string) {
       const input = { ...editor, id: nodeId, operation: 'UNBLOCK' as const };
-      const preview = await confirmed(previewTeacherBlock(input));
-      return confirmed(changeTeacherBlock({ ...input, previewVersion: preview.version }, port));
+      const preview = await previewTeacherBlock(input);
+      return changeTeacherBlock({ ...input, previewVersion: preview.version }, port);
     },
     renameType: (nodeTypeId: string, name: string) =>
-      confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input: { name } }, port)),
+      updateRoadmapNodeType({ ...editor, id: nodeTypeId, input: { name } }, port),
     connect: async (sourceNodeId: string, targetNodeId: string) =>
-      (
-        await confirmed(
-          createRoadmapDependency({ ...editor, input: { sourceNodeId, targetNodeId } }, port),
-        )
-      ).dependency.id,
+      (await createRoadmapDependency({ ...editor, input: { sourceNodeId, targetNodeId } }, port))
+        .dependency.id,
     disconnect: (dependencyId: string) =>
-      confirmed(deleteRoadmapDependency({ ...editor, id: dependencyId }, port)),
+      deleteRoadmapDependency({ ...editor, id: dependencyId }, port),
     updateType: (nodeTypeId: string, input: Record<string, unknown>) =>
-      confirmed(updateRoadmapNodeType({ ...editor, id: nodeTypeId, input }, port)),
+      updateRoadmapNodeType({ ...editor, id: nodeTypeId, input }, port),
     addResource: (nodeId: string, title: string, url = 'https://example.test/guide') =>
-      confirmed(
-        createRoadmapResource({ ...editor, id: nodeId, input: { title, url, type: 'LINK' } }, port),
-      ),
+      createRoadmapResource({ ...editor, id: nodeId, input: { title, url, type: 'LINK' } }, port),
     editResource: (resourceId: string, input: Record<string, unknown>) =>
-      confirmed(updateRoadmapResource({ ...editor, id: resourceId, input }, port)),
+      updateRoadmapResource({ ...editor, id: resourceId, input }, port),
     removeResource: (resourceId: string) =>
-      confirmed(removeRoadmapResource({ ...editor, id: resourceId }, port)),
+      removeRoadmapResource({ ...editor, id: resourceId }, port),
   };
 }
 

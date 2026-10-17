@@ -22,7 +22,7 @@ import {
 } from '@/features/roadmap/infrastructure/resources/filesystem';
 import { fileResourceUrl } from '@/features/roadmap/domain/resource';
 import { requireUuid } from '@/shared/validation';
-import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import { ApplicationError } from '@/shared/errors/server';
 
 type JsonObject = Record<string, unknown>;
 type ResourceInput = EditorInput & { id: string };
@@ -31,7 +31,7 @@ type UploadedResourceInput = ResourceInput & {
   file: unknown;
 };
 
-export const createRoadmapResource = withApplicationResult(async function createRoadmapResource(
+export async function createRoadmapResource(
   { id, input, ...editor }: ResourceInput & { input: JsonObject },
   changePort: RoadmapChangePort,
 ) {
@@ -60,7 +60,7 @@ export const createRoadmapResource = withApplicationResult(async function create
     });
     return resourceDto(resource, editor.identifier);
   });
-});
+}
 
 function uploadedFileError(error: unknown): never {
   if (error instanceof Error && error.message === 'EMPTY_FILE') {
@@ -72,7 +72,7 @@ function uploadedFileError(error: unknown): never {
   throw error;
 }
 
-export const uploadRoadmapResource = withApplicationResult(async function uploadRoadmapResource(
+export async function uploadRoadmapResource(
   { file, id, ...editor }: UploadedResourceInput,
   changePort: RoadmapChangePort,
 ) {
@@ -120,9 +120,9 @@ export const uploadRoadmapResource = withApplicationResult(async function upload
     await deleteUploadedFile(fileKey);
     throw error;
   }
-});
+}
 
-export const updateRoadmapResource = withApplicationResult(async function updateRoadmapResource(
+export async function updateRoadmapResource(
   { id, input, ...editor }: ResourceInput & { input: JsonObject },
   changePort: RoadmapChangePort,
 ) {
@@ -162,9 +162,9 @@ export const updateRoadmapResource = withApplicationResult(async function update
       });
     return { resource: resourceDto(updated, editor.identifier) };
   });
-});
+}
 
-export const removeRoadmapResource = withApplicationResult(async function removeRoadmapResource(
+export async function removeRoadmapResource(
   { id, ...editor }: ResourceInput,
   changePort: RoadmapChangePort,
 ) {
@@ -190,4 +190,4 @@ export const removeRoadmapResource = withApplicationResult(async function remove
   });
   if (deleted.fileKey) await deleteUploadedFile(deleted.fileKey).catch(() => undefined);
   return {};
-});
+}

@@ -11,7 +11,6 @@ import {
   type InstitutionalCoursePosition,
 } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
-import { unwrap, withApplicationResult } from '@/shared/errors/server';
 import {
   averageStudentCompletion,
   compareCourseMembers,
@@ -146,13 +145,16 @@ async function readCompletedVisibleNodes(roadmapId: string, userIds: string[]) {
  * Student progress tracking (GLOSSARY): the offering's members and each
  * student's Roadmap completion, for its active teaching staff only.
  */
-export const readCourseParticipants = withApplicationResult(async function readCourseParticipants(
+export async function readCourseParticipants(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
   changePort: RoadmapChangePort,
 ): Promise<CourseParticipants> {
-  const { courseOffering } = await unwrap(() =>
-    requireCourseOfferingParticipation(actor, identifier, 'oversee', changePort),
+  const { courseOffering } = await requireCourseOfferingParticipation(
+    actor,
+    identifier,
+    'oversee',
+    changePort,
   );
   const [institutionalRoster, course, visibleNodes] = await Promise.all([
     readInstitutionalRoster(actor, identifier),
@@ -208,4 +210,4 @@ export const readCourseParticipants = withApplicationResult(async function readC
     ),
     students,
   };
-});
+}

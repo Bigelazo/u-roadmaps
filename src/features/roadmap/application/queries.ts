@@ -9,35 +9,33 @@ import {
   requireRoadmapCreationAccess,
   type RoadmapActor,
 } from '@/features/roadmap/application/participation';
-import { applicationResult, unwrap } from '@/shared/errors/server';
 
-export function createRoadmapForActor(
+export async function createRoadmapForActor(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
   readInput: () => Promise<Record<string, unknown>>,
   changePort: RoadmapChangePort,
 ) {
-  return applicationResult(async () => {
-    await unwrap(() => requireRoadmapCreationAccess(actor, identifier, changePort));
-    const input = await readInput();
-    return unwrap(() => createRoadmap(identifier, input, actor, changePort));
-  });
+  await requireRoadmapCreationAccess(actor, identifier, changePort);
+  const input = await readInput();
+  return createRoadmap(identifier, input, actor, changePort);
 }
 
-export function getNodeTypesForActor(
+export async function getNodeTypesForActor(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
   changePort: RoadmapChangePort,
 ) {
-  return applicationResult(async () => {
-    const { courseOffering, participation } = await unwrap(() =>
-      requireCourseOfferingParticipation(actor, identifier, 'read', changePort),
-    );
-    const { roadmap } = requireRoadmapCapability({
-      capability: 'read',
-      participation,
-      roadmap: courseOffering.roadmap,
-    });
-    return getAvailableTypes(roadmap.id);
+  const { courseOffering, participation } = await requireCourseOfferingParticipation(
+    actor,
+    identifier,
+    'read',
+    changePort,
+  );
+  const { roadmap } = requireRoadmapCapability({
+    capability: 'read',
+    participation,
+    roadmap: courseOffering.roadmap,
   });
+  return getAvailableTypes(roadmap.id);
 }

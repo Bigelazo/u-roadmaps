@@ -49,12 +49,10 @@ import { POST } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependenc
 import { DELETE } from '@/app/api/[courseCode]/[year]/[semester]/roadmap/dependencies/[dependencyId]/route';
 
 const identifier = { courseCode: 'CC3002', year: 2026, semester: 2 };
-function result<T>(value: T) {
-  return {
-    match: async (onSuccess: (value: T) => unknown) => {
-      sequence.push('mutation-committed');
-      return onSuccess(value);
-    },
+function committed<T>(value: T) {
+  return async () => {
+    sequence.push('mutation-committed');
+    return value;
   };
 }
 
@@ -78,7 +76,7 @@ test('POST returns the plain confirmed mutation', async () => {
     dependency: { id: 'dependency-id', sourceNodeId: 'source-id', targetNodeId: 'target-id' },
     nodes: [{ id: 'target-id', title: 'Evaluación 1' }],
   };
-  createRoadmapDependency.mockReturnValue(result(mutation));
+  createRoadmapDependency.mockImplementation(committed(mutation));
 
   const response = await POST(
     new Request('http://localhost/dependencies', {
@@ -97,10 +95,7 @@ test('POST returns the plain confirmed mutation', async () => {
 
 test('POST returns a failed Dependency action', async () => {
   const error = new Error('DEPENDENCY_CYCLE');
-  createRoadmapDependency.mockReturnValue({
-    match: async (_onSuccess: (value: unknown) => unknown, onError: (error: Error) => unknown) =>
-      onError(error),
-  });
+  createRoadmapDependency.mockRejectedValue(error);
 
   await expect(
     POST(
@@ -116,7 +111,7 @@ test('POST returns a failed Dependency action', async () => {
 });
 
 test('DELETE returns an empty 204 response', async () => {
-  deleteRoadmapDependency.mockReturnValue(result({}));
+  deleteRoadmapDependency.mockImplementation(committed({}));
 
   const response = await DELETE(
     new Request('http://localhost/dependencies/dependency-id'),

@@ -1,7 +1,7 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
-import { ApplicationError, unwrap } from '@/shared/errors/server';
+import { ApplicationError } from '@/shared/errors/server';
 import {
   deleteRoadmapNode,
   previewNodeDeletion,
@@ -19,9 +19,7 @@ export const GET = courseRoute(
   async ({ identifier, user, params, prepared: operation }) => {
     const input = { userId: user.id, identifier, id: params.nodeId };
     const preview =
-      operation === 'HIDE'
-        ? await unwrap(() => previewNodeVisibility(input))
-        : await unwrap(() => previewNodeDeletion(input));
+      operation === 'HIDE' ? await previewNodeVisibility(input) : await previewNodeDeletion(input);
     return NextResponse.json(preview);
   },
   { prepare: previewOperation, authWithParams: true },
@@ -29,11 +27,9 @@ export const GET = courseRoute(
 
 export const PATCH = courseRoute(
   async ({ identifier, user, params, body }) => {
-    const result = await unwrap(() =>
-      updateRoadmapNode(
-        { userId: user.id, identifier, id: params.nodeId, input: body },
-        roadmapChangePort,
-      ),
+    const result = await updateRoadmapNode(
+      { userId: user.id, identifier, id: params.nodeId, input: body },
+      roadmapChangePort,
     );
     return NextResponse.json(result);
   },
@@ -48,7 +44,7 @@ export const DELETE = courseRoute(
       id: params.nodeId,
       previewVersion: request.headers.get('x-node-delete-preview') ?? undefined,
     };
-    await unwrap(() => deleteRoadmapNode(input, roadmapChangePort));
+    await deleteRoadmapNode(input, roadmapChangePort);
     return new NextResponse(null, { status: 204 });
   },
   { authWithParams: true },

@@ -5,7 +5,6 @@ import { completeNode } from '@/features/roadmap/server';
 import { prisma } from '@/shared/server/db';
 import {
   addNode,
-  confirmed,
   deferredNoticePort,
   enterRoadmap,
   pendingNotices,
@@ -103,11 +102,9 @@ test('a student who completed the prerequisite is still told the route changed',
 }) => {
   const prerequisite = await addNode(course, 'Pilas');
   const dependent = await addNode(course, 'Colas');
-  await confirmed(
-    completeNode(
-      { userId: course.studentId, identifier: course.identifier, nodeId: prerequisite.id },
-      scheduledRoadmapChangePort,
-    ),
+  await completeNode(
+    { userId: course.studentId, identifier: course.identifier, nodeId: prerequisite.id },
+    scheduledRoadmapChangePort,
   );
   await teacherEdits(course).connect(prerequisite.id, dependent.id);
   expect(await routeNotices(course.studentId, course.roadmapId)).toMatchObject([

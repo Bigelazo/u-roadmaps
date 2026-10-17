@@ -1,4 +1,3 @@
-import type { ResultAsync } from 'neverthrow';
 import 'server-only';
 
 import {
@@ -24,7 +23,7 @@ import { versionApiUrl } from '@/shared/version-history-url';
 import { requireUuid } from '@/shared/validation';
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
-import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import { ApplicationError } from '@/shared/errors/server';
 
 const recordedVersionSelect = {
   closedAt: true,
@@ -104,31 +103,26 @@ function recordedAuthorship(roadmap: {
   };
 }
 
-export const readRoadmapVersionHistory = withApplicationResult(
-  async function readRoadmapVersionHistory(actor: RoadmapActor, courseCode: string) {
-    const { course, horizon } = await requireCourseWithHorizon(actor, courseCode);
-    const versions = course.courseOfferings
-      .flatMap(({ year, semester, roadmap }) =>
-        roadmap?.closedAt && isWithinVersionHorizon({ year, semester }, horizon)
-          ? [{ year, semester, closedAt: roadmap.closedAt, roadmap }]
-          : [],
-      )
-      .sort(compareEditionsNewestFirst)
-      .map(({ year, semester, closedAt, roadmap }) => ({
-        year,
-        semester,
-        edition: editionLabel({ year, semester }),
-        closedAt: closedAt.toISOString(),
-        ...recordedAuthorship(roadmap),
-      }));
-    return { course: { code: course.code, name: course.name }, horizon, versions };
-  },
-);
+export async function readRoadmapVersionHistory(actor: RoadmapActor, courseCode: string) {
+  const { course, horizon } = await requireCourseWithHorizon(actor, courseCode);
+  const versions = course.courseOfferings
+    .flatMap(({ year, semester, roadmap }) =>
+      roadmap?.closedAt && isWithinVersionHorizon({ year, semester }, horizon)
+        ? [{ year, semester, closedAt: roadmap.closedAt, roadmap }]
+        : [],
+    )
+    .sort(compareEditionsNewestFirst)
+    .map(({ year, semester, closedAt, roadmap }) => ({
+      year,
+      semester,
+      edition: editionLabel({ year, semester }),
+      closedAt: closedAt.toISOString(),
+      ...recordedAuthorship(roadmap),
+    }));
+  return { course: { code: course.code, name: course.name }, horizon, versions };
+}
 
-export type RoadmapVersionHistory =
-  ReturnType<typeof readRoadmapVersionHistory> extends ResultAsync<infer Value, unknown>
-    ? Value
-    : never;
+export type RoadmapVersionHistory = Awaited<ReturnType<typeof readRoadmapVersionHistory>>;
 
 /**
  * A closed Roadmap of the Course within the actor's horizon. Every refusal looks
@@ -152,7 +146,7 @@ async function requireVisibleVersion(actor: RoadmapActor, identifier: CourseOffe
 }
 
 // Reads only the Roadmap's own content: never Participations, Completions or visits.
-export const readRoadmapVersion = withApplicationResult(async function readRoadmapVersion(
+export async function readRoadmapVersion(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
 ) {
@@ -237,37 +231,30 @@ export const readRoadmapVersion = withApplicationResult(async function readRoadm
       lineage,
     },
   };
-});
+}
 
-export type RoadmapVersion =
-  ReturnType<typeof readRoadmapVersion> extends ResultAsync<infer Value, unknown> ? Value : never;
+export type RoadmapVersion = Awaited<ReturnType<typeof readRoadmapVersion>>;
 
-export const downloadRoadmapVersionResource = withApplicationResult(
-  async function downloadRoadmapVersionResource(
-    actor: RoadmapActor,
-    identifier: CourseOfferingIdentifier,
-    resourceId: string,
-  ) {
-    const { roadmap } = await requireVisibleVersion(actor, identifier);
-    const resource = await prisma.resource.findFirst({
-      where: { id: requireUuid(resourceId, 'resourceId'), roadmapNode: { roadmapId: roadmap.id } },
-    });
-    if (!resource?.fileKey)
-      throw new ApplicationError(
-        404,
-        'RESOURCE_NOT_FOUND',
-        'El recurso no existe en esta versión.',
-      );
-    try {
-      return {
-        bytes: await readUploadedFile(resource.fileKey),
-        contentType: resource.fileContentType ?? 'application/octet-stream',
-        title: resource.title,
-      };
-    } catch (error) {
-      // Only a missing file is a missing Resource; other storage failures surface.
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
-    }
-  },
-);
+export async function downloadRoadmapVersionResource(
+  actor: RoadmapActor,
+  identifier: CourseOfferingIdentifier,
+  resourceId: string,
+) {
+  const { roadmap } = await requireVisibleVersion(actor, identifier);
+  const resource = await prisma.resource.findFirst({
+    where: { id: requireUuid(resourceId, 'resourceId'), roadmapNode: { roadmapId: roadmap.id } },
+  });
+  if (!resource?.fileKey)
+    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en esta versión.');
+  try {
+    return {
+      bytes: await readUploadedFile(resource.fileKey),
+      contentType: resource.fileContentType ?? 'application/octet-stream',
+      title: resource.title,
+    };
+  } catch (error) {
+    // Only a missing file is a missing Resource; other storage failures surface.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
+  }
+}

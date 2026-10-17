@@ -20,7 +20,7 @@ import {
 } from '@/features/roadmap/application/validation';
 import { normalizeName } from '@/features/roadmap/domain/roadmap-copy';
 import { requireUuid } from '@/shared/validation';
-import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import { ApplicationError } from '@/shared/errors/server';
 import type { ApplicationErrorStatus } from '@/shared/errors/types';
 import type {
   NodeDeletionImpact,
@@ -198,140 +198,140 @@ async function ensureTypeNameAvailable(
   }
 }
 
-export const createRoadmapNode = withApplicationResult(
-  async ({ input, ...editor }: WithInput, changePort: RoadmapChangePort) =>
-    roadmapChangeTransaction(changePort, async (transaction, report) => {
-      const roadmap = await requireEditorRoadmap(transaction, editor);
-      const title = requireString(input.title, 'title', 240);
-      const description = nodeDescription(input.description);
-      const nodeTypeId = requireUuid(input.nodeTypeId, 'nodeTypeId');
-      const positionX = requireFiniteNumber(input.positionX, 'positionX');
-      const positionY = requireFiniteNumber(input.positionY, 'positionY');
-      const isVisible =
-        input.isVisible === undefined ? true : requireBoolean(input.isVisible, 'isVisible');
-      await requireType(transaction, nodeTypeId, roadmap.id);
-      const node = await transaction.roadmapNode.create({
-        data: {
-          roadmapId: roadmap.id,
-          nodeTypeId,
-          title,
-          description,
-          positionX,
-          positionY,
-          isVisible,
-        },
-      });
-      await reportEditorChange(report, editor, roadmap.id, [
-        { kind: 'node-created', nodeId: node.id, previous: null, current: node },
-      ]);
-      return nodeDto(node);
-    }),
-);
-
-export const updateRoadmapNode = withApplicationResult(
-  async ({ id, input, ...editor }: WithId & { input: JsonObject }, changePort: RoadmapChangePort) =>
-    withSerializableTransaction(async (transaction, report) => {
-      const roadmap = await requireEditorRoadmap(transaction, editor);
-      const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
-      const requestedVisibility =
-        'isVisible' in input ? requireBoolean(input.isVisible, 'isVisible') : undefined;
-      const beforeVisibility =
-        requestedVisibility === undefined
-          ? null
-          : await readAccessSnapshot(transaction, roadmap.id);
-      const data: Prisma.RoadmapNodeUncheckedUpdateInput = {};
-      if ('title' in input) data.title = requireString(input.title, 'title', 240);
-      if ('description' in input) data.description = nodeDescription(input.description) ?? null;
-      const nodeTypeId =
-        'nodeTypeId' in input ? requireUuid(input.nodeTypeId, 'nodeTypeId') : undefined;
-      if (nodeTypeId !== undefined) {
-        data.nodeTypeId = nodeTypeId;
-        await requireType(transaction, nodeTypeId, roadmap.id);
-      }
-      if ('positionX' in input) data.positionX = requireFiniteNumber(input.positionX, 'positionX');
-      if ('positionY' in input) data.positionY = requireFiniteNumber(input.positionY, 'positionY');
-      if (requestedVisibility !== undefined) data.isVisible = requestedVisibility;
-      if (Object.keys(data).length === 0)
-        throw new ApplicationError(
-          400,
-          'INVALID_REQUEST',
-          'Debe indicar al menos un campo para actualizar.',
-        );
-      const isVisible = requestedVisibility ?? node.isVisible;
-      const { removedDependencies, clearsTeacherBlock } = decideVisibilityChange({
-        nodeId: node.id,
+export const createRoadmapNode = async (
+  { input, ...editor }: WithInput,
+  changePort: RoadmapChangePort,
+) =>
+  roadmapChangeTransaction(changePort, async (transaction, report) => {
+    const roadmap = await requireEditorRoadmap(transaction, editor);
+    const title = requireString(input.title, 'title', 240);
+    const description = nodeDescription(input.description);
+    const nodeTypeId = requireUuid(input.nodeTypeId, 'nodeTypeId');
+    const positionX = requireFiniteNumber(input.positionX, 'positionX');
+    const positionY = requireFiniteNumber(input.positionY, 'positionY');
+    const isVisible =
+      input.isVisible === undefined ? true : requireBoolean(input.isVisible, 'isVisible');
+    await requireType(transaction, nodeTypeId, roadmap.id);
+    const node = await transaction.roadmapNode.create({
+      data: {
+        roadmapId: roadmap.id,
+        nodeTypeId,
+        title,
+        description,
+        positionX,
+        positionY,
         isVisible,
-        // Only a hidden Node loses Dependencies; skip the read on ordinary edits and moves.
-        dependencies: isVisible
-          ? []
-          : await transaction.dependency.findMany({
-              where: touchingNode(node.id),
-              select: { id: true, sourceNodeId: true, targetNodeId: true },
-              orderBy: { id: 'asc' },
-            }),
+      },
+    });
+    await reportEditorChange(report, editor, roadmap.id, [
+      { kind: 'node-created', nodeId: node.id, previous: null, current: node },
+    ]);
+    return nodeDto(node);
+  });
+
+export const updateRoadmapNode = async (
+  { id, input, ...editor }: WithId & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) =>
+  withSerializableTransaction(async (transaction, report) => {
+    const roadmap = await requireEditorRoadmap(transaction, editor);
+    const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
+    const requestedVisibility =
+      'isVisible' in input ? requireBoolean(input.isVisible, 'isVisible') : undefined;
+    const beforeVisibility =
+      requestedVisibility === undefined ? null : await readAccessSnapshot(transaction, roadmap.id);
+    const data: Prisma.RoadmapNodeUncheckedUpdateInput = {};
+    if ('title' in input) data.title = requireString(input.title, 'title', 240);
+    if ('description' in input) data.description = nodeDescription(input.description) ?? null;
+    const nodeTypeId =
+      'nodeTypeId' in input ? requireUuid(input.nodeTypeId, 'nodeTypeId') : undefined;
+    if (nodeTypeId !== undefined) {
+      data.nodeTypeId = nodeTypeId;
+      await requireType(transaction, nodeTypeId, roadmap.id);
+    }
+    if ('positionX' in input) data.positionX = requireFiniteNumber(input.positionX, 'positionX');
+    if ('positionY' in input) data.positionY = requireFiniteNumber(input.positionY, 'positionY');
+    if (requestedVisibility !== undefined) data.isVisible = requestedVisibility;
+    if (Object.keys(data).length === 0)
+      throw new ApplicationError(
+        400,
+        'INVALID_REQUEST',
+        'Debe indicar al menos un campo para actualizar.',
+      );
+    const isVisible = requestedVisibility ?? node.isVisible;
+    const { removedDependencies, clearsTeacherBlock } = decideVisibilityChange({
+      nodeId: node.id,
+      isVisible,
+      // Only a hidden Node loses Dependencies; skip the read on ordinary edits and moves.
+      dependencies: isVisible
+        ? []
+        : await transaction.dependency.findMany({
+            where: touchingNode(node.id),
+            select: { id: true, sourceNodeId: true, targetNodeId: true },
+            orderBy: { id: 'asc' },
+          }),
+    });
+    if (clearsTeacherBlock) {
+      data.isTeacherBlocked = false;
+      data.teacherUnlockOn = null;
+    }
+    if (removedDependencies.length > 0) {
+      await transaction.dependency.deleteMany({ where: touchingNode(node.id) });
+    }
+    const updated = await transaction.roadmapNode.update({
+      where: { id: node.id },
+      data,
+      include: { resources: { orderBy: { title: 'asc' } } },
+    });
+    const [previousType, currentType] =
+      nodeTypeId && nodeTypeId !== node.nodeTypeId
+        ? await Promise.all([
+            requireType(transaction, node.nodeTypeId, roadmap.id),
+            requireType(transaction, nodeTypeId, roadmap.id),
+          ])
+        : [null, null];
+    const facts: RoadmapChangeFact[] = [];
+    if (data.title !== undefined && data.title !== node.title)
+      facts.push({
+        kind: 'node-title',
+        nodeId: node.id,
+        previous: node.title,
+        current: updated.title,
       });
-      if (clearsTeacherBlock) {
-        data.isTeacherBlocked = false;
-        data.teacherUnlockOn = null;
-      }
-      if (removedDependencies.length > 0) {
-        await transaction.dependency.deleteMany({ where: touchingNode(node.id) });
-      }
-      const updated = await transaction.roadmapNode.update({
-        where: { id: node.id },
-        data,
-        include: { resources: { orderBy: { title: 'asc' } } },
+    if (data.description !== undefined && data.description !== node.description)
+      facts.push({
+        kind: 'node-description',
+        nodeId: node.id,
+        previous: node.description,
+        current: updated.description,
       });
-      const [previousType, currentType] =
-        nodeTypeId && nodeTypeId !== node.nodeTypeId
-          ? await Promise.all([
-              requireType(transaction, node.nodeTypeId, roadmap.id),
-              requireType(transaction, nodeTypeId, roadmap.id),
-            ])
-          : [null, null];
-      const facts: RoadmapChangeFact[] = [];
-      if (data.title !== undefined && data.title !== node.title)
-        facts.push({
-          kind: 'node-title',
-          nodeId: node.id,
-          previous: node.title,
-          current: updated.title,
-        });
-      if (data.description !== undefined && data.description !== node.description)
-        facts.push({
-          kind: 'node-description',
-          nodeId: node.id,
-          previous: node.description,
-          current: updated.description,
-        });
-      if (previousType && currentType)
-        facts.push({
-          kind: 'node-type',
-          nodeId: node.id,
-          previous: { id: previousType.id, name: previousType.name },
-          current: { id: currentType.id, name: currentType.name },
-        });
-      if (beforeVisibility && requestedVisibility !== node.isVisible) {
-        facts.push({
-          kind: 'node-visibility',
-          nodeId: node.id,
-          previous: node.isVisible,
-          current: updated.isVisible,
-        });
-        facts.push(
-          ...accessChanges(beforeVisibility, await readAccessSnapshot(transaction, roadmap.id)),
-        );
-      }
-      if (facts.length) await reportEditorChange(report, editor, roadmap.id, facts);
-      return {
-        node: {
-          ...nodeDto(updated),
-          resources: updated.resources.map((resource) => resourceDto(resource, editor.identifier)),
-        },
-        ...(requestedVisibility !== undefined ? { dependencies: removedDependencies } : {}),
-      };
-    }, changePort),
-);
+    if (previousType && currentType)
+      facts.push({
+        kind: 'node-type',
+        nodeId: node.id,
+        previous: { id: previousType.id, name: previousType.name },
+        current: { id: currentType.id, name: currentType.name },
+      });
+    if (beforeVisibility && requestedVisibility !== node.isVisible) {
+      facts.push({
+        kind: 'node-visibility',
+        nodeId: node.id,
+        previous: node.isVisible,
+        current: updated.isVisible,
+      });
+      facts.push(
+        ...accessChanges(beforeVisibility, await readAccessSnapshot(transaction, roadmap.id)),
+      );
+    }
+    if (facts.length) await reportEditorChange(report, editor, roadmap.id, facts);
+    return {
+      node: {
+        ...nodeDto(updated),
+        resources: updated.resources.map((resource) => resourceDto(resource, editor.identifier)),
+      },
+      ...(requestedVisibility !== undefined ? { dependencies: removedDependencies } : {}),
+    };
+  }, changePort);
 
 async function nodeDeletionPreview(
   transaction: Prisma.TransactionClient,
@@ -371,119 +371,118 @@ async function nodeDeletionPreview(
   return { ...impact, version: versionHash(impact) };
 }
 
-export const previewNodeDeletion = withApplicationResult(async ({ id, ...editor }: WithId) =>
+export const previewNodeDeletion = async ({ id, ...editor }: WithId) =>
   repeatableRead(async (transaction) =>
     nodeDeletionPreview(transaction, (await requireEditorRoadmap(transaction, editor)).id, id),
-  ),
-);
+  );
 
-export const deleteRoadmapNode = withApplicationResult(
-  async ({ id, previewVersion, ...editor }: WithDeletePreview, changePort: RoadmapChangePort) => {
-    const deletion = await withSerializableTransaction(
-      async (transaction, report) => {
-        const roadmap = await requireEditorRoadmap(transaction, editor);
-        const preview = await nodeDeletionPreview(transaction, roadmap.id, id);
-        if (previewVersion && previewVersion !== preview.version) {
-          throw new ApplicationError(
-            409,
-            'NODE_DELETE_PREVIEW_STALE',
-            'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
-          );
-        }
-        const resources = await transaction.resource.findMany({
-          where: { roadmapNodeId: id, fileKey: { not: null } },
-          select: { fileKey: true },
-        });
-        const {
-          result: { node, nodeType },
-          accessFacts,
-        } = await trackAccessChanges(transaction, roadmap.id, async () => {
-          const node = await requireNode(transaction, id, roadmap.id);
-          const nodeType = await requireType(transaction, node.nodeTypeId, roadmap.id);
-          await transaction.roadmapNode.delete({ where: { id } });
-          return { node, nodeType };
-        });
-        await reportEditorChange(report, editor, roadmap.id, [
-          {
-            kind: 'node-deleted',
-            nodeId: id,
-            nodeTypeName: nodeType.name,
-            previous: node,
-            current: null,
-          },
-          ...accessFacts,
-        ]);
-        return { fileKeys: resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : [])) };
-      },
-      changePort,
-      () => conflict('La eliminación entra en conflicto con otra modificación.'),
-    );
-    await Promise.all(
-      deletion.fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)),
-    );
-    return {};
-  },
-);
-
-export const createRoadmapNodeType = withApplicationResult(
-  async ({ input, ...editor }: WithInput) =>
-    prisma.$transaction(async (transaction) => {
+export const deleteRoadmapNode = async (
+  { id, previewVersion, ...editor }: WithDeletePreview,
+  changePort: RoadmapChangePort,
+) => {
+  const deletion = await withSerializableTransaction(
+    async (transaction, report) => {
       const roadmap = await requireEditorRoadmap(transaction, editor);
-      const name = requireString(input.name, 'name', 120);
-      const icon = requireNodeTypeIcon(input.icon);
-      const color = requireNodeTypeColor(input.color);
-      await ensureTypeNameAvailable(transaction, name, roadmap.id);
-      return nodeTypeDto(
-        await transaction.nodeType.create({
-          data: {
-            roadmapId: roadmap.id,
-            name,
-            normalizedName: normalizeName(name),
-            icon,
-            color,
-            isPredefined: false,
-          },
-        }),
-      );
-    }),
-);
-
-export const updateRoadmapNodeType = withApplicationResult(
-  async ({ id, input, ...editor }: WithId & { input: JsonObject }, changePort: RoadmapChangePort) =>
-    roadmapChangeTransaction(changePort, async (transaction, report) => {
-      const roadmap = await requireEditorRoadmap(transaction, editor);
-      const nodeType = await requireCustomType(transaction, requireUuid(id, 'typeId'), roadmap.id);
-      const data: { name?: string; normalizedName?: string; icon?: string; color?: string } = {};
-      if ('name' in input) {
-        data.name = requireString(input.name, 'name', 120);
-        data.normalizedName = normalizeName(data.name);
-        await ensureTypeNameAvailable(transaction, data.name, roadmap.id, nodeType.id);
-      }
-      if ('icon' in input) data.icon = requireNodeTypeIcon(input.icon);
-      if ('color' in input) data.color = requireNodeTypeColor(input.color);
-      if (Object.keys(data).length === 0)
+      const preview = await nodeDeletionPreview(transaction, roadmap.id, id);
+      if (previewVersion && previewVersion !== preview.version) {
         throw new ApplicationError(
-          400,
-          'INVALID_REQUEST',
-          'Debe indicar nombre, ícono o color para actualizar.',
+          409,
+          'NODE_DELETE_PREVIEW_STALE',
+          'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
         );
-      const updated = await transaction.nodeType.update({ where: { id: nodeType.id }, data });
-      if (data.name !== undefined && data.name !== nodeType.name)
-        await reportEditorChange(report, editor, roadmap.id, [
-          {
-            kind: 'node-type-name',
-            nodeTypeId: nodeType.id,
-            previous: nodeType.name,
-            current: updated.name,
-          },
-        ]);
-      return {
-        nodeType: nodeTypeDto(updated),
-      };
-    }),
-);
+      }
+      const resources = await transaction.resource.findMany({
+        where: { roadmapNodeId: id, fileKey: { not: null } },
+        select: { fileKey: true },
+      });
+      const {
+        result: { node, nodeType },
+        accessFacts,
+      } = await trackAccessChanges(transaction, roadmap.id, async () => {
+        const node = await requireNode(transaction, id, roadmap.id);
+        const nodeType = await requireType(transaction, node.nodeTypeId, roadmap.id);
+        await transaction.roadmapNode.delete({ where: { id } });
+        return { node, nodeType };
+      });
+      await reportEditorChange(report, editor, roadmap.id, [
+        {
+          kind: 'node-deleted',
+          nodeId: id,
+          nodeTypeName: nodeType.name,
+          previous: node,
+          current: null,
+        },
+        ...accessFacts,
+      ]);
+      return { fileKeys: resources.flatMap(({ fileKey }) => (fileKey ? [fileKey] : [])) };
+    },
+    changePort,
+    () => conflict('La eliminación entra en conflicto con otra modificación.'),
+  );
+  await Promise.all(
+    deletion.fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)),
+  );
+  return {};
+};
 
-export const deleteRoadmapNodeType = withApplicationResult(async ({ id, ...editor }: WithId) =>
+export const createRoadmapNodeType = async ({ input, ...editor }: WithInput) =>
+  prisma.$transaction(async (transaction) => {
+    const roadmap = await requireEditorRoadmap(transaction, editor);
+    const name = requireString(input.name, 'name', 120);
+    const icon = requireNodeTypeIcon(input.icon);
+    const color = requireNodeTypeColor(input.color);
+    await ensureTypeNameAvailable(transaction, name, roadmap.id);
+    return nodeTypeDto(
+      await transaction.nodeType.create({
+        data: {
+          roadmapId: roadmap.id,
+          name,
+          normalizedName: normalizeName(name),
+          icon,
+          color,
+          isPredefined: false,
+        },
+      }),
+    );
+  });
+
+export const updateRoadmapNodeType = async (
+  { id, input, ...editor }: WithId & { input: JsonObject },
+  changePort: RoadmapChangePort,
+) =>
+  roadmapChangeTransaction(changePort, async (transaction, report) => {
+    const roadmap = await requireEditorRoadmap(transaction, editor);
+    const nodeType = await requireCustomType(transaction, requireUuid(id, 'typeId'), roadmap.id);
+    const data: { name?: string; normalizedName?: string; icon?: string; color?: string } = {};
+    if ('name' in input) {
+      data.name = requireString(input.name, 'name', 120);
+      data.normalizedName = normalizeName(data.name);
+      await ensureTypeNameAvailable(transaction, data.name, roadmap.id, nodeType.id);
+    }
+    if ('icon' in input) data.icon = requireNodeTypeIcon(input.icon);
+    if ('color' in input) data.color = requireNodeTypeColor(input.color);
+    if (Object.keys(data).length === 0)
+      throw new ApplicationError(
+        400,
+        'INVALID_REQUEST',
+        'Debe indicar nombre, ícono o color para actualizar.',
+      );
+    const updated = await transaction.nodeType.update({ where: { id: nodeType.id }, data });
+    if (data.name !== undefined && data.name !== nodeType.name)
+      await reportEditorChange(report, editor, roadmap.id, [
+        {
+          kind: 'node-type-name',
+          nodeTypeId: nodeType.id,
+          previous: nodeType.name,
+          current: updated.name,
+        },
+      ]);
+    return {
+      nodeType: nodeTypeDto(updated),
+    };
+  });
+
+export const deleteRoadmapNodeType = async ({ id, ...editor }: WithId) =>
   prisma.$transaction(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, editor);
     const nodeType = await requireCustomType(transaction, requireUuid(id, 'typeId'), roadmap.id);
@@ -495,8 +494,7 @@ export const deleteRoadmapNodeType = withApplicationResult(async ({ id, ...edito
       );
     }
     await transaction.nodeType.delete({ where: { id: nodeType.id } });
-  }),
-);
+  });
 
 async function prepareRoadmapDependency(
   transaction: Prisma.TransactionClient,
@@ -536,113 +534,113 @@ async function prepareRoadmapDependency(
   };
 }
 
-export const createRoadmapDependency = withApplicationResult(
-  async ({ input, ...editor }: WithInput, changePort: RoadmapChangePort) =>
-    withSerializableTransaction(
-      async (transaction, report) => {
-        const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
-        const nodes = prepared.teacherBlockedNodes;
-        const { result: dependency, accessFacts } = await trackAccessChanges(
-          transaction,
-          prepared.roadmapId,
-          async () => {
-            const dependency = await transaction.dependency.create({
-              data: {
-                sourceNodeId: prepared.sourceNodeId,
-                targetNodeId: prepared.targetNodeId,
-                sourceHandle: prepared.sourceHandle,
-                targetHandle: prepared.targetHandle,
-              },
-            });
-            if (nodes.length > 0) {
-              await transaction.roadmapNode.updateMany({
-                where: { id: { in: nodes.map((node) => node.id) } },
-                data: { isTeacherBlocked: true },
-              });
-            }
-            return dependency;
-          },
-        );
-        await reportEditorChange(report, editor, prepared.roadmapId, [
-          {
-            kind: 'dependency' as const,
-            dependencyId: dependency.id,
-            sourceNodeId: prepared.sourceNodeId,
-            targetNodeId: prepared.targetNodeId,
-            previous: false,
-            current: true,
-            sourceNode: prepared.sourceNode,
-            targetNode: prepared.targetNode,
-          },
-          ...accessFacts,
-        ]);
-        return {
-          dependency: {
-            id: dependency.id,
-            sourceNodeId: prepared.sourceNodeId,
-            targetNodeId: prepared.targetNodeId,
-            sourceHandle: prepared.sourceHandle,
-            targetHandle: prepared.targetHandle,
-          },
-          nodes,
-        };
-      },
-      changePort,
-      dependencyConflict,
-    ),
-);
-
-export const previewRoadmapDependency = withApplicationResult(
-  async ({ input, ...editor }: WithInput) =>
-    repeatableRead(async (transaction) => {
+export const createRoadmapDependency = async (
+  { input, ...editor }: WithInput,
+  changePort: RoadmapChangePort,
+) =>
+  withSerializableTransaction(
+    async (transaction, report) => {
       const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
-      return { nodes: prepared.teacherBlockedNodes };
-    }),
-);
+      const nodes = prepared.teacherBlockedNodes;
+      const { result: dependency, accessFacts } = await trackAccessChanges(
+        transaction,
+        prepared.roadmapId,
+        async () => {
+          const dependency = await transaction.dependency.create({
+            data: {
+              sourceNodeId: prepared.sourceNodeId,
+              targetNodeId: prepared.targetNodeId,
+              sourceHandle: prepared.sourceHandle,
+              targetHandle: prepared.targetHandle,
+            },
+          });
+          if (nodes.length > 0) {
+            await transaction.roadmapNode.updateMany({
+              where: { id: { in: nodes.map((node) => node.id) } },
+              data: { isTeacherBlocked: true },
+            });
+          }
+          return dependency;
+        },
+      );
+      await reportEditorChange(report, editor, prepared.roadmapId, [
+        {
+          kind: 'dependency' as const,
+          dependencyId: dependency.id,
+          sourceNodeId: prepared.sourceNodeId,
+          targetNodeId: prepared.targetNodeId,
+          previous: false,
+          current: true,
+          sourceNode: prepared.sourceNode,
+          targetNode: prepared.targetNode,
+        },
+        ...accessFacts,
+      ]);
+      return {
+        dependency: {
+          id: dependency.id,
+          sourceNodeId: prepared.sourceNodeId,
+          targetNodeId: prepared.targetNodeId,
+          sourceHandle: prepared.sourceHandle,
+          targetHandle: prepared.targetHandle,
+        },
+        nodes,
+      };
+    },
+    changePort,
+    dependencyConflict,
+  );
 
-export const deleteRoadmapDependency = withApplicationResult(
-  async ({ id, ...editor }: WithId, changePort: RoadmapChangePort) =>
-    withSerializableTransaction(
-      async (transaction, report) => {
-        const roadmap = await requireEditorRoadmap(transaction, editor);
-        const dependencyId = requireUuid(id, 'dependencyId');
-        const dependency = await transaction.dependency.findFirst({
-          where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
-          include: {
-            sourceNode: { select: { title: true, isVisible: true } },
-            targetNode: { select: { title: true, isVisible: true } },
-          },
-        });
-        if (!dependency)
-          throw new ApplicationError(
-            404,
-            'DEPENDENCY_NOT_FOUND',
-            'La dependencia no existe en este roadmap.',
-          );
-        const { accessFacts } = await trackAccessChanges(transaction, roadmap.id, () =>
-          transaction.dependency.delete({ where: { id: dependency.id } }),
+export const previewRoadmapDependency = async ({ input, ...editor }: WithInput) =>
+  repeatableRead(async (transaction) => {
+    const prepared = await prepareRoadmapDependency(transaction, { input, ...editor });
+    return { nodes: prepared.teacherBlockedNodes };
+  });
+
+export const deleteRoadmapDependency = async (
+  { id, ...editor }: WithId,
+  changePort: RoadmapChangePort,
+) =>
+  withSerializableTransaction(
+    async (transaction, report) => {
+      const roadmap = await requireEditorRoadmap(transaction, editor);
+      const dependencyId = requireUuid(id, 'dependencyId');
+      const dependency = await transaction.dependency.findFirst({
+        where: { id: dependencyId, sourceNode: { roadmapId: roadmap.id } },
+        include: {
+          sourceNode: { select: { title: true, isVisible: true } },
+          targetNode: { select: { title: true, isVisible: true } },
+        },
+      });
+      if (!dependency)
+        throw new ApplicationError(
+          404,
+          'DEPENDENCY_NOT_FOUND',
+          'La dependencia no existe en este roadmap.',
         );
-        await reportEditorChange(report, editor, roadmap.id, [
-          {
-            kind: 'dependency' as const,
-            dependencyId: dependency.id,
-            sourceNodeId: dependency.sourceNodeId,
-            targetNodeId: dependency.targetNodeId,
-            previous: true,
-            current: false,
-            sourceNode: dependency.sourceNode,
-            targetNode: dependency.targetNode,
-          },
-          ...accessFacts,
-        ]);
-        return {};
-      },
-      changePort,
-      dependencyConflict,
-    ),
-);
+      const { accessFacts } = await trackAccessChanges(transaction, roadmap.id, () =>
+        transaction.dependency.delete({ where: { id: dependency.id } }),
+      );
+      await reportEditorChange(report, editor, roadmap.id, [
+        {
+          kind: 'dependency' as const,
+          dependencyId: dependency.id,
+          sourceNodeId: dependency.sourceNodeId,
+          targetNodeId: dependency.targetNodeId,
+          previous: true,
+          current: false,
+          sourceNode: dependency.sourceNode,
+          targetNode: dependency.targetNode,
+        },
+        ...accessFacts,
+      ]);
+      return {};
+    },
+    changePort,
+    dependencyConflict,
+  );
 
-export const previewNodeVisibility = withApplicationResult(async (input: WithId) =>
+export const previewNodeVisibility = async (input: WithId) =>
   repeatableRead(async (transaction) => {
     const roadmap = await requireEditorRoadmap(transaction, input);
     const node = await requireNode(transaction, requireUuid(input.id, 'nodeId'), roadmap.id);
@@ -652,8 +650,7 @@ export const previewNodeVisibility = withApplicationResult(async (input: WithId)
       orderBy: { id: 'asc' },
     });
     return { dependencies };
-  }),
-);
+  });
 
 async function teacherBlockPreview(
   transaction: Prisma.TransactionClient,
@@ -690,42 +687,42 @@ async function teacherBlockPreview(
   return { ...preview, version: versionHash(preview) } satisfies TeacherBlockPreview;
 }
 
-export const previewTeacherBlock = withApplicationResult(async (input: WithTeacherBlockOperation) =>
-  repeatableRead((transaction) => teacherBlockPreview(transaction, input)),
-);
+export const previewTeacherBlock = async (input: WithTeacherBlockOperation) =>
+  repeatableRead((transaction) => teacherBlockPreview(transaction, input));
 
-export const changeTeacherBlock = withApplicationResult(
-  async (input: WithTeacherBlockOperation, changePort: RoadmapChangePort) =>
-    withSerializableTransaction(async (transaction, report) => {
-      const roadmap = await requireEditorRoadmap(transaction, input);
-      const preview = await teacherBlockPreview(transaction, input, roadmap);
-      if (
-        input.operation !== 'BLOCK' &&
-        (!input.previewVersion || input.previewVersion !== preview.version)
-      ) {
-        throw new ApplicationError(
-          409,
-          'TEACHER_BLOCK_PREVIEW_STALE',
-          'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
-        );
+export const changeTeacherBlock = async (
+  input: WithTeacherBlockOperation,
+  changePort: RoadmapChangePort,
+) =>
+  withSerializableTransaction(async (transaction, report) => {
+    const roadmap = await requireEditorRoadmap(transaction, input);
+    const preview = await teacherBlockPreview(transaction, input, roadmap);
+    if (
+      input.operation !== 'BLOCK' &&
+      (!input.previewVersion || input.previewVersion !== preview.version)
+    ) {
+      throw new ApplicationError(
+        409,
+        'TEACHER_BLOCK_PREVIEW_STALE',
+        'El impacto del desbloqueo cambió. Revisa y confirma la previsualización actualizada.',
+      );
+    }
+    const { accessFacts } = await trackAccessChanges(transaction, roadmap.id, async () => {
+      if (preview.nodes.length > 0) {
+        await transaction.roadmapNode.updateMany({
+          where: { id: { in: preview.nodes.map((node) => node.id) } },
+          data:
+            input.operation === 'BLOCK'
+              ? { isTeacherBlocked: true }
+              : { isTeacherBlocked: false, teacherUnlockOn: null },
+        });
       }
-      const { accessFacts } = await trackAccessChanges(transaction, roadmap.id, async () => {
-        if (preview.nodes.length > 0) {
-          await transaction.roadmapNode.updateMany({
-            where: { id: { in: preview.nodes.map((node) => node.id) } },
-            data:
-              input.operation === 'BLOCK'
-                ? { isTeacherBlocked: true }
-                : { isTeacherBlocked: false, teacherUnlockOn: null },
-          });
-        }
-        // Unlocking a prerequisite can release dependents whose scheduled day already arrived.
-        if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(transaction, roadmap.id);
-      });
-      await reportEditorChange(report, input, roadmap.id, accessFacts);
-      return preview;
-    }, changePort),
-);
+      // Unlocking a prerequisite can release dependents whose scheduled day already arrived.
+      if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(transaction, roadmap.id);
+    });
+    await reportEditorChange(report, input, roadmap.id, accessFacts);
+    return preview;
+  }, changePort);
 
 function calendarDayOf(date: Date): CalendarDay {
   return date.toISOString().slice(0, 10);
@@ -775,65 +772,68 @@ async function releaseDueScheduledUnlocks(
   return releasedNodeIds;
 }
 
-export const scheduleTeacherUnlock = withApplicationResult(
-  async ({ id, unlockOn, ...editor }: WithTeacherUnlockSchedule) =>
-    withSerializableTransaction(async (transaction) => {
-      const roadmap = await requireEditorRoadmap(transaction, editor);
-      const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
-      const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
-      if (decision.kind === 'REJECTED') throw ruleError(decision);
-      const { day } = decision;
-      await transaction.roadmapNode.update({
-        where: { id: node.id },
-        data: { teacherUnlockOn: day ? calendarDayDate(day) : null },
-      });
-      return { teacherUnlockOn: day };
-    }),
-);
+export const scheduleTeacherUnlock = async ({
+  id,
+  unlockOn,
+  ...editor
+}: WithTeacherUnlockSchedule) =>
+  withSerializableTransaction(async (transaction) => {
+    const roadmap = await requireEditorRoadmap(transaction, editor);
+    const node = await requireNode(transaction, requireUuid(id, 'nodeId'), roadmap.id);
+    const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
+    if (decision.kind === 'REJECTED') throw ruleError(decision);
+    const { day } = decision;
+    await transaction.roadmapNode.update({
+      where: { id: node.id },
+      data: { teacherUnlockOn: day ? calendarDayDate(day) : null },
+    });
+    return { teacherUnlockOn: day };
+  });
 
 /** Releases every due scheduled unlock; run by the daily scheduled job. */
-export const releaseScheduledTeacherUnlocks = withApplicationResult(
-  async (changePort: RoadmapChangePort, today: CalendarDay = chileCalendarDay()) => {
-    const roadmaps = await prisma.roadmap.findMany({
-      where: {
-        closedAt: null,
-        roadmapNodes: {
-          some: { isTeacherBlocked: true, teacherUnlockOn: { lte: calendarDayDate(today) } },
-        },
+export const releaseScheduledTeacherUnlocks = async (
+  changePort: RoadmapChangePort,
+  today: CalendarDay = chileCalendarDay(),
+) => {
+  const roadmaps = await prisma.roadmap.findMany({
+    where: {
+      closedAt: null,
+      roadmapNodes: {
+        some: { isTeacherBlocked: true, teacherUnlockOn: { lte: calendarDayDate(today) } },
       },
-      select: {
-        id: true,
-        courseOffering: { select: { courseCode: true, year: true, semester: true } },
+    },
+    select: {
+      id: true,
+      courseOffering: { select: { courseCode: true, year: true, semester: true } },
+    },
+  });
+  const released = [];
+  for (const roadmap of roadmaps) {
+    // A node waiting for blocked prerequisites stays due on every pass; checking outside a
+    // transaction keeps those passes from contending with teaching edits on its Roadmap.
+    if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
+    const result = await withSerializableTransaction(
+      async (transaction, report) => {
+        await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
+        const current = await transaction.roadmap.findUnique({ where: { id: roadmap.id } });
+        if (!current || current.closedAt) return { releasedNodeIds: [] };
+        const { result: releasedNodeIds, accessFacts } = await trackAccessChanges(
+          transaction,
+          roadmap.id,
+          () => releaseDueScheduledUnlocks(transaction, roadmap.id, today),
+        );
+        await report({
+          actorId: SCHEDULED_UNLOCK_ACTOR_ID,
+          identifier: roadmap.courseOffering,
+          roadmapId: roadmap.id,
+          facts: accessFacts,
+        });
+        return { releasedNodeIds: [...releasedNodeIds] };
       },
-    });
-    const released = [];
-    for (const roadmap of roadmaps) {
-      // A node waiting for blocked prerequisites stays due on every pass; checking outside a
-      // transaction keeps those passes from contending with teaching edits on its Roadmap.
-      if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
-      const result = await withSerializableTransaction(
-        async (transaction, report) => {
-          await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmap.id}::uuid FOR UPDATE`;
-          const current = await transaction.roadmap.findUnique({ where: { id: roadmap.id } });
-          if (!current || current.closedAt) return { releasedNodeIds: [] };
-          const { result: releasedNodeIds, accessFacts } = await trackAccessChanges(
-            transaction,
-            roadmap.id,
-            () => releaseDueScheduledUnlocks(transaction, roadmap.id, today),
-          );
-          await report({
-            actorId: SCHEDULED_UNLOCK_ACTOR_ID,
-            identifier: roadmap.courseOffering,
-            roadmapId: roadmap.id,
-            facts: accessFacts,
-          });
-          return { releasedNodeIds: [...releasedNodeIds] };
-        },
-        changePort,
-        () => conflict('El desbloqueo programado entra en conflicto con otra modificación.'),
-      );
-      released.push({ identifier: roadmap.courseOffering, ...result });
-    }
-    return released;
-  },
-);
+      changePort,
+      () => conflict('El desbloqueo programado entra en conflicto con otra modificación.'),
+    );
+    released.push({ identifier: roadmap.courseOffering, ...result });
+  }
+  return released;
+};

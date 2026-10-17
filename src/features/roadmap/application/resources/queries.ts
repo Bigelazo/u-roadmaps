@@ -12,7 +12,7 @@ import { requireRoadmapCapability } from '@/features/roadmap/application/roadmap
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import { readUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
 import { requireUuid } from '@/shared/validation';
-import { ApplicationError, withApplicationResult } from '@/shared/errors/server';
+import { ApplicationError } from '@/shared/errors/server';
 
 type NodeResourcesInput = {
   actor: RoadmapActor;
@@ -36,11 +36,6 @@ async function requireResourceRoadmap(
     identifier,
     'read',
     changePort,
-  ).match(
-    (value) => value,
-    (error) => {
-      throw error;
-    },
   );
   return requireRoadmapCapability({
     capability: 'read',
@@ -70,7 +65,7 @@ async function requireStudentResourceAccess(
   }
 }
 
-export const getRoadmapNodeResources = withApplicationResult(async function getRoadmapNodeResources(
+export async function getRoadmapNodeResources(
   { actor, identifier, nodeId }: NodeResourcesInput,
   changePort: RoadmapChangePort,
 ) {
@@ -87,9 +82,9 @@ export const getRoadmapNodeResources = withApplicationResult(async function getR
     orderBy: { title: 'asc' },
   });
   return resources.map((resource) => resourceDto(resource, identifier));
-});
+}
 
-export const downloadRoadmapResource = withApplicationResult(async function downloadRoadmapResource(
+export async function downloadRoadmapResource(
   { actor, identifier, resourceId }: ResourceDownloadInput,
   changePort: RoadmapChangePort,
 ) {
@@ -117,4 +112,4 @@ export const downloadRoadmapResource = withApplicationResult(async function down
   } catch {
     throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
   }
-});
+}

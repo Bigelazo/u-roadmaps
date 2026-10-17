@@ -24,18 +24,8 @@ import {
 } from '@/features/roadmap/server';
 import { createRoadmap } from '@/features/roadmap/application/roadmap';
 import { materializeParticipation } from '@/features/roadmap/application/academic-participation';
-import type { ResultAsync } from 'neverthrow';
 
 beforeAll(databaseSetup, 60_000);
-
-function confirmed<T, E>(result: ResultAsync<T, E>) {
-  return result.match(
-    (value) => value,
-    (error) => {
-      throw error;
-    },
-  );
-}
 
 function editor(course: {
   teacherId: string;
@@ -78,20 +68,18 @@ test('node creation and edits report per-object previous values and return plain
   const recording = recordingChangePort();
   const input = editor(course);
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
-  const node = await confirmed(
-    createRoadmapNode(
-      {
-        ...input,
-        input: {
-          title: 'Pilas',
-          description: 'Original',
-          nodeTypeId: type.id,
-          positionX: 10,
-          positionY: 20,
-        },
+  const node = await createRoadmapNode(
+    {
+      ...input,
+      input: {
+        title: 'Pilas',
+        description: 'Original',
+        nodeTypeId: type.id,
+        positionX: 10,
+        positionY: 20,
       },
-      recording.port,
-    ),
+    },
+    recording.port,
   );
   expect(recording.facts()).toMatchObject([
     {
@@ -103,15 +91,13 @@ test('node creation and edits report per-object previous values and return plain
   ]);
   recording.changes.length = 0;
   const nextType = await addNodeType(course, 'Ejercicio');
-  const updated = await confirmed(
-    updateRoadmapNode(
-      {
-        ...input,
-        id: node.id,
-        input: { title: 'Colas', description: 'Nueva', nodeTypeId: nextType.id },
-      },
-      recording.port,
-    ),
+  const updated = await updateRoadmapNode(
+    {
+      ...input,
+      id: node.id,
+      input: { title: 'Colas', description: 'Nueva', nodeTypeId: nextType.id },
+    },
+    recording.port,
   );
   expect(recording.facts()).toEqual([
     { kind: 'node-title', nodeId: node.id, previous: 'Pilas', current: 'Colas' },
@@ -126,11 +112,9 @@ test('node creation and edits report per-object previous values and return plain
   expect(updated).not.toHaveProperty('notification');
   expect(updated).not.toHaveProperty('notifications');
   recording.changes.length = 0;
-  await confirmed(
-    updateRoadmapNode(
-      { ...input, id: node.id, input: { positionX: 50, title: 'Colas' } },
-      recording.port,
-    ),
+  await updateRoadmapNode(
+    { ...input, id: node.id, input: { positionX: 50, title: 'Colas' } },
+    recording.port,
   );
   expect(recording.facts()).toEqual([]);
 });
@@ -142,15 +126,13 @@ test('description and type edits report previous values and write no notice base
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
   const nextType = await addNodeType(course, 'Taller');
   const nodeId = course.change.nodeId;
-  await confirmed(
-    updateRoadmapNode(
-      {
-        ...editor(course),
-        id: nodeId,
-        input: { description: 'Nueva', nodeTypeId: nextType.id },
-      },
-      recording.port,
-    ),
+  await updateRoadmapNode(
+    {
+      ...editor(course),
+      id: nodeId,
+      input: { description: 'Nueva', nodeTypeId: nextType.id },
+    },
+    recording.port,
   );
   expect(recording.facts()).toEqual([
     { kind: 'node-description', nodeId, previous: null, current: 'Nueva' },
@@ -171,9 +153,7 @@ test('visibility and deletion report their facts and recipient access transition
   const recording = recordingChangePort();
   const input = editor(course);
   const nodeId = course.change.nodeId;
-  await confirmed(
-    updateRoadmapNode({ ...input, id: nodeId, input: { isVisible: false } }, recording.port),
-  );
+  await updateRoadmapNode({ ...input, id: nodeId, input: { isVisible: false } }, recording.port);
   expect(recording.facts()).toContainEqual({
     kind: 'node-visibility',
     nodeId,
@@ -191,7 +171,7 @@ test('visibility and deletion report their facts and recipient access transition
   // Access baselines are recorded by the notice lifecycle module through the port.
   expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
   recording.changes.length = 0;
-  await confirmed(deleteRoadmapNode({ ...input, id: nodeId }, recording.port));
+  await deleteRoadmapNode({ ...input, id: nodeId }, recording.port);
   expect(recording.facts()).toMatchObject([
     {
       kind: 'node-deleted',
@@ -211,9 +191,7 @@ test('Dependencies removed by hiding a Node are not reported as Dependency facts
   await prisma.dependency.create({
     data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
   });
-  await confirmed(
-    updateRoadmapNode({ ...input, id: target.id, input: { isVisible: false } }, recording.port),
-  );
+  await updateRoadmapNode({ ...input, id: target.id, input: { isVisible: false } }, recording.port);
   expect(await prisma.dependency.count({ where: { targetNodeId: target.id } })).toBe(0);
   expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([]);
 });
@@ -224,11 +202,9 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   const recording = recordingChangePort();
   const input = editor(course);
   const target = await addNode(course);
-  const result = await confirmed(
-    createRoadmapDependency(
-      { ...input, input: { sourceNodeId: course.change.nodeId, targetNodeId: target.id } },
-      recording.port,
-    ),
+  const result = await createRoadmapDependency(
+    { ...input, input: { sourceNodeId: course.change.nodeId, targetNodeId: target.id } },
+    recording.port,
   );
   expect(recording.facts()).toContainEqual(
     expect.objectContaining({
@@ -258,11 +234,9 @@ test('dependencies report the pair and distinct access for each recipient; Compl
     );
   expect(result).not.toHaveProperty('notifications');
   recording.changes.length = 0;
-  await confirmed(
-    completeNode(
-      { userId: course.studentId, identifier: input.identifier, nodeId: course.change.nodeId },
-      recording.port,
-    ),
+  await completeNode(
+    { userId: course.studentId, identifier: input.identifier, nodeId: course.change.nodeId },
+    recording.port,
   );
   expect(recording.facts()).toEqual([
     {
@@ -276,7 +250,7 @@ test('dependencies report the pair and distinct access for each recipient; Compl
     },
   ]);
   recording.changes.length = 0;
-  await confirmed(deleteRoadmapDependency({ ...input, id: result.dependency.id }, recording.port));
+  await deleteRoadmapDependency({ ...input, id: result.dependency.id }, recording.port);
   // Only the classmate, who has not completed the prerequisite, regains access.
   expect(recording.facts()).toMatchObject([
     { kind: 'dependency', previous: true, current: false },
@@ -289,7 +263,7 @@ test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
   async (operation, { course }) => {
     const recording = recordingChangePort();
     const input = { ...editor(course), id: course.change.nodeId };
-    await confirmed(changeTeacherBlock({ ...input, operation: 'BLOCK' }, recording.port));
+    await changeTeacherBlock({ ...input, operation: 'BLOCK' }, recording.port);
     expect(recording.facts()).toContainEqual(
       access({
         nodeId: input.id,
@@ -299,9 +273,10 @@ test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
       }),
     );
     recording.changes.length = 0;
-    const preview = await confirmed(previewTeacherBlock({ ...input, operation }));
-    await confirmed(
-      changeTeacherBlock({ ...input, operation, previewVersion: preview.version }, recording.port),
+    const preview = await previewTeacherBlock({ ...input, operation });
+    await changeTeacherBlock(
+      { ...input, operation, previewVersion: preview.version },
+      recording.port,
     );
     expect(recording.facts()).toContainEqual(
       access({
@@ -321,7 +296,7 @@ test('scheduled releases report committed access transitions and are idempotent'
     data: { isTeacherBlocked: true, teacherUnlockOn: new Date('2026-10-01T00:00:00Z') },
   });
   const recording = recordingChangePort();
-  await confirmed(releaseScheduledTeacherUnlocks(recording.port, '2026-10-08'));
+  await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
   expect(recording.facts()).toContainEqual(
     access({
       recipientId: course.studentId,
@@ -330,7 +305,7 @@ test('scheduled releases report committed access transitions and are idempotent'
     }),
   );
   recording.changes.length = 0;
-  await confirmed(releaseScheduledTeacherUnlocks(recording.port, '2026-10-08'));
+  await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
   expect(recording.facts()).toEqual([]);
 });
 
@@ -339,15 +314,13 @@ test('Resource lifecycle reports absence and exact previous content, including u
 }) => {
   const recording = recordingChangePort();
   const input = editor(course);
-  const resource = await confirmed(
-    createRoadmapResource(
-      {
-        ...input,
-        id: course.change.nodeId,
-        input: { title: 'Guía', url: 'https://example.test/guide', type: 'LINK' },
-      },
-      recording.port,
-    ),
+  const resource = await createRoadmapResource(
+    {
+      ...input,
+      id: course.change.nodeId,
+      input: { title: 'Guía', url: 'https://example.test/guide', type: 'LINK' },
+    },
+    recording.port,
   );
   const added = recording.facts()[0];
   expect(added).toMatchObject({
@@ -359,11 +332,9 @@ test('Resource lifecycle reports absence and exact previous content, including u
   });
   if (added.kind !== 'resource') throw new Error('Expected Resource change');
   recording.changes.length = 0;
-  const result = await confirmed(
-    updateRoadmapResource(
-      { ...input, id: resource.id, input: { title: 'Guía nueva' } },
-      recording.port,
-    ),
+  const result = await updateRoadmapResource(
+    { ...input, id: resource.id, input: { title: 'Guía nueva' } },
+    recording.port,
   );
   const edited = recording.facts()[0];
   expect(edited).toMatchObject({
@@ -373,48 +344,45 @@ test('Resource lifecycle reports absence and exact previous content, including u
   });
   expect(result).not.toHaveProperty('notification');
   recording.changes.length = 0;
-  await confirmed(
-    updateRoadmapResource(
-      { ...input, id: resource.id, input: { title: 'Guía nueva' } },
-      recording.port,
-    ),
+  await updateRoadmapResource(
+    { ...input, id: resource.id, input: { title: 'Guía nueva' } },
+    recording.port,
   );
   expect(recording.facts()).toEqual([]);
-  await confirmed(removeRoadmapResource({ ...input, id: resource.id }, recording.port));
+  await removeRoadmapResource({ ...input, id: resource.id }, recording.port);
   if (edited.kind !== 'resource') throw new Error('Expected Resource edit');
   expect(recording.facts()).toMatchObject([
     { kind: 'resource', previous: edited.current, current: null },
   ]);
   recording.changes.length = 0;
-  const file = await confirmed(
-    uploadRoadmapResource(
-      {
-        ...input,
-        id: course.change.nodeId,
-        file: new File(['Contenido'], 'guide.txt', { type: 'text/plain' }),
-      },
-      recording.port,
-    ),
+  const file = await uploadRoadmapResource(
+    {
+      ...input,
+      id: course.change.nodeId,
+      file: new File(['Contenido'], 'guide.txt', { type: 'text/plain' }),
+    },
+    recording.port,
   );
   expect(recording.facts()).toMatchObject([
     { kind: 'resource', resourceId: file.id, previous: null, current: { title: 'guide.txt' } },
   ]);
-  await confirmed(removeRoadmapResource({ ...input, id: file.id }, recording.port));
+  await removeRoadmapResource({ ...input, id: file.id }, recording.port);
 });
 
 test('type rename reports its previous name; appearance edits stay silent', async ({ course }) => {
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
   const recording = recordingChangePort();
   const input = { ...editor(course), id: type.id };
-  const result = await confirmed(
-    updateRoadmapNodeType({ ...input, input: { name: 'Lectura' } }, recording.port),
+  const result = await updateRoadmapNodeType(
+    { ...input, input: { name: 'Lectura' } },
+    recording.port,
   );
   expect(recording.facts()).toEqual([
     { kind: 'node-type-name', nodeTypeId: type.id, previous: 'Tema', current: 'Lectura' },
   ]);
   expect(result).not.toHaveProperty('notification');
   recording.changes.length = 0;
-  await confirmed(updateRoadmapNodeType({ ...input, input: { color: '#1467A8' } }, recording.port));
+  await updateRoadmapNodeType({ ...input, input: { color: '#1467A8' } }, recording.port);
   expect(recording.facts()).toEqual([]);
 });
 
@@ -462,13 +430,11 @@ test.for([false, true])(
       data: { closedAt: new Date() },
     });
     const identifier = { ...editor(course).identifier, year: 2027, semester: 1 };
-    const result = await confirmed(
-      createRoadmap(
-        identifier,
-        copy ? { source: editor(course).identifier } : {},
-        { id: course.teacherId, name: 'Docente' },
-        recording.port,
-      ),
+    const result = await createRoadmap(
+      identifier,
+      copy ? { source: editor(course).identifier } : {},
+      { id: course.teacherId, name: 'Docente' },
+      recording.port,
     );
     expect(recording.facts()).toMatchObject([
       {
@@ -484,7 +450,7 @@ test.for([false, true])(
 
 test('a failed uploaded Resource transaction compensates its stored bytes', async ({ course }) => {
   let storedFileKey: string | null = null;
-  const result = await uploadRoadmapResource(
+  const upload = uploadRoadmapResource(
     {
       ...editor(course),
       id: course.change.nodeId,
@@ -501,13 +467,8 @@ test('a failed uploaded Resource transaction compensates its stored bytes', asyn
         throw new Error('transaction failed');
       },
     },
-  ).match(
-    () => {
-      throw new Error('Expected failure');
-    },
-    (error) => error,
   );
-  expect(result.code).toBe('INTERNAL_ERROR');
+  await expect(upload).rejects.toThrow('transaction failed');
   expect(storedFileKey).toEqual(expect.any(String));
   const { readUploadedFile } =
     await import('@/features/roadmap/infrastructure/resources/filesystem');
