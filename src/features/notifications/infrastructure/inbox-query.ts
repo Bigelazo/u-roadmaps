@@ -28,8 +28,18 @@ type InboxNotice = {
  */
 type NoticeScope = 'pending' | 'unreviewed';
 
-/** Keep backlog data and access evaluation in PostgreSQL; only the requested page leaves it. */
-function visibleNotices(userId: string, filter: InboxFilter, scope: NoticeScope = 'pending') {
+/** The recipient, with the Nodes they can open in the Roadmaps the request reads. */
+export type InboxRecipient = Readonly<{ userId: string; accessibleNodeIds: readonly string[] }>;
+
+/**
+ * Keep the backlog in PostgreSQL; only the requested page leaves it. Node access is decided
+ * by the participant view and arrives as data.
+ */
+function visibleNotices(
+  { userId, accessibleNodeIds }: InboxRecipient,
+  filter: InboxFilter,
+  scope: NoticeScope = 'pending',
+) {
   const conditions = [
     Prisma.sql`notice."recipientId" = ${userId}::uuid`,
     scope === 'pending'
@@ -52,8 +62,8 @@ function visibleNotices(userId: string, filter: InboxFilter, scope: NoticeScope 
       Prisma.sql`notice.data->'semester' = ${JSON.stringify(filter.semester)}::jsonb`,
     );
   return Prisma.sql`
-    WITH RECURSIVE pending AS MATERIALIZED (
-      SELECT notice.*, participation.role, course.name AS "courseName"
+    WITH pending AS MATERIALIZED (
+      SELECT notice.*, course.name AS "courseName"
       FROM "RoadmapNotice" notice
       JOIN "Roadmap" roadmap ON roadmap.id = notice."roadmapId"
       JOIN "Participation" participation ON participation."courseOfferingId" = roadmap."courseOfferingId"
@@ -62,29 +72,9 @@ function visibleNotices(userId: string, filter: InboxFilter, scope: NoticeScope 
       JOIN "Course" course ON course.code = offering."courseCode"
       WHERE ${Prisma.join(conditions, ' AND ')}
     ), nodes AS MATERIALIZED (
-      SELECT node.*, participation.role,
-        EXISTS (SELECT 1 FROM "Completion" completion
-          WHERE completion."userId" = ${userId}::uuid AND completion."roadmapNodeId" = node.id) AS completed
+      SELECT node.id, node."roadmapId", node."isVisible", node."nodeTypeId"
       FROM "RoadmapNode" node
-      JOIN "Roadmap" roadmap ON roadmap.id = node."roadmapId"
-      JOIN "Participation" participation ON participation."courseOfferingId" = roadmap."courseOfferingId"
-        AND participation."userId" = ${userId}::uuid AND participation."isActive"
       WHERE node."roadmapId" IN (SELECT "roadmapId" FROM pending)
-    ), edges AS MATERIALIZED (
-      SELECT dependency."sourceNodeId", dependency."targetNodeId"
-      FROM "Dependency" dependency
-      JOIN nodes source ON source.id = dependency."sourceNodeId" AND source."isVisible"
-      JOIN nodes target ON target.id = dependency."targetNodeId" AND target."isVisible"
-      WHERE target.role <> 'TEACHER'
-    ), blocked(id) AS (
-      SELECT node.id FROM nodes node WHERE node."isVisible" AND (
-        node."isTeacherBlocked" OR EXISTS (
-          SELECT 1 FROM edges edge JOIN nodes source ON source.id = edge."sourceNodeId"
-          WHERE edge."targetNodeId" = node.id AND NOT source.completed
-        )
-      )
-      UNION
-      SELECT edge."targetNodeId" FROM blocked JOIN edges edge ON edge."sourceNodeId" = blocked.id
     ), visible AS (
       SELECT pending.* FROM pending LEFT JOIN nodes node ON node.id::text = pending.data->>'nodeId'
         AND node."roadmapId" = pending."roadmapId"
@@ -106,14 +96,14 @@ function visibleNotices(userId: string, filter: InboxFilter, scope: NoticeScope 
             AND NOT COALESCE(pending.data->'changedFields' @> '["title"]'::jsonb, FALSE)
             AND NOT COALESCE(pending.data->'changedFields' @> '["nodeType"]'::jsonb, FALSE)
             AND NOT COALESCE((pending.data->'noticeTarget') <> 'null'::jsonb, FALSE))
-          THEN NOT EXISTS (SELECT 1 FROM blocked WHERE blocked.id = node.id)
+          THEN node.id = ANY(${accessibleNodeIds}::uuid[])
         ELSE TRUE
       END
     )`;
 }
 
 export async function queryInboxPage(
-  userId: string,
+  recipient: InboxRecipient,
   filter: InboxFilter,
   {
     limit,
@@ -122,7 +112,7 @@ export async function queryInboxPage(
   }: { limit: number; grouped: boolean; cursor: { id: string; availableAt: Date } | null },
 ) {
   const rows = await prisma.$queryRaw<InboxNotice[]>(Prisma.sql`
-    ${visibleNotices(userId, filter)}, ranked AS (
+    ${visibleNotices(recipient, filter)}, ranked AS (
       SELECT visible.*,
         count(*) OVER (PARTITION BY "roadmapId", COALESCE(data->>'changeKind' = 'roadmap-available', FALSE)) AS "targetCount",
         row_number() OVER (PARTITION BY "roadmapId", COALESCE(data->>'changeKind' = 'roadmap-available', FALSE)
@@ -149,18 +139,18 @@ export async function queryInboxPage(
   };
 }
 
-export async function queryInboxCounts(userId: string, filter: InboxFilter) {
+export async function queryInboxCounts(recipient: InboxRecipient, filter: InboxFilter) {
   const [row] = await prisma.$queryRaw<{ count: bigint }[]>(Prisma.sql`
-    ${visibleNotices(userId, filter)}
+    ${visibleNotices(recipient, filter)}
     SELECT count(*) AS count FROM visible
   `);
   return { count: Number(row?.count ?? 0) };
 }
 
 /** Count changed objects, not notices: a target recognized and changed again counts once. */
-export async function queryNodeChangeCounts(userId: string, roadmapId: string) {
+export async function queryNodeChangeCounts(recipient: InboxRecipient, roadmapId: string) {
   const rows = await prisma.$queryRaw<{ nodeId: string; count: bigint }[]>(Prisma.sql`
-    ${visibleNotices(userId, { roadmapId }, 'unreviewed')}
+    ${visibleNotices(recipient, { roadmapId }, 'unreviewed')}
     SELECT data->>'nodeId' AS "nodeId", count(DISTINCT COALESCE("targetKey", id::text)) AS count
     FROM visible GROUP BY 1
   `);

@@ -9,6 +9,7 @@ import {
   queryInboxCounts,
   queryNodeChangeCounts,
   type InboxFilter,
+  type InboxRecipient,
 } from './inbox-query';
 import { changeSummary } from '../application/change-summary';
 import type { ChangeSummary } from '../contracts/change-summary';
@@ -88,20 +89,51 @@ function inboxFilter(params: URLSearchParams): InboxFilter {
   };
 }
 
-export async function listOwnNotices(userId: string, params: URLSearchParams) {
+/** One participant's accessible Nodes per Roadmap; a Roadmap without their Participation is absent. */
+export type ParticipantAccessReader = (
+  transaction: Prisma.TransactionClient,
+  query: { userId: string; roadmapIds: readonly string[] },
+) => Promise<ReadonlyMap<string, ReadonlySet<string>>>;
+
+/** The recipient's accessible Nodes in the filtered Roadmap, or in every Roadmap of theirs. */
+async function inboxRecipient(
+  userId: string,
+  roadmapId: string | undefined,
+  readAccess: ParticipantAccessReader,
+): Promise<InboxRecipient> {
+  const roadmapIds = roadmapId
+    ? [roadmapId]
+    : (
+        await prisma.roadmap.findMany({
+          where: { courseOffering: { participants: { some: { userId, isActive: true } } } },
+          select: { id: true },
+        })
+      ).map(({ id }) => id);
+  const access = await readAccess(prisma, { userId, roadmapIds });
+  return { userId, accessibleNodeIds: [...access.values()].flatMap((ids) => [...ids]) };
+}
+
+export async function listOwnNotices(
+  userId: string,
+  params: URLSearchParams,
+  readAccess: ParticipantAccessReader,
+) {
   const limit = Number(params.get('limit') ?? 10);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
     throw new ApplicationError(400, 'INVALID_REQUEST', 'Límite inválido.');
   const filter = inboxFilter(params);
-  const after = params.get('after');
-  const cursor = after
-    ? await prisma.roadmapNotice.findFirst({
-        where: { id: uuid(after), recipientId: userId },
-        select: { id: true, availableAt: true },
-      })
-    : null;
+  const after = params.get('after') && uuid(params.get('after'));
+  const [recipient, cursor] = await Promise.all([
+    inboxRecipient(userId, filter.roadmapId, readAccess),
+    after
+      ? prisma.roadmapNotice.findFirst({
+          where: { id: after, recipientId: userId },
+          select: { id: true, availableAt: true },
+        })
+      : null,
+  ]);
   if (after && !cursor) throw new ApplicationError(404, 'NOT_FOUND', 'Aviso no encontrado.');
-  const page = await queryInboxPage(userId, filter, {
+  const page = await queryInboxPage(recipient, filter, {
     limit,
     cursor,
     grouped: params.get('groupBy') === 'roadmapId',
@@ -109,12 +141,22 @@ export async function listOwnNotices(userId: string, params: URLSearchParams) {
   return { notifications: page.notices.map(noticeRecord), hasMore: page.hasMore };
 }
 
-export function countOwnNoticeTargets(userId: string, params: URLSearchParams) {
-  return queryInboxCounts(userId, inboxFilter(params));
+export async function countOwnNoticeTargets(
+  userId: string,
+  params: URLSearchParams,
+  readAccess: ParticipantAccessReader,
+) {
+  const filter = inboxFilter(params);
+  return queryInboxCounts(await inboxRecipient(userId, filter.roadmapId, readAccess), filter);
 }
 
-export function countOwnNodeChanges(userId: string, params: URLSearchParams) {
-  return queryNodeChangeCounts(userId, uuid(params.get('roadmapId')));
+export async function countOwnNodeChanges(
+  userId: string,
+  params: URLSearchParams,
+  readAccess: ParticipantAccessReader,
+) {
+  const roadmapId = uuid(params.get('roadmapId'));
+  return queryNodeChangeCounts(await inboxRecipient(userId, roadmapId, readAccess), roadmapId);
 }
 
 /** Opening a Node reviews its changes for the canvas mark; it never recognizes notices. */
