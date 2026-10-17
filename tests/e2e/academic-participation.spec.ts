@@ -101,7 +101,35 @@ const entries: {
       await expect(page.getByRole('button', { name: 'Crear en el mapa' })).toBeVisible();
     },
   },
+  {
+    // A deep link to the page works without first entering the course page.
+    name: 'Student progress tracking entry',
+    enter: async (page, _api, course, userId) => {
+      await authenticateAs(page.context(), userId);
+      await page.goto(`${course.pagePath()}/participants`);
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Integrantes del curso' }),
+      ).toBeVisible();
+    },
+  },
 ];
+
+test('Roadmap reads check the stored Participation; entering the course page synchronises it', async ({
+  course,
+  apiAs,
+  reportPosition,
+  page,
+}) => {
+  const user = course.users.withdrawnStudent;
+  const api = await apiAs(user);
+  await reportPosition(user, course, 'STUDENT');
+  for (const path of [course.apiPath(), course.apiPath('/node-types')])
+    await ok(await api.get(path), 403);
+  await authenticateAs(page.context(), user.id);
+  await page.goto(course.pagePath());
+  for (const path of [course.apiPath(), course.apiPath('/node-types')])
+    await ok(await api.get(path));
+});
 
 for (const { name: entry, enter } of entries) {
   test(`a stored student becomes teaching staff on ${entry}`, async ({
