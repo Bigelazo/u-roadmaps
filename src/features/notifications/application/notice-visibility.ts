@@ -2,23 +2,10 @@ import { descriptorForNoticeTarget, noticeTargetDescriptors, type ShownTo } from
 
 export type NoticeVisibilityNode = { id: string; isVisible: boolean; nodeTypeId: string };
 
-const SHOWN_TO = [
-  'everyone',
-  'node-viewers',
-  'node-openers',
-  'dependency-viewers',
-  'node-type-viewers',
-] as const satisfies readonly ShownTo[];
-
 /** The Notice targets of each `shownTo` class, as the Inbox SQL matches them. */
-export const NOTICE_TARGETS_SHOWN_TO = Object.fromEntries(
-  SHOWN_TO.map((shownTo) => [
-    shownTo,
-    noticeTargetDescriptors
-      .filter((descriptor) => descriptor.shownTo === shownTo)
-      .map(({ noticeTarget }) => noticeTarget),
-  ]),
-) as Record<ShownTo, string[]>;
+export const NOTICE_TARGETS_SHOWN_TO: Partial<Record<ShownTo, string[]>> = {};
+for (const { shownTo, noticeTarget } of noticeTargetDescriptors)
+  (NOTICE_TARGETS_SHOWN_TO[shownTo] ??= []).push(noticeTarget);
 
 /**
  * Whether a stored notice is shown, as its Notice target declares (`shownTo`). Rows no

@@ -103,7 +103,7 @@ function shownToCases(accessibleNodeIds: readonly string[]) {
   return Prisma.join(
     (Object.keys(conditions) as ShownTo[]).map(
       (shownTo) => Prisma.sql`
-        WHEN pending.data->>'noticeTarget' = ANY(${NOTICE_TARGETS_SHOWN_TO[shownTo]}::text[])
+        WHEN pending.data->>'noticeTarget' = ANY(${NOTICE_TARGETS_SHOWN_TO[shownTo] ?? []}::text[])
           THEN ${conditions[shownTo]}`,
     ),
     '',

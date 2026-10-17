@@ -1,6 +1,6 @@
 import 'server-only';
 import { lockNoticeParticipation } from './participation-lock';
-import { visibleOwnNotices } from './notice-visibility';
+import { isOwnNoticeVisible } from './notice-visibility';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
@@ -187,7 +187,7 @@ export async function findOwnNotice(userId: string, id: string, accessibleNodes:
   const notice = await prisma.roadmapNotice.findFirst({
     where: { id: uuid(id), recipientId: userId },
   });
-  if (!notice || !(await visibleOwnNotices(userId, [notice], accessibleNodes)).length)
+  if (!notice || !(await isOwnNoticeVisible(userId, notice, accessibleNodes)))
     throw new ApplicationError(404, 'NOT_FOUND', 'Aviso no encontrado.');
   const offering = await prisma.courseOffering.findUnique({
     where: { id: notice.courseOfferingId },
