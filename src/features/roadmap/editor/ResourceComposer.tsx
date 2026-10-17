@@ -63,36 +63,14 @@ function resourceSubmitLabel(mode: Props['mode'], isEditingResource: boolean) {
   return mode === 'file' ? 'Subir archivo' : 'Agregar enlace';
 }
 
-export function ResourceComposer({ mode, editingResource, onModeChange, onClose }: Props) {
-  const { resourceSession, changeResource, selectResourceFile, saveResource, pendingEditorEffect } =
-    useNodeEditorContext();
-  const isEditingResource = resourceSession.kind === 'editing-existing';
-  const resourceValue = sessionValue(resourceSession);
-  const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
-  const extensionIndex = editingResource?.title.lastIndexOf('.') ?? -1;
-  const extension =
-    editingResource?.type === 'FILE' &&
-    extensionIndex > 0 &&
-    extensionIndex < editingResource.title.length - 1
-      ? editingResource.title.slice(extensionIndex)
-      : '';
-  const editableTitle = extension
-    ? resourceValue.title.slice(0, -extension.length)
-    : resourceValue.title;
-  const isAddingFile = mode === 'file' && !isEditingResource;
-  // Text fields stay submittable so a submit can explain what is missing.
-  const canSave = isAddingFile
-    ? Boolean(selectedFile)
-    : hasResourceChanges(resourceValue, editingResource);
-  const [showErrors, setShowErrors] = useState(false);
-  const errors = isAddingFile
-    ? { title: undefined, url: undefined }
-    : resourceErrors(mode, editableTitle, resourceValue.url);
-  const titleError = showErrors ? errors.title : undefined;
-  const urlError = showErrors ? errors.url : undefined;
-  const isPending = Boolean(pendingEditorEffect);
-
-  const resourceFields = isAddingFile ? (
+function ResourceFileField({
+  selectedFile,
+  selectResourceFile,
+}: {
+  selectedFile: File | null;
+  selectResourceFile: (file: File | null) => void;
+}) {
+  return (
     <Field>
       <FieldLabel htmlFor="resource-file">Archivo</FieldLabel>
       <label
@@ -120,7 +98,27 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
       </label>
       <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
     </Field>
-  ) : (
+  );
+}
+
+function ResourceTextFields({
+  mode,
+  resourceValue,
+  editableTitle,
+  extension,
+  titleError,
+  urlError,
+  changeResource,
+}: {
+  mode: Props['mode'];
+  resourceValue: ResourceInput;
+  editableTitle: string;
+  extension: string;
+  titleError: string | undefined;
+  urlError: string | undefined;
+  changeResource: (value: ResourceInput) => void;
+}) {
+  return (
     <FieldGroup className="gap-3">
       <Field data-invalid={titleError ? true : undefined}>
         <FieldLabel htmlFor="resource-title">Título</FieldLabel>
@@ -168,6 +166,55 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
         </Field>
       )}
     </FieldGroup>
+  );
+}
+
+function resourceTitle(resourceValue: ResourceInput, editingResource: Resource | null) {
+  const extensionIndex = editingResource?.title.lastIndexOf('.') ?? -1;
+  const extension =
+    editingResource?.type === 'FILE' &&
+    extensionIndex > 0 &&
+    extensionIndex < editingResource.title.length - 1
+      ? editingResource.title.slice(extensionIndex)
+      : '';
+  const editableTitle = extension
+    ? resourceValue.title.slice(0, -extension.length)
+    : resourceValue.title;
+  return { extension, editableTitle };
+}
+
+export function ResourceComposer({ mode, editingResource, onModeChange, onClose }: Props) {
+  const { resourceSession, changeResource, selectResourceFile, saveResource, pendingEditorEffect } =
+    useNodeEditorContext();
+  const isEditingResource = resourceSession.kind === 'editing-existing';
+  const resourceValue = sessionValue(resourceSession);
+  const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
+  const { extension, editableTitle } = resourceTitle(resourceValue, editingResource);
+  const isAddingFile = mode === 'file' && !isEditingResource;
+  // Text fields stay submittable so a submit can explain what is missing.
+  const canSave = isAddingFile
+    ? Boolean(selectedFile)
+    : hasResourceChanges(resourceValue, editingResource);
+  const [showErrors, setShowErrors] = useState(false);
+  const errors = isAddingFile
+    ? { title: undefined, url: undefined }
+    : resourceErrors(mode, editableTitle, resourceValue.url);
+  const titleError = showErrors ? errors.title : undefined;
+  const urlError = showErrors ? errors.url : undefined;
+  const isPending = Boolean(pendingEditorEffect);
+
+  const resourceFields = isAddingFile ? (
+    <ResourceFileField selectedFile={selectedFile} selectResourceFile={selectResourceFile} />
+  ) : (
+    <ResourceTextFields
+      mode={mode}
+      resourceValue={resourceValue}
+      editableTitle={editableTitle}
+      extension={extension}
+      titleError={titleError}
+      urlError={urlError}
+      changeResource={changeResource}
+    />
   );
 
   return (
