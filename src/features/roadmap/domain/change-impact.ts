@@ -15,8 +15,8 @@ export type StaleChangeImpactReason = (typeof staleChanges)[ChangeWithImpact][0]
 
 /**
  * Whether a confirmation may take effect: the Change impact version it sends must still
- * match the current impact's `version`. A missing version passes, except for an unlock,
- * which must confirm the impact it showed.
+ * match the current impact's `version`. A missing version is stale, except for a Node
+ * deletion, which still passes without one.
  */
 export function decideChangeImpactVersion({
   change,
@@ -27,7 +27,7 @@ export function decideChangeImpactVersion({
   sentVersion: string | undefined;
   version: string;
 }): { kind: 'ALLOWED' } | RuleRejection<StaleChangeImpactReason> {
-  const isStale = sentVersion ? sentVersion !== version : change === 'unlock';
+  const isStale = sentVersion ? sentVersion !== version : change !== 'delete';
   if (!isStale) return { kind: 'ALLOWED' };
   const [reason, impact] = staleChanges[change];
   return ruleRejection(

@@ -222,7 +222,7 @@ export const updateRoadmapNode = roadmapCommand({
   }: {
     id: string;
     input: JsonObject;
-    /** The visibility preview's version; checked only when the edit hides the Node. */
+    /** The visibility preview's version; required only when the edit hides the Node. */
     previewVersion?: string;
   }) => {
     const nodeId = requireUuid(id, 'nodeId');

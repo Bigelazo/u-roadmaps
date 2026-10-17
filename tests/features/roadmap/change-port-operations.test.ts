@@ -13,6 +13,8 @@ import {
   createRoadmapDependency,
   deleteRoadmapDependency,
   changeTeacherBlock,
+  previewNodeVisibility,
+  previewRoadmapDependency,
   previewTeacherBlock,
   releaseScheduledTeacherUnlocks,
   createRoadmapResource,
@@ -23,11 +25,21 @@ import {
   updateRoadmapNodeType,
   deleteRoadmapNodeType,
   completeNode,
+  type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import { createRoadmap } from '@/features/roadmap/application/roadmap';
 import { materializeParticipation } from '@/features/roadmap/application/academic-participation';
 
 beforeAll(databaseSetup, 60_000);
+
+/** Hides the Node, confirming its visibility preview as the canvas does. */
+async function hide(input: ReturnType<typeof teacher>, id: string, port: RoadmapChangePort) {
+  const { version } = await previewNodeVisibility({ ...input, id });
+  return updateRoadmapNode(
+    { ...input, id, input: { isVisible: false }, previewVersion: version },
+    port,
+  );
+}
 
 async function addNode(course: IntegrationCourse, title = 'Pilas') {
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
@@ -144,7 +156,7 @@ test('visibility and deletion report their facts and recipient access transition
   const recording = recordingChangePort();
   const input = teacher(course);
   const nodeId = course.change.nodeId;
-  await updateRoadmapNode({ ...input, id: nodeId, input: { isVisible: false } }, recording.port);
+  await hide(input, nodeId, recording.port);
   expect(recording.facts()).toContainEqual({
     kind: 'node-visibility',
     nodeId,
@@ -182,7 +194,7 @@ test('Dependencies removed by hiding a Node are not reported as Dependency facts
   await prisma.dependency.create({
     data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
   });
-  await updateRoadmapNode({ ...input, id: target.id, input: { isVisible: false } }, recording.port);
+  await hide(input, target.id, recording.port);
   expect(await prisma.dependency.count({ where: { targetNodeId: target.id } })).toBe(0);
   expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([]);
 });
@@ -193,8 +205,13 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   const recording = recordingChangePort();
   const input = teacher(course);
   const target = await addNode(course);
+  const request = {
+    ...input,
+    input: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
+  };
+  const { version } = await previewRoadmapDependency(request);
   const result = await createRoadmapDependency(
-    { ...input, input: { sourceNodeId: course.change.nodeId, targetNodeId: target.id } },
+    { ...request, previewVersion: version },
     recording.port,
   );
   expect(recording.facts()).toContainEqual(
@@ -254,7 +271,11 @@ test.for(['UNBLOCK', 'BRANCH_UNLOCK'] as const)(
   async (operation, { course }) => {
     const recording = recordingChangePort();
     const input = { ...teacher(course), id: course.change.nodeId };
-    await changeTeacherBlock({ ...input, operation: 'BLOCK' }, recording.port);
+    const block = await previewTeacherBlock({ ...input, operation: 'BLOCK' });
+    await changeTeacherBlock(
+      { ...input, operation: 'BLOCK', previewVersion: block.version },
+      recording.port,
+    );
     expect(recording.facts()).toContainEqual(
       access({
         nodeId: input.id,
