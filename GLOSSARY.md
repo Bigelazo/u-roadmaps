@@ -232,8 +232,16 @@ A teaching-staff simulation of a Roadmap's student experience that follows the s
 _Avoid_: Preview, teacher progress, student impersonation, preview completion
 
 **Roadmap canvas session (Sesión del canvas del roadmap)**:
-A participant's active interaction with one Course offering's Roadmap, encompassing the current teaching, student, or Canvas preview experience together with any selected Node or pending confirmation. It ends when the participant leaves for another Course offering and is distinct from authentication.
+A participant's active interaction with one Course offering's Roadmap, encompassing the current teaching, student, or Canvas preview experience together with any selected Node or pending Confirmed action. It ends when the participant leaves for another Course offering and is distinct from authentication.
 _Avoid_: VTI session, browser session, Canvas preview
+
+**Confirmed action (Acción confirmada)**:
+A teaching-staff change to the Roadmap that takes effect only after explicit confirmation, once its Change impact, if it has one, has been shown. At most one is pending per Roadmap canvas session.
+_Avoid_: Dialog, workflow, confirmation flow
+
+**Change impact (Impacto del cambio)**:
+What a Confirmed action would remove, block or release, such as Dependencies, Resources or Teacher blocks. It is recomputed on confirmation; if it changed, the new impact is shown instead of the change taking effect.
+_Avoid_: Preview, impact preview
 
 **Node information preview (Previsualización de información del nodo)**:
 A teaching-staff inspection of a Node's information through the same view available to a student who can access that Node, projecting any unsaved change that is visible in that view. Unlike Canvas preview, it does not evaluate the Node's visibility, Teacher block, or Prerequisite block.
