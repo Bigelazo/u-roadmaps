@@ -52,8 +52,15 @@ export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
     impact: ChangeImpactOf[Kind],
     choice: CanvasConfirmationChoice | undefined,
   ) => Promise<boolean | { retry: CanvasCommandOf<Kind> }>;
-  /** The toast shown once the request took effect, except for the `remaining` part. */
-  success?: (request: CanvasCommandOf<Kind>, remaining?: CanvasCommandOf<Kind>) => string;
+  /**
+   * The toast shown once the request took effect with the confirmation choice teaching
+   * staff made, except for the `remaining` part.
+   */
+  success?: (
+    request: CanvasCommandOf<Kind>,
+    choice: CanvasConfirmationChoice | undefined,
+    remaining?: CanvasCommandOf<Kind>,
+  ) => string;
   /** What the Practice roadmap is told once the whole request took effect. */
   report?: (
     request: CanvasCommandOf<Kind>,
@@ -79,6 +86,13 @@ const chosenTeacherBlockOperation = (
   choice?: CanvasConfirmationChoice,
 ) => (choice && teacherBlockOperationByChoice[choice]) || requested;
 
+/** The toast for each Teacher block operation applied. */
+const teacherBlockSuccess: Readonly<Record<TeacherBlockOperation, string>> = {
+  BLOCK: 'Nodo bloqueado exitosamente.',
+  UNBLOCK: 'Nodo desbloqueado exitosamente.',
+  BRANCH_UNLOCK: 'Rama desbloqueada exitosamente.',
+};
+
 const visibilityFailure = 'No se pudo cambiar la visibilidad.';
 
 export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<Kind> } = {
@@ -93,6 +107,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.setVisibility(input, nodeId, false, impact.version),
         visibilityFailure,
       ),
+    success: () => 'Nodo ocultado exitosamente.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: false }),
   },
   'show-node': {
@@ -101,6 +116,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.setVisibility(input, nodeId, true),
         visibilityFailure,
       ),
+    success: () => 'Nodo visible para estudiantes.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: true }),
   },
   'delete-node': {
@@ -114,6 +130,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.deleteNode(input, nodeId, impact.version),
         'No se pudo eliminar el nodo.',
       ),
+    success: () => 'Nodo eliminado exitosamente.',
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   },
   'change-teacher-block': {
@@ -140,6 +157,11 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         'No se pudo cambiar el bloqueo docente.',
       );
     },
+    /** Unlocking behind blocked prerequisites unlocks them too, so it names several Nodes. */
+    success: ({ operation }, choice) =>
+      choice === canvasConfirmationChoices.unlockPrerequisites
+        ? 'Nodos desbloqueados exitosamente.'
+        : teacherBlockSuccess[chosenTeacherBlockOperation(operation, choice)],
     report: ({ nodeId, operation }, choice) => ({
       type: 'changeTeacherBlock',
       nodeId,
@@ -180,7 +202,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
       if (failed.length === request.dependencyIds.length) return false;
       return { retry: { ...request, dependencyIds: failed } };
     },
-    success: ({ dependencyIds }, remaining) =>
+    success: ({ dependencyIds }, _, remaining) =>
       dependencyIds.length - (remaining?.dependencyIds.length ?? 0) === 1
         ? 'Dependencia eliminada exitosamente.'
         : 'Dependencias eliminadas exitosamente.',
@@ -194,6 +216,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         fallback,
       );
     },
+    success: () => 'Nodos ordenados exitosamente.',
   },
   'delete-node-type': {
     run: ({ mutate }, { nodeTypeId }) =>
@@ -201,6 +224,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.deleteNodeType(input, nodeTypeId),
         'No se pudo eliminar el tipo de nodo.',
       ),
+    success: () => 'Tipo de nodo eliminado exitosamente.',
   },
   'reset-canvas-preview': {
     run: ({ mutateCanvasPreview }) =>
@@ -208,5 +232,6 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         (persistence, input) => persistence.resetSimulation(input),
         'No se pudo reiniciar el progreso de previsualización.',
       ),
+    success: () => 'Progreso de previsualización reiniciado.',
   },
 };

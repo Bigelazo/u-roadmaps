@@ -30,10 +30,14 @@ export type UnconfirmedWrite<Kind extends UnconfirmedCommandKind> = {
   reloads?: 'canvas-preview';
 };
 
+/** Completing a Node in the Canvas preview shows the toast a student sees for a real Completion. */
+const completionSuccess = () => 'Nodo completado.';
+
 export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedWrite<Kind> } = {
   'add-node': {
     write: (persistence, input, { node, position }) => persistence.addNode(input, node, position),
     fallback: 'No se pudo crear el nodo.',
+    success: () => 'Nodo creado exitosamente.',
     report: (_, nodeId) => (nodeId ? { type: 'addNode', nodeId } : null),
   },
   'update-node': {
@@ -41,6 +45,7 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
     fallback: 'No se pudo guardar el nodo.',
     success: () => 'Cambios guardados exitosamente.',
   },
+  /** No toast: the dropped Node is its own feedback, and a failed move is the session error. */
   'move-nodes': {
     /** Each Node moves on its own, so a failed move keeps the others; it fails with the first. */
     write: async (persistence, input, { positions }) => {
@@ -87,20 +92,23 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
   'add-node-type': {
     write: (persistence, input, { nodeType }) => persistence.addNodeType(input, nodeType),
     fallback: 'No se pudo crear el tipo de nodo.',
+    success: () => 'Tipo de nodo creado exitosamente.',
   },
   'update-node-type': {
     write: (persistence, input, { nodeTypeId, nodeType }) =>
       persistence.updateNodeType(input, nodeTypeId, nodeType),
     fallback: 'No se pudo guardar el tipo de nodo.',
+    success: () => 'Tipo de nodo guardado exitosamente.',
   },
   'complete-node': {
     write: (persistence, input, { nodeId }) => persistence.complete(input, nodeId),
     fallback: 'No se pudo completar el nodo.',
-    success: () => 'Nodo completado.',
+    success: completionSuccess,
   },
   'complete-simulated-node': {
     write: (persistence, input, { nodeId }) => persistence.completeSimulatedNode(input, nodeId),
     fallback: 'No se pudo completar el nodo en la previsualización.',
+    success: completionSuccess,
     report: ({ nodeId }) => ({ type: 'completeSimulatedNode', nodeId }),
     reloads: 'canvas-preview',
   },

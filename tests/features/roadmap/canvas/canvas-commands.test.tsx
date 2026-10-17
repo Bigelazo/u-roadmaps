@@ -109,6 +109,17 @@ function withTeacherBlocks(...nodeIds: string[]): RoadmapDto {
   };
 }
 
+/** A Custom node type no Node uses. */
+const laboratory: NodeType = {
+  id: 'laboratory',
+  name: 'Laboratorio',
+  icon: 'FlaskConical',
+  color: '#024AD8',
+  isPredefined: false,
+};
+
+const withLaboratory: RoadmapDto = { ...roadmap, nodeTypes: [...roadmap.nodeTypes, laboratory] };
+
 async function teacherBlockedNodeIds(persistence: RoadmapCanvasSessionPersistence) {
   return (await persistence.load(teachingInput)).nodes.flatMap((node) =>
     'isTeacherBlocked' in node && node.isTeacherBlocked ? [node.id] : [],
@@ -188,6 +199,7 @@ describe('canvas commands', () => {
 
     expect(canvas.commands().pending).toBeNull();
     expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ isVisible: true });
+    expect(successToasts()).toEqual([]);
   });
 
   test.each([
@@ -217,6 +229,7 @@ describe('canvas commands', () => {
         impact: { dependencies: latestDependencies.map((item) => expect.objectContaining(item)) },
       });
       expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ isVisible: true });
+      expect(successToasts()).toEqual([]);
 
       await canvas.confirm(kind);
       expect(canvas.commands().pending).toBeNull();
@@ -267,6 +280,7 @@ describe('canvas commands', () => {
         impact: { dependencies: latestDependencies.map((item) => expect.objectContaining(item)) },
       });
       expect((await persistence.load(teachingInput)).dependencies).toHaveLength(2);
+      expect(successToasts()).toEqual([]);
 
       await canvas.confirm(kind);
       expect(canvas.commands().pending).toBeNull();
@@ -449,6 +463,7 @@ describe('canvas commands', () => {
         'derivatives',
         'integrals',
       ]);
+      expect(successToasts()).toEqual([]);
 
       await canvas.confirm('unlock-node');
       expect(canvas.commands().pending).toBeNull();
@@ -709,6 +724,7 @@ describe('canvas commands', () => {
     expect(await nodeOf(adapter, 'limits')).toMatchObject({ positionX: 0, positionY: 200 });
     expect(await nodeOf(adapter, 'derivatives')).toMatchObject({ positionX: 0, positionY: 0 });
     expect(canvas.session().error).toBe('No se pudo guardar la posición.');
+    expect(successToasts()).toEqual([]);
     expect(canvas.onCommandApplied).not.toHaveBeenCalled();
   });
 
@@ -811,6 +827,7 @@ describe('canvas commands', () => {
         phase: 'awaiting',
       });
       expect(await nodeTypeIds(canvas.persistence)).toEqual(['content', 'workshop']);
+      expect(successToasts()).toEqual([]);
       expect(canvas.onCommandApplied).not.toHaveBeenCalled();
     });
   });
@@ -867,11 +884,107 @@ describe('canvas commands', () => {
     ]);
   });
 
+  describe('Confirmed action toasts', () => {
+    test.each<
+      [string, RoadmapDto, CanvasCommandOf<ConfirmedActionKind>, CanvasConfirmationChoice, string]
+    >([
+      [
+        'hiding a Node',
+        roadmap,
+        { kind: 'hide-node', nodeId: 'limits' },
+        'hide-node',
+        'Nodo ocultado exitosamente.',
+      ],
+      [
+        'showing a Node',
+        roadmap,
+        { kind: 'show-node', nodeId: 'series' },
+        'show-node',
+        'Nodo visible para estudiantes.',
+      ],
+      [
+        'deleting a Node',
+        roadmap,
+        { kind: 'delete-node', nodeId: 'limits' },
+        'delete-node',
+        'Nodo eliminado exitosamente.',
+      ],
+      [
+        'applying an automatic layout',
+        roadmap,
+        {
+          kind: 'apply-automatic-layout',
+          positions: [{ nodeId: 'limits', position: { x: 0, y: 200 } }],
+          direction: 'LR',
+        },
+        'auto-layout',
+        'Nodos ordenados exitosamente.',
+      ],
+      [
+        'deleting a Custom node type',
+        withLaboratory,
+        { kind: 'delete-node-type', nodeTypeId: laboratory.id },
+        'delete-node-type',
+        'Tipo de nodo eliminado exitosamente.',
+      ],
+      [
+        'resetting the Canvas preview',
+        roadmap,
+        { kind: 'reset-canvas-preview' },
+        'reset-canvas-preview',
+        'Progreso de previsualización reiniciado.',
+      ],
+      [
+        'placing a Teacher block',
+        roadmap,
+        { kind: 'change-teacher-block', nodeId: 'limits', operation: 'BLOCK' },
+        'block-teacher',
+        'Nodo bloqueado exitosamente.',
+      ],
+      [
+        'unlocking only the Node',
+        withTeacherBlocks('limits', 'derivatives'),
+        { kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' },
+        'unlock-node',
+        'Nodo desbloqueado exitosamente.',
+      ],
+      [
+        'a Branch unlock',
+        withTeacherBlocks('limits', 'derivatives'),
+        { kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' },
+        'unlock-branch',
+        'Rama desbloqueada exitosamente.',
+      ],
+      [
+        'unlocking behind a blocked prerequisite',
+        withTeacherBlocks('limits', 'derivatives'),
+        { kind: 'change-teacher-block', nodeId: 'derivatives', operation: 'UNBLOCK' },
+        'unlock-prerequisites',
+        'Nodos desbloqueados exitosamente.',
+      ],
+    ])('%s shows its toast only once confirmed', async (_, fixture, request, choice, toast) => {
+      const canvas = await openCanvas(createInMemoryRoadmapSessionPersistence(fixture));
+
+      await act(() => canvas.commands().request(request));
+      await canvas.awaiting();
+      expect(successToasts()).toEqual([]);
+      await canvas.confirm(choice);
+
+      expect(canvas.commands().pending).toBeNull();
+      expect(canvas.session().error).toBeNull();
+      expect(successToasts()).toEqual([toast]);
+    });
+  });
+
   describe('unconfirmed writes', () => {
     const guide = { id: 'guide', title: 'Guía', url: 'https://example.test/guia', type: 'LINK' };
-    /** Límites is Teacher-blocked, so it can be scheduled, and links a guide. */
+    /**
+     * Límites is Teacher-blocked, so it can be scheduled, and links a guide; Laboratorio is a
+     * Custom node type that can be edited.
+     */
     const editable: RoadmapDto = {
       ...withTeacherBlocks('limits'),
+      nodeTypes: withLaboratory.nodeTypes,
       nodes: withTeacherBlocks('limits').nodes.map((node) =>
         node.id === 'limits' ? { ...node, resources: [guide] as RoadmapNode['resources'] } : node,
       ),
@@ -989,9 +1102,28 @@ describe('canvas commands', () => {
         ],
       ],
       [
+        'creating a Node',
+        {
+          kind: 'add-node',
+          node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
+          position: { x: 480, y: 240 },
+        },
+        'Nodo creado exitosamente.',
+        async (persistence) => (await persistence.load(teachingInput)).nodes.at(-1)?.title,
+        'Sucesiones',
+      ],
+      [
         'creating a Node type',
         { kind: 'add-node-type', nodeType: workshop },
-        null,
+        'Tipo de nodo creado exitosamente.',
+        async (persistence) =>
+          (await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name),
+        ['Contenido', 'Laboratorio', 'Taller'],
+      ],
+      [
+        'saving a Custom node type',
+        { kind: 'update-node-type', nodeTypeId: laboratory.id, nodeType: workshop },
+        'Tipo de nodo guardado exitosamente.',
         async (persistence) =>
           (await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name),
         ['Contenido', 'Taller'],
@@ -1127,7 +1259,7 @@ describe('canvas commands', () => {
       expect(canvas.reported()).toEqual([{ type: 'addNode', nodeId: created.id }]);
     });
 
-    test('completing a Node in the Canvas preview reloads only the preview and reports it', async () => {
+    test('completing a Node in the Canvas preview reloads only the preview, shows the student toast and reports it', async () => {
       const canvas = await openCanvas();
       await act(async () => {
         await canvas.session().loadSimulation();
@@ -1141,6 +1273,7 @@ describe('canvas commands', () => {
         canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits'),
       ).toMatchObject({ isCompleted: true });
       expect(await nodeOf(canvas.persistence, 'limits')).not.toHaveProperty('isCompleted');
+      expect(successToasts()).toEqual(['Nodo completado.']);
       expect(canvas.reported()).toEqual([{ type: 'completeSimulatedNode', nodeId: 'limits' }]);
     });
   });

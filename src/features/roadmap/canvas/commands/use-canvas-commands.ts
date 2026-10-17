@@ -186,7 +186,7 @@ export function useCanvasCommands({
       const result = await action.run(context, opened.request, impact as never, choice);
       if (result) {
         const remaining = result === true ? undefined : result.retry;
-        const message = action.success?.(opened.request, remaining);
+        const message = action.success?.(opened.request, choice, remaining);
         if (message) notify.success(message);
         if (remaining) return open({ kind: opened.kind, request: remaining });
         setPending(null);
