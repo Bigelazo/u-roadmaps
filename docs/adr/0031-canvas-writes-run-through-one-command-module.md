@@ -43,9 +43,11 @@ de igualdad. Se decide que las escrituras del canvas pasen por un módulo de com
   del editor de Nodos. Así el canvas nunca queda bloqueado detrás de una pregunta sin
   responder.
 
-La migración es incremental: mientras una Acción confirmada no se mueve al módulo, la
-vista conserva su lock para ella, y el lock y el espacio pendiente se respetan
-mutuamente.
+- **La vista solo dibuja la confirmación pendiente.** El canvas muestra un único diálogo
+  a partir de los datos pendientes y no coordina nada. El módulo le avisa qué comando
+  tuvo efecto, y la vista hace lo que le toca a ella: cerrar el editor tras eliminar un
+  Nodo y recordar la dirección del ordenamiento automático. Entrar y salir de la Canvas
+  preview y restaurar su viewport también quedan en la vista.
 
 ## Alternativas descartadas
 
