@@ -127,65 +127,6 @@ function handlePrismaError(error: unknown): never {
   throw error;
 }
 
-export const getRoadmapDto = withApplicationResult(
-  async (identifier: CourseOfferingIdentifier, includeHidden = true) => {
-    const roadmap = await prisma.roadmap.findFirst({
-      where: { courseOffering: identifier },
-      include: {
-        courseOffering: {
-          select: {
-            id: true,
-            year: true,
-            semester: true,
-            course: { select: { code: true, name: true, department: true } },
-          },
-        },
-        roadmapNodes: {
-          orderBy: { title: 'asc' },
-          include: { resources: { orderBy: { title: 'asc' } } },
-        },
-      },
-    });
-
-    if (!roadmap) throw roadmapNotFound();
-    const dependencies = await prisma.dependency.findMany({
-      where: { sourceNode: { roadmapId: roadmap.id } },
-      orderBy: { id: 'asc' },
-      select: {
-        id: true,
-        sourceNodeId: true,
-        targetNodeId: true,
-        sourceHandle: true,
-        targetHandle: true,
-      },
-    });
-
-    const nodes = includeHidden
-      ? roadmap.roadmapNodes
-      : roadmap.roadmapNodes.filter((node) => node.isVisible);
-    const visibleNodeIds = new Set(nodes.map((node) => node.id));
-    const visibleDependencies = includeHidden
-      ? dependencies
-      : dependencies.filter(
-          (dependency) =>
-            visibleNodeIds.has(dependency.sourceNodeId) &&
-            visibleNodeIds.has(dependency.targetNodeId),
-        );
-    const { course, ...courseOffering } = roadmap.courseOffering;
-    return {
-      course,
-      courseOffering,
-      roadmap: { id: roadmap.id, closedAt: roadmap.closedAt },
-      nodeTypes: await getAvailableTypes(roadmap.id),
-      nodes: nodes.map((node) => ({
-        ...nodeDto(node),
-        resources: node.resources.map((resource) => resourceDto(resource, identifier)),
-      })),
-      dependencies: visibleDependencies,
-    };
-  },
-);
-
 /**
  * The optional frozen version to copy, identified by its Academic term as
  * `{ year, semester }`. A `courseCode` defaults to the target's own Course.

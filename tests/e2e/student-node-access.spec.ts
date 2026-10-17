@@ -137,6 +137,10 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
   expect((await resources.json()).error.code).toBe('PREREQUISITE_BLOCK');
   const download = await ok(await student.get(fileResource.url), 403);
   expect((await download.json()).error.code).toBe('PREREQUISITE_BLOCK');
+  // The Node collection only accepts creation; listing it would bypass the access projection.
+  const nodeCollection = await student.get(course.apiPath('/nodes'));
+  expect(nodeCollection.status()).toBe(405);
+  expect(await nodeCollection.text()).not.toContain('Detalle que no debe filtrarse');
   const repeatCompletion = await student.post(
     course.apiPath(`/nodes/${completedBeforeDependency.id}/completion`),
   );

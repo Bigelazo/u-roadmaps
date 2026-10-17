@@ -38,7 +38,6 @@ export {
 export {
   createRoadmapForActor,
   getNodeTypesForActor,
-  getRoadmapNodesForActor,
 } from '@/features/roadmap/application/queries';
 export {
   requireCourseOfferingParticipation,
@@ -47,10 +46,7 @@ export {
 } from '@/features/roadmap/application/participation';
 
 export { synchronizeAcademicParticipations } from './application/academic-participation';
-export {
-  readCourseParticipants,
-  type CourseParticipants,
-} from './application/course-participants';
+export { readCourseParticipants, type CourseParticipants } from './application/course-participants';
 export {
   downloadRoadmapVersionResource,
   readRoadmapVersion,

@@ -5,7 +5,6 @@ import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import {
   createRoadmap,
   getAvailableTypes,
-  getRoadmapDto,
   requireRoadmap,
 } from '@/features/roadmap/application/roadmap';
 import {
@@ -42,19 +41,5 @@ export function getNodeTypesForActor(
       return getAvailableTypes(roadmap.id);
     }
     return getAvailableTypes(courseOffering.roadmap.id);
-  });
-}
-
-export function getRoadmapNodesForActor(
-  actor: RoadmapActor,
-  identifier: CourseOfferingIdentifier,
-  changePort: RoadmapChangePort,
-) {
-  return applicationResult(async () => {
-    const { participation } = await unwrap(() =>
-      requireCourseOfferingParticipation(actor, identifier, ['STUDENT', 'TEACHER'], changePort),
-    );
-    const roadmap = await unwrap(() => getRoadmapDto(identifier, participation.role === 'TEACHER'));
-    return roadmap.nodes;
   });
 }

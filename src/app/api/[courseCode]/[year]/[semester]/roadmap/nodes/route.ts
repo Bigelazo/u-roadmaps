@@ -1,7 +1,7 @@
 import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { NextResponse } from 'next/server';
 import { courseRoute } from '@/app/_adapters/http';
-import { createRoadmapNode, getRoadmapNodesForActor } from '@/features/roadmap/server';
+import { createRoadmapNode } from '@/features/roadmap/server';
 import { unwrap } from '@/shared/errors/server';
 
 export const POST = courseRoute(
@@ -13,8 +13,3 @@ export const POST = courseRoute(
   },
   { body: true },
 );
-
-export const GET = courseRoute(async ({ identifier, user }) => {
-  const nodes = await unwrap(() => getRoadmapNodesForActor(user, identifier, roadmapChangePort));
-  return NextResponse.json({ nodes });
-});
