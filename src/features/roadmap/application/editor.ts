@@ -22,6 +22,10 @@ import {
   requireString,
 } from '@/features/roadmap/application/validation';
 import { normalizeName } from '@/features/roadmap/domain/roadmap-copy';
+import {
+  decidePreviewVersion,
+  type PreviewedChange,
+} from '@/features/roadmap/domain/change-impact';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
 import type { ApplicationErrorStatus } from '@/shared/errors/types';
@@ -90,24 +94,15 @@ function versioned<Impact extends object>(impact: Impact) {
   return { ...impact, version };
 }
 
-/**
- * Rejects a confirmation whose sent preview version no longer matches the current impact.
- * A missing version passes unless it is `required`. `impact` names what the preview showed.
- */
+/** Rejects a confirmation whose sent preview version no longer matches the current impact. */
 function rejectStalePreview(
+  change: PreviewedChange,
   sentVersion: string | undefined,
   { version }: { version: string },
-  code: string,
-  impact: string,
-  { required = false } = {},
 ) {
-  if (sentVersion ? sentVersion !== version : required) {
-    throw new ApplicationError(
-      409,
-      code,
-      `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`,
-    );
-  }
+  const decision = decidePreviewVersion({ change, sentVersion, version });
+  if (decision.kind === 'REJECTED')
+    throw new ApplicationError(409, decision.reason, decision.message);
 }
 
 function dependencyHandle(value: unknown, field: string, fallback: string) {
@@ -251,12 +246,7 @@ export const updateRoadmapNode = roadmapCommand({
     // Only a hidden Node loses Dependencies; skip the read on ordinary edits and moves.
     const dependencies = isVisible ? [] : await dependenciesTouching(tx, node.id);
     if (changes.isVisible === false) {
-      rejectStalePreview(
-        previewVersion,
-        versioned({ dependencies }),
-        'NODE_VISIBILITY_PREVIEW_STALE',
-        'de ocultar el nodo',
-      );
+      rejectStalePreview('hide', previewVersion, versioned({ dependencies }));
     }
     const { removedDependencies, clearsTeacherBlock } = decideVisibilityChange({
       nodeId: node.id,
@@ -378,12 +368,7 @@ const nodeDeletion = roadmapCommand({
   access: 'roadmap',
   conflictMessage: 'La eliminación entra en conflicto con otra modificación.',
   run: async ({ tx, roadmap, input: { nodeId, previewVersion } }) => {
-    rejectStalePreview(
-      previewVersion,
-      await nodeDeletionPreview(tx, roadmap.id, nodeId),
-      'NODE_DELETE_PREVIEW_STALE',
-      'de la eliminación',
-    );
+    rejectStalePreview('delete', previewVersion, await nodeDeletionPreview(tx, roadmap.id, nodeId));
     const resources = await tx.resource.findMany({
       where: { roadmapNodeId: nodeId, fileKey: { not: null } },
       select: { fileKey: true },
@@ -552,7 +537,7 @@ export const createRoadmapDependency = roadmapCommand({
       roadmap.id,
       input,
     );
-    rejectStalePreview(previewVersion, preview, 'DEPENDENCY_PREVIEW_STALE', 'de la dependencia');
+    rejectStalePreview('dependency', previewVersion, preview);
     const { nodes } = preview;
     const dependency = await tx.dependency.create({ data: input });
     if (nodes.length > 0) {
@@ -697,14 +682,10 @@ export const changeTeacherBlock = roadmapCommand({
   access: 'roadmap',
   run: async ({ tx, roadmap, input }) => {
     const preview = await teacherBlockPreview(tx, roadmap.id, input);
-    const blocks = input.operation === 'BLOCK';
     rejectStalePreview(
+      input.operation === 'BLOCK' ? 'block' : 'unlock',
       input.previewVersion,
       preview,
-      'TEACHER_BLOCK_PREVIEW_STALE',
-      blocks ? 'del bloqueo' : 'del desbloqueo',
-      // An unlock must confirm its previewed impact; a BLOCK only when it sends a version.
-      { required: !blocks },
     );
     if (preview.nodes.length > 0) {
       await tx.roadmapNode.updateMany({
