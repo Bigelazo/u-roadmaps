@@ -17,10 +17,6 @@ import {
 
 beforeAll(databaseSetup, 60_000);
 
-function editor({ teacherId, identifier }: IntegrationCourse) {
-  return { userId: teacherId, identifier };
-}
-
 function addNode(course: IntegrationCourse, title: string) {
   return prisma.roadmapNode.create({
     data: {
@@ -47,11 +43,11 @@ test('hiding a Node checks a sent visibility preview version against the removed
     await addNode(course, 'Colas'),
   ];
   await connect(nodeId, dependent.id);
-  const preview = await previewNodeVisibility({ ...editor(course), id: nodeId });
+  const preview = await previewNodeVisibility({ ...course.teacher, id: nodeId });
   await connect(prerequisite.id, nodeId);
   const hide = (previewVersion?: string) =>
     updateRoadmapNode(
-      { ...editor(course), id: nodeId, input: { isVisible: false }, previewVersion },
+      { ...course.teacher, id: nodeId, input: { isVisible: false }, previewVersion },
       recording.port,
     );
 
@@ -61,7 +57,7 @@ test('hiding a Node checks a sent visibility preview version against the removed
   });
   expect(recording.changes).toEqual([]);
 
-  const current = await previewNodeVisibility({ ...editor(course), id: nodeId });
+  const current = await previewNodeVisibility({ ...course.teacher, id: nodeId });
   expect(current.dependencies).toHaveLength(2);
   await expect(hide(current.version)).resolves.toMatchObject({
     node: { isVisible: false },
@@ -72,7 +68,7 @@ test('hiding a Node checks a sent visibility preview version against the removed
   await connect(unconfirmed.id, dependent.id);
   await expect(
     updateRoadmapNode(
-      { ...editor(course), id: unconfirmed.id, input: { isVisible: false } },
+      { ...course.teacher, id: unconfirmed.id, input: { isVisible: false } },
       recording.port,
     ),
   ).resolves.toMatchObject({ node: { isVisible: false }, dependencies: [expect.anything()] });
@@ -84,7 +80,7 @@ test('BLOCK checks a sent Teacher block preview version against the Nodes it blo
   const recording = recordingChangePort();
   const nodeId = course.change.nodeId;
   await connect(nodeId, (await addNode(course, 'Pilas')).id);
-  const request = { ...editor(course), id: nodeId, operation: 'BLOCK' as const };
+  const request = { ...course.teacher, id: nodeId, operation: 'BLOCK' as const };
   const preview = await previewTeacherBlock(request);
   await connect(nodeId, (await addNode(course, 'Colas')).id);
   const block = (previewVersion?: string) =>
@@ -116,7 +112,7 @@ test('Dependency creation checks a sent Dependency preview version against the T
   });
   const target = await addNode(course, 'Pilas');
   const request = {
-    ...editor(course),
+    ...course.teacher,
     input: { sourceNodeId: source.id, targetNodeId: target.id },
   };
   const preview = await previewRoadmapDependency(request);

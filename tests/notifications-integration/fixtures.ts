@@ -56,6 +56,9 @@ async function createCourse(
       roadmapId,
       nodeTypeId: type.id,
       identifier,
+      /** The teacher and the student, as Roadmap operations receive them. */
+      teacher: { userId: teacherId, identifier },
+      student: { userId: studentId, identifier },
       participationId: offering.participants.find((p) => p.userId === studentId)!.id,
       change: { ...identifier, nodeId: node.id },
     };

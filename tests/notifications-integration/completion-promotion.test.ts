@@ -15,10 +15,7 @@ const accessBodies = (notices: Notice[]) =>
     .sort();
 
 const complete = (course: IntegrationCourse, nodeId: string) =>
-  completeNode(
-    { userId: course.studentId, identifier: course.identifier, nodeId },
-    scheduledRoadmapChangePort,
-  );
+  completeNode({ ...course.student, nodeId }, scheduledRoadmapChangePort);
 
 const promote = (course: IntegrationCourse) =>
   materializeParticipation(

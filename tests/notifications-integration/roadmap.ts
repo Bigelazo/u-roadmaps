@@ -29,7 +29,7 @@ export function teacherEdits(
   course: IntegrationCourse,
   port: RoadmapChangePort = scheduledRoadmapChangePort,
 ) {
-  const editor = { userId: course.teacherId, identifier: course.identifier };
+  const editor = course.teacher;
   return {
     create: (title: string) =>
       createRoadmapNode(
