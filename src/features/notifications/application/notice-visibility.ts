@@ -1,7 +1,13 @@
-import { NOTICE_TARGET } from './notice-targets/kinds';
-export type NoticeVisibilityNode = { id: string; isVisible: boolean; nodeTypeId?: string };
+import { descriptorForNoticeTarget } from './notice-targets';
 
-/** Visibility affects presentation only; hidden notices remain pending for recognition. */
+export type NoticeVisibilityNode = { id: string; isVisible: boolean; nodeTypeId: string };
+
+/**
+ * Whether a stored notice is shown, as its Notice target declares (`shownTo`). A row no
+ * descriptor owns may carry hidden or Blocked node details, so with a `nodeId` it is shown
+ * like `node-openers`; without one it is shown as stored. Visibility affects presentation
+ * only; hidden notices remain pending for recognition.
+ */
 export function isNoticeVisible(
   value: unknown,
   nodes: readonly NoticeVisibilityNode[],
@@ -9,31 +15,21 @@ export function isNoticeVisible(
 ): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const data = value as Record<string, unknown>;
-  if (data.noticeTarget === NOTICE_TARGET.dependency)
-    return [data.sourceNodeId, data.targetNodeId].every((nodeId) =>
-      nodes.some((node) => node.id === nodeId && node.isVisible),
-    );
-  if (data.noticeTarget === NOTICE_TARGET.nodeTypeName)
-    return (
-      typeof data.nodeTypeId === 'string' &&
-      nodes.some((node) => node.nodeTypeId === data.nodeTypeId && node.isVisible)
-    );
-  const node = nodes.find(({ id }) => id === data.nodeId);
-  // Access withdrawal and deletion describe a change in the Roadmap itself.
-  if (data.noticeTarget === NOTICE_TARGET.nodeAccess || data.changeKind === 'node-deleted')
-    return true;
-  // A new Node that no longer exists has nothing left to show.
-  if (!node) return data.noticeTarget !== NOTICE_TARGET.nodeCreation;
-  if (!node.isVisible) return false;
-  const fields = Array.isArray(data.changedFields) ? data.changedFields : [];
-  const details =
-    data.noticeTarget === NOTICE_TARGET.nodeDescription ||
-    data.changeKind === 'resource-added' ||
-    data.changeKind === 'resource-updated' ||
-    data.changeKind === 'resource-removed' ||
-    (data.changeKind === 'node-updated' &&
-      !fields.includes('title') &&
-      !fields.includes('nodeType') &&
-      !data.noticeTarget);
-  return !details || accessible.has(node.id);
+  const shownTo = descriptorForNoticeTarget(data.noticeTarget)?.shownTo;
+  const visible = (nodeId: unknown) => nodes.some((node) => node.id === nodeId && node.isVisible);
+  const opens = (nodeId: unknown) => visible(nodeId) && accessible.has(nodeId as string);
+  switch (shownTo) {
+    case undefined:
+      return typeof data.nodeId !== 'string' || opens(data.nodeId);
+    case 'everyone':
+      return true;
+    case 'node-viewers':
+      return visible(data.nodeId);
+    case 'node-openers':
+      return opens(data.nodeId);
+    case 'dependency-viewers':
+      return visible(data.sourceNodeId) && visible(data.targetNodeId);
+    case 'node-type-viewers':
+      return nodes.some((node) => node.nodeTypeId === data.nodeTypeId && node.isVisible);
+  }
 }

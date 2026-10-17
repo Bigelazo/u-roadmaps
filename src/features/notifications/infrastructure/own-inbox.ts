@@ -1,6 +1,6 @@
 import 'server-only';
 import { lockNoticeParticipation } from './participation-lock';
-import { visibleOwnNotices } from './notice-visibility';
+import { isOwnNoticeVisible } from './notice-visibility';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
@@ -9,11 +9,17 @@ import {
   queryInboxCounts,
   queryNodeChangeCounts,
   type InboxFilter,
+  type InboxRecipient,
 } from './inbox-query';
 import { changeSummary } from '../application/change-summary';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
-import { entryTargetSnapshots, recognizeTargetSnapshots } from './notice-lifecycle';
+import {
+  entryTargetSnapshots,
+  recognizeTargetSnapshots,
+  roadmapNodeAccess,
+  type ParticipantAccessReader,
+} from './notice-lifecycle';
 import { projectTargetNotice } from '../application/notice-targets';
 
 const NOTICE_OPENING_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -30,12 +36,6 @@ async function pruneNoticeOpenings(
     },
   });
 }
-
-export type NoticeNodeAccess = (
-  transaction: Prisma.TransactionClient,
-  userId: string,
-  roadmapId: string,
-) => Promise<ReadonlySet<string>>;
 
 export function noticeRecord(notice: {
   id: string;
@@ -88,20 +88,46 @@ function inboxFilter(params: URLSearchParams): InboxFilter {
   };
 }
 
-export async function listOwnNotices(userId: string, params: URLSearchParams) {
+/** The recipient's accessible Nodes in the filtered Roadmap, or in every Roadmap of theirs. */
+async function inboxRecipient(
+  userId: string,
+  roadmapId: string | undefined,
+  readAccess: ParticipantAccessReader,
+): Promise<InboxRecipient> {
+  const roadmapIds = roadmapId
+    ? [roadmapId]
+    : (
+        await prisma.roadmap.findMany({
+          where: { courseOffering: { participants: { some: { userId, isActive: true } } } },
+          select: { id: true },
+        })
+      ).map(({ id }) => id);
+  const access = await readAccess(prisma, { userId, roadmapIds });
+  return { userId, accessibleNodeIds: [...access.values()].flatMap((ids) => [...ids]) };
+}
+
+export async function listOwnNotices(
+  userId: string,
+  params: URLSearchParams,
+  readAccess: ParticipantAccessReader,
+) {
   const limit = Number(params.get('limit') ?? 10);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
     throw new ApplicationError(400, 'INVALID_REQUEST', 'Límite inválido.');
   const filter = inboxFilter(params);
-  const after = params.get('after');
-  const cursor = after
-    ? await prisma.roadmapNotice.findFirst({
-        where: { id: uuid(after), recipientId: userId },
-        select: { id: true, availableAt: true },
-      })
-    : null;
+  const afterParam = params.get('after');
+  const after = afterParam ? uuid(afterParam) : null;
+  const [recipient, cursor] = await Promise.all([
+    inboxRecipient(userId, filter.roadmapId, readAccess),
+    after
+      ? prisma.roadmapNotice.findFirst({
+          where: { id: after, recipientId: userId },
+          select: { id: true, availableAt: true },
+        })
+      : null,
+  ]);
   if (after && !cursor) throw new ApplicationError(404, 'NOT_FOUND', 'Aviso no encontrado.');
-  const page = await queryInboxPage(userId, filter, {
+  const page = await queryInboxPage(recipient, filter, {
     limit,
     cursor,
     grouped: params.get('groupBy') === 'roadmapId',
@@ -109,12 +135,22 @@ export async function listOwnNotices(userId: string, params: URLSearchParams) {
   return { notifications: page.notices.map(noticeRecord), hasMore: page.hasMore };
 }
 
-export function countOwnNoticeTargets(userId: string, params: URLSearchParams) {
-  return queryInboxCounts(userId, inboxFilter(params));
+export async function countOwnNoticeTargets(
+  userId: string,
+  params: URLSearchParams,
+  readAccess: ParticipantAccessReader,
+) {
+  const filter = inboxFilter(params);
+  return queryInboxCounts(await inboxRecipient(userId, filter.roadmapId, readAccess), filter);
 }
 
-export function countOwnNodeChanges(userId: string, params: URLSearchParams) {
-  return queryNodeChangeCounts(userId, uuid(params.get('roadmapId')));
+export async function countOwnNodeChanges(
+  userId: string,
+  params: URLSearchParams,
+  readAccess: ParticipantAccessReader,
+) {
+  const roadmapId = uuid(params.get('roadmapId'));
+  return queryNodeChangeCounts(await inboxRecipient(userId, roadmapId, readAccess), roadmapId);
 }
 
 /** Opening a Node reviews its changes for the canvas mark; it never recognizes notices. */
@@ -141,11 +177,15 @@ export async function reviewOwnNode(userId: string, input: Record<string, unknow
   return { reviewed: true };
 }
 
-export async function findOwnNotice(userId: string, id: string, accessibleNodes: NoticeNodeAccess) {
+export async function findOwnNotice(
+  userId: string,
+  id: string,
+  readAccess: ParticipantAccessReader,
+) {
   const notice = await prisma.roadmapNotice.findFirst({
     where: { id: uuid(id), recipientId: userId },
   });
-  if (!notice || !(await visibleOwnNotices(userId, [notice], accessibleNodes)).length)
+  if (!notice || !(await isOwnNoticeVisible(userId, notice, readAccess)))
     throw new ApplicationError(404, 'NOT_FOUND', 'Aviso no encontrado.');
   const offering = await prisma.courseOffering.findUnique({
     where: { id: notice.courseOfferingId },
@@ -159,7 +199,7 @@ export async function findOwnNotice(userId: string, id: string, accessibleNodes:
 export async function prepareOwnNoticeOpening(
   userId: string,
   roadmapId: string,
-  accessibleNodes: NoticeNodeAccess,
+  readAccess: ParticipantAccessReader,
   operationId: string = randomUUID(),
   retry = false,
 ) {
@@ -172,14 +212,14 @@ export async function prepareOwnNoticeOpening(
       where: { recipientId_operationId: { recipientId: userId, operationId } },
     });
     if (existing) {
-      await accessibleNodes(transaction, userId, roadmapId);
+      await roadmapNodeAccess(readAccess, transaction, userId, roadmapId);
       if (existing.roadmapId !== roadmapId)
         throw new ApplicationError(400, 'INVALID_REQUEST', 'Apertura inválida.');
       return operationId;
     }
     if (retry) throw new ApplicationError(404, 'NOT_FOUND', 'Apertura de Roadmap no encontrada.');
     const [accessible, notices, nodes, roadmap] = await Promise.all([
-      accessibleNodes(transaction, userId, roadmapId),
+      roadmapNodeAccess(readAccess, transaction, userId, roadmapId),
       transaction.roadmapNotice.findMany({
         where: { recipientId: userId, roadmapId, acknowledgedAt: null },
         select: { id: true, data: true },
@@ -214,7 +254,7 @@ export async function prepareOwnNoticeOpening(
 export async function acknowledgeOwnNotices(
   userId: string,
   input: Record<string, unknown>,
-  accessibleNodes?: NoticeNodeAccess,
+  readAccess?: ParticipantAccessReader,
 ) {
   const operationId = uuid(input.operationId);
   const roadmapId = uuid(input.roadmapId);
@@ -274,7 +314,7 @@ export async function acknowledgeOwnNotices(
       roadmapId,
       operationId,
       snapshots: retained.snapshots,
-      accessibleNodes,
+      readAccess,
     });
     const summary =
       visited && result.count + targetCount > 0 ? (retained.summary as ChangeSummary | null) : null;

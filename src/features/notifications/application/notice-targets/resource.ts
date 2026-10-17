@@ -58,6 +58,7 @@ function lifecycle({ knownValue, currentValue, context }: TargetValues) {
 export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   noticeTarget: NOTICE_TARGET.resource,
   noticeClass: 'roadmap-resource-changed',
+  shownTo: 'node-openers',
   readSide: { changeKind: 'resource-updated', changedFields: [], targetKind: 'node' },
   valueReadSide: (values) => ({ changeKind: lifecycle(values).changeKind }),
   matches: (fact): fact is ResourceFact => fact.kind === 'resource',

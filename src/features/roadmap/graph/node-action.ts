@@ -1,24 +1,10 @@
-import type { TeacherBlockOperation } from '@/features/roadmap/types';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 
-export type NodeAccessActionOperation = Extract<TeacherBlockOperation, 'BLOCK' | 'UNBLOCK'>;
-
+/** What the Node action menu asks for: canvas commands, plus opening the Resource composer. */
 export type NodeActionIntent =
-  | {
-      readonly kind: 'change-teacher-block';
-      readonly nodeId: string;
-      readonly operation: NodeAccessActionOperation;
-    }
-  | {
-      readonly kind: 'change-visibility';
-      readonly nodeId: string;
-      readonly isVisible: boolean;
-    }
+  | CanvasCommandOf<'hide-node' | 'show-node' | 'change-teacher-block' | 'delete-node'>
   | {
       readonly kind: 'add-resource';
-      readonly nodeId: string;
-    }
-  | {
-      readonly kind: 'delete-node';
       readonly nodeId: string;
     };
 

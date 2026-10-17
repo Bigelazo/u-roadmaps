@@ -12,7 +12,7 @@ import {
 } from 'react';
 import {
   editorDraftDiscardConfirmation,
-  roadmapConfirmationActionIds,
+  nodeEditorConfirmationActionIds,
   resourceDeletionConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
@@ -296,7 +296,7 @@ function useNodeEditorController(
       const current = stateRef.current;
       const resource = current.pendingResourceDeletion;
       if (
-        actionId !== roadmapConfirmationActionIds.deleteResource ||
+        actionId !== nodeEditorConfirmationActionIds.deleteResource ||
         !resource ||
         current.pendingEditorEffect
       )
@@ -313,20 +313,12 @@ function useNodeEditorController(
         const currentNode = stateRef.current.canonicalNode;
         if (currentNode) run(currentNode, ...args);
       };
-    // A dirty draft must be discarded before the intent leaves this Node.
-    const guardThen = (reason: 'deselect-node' | 'delete-node', intent: 'close' | 'delete-node') =>
-      withCurrentNode((currentNode) => {
-        void guardDraft({ kind: reason, nodeId: currentNode.id }).then((proceed) => {
-          if (proceed) onIntent({ kind: intent, nodeId: currentNode.id });
-        });
-      });
 
     return {
       toggleVisibility: withCurrentNode((currentNode) =>
         onIntent({
-          kind: 'change-visibility',
+          kind: currentNode.isVisible ? 'hide-node' : 'show-node',
           nodeId: currentNode.id,
-          isVisible: currentNode.isVisible,
         }),
       ),
       requestTeacherBlock: withCurrentNode((currentNode, operation: TeacherBlockOperation) =>
@@ -335,8 +327,16 @@ function useNodeEditorController(
       scheduleTeacherUnlock: withCurrentNode((currentNode, unlockOn: string | null) =>
         onIntent({ kind: 'schedule-teacher-unlock', nodeId: currentNode.id, unlockOn }),
       ),
-      closeNode: guardThen('deselect-node', 'close'),
-      requestNodeDeletion: guardThen('delete-node', 'delete-node'),
+      // A dirty draft must be discarded before the editor closes this Node.
+      closeNode: withCurrentNode((currentNode) => {
+        void guardDraft({ kind: 'deselect-node', nodeId: currentNode.id }).then((proceed) => {
+          if (proceed) onIntent({ kind: 'close', nodeId: currentNode.id });
+        });
+      }),
+      // The canvas commands ask about the draft before a deletion opens.
+      requestNodeDeletion: withCurrentNode((currentNode) =>
+        onIntent({ kind: 'delete-node', nodeId: currentNode.id }),
+      ),
     };
   }, [guardDraft, onIntent]);
 
@@ -416,7 +416,7 @@ function useNodeEditorController(
   const confirmGuard = useCallback(
     (actionId: string) => {
       if (
-        actionId !== roadmapConfirmationActionIds.discardEditorDraft ||
+        actionId !== nodeEditorConfirmationActionIds.discardEditorDraft ||
         !stateRef.current.pendingGuard
       )
         return;
@@ -457,7 +457,7 @@ export const NodeEditor = forwardRef<NodeEditorHandle, NodeEditorProps>(
           }
           pendingActionId={
             state.pendingEditorEffect?.effect.kind === 'delete-resource'
-              ? roadmapConfirmationActionIds.deleteResource
+              ? nodeEditorConfirmationActionIds.deleteResource
               : undefined
           }
           onCancel={transitions.cancelResourceDeletion}

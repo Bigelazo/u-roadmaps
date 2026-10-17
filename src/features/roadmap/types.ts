@@ -102,6 +102,18 @@ export type TeacherBlockPreview = {
   version: string;
 };
 
+/** The Nodes a new Dependency would Teacher-block. */
+export type DependencyImpact = {
+  nodes: TeacherBlockImpact[];
+  version: string;
+};
+
+/** The Dependencies hiding a Node would remove. */
+export type NodeHidingImpact = {
+  dependencies: Array<{ id: string; sourceNodeId: string; targetNodeId: string }>;
+  version: string;
+};
+
 export type NodeDeletionImpact = {
   node: {
     title: string;

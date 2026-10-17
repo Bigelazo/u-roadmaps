@@ -48,6 +48,7 @@ async function pairRecipients(
 export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
   noticeTarget: NOTICE_TARGET.dependency,
   noticeClass: 'roadmap-path-changed',
+  shownTo: 'dependency-viewers',
   readSide: { changeKind: 'dependency-added', changedFields: [], targetKind: 'roadmap' },
   matches: (fact): fact is DependencyFact => fact.kind === 'dependency',
   target: (fact) => dependencyPairRef(fact.sourceNodeId, fact.targetNodeId),

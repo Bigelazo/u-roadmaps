@@ -4,7 +4,9 @@ import type { Point } from '@/features/roadmap/graph/geometry';
 import type { NodeUpdate } from '@/features/roadmap/editor/types';
 import type {
   AnyRoadmapDto,
+  DependencyImpact,
   NodeDeletionImpact,
+  NodeHidingImpact,
   RoadmapDto,
   StudentRoadmapDto,
   TeacherBlockImpact,
@@ -113,15 +115,19 @@ function isNodeDeletionImpact(value: unknown): value is NodeDeletionImpact {
   );
 }
 
-function isDependencyPreview(value: unknown): value is { nodes: TeacherBlockImpact[] } {
-  return isRecord(value) && Array.isArray(value.nodes) && value.nodes.every(isTitledRecord);
-}
-
-function isVisibilityPreview(value: unknown): value is {
-  dependencies: { id: string; sourceNodeId: string; targetNodeId: string }[];
-} {
+function isDependencyImpact(value: unknown): value is DependencyImpact {
   return (
     isRecord(value) &&
+    typeof value.version === 'string' &&
+    Array.isArray(value.nodes) &&
+    value.nodes.every(isTitledRecord)
+  );
+}
+
+function isNodeHidingImpact(value: unknown): value is NodeHidingImpact {
+  return (
+    isRecord(value) &&
+    typeof value.version === 'string' &&
     Array.isArray(value.dependencies) &&
     value.dependencies.every(
       (dependency) =>
@@ -131,6 +137,11 @@ function isVisibilityPreview(value: unknown): value is {
         typeof dependency.targetNodeId === 'string',
     )
   );
+}
+
+/** Sends a previewed change's Change impact version back in its header, when there is one. */
+function previewHeader(name: string, previewVersion: string | undefined) {
+  return previewVersion ? { headers: { [name]: previewVersion } } : {};
 }
 
 async function request(
@@ -227,30 +238,30 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
     );
   },
 
-  async connectNodes(input, sourceNodeId, targetNodeId, sourceHandle, targetHandle) {
+  previewRoadmapDependency: (input, { sourceNodeId, targetNodeId, sourceHandle, targetHandle }) =>
+    fetchValid(
+      input,
+      `/dependencies?${new URLSearchParams({ sourceNodeId, targetNodeId, sourceHandle, targetHandle })}`,
+      {},
+      isDependencyImpact,
+      'No se pudo calcular el impacto de la dependencia.',
+    ),
+
+  async connectNodes(
+    input,
+    { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
+    previewVersion,
+  ) {
     await request(
       input,
       '/dependencies',
       {
         method: 'POST',
         body: JSON.stringify({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }),
+        ...previewHeader('x-dependency-preview', previewVersion),
       },
       'No se pudo crear la dependencia.',
     );
-  },
-
-  async previewRoadmapDependency(input, sourceNodeId, targetNodeId, sourceHandle, targetHandle) {
-    const query = new URLSearchParams({ sourceNodeId, targetNodeId });
-    if (sourceHandle) query.set('sourceHandle', sourceHandle);
-    if (targetHandle) query.set('targetHandle', targetHandle);
-    const body = await fetchValid(
-      input,
-      `/dependencies?${query}`,
-      {},
-      isDependencyPreview,
-      'No se pudo calcular el impacto de la dependencia.',
-    );
-    return body.nodes;
   },
 
   previewTeacherBlock: (input, nodeId, operation: TeacherBlockOperation) =>
@@ -268,7 +279,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
       `/nodes/${nodeId}/teacher-block`,
       {
         method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
-        ...(previewVersion ? { headers: { 'x-teacher-block-preview': previewVersion } } : {}),
+        ...previewHeader('x-teacher-block-preview', previewVersion),
       },
       'No se pudo cambiar el bloqueo docente.',
     );
@@ -297,24 +308,26 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
     );
   },
 
-  async toggleVisibility(input, nodeId, isVisible) {
-    await request(
-      input,
-      `/nodes/${nodeId}`,
-      { method: 'PATCH', body: JSON.stringify({ isVisible: !isVisible }) },
-      'No se pudo cambiar la visibilidad.',
-    );
-  },
-
-  async previewNodeVisibility(input, nodeId) {
-    const body = await fetchValid(
+  previewNodeHiding: (input, nodeId) =>
+    fetchValid(
       input,
       `/nodes/${nodeId}?operation=HIDE`,
       {},
-      isVisibilityPreview,
+      isNodeHidingImpact,
       'No se pudo calcular el impacto de ocultar el nodo.',
+    ),
+
+  async setVisibility(input, nodeId, visible, previewVersion) {
+    await request(
+      input,
+      `/nodes/${nodeId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ isVisible: visible }),
+        ...previewHeader('x-node-visibility-preview', previewVersion),
+      },
+      'No se pudo cambiar la visibilidad.',
     );
-    return body.dependencies;
   },
 
   previewNodeDeletion: (input, nodeId) =>
@@ -332,7 +345,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
       `/nodes/${nodeId}`,
       {
         method: 'DELETE',
-        ...(previewVersion ? { headers: { 'x-node-delete-preview': previewVersion } } : {}),
+        ...previewHeader('x-node-delete-preview', previewVersion),
       },
       'No se pudo eliminar el nodo.',
     );

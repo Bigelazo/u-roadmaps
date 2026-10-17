@@ -1,13 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
+  canvasConfirmation,
   editorDraftDiscardConfirmation,
   nodeDeletionConfirmation,
   roadmapNodeVisibilityConfirmation,
   roadmapTeacherBlockConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
-import type { TeacherBlockPreview } from '@/features/roadmap/types';
+import type { NodeType, TeacherBlockPreview } from '@/features/roadmap/types';
 
 const continueText = 'Puedes seguir editando o descartarlo para continuar.';
 
@@ -202,7 +203,7 @@ describe('roadmapNodeVisibilityConfirmation', () => {
       description:
         'Dejará de aparecer en el roadmap de los estudiantes. Además, se quitará su bloqueo docente y se eliminarán sus conexiones con “Conjuntos” y “Gráficas”; al volver a mostrarlo, tendrás que conectarlo de nuevo.',
       intent: 'destructive',
-      actions: [{ id: 'toggle-visibility', label: 'Ocultar' }],
+      actions: [{ id: 'hide-node', label: 'Ocultar' }],
     });
   });
 
@@ -212,7 +213,248 @@ describe('roadmapNodeVisibilityConfirmation', () => {
       description:
         'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
       intent: 'default',
-      actions: [{ id: 'toggle-visibility', label: 'Mostrar' }],
+      actions: [{ id: 'show-node', label: 'Mostrar' }],
+    });
+  });
+});
+
+describe('canvasConfirmation', () => {
+  const roadmap = {
+    nodes: [
+      { id: 'a', title: 'Conjuntos', nodeTypeId: 't' },
+      { id: 'b', title: 'Funciones', nodeTypeId: 't' },
+    ],
+    nodeTypes: [
+      {
+        id: 't',
+        name: 'Taller',
+        icon: 'Shapes',
+        color: '#024AD8',
+        isPredefined: false,
+      } as NodeType,
+    ],
+  };
+  const deletionImpact = {
+    node: { title: 'Funciones', nodeType: { name: 'Clase', icon: 'Book', color: '#000' } },
+    dependencies: [{ id: 'd1', sourceTitle: 'Conjuntos', targetTitle: 'Funciones' }],
+    resources: [],
+    version: 'v1',
+  };
+
+  it('shows nothing while the Change impact is being previewed', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'delete-node',
+          request: { kind: 'delete-node', nodeId: 'b' },
+          impact: null,
+          phase: 'reading-impact',
+        },
+        roadmap,
+      ),
+    ).toBeNull();
+  });
+
+  it('presents hiding with the connections its Change impact removes', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'hide-node',
+          request: { kind: 'hide-node', nodeId: 'b' },
+          impact: {
+            dependencies: [{ id: 'd1', sourceNodeId: 'a', targetNodeId: 'b' }],
+            version: 'v1',
+          },
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: '¿Ocultar “Funciones”?',
+      description: expect.stringContaining('sus conexiones con “Conjuntos”'),
+      actions: [{ id: 'hide-node', label: 'Ocultar' }],
+    });
+  });
+
+  it('presents showing, and keeps presenting a choice while it is being confirmed', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'show-node',
+          request: { kind: 'show-node', nodeId: 'a' },
+          impact: null,
+          phase: 'confirming',
+          choice: 'show-node',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({ title: '¿Mostrar “Conjuntos”?', actions: [{ id: 'show-node' }] });
+  });
+
+  it('presents a Node deletion from its Change impact', () => {
+    const confirmation = canvasConfirmation(
+      {
+        kind: 'delete-node',
+        request: { kind: 'delete-node', nodeId: 'b' },
+        impact: deletionImpact,
+        phase: 'awaiting',
+      },
+      roadmap,
+    );
+    expect(renderToStaticMarkup(confirmation?.title)).toContain('¿Eliminar “Funciones”?');
+    expect(confirmation?.description).toBe(
+      'También se eliminarán sus conexiones con “Conjuntos”. Esta acción no se puede deshacer.',
+    );
+  });
+
+  it('shows nothing for a Node the Roadmap no longer has', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'show-node',
+          request: { kind: 'show-node', nodeId: 'missing' },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toBeNull();
+  });
+
+  it('offers both unlock scopes from a Teacher block Change impact', () => {
+    const scope = (mode: 'SINGLE' | 'BRANCH', ids: readonly string[]) => ({
+      mode,
+      version: mode,
+      nodes: ids.map((id) => ({
+        id,
+        title: id === 'a' ? 'Conjuntos' : 'Funciones',
+        relation: id === 'a' ? ('SELECTED_NODE' as const) : ('DEPENDENT' as const),
+      })),
+    });
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'change-teacher-block',
+          request: { kind: 'change-teacher-block', nodeId: 'a', operation: 'UNBLOCK' },
+          impact: { UNBLOCK: scope('SINGLE', ['a']), BRANCH_UNLOCK: scope('BRANCH', ['a', 'b']) },
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: '¿Desbloquear “Conjuntos”?',
+      actions: [{ id: 'unlock-node' }, { id: 'unlock-branch' }],
+    });
+  });
+
+  const creation = {
+    kind: 'create-dependency',
+    sourceNodeId: 'a',
+    targetNodeId: 'b',
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  } as const;
+
+  it('presents a Dependency creation with the Nodes it Teacher-blocks', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'create-dependency',
+          request: creation,
+          impact: { nodes: [{ id: 'b', title: 'Funciones' }], version: 'v1' },
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: 'Confirmar bloqueo',
+      description: expect.stringContaining('bloqueará persistentemente 1 nodo.'),
+      actions: [{ id: 'create-dependency', label: 'Conectar y bloquear' }],
+    });
+  });
+
+  it('shows nothing while a Dependency creation without Change impact applies', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'create-dependency',
+          request: creation,
+          impact: { nodes: [], version: 'v1' },
+          phase: 'confirming',
+        },
+        roadmap,
+      ),
+    ).toBeNull();
+  });
+
+  it('presents the Dependencies still to delete', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'delete-dependencies',
+          request: { kind: 'delete-dependencies', dependencyIds: ['d2'] },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      description: 'Eliminarás esta dependencia. Esta acción no se puede deshacer.',
+      actions: [{ id: 'delete-dependencies', label: 'Eliminar' }],
+    });
+  });
+
+  it('presents an automatic layout', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'apply-automatic-layout',
+          request: { kind: 'apply-automatic-layout', positions: [], direction: 'LR' },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: 'Confirmar ordenamiento',
+      actions: [{ id: 'auto-layout', label: 'Ordenar nodos' }],
+    });
+  });
+
+  it('presents a Node type deletion, and nothing for a Node type the Roadmap no longer has', () => {
+    const deletion = (nodeTypeId: string) =>
+      canvasConfirmation(
+        {
+          kind: 'delete-node-type',
+          request: { kind: 'delete-node-type', nodeTypeId },
+          impact: null,
+          phase: 'confirming',
+          choice: 'delete-node-type',
+        },
+        roadmap,
+      );
+    expect(deletion('t')).toMatchObject({
+      description: 'Eliminarás el Tipo de nodo Taller. Esta acción no se puede deshacer.',
+      actions: [{ id: 'delete-node-type', label: 'Eliminar' }],
+    });
+    expect(deletion('missing')).toBeNull();
+  });
+
+  it('presents a Canvas preview progress reset', () => {
+    expect(
+      canvasConfirmation(
+        {
+          kind: 'reset-canvas-preview',
+          request: { kind: 'reset-canvas-preview' },
+          impact: null,
+          phase: 'awaiting',
+        },
+        roadmap,
+      ),
+    ).toMatchObject({
+      title: 'Reiniciar progreso de previsualización',
+      intent: 'destructive',
+      actions: [{ id: 'reset-canvas-preview', label: 'Reiniciar progreso' }],
     });
   });
 });

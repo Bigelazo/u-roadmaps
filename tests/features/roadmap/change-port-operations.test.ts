@@ -19,7 +19,9 @@ import {
   uploadRoadmapResource,
   updateRoadmapResource,
   removeRoadmapResource,
+  createRoadmapNodeType,
   updateRoadmapNodeType,
+  deleteRoadmapNodeType,
   completeNode,
 } from '@/features/roadmap/server';
 import { createRoadmap } from '@/features/roadmap/application/roadmap';
@@ -373,6 +375,65 @@ test('type rename reports its previous name; appearance edits stay silent', asyn
   recording.changes.length = 0;
   await updateRoadmapNodeType({ ...input, input: { color: '#1467A8' } }, recording.port);
   expect(recording.facts()).toEqual([]);
+});
+
+test('Node type commands refuse what the Node type decision rejects, with their HTTP contract', async ({
+  course,
+}) => {
+  const { port } = recordingChangePort();
+  const editor = teacher(course);
+  const name = `Predefinido ${crypto.randomUUID()}`;
+  const predefined = await prisma.nodeType.create({
+    data: {
+      name,
+      normalizedName: name.toLowerCase(),
+      icon: 'BookOpen',
+      color: '#024AD8',
+      isPredefined: true,
+    },
+  });
+  const appearance = { icon: 'BookOpen', color: '#024AD8' };
+
+  try {
+    await expect(
+      createRoadmapNodeType(
+        { ...editor, input: { name: ` ${name.toUpperCase()} `, ...appearance } },
+        port,
+      ),
+    ).rejects.toMatchObject({ status: 409, code: 'NODE_TYPE_NAME_CONFLICT' });
+    await expect(
+      createRoadmapNodeType({ ...editor, input: { name: 'TEMA', ...appearance } }, port),
+    ).rejects.toMatchObject({ status: 409, code: 'NODE_TYPE_NAME_CONFLICT' });
+    await expect(
+      updateRoadmapNodeType({ ...editor, id: predefined.id, input: { color: '#1467A8' } }, port),
+    ).rejects.toMatchObject({ status: 409, code: 'PREDEFINED_TYPE_IMMUTABLE' });
+    await expect(
+      deleteRoadmapNodeType({ ...editor, id: predefined.id }, port),
+    ).rejects.toMatchObject({ status: 409, code: 'PREDEFINED_TYPE_IMMUTABLE' });
+    await expect(
+      updateRoadmapNodeType(
+        { ...editor, id: crypto.randomUUID(), input: { name: 'Lectura' } },
+        port,
+      ),
+    ).rejects.toMatchObject({ status: 404, code: 'NODE_TYPE_NOT_FOUND' });
+    await expect(
+      deleteRoadmapNodeType({ ...editor, id: course.nodeTypeId }, port),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'NODE_TYPE_IN_USE',
+      message: 'No se puede eliminar un tipo utilizado por nodos.',
+    });
+
+    const created = await createRoadmapNodeType(
+      { ...editor, input: { name: 'Taller', ...appearance } },
+      port,
+    );
+    await updateRoadmapNodeType({ ...editor, id: created.id, input: { name: 'TALLER' } }, port);
+    await deleteRoadmapNodeType({ ...editor, id: created.id }, port);
+    expect(await prisma.nodeType.count({ where: { roadmapId: course.roadmapId } })).toBe(1);
+  } finally {
+    await prisma.nodeType.delete({ where: { id: predefined.id } });
+  }
 });
 
 test('promotion reports the role change', async ({ course }) => {

@@ -37,6 +37,7 @@ function nodeTitle({ context }: TargetValues) {
 export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> = {
   noticeTarget: NOTICE_TARGET.nodeDescription,
   noticeClass: 'roadmap-node-changed',
+  shownTo: 'node-openers',
   readSide: { changeKind: 'node-updated', changedFields: ['description'], targetKind: 'node' },
   matches: (fact): fact is NodeDescriptionFact => fact.kind === 'node-description',
   target: (fact) => nodeDescriptionRef(fact.nodeId),

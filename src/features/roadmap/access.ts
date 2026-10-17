@@ -1,1 +1,1 @@
-export { studentNodeAccessById } from './domain/access';
+export { readParticipantAccess } from './application/participant-access';

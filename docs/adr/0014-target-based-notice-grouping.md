@@ -410,6 +410,11 @@ exactamente lo que cambió para ella. Se descartó **retirar** estos avisos: en 
 ejemplo Ana terminaría sin aviso alguno de una descripción que ahora puede leer.
 Eliminar un Nodo sigue absorbiendo definitivamente sus avisos (decisión 1).
 
+**Nota (2026-10-17):** qué Nodos son accesibles para cada participante y a quién se
+muestra un aviso guardado lo rige ahora
+[ADR-0030](0030-participant-access-is-decided-once-in-the-domain.md); cada Notice target
+lo declara en `shownTo`.
+
 ### 11. Pérdida de acceso al curso
 
 Cuando la Participación de un destinatario se desactiva, **se retiran todos sus

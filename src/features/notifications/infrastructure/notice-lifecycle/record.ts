@@ -12,7 +12,7 @@ import {
 import { acceptDelivery } from '../notice-delivery';
 import { nodeCreationRef } from '../../application/absorption';
 import { forgetDeletedNode, recordKnowersValueAtEdit, recordKnownValues } from './known-values';
-import { roadmapView, type NodeAccessReader } from './roadmap-view';
+import { roadmapView, type ParticipantAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget } from './reconcile';
 import { noticeCourseContext, type NoticeCourseContext } from './course-context';
 import { lockOwnChanges, recordOwnChanges, type OwnTarget } from './own-changes';
@@ -43,9 +43,9 @@ const DELIVERY_CONCURRENCY = 5;
 export async function recordNoticeTargets(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
-  accessibleNodes?: NodeAccessReader,
+  readAccess?: ParticipantAccessReader,
 ): Promise<NoticeDelivery | undefined> {
-  const roadmap = roadmapView(transaction, changes.roadmapId, accessibleNodes);
+  const roadmap = roadmapView(transaction, changes.roadmapId, readAccess);
   await lockOwnChanges(transaction, changes);
   const targets: RecordedTarget[] = [];
   const ownTargets: OwnTarget[] = [];
@@ -115,7 +115,7 @@ export async function recordNoticeTargets(
       const courseContext = await noticeCourseContext(prisma, changes.roadmapId, changes.actorId);
       if (!courseContext) return;
       await schedule(() =>
-        deliverTargets(targets, { eventId, occurredAt, courseContext, accessibleNodes }),
+        deliverTargets(targets, { eventId, occurredAt, courseContext, readAccess }),
       );
     } catch {
       console.warn('Roadmap notice delivery failed', { roadmapId: changes.roadmapId });
@@ -127,7 +127,7 @@ type RecordedChange = Readonly<{
   eventId: string;
   occurredAt: Date;
   courseContext: NoticeCourseContext;
-  accessibleNodes?: NodeAccessReader;
+  readAccess?: ParticipantAccessReader;
 }>;
 
 async function deliverTargets(targets: readonly RecordedTarget[], change: RecordedChange) {
@@ -153,7 +153,7 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
 async function deliverTarget(
   { descriptor, target, previousValue, previousContext, context }: RecordedTarget,
   recipientId: string,
-  { eventId, occurredAt, courseContext, accessibleNodes }: RecordedChange,
+  { eventId, occurredAt, courseContext, readAccess }: RecordedChange,
 ) {
   const { roadmapId } = courseContext;
   const targetEventId = `${eventId}:${target.targetKey}`;
@@ -175,7 +175,7 @@ async function deliverTarget(
       fallbackKnown: previousValue,
       fallbackContext: previousContext,
       context,
-      roadmap: roadmapView(transaction, roadmapId, accessibleNodes),
+      roadmap: roadmapView(transaction, roadmapId, readAccess),
       courseContext: async () => courseContext,
       eventId: targetEventId,
       occurredAt,
