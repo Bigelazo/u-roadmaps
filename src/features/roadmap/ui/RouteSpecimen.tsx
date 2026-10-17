@@ -227,6 +227,48 @@ type RouteSpecimenInteraction = {
   onNodeHover?: (nodeId: RouteSpecimenNodeId | null) => void;
 };
 
+function NodeOutline({
+  width,
+  current,
+  highlighted,
+}: {
+  width: number;
+  current: boolean;
+  highlighted: boolean;
+}) {
+  return (
+    <>
+      {current ? (
+        <rect
+          x={-6}
+          y={-6}
+          width={width + 12}
+          height={nodeHeight + 12}
+          rx={12}
+          fill="var(--progress-soft)"
+          stroke="var(--progress)"
+          strokeWidth={2}
+        />
+      ) : null}
+      <motion.rect
+        x={current ? -11 : -6}
+        y={current ? -11 : -6}
+        width={width + (current ? 22 : 12)}
+        height={nodeHeight + (current ? 22 : 12)}
+        rx={current ? 15 : 12}
+        fill="none"
+        stroke="var(--primary-bright)"
+        strokeWidth={2}
+        style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+        initial={false}
+        animate={{ opacity: highlighted ? 1 : 0, scale: highlighted ? 1 : 0.96 }}
+        // Aparece cuando la traza de la otra vista llega al lienzo: fila, borde, contorno.
+        transition={{ delay: highlighted ? 0.45 : 0, duration: 0.3, ease: easeOutExpo }}
+      />
+    </>
+  );
+}
+
 function RouteNode({
   node,
   highlighted,
@@ -247,33 +289,7 @@ function RouteNode({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: easeOutExpo, delay: nodeDepth(node.id) * stagger * 2 }}
       >
-        {node.current ? (
-          <rect
-            x={-6}
-            y={-6}
-            width={width + 12}
-            height={nodeHeight + 12}
-            rx={12}
-            fill="var(--progress-soft)"
-            stroke="var(--progress)"
-            strokeWidth={2}
-          />
-        ) : null}
-        <motion.rect
-          x={node.current ? -11 : -6}
-          y={node.current ? -11 : -6}
-          width={width + (node.current ? 22 : 12)}
-          height={nodeHeight + (node.current ? 22 : 12)}
-          rx={node.current ? 15 : 12}
-          fill="none"
-          stroke="var(--primary-bright)"
-          strokeWidth={2}
-          style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-          initial={false}
-          animate={{ opacity: highlighted ? 1 : 0, scale: highlighted ? 1 : 0.96 }}
-          // Aparece cuando la traza de la otra vista llega al lienzo: fila, borde, contorno.
-          transition={{ delay: highlighted ? 0.45 : 0, duration: 0.3, ease: easeOutExpo }}
-        />
+        <NodeOutline width={width} current={Boolean(node.current)} highlighted={highlighted} />
         <g opacity={locked ? 0.88 : 1} filter={locked ? undefined : 'url(#route-node-shadow)'}>
           <rect
             data-route-node={node.id}
