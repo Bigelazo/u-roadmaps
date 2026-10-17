@@ -52,8 +52,15 @@ export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
     impact: ChangeImpactOf[Kind],
     choice: CanvasConfirmationChoice | undefined,
   ) => Promise<boolean | { retry: CanvasCommandOf<Kind> }>;
-  /** The toast shown once the request took effect, except for the `remaining` part. */
-  success?: (request: CanvasCommandOf<Kind>, remaining?: CanvasCommandOf<Kind>) => string;
+  /**
+   * The toast shown once the request took effect with the confirmation choice teaching
+   * staff made, except for the `remaining` part.
+   */
+  success?: (
+    request: CanvasCommandOf<Kind>,
+    choice: CanvasConfirmationChoice | undefined,
+    remaining?: CanvasCommandOf<Kind>,
+  ) => string;
   /** What the Practice roadmap is told once the whole request took effect. */
   report?: (
     request: CanvasCommandOf<Kind>,
@@ -78,6 +85,13 @@ const chosenTeacherBlockOperation = (
   requested: TeacherBlockOperation,
   choice?: CanvasConfirmationChoice,
 ) => (choice && teacherBlockOperationByChoice[choice]) || requested;
+
+/** The toast for each Teacher block operation applied. */
+const teacherBlockSuccess: Readonly<Record<TeacherBlockOperation, string>> = {
+  BLOCK: 'Nodo bloqueado exitosamente.',
+  UNBLOCK: 'Nodo desbloqueado exitosamente.',
+  BRANCH_UNLOCK: 'Rama desbloqueada exitosamente.',
+};
 
 const visibilityFailure = 'No se pudo cambiar la visibilidad.';
 
@@ -143,6 +157,11 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         'No se pudo cambiar el bloqueo docente.',
       );
     },
+    /** Unlocking behind blocked prerequisites unlocks them too, so it names several Nodes. */
+    success: ({ operation }, choice) =>
+      choice === canvasConfirmationChoices.unlockPrerequisites
+        ? 'Nodos desbloqueados exitosamente.'
+        : teacherBlockSuccess[chosenTeacherBlockOperation(operation, choice)],
     report: ({ nodeId, operation }, choice) => ({
       type: 'changeTeacherBlock',
       nodeId,
@@ -183,7 +202,7 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
       if (failed.length === request.dependencyIds.length) return false;
       return { retry: { ...request, dependencyIds: failed } };
     },
-    success: ({ dependencyIds }, remaining) =>
+    success: ({ dependencyIds }, _, remaining) =>
       dependencyIds.length - (remaining?.dependencyIds.length ?? 0) === 1
         ? 'Dependencia eliminada exitosamente.'
         : 'Dependencias eliminadas exitosamente.',

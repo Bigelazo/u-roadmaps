@@ -928,6 +928,34 @@ describe('canvas commands', () => {
         'reset-canvas-preview',
         'Progreso de previsualización reiniciado.',
       ],
+      [
+        'placing a Teacher block',
+        roadmap,
+        { kind: 'change-teacher-block', nodeId: 'limits', operation: 'BLOCK' },
+        'block-teacher',
+        'Nodo bloqueado exitosamente.',
+      ],
+      [
+        'unlocking only the Node',
+        withTeacherBlocks('limits', 'derivatives'),
+        { kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' },
+        'unlock-node',
+        'Nodo desbloqueado exitosamente.',
+      ],
+      [
+        'a Branch unlock',
+        withTeacherBlocks('limits', 'derivatives'),
+        { kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' },
+        'unlock-branch',
+        'Rama desbloqueada exitosamente.',
+      ],
+      [
+        'unlocking behind a blocked prerequisite',
+        withTeacherBlocks('limits', 'derivatives'),
+        { kind: 'change-teacher-block', nodeId: 'derivatives', operation: 'UNBLOCK' },
+        'unlock-prerequisites',
+        'Nodos desbloqueados exitosamente.',
+      ],
     ])('%s shows its toast only once confirmed', async (_, fixture, request, choice, toast) => {
       const canvas = await openCanvas(createInMemoryRoadmapSessionPersistence(fixture));
 
