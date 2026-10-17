@@ -1,4 +1,4 @@
-import { clickElement, type TutorialStep } from '@/shared/client/tutorial/tutorial';
+import { clickElement, type TutorialStep } from '@/shared/client/tutorial/tutorial-support';
 import { practiceNodeIds } from './practice-roadmap';
 
 export const canvas = '.react-flow';

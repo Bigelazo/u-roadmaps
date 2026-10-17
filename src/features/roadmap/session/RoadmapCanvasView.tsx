@@ -61,8 +61,8 @@ import {
   TUTORIAL_EXIT_ATTRIBUTE,
   TUTORIAL_TRIGGER_ATTRIBUTE,
   markTutorialClosingPopover,
-  TutorialClosingPopover,
-} from '@/shared/client/tutorial/tutorial';
+} from '@/shared/client/tutorial/tutorial-support';
+import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
 import { termLabel } from '@/shared/course-offering';
 import {

@@ -18,7 +18,8 @@ import { studentTutorialSteps } from '@/features/roadmap/practice/student-tutori
 import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
 import { reportingPracticeActions } from '@/features/roadmap/practice/practice-actions';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
-import { createTutorialActions, RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
+import { RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
+import { createTutorialActions } from '@/shared/client/tutorial/tutorial-support';
 import { useRecordTutorialOpening } from '@/shared/client/tutorial/tutorial-records';
 
 /**

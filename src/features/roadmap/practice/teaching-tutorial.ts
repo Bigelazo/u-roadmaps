@@ -1,4 +1,8 @@
-import { clickElement, waitForElement, type TutorialStep } from '@/shared/client/tutorial/tutorial';
+import {
+  clickElement,
+  waitForElement,
+  type TutorialStep,
+} from '@/shared/client/tutorial/tutorial-support';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 import { NODE_TYPES_MENU_ITEM_LABEL } from '@/features/roadmap/editor/types';
 import { practiceNodeIds } from './practice-roadmap';
