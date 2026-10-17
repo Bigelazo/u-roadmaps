@@ -3,7 +3,7 @@ import 'dotenv/config';
 import '../../notifications-integration/setup';
 import databaseSetup from '../../notifications-integration/global-setup';
 import { randomUUID } from 'node:crypto';
-import { beforeAll, expect } from 'vitest';
+import { beforeAll, expect, vi } from 'vitest';
 import { test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { requireUuid } from '@/shared/validation';
@@ -28,6 +28,7 @@ import {
   resetSimulatedCompletions,
   scheduleTeacherUnlock,
   updateRoadmapNode,
+  uploadRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 
@@ -228,6 +229,29 @@ test('invalid read ids are refused before authorisation', async ({ course }) => 
   ]);
   for (const refusal of refusals)
     expect(refusal).toMatchObject({ status: 'rejected', reason: { status: 400 } });
+});
+
+test('an upload is parsed and authorised before its bytes are saved', async ({ course }) => {
+  const { port } = recordingChangePort();
+  const upload = async (participant: typeof course.teacher, id: string) => {
+    const file = new File(['Contenido'], 'guide.txt', { type: 'text/plain' });
+    const read = vi.spyOn(file, 'arrayBuffer');
+    const outcome = await uploadRoadmapResource({ ...participant, id, file }, port).catch(
+      (error: unknown) => error,
+    );
+    expect(read).not.toHaveBeenCalled();
+    return outcome;
+  };
+  expect(await upload(course.teacher, 'not-a-node')).toMatchObject({ status: 400 });
+  expect(await upload(course.student, course.change.nodeId)).toMatchObject({
+    status: 403,
+    code: 'FORBIDDEN',
+  });
+  await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
+  expect(await upload(course.teacher, course.change.nodeId)).toMatchObject({
+    status: 409,
+    code: 'ROADMAP_CLOSED',
+  });
 });
 
 /** Every Roadmap read, each asked by the participant it serves. */

@@ -4,7 +4,7 @@ import { resourceContentState } from '@/shared/server/resource-content-state';
 import type { Prisma } from '@/shared/server/db';
 import type { RoadmapChangePort } from '../change-port';
 import { resourceNotFound } from '../errors';
-import { roadmapCommand } from '../roadmap-command';
+import { roadmapCommand, roadmapRead, type RoadmapParticipant } from '../roadmap-command';
 import { resourceDto } from '@/features/roadmap/application/roadmap';
 import { requireNode } from '@/features/roadmap/application/editor';
 import {
@@ -78,15 +78,17 @@ export const createRoadmapResource = resourceCreation(
   }),
 );
 
-/** Records bytes already saved under `fileKey` as a FILE Resource. */
+type UploadedResource = Omit<NewResource, 'url' | 'type'> & { fileKey: string };
+
+/** Records bytes already saved under `fileKey` as a FILE Resource; the upload parsed them. */
 const createUploadedResource = resourceCreation(
-  ({ id, file, fileKey }: { id: string; file: File; fileKey: string }) => ({
-    nodeId: requireUuid(id, 'nodeId'),
-    title: requireString(file.name, 'title', 240),
+  ({ nodeId, title, fileKey, fileContentType }: UploadedResource) => ({
+    nodeId,
+    title,
     url: fileResourceUrl(fileKey),
     type: 'FILE',
     fileKey,
-    fileContentType: file.type || null,
+    fileContentType,
   }),
 );
 
@@ -100,14 +102,13 @@ function uploadedFileError(error: unknown): never {
   throw error;
 }
 
-/** Saves the file's bytes, then records them; a refused or failed record deletes the bytes. */
+/**
+ * Parses and authorises the upload, saves the file's bytes, then records them; a refused or
+ * failed record deletes the bytes. The bytes are saved outside the change transaction,
+ * which may retry.
+ */
 export async function uploadRoadmapResource(
-  {
-    file,
-    ...request
-  }: Omit<Parameters<typeof createUploadedResource>[0], 'file' | 'fileKey'> & {
-    file: unknown;
-  },
+  { id, file, ...participant }: RoadmapParticipant & { id: string; file: unknown },
   changePort: RoadmapChangePort,
 ) {
   if (!(file instanceof File)) {
@@ -118,10 +119,17 @@ export async function uploadRoadmapResource(
   } catch (error) {
     uploadedFileError(error);
   }
+  const nodeId = requireUuid(id, 'nodeId');
+  const title = requireString(file.name, 'title', 240);
+  // A refused editor, or a closed Roadmap, never writes bytes; the record decides again.
+  await roadmapRead(participant, 'edit', async () => undefined);
   const fileKey = crypto.randomUUID();
   await saveUploadedFile(fileKey, file);
   try {
-    return await createUploadedResource({ ...request, file, fileKey }, changePort);
+    return await createUploadedResource(
+      { ...participant, nodeId, title, fileKey, fileContentType: file.type || null },
+      changePort,
+    );
   } catch (error) {
     await deleteUploadedFile(fileKey);
     throw error;
