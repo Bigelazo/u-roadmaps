@@ -3,7 +3,7 @@ import 'dotenv/config';
 import '../../notifications-integration/setup';
 import databaseSetup from '../../notifications-integration/global-setup';
 import { randomUUID } from 'node:crypto';
-import { beforeAll, expect, vi } from 'vitest';
+import { beforeAll, expect, onTestFinished, vi } from 'vitest';
 import { test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma, type Prisma } from '@/shared/server/db';
 import { requireUuid } from '@/shared/validation';
@@ -316,6 +316,31 @@ test('delivery runs only after commit', async ({ course }) => {
   };
   await blockNode('roadmap')({ ...course.teacher, nodeId: course.change.nodeId }, port);
   expect(delivered).toEqual([true]);
+});
+
+test('a failed delivery is logged with context and does not change the response', async ({
+  course,
+}) => {
+  const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  onTestFinished(() => logged.mockRestore());
+  const failure = new Error('delivery failed');
+  const port: RoadmapChangePort = {
+    async report() {
+      return async () => {
+        throw failure;
+      };
+    },
+  };
+  const nodeId = course.change.nodeId;
+  await expect(blockNode('roadmap')({ ...course.teacher, nodeId }, port)).resolves.toBe(nodeId);
+  expect(logged).toHaveBeenCalledWith('Roadmap change delivery failed', {
+    roadmapId: course.roadmapId,
+    actorId: course.teacherId,
+    factKinds: ['node-access'],
+    error: failure,
+  });
+  const node = await prisma.roadmapNode.findUniqueOrThrow({ where: { id: nodeId } });
+  expect(node.isTeacherBlocked).toBe(true);
 });
 
 test('a failed commit discards delivery', async ({ course }) => {
