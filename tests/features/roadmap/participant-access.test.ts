@@ -3,9 +3,15 @@ import 'dotenv/config';
 import '../../notifications-integration/setup';
 import databaseSetup from '../../notifications-integration/global-setup';
 import { beforeAll, expect } from 'vitest';
-import { test, type IntegrationCourse } from '../../notifications-integration/fixtures';
+import {
+  student,
+  teacher,
+  test,
+  type IntegrationCourse,
+} from '../../notifications-integration/fixtures';
 import { prisma } from '@/shared/server/db';
 import { readParticipantAccess } from '@/features/roadmap/access';
+import { getRoadmapNodeResources } from '@/features/roadmap/server';
 
 beforeAll(databaseSetup, 60_000);
 
@@ -56,4 +62,19 @@ test('reads one participant’s accessible Nodes in each Roadmap where their Par
     data: { isActive: false },
   });
   expect(await read(course.studentId)).toEqual(new Map());
+});
+
+test('a student reaches a Node’s Resources only with the access Completion requires', async ({
+  course,
+}) => {
+  const hidden = await addNode(course, 'Colas', { isVisible: false });
+  const blocked = await addNode(course, 'Árboles', { isTeacherBlocked: true });
+  const resources = (nodeId: string) => getRoadmapNodeResources({ ...student(course), nodeId });
+
+  await expect(resources(course.change.nodeId)).resolves.toEqual([]);
+  await expect(resources(hidden.id)).rejects.toMatchObject({ status: 404, code: 'NODE_NOT_FOUND' });
+  await expect(resources(blocked.id)).rejects.toMatchObject({ status: 403, code: 'TEACHER_BLOCK' });
+  await expect(getRoadmapNodeResources({ ...teacher(course), nodeId: hidden.id })).resolves.toEqual(
+    [],
+  );
 });
