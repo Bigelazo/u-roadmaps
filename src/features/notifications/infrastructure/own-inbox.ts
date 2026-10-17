@@ -115,7 +115,8 @@ export async function listOwnNotices(
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
     throw new ApplicationError(400, 'INVALID_REQUEST', 'Límite inválido.');
   const filter = inboxFilter(params);
-  const after = params.get('after') && uuid(params.get('after'));
+  const afterParam = params.get('after');
+  const after = afterParam ? uuid(afterParam) : null;
   const [recipient, cursor] = await Promise.all([
     inboxRecipient(userId, filter.roadmapId, readAccess),
     after
