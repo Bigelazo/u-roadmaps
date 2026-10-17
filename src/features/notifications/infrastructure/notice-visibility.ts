@@ -1,27 +1,23 @@
 import 'server-only';
 import { prisma } from '@/shared/server/db';
-import type { NoticeNodeAccess } from './own-inbox';
+import type { ParticipantAccessReader } from './notice-lifecycle';
 import { isNoticeVisible } from '../application/notice-visibility';
 
 /** Whether the Inbox shows the recipient one of their notices; false without a Participation. */
 export async function isOwnNoticeVisible(
   userId: string,
   { roadmapId, data }: { roadmapId: string; data: unknown },
-  accessibleNodes: NoticeNodeAccess,
+  readAccess: ParticipantAccessReader,
 ) {
   return prisma.$transaction(async (transaction) => {
-    const participation = await transaction.participation.findFirst({
-      where: { userId, isActive: true, courseOffering: { roadmap: { id: roadmapId } } },
-      select: { id: true },
-    });
-    if (!participation) return false;
-    const [nodes, accessible] = await Promise.all([
+    const [access, nodes] = await Promise.all([
+      readAccess(transaction, { userId, roadmapIds: [roadmapId] }),
       transaction.roadmapNode.findMany({
         where: { roadmapId },
         select: { id: true, isVisible: true, nodeTypeId: true },
       }),
-      accessibleNodes(transaction, userId, roadmapId),
     ]);
-    return isNoticeVisible(data, nodes, accessible);
+    const accessible = access.get(roadmapId);
+    return accessible !== undefined && isNoticeVisible(data, nodes, accessible);
   });
 }

@@ -27,7 +27,11 @@ export async function entryTargetSnapshots(
   accessible: ReadonlySet<string>,
 ): Promise<Prisma.InputJsonArray> {
   const identity = { recipientId, roadmapId };
-  const roadmap = roadmapView(transaction, roadmapId, async () => accessible);
+  const roadmap = roadmapView(
+    transaction,
+    roadmapId,
+    async () => new Map([[roadmapId, accessible]]),
+  );
   const [rows] = await Promise.all([
     transaction.noticeKnownValue.findMany({
       where: identity,

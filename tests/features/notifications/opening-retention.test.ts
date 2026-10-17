@@ -30,7 +30,7 @@ const recipientId = '00000000-0000-4000-8000-000000000001';
 const roadmapId = '00000000-0000-4000-8000-000000000002';
 const nodeId = '00000000-0000-4000-8000-000000000003';
 const operationId = '00000000-0000-4000-8000-000000000004';
-const accessibleNodes = async () => new Set([nodeId]);
+const readAccess = async () => new Map([[roadmapId, new Set([nodeId])]]);
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -60,7 +60,7 @@ afterEach(() => {
 });
 
 test('creating a Roadmap opening prunes only that recipient before the 24-hour cutoff', async () => {
-  await prepareOwnNoticeOpening(recipientId, roadmapId, accessibleNodes);
+  await prepareOwnNoticeOpening(recipientId, roadmapId, readAccess);
   expect(transaction.noticeAcknowledgement.deleteMany).toHaveBeenCalledWith({
     where: { recipientId, openedAt: { lt: new Date('2026-10-05T12:00:00.000Z') } },
   });

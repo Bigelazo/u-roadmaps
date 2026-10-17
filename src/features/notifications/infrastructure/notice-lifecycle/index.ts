@@ -2,4 +2,4 @@
 export { recordNoticeTargets, type NoticeDelivery, type NoticeDeliveryScheduler } from './record';
 export { recognizeTargetSnapshots } from './recognize';
 export { entryTargetSnapshots } from './entry';
-export type { NodeAccessReader } from './roadmap-view';
+export { roadmapNodeAccess, type ParticipantAccessReader } from './roadmap-view';

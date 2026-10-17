@@ -14,7 +14,12 @@ import {
 import { changeSummary } from '../application/change-summary';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
-import { entryTargetSnapshots, recognizeTargetSnapshots } from './notice-lifecycle';
+import {
+  entryTargetSnapshots,
+  recognizeTargetSnapshots,
+  roadmapNodeAccess,
+  type ParticipantAccessReader,
+} from './notice-lifecycle';
 import { projectTargetNotice } from '../application/notice-targets';
 
 const NOTICE_OPENING_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -31,12 +36,6 @@ async function pruneNoticeOpenings(
     },
   });
 }
-
-export type NoticeNodeAccess = (
-  transaction: Prisma.TransactionClient,
-  userId: string,
-  roadmapId: string,
-) => Promise<ReadonlySet<string>>;
 
 export function noticeRecord(notice: {
   id: string;
@@ -88,12 +87,6 @@ function inboxFilter(params: URLSearchParams): InboxFilter {
     ...(semester ? { semester: Number(semester) } : {}),
   };
 }
-
-/** One participant's accessible Nodes per Roadmap; a Roadmap without their Participation is absent. */
-export type ParticipantAccessReader = (
-  transaction: Prisma.TransactionClient,
-  query: { userId: string; roadmapIds: readonly string[] },
-) => Promise<ReadonlyMap<string, ReadonlySet<string>>>;
 
 /** The recipient's accessible Nodes in the filtered Roadmap, or in every Roadmap of theirs. */
 async function inboxRecipient(
@@ -183,11 +176,15 @@ export async function reviewOwnNode(userId: string, input: Record<string, unknow
   return { reviewed: true };
 }
 
-export async function findOwnNotice(userId: string, id: string, accessibleNodes: NoticeNodeAccess) {
+export async function findOwnNotice(
+  userId: string,
+  id: string,
+  readAccess: ParticipantAccessReader,
+) {
   const notice = await prisma.roadmapNotice.findFirst({
     where: { id: uuid(id), recipientId: userId },
   });
-  if (!notice || !(await isOwnNoticeVisible(userId, notice, accessibleNodes)))
+  if (!notice || !(await isOwnNoticeVisible(userId, notice, readAccess)))
     throw new ApplicationError(404, 'NOT_FOUND', 'Aviso no encontrado.');
   const offering = await prisma.courseOffering.findUnique({
     where: { id: notice.courseOfferingId },
@@ -201,7 +198,7 @@ export async function findOwnNotice(userId: string, id: string, accessibleNodes:
 export async function prepareOwnNoticeOpening(
   userId: string,
   roadmapId: string,
-  accessibleNodes: NoticeNodeAccess,
+  readAccess: ParticipantAccessReader,
   operationId: string = randomUUID(),
   retry = false,
 ) {
@@ -214,14 +211,14 @@ export async function prepareOwnNoticeOpening(
       where: { recipientId_operationId: { recipientId: userId, operationId } },
     });
     if (existing) {
-      await accessibleNodes(transaction, userId, roadmapId);
+      await roadmapNodeAccess(readAccess, transaction, userId, roadmapId);
       if (existing.roadmapId !== roadmapId)
         throw new ApplicationError(400, 'INVALID_REQUEST', 'Apertura inválida.');
       return operationId;
     }
     if (retry) throw new ApplicationError(404, 'NOT_FOUND', 'Apertura de Roadmap no encontrada.');
     const [accessible, notices, nodes, roadmap] = await Promise.all([
-      accessibleNodes(transaction, userId, roadmapId),
+      roadmapNodeAccess(readAccess, transaction, userId, roadmapId),
       transaction.roadmapNotice.findMany({
         where: { recipientId: userId, roadmapId, acknowledgedAt: null },
         select: { id: true, data: true },
@@ -256,7 +253,7 @@ export async function prepareOwnNoticeOpening(
 export async function acknowledgeOwnNotices(
   userId: string,
   input: Record<string, unknown>,
-  accessibleNodes?: NoticeNodeAccess,
+  readAccess?: ParticipantAccessReader,
 ) {
   const operationId = uuid(input.operationId);
   const roadmapId = uuid(input.roadmapId);
@@ -316,7 +313,7 @@ export async function acknowledgeOwnNotices(
       roadmapId,
       operationId,
       snapshots: retained.snapshots,
-      accessibleNodes,
+      readAccess,
     });
     const summary =
       visited && result.count + targetCount > 0 ? (retained.summary as ChangeSummary | null) : null;
