@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@/shared/server/db';
-import { studentNodeAccessById } from '@/features/roadmap/access';
+import { readParticipantAccess } from '@/features/roadmap/access';
 import {
   acknowledgeOwnNotices as acknowledgeNotices,
   findOwnNotice,
@@ -51,47 +51,16 @@ export async function getOwnNotice(userId: string, id: string) {
   return noticeRecord(await findOwnNotice(userId, id, accessibleNodes));
 }
 
+/** One Roadmap's accessible Nodes, from the participant view; no active Participation is 403. */
 async function accessibleNodes(
   transaction: Prisma.TransactionClient,
   userId: string,
   roadmapId: string,
 ) {
-  const participation = await transaction.participation.findFirst({
-    where: { userId, isActive: true, courseOffering: { roadmap: { id: roadmapId } } },
-    select: { role: true },
-  });
-  if (!participation)
-    throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
-  const [nodes, dependencies, completions] = await Promise.all([
-    transaction.roadmapNode.findMany({
-      where: { roadmapId, isVisible: true },
-      select: { id: true, isTeacherBlocked: true },
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId } },
-      select: { sourceNodeId: true, targetNodeId: true },
-    }),
-    transaction.completion.findMany({
-      where: { userId, roadmapNode: { roadmapId } },
-      select: { roadmapNodeId: true },
-    }),
-  ]);
-  if (participation.role === 'TEACHER')
-    return new Set(nodes.filter((node) => !node.isTeacherBlocked).map((node) => node.id));
-  const visible = new Set(nodes.map((node) => node.id));
-  return new Set(
-    [
-      ...studentNodeAccessById({
-        nodes,
-        dependencies: dependencies.filter(
-          (edge) => visible.has(edge.sourceNodeId) && visible.has(edge.targetNodeId),
-        ),
-        completedNodeIds: new Set(completions.map((completion) => completion.roadmapNodeId)),
-      }),
-    ]
-      .filter(([, access]) => access.status === 'ACCESSIBLE')
-      .map(([id]) => id),
-  );
+  const access = await readParticipantAccess(transaction, { userId, roadmapIds: [roadmapId] });
+  const accessible = access.get(roadmapId);
+  if (!accessible) throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
+  return accessible;
 }
 
 export function prepareOwnRoadmapOpening(userId: string, input: Record<string, unknown>) {
