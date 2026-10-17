@@ -1,9 +1,6 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
-import {
-  blockedNodeAccessMessage,
-  studentNodeAccessById,
-  visibleRoadmapGraph,
-} from '@/features/roadmap/domain/access';
+import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
+import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
 import { decideDependency } from '@/features/roadmap/domain/dependency';
 import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
 import {
@@ -19,7 +16,6 @@ import type {
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapDto,
-  StudentRoadmapNode,
   TeacherBlockImpact,
   TeacherBlockOperation,
   TeacherBlockPreview,
@@ -59,44 +55,18 @@ function asStudentRoadmap(
   completedNodeIds: ReadonlySet<string>,
 ): StudentRoadmapDto {
   if (roadmap.nodes.every((node) => 'access' in node)) return copy(roadmap as StudentRoadmapDto);
-  const { nodes: visibleNodes, dependencies } = visibleRoadmapGraph(
-    (roadmap as RoadmapDto).nodes,
-    roadmap.dependencies,
-  );
-  const accessByNodeId = studentNodeAccessById({
-    nodes: visibleNodes,
-    dependencies,
-    completedNodeIds,
+  return copy({
+    course: roadmap.course,
+    courseOffering: roadmap.courseOffering,
+    roadmap: roadmap.roadmap,
+    nodeTypes: roadmap.nodeTypes,
+    ...studentRoadmapNodes({
+      nodes: (roadmap as RoadmapDto).nodes,
+      dependencies: roadmap.dependencies,
+      completedNodeIds,
+      isClosed: Boolean(roadmap.roadmap.closedAt),
+    }),
   });
-  const nodes = visibleNodes.map<StudentRoadmapNode>((node) => {
-    const summary = {
-      id: node.id,
-      title: node.title,
-      nodeTypeId: node.nodeTypeId,
-      positionX: node.positionX,
-      positionY: node.positionY,
-    };
-    const access = accessByNodeId.get(node.id) ?? { status: 'ACCESSIBLE' };
-    if (access.status === 'BLOCKED') return { ...summary, access };
-    const isCompleted = completedNodeIds.has(node.id);
-    return {
-      ...summary,
-      isVisible: true,
-      access,
-      description: node.description,
-      isCompleted,
-      canComplete: !isCompleted,
-      resources: copy(node.resources),
-    };
-  });
-  return {
-    course: copy(roadmap.course),
-    courseOffering: copy(roadmap.courseOffering),
-    roadmap: copy(roadmap.roadmap),
-    nodeTypes: copy(roadmap.nodeTypes),
-    nodes,
-    dependencies: copy(dependencies),
-  };
 }
 
 function incidentDependencies(roadmap: AnyRoadmapDto, nodeId: string) {

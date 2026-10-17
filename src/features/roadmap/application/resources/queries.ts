@@ -11,17 +11,16 @@ import { readUploadedFile } from '@/features/roadmap/infrastructure/resources/fi
 import { nodeNotFound, resourceNotFound } from '@/features/roadmap/application/errors';
 import { requireUuid } from '@/shared/validation';
 
-/** Students reach a Node's Resources only while the Node is visible and accessible to them. */
+/** Students reach a Node's Resources only with the access Completion requires. */
 async function requireStudentResourceAccess(
   { tx, participation, roadmap }: RoadmapReadContext,
-  node: { id: string; isVisible: boolean },
+  nodeId: string,
 ) {
   if (participation.role !== 'STUDENT') return;
-  if (!node.isVisible) throw nodeNotFound();
   await requireStudentNodeAccess(tx, {
     userId: participation.userId,
     roadmapId: roadmap.id,
-    nodeId: node.id,
+    nodeId,
   });
 }
 
@@ -35,7 +34,7 @@ export async function getRoadmapNodeResources({
       where: { id, roadmapId: context.roadmap.id },
     });
     if (!node) throw nodeNotFound();
-    await requireStudentResourceAccess(context, node);
+    await requireStudentResourceAccess(context, node.id);
     const resources = await context.tx.resource.findMany({
       where: { roadmapNodeId: node.id },
       orderBy: { title: 'asc' },
@@ -52,13 +51,9 @@ export async function downloadRoadmapResource({
   const resource = await roadmapRead(participant, 'read', async (context) => {
     const found = await context.tx.resource.findFirst({
       where: { id, roadmapNode: { roadmapId: context.roadmap.id } },
-      include: { roadmapNode: { select: { isVisible: true } } },
     });
     if (!found?.fileKey) throw resourceNotFound();
-    await requireStudentResourceAccess(context, {
-      id: found.roadmapNodeId,
-      isVisible: found.roadmapNode.isVisible,
-    });
+    await requireStudentResourceAccess(context, found.roadmapNodeId);
     const { fileKey, fileContentType, title } = found;
     return { fileKey, fileContentType, title };
   });
