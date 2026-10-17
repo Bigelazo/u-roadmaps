@@ -6,12 +6,16 @@ transiciones de acceso por destinatario, incluyendo al actor. Completion reporta
 las transiciones del propio estudiante y la sincronización académica reporta
 la promoción de estudiante a equipo docente.
 
-Las operaciones reciben el port como dependencia explícita.
-`roadmapChangeTransaction` llama `report(transaction, changes)` dentro de la
-transacción de la mutación. El trabajo que devuelve el adapter se ejecuta
-únicamente después de un commit exitoso. Cada intento de una transacción
-serializable tiene su propia colección de trabajo; un rollback la descarta.
-Un fallo en el trabajo posterior al commit conserva el resultado de la mutación.
+Las escrituras reciben el port como dependencia explícita. El módulo de comandos
+del Roadmap (`application/roadmap-command/`,
+[ADR-0029](adr/0029-roadmap-writes-run-through-one-command-module.md)) une los hechos
+de contenido de cada comando con los de acceso y llama una sola vez
+`report(transaction, changes)` dentro de la transacción de la mutación; un cambio sin
+hechos no reporta. El trabajo que devuelve el adapter se ejecuta únicamente después de
+un commit exitoso. Cada intento de una transacción serializable tiene su propia
+colección de trabajo; un rollback la descarta. Un fallo en el trabajo posterior al
+commit conserva el resultado de la mutación y se registra con el Roadmap, el actor, las
+clases de hecho y la causa.
 
 La composición está en `app/_adapters/roadmap-changes.ts`. El adapter solo llama
 `recordRoadmapNotices` del módulo de ciclo de vida de avisos
@@ -33,7 +37,8 @@ en `tests/features/roadmap/support/recording-change-port.ts`, datos propios y
 PostgreSQL local, sin mocks de Prisma para avisos. Corren en la suite unitaria con
 la preparación existente de `roadmap_notifications_test_db`; requieren
 `NOTIFICATIONS_DATABASE_URL` en `.env`, igual que la suite de integración.
-Los tests de la transacción comprueban el orden de commit y el descarte en
-rollback. El comportamiento de los avisos se verifica contra PostgreSQL en la
+Los tests del módulo de comandos (`tests/features/roadmap/roadmap-command.test.ts`),
+con el mismo adapter y PostgreSQL, comprueban la entrega después del commit, el
+descarte ante un commit fallido y que solo entrega el intento confirmado. El comportamiento de los avisos se verifica contra PostgreSQL en la
 suite de integración del módulo (`tests/notifications-integration/`), sin mocks
 de Prisma, y en los specs E2E `own-*`.
