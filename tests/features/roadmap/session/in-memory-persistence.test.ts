@@ -250,6 +250,44 @@ test('rejects confirming a hide, a Dependency, a deletion or a Teacher block who
   expect((await persistence.load(input)).nodes.map(({ id }) => id)).not.toContain('prerequisite');
 });
 
+test('follows the Node type rules with the messages of production', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  const workshop = { name: 'Taller', icon: 'Shapes', color: '#024AD8' } as const;
+  await persistence.addNodeType(input, workshop);
+  const before = await persistence.load(input);
+  const workshopId = before.nodeTypes.find(({ name }) => name === 'Taller')?.id ?? '';
+
+  await expect(
+    persistence.addNodeType(input, { ...workshop, name: ' contenido ' }),
+  ).rejects.toThrow('Ya existe un tipo disponible con ese nombre.');
+  await expect(
+    persistence.updateNodeType(input, workshopId, { ...workshop, name: 'CONTENIDO' }),
+  ).rejects.toThrow('Ya existe un tipo disponible con ese nombre.');
+  await expect(
+    persistence.updateNodeType(input, 'content', { ...workshop, name: 'Lectura' }),
+  ).rejects.toThrow('Los tipos predefinidos son inmutables.');
+  await expect(persistence.deleteNodeType(input, 'content')).rejects.toThrow(
+    'Los tipos predefinidos son inmutables.',
+  );
+  await persistence.updateNode(input, 'selected', {
+    title: 'Seleccionado',
+    description: '',
+    nodeTypeId: workshopId,
+  });
+  await expect(persistence.deleteNodeType(input, workshopId)).rejects.toThrow(
+    'No se puede eliminar un tipo utilizado por nodos.',
+  );
+  expect((await persistence.load(input)).nodeTypes).toEqual(before.nodeTypes);
+
+  await persistence.updateNode(input, 'selected', {
+    title: 'Seleccionado',
+    description: '',
+    nodeTypeId: 'content',
+  });
+  await persistence.deleteNodeType(input, workshopId);
+  expect((await persistence.load(input)).nodeTypes.map(({ id }) => id)).toEqual(['content']);
+});
+
 test('never reuses an identifier after a deletion', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence({ ...roadmap, dependencies: [] });
   const node = { title: 'Nuevo', description: '', nodeTypeId: 'content', isVisible: true };

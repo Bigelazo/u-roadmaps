@@ -6,6 +6,7 @@ import {
 } from '@/features/roadmap/domain/change-impact';
 import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
 import { decideDependency } from '@/features/roadmap/domain/dependency';
+import { decideNodeTypeChange, type NodeTypeChange } from '@/features/roadmap/domain/node-type';
 import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
 import {
   chileCalendarDay,
@@ -220,6 +221,15 @@ export function createInMemoryRoadmapSessionPersistence(
 
   const mutateNode = (nodeId: string, update: (node: AnyRoadmapNode) => AnyRoadmapNode) => {
     roadmap = replaceRoadmapNode(roadmap, nodeId, update);
+  };
+
+  const decideNodeType = (change: NodeTypeChange) => {
+    const decision = decideNodeTypeChange({
+      nodeTypes: roadmap.nodeTypes,
+      nodes: roadmap.nodes,
+      change,
+    });
+    if (decision.kind === 'REJECTED') throw new Error(decision.message);
   };
 
   const appendResource = (nodeId: string, resource: Resource) =>
@@ -455,6 +465,7 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async addNodeType(_input: RoadmapCanvasSessionInput, nodeType: RoadmapNodeTypeInput) {
+      decideNodeType({ kind: 'create', name: nodeType.name });
       const id = crypto.randomUUID();
       roadmap = {
         ...roadmap,
@@ -467,6 +478,7 @@ export function createInMemoryRoadmapSessionPersistence(
       nodeTypeId: string,
       nodeType: RoadmapNodeTypeInput,
     ) {
+      decideNodeType({ kind: 'update', nodeTypeId, name: nodeType.name });
       roadmap = {
         ...roadmap,
         nodeTypes: roadmap.nodeTypes.map((current) =>
@@ -476,6 +488,7 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async deleteNodeType(_input: RoadmapCanvasSessionInput, nodeTypeId: string) {
+      decideNodeType({ kind: 'delete', nodeTypeId });
       roadmap = {
         ...roadmap,
         nodeTypes: roadmap.nodeTypes.filter(({ id }) => id !== nodeTypeId),
