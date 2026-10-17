@@ -199,6 +199,7 @@ describe('canvas commands', () => {
 
     expect(canvas.commands().pending).toBeNull();
     expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ isVisible: true });
+    expect(successToasts()).toEqual([]);
   });
 
   test.each([
@@ -228,6 +229,7 @@ describe('canvas commands', () => {
         impact: { dependencies: latestDependencies.map((item) => expect.objectContaining(item)) },
       });
       expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ isVisible: true });
+      expect(successToasts()).toEqual([]);
 
       await canvas.confirm(kind);
       expect(canvas.commands().pending).toBeNull();
@@ -278,6 +280,7 @@ describe('canvas commands', () => {
         impact: { dependencies: latestDependencies.map((item) => expect.objectContaining(item)) },
       });
       expect((await persistence.load(teachingInput)).dependencies).toHaveLength(2);
+      expect(successToasts()).toEqual([]);
 
       await canvas.confirm(kind);
       expect(canvas.commands().pending).toBeNull();
@@ -460,6 +463,7 @@ describe('canvas commands', () => {
         'derivatives',
         'integrals',
       ]);
+      expect(successToasts()).toEqual([]);
 
       await canvas.confirm('unlock-node');
       expect(canvas.commands().pending).toBeNull();
@@ -720,6 +724,7 @@ describe('canvas commands', () => {
     expect(await nodeOf(adapter, 'limits')).toMatchObject({ positionX: 0, positionY: 200 });
     expect(await nodeOf(adapter, 'derivatives')).toMatchObject({ positionX: 0, positionY: 0 });
     expect(canvas.session().error).toBe('No se pudo guardar la posición.');
+    expect(successToasts()).toEqual([]);
     expect(canvas.onCommandApplied).not.toHaveBeenCalled();
   });
 
@@ -822,6 +827,7 @@ describe('canvas commands', () => {
         phase: 'awaiting',
       });
       expect(await nodeTypeIds(canvas.persistence)).toEqual(['content', 'workshop']);
+      expect(successToasts()).toEqual([]);
       expect(canvas.onCommandApplied).not.toHaveBeenCalled();
     });
   });
