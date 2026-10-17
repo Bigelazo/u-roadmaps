@@ -1,9 +1,9 @@
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 import type {
   Resource,
   RoadmapDto,
   RoadmapNode,
   StudentAccessibleRoadmapNode,
-  TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 
@@ -59,6 +59,7 @@ export type NodeEditorGuardReason =
   | { kind: 'open-resource'; nodeId: string }
   | { kind: 'enter-canvas-preview' };
 
+/** Editor-only UI intents, plus the canvas commands the Node editor asks for. */
 export type NodeEditorIntent =
   | { kind: 'close'; nodeId: string }
   | {
@@ -66,10 +67,9 @@ export type NodeEditorIntent =
       node: StudentAccessibleRoadmapNode;
       returnFocus: () => void;
     }
-  | { kind: 'change-visibility'; nodeId: string; isVisible: boolean }
-  | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
-  | { kind: 'schedule-teacher-unlock'; nodeId: string; unlockOn: string | null }
-  | { kind: 'delete-node'; nodeId: string };
+  | CanvasCommandOf<
+      'hide-node' | 'show-node' | 'change-teacher-block' | 'schedule-teacher-unlock' | 'delete-node'
+    >;
 
 export type NodeEditorSession = {
   node: RoadmapNode | undefined;

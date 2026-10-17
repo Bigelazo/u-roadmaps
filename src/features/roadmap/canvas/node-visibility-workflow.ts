@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 import {
   roadmapConfirmationActionIds,
   roadmapNodeVisibilityConfirmation,
@@ -16,18 +17,16 @@ type StructuralDependency = {
 
 type NodeVisibilityWorkflowRoadmap = Pick<AnyRoadmapDto, 'nodes' | 'nodeTypes'>;
 
-type NodeVisibilityRequest = {
-  nodeId: string;
-  currentlyVisible: boolean;
-};
+type NodeVisibilityRequest = CanvasCommandOf<'hide-node' | 'show-node'>;
 
-type NodeVisibilityConfirmationState = NodeVisibilityRequest & {
+type NodeVisibilityConfirmationState = {
+  request: NodeVisibilityRequest;
   dependencies: StructuralDependency[];
 };
 
 type NodeVisibilityWorkflowState =
   | { kind: 'idle' }
-  | ({ kind: 'previewing' } & NodeVisibilityRequest)
+  | { kind: 'previewing'; request: NodeVisibilityRequest }
   | ({ kind: 'awaiting-confirmation' } & NodeVisibilityConfirmationState)
   | ({ kind: 'mutating' } & NodeVisibilityConfirmationState);
 
@@ -38,20 +37,20 @@ type StateTransition =
 type NodeVisibilityWorkflowOptions = {
   roadmap: NodeVisibilityWorkflowRoadmap | null;
   previewNodeVisibility: (nodeId: string) => Promise<StructuralDependency[] | null>;
-  toggleVisibility: (nodeId: string, currentlyVisible: boolean) => Promise<boolean>;
+  setVisibility: (nodeId: string, visible: boolean) => Promise<boolean>;
 };
 
 function awaitingConfirmation(
   request: NodeVisibilityRequest,
   dependencies: StructuralDependency[],
 ): NodeVisibilityWorkflowState {
-  return { kind: 'awaiting-confirmation', ...request, dependencies };
+  return { kind: 'awaiting-confirmation', request, dependencies };
 }
 
 export function useNodeVisibilityWorkflow({
   roadmap,
   previewNodeVisibility,
-  toggleVisibility,
+  setVisibility,
 }: NodeVisibilityWorkflowOptions) {
   const [state, setState] = useState<NodeVisibilityWorkflowState>({ kind: 'idle' });
   const stateRef = useRef<NodeVisibilityWorkflowState>({ kind: 'idle' });
@@ -63,18 +62,17 @@ export function useNodeVisibilityWorkflow({
   }, []);
 
   const requestChange = useCallback(
-    async (nodeId: string, currentlyVisible: boolean) => {
+    async (request: NodeVisibilityRequest) => {
       if (stateRef.current.kind !== 'idle') return false;
 
-      const request = { nodeId, currentlyVisible };
-      if (!currentlyVisible) {
+      if (request.kind === 'show-node') {
         transition(awaitingConfirmation(request, []));
         return false;
       }
 
-      transition({ kind: 'previewing', ...request });
+      transition({ kind: 'previewing', request });
       try {
-        const dependencies = await previewNodeVisibility(nodeId);
+        const dependencies = await previewNodeVisibility(request.nodeId);
         transition(dependencies ? awaitingConfirmation(request, dependencies) : { kind: 'idle' });
       } catch {
         transition({ kind: 'idle' });
@@ -97,13 +95,14 @@ export function useNodeVisibilityWorkflow({
     transition({ ...pending, kind: 'mutating' });
     void (async () => {
       try {
-        const changed = await toggleVisibility(pending.nodeId, pending.currentlyVisible);
+        const { nodeId, kind } = pending.request;
+        const changed = await setVisibility(nodeId, kind === 'show-node');
         transition(changed ? { kind: 'idle' } : pending);
       } catch {
         transition(pending);
       }
     })();
-  }, [toggleVisibility, transition]);
+  }, [setVisibility, transition]);
 
   const handleAction = useCallback(
     (actionId: string) => {
@@ -115,7 +114,7 @@ export function useNodeVisibilityWorkflow({
   const confirmationState =
     state.kind === 'awaiting-confirmation' || state.kind === 'mutating' ? state : null;
   const confirmationNode = confirmationState
-    ? roadmap?.nodes.find((node) => node.id === confirmationState.nodeId)
+    ? roadmap?.nodes.find((node) => node.id === confirmationState.request.nodeId)
     : undefined;
   const confirmationDialog: ConfirmationDialogProps = {
     confirmation:
@@ -123,7 +122,7 @@ export function useNodeVisibilityWorkflow({
         ? roadmapNodeVisibilityConfirmation(
             roadmap,
             confirmationNode,
-            confirmationState.currentlyVisible,
+            confirmationState.request.kind === 'hide-node',
             confirmationState.dependencies,
           )
         : null,

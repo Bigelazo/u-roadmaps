@@ -41,7 +41,7 @@ type DependencyActionDialog = {
 
 export type RoadmapDependencyWorkflow = {
   requestCreation: (request: RoadmapDependencyRequest) => void;
-  requestDeletion: (dependencyIds: string[]) => void;
+  requestDeletion: (dependencyIds: readonly string[]) => void;
   isBusy: boolean;
   creationDialog: DependencyActionDialog;
   deletionDialog: DependencyActionDialog;
@@ -148,7 +148,7 @@ export function useRoadmapDependencyWorkflow({
   }, [create, transitionCreation]);
 
   const requestDeletion = useCallback(
-    (dependencyIds: string[]) => {
+    (dependencyIds: readonly string[]) => {
       if (dependencyIds.length === 0 || deletionStateRef.current.kind !== 'idle') return;
       transitionDeletion({ kind: 'awaiting-confirmation', dependencyIds: [...dependencyIds] });
     },

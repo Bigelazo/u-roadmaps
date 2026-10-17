@@ -324,9 +324,8 @@ function useNodeEditorController(
     return {
       toggleVisibility: withCurrentNode((currentNode) =>
         onIntent({
-          kind: 'change-visibility',
+          kind: currentNode.isVisible ? 'hide-node' : 'show-node',
           nodeId: currentNode.id,
-          isVisible: currentNode.isVisible,
         }),
       ),
       requestTeacherBlock: withCurrentNode((currentNode, operation: TeacherBlockOperation) =>

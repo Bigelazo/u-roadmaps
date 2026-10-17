@@ -144,11 +144,7 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
   await user.click(deleteAction);
   expect(onAction).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: 'teacher-node' });
   await user.click(visibilityAction);
-  expect(onAction).toHaveBeenCalledWith({
-    kind: 'change-visibility',
-    nodeId: 'teacher-node',
-    isVisible: false,
-  });
+  expect(onAction).toHaveBeenCalledWith({ kind: 'hide-node', nodeId: 'teacher-node' });
   expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
 });
 
@@ -190,11 +186,7 @@ test('offers showing a hidden node without an access action', async () => {
       .parentElement?.style.getPropertyValue('--angle'),
   ).toBe('60deg');
   await user.click(visibilityAction);
-  expect(onAction).toHaveBeenCalledWith({
-    kind: 'change-visibility',
-    nodeId: 'hidden-teacher-node',
-    isVisible: true,
-  });
+  expect(onAction).toHaveBeenCalledWith({ kind: 'show-node', nodeId: 'hidden-teacher-node' });
   expect(screen.getByRole('button', { name: 'Eliminar nodo' })).toBeTruthy();
 });
 

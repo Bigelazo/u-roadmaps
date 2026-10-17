@@ -16,7 +16,7 @@ export function reportingPracticeActions(
     addNode,
     connectNodes,
     changeTeacherBlock,
-    toggleVisibility,
+    setVisibility,
     addResource,
     deleteNode,
     loadSimulation,
@@ -26,7 +26,7 @@ export function reportingPracticeActions(
     !addNode ||
     !connectNodes ||
     !changeTeacherBlock ||
-    !toggleVisibility ||
+    !setVisibility ||
     !addResource ||
     !deleteNode ||
     !loadSimulation ||
@@ -48,9 +48,9 @@ export function reportingPracticeActions(
       await changeTeacherBlock(input, nodeId, operation, ...rest);
       report({ type: 'changeTeacherBlock', nodeId, operation });
     },
-    async toggleVisibility(input, nodeId, isVisible, ...rest) {
-      await toggleVisibility(input, nodeId, isVisible, ...rest);
-      report({ type: 'changeVisibility', nodeId, isVisible: !isVisible });
+    async setVisibility(input, nodeId, visible) {
+      await setVisibility(input, nodeId, visible);
+      report({ type: 'changeVisibility', nodeId, isVisible: visible });
     },
     async addResource(input, nodeId, ...rest) {
       await addResource(input, nodeId, ...rest);

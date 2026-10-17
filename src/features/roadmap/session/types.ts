@@ -67,11 +67,8 @@ export type RoadmapCanvasSessionPersistence = {
     unlockOn: string | null,
   ): Promise<void>;
   deleteDependency?(input: RoadmapCanvasSessionInput, dependencyId: string): Promise<void>;
-  toggleVisibility?(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-    isVisible: boolean,
-  ): Promise<void>;
+  /** Shows (`visible`) or hides the Node: the target visibility, never the current one. */
+  setVisibility?(input: RoadmapCanvasSessionInput, nodeId: string, visible: boolean): Promise<void>;
   previewNodeVisibility?(
     input: RoadmapCanvasSessionInput,
     nodeId: string,

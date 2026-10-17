@@ -297,11 +297,11 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
     );
   },
 
-  async toggleVisibility(input, nodeId, isVisible) {
+  async setVisibility(input, nodeId, visible) {
     await request(
       input,
       `/nodes/${nodeId}`,
-      { method: 'PATCH', body: JSON.stringify({ isVisible: !isVisible }) },
+      { method: 'PATCH', body: JSON.stringify({ isVisible: visible }) },
       'No se pudo cambiar la visibilidad.',
     );
   },

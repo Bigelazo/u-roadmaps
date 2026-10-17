@@ -1,27 +1,11 @@
-import type {
-  RoadmapDependencyRequest,
-  RoadmapDto,
-  StudentRoadmapDto,
-} from '@/features/roadmap/types';
+import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
-import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 
-/**
- * The complete graph-editing capability. Its presence is the only thing that
- * enables editing mechanics; individual operations are not independently
- * configurable at this seam.
- */
-export type RoadmapNodePosition = {
-  readonly x: number;
-  readonly y: number;
-};
-
-export type RoadmapNodePlacement = {
-  readonly nodeId: string;
-  readonly position: RoadmapNodePosition;
-};
-
-export type RoadmapNodePositionCause = 'pointer' | 'keyboard' | 'automatic-layout';
+export type {
+  RoadmapNodePlacement,
+  RoadmapNodePosition,
+} from '@/features/roadmap/canvas/commands/commands';
 
 export type RoadmapViewport = {
   readonly x: number;
@@ -36,23 +20,15 @@ export type RoadmapViewportRestoration = {
 
 export type RoadmapGraphEditingIntent =
   | NodeActionIntent
-  | {
-      readonly kind: 'node-positions';
-      readonly cause: RoadmapNodePositionCause;
-      readonly positions: readonly RoadmapNodePlacement[];
-    }
-  | ({ readonly kind: 'create-dependency' } & RoadmapDependencyRequest)
-  | {
-      readonly kind: 'delete-dependencies';
-      readonly dependencyIds: readonly string[];
-    }
-  | {
-      /** Geometry is calculated in Graph; confirmation and persistence belong to the session. */
-      readonly kind: 'request-automatic-layout';
-      readonly positions: readonly RoadmapNodePlacement[];
-      readonly direction: RoadmapLayoutDirection;
-    };
+  | CanvasCommandOf<
+      'move-nodes' | 'apply-automatic-layout' | 'create-dependency' | 'delete-dependencies'
+    >;
 
+/**
+ * The complete graph-editing capability. Its presence is the only thing that
+ * enables editing mechanics; individual operations are not independently
+ * configurable at this seam.
+ */
 export type RoadmapGraphEditing = {
   onEditingIntent: (intent: RoadmapGraphEditingIntent) => void;
 };

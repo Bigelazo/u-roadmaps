@@ -595,7 +595,6 @@ test('closes the selected node when Escape is pressed on the canvas node', async
 test.each([
   {
     name: 'reports a keyboard node move for persistence',
-    cause: 'keyboard',
     selectedNodeId: 'node-1',
     move: async (user: ReturnType<typeof userEvent.setup>) => {
       screen.getByTestId('keyboard-node').focus();
@@ -604,12 +603,11 @@ test.each([
   },
   {
     name: 'emits the snapped pointer position supplied by React Flow',
-    cause: 'pointer',
     selectedNodeId: undefined,
     move: (user: ReturnType<typeof userEvent.setup>) =>
       user.click(screen.getByRole('button', { name: 'Finalizar arrastre' })),
   },
-])('$name', async ({ cause, selectedNodeId, move }) => {
+])('$name', async ({ selectedNodeId, move }) => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
   renderGraph({ editing: { onEditingIntent }, selectedNodeId });
@@ -617,8 +615,7 @@ test.each([
   await move(user);
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
   expect(onEditingIntent).toHaveBeenCalledWith({
-    kind: 'node-positions',
-    cause,
+    kind: 'move-nodes',
     positions: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
   });
 });
@@ -662,7 +659,7 @@ test('clears action-menu state when editing behavior is removed', async () => {
   expect(screen.queryByRole('button', { name: 'Ejecutar acceso node-1' })).toBeNull();
 });
 
-test('translates automatic-layout geometry into a session confirmation intent without moving Nodes', async () => {
+test('translates automatic-layout geometry into an automatic-layout command without moving Nodes', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
   renderGraph({ editing: { onEditingIntent } });
@@ -674,8 +671,8 @@ test('translates automatic-layout geometry into a session confirmation intent wi
 
   expect(onEditingIntent).toHaveBeenCalledOnce();
   const [intent] = onEditingIntent.mock.calls[0] as [RoadmapGraphEditingIntent];
-  expect(intent.kind).toBe('request-automatic-layout');
-  if (intent.kind !== 'request-automatic-layout') return;
+  expect(intent.kind).toBe('apply-automatic-layout');
+  if (intent.kind !== 'apply-automatic-layout') return;
   expect(intent.positions.map(({ nodeId }) => nodeId)).toEqual(['node-1', 'node-2']);
   expect(Object.isFrozen(intent.positions)).toBe(true);
   expect(Object.isFrozen(intent.positions[0])).toBe(true);
@@ -693,7 +690,7 @@ test('emits a fresh automatic-layout request for each gesture', async () => {
   await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
   expect(onEditingIntent).toHaveBeenCalledTimes(2);
   expect(
-    onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'request-automatic-layout'),
+    onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'apply-automatic-layout'),
   ).toBe(true);
 });
 

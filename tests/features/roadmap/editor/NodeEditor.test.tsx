@@ -257,6 +257,17 @@ test('schedules and removes the unlock day of a teacher-blocked Node', async () 
   });
 });
 
+test.each([
+  { isVisible: true, label: 'Ocultar', command: 'hide-node' },
+  { isVisible: false, label: 'Mostrar', command: 'show-node' },
+])('asks to $label a Node with the $command command', async ({ isVisible, label, command }) => {
+  const user = userEvent.setup();
+  const { onIntent } = renderEditor(withNode({ isVisible }));
+
+  await user.click(screen.getByRole('button', { name: label }));
+  expect(onIntent).toHaveBeenCalledWith({ kind: command, nodeId: node.id });
+});
+
 test('offers no unlock schedule while a Node has no teacher block', () => {
   renderEditor(withNode({ isTeacherBlocked: false }));
 

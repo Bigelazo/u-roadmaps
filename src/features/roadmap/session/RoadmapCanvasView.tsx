@@ -39,12 +39,12 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
+import type { CanvasCommand, CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 import type {
   RoadmapDto,
   RoadmapNode,
   StudentRoadmapDto,
   StudentRoadmapNode,
-  TeacherBlockOperation,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
@@ -81,53 +81,10 @@ type ExclusiveConfirmationSource =
   | 'node-visibility'
   | 'teacher-block';
 
-type AutomaticLayoutRequest = {
-  positions: Extract<RoadmapGraphEditingIntent, { kind: 'request-automatic-layout' }>['positions'];
-  direction: Extract<RoadmapGraphEditingIntent, { kind: 'request-automatic-layout' }>['direction'];
-  isPending: boolean;
-};
-
-/** Private vocabulary: Graph and NodeEditor events are translated before reaching the session. */
-type RoadmapCanvasIntent =
-  | { kind: 'close-selected-node' }
-  | ({ kind: 'preview-node-information' } & Extract<
-      NodeEditorIntent,
-      { kind: 'preview-node-information' }
-    >)
-  | { kind: 'change-visibility'; nodeId: string; isVisible: boolean }
-  | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
-  | { kind: 'schedule-teacher-unlock'; nodeId: string; unlockOn: string | null }
-  | { kind: 'delete-node'; nodeId: string; draftWasDiscarded?: boolean }
-  | Extract<RoadmapGraphEditingIntent, { kind: 'node-positions' | 'request-automatic-layout' }>
-  | {
-      kind: 'request-dependency-creation';
-      request: Extract<RoadmapGraphEditingIntent, { kind: 'create-dependency' }>;
-    }
-  | { kind: 'request-dependency-deletion'; dependencyIds: string[] }
-  | { kind: 'add-resource'; nodeId: string };
-
-function canvasIntentFromNodeEditor(intent: NodeEditorIntent): RoadmapCanvasIntent {
-  switch (intent.kind) {
-    case 'close':
-      return { kind: 'close-selected-node' };
-    case 'preview-node-information':
-    case 'change-visibility':
-    case 'change-teacher-block':
-    case 'schedule-teacher-unlock':
-      return intent;
-    case 'delete-node':
-      return { ...intent, draftWasDiscarded: true };
-  }
-}
-
-function canvasIntentFromGraph(intent: RoadmapGraphEditingIntent): RoadmapCanvasIntent {
-  if (intent.kind === 'change-visibility') return { ...intent, isVisible: !intent.isVisible };
-  if (intent.kind === 'create-dependency')
-    return { kind: 'request-dependency-creation', request: intent };
-  if (intent.kind === 'delete-dependencies')
-    return { kind: 'request-dependency-deletion', dependencyIds: [...intent.dependencyIds] };
-  return intent;
-}
+type AutomaticLayoutRequest = Pick<
+  CanvasCommandOf<'apply-automatic-layout'>,
+  'positions' | 'direction'
+> & { isPending: boolean };
 
 const NodeEditor = dynamic(
   () => import('@/features/roadmap/editor/NodeEditor').then(({ NodeEditor }) => NodeEditor),
@@ -648,58 +605,44 @@ function useRoadmapCanvasController({ input }: Props) {
       ),
     [nodeVisibilityWorkflow, requestExclusiveConfirmation],
   );
-  const handleCanvasIntent = useCallback(
-    (intent: RoadmapCanvasIntent) => {
-      switch (intent.kind) {
-        case 'close-selected-node':
-          closeSelectedNodeNow();
-          return;
-        case 'preview-node-information':
-          dispatchCanvas({
-            type: 'showTeacherPreview',
-            node: intent.node,
-            focusReturn: intent.returnFocus,
-          });
-          return;
-        case 'change-visibility':
-          void requestVisibilityChange(intent.nodeId, intent.isVisible);
+  const runCanvasCommand = useCallback(
+    (command: CanvasCommand) => {
+      switch (command.kind) {
+        case 'hide-node':
+        case 'show-node':
+          void requestVisibilityChange(command);
           return;
         case 'change-teacher-block':
-          requestTeacherBlockChange(intent.nodeId, intent.operation);
+          requestTeacherBlockChange(command.nodeId, command.operation);
           return;
         case 'schedule-teacher-unlock':
           void withSuccess(
-            scheduleTeacherUnlock(intent.nodeId, intent.unlockOn),
-            intent.unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
+            scheduleTeacherUnlock(command.nodeId, command.unlockOn),
+            command.unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
           );
           return;
         case 'delete-node':
-          requestNodeDeletion(intent.nodeId, { draftWasDiscarded: intent.draftWasDiscarded });
+          requestNodeDeletion(command.nodeId);
           return;
-        case 'node-positions':
+        case 'move-nodes':
           void Promise.all(
-            intent.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
+            command.positions.map(({ nodeId, position }) => moveNode(nodeId, position)),
           );
           return;
-        case 'request-automatic-layout':
-          requestAutomaticLayout(intent.positions, intent.direction);
+        case 'apply-automatic-layout':
+          requestAutomaticLayout(command.positions, command.direction);
           return;
-        case 'request-dependency-creation':
-          requestDependencyCreation(intent.request);
+        case 'create-dependency':
+          requestDependencyCreation(command);
           return;
-        case 'request-dependency-deletion':
-          requestDependencyDeletion(intent.dependencyIds);
-          return;
-        case 'add-resource':
-          openResourceComposer(intent.nodeId);
+        case 'delete-dependencies':
+          requestDependencyDeletion(command.dependencyIds);
           return;
       }
     },
     [
-      closeSelectedNodeNow,
       moveNode,
       scheduleTeacherUnlock,
-      openResourceComposer,
       requestDependencyCreation,
       requestDependencyDeletion,
       requestNodeDeletion,
@@ -709,12 +652,34 @@ function useRoadmapCanvasController({ input }: Props) {
     ],
   );
   const handleNodeEditorIntent = useCallback(
-    (intent: NodeEditorIntent) => handleCanvasIntent(canvasIntentFromNodeEditor(intent)),
-    [handleCanvasIntent],
+    (intent: NodeEditorIntent) => {
+      switch (intent.kind) {
+        case 'close':
+          closeSelectedNodeNow();
+          return;
+        case 'preview-node-information':
+          dispatchCanvas({
+            type: 'showTeacherPreview',
+            node: intent.node,
+            focusReturn: intent.returnFocus,
+          });
+          return;
+        case 'delete-node':
+          // The Node editor asks about its own draft before it asks for the deletion.
+          requestNodeDeletion(intent.nodeId, { draftWasDiscarded: true });
+          return;
+        default:
+          runCanvasCommand(intent);
+      }
+    },
+    [closeSelectedNodeNow, requestNodeDeletion, runCanvasCommand],
   );
   const handleGraphEditingIntent = useCallback(
-    (intent: RoadmapGraphEditingIntent) => handleCanvasIntent(canvasIntentFromGraph(intent)),
-    [handleCanvasIntent],
+    (intent: RoadmapGraphEditingIntent) => {
+      if (intent.kind === 'add-resource') openResourceComposer(intent.nodeId);
+      else runCanvasCommand(intent);
+    },
+    [openResourceComposer, runCanvasCommand],
   );
   const graphEditing = useMemo<RoadmapGraphEditing | undefined>(
     () =>

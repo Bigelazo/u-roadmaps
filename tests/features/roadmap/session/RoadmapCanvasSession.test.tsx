@@ -8,6 +8,7 @@ import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/sess
 import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change-signal';
 import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
 import type { NodeEditorProps } from '@/features/roadmap/editor/types';
+import type { RoadmapGraphEditingIntent } from '@/features/roadmap/graph/RoadmapGraph';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
 import { closeToast, findToast, queryToast, queryToasts } from '../../../support/toast';
@@ -30,10 +31,9 @@ vi.mock('next/dynamic', () => ({
           'Bloquear nodo',
           () => onIntent({ kind: 'change-teacher-block', nodeId: node.id, operation: 'BLOCK' }),
         ],
-        [
-          'Ocultar para estudiantes',
-          () => onIntent({ kind: 'change-visibility', nodeId: node.id, isVisible: true }),
-        ],
+        node.isVisible
+          ? ['Ocultar para estudiantes', () => onIntent({ kind: 'hide-node', nodeId: node.id })]
+          : ['Mostrar para estudiantes', () => onIntent({ kind: 'show-node', nodeId: node.id })],
         ['Eliminar nodo', () => onIntent({ kind: 'delete-node', nodeId: node.id })],
         [
           'Guardar cambios',
@@ -102,19 +102,18 @@ vi.mock('next/dynamic', () => ({
 }));
 
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => {
-  const editingIntents: [label: string, intent: object][] = [
+  const editingIntents: [label: string, intent: RoadmapGraphEditingIntent][] = [
     [
       'Mover nodo',
       {
-        kind: 'node-positions',
-        cause: 'pointer',
+        kind: 'move-nodes',
         positions: [{ nodeId: 'node-1', position: { x: 120, y: 80 } }],
       },
     ],
     [
       'Solicitar ordenamiento',
       {
-        kind: 'request-automatic-layout',
+        kind: 'apply-automatic-layout',
         positions: [{ nodeId: 'node-1', position: { x: 320, y: 160 } }],
         direction: 'LR',
       },
@@ -661,6 +660,13 @@ describe('RoadmapCanvasSession', () => {
     await user.click(within(visibilityDialog).getByRole('button', { name: 'Ocultar' }));
     await waitFor(async () =>
       expect((await persistence.load(teachingInput)).nodes[0]).toMatchObject({ isVisible: false }),
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Mostrar para estudiantes' }));
+    const showDialog = await screen.findByRole('alertdialog', { name: '¿Mostrar “Límites”?' });
+    await user.click(within(showDialog).getByRole('button', { name: 'Mostrar' }));
+    await waitFor(async () =>
+      expect((await persistence.load(teachingInput)).nodes[0]).toMatchObject({ isVisible: true }),
     );
 
     await user.click(screen.getByRole('button', { name: 'Eliminar nodo' }));

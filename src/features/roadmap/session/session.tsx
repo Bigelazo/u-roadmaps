@@ -104,7 +104,7 @@ type InjectedSessionResult = {
   ) => Promise<boolean>;
   scheduleTeacherUnlock: (nodeId: string, unlockOn: string | null) => Promise<boolean>;
   deleteDependency: (dependencyId: string) => Promise<boolean>;
-  toggleVisibility: (nodeId: string, isVisible: boolean) => Promise<boolean>;
+  setVisibility: (nodeId: string, visible: boolean) => Promise<boolean>;
   previewNodeVisibility: (
     nodeId: string,
   ) => Promise<{ id: string; sourceNodeId: string; targetNodeId: string }[] | null>;
@@ -465,8 +465,8 @@ function useInjectedSession(
         'eliminar dependencia',
         'No se pudo eliminar la dependencia.',
       ),
-      toggleVisibility: bindMutation(
-        'toggleVisibility',
+      setVisibility: bindMutation(
+        'setVisibility',
         'cambiar visibilidad',
         'No se pudo cambiar la visibilidad.',
       ),
@@ -614,7 +614,7 @@ export function useRoadmapCanvasSession(
   const nodeVisibilityWorkflow = useNodeVisibilityWorkflow({
     roadmap: active.roadmap,
     previewNodeVisibility: active.previewNodeVisibility,
-    toggleVisibility: active.toggleVisibility,
+    setVisibility: active.setVisibility,
   });
   const nodeDeletionWorkflow = useNodeDeletionWorkflow({
     previewNodeDeletion: active.previewNodeDeletion,

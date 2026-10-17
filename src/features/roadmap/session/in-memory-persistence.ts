@@ -335,18 +335,17 @@ export function createInMemoryRoadmapSessionPersistence(
       };
     },
 
-    async toggleVisibility(_input: RoadmapCanvasSessionInput, nodeId: string, isVisible: boolean) {
-      // `isVisible` is the current visibility.
+    async setVisibility(_input: RoadmapCanvasSessionInput, nodeId: string, visible: boolean) {
       const change = decideVisibilityChange({
         nodeId,
-        isVisible: !isVisible,
+        isVisible: visible,
         dependencies: roadmap.dependencies,
       });
       mutateNode(nodeId, (node) =>
         'isVisible' in node
           ? ({
               ...node,
-              isVisible: !isVisible,
+              isVisible: visible,
               ...(change.clearsTeacherBlock
                 ? { isTeacherBlocked: false, teacherUnlockOn: undefined }
                 : {}),
