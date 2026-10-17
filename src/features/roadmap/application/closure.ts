@@ -28,11 +28,13 @@ export async function readRoadmapClosureCalendar(now = new Date()) {
 
 /** Silent, atomic and irreversible. A later pass retries any transaction that failed. */
 export async function closeDueRoadmaps(now = new Date()) {
-  const roadmaps = await prisma.roadmap.findMany({
-    where: { closedAt: null },
-    select: { id: true, courseOffering: { select: { year: true, semester: true } } },
-  });
-  const isPastClosure = await readRoadmapClosureCalendar(now);
+  const [roadmaps, isPastClosure] = await Promise.all([
+    prisma.roadmap.findMany({
+      where: { closedAt: null },
+      select: { id: true, courseOffering: { select: { year: true, semester: true } } },
+    }),
+    readRoadmapClosureCalendar(now),
+  ]);
   for (const { id, courseOffering } of roadmaps) {
     // An offering can be deleted between Prisma's candidate and relation reads.
     if (!courseOffering || !isPastClosure(courseOffering)) continue;
