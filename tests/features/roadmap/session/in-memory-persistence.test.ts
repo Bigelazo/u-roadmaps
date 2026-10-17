@@ -70,6 +70,23 @@ const roadmap = {
   ],
 } satisfies RoadmapDto;
 
+test('sets a Node to the target visibility, as production does', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+
+  await persistence.setVisibility!(input, 'selected', false);
+  await persistence.setVisibility!(input, 'selected', false);
+  const hidden = await persistence.load(input);
+  expect(hidden.nodes).toContainEqual(
+    expect.objectContaining({ id: 'selected', isVisible: false, isTeacherBlocked: false }),
+  );
+  expect(hidden.dependencies).toEqual([]);
+
+  await persistence.setVisibility!(input, 'selected', true);
+  expect((await persistence.load(input)).nodes).toContainEqual(
+    expect.objectContaining({ id: 'selected', isVisible: true }),
+  );
+});
+
 test('models upstream Node unlock through the same Teacher block policy as production', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
