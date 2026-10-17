@@ -1,5 +1,6 @@
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
 import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
+import { creatorLabel } from '@/features/roadmap/ui/version-labels';
 
 const positionLabels: Record<InstitutionalCoursePosition, string> = {
   COURSE_PROFESSOR: 'Profesor de cátedra',
@@ -11,20 +12,6 @@ const positionLabels: Record<InstitutionalCoursePosition, string> = {
 };
 
 type Version = RoadmapVersionHistory['versions'][number];
-
-/** Roadmaps that predate recorded authorship never get an inferred creator. */
-export function creatorLabel(creator: { name: string } | null): string {
-  return creator?.name ?? 'Creador no registrado';
-}
-
-export function originLabel(origin: Version['origin']): string {
-  switch (origin.kind) {
-    case 'COPY':
-      return `Copiada de la edición ${origin.year}-${origin.semester}`;
-    case 'EMPTY':
-      return 'Creada desde cero';
-  }
-}
 
 /** The creator and Teaching staff rows of a version's description list. */
 export function VersionAuthorshipList({

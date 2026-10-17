@@ -6,7 +6,8 @@ import { ArrowLeft, ChevronDown, Download, ExternalLink, FileText, X } from 'luc
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
-import { originLabel, VersionAuthorshipList } from '@/features/roadmap/ui/version-labels';
+import { originLabel } from '@/features/roadmap/ui/version-labels';
+import { VersionAuthorshipList } from '@/features/roadmap/ui/VersionAuthorshipList';
 import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { Card, CardContent, CardHeader } from '@/shared/ui/card';
