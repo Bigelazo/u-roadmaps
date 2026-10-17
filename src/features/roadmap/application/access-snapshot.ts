@@ -1,6 +1,9 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
-import { studentNodeAccessById, visibleRoadmapGraph } from '@/features/roadmap/domain/access';
+import {
+  participantNodeAccess,
+  type Participant,
+} from '@/features/roadmap/domain/participant-view';
 
 export type AccessSnapshot = Readonly<{
   nodes: readonly {
@@ -20,7 +23,14 @@ type AccessSnapshotParticipant = Readonly<{
   isActive: boolean;
 }>;
 
-export function projectAccessSnapshot({
+function viewParticipant(
+  role: AccessSnapshotParticipant['role'],
+  completedNodeIds: ReadonlySet<string>,
+): Participant {
+  return role === 'TEACHER' ? { role } : { role, completedNodeIds };
+}
+
+function projectAccessSnapshot({
   nodes,
   dependencies,
   participants,
@@ -31,10 +41,6 @@ export function projectAccessSnapshot({
   participants: readonly AccessSnapshotParticipant[];
   completions: readonly { userId: string; roadmapNodeId: string }[];
 }): AccessSnapshot {
-  const { nodes: visibleNodes, dependencies: visibleDependencies } = visibleRoadmapGraph(
-    nodes,
-    dependencies,
-  );
   const completionIdsByUser = new Map<string, Set<string>>();
   for (const completion of completions) {
     const ids = completionIdsByUser.get(completion.userId) ?? new Set<string>();
@@ -44,20 +50,12 @@ export function projectAccessSnapshot({
 
   const accessibleByUser = new Map<string, ReadonlySet<string>>();
   const activeParticipants = participants.filter(({ isActive }) => isActive);
-  for (const participant of activeParticipants) {
-    const accessible =
-      participant.role === 'TEACHER'
-        ? visibleNodes.filter(({ isTeacherBlocked }) => !isTeacherBlocked).map(({ id }) => id)
-        : [
-            ...studentNodeAccessById({
-              nodes: visibleNodes,
-              dependencies: visibleDependencies,
-              completedNodeIds: completionIdsByUser.get(participant.userId) ?? new Set(),
-            }),
-          ]
-            .filter(([, access]) => access.status === 'ACCESSIBLE')
-            .map(([id]) => id);
-    accessibleByUser.set(participant.userId, new Set(accessible));
+  for (const { userId, role } of activeParticipants) {
+    const participant = viewParticipant(role, completionIdsByUser.get(userId) ?? new Set());
+    accessibleByUser.set(
+      userId,
+      participantNodeAccess({ participant, nodes, dependencies }).accessibleNodeIds,
+    );
   }
 
   return {
@@ -65,6 +63,49 @@ export function projectAccessSnapshot({
     accessibleByUser,
     participants: activeParticipants.map(({ userId }) => ({ userId })),
   };
+}
+
+/**
+ * One participant's accessible Nodes in each of several Roadmaps. A Roadmap without an active
+ * Participation of theirs has no entry.
+ */
+export async function readParticipantAccess(
+  transaction: Prisma.TransactionClient,
+  { userId, roadmapIds }: { userId: string; roadmapIds: readonly string[] },
+): Promise<Map<string, ReadonlySet<string>>> {
+  const inRoadmaps = { in: [...roadmapIds] };
+  const [participations, nodes, dependencies, completions] = await Promise.all([
+    transaction.participation.findMany({
+      where: { userId, isActive: true, courseOffering: { roadmap: { id: inRoadmaps } } },
+      select: { role: true, courseOffering: { select: { roadmap: { select: { id: true } } } } },
+    }),
+    transaction.roadmapNode.findMany({
+      where: { roadmapId: inRoadmaps },
+      select: { id: true, roadmapId: true, isVisible: true, isTeacherBlocked: true },
+    }),
+    transaction.dependency.findMany({
+      where: { sourceNode: { roadmapId: inRoadmaps } },
+      select: { sourceNodeId: true, targetNodeId: true },
+    }),
+    transaction.completion.findMany({
+      where: { userId, roadmapNode: { roadmapId: inRoadmaps } },
+      select: { roadmapNodeId: true },
+    }),
+  ]);
+  const completedNodeIds = new Set(completions.map(({ roadmapNodeId }) => roadmapNodeId));
+  const access = new Map<string, ReadonlySet<string>>();
+  for (const { role, courseOffering } of participations) {
+    const roadmapId = courseOffering.roadmap?.id;
+    if (!roadmapId) continue;
+    // Every Roadmap's Dependencies are passed: the view keeps only those between its visible Nodes.
+    const view = participantNodeAccess({
+      participant: viewParticipant(role, completedNodeIds),
+      nodes: nodes.filter((node) => node.roadmapId === roadmapId),
+      dependencies,
+    });
+    access.set(roadmapId, view.accessibleNodeIds);
+  }
+  return access;
 }
 
 /** Every active participant's Node access, read inside the editing transaction. */

@@ -329,6 +329,7 @@ export default defineConfig([
   {
     files: [
       'tests/features/roadmap/change-port-operations.test.ts',
+      'tests/features/roadmap/participant-access.test.ts',
       'tests/features/roadmap/preview-version.test.ts',
       'tests/features/roadmap/roadmap-command.test.ts',
     ],
