@@ -30,6 +30,9 @@ export type UnconfirmedWrite<Kind extends UnconfirmedCommandKind> = {
   reloads?: 'canvas-preview';
 };
 
+/** Completing a Node in the Canvas preview shows the toast a student sees for a real Completion. */
+const completionSuccess = () => 'Nodo completado.';
+
 export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedWrite<Kind> } = {
   'add-node': {
     write: (persistence, input, { node, position }) => persistence.addNode(input, node, position),
@@ -100,11 +103,12 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
   'complete-node': {
     write: (persistence, input, { nodeId }) => persistence.complete(input, nodeId),
     fallback: 'No se pudo completar el nodo.',
-    success: () => 'Nodo completado.',
+    success: completionSuccess,
   },
   'complete-simulated-node': {
     write: (persistence, input, { nodeId }) => persistence.completeSimulatedNode(input, nodeId),
     fallback: 'No se pudo completar el nodo en la previsualización.',
+    success: completionSuccess,
     report: ({ nodeId }) => ({ type: 'completeSimulatedNode', nodeId }),
     reloads: 'canvas-preview',
   },

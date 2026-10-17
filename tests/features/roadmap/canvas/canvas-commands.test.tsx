@@ -1154,7 +1154,7 @@ describe('canvas commands', () => {
       expect(canvas.reported()).toEqual([{ type: 'addNode', nodeId: created.id }]);
     });
 
-    test('completing a Node in the Canvas preview reloads only the preview and reports it', async () => {
+    test('completing a Node in the Canvas preview reloads only the preview, shows the student toast and reports it', async () => {
       const canvas = await openCanvas();
       await act(async () => {
         await canvas.session().loadSimulation();
@@ -1168,6 +1168,7 @@ describe('canvas commands', () => {
         canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits'),
       ).toMatchObject({ isCompleted: true });
       expect(await nodeOf(canvas.persistence, 'limits')).not.toHaveProperty('isCompleted');
+      expect(successToasts()).toEqual(['Nodo completado.']);
       expect(canvas.reported()).toEqual([{ type: 'completeSimulatedNode', nodeId: 'limits' }]);
     });
   });
