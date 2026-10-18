@@ -144,6 +144,8 @@ Installed keyboard movement already snaps (`index.js:1722–1756`). `normalizedC
 
 [useOnSelectionChange](https://reactflow.dev/api-reference/hooks/use-on-selection-change) reports selection, whereas Node click invokes session selection with block checks (`:832`); menu actions and explicit selectedNodeId remain separate. No simplification. [useNodesData](https://reactflow.dev/api-reference/hooks/use-nodes-data) duplicates NodeProps.data subscription; [useNodeId](https://reactflow.dev/api-reference/hooks/use-node-id) only avoids prop drilling where none is problematic. [useConnection](https://reactflow.dev/api-reference/hooks/use-connection), [useNodeConnections](https://reactflow.dev/api-reference/hooks/use-node-connections) add live connection presentation, not domain dependency validation. [useHandleConnections](https://reactflow.dev/api-reference/hooks/use-handle-connections) is deprecated in docs and 12.11.3. [useUpdateNodeInternals](https://reactflow.dev/api-reference/hooks/use-update-node-internals) is for dynamically changed handles; RoadmapNode has stable four handles and dimension observation. No manual counterpart exists for these to remove: 0 equivalent production LOC savings, high confidence.
 
+Since #287, `NodeMeasurementRecovery` in `RoadmapGraph.tsx` calls `useUpdateNodeInternals` for a different reason: a measurement taken between a nodes commit and React Flow adopting the nodes can leave a Node without handle bounds, and 12.11.3 never measures it again. The hook re-measures only those Nodes; it does not replace dimension observation.
+
 
 ### Agent 3: types (65 pages)
 
