@@ -243,6 +243,31 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
       context: {},
     },
   });
+  // Unknown/malformed identities must neither abort the upgrade nor acquire a guessed baseline.
+  const malformedTargets = ['resource:not-a-uuid', `resource:${video.id.replaceAll('-', '')}`];
+  const malformedKnown = await Promise.all(
+    malformedTargets.map((targetKey) =>
+      prisma.noticeKnownValue.create({
+        data: {
+          recipientId: ids.user,
+          roadmapId: ids.roadmap,
+          noticeTarget: 'resource',
+          targetKey,
+          nodeId: ids.node,
+          knownValue: state(video),
+          currentValue: state(video),
+          context: { untouched: 'ñ' },
+        },
+      }),
+    ),
+  );
+  const malformedSnapshots = malformedTargets.map((targetKey) => ({
+    id: null,
+    noticeTarget: 'resource',
+    targetKey,
+    nodeId: ids.node,
+    currentValue: state(video),
+  }));
   const operationId = randomUUID();
   const snapshot = {
     id: titleChange.id,
@@ -293,7 +318,7 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
       noticeIds: opening.noticeIds,
       summary: { keep: 'captured text' },
       operationId: randomUUID(),
-      snapshots: [snapshot, unrelated, missingTarget],
+      snapshots: [snapshot, unrelated, missingTarget, ...malformedSnapshots],
       recognizedAt: date,
     },
   });
@@ -346,6 +371,8 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
     closedAt: date,
   });
   const values = await prisma.noticeKnownValue.findMany({ where: { noticeTarget: 'resource' } });
+  for (const before of malformedKnown)
+    expect(values.find((entry) => entry.targetKey === before.targetKey)).toEqual(before);
   const value = (row: LegacyResource) =>
     values.find((entry) => entry.targetKey === `resource:${row.id}`)!;
   expect(value(video)).toMatchObject({
@@ -411,7 +438,12 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
     }),
   ).toEqual({
     ...recognizedOpening,
-    snapshots: [{ ...snapshot, currentValue: normalized(external) }, unrelated, missingTarget],
+    snapshots: [
+      { ...snapshot, currentValue: normalized(external) },
+      unrelated,
+      missingTarget,
+      ...malformedSnapshots,
+    ],
   });
   expect(await prisma.noticeDeliveryEffect.count()).toBe(1);
   expect(await prisma.nodeChangeReview.findFirst()).toMatchObject({ reviewedAt: date });
