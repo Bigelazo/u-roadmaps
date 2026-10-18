@@ -114,7 +114,7 @@ test('Node creation and deletion absorb description changes', async ({ course })
   const remaining = await pendingNotices(course.studentId, course.roadmapId);
   expect(
     remaining.filter(({ data }) => (data as { nodeId: string }).nodeId === known.id),
-  ).toMatchObject([{ data: { changeKind: 'node-deleted' } }]);
+  ).toMatchObject([{ data: { noticeTarget: 'node-deletion' } }]);
 });
 
 test('the Change summary lists a description change under its Node', async ({ course }) => {

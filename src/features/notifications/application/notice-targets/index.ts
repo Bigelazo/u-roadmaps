@@ -20,7 +20,6 @@ export type {
   BroadScope,
   EntryValue,
   KnownTarget,
-  NoticeReadSide,
   NoticeTargetDescriptor,
   NoticeTargetRef,
   RoadmapView,

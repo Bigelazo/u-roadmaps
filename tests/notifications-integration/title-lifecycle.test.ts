@@ -91,14 +91,14 @@ test('a pending Node creation absorbs title changes and deletion absorbs a pendi
   const remaining = await pendingNotices(course.studentId, course.roadmapId);
   expect(
     remaining.filter(({ data }) => (data as { nodeId: string }).nodeId === known.id),
-  ).toMatchObject([{ data: { changeKind: 'node-deleted' } }]);
+  ).toMatchObject([{ data: { noticeTarget: 'node-deletion' } }]);
 });
 
 test('a pending Roadmap availability notice absorbs title changes', async ({ course }) => {
   await announceRoadmap(course);
   await teacherEdits(course).rename(course.change.nodeId, 'Recursión');
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
-    { data: { changeKind: 'roadmap-available' } },
+    { data: { noticeTarget: 'roadmap-availability' } },
   ]);
 });
 

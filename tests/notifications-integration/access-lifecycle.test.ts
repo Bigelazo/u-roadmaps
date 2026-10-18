@@ -60,8 +60,6 @@ test('hide, show and block before recognition leave one notice; unblocking withd
     data: {
       noticeTarget: 'node-access',
       noticeClass: 'roadmap-node-changed',
-      changeKind: 'node-blocked',
-      targetKind: 'roadmap',
       nodeId: node.id,
       nodeTitle: 'Colas',
       knownValue: 'Disponible',
@@ -184,7 +182,11 @@ test('a Scheduled unlock release notifies like a manual unlock, from teaching st
   expect(accessNotices(await pendingNotices(course.studentId, course.roadmapId))).toMatchObject([
     {
       body: '«Colas» fue desbloqueado.',
-      data: { changeKind: 'node-available', actorName: 'Equipo docente' },
+      data: {
+        noticeTarget: 'node-access',
+        currentValue: 'Disponible',
+        actorName: 'Equipo docente',
+      },
     },
   ]);
   // The label is projected at read time; the stored attribution has no name.

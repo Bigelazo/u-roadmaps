@@ -119,7 +119,7 @@ test('Node creation and deletion absorb type changes', async ({ course }) => {
   const remaining = await pendingNotices(course.studentId, course.roadmapId);
   expect(
     remaining.filter(({ data }) => (data as { nodeId: string }).nodeId === known.id),
-  ).toMatchObject([{ data: { changeKind: 'node-deleted' } }]);
+  ).toMatchObject([{ data: { noticeTarget: 'node-deletion' } }]);
 });
 
 test('the Change summary lists a type change under «Ruta y clasificación» with the current Node title', async ({

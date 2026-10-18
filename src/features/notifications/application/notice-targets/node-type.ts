@@ -32,7 +32,6 @@ export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
   noticeTarget: NOTICE_TARGET.nodeType,
   noticeClass: 'roadmap-node-changed',
   shownTo: 'node-viewers',
-  readSide: { changeKind: 'node-updated', changedFields: ['nodeType'], targetKind: 'node' },
   matches: (fact): fact is NodeTypeFact => fact.kind === 'node-type',
   target: (fact) => nodeTypeRef(fact.nodeId),
   previousValue: (fact) => fact.previous.id,

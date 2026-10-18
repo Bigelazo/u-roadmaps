@@ -161,8 +161,6 @@ async function reconcileOne(
       targetKey: target.targetKey,
       noticeClass: descriptor.noticeClass,
       noticeTarget: descriptor.noticeTarget,
-      ...descriptor.readSide,
-      ...descriptor.valueReadSide?.(values),
       ...descriptor.storedData?.(target),
       ...values,
       occurredAt: occurredAt.toISOString(),

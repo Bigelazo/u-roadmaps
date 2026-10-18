@@ -15,7 +15,6 @@ export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
   noticeTarget: NOTICE_TARGET.nodeTitle,
   noticeClass: 'roadmap-node-changed',
   shownTo: 'node-viewers',
-  readSide: { changeKind: 'node-updated', changedFields: ['title'], targetKind: 'node' },
   matches: (fact): fact is NodeTitleFact => fact.kind === 'node-title',
   target: (fact) => nodeTitleRef(fact.nodeId),
   previousValue: (fact) => fact.previous,

@@ -45,22 +45,20 @@ async function accessibleRecipients(nodeId: string, roadmap: RoadmapView) {
 function lifecycle({ knownValue, currentValue, context }: TargetValues) {
   const known = decode(knownValue);
   const current = decode(currentValue);
-  const changeKind = !known ? 'resource-added' : !current ? 'resource-removed' : 'resource-updated';
+  const change = !known ? 'added' : !current ? 'removed' : 'updated';
   const resourceTitle = (known ?? current)!.title;
   const titleChange =
     known && current && known.title !== current.title
       ? `«${known.title}» ahora se llama «${current.title}».`
       : null;
   const nodeTitle = typeof context.nodeTitle === 'string' ? context.nodeTitle : '';
-  return { known, current, changeKind, resourceTitle, titleChange, nodeTitle } as const;
+  return { known, current, change, resourceTitle, titleChange, nodeTitle } as const;
 }
 
 export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   noticeTarget: NOTICE_TARGET.resource,
   noticeClass: 'roadmap-resource-changed',
   shownTo: 'node-openers',
-  readSide: { changeKind: 'resource-updated', changedFields: [], targetKind: 'node' },
-  valueReadSide: (values) => ({ changeKind: lifecycle(values).changeKind }),
   matches: (fact): fact is ResourceFact => fact.kind === 'resource',
   target: (fact) => resourceRef(fact.resourceId, fact.nodeId),
   previousValue: (fact) => resourceValue(fact.previous),
@@ -101,14 +99,14 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
     return [...shown, ...removed];
   },
   wording(values) {
-    const { changeKind, resourceTitle, titleChange, nodeTitle } = lifecycle(values);
+    const { change, resourceTitle, titleChange, nodeTitle } = lifecycle(values);
     // The Inbox names the Node; the Change summary groups items under it already.
     const inNode = (preposition: string, withNode: boolean) =>
       withNode ? ` ${preposition} «${nodeTitle}»` : '';
     const sentence = (withNode: boolean) =>
-      changeKind === 'resource-added'
+      change === 'added'
         ? `Nuevo recurso «${resourceTitle}»${inNode('en', withNode)}.`
-        : changeKind === 'resource-removed'
+        : change === 'removed'
           ? `Se eliminó el recurso «${resourceTitle}»${inNode('de', withNode)}.`
           : `Se actualizó el recurso «${resourceTitle}»${inNode('en', withNode)}.${titleChange ? ` ${titleChange}` : ''}`;
     return {
@@ -119,9 +117,8 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
     };
   },
   apiData(values) {
-    const { known, current, changeKind, resourceTitle, titleChange, nodeTitle } = lifecycle(values);
+    const { known, current, resourceTitle, titleChange, nodeTitle } = lifecycle(values);
     return {
-      changeKind,
       resourceId: values.context.resourceId,
       resourceTitle,
       titleChange,

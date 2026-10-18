@@ -21,7 +21,6 @@ export const roadmapAvailabilityTarget: NoticeTargetDescriptor<RoadmapCreatedFac
   noticeTarget: NOTICE_TARGET.roadmapAvailability,
   noticeClass: 'roadmap-available',
   shownTo: 'everyone',
-  readSide: { changeKind: 'roadmap-available', changedFields: [], targetKind: 'roadmap' },
   scope: 'roadmap',
   matches: (fact): fact is RoadmapCreatedFact => fact.kind === 'roadmap-created',
   target: (_fact, changes) => availabilityRef(changes.roadmapId),

@@ -26,9 +26,6 @@ function dependencyPair({ targetKey }: NoticeTargetRef) {
   return { sourceNodeId, targetNodeId };
 }
 
-const changeKind = (currentValue: string) =>
-  currentValue === PRESENT ? 'dependency-added' : 'dependency-removed';
-
 /** Everyone, when the Dependency joins two visible Nodes. */
 async function pairRecipients(
   fact: DependencyFact,
@@ -49,7 +46,6 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
   noticeTarget: NOTICE_TARGET.dependency,
   noticeClass: 'roadmap-path-changed',
   shownTo: 'dependency-viewers',
-  readSide: { changeKind: 'dependency-added', changedFields: [], targetKind: 'roadmap' },
   matches: (fact): fact is DependencyFact => fact.kind === 'dependency',
   target: (fact) => dependencyPairRef(fact.sourceNodeId, fact.targetNodeId),
   previousValue: (fact) => pairValue(fact.previous),
@@ -87,15 +83,13 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
     ];
   },
   factContext: (fact) => ({ dependencyId: fact.dependencyId }),
-  valueReadSide: ({ currentValue }) => ({ changeKind: changeKind(currentValue) }),
   storedData: dependencyPair,
   wording: ({ currentValue, context }) => ({
     subject: 'Ruta actualizada',
     body: `«${String(context.dependentNodeTitle)}» ${currentValue === PRESENT ? 'ahora requiere' : 'ya no requiere'} «${String(context.prerequisiteNodeTitle)}».`,
     summaryGroup: 'general',
   }),
-  apiData: ({ currentValue, context }) => ({
-    changeKind: changeKind(currentValue),
+  apiData: ({ context }) => ({
     dependencyId: context.dependencyId,
     prerequisiteNodeTitle: context.prerequisiteNodeTitle,
     dependentNodeTitle: context.dependentNodeTitle,

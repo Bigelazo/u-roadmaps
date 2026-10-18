@@ -111,17 +111,6 @@ export type TargetWording = Readonly<{
 }>;
 
 /**
- * One Notice target kind, described once (ADR-0024): identity, Known value baseline,
- * audience (ADR-0014 decision 10), visibility gate, equality and wording.
- * Values are encoded strings; equality is exact string equality.
- */
-export type NoticeReadSide = Readonly<{
-  changeKind: string;
-  changedFields: readonly string[];
-  targetKind: 'node' | 'roadmap';
-}>;
-
-/**
  * Who a recipient's stored notices of a target are shown to (ADR-0030 decision 3):
  * - `everyone`: every recipient;
  * - `node-viewers`: while its Node exists and is visible, even if Blocked;
@@ -132,16 +121,17 @@ export type NoticeReadSide = Readonly<{
 export type ShownTo =
   'everyone' | 'node-viewers' | 'node-openers' | 'dependency-viewers' | 'node-type-viewers';
 
+/**
+ * One Notice target kind, described once (ADR-0024): identity, Known value baseline,
+ * audience (ADR-0014 decision 10), visibility gate, equality and wording.
+ * Values are encoded strings; equality is exact string equality.
+ */
 export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapChangeFact> {
   /** Stored as `data.noticeTarget`; also selects the descriptor at read time. */
   readonly noticeTarget: string;
   readonly noticeClass: NoticeClass;
   /** The Inbox, counts, Node change marks, Change summary and single-notice reads follow it. */
   readonly shownTo: ShownTo;
-  /** Legacy keys the notice API still returns and grouping reads; never visibility. */
-  readonly readSide: NoticeReadSide;
-  /** Read-side discriminators that depend on the stored values (stored over `readSide`). */
-  valueReadSide?(values: TargetValues): Partial<NoticeReadSide>;
   /**
    * Broad targets only: the part of the hierarchy Roadmap ⊃ Node ⊃ aspect/Resource the
    * target stands for. A recipient who has not recognized it learns later changes inside
