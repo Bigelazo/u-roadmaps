@@ -45,12 +45,12 @@ título, descripción y tipo siguen dependiendo del tiempo real, como decide est
 
 ## Actualización — 2026-10-17: la versión es obligatoria
 
-Desde #281, como el canvas ya envía la versión en toda Acción confirmada con
-previsualización, el servidor la exige para eliminar, ocultar, desbloquear y bloquear un
-Nodo y para crear una Dependency. Una confirmación sin versión se rechaza como una
-obsoleta: 409 con el mismo código. Mostrar un Nodo no tiene Impacto del cambio y no la
-necesita. La regla vive en la decisión de dominio que comparten el servidor y el Mapa de
-práctica ([ADR-0028](0028-roadmap-editing-rules-are-shared-domain-decisions.md)): ninguna
-escritura interna del servidor (la creación o copia de un Roadmap, las fixtures de
-desarrollo, el Scheduled unlock release) pasa por estos comandos, así que ninguna tiene que
+Desde #281, como el canvas ya envía la versión en toda Acción confirmada con Impacto del
+cambio, el servidor la exige para eliminar, ocultar, desbloquear y bloquear un Nodo y para
+crear una Dependencia. Una confirmación sin versión se rechaza como una obsoleta: 409 con
+el mismo código. Mostrar un Nodo no tiene Impacto del cambio y no la necesita. La regla
+vive en la decisión de dominio que comparten el servidor y el Mapa de práctica
+([ADR-0028](0028-roadmap-editing-rules-are-shared-domain-decisions.md)): ninguna escritura
+interna del servidor (la creación o copia de un Roadmap, las fixtures de desarrollo, la
+liberación de un Desbloqueo programado) pasa por estos comandos, así que ninguna tiene que
 inventar una versión.
