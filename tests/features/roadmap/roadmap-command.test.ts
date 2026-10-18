@@ -1,9 +1,7 @@
 // @vitest-environment node
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
 import { randomUUID } from 'node:crypto';
-import { beforeAll, expect, onTestFinished, vi } from 'vitest';
+import { expect, onTestFinished, vi } from 'vitest';
 import {
   student,
   teacher,
@@ -36,8 +34,6 @@ import {
   uploadRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
-
-beforeAll(databaseSetup, 60_000);
 
 /** Starts the four editor previews, over the course's Node and a second Node. */
 async function editorPreviews(course: IntegrationCourse) {

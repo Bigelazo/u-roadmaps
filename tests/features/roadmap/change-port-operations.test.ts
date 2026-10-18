@@ -1,8 +1,6 @@
 // @vitest-environment node
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
-import { beforeAll, expect } from 'vitest';
+import { expect } from 'vitest';
 import { teacher, test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma } from '@/shared/server/db';
 import { recordingChangePort } from './support/recording-change-port';
@@ -27,8 +25,6 @@ import {
 import { createRoadmap } from '@/features/roadmap/application/roadmap';
 import { materializeParticipation } from '@/features/roadmap/application/academic-participation';
 import { teacherEdits } from '../../notifications-integration/roadmap';
-
-beforeAll(databaseSetup, 60_000);
 
 async function addNode(course: IntegrationCourse, title = 'Pilas') {
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });

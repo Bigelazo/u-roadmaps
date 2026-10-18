@@ -1,8 +1,6 @@
 // @vitest-environment node
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
-import { beforeAll, expect } from 'vitest';
+import { expect } from 'vitest';
 import { teacher, test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma } from '@/shared/server/db';
 import { recordingChangePort } from './support/recording-change-port';
@@ -16,8 +14,6 @@ import {
   previewTeacherBlock,
   updateRoadmapNode,
 } from '@/features/roadmap/server';
-
-beforeAll(databaseSetup, 60_000);
 
 function addNode(course: IntegrationCourse, title: string) {
   return prisma.roadmapNode.create({
