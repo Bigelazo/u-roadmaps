@@ -95,12 +95,36 @@ it('reports no access when U-Campus does not place the person in the offering', 
   process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockImplementation(() => Promise.resolve(mufasaResponse([]))),
+    vi
+      .fn()
+      .mockImplementation((url: URL) =>
+        Promise.resolve(
+          mufasaResponse(
+            url.toString().includes('cursos_inscritos')
+              ? [{ codigo: 'CC3002', nombre: 'Metodologías', ano: 2025, periodo: 1 }]
+              : [],
+          ),
+        ),
+      ),
   );
 
   await expect(readMufasaCourseAccess(user, identifier)).resolves.toEqual({
     access: null,
     isComplete: true,
+  });
+});
+
+it('reports no complete answer when U-Campus lists no course at all', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(() => Promise.resolve(mufasaResponse([]))),
+  );
+
+  await expect(readMufasaCourseAccess(user, identifier)).resolves.toEqual({
+    access: null,
+    isComplete: false,
   });
 });
 

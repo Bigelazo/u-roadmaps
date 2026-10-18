@@ -52,11 +52,24 @@ function reportHistory(userId: string, offerings: Reported[], { isComplete = tru
   });
 }
 
+/**
+ * An earlier offering of the same Course. A complete history is never empty, so a history
+ * that omits the test's offering still lists this one.
+ */
+const earlierOffering = ({ identifier }: IntegrationCourse) => ({
+  ...identifier,
+  year: identifier.year - 1,
+});
+
 const visitOverview = (userId: string) =>
   getAcademicOverviewApi({ id: userId, rut: rutOf(userId) });
 
-const offeringCodes = async (userId: string) =>
-  (await visitOverview(userId)).offerings.map(({ courseCode }) => courseCode);
+const overviewOfferings = async (userId: string) =>
+  (await visitOverview(userId)).offerings.map(({ courseCode, year, semester }) => ({
+    courseCode,
+    year,
+    semester,
+  }));
 
 const canRead = (userId: string, course: IntegrationCourse) =>
   readRoadmapForParticipant({ userId, identifier: course.identifier }).then(
@@ -74,19 +87,19 @@ test('a complete history that omits an offering deactivates its Participation', 
   await teacherEdits(course).rename(course.change.nodeId, 'Recursión');
   expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);
 
-  reportHistory(course.studentId, []);
-  expect(await offeringCodes(course.studentId)).toEqual([]);
+  reportHistory(course.studentId, [earlierOffering(course)]);
+  expect(await overviewOfferings(course.studentId)).toEqual([earlierOffering(course)]);
 
   expect(await canRead(course.studentId, course)).toBe(false);
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
   // During a later outage the overview falls back to active Participations only.
   reports.delete(rutOf(course.studentId));
-  expect(await offeringCodes(course.studentId)).toEqual([]);
+  expect(await overviewOfferings(course.studentId)).toEqual([earlierOffering(course)]);
 });
 
 test('teaching staff still see the Completions of a deactivated student', async ({ course }) => {
   await complete(course);
-  reportHistory(course.studentId, []);
+  reportHistory(course.studentId, [earlierOffering(course)]);
   await visitOverview(course.studentId);
 
   const ramoId = 4242;
@@ -108,28 +121,28 @@ test('a later complete history that reports the offering again reactivates it', 
   course,
 }) => {
   await complete(course);
-  reportHistory(course.studentId, []);
+  reportHistory(course.studentId, [earlierOffering(course)]);
   await visitOverview(course.studentId);
   expect(await canRead(course.studentId, course)).toBe(false);
 
   reportHistory(course.studentId, [course.identifier]);
-  expect(await offeringCodes(course.studentId)).toEqual([course.identifier.courseCode]);
+  expect(await overviewOfferings(course.studentId)).toEqual([course.identifier]);
   const roadmap = await readRoadmapForParticipant(student(course));
   expect(roadmap.nodes).toMatchObject([{ id: course.change.nodeId, isCompleted: true }]);
 });
 
 test('an incomplete or failed history deactivates nothing', async ({ course }) => {
   reportHistory(course.studentId, [], { isComplete: false });
-  expect(await offeringCodes(course.studentId)).toEqual([course.identifier.courseCode]);
+  expect(await overviewOfferings(course.studentId)).toEqual([course.identifier]);
   reports.delete(rutOf(course.studentId));
-  expect(await offeringCodes(course.studentId)).toEqual([course.identifier.courseCode]);
+  expect(await overviewOfferings(course.studentId)).toEqual([course.identifier]);
   expect(await canRead(course.studentId, course)).toBe(true);
 });
 
 test('teaching staff lose an omitted offering, but not one reported without a usable position', async ({
   course,
 }) => {
-  reportHistory(course.teacherId, []);
+  reportHistory(course.teacherId, [earlierOffering(course)]);
   await visitOverview(course.teacherId);
   expect(await canRead(course.teacherId, course)).toBe(false);
 
@@ -153,7 +166,7 @@ test('entering one offering deactivates it only when a complete report omits it'
   await enter(course.classmateId);
   expect(await canRead(course.classmateId, course)).toBe(true);
 
-  reportHistory(course.studentId, []);
+  reportHistory(course.studentId, [earlierOffering(course)]);
   await enter(course.studentId);
   expect(await canRead(course.studentId, course)).toBe(false);
 });
