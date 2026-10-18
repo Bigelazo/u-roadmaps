@@ -15,9 +15,9 @@ import {
 } from '@/features/roadmap/application/validation';
 import {
   deleteUploadedFile,
-  saveUploadedFile,
   validateUploadedFile,
 } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { withStoredFiles } from '@/features/roadmap/infrastructure/resources/lifecycle';
 import { resourceEditError, fileResourceUrl } from '@/features/roadmap/domain/resource';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
@@ -125,16 +125,13 @@ export async function uploadRoadmapResource(
   // A refused editor, or a closed Roadmap, never writes bytes; the record decides again.
   await roadmapRead(participant, 'edit', async () => undefined);
   const fileKey = crypto.randomUUID();
-  await saveUploadedFile(fileKey, file);
-  try {
-    return await createUploadedResource(
+  return withStoredFiles('upload Resource', async (files) => {
+    await files.upload(fileKey, file);
+    return createUploadedResource(
       { ...participant, nodeId, title, fileKey, fileContentType: file.type || null },
       changePort,
     );
-  } catch (error) {
-    await deleteUploadedFile(fileKey);
-    throw error;
-  }
+  });
 }
 
 export const updateRoadmapResource = roadmapCommand({
