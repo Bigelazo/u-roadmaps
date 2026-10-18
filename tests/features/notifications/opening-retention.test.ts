@@ -10,7 +10,7 @@ const { transaction, prisma } = vi.hoisted(() => {
       upsert: vi.fn(),
       deleteMany: vi.fn(),
     },
-    roadmapNotice: { findMany: vi.fn(), updateMany: vi.fn() },
+    roadmapNotice: { findMany: vi.fn(), update: vi.fn() },
     roadmapNode: { findMany: vi.fn() },
     noticeKnownValue: { findMany: vi.fn() },
     dependency: { findMany: vi.fn() },
@@ -68,10 +68,9 @@ test('creating a Roadmap opening prunes only that recipient before the 24-hour c
     data: expect.objectContaining({
       recipientId,
       openedAt: new Date('2026-10-06T12:00:00.000Z'),
-      noticeIds: ['notice-before'],
     }),
   });
-  expect(transaction.roadmapNotice.updateMany).not.toHaveBeenCalled();
+  expect(transaction.roadmapNotice.update).not.toHaveBeenCalled();
 });
 
 test('recognizing a pruned opening fails without recognizing any notices', async () => {
@@ -80,5 +79,5 @@ test('recognizing a pruned opening fails without recognizing any notices', async
   ).rejects.toMatchObject({
     status: 404,
   });
-  expect(transaction.roadmapNotice.updateMany).not.toHaveBeenCalled();
+  expect(transaction.roadmapNotice.update).not.toHaveBeenCalled();
 });

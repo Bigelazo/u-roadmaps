@@ -46,7 +46,7 @@ export function noticeRecord(notice: {
   availableAt: Date;
   acknowledgedAt: Date | null;
 }) {
-  // Lifecycle notices are worded at read time; other rows keep their stored text.
+  // Notices are worded at read time; a row without stored values keeps its cached text.
   const projected = projectTargetNotice(notice.data);
   return {
     id: notice.id,
@@ -242,7 +242,6 @@ export async function prepareOwnNoticeOpening(
         operationId,
         roadmapId,
         openedAt,
-        noticeIds: notices.map(({ id }) => id),
         snapshots: await entryTargetSnapshots(transaction, userId, roadmapId, notices, accessible),
         summary: changeSummary(roadmap.courseOffering.courseCode, notices, nodes, accessible),
       },
@@ -299,33 +298,19 @@ export async function acknowledgeOwnNotices(
       },
       update: { lastRecognizedOpeningSequence: retained.openingSequence },
     });
-    const result = await transaction.roadmapNotice.updateMany({
-      where: {
-        recipientId: userId,
-        roadmapId,
-        acknowledgedAt: null,
-        targetKey: null,
-        id: { in: retained.noticeIds },
-      },
-      data: { acknowledgedAt: new Date() },
-    });
-    const targetCount = await recognizeTargetSnapshots(transaction, {
+    const count = await recognizeTargetSnapshots(transaction, {
       recipientId: userId,
       roadmapId,
       operationId,
       snapshots: retained.snapshots,
       readAccess,
     });
-    const summary =
-      visited && result.count + targetCount > 0 ? (retained.summary as ChangeSummary | null) : null;
+    const summary = visited && count > 0 ? (retained.summary as ChangeSummary | null) : null;
     await transaction.noticeAcknowledgement.update({
       where: { recipientId_operationId: { recipientId: userId, operationId } },
       data: { recognizedAt: new Date(), summary: summary ?? Prisma.JsonNull },
     });
-    return {
-      count: result.count + targetCount,
-      summary,
-    };
+    return { count, summary };
   });
   return { acknowledged: result.count, summary: result.summary };
 }

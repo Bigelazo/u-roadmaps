@@ -60,7 +60,7 @@ export function descriptorForNoticeTarget(noticeTarget: unknown) {
   );
 }
 
-/** The descriptor and stored values of a lifecycle notice; null for any other notice row. */
+/** The descriptor and stored values of a notice; null for a row without them. */
 export function storedTargetValues(
   data: unknown,
 ): { descriptor: NoticeTargetDescriptor; values: TargetValues } | null {
@@ -99,8 +99,8 @@ export function noticeActorLabel(data: unknown): { actorName?: string } {
 }
 
 /**
- * Read-time projection of a lifecycle notice: its text and API data come from the
- * descriptor, so wording changes need no migration. Other rows keep their stored text.
+ * Read-time projection of a notice: its text and API data come from the descriptor, so
+ * wording changes need no migration; null for a row without stored values.
  * `live` overrides stored presentation context (e.g. the current Node title).
  */
 export function projectTargetNotice<D>(
