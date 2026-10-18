@@ -57,7 +57,7 @@ test('an edit details only a title change, and edited then removed names the kno
   const edits = teacherEdits(course);
   const resource = await edits.addResource(course.change.nodeId, 'Guía 3');
   await enterRoadmap(course.studentId, course.roadmapId);
-  await edits.editResource(resource.id, { url: 'https://example.test/revised', type: 'VIDEO' });
+  await edits.editResource(resource.id, { url: 'https://example.test/revised', type: 'LINK' });
   const [edited] = await pendingResources(course.studentId, course);
   expect(edited).toMatchObject({
     subject: 'Guía 3',
@@ -92,7 +92,7 @@ test('restoring the known title, URL and type withdraws the Resource notice', as
   await edits.editResource(resource.id, {
     title: 'Otra',
     url: 'https://example.test/revised',
-    type: 'VIDEO',
+    type: 'LINK',
   });
   expect(await pendingResources(course.studentId, course)).toHaveLength(1);
   await edits.editResource(resource.id, {

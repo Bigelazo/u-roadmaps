@@ -126,7 +126,7 @@ test('restoring Resource title URL and type withdraws the known-content notice',
   const path = course.apiPath(`/resources/${resource.id}`);
   await ok(
     await author.patch(path, {
-      data: { title: 'Renamed', url: 'https://example.test/revised', type: 'VIDEO' },
+      data: { title: 'Renamed', url: 'https://example.test/revised', type: 'LINK' },
     }),
   );
   await expect.poll(notices).toHaveLength(1);

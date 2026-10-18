@@ -230,7 +230,6 @@ model SimulatedCompletion {
 enum ResourceType {
   FILE
   LINK
-  VIDEO
 }
 
 enum ParticipationRole {

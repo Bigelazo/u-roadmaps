@@ -19,6 +19,12 @@ for (const width of [1440, 390]) {
     });
     await ok(response, 201);
     const { resource } = await response.json();
+    await ok(
+      await api.post(course.apiPath(`/nodes/${course.nodes.first}/resources`), {
+        data: { title: 'Video como enlace', url: 'https://example.test/video', type: 'LINK' },
+      }),
+      201,
+    );
     await authenticateAs(page.context(), course.users.teacher.id);
     await page.goto(course.pagePath());
     await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
@@ -34,6 +40,16 @@ for (const width of [1440, 390]) {
     ).toBeVisible();
     const row = editor.getByRole('listitem').filter({ hasText: resource.title });
     await expect(row.locator('[data-slot="item-media"] svg')).toBeVisible();
+    await expect(row.getByText('Archivo', { exact: true })).toBeVisible();
+    await expect(
+      editor
+        .getByRole('listitem')
+        .filter({ hasText: 'Video como enlace' })
+        .getByText('Enlace', { exact: true }),
+    ).toBeVisible();
+    const resources = editor.getByRole('list', { name: 'Recursos del nodo' });
+    await resources.scrollIntoViewIfNeeded();
+    await resources.screenshot({ path: testInfo.outputPath('file-link-rendering.png') });
     await row.getByRole('button', { name: `Editar recurso ${resource.title}` }).click();
     const form = editor.getByRole('form', { name: 'Editor de recurso' });
     const title = form.getByRole('textbox', { name: 'Título', exact: true });

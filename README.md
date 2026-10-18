@@ -46,7 +46,7 @@ Cada curso se identifica por el código del ramo, el año y el semestre, y tiene
 
 ### Recursos pedagógicos
 
-- Recursos de tipo archivo, enlace o video, asociados a un nodo.
+- Recursos de tipo Archivo subido o Enlace externo, asociados a un nodo. Los videos y archivos alojados fuera de U-Roadmaps son Enlaces.
 - Creación, edición y eliminación de referencias externas con título y URL HTTP/HTTPS.
 - Subida de archivos de hasta 25 MB y descarga mediante rutas que comprueban el acceso al curso y al nodo.
 - Almacenamiento de archivos subidos en el directorio `uploads/`; PostgreSQL conserva sus metadatos.

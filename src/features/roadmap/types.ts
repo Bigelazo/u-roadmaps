@@ -11,7 +11,7 @@ export type Resource = {
   id: string;
   title: string;
   url: string;
-  type: 'FILE' | 'LINK' | 'VIDEO';
+  type: 'FILE' | 'LINK';
 };
 
 export type NodeType = {
