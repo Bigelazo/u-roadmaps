@@ -11,34 +11,10 @@ type PendingNotice = {
   availableAt: Date;
 };
 
-// The newest target also supplies the row's cursor identity. Group before paging
-// so a Roadmap cannot be split across pages or cross the threshold per page.
-export function groupRoadmapNotices(notices: readonly PendingNotice[]): PendingNotice[] {
-  const ordered = [...notices].sort(
-    (a, b) => b.availableAt.getTime() - a.availableAt.getTime() || b.id.localeCompare(a.id),
-  );
-  const byRoadmap = new Map<string, PendingNotice[]>();
-  for (const notice of ordered) {
-    if ((notice.data as Record<string, NoticeData> | null)?.changeKind === 'roadmap-available')
-      continue;
-    const targets = byRoadmap.get(notice.roadmapId) ?? [];
-    targets.push(notice);
-    byRoadmap.set(notice.roadmapId, targets);
-  }
-  return ordered.flatMap((notice) => {
-    const targets = byRoadmap.get(notice.roadmapId);
-    if (
-      (notice.data as Record<string, NoticeData> | null)?.changeKind === 'roadmap-available' ||
-      !targets ||
-      targets.length < 3
-    )
-      return [notice];
-    if (targets[0].id !== notice.id) return [];
-    return [groupedRoadmapNotice(notice, targets.length)];
-  });
-}
-
-/** Project a grouped row after either in-memory or database aggregation. */
+/**
+ * The Grouped roadmap notice the Inbox shows in place of a Roadmap's pending targets,
+ * projected from the newest one.
+ */
 export function groupedRoadmapNotice(notice: PendingNotice, count: number): PendingNotice {
   const data = notice.data as Record<string, NoticeData>;
   return {
@@ -51,8 +27,6 @@ export function groupedRoadmapNotice(notice: PendingNotice, count: number): Pend
       year: data.year,
       semester: data.semester,
       occurredAt: notice.availableAt.toISOString(),
-      changeKind: 'roadmap-grouped',
-      targetKind: 'roadmap',
       targetCount: count,
     },
   };

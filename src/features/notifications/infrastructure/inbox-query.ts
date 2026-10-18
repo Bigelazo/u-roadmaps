@@ -2,6 +2,7 @@ import 'server-only';
 import { prisma, Prisma } from '@/shared/server/db';
 import { groupedRoadmapNotice } from '../application/group-roadmap-notices';
 import { noticeTargetDescriptors, type ShownTo } from '../application/notice-targets';
+import { NOTICE_TARGET } from '../application/notice-targets/kinds';
 
 export type InboxFilter = {
   roadmapId?: string;
@@ -21,6 +22,7 @@ type InboxNotice = {
   availableAt: Date;
   acknowledgedAt: Date | null;
   targetCount: bigint;
+  isGroup: boolean;
 };
 
 /**
@@ -117,30 +119,26 @@ export async function queryInboxPage(
     cursor,
   }: { limit: number; grouped: boolean; cursor: { id: string; availableAt: Date } | null },
 ) {
+  // Roadmap availability stands alone: it never joins a Grouped roadmap notice.
+  const standalone = Prisma.sql`data->>'noticeTarget' = ${NOTICE_TARGET.roadmapAvailability}`;
   const rows = await prisma.$queryRaw<InboxNotice[]>(Prisma.sql`
     ${visibleNotices(recipient, filter)}, ranked AS (
-      SELECT visible.*,
-        count(*) OVER (PARTITION BY "roadmapId", COALESCE(data->>'changeKind' = 'roadmap-available', FALSE)) AS "targetCount",
-        row_number() OVER (PARTITION BY "roadmapId", COALESCE(data->>'changeKind' = 'roadmap-available', FALSE)
-          ORDER BY "availableAt" DESC, id DESC) AS position
-      FROM visible
+      SELECT visible.*, ${standalone} AS standalone,
+        count(*) OVER roadmap AS "targetCount",
+        row_number() OVER (roadmap ORDER BY "availableAt" DESC, id DESC) AS position
+      FROM visible WINDOW roadmap AS (PARTITION BY "roadmapId", ${standalone})
     )
-    SELECT id, "roadmapId", "courseName", subject, body, data, "availableAt", "acknowledgedAt", "targetCount"
+    SELECT id, "roadmapId", "courseName", subject, body, data, "availableAt", "acknowledgedAt",
+      "targetCount", ${grouped} AND NOT standalone AND "targetCount" >= 3 AS "isGroup"
     FROM ranked WHERE (
-      NOT ${grouped} OR data->>'changeKind' = 'roadmap-available' OR "targetCount" < 3 OR position = 1
+      NOT ${grouped} OR standalone OR "targetCount" < 3 OR position = 1
     ) ${cursor ? Prisma.sql`AND ("availableAt", id) < (${cursor.availableAt}, ${cursor.id}::uuid)` : Prisma.empty}
     ORDER BY "availableAt" DESC, id DESC LIMIT ${limit + 1}
   `);
   return {
     notices: rows
       .slice(0, limit)
-      .map((row) =>
-        grouped &&
-        Number(row.targetCount) >= 3 &&
-        (row.data as Record<string, unknown>)?.changeKind !== 'roadmap-available'
-          ? groupedRoadmapNotice(row, Number(row.targetCount))
-          : row,
-      ),
+      .map((row) => (row.isGroup ? groupedRoadmapNotice(row, Number(row.targetCount)) : row)),
     hasMore: rows.length > limit,
   };
 }
