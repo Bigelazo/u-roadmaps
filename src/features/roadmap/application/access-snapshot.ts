@@ -83,6 +83,7 @@ export async function readAccessSnapshot(
         ...(recipientId ? { userId: recipientId } : {}),
       },
       select: { userId: true, role: true, isActive: true },
+      orderBy: { userId: 'asc' },
     }),
   ]);
   const studentIds = participants
