@@ -44,7 +44,13 @@ vi.mock('@xyflow/react', () => ({
     onMoveEnd,
     children,
   }: {
-    nodes: { id: string; position: { x: number; y: number }; data: object; selected?: boolean }[];
+    nodes: {
+      id: string;
+      position: { x: number; y: number };
+      data: object;
+      selected?: boolean;
+      measured?: { width?: number; height?: number };
+    }[];
     onNodesChange: (changes: unknown[]) => void;
     onNodeClick: (event: { currentTarget: HTMLElement }, node: (typeof nodes)[number]) => void;
     onConnect?: (connection: {
@@ -80,7 +86,26 @@ vi.mock('@xyflow/react', () => ({
             {`${node.position.x},${node.position.y}`}
           </output>
         ))}
+        {nodes.map((node) => (
+          <output key={node.id} data-testid={`node-measured-${node.id}`}>
+            {node.measured ? `${node.measured.width}x${node.measured.height}` : ''}
+          </output>
+        ))}
         <output data-testid="selected-node">{nodes.find((node) => node.selected)?.id ?? ''}</output>
+        <button
+          type="button"
+          onClick={() =>
+            onNodesChange(
+              nodes.map((node) => ({
+                id: node.id,
+                type: 'dimensions',
+                dimensions: { width: 180, height: 80 },
+              })),
+            )
+          }
+        >
+          Medir nodos
+        </button>
         <button
           type="button"
           onClick={() =>
@@ -193,14 +218,19 @@ vi.mock('@xyflow/react', () => ({
   },
   applyEdgeChanges: <T,>(changes: T[], edges: T[]) => edges,
   applyNodeChanges: <T extends { id: string; position: { x: number; y: number } }>(
-    changes: { id: string; type: string; position?: { x: number; y: number } }[],
+    changes: {
+      id: string;
+      type: string;
+      position?: { x: number; y: number };
+      dimensions?: { width: number; height: number };
+    }[],
     nodes: T[],
   ) =>
     nodes.map((node) => {
-      const change = changes.find(
-        (candidate) => candidate.id === node.id && candidate.type === 'position',
-      );
-      return change?.position ? { ...node, position: change.position } : node;
+      const change = changes.find((candidate) => candidate.id === node.id);
+      if (change?.position) return { ...node, position: change.position };
+      if (change?.dimensions) return { ...node, measured: change.dimensions };
+      return node;
     }),
   useReactFlow: () => ({
     fitView: fitViewMock,
@@ -447,6 +477,21 @@ test('keeps the selected node when refreshed roadmap data arrives', () => {
   rerender(<GraphHarness initialSelectedNodeId="node-2" roadmapData={updatedRoadmap} />);
 
   expect(screen.getByTestId('selected-node').textContent).toBe('node-2');
+});
+
+test('keeps the dimensions React Flow measured when refreshed roadmap data arrives', async () => {
+  const user = userEvent.setup();
+  const updatedRoadmap = structuredClone(roadmap);
+  updatedRoadmap.nodes[1].isTeacherBlocked = true;
+  const { rerender } = render(<GraphHarness />);
+  await user.click(screen.getByRole('button', { name: 'Medir nodos' }));
+  expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
+
+  rerender(<GraphHarness roadmapData={updatedRoadmap} />);
+
+  // React Flow hides a Node without dimensions and does not always measure it again.
+  expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
+  expect(screen.getByTestId('node-measured-node-2').textContent).toBe('180x80');
 });
 
 test('preserves the viewport when the editor panel width changes', async () => {

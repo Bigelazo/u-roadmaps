@@ -169,6 +169,22 @@ function mapProjectionToFlow(
   return { nodes, edges };
 }
 
+/**
+ * Keeps the size React Flow measured for each Node a new projection still shows: React Flow
+ * hides a Node that arrives without `measured` and drops its handle bounds until it measures
+ * the Node again.
+ */
+function keepMeasuredNodes(
+  flow: ReturnType<typeof mapProjectionToFlow>,
+  current: ReturnType<typeof mapProjectionToFlow>,
+) {
+  const measuredById = new Map(current.nodes.map((node) => [node.id, node.measured]));
+  return {
+    ...flow,
+    nodes: flow.nodes.map((node) => ({ ...node, measured: measuredById.get(node.id) })),
+  };
+}
+
 function isRoadmapDependencyHandle(
   value: string,
 ): value is (typeof roadmapDependencyHandles)[number] {
@@ -614,13 +630,16 @@ function useRoadmapGraphController({
   );
 
   useEffect(() => {
-    setFlow(
-      mapProjectionToFlow(
-        stableProjection,
-        deleteDependency,
-        selectedNodeIdRef.current,
-        actionMenu,
-        notificationsEnabled,
+    setFlow((current) =>
+      keepMeasuredNodes(
+        mapProjectionToFlow(
+          stableProjection,
+          deleteDependency,
+          selectedNodeIdRef.current,
+          actionMenu,
+          notificationsEnabled,
+        ),
+        current,
       ),
     );
   }, [actionMenu, deleteDependency, notificationsEnabled, stableProjection]);
