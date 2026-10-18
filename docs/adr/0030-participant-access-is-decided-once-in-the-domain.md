@@ -21,7 +21,9 @@ reciba su resultado.
    descripción, los Resources y la completación no. La usan las lecturas del servidor
    (Roadmap del estudiante, **Canvas preview**, Completion y Resources), la instantánea de
    acceso, notifications y el Practice roadmap. El equipo docente, como destinatario de
-   avisos, tiene su propia rama explícita: Nodos visibles sin **Teacher block**.
+   avisos, tiene su propia rama explícita: Nodos visibles sin **Teacher block**. Esa rama
+   decide su Acceso al Nodo; en los demás avisos de un Nodo, la visibilidad y el Bloqueo
+   docente no lo limitan (decisión 3).
 2. **El SQL del Inbox conserva agrupar antes de paginar, contar y las Node change marks,
    pero recibe los ids de los Nodos accesibles** del destinatario y nunca reimplementa la
    regla de bloqueo.
@@ -32,6 +34,17 @@ reciba su resultado.
    leen esa declaración. Una fila que ningún descriptor posee nunca se muestra: desde #272
    una migración borró esas filas y los campos heredados `changeKind`, `changedFields` y
    `targetKind`, de modo que todo aviso guardado pertenece a un Notice target.
+
+   La declaración se evalúa con un único dato más del destinatario: su Rol de
+   participación. Para el equipo docente (`TEACHER`), todo Nodo existente es visible y se
+   puede abrir en `node-viewers`, `node-openers` y `dependency-viewers`
+   ([ADR-0014](0014-target-based-notice-grouping.md), decisiones 10 y 14.5); `everyone` y
+   `node-type-viewers` no cambian, y cualquier otro rol recibe la regla del estudiante. La
+   regla vive en `seesEveryNode`: el evaluador en TypeScript la recibe con el rol, y el
+   `CASE` del Inbox lee el rol de la Participación que ya une. El test de paridad del Inbox
+   compara ambos para estudiantes y equipo docente. Las audiencias y los Valores conocidos
+   aplican la misma regla mediante los helpers compartidos de los descriptores, que leen
+   el rol desde la vista del Roadmap.
 
 ## Alternativas descartadas
 
