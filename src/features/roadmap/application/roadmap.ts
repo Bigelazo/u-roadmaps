@@ -12,9 +12,9 @@ import {
 } from '../domain/roadmap-copy';
 import type { VersionIdentifier } from '@/shared/version-history-url';
 import {
-  copyUploadedFile,
-  deleteUploadedFile,
-} from '@/features/roadmap/infrastructure/resources/filesystem';
+  withStoredFiles,
+  type ProvisionalStoredFiles,
+} from '@/features/roadmap/infrastructure/resources/lifecycle';
 
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import type { NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
@@ -130,42 +130,6 @@ function parseCopySource(
   };
 }
 
-/** Stored files duplicated for a creation, removable if that creation fails. */
-function fileCopyLedger() {
-  const copied: string[] = [];
-  return {
-    /**
-     * Duplicates every file's bytes and returns the keys stored; a source file
-     * missing from storage is skipped. Waits for every copy before failing, so
-     * no copy finishes after a rollback.
-     */
-    async copyAll(copies: readonly { sourceFileKey: string; fileKey: string }[]) {
-      // Fresh keys are only ever ours, and a failed copy can leave partial bytes.
-      copied.push(...copies.map(({ fileKey }) => fileKey));
-      const results = await Promise.allSettled(
-        copies.map(({ sourceFileKey, fileKey }) => copyUploadedFile(sourceFileKey, fileKey)),
-      );
-      const failure = results.find((result) => result.status === 'rejected');
-      if (failure) throw failure.reason;
-      return new Set(
-        copies
-          .filter((_, index) => (results[index] as PromiseFulfilledResult<boolean>).value)
-          .map(({ fileKey }) => fileKey),
-      );
-    },
-    rollback() {
-      return Promise.all(
-        copied.map((fileKey) =>
-          deleteUploadedFile(fileKey).catch((error) =>
-            console.warn('Copied file cleanup failed', { fileKey, error }),
-          ),
-        ),
-      );
-    },
-  };
-}
-type FileCopyLedger = ReturnType<typeof fileCopyLedger>;
-
 /**
  * Writes a frozen version's content into the new Roadmap, recording it as the source.
  * File bytes are duplicated first; a file missing from storage omits its Resource.
@@ -175,7 +139,7 @@ async function persistRoadmapCopy(
   roadmapId: string,
   sourceVersion: { roadmapId: string; year: number; semester: number },
   source: RoadmapCopySource,
-  files: FileCopyLedger,
+  files: ProvisionalStoredFiles,
 ) {
   const plan = planRoadmapCopy(source, roadmapId, randomUUID);
   const storedFileKeys = await files.copyAll(plan.fileCopies);
@@ -201,7 +165,7 @@ async function copyFrozenVersion(
   identifier: CourseOfferingIdentifier,
   source: VersionIdentifier,
   roadmapId: string,
-  files: FileCopyLedger,
+  files: ProvisionalStoredFiles,
 ) {
   const missing = new ApplicationError(
     404,
@@ -283,78 +247,77 @@ export async function createRoadmap(
       ? (body.course as JsonObject)
       : undefined;
   const source = parseCopySource(body.source, identifier);
-  const files = fileCopyLedger();
 
-  return roadmapChangeTransaction(
-    changePort,
-    async (transaction, report) => {
-      const [existingCourse, existingCourseOffering] = await Promise.all([
-        transaction.course.findUnique({ where: { code: identifier.courseCode } }),
-        transaction.courseOffering.findUnique({
-          where: {
-            courseCode_year_semester: identifier,
-          },
-          include: { roadmap: true },
-        }),
-      ]);
-      if (existingCourseOffering?.roadmap) throw roadmapConflict();
-      const term = await transaction.academicTerm.findUnique({
-        where: { year_semester: { year: identifier.year, semester: identifier.semester } },
-      });
-      if (
-        isPastRoadmapClosure(
-          identifier,
-          term?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
-          new Date(),
-        )
-      ) {
-        throw roadmapClosed('El período de este curso terminó. No se puede crear un roadmap.');
-      }
-      const name =
-        courseBody?.name === undefined && existingCourse
-          ? existingCourse.name
-          : requireString(courseBody?.name, 'name', 200);
-      const department =
-        courseBody?.department === undefined && existingCourse
-          ? existingCourse.department
-          : requireString(courseBody?.department, 'department', 200);
-      const course = await transaction.course.upsert({
-        where: { code: identifier.courseCode },
-        update: { name, department },
-        create: { code: identifier.courseCode, name, department },
-      });
-      const materializedCourseOffering =
-        existingCourseOffering ??
-        (await transaction.courseOffering.create({
-          data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
-        }));
-      const roadmap = await transaction.roadmap.create({
-        data: { courseOfferingId: materializedCourseOffering.id, creatorId: actor.id },
-      });
-      if (source) await copyFrozenVersion(transaction, identifier, source, roadmap.id, files);
-      await report({
-        actorId: actor.id,
-        identifier,
-        roadmapId: roadmap.id,
-        facts: [
-          {
-            kind: 'roadmap-created',
-            previous: null,
-            current: {
-              courseOfferingId: materializedCourseOffering.id,
-              courseName: course.name,
-              actorName: actor.name ?? actor.id,
-              occurredAt: new Date(),
+  return withStoredFiles('create Roadmap', (files) =>
+    roadmapChangeTransaction(
+      changePort,
+      async (transaction, report) => {
+        const [existingCourse, existingCourseOffering] = await Promise.all([
+          transaction.course.findUnique({ where: { code: identifier.courseCode } }),
+          transaction.courseOffering.findUnique({
+            where: {
+              courseCode_year_semester: identifier,
             },
-          },
-        ],
-      });
-      return { roadmap };
-    },
-    copyTransactionOptions,
-  ).catch(async (error) => {
-    // Only an uncommitted creation discards its copied bytes.
-    await files.rollback();
+            include: { roadmap: true },
+          }),
+        ]);
+        if (existingCourseOffering?.roadmap) throw roadmapConflict();
+        const term = await transaction.academicTerm.findUnique({
+          where: { year_semester: { year: identifier.year, semester: identifier.semester } },
+        });
+        if (
+          isPastRoadmapClosure(
+            identifier,
+            term?.roadmapFreezeDate.toISOString().slice(0, 10) ?? null,
+            new Date(),
+          )
+        ) {
+          throw roadmapClosed('El período de este curso terminó. No se puede crear un roadmap.');
+        }
+        const name =
+          courseBody?.name === undefined && existingCourse
+            ? existingCourse.name
+            : requireString(courseBody?.name, 'name', 200);
+        const department =
+          courseBody?.department === undefined && existingCourse
+            ? existingCourse.department
+            : requireString(courseBody?.department, 'department', 200);
+        const course = await transaction.course.upsert({
+          where: { code: identifier.courseCode },
+          update: { name, department },
+          create: { code: identifier.courseCode, name, department },
+        });
+        const materializedCourseOffering =
+          existingCourseOffering ??
+          (await transaction.courseOffering.create({
+            data: { courseCode: course.code, year: identifier.year, semester: identifier.semester },
+          }));
+        const roadmap = await transaction.roadmap.create({
+          data: { courseOfferingId: materializedCourseOffering.id, creatorId: actor.id },
+        });
+        if (source) await copyFrozenVersion(transaction, identifier, source, roadmap.id, files);
+        await report({
+          actorId: actor.id,
+          identifier,
+          roadmapId: roadmap.id,
+          facts: [
+            {
+              kind: 'roadmap-created',
+              previous: null,
+              current: {
+                courseOfferingId: materializedCourseOffering.id,
+                courseName: course.name,
+                actorName: actor.name ?? actor.id,
+                occurredAt: new Date(),
+              },
+            },
+          ],
+        });
+        return { roadmap };
+      },
+      copyTransactionOptions,
+    ),
+  ).catch((error) => {
     // A concurrent creation (double click, two tabs) committed first.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
       throw roadmapConflict();
