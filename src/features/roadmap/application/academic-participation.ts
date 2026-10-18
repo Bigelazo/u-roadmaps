@@ -62,13 +62,6 @@ export async function readMufasaCourseAccess(
   };
 }
 
-export async function getMufasaCourseAccess(
-  user: AcademicUser,
-  identifier: CourseOfferingIdentifier,
-) {
-  return (await readMufasaCourseAccess(user, identifier)).access;
-}
-
 /** Materializes the institutionally reported participation for one offering. */
 export async function materializeParticipation(
   user: AcademicUser,
