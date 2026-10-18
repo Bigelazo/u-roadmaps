@@ -7,7 +7,7 @@ import {
   type RoadmapParticipant,
   type RoadmapReadContext,
 } from '@/features/roadmap/application/roadmap-command';
-import { readUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { readStoredFile } from '@/features/roadmap/infrastructure/resources/lifecycle';
 import { nodeNotFound, resourceNotFound } from '@/features/roadmap/application/errors';
 import { requireUuid } from '@/shared/validation';
 
@@ -58,13 +58,9 @@ export async function downloadRoadmapResource({
     return { fileKey, fileContentType, title };
   });
   // The stored bytes are read after the snapshot, outside the transaction.
-  try {
-    return {
-      bytes: await readUploadedFile(resource.fileKey),
-      contentType: resource.fileContentType ?? 'application/octet-stream',
-      title: resource.title,
-    };
-  } catch {
-    throw resourceNotFound('El archivo ya no está disponible.');
-  }
+  return {
+    bytes: await readStoredFile(resource.fileKey),
+    contentType: resource.fileContentType ?? 'application/octet-stream',
+    title: resource.title,
+  };
 }

@@ -1,6 +1,13 @@
 import 'server-only';
 
-import { copyUploadedFile, createStoredFile, deleteUploadedFile } from './filesystem';
+import { ApplicationError } from '@/shared/errors/types';
+
+import {
+  copyUploadedFile,
+  createStoredFile,
+  deleteUploadedFile,
+  readUploadedFile,
+} from './filesystem';
 
 export type ProvisionalStoredFiles = {
   upload(fileKey: string, file: File): Promise<void>;
@@ -86,5 +93,15 @@ export async function withStoredFiles<Result>(
     await Promise.allSettled(started);
     await cleanupStoredFiles(operation, owned);
     throw error;
+  }
+}
+
+/** Only absent bytes are unavailable material; storage faults keep their original cause. */
+export async function readStoredFile(fileKey: string) {
+  try {
+    return await readUploadedFile(fileKey);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
   }
 }

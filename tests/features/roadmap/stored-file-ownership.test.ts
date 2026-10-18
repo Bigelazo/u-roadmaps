@@ -7,26 +7,35 @@ import { teacher, test } from '../../notifications-integration/fixtures';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { readdir, rm, readFile } from 'node:fs/promises';
+import { readdir, rm, readFile, mkdir } from 'node:fs/promises';
 
 const faults = vi.hoisted(() => ({
+  userId: '',
   partialUpload: false,
   closeFailure: false,
   collision: false,
   cleanupFailure: false,
   cleanupOne: false,
   cleanupPath: '',
+  cleanupPaths: [] as string[],
   copyFailure: false,
   lateSource: '',
   fastSource: '',
   lateSettled: false,
+}));
+vi.mock('@/app/_adapters/auth', () => ({
+  requireAuthenticatedUser: async () => ({ id: faults.userId, rut: null }),
 }));
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof import('node:fs/promises')>();
   return {
     ...fs,
     rm: async (...args: Parameters<typeof fs.rm>) => {
-      if (faults.cleanupFailure || String(args[0]) === faults.cleanupPath)
+      if (
+        faults.cleanupFailure ||
+        String(args[0]) === faults.cleanupPath ||
+        faults.cleanupPaths.includes(String(args[0]))
+      )
         throw new Error('cleanup disk failure');
       return fs.rm(...args);
     },
@@ -74,10 +83,19 @@ vi.mock('node:fs/promises', async (original) => {
 
 const directory = mkdtempSync(join(tmpdir(), 'resource-ownership-'));
 process.env.UPLOADS_DIRECTORY = relative(process.cwd(), directory);
-const { uploadRoadmapResource } = await import('@/features/roadmap/application/resources/commands');
+const { uploadRoadmapResource, removeRoadmapResource } =
+  await import('@/features/roadmap/application/resources/commands');
+const { deleteRoadmapNode, previewNodeDeletion } =
+  await import('@/features/roadmap/application/editor');
 const { createRoadmap } = await import('@/features/roadmap/application/roadmap');
 const { downloadRoadmapResource, getRoadmapNodeResources } =
   await import('@/features/roadmap/application/resources/queries');
+const { downloadRoadmapVersionResource } =
+  await import('@/features/roadmap/application/version-history');
+const { GET: courseDownload } =
+  await import('@/app/api/[courseCode]/[year]/[semester]/roadmap/resources/[resourceId]/file/route');
+const { GET: versionDownload } =
+  await import('@/app/api/[courseCode]/versions/[year]/[semester]/resources/[resourceId]/file/route');
 const { prisma } = await import('@/shared/server/db');
 const { recordingChangePort } = await import('./support/recording-change-port');
 beforeAll(databaseSetup, 60_000);
@@ -89,6 +107,7 @@ afterEach(async () => {
     cleanupFailure: false,
     cleanupOne: false,
     cleanupPath: '',
+    cleanupPaths: [],
     copyFailure: false,
     lateSource: '',
     fastSource: '',
@@ -96,7 +115,9 @@ afterEach(async () => {
   });
   vi.restoreAllMocks();
   await Promise.all(
-    (await readdir(directory)).map((key) => rm(join(directory, key), { force: true })),
+    (await readdir(directory)).map((key) =>
+      rm(join(directory, key), { force: true, recursive: true }),
+    ),
   );
 });
 afterAll(async () => {
@@ -122,6 +143,25 @@ async function upload(course: Parameters<typeof teacher>[0], id: string, content
   return uploadRoadmapResource(
     { ...teacher(course), id, file: new File([content], 'guide.txt') },
     recordingChangePort().port,
+  );
+}
+
+async function downloadResponse(
+  version: boolean,
+  course: Parameters<typeof teacher>[0],
+  resourceId: string,
+) {
+  faults.userId = course.teacherId;
+  return (version ? versionDownload : courseDownload)(
+    new Request('http://localhost/resource/file'),
+    {
+      params: Promise.resolve({
+        courseCode: course.identifier.courseCode,
+        year: String(course.identifier.year),
+        semester: String(course.identifier.semester),
+        resourceId,
+      }),
+    },
   );
 }
 
@@ -363,4 +403,240 @@ test('a close failure after a successful write fails and compensates the upload'
   expect(
     await getRoadmapNodeResources({ ...teacher(course), nodeId: course.change.nodeId }),
   ).toEqual([]);
+});
+
+test('committed Node deletion logs every failed cleanup and still cleans other files', async ({
+  course,
+}) => {
+  for (const content of ['First', 'Second', 'Third'])
+    await upload(course, course.change.nodeId, content);
+  const keys = await readdir(directory);
+  faults.cleanupPaths = keys.slice(0, 2).map((key) => join(directory, key));
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  const { version } = await previewNodeDeletion({ ...teacher(course), id: course.change.nodeId });
+  await expect(
+    deleteRoadmapNode(
+      { ...teacher(course), id: course.change.nodeId, previewVersion: version },
+      recordingChangePort().port,
+    ),
+  ).resolves.toEqual({});
+  expect((await readdir(directory)).sort()).toEqual(keys.slice(0, 2).sort());
+  await expect(
+    getRoadmapNodeResources({ ...teacher(course), nodeId: course.change.nodeId }),
+  ).rejects.toMatchObject({ code: 'NODE_NOT_FOUND' });
+  for (const fileKey of keys.slice(0, 2))
+    expect(warning).toHaveBeenCalledWith(
+      'Stored file cleanup failed',
+      expect.objectContaining({ operation: 'delete Node', fileKey, error: expect.any(Error) }),
+    );
+});
+
+test('committed Resource deletion remains successful and diagnoses retained bytes', async ({
+  course,
+}) => {
+  const resource = await upload(course, course.change.nodeId);
+  const [fileKey] = await readdir(directory);
+  faults.cleanupFailure = true;
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  await expect(
+    removeRoadmapResource({ ...teacher(course), id: resource.id }, recordingChangePort().port),
+  ).resolves.toEqual({});
+  expect(
+    await getRoadmapNodeResources({ ...teacher(course), nodeId: course.change.nodeId }),
+  ).toEqual([]);
+  expect(await readFile(join(directory, fileKey), 'utf8')).toBe('Contenido');
+  expect(warning).toHaveBeenCalledWith(
+    'Stored file cleanup failed',
+    expect.objectContaining({ operation: 'remove Resource', fileKey, error: expect.any(Error) }),
+  );
+});
+
+for (const version of [false, true]) {
+  test(`${version ? 'version history' : 'Course offering'} download preserves operational storage errors for the logged 500 response`, async ({
+    course,
+  }) => {
+    const resource = await upload(course, course.change.nodeId);
+    const [key] = await readdir(directory);
+    await rm(join(directory, key));
+    await mkdir(join(directory, key));
+    if (version)
+      await prisma.roadmap.update({
+        where: { id: course.roadmapId },
+        data: { closedAt: new Date() },
+      });
+    const download = () =>
+      version
+        ? downloadRoadmapVersionResource(
+            { id: course.teacherId, rut: null },
+            course.identifier,
+            resource.id,
+          )
+        : downloadRoadmapResource({ ...teacher(course), resourceId: resource.id });
+    await expect(download()).rejects.toMatchObject({ code: 'EISDIR' });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const response = await downloadResponse(version, course, resource.id);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ error: { code: 'INTERNAL_ERROR' } });
+    expect(errorLog).toHaveBeenCalledWith(expect.objectContaining({ code: 'EISDIR' }));
+    await rm(join(directory, key), { recursive: true });
+  });
+}
+
+for (const node of [false, true]) {
+  test(`${node ? 'Node' : 'Resource'} deletion rollback retains pre-existing downloadable bytes`, async ({
+    course,
+  }) => {
+    const resource = await upload(course, course.change.nodeId);
+    const request = { ...teacher(course), id: node ? course.change.nodeId : resource.id };
+    const refusal = {
+      async report(tx: import('@/shared/server/db').Prisma.TransactionClient) {
+        await tx.$executeRawUnsafe(`CREATE FUNCTION pg_temp.refuse_delete_commit() RETURNS trigger
+          LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'deletion commit refused'; END $$`);
+        await tx.$executeRawUnsafe('CREATE TEMP TABLE delete_commit_guard (id int) ON COMMIT DROP');
+        await tx.$executeRawUnsafe(`CREATE CONSTRAINT TRIGGER refuse_delete_commit AFTER INSERT ON delete_commit_guard
+          DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pg_temp.refuse_delete_commit()`);
+        await tx.$executeRawUnsafe('INSERT INTO delete_commit_guard VALUES (1)');
+      },
+    };
+    const { version } = await previewNodeDeletion({ ...teacher(course), id: course.change.nodeId });
+    await expect(
+      node
+        ? deleteRoadmapNode({ ...request, previewVersion: version }, refusal)
+        : removeRoadmapResource(request, refusal),
+    ).rejects.toThrow('deletion commit refused');
+    expect(
+      await getRoadmapNodeResources({ ...teacher(course), nodeId: course.change.nodeId }),
+    ).toMatchObject([{ id: resource.id }]);
+    expect(
+      (
+        await downloadRoadmapResource({ ...teacher(course), resourceId: resource.id })
+      ).bytes.toString(),
+    ).toBe('Contenido');
+  });
+
+  test(`${node ? 'Node' : 'Resource'} deletion treats absent bytes as already cleaned`, async ({
+    course,
+  }) => {
+    const resource = await upload(course, course.change.nodeId);
+    const [key] = await readdir(directory);
+    await rm(join(directory, key));
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const request = { ...teacher(course), id: node ? course.change.nodeId : resource.id };
+    const { version } = await previewNodeDeletion({ ...teacher(course), id: course.change.nodeId });
+    await expect(
+      node
+        ? deleteRoadmapNode({ ...request, previewVersion: version }, recordingChangePort().port)
+        : removeRoadmapResource(request, recordingChangePort().port),
+    ).resolves.toEqual({});
+    await expect(
+      downloadRoadmapResource({ ...teacher(course), resourceId: resource.id }),
+    ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
+    expect(await readdir(directory)).toEqual([]);
+    expect(warning).not.toHaveBeenCalled();
+  });
+}
+
+for (const version of [false, true]) {
+  test(`${version ? 'version history' : 'Course offering'} download reports absent bytes as an unlogged 404`, async ({
+    course,
+  }) => {
+    const resource = await upload(course, course.change.nodeId);
+    if (version)
+      await prisma.roadmap.update({
+        where: { id: course.roadmapId },
+        data: { closedAt: new Date() },
+      });
+    const successful = await downloadResponse(version, course, resource.id);
+    expect(successful.status).toBe(200);
+    expect(await successful.text()).toBe('Contenido');
+    expect(Object.fromEntries(successful.headers)).toMatchObject({
+      'content-type': 'application/octet-stream',
+      'content-length': '9',
+      'content-disposition': "attachment; filename*=UTF-8''guide.txt",
+      'cache-control': 'private, no-store',
+    });
+    const [key] = await readdir(directory);
+    await rm(join(directory, key));
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const response = await downloadResponse(version, course, resource.id);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ error: { code: 'RESOURCE_NOT_FOUND' } });
+    expect(errorLog).not.toHaveBeenCalled();
+  });
+}
+
+test('downloads keep participant Node access separate from frozen version teacher access', async ({
+  course,
+  otherCourse,
+}) => {
+  const resource = await upload(course, course.change.nodeId);
+  const download = (userId: string) =>
+    downloadRoadmapResource({ userId, identifier: course.identifier, resourceId: resource.id });
+  await expect(download(otherCourse.teacherId)).rejects.toMatchObject({ status: 403 });
+  await prisma.roadmapNode.update({
+    where: { id: course.change.nodeId },
+    data: { isVisible: false },
+  });
+  await expect(download(course.studentId)).rejects.toMatchObject({ code: 'NODE_NOT_FOUND' });
+  await prisma.roadmapNode.update({
+    where: { id: course.change.nodeId },
+    data: { isVisible: true, isTeacherBlocked: true },
+  });
+  await expect(download(course.studentId)).rejects.toMatchObject({ code: 'TEACHER_BLOCK' });
+  await expect(
+    downloadRoadmapVersionResource(
+      { id: course.teacherId, rut: null },
+      course.identifier,
+      resource.id,
+    ),
+  ).rejects.toMatchObject({ status: 404 });
+  await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
+  await expect(
+    downloadRoadmapVersionResource(
+      { id: course.studentId, rut: null },
+      course.identifier,
+      resource.id,
+    ),
+  ).rejects.toMatchObject({ status: 404, code: 'VERSION_NOT_FOUND' });
+  expect(
+    (
+      await downloadRoadmapVersionResource(
+        { id: course.teacherId, rut: null },
+        course.identifier,
+        resource.id,
+      )
+    ).bytes.toString(),
+  ).toBe('Contenido');
+  await expect(
+    removeRoadmapResource({ ...teacher(course), id: resource.id }, recordingChangePort().port),
+  ).rejects.toMatchObject({ code: 'ROADMAP_CLOSED' });
+  await prisma.participation.update({
+    where: { id: course.participationId },
+    data: { isActive: false },
+  });
+  await expect(download(course.studentId)).rejects.toMatchObject({ status: 403 });
+  await prisma.courseOffering.update({
+    where: { courseCode_year_semester: course.identifier },
+    data: { year: 2027 },
+  });
+  await prisma.participation.updateMany({
+    where: {
+      userId: course.teacherId,
+      courseOffering: { courseCode: course.identifier.courseCode, year: 2027 },
+    },
+    data: { isActive: false },
+  });
+  await prisma.courseOffering.create({
+    data: {
+      ...course.identifier,
+      participants: { create: { userId: course.teacherId, role: 'TEACHER' } },
+    },
+  });
+  await expect(
+    downloadRoadmapVersionResource(
+      { id: course.teacherId, rut: null },
+      { ...course.identifier, year: 2027 },
+      resource.id,
+    ),
+  ).rejects.toMatchObject({ status: 404 });
 });

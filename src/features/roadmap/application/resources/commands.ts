@@ -13,11 +13,11 @@ import {
   requireString,
   requireUrl,
 } from '@/features/roadmap/application/validation';
+import { validateUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
 import {
-  deleteUploadedFile,
-  validateUploadedFile,
-} from '@/features/roadmap/infrastructure/resources/filesystem';
-import { withStoredFiles } from '@/features/roadmap/infrastructure/resources/lifecycle';
+  cleanupStoredFiles,
+  withStoredFiles,
+} from '@/features/roadmap/infrastructure/resources/lifecycle';
 import { resourceEditError, fileResourceUrl } from '@/features/roadmap/domain/resource';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
@@ -205,6 +205,6 @@ export async function removeRoadmapResource(
   changePort: RoadmapChangePort,
 ) {
   const fileKey = await resourceRemoval(request, changePort);
-  if (fileKey) await deleteUploadedFile(fileKey).catch(() => undefined);
+  if (fileKey) await cleanupStoredFiles('remove Resource', [fileKey]);
   return {};
 }
