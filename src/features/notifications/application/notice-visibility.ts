@@ -13,7 +13,8 @@ export function isNoticeVisible(
   value: unknown,
   nodes: readonly NoticeVisibilityNode[],
   accessible: ReadonlySet<string>,
-  role: ParticipantRole,
+  /** Null without an active Participation: the student rule, as `seesEveryNode` decides. */
+  role: ParticipantRole | null,
 ): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const data = value as Record<string, unknown>;
