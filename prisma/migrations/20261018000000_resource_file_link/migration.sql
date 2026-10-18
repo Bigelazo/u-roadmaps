@@ -19,6 +19,7 @@ CREATE FUNCTION pg_temp.normalize_resource_value(value text, target_key text)
 RETURNS text LANGUAGE plpgsql AS $$
 DECLARE
   state jsonb;
+  resource_id uuid;
   resource "Resource"%ROWTYPE;
   old_kind text;
   revision text;
@@ -27,7 +28,12 @@ BEGIN
   state := value::jsonb;
   IF jsonb_typeof(state) <> 'object' OR jsonb_typeof(state->'title') <> 'string'
     OR jsonb_typeof(state->'revision') <> 'string' THEN RETURN value; END IF;
-  SELECT * INTO resource FROM "Resource" WHERE id::text = substring(target_key FROM 10);
+  -- Preserve malformed/noncanonical keys while keeping the primary-key lookup indexed.
+  IF substring(target_key FROM 10) !~ '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' THEN
+    RETURN value;
+  END IF;
+  resource_id := substring(target_key FROM 10)::uuid;
+  SELECT * INTO resource FROM "Resource" WHERE id = resource_id;
   IF NOT FOUND THEN RETURN value; END IF;
   -- Use the retained state's title, not today's title. Previous URL/file payloads
   -- cannot be guessed: unmatched hashes, including deleted Resources, stay opaque.
