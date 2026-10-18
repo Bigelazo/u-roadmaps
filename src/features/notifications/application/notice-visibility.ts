@@ -3,10 +3,9 @@ import { descriptorForNoticeTarget } from './notice-targets';
 export type NoticeVisibilityNode = { id: string; isVisible: boolean; nodeTypeId: string };
 
 /**
- * Whether a stored notice is shown, as its Notice target declares (`shownTo`). A row no
- * descriptor owns may carry hidden or Blocked node details, so with a `nodeId` it is shown
- * like `node-openers`; without one it is shown as stored. Visibility affects presentation
- * only; hidden notices remain pending for recognition.
+ * Whether a stored notice is shown, as its Notice target declares (`shownTo`); a row no
+ * descriptor owns is never shown. Visibility affects presentation only; hidden notices
+ * remain pending for recognition.
  */
 export function isNoticeVisible(
   value: unknown,
@@ -20,7 +19,7 @@ export function isNoticeVisible(
   const opens = (nodeId: unknown) => visible(nodeId) && accessible.has(nodeId as string);
   switch (shownTo) {
     case undefined:
-      return typeof data.nodeId !== 'string' || opens(data.nodeId);
+      return false;
     case 'everyone':
       return true;
     case 'node-viewers':

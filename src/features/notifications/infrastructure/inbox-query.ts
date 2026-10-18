@@ -79,7 +79,7 @@ function visibleNotices(
     ), visible AS (
       SELECT pending.* FROM pending LEFT JOIN nodes node ON node.id::text = pending.data->>'nodeId'
         AND node."roadmapId" = pending."roadmapId"
-      WHERE jsonb_typeof(pending.data) = 'object' AND ${shownToCase(accessibleNodeIds)}
+      WHERE ${shownToCase(accessibleNodeIds)}
     )`;
 }
 
@@ -104,9 +104,8 @@ function shownToCase(accessibleNodeIds: readonly string[]) {
       .map(({ noticeTarget }) => noticeTarget);
     return Prisma.sql`WHEN pending.data->>'noticeTarget' = ANY(${targets}::text[]) THEN ${condition}`;
   });
-  // A row no descriptor owns follows `node-openers` on its Node; without one it is shown as stored.
-  return Prisma.sql`CASE ${Prisma.join(whens, ' ')}
-    ELSE jsonb_typeof(pending.data->'nodeId') IS DISTINCT FROM 'string' OR ${opensNode} END`;
+  // A row no descriptor owns is never shown.
+  return Prisma.sql`CASE ${Prisma.join(whens, ' ')} ELSE FALSE END`;
 }
 
 export async function queryInboxPage(

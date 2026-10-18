@@ -49,24 +49,8 @@ describe('who a Notice target is shown to', () => {
     );
   });
 
-  it('never decides by the legacy changeKind or changedFields', () => {
-    const legacy = { changeKind: 'node-deleted', changedFields: ['title'] };
-    expect(
-      isNoticeVisible(
-        { ...legacy, noticeTarget: 'resource', nodeId: 'blocked' },
-        nodes,
-        accessible,
-      ),
-    ).toBe(false);
-  });
-
-  // Legacy rows may carry a description, a Resource title or a hidden Node's title.
-  it('shows a row no descriptor owns only on a Node the recipient can open', () => {
-    const legacy = { changeKind: 'node-deleted', changedFields: ['description'] };
-    expect(
-      aboutNodes.map((data) => isNoticeVisible({ ...legacy, ...data }, nodes, accessible)),
-    ).toEqual([true, false, false, false]);
-    // Without a Node, it is shown as stored.
-    expect(isNoticeVisible(legacy, nodes, accessible)).toBe(true);
+  it('never shows a row no descriptor owns', () => {
+    for (const data of [...aboutNodes, {}])
+      expect(isNoticeVisible(data, nodes, accessible)).toBe(false);
   });
 });

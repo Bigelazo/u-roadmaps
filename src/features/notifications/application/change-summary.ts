@@ -6,9 +6,8 @@ type SummaryNotice = { data: unknown };
 type SummaryNode = NoticeVisibilityNode & { title: string };
 
 /**
- * The Change summary shows what the Inbox shows, worded by each Notice target's descriptor;
- * rows no descriptor owns are left out. Notices arrive newest first, and group insertion
- * order preserves that ordering.
+ * The Change summary shows what the Inbox shows, worded by each Notice target's descriptor.
+ * Notices arrive newest first, and group insertion order preserves that ordering.
  */
 export function changeSummary(
   courseCode: string,

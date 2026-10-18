@@ -29,10 +29,9 @@ reciba su resultado.
    `node-viewers`, `node-openers`, `dependency-viewers` o `node-type-viewers`. El
    evaluador en TypeScript (Change summary y lectura de un aviso) y el `CASE` del Inbox,
    que compara `noticeTarget` con arreglos por clase construidos desde los descriptores,
-   leen esa declaración. Las claves heredadas no deciden visibilidad. Una fila que ningún
-   descriptor posee puede guardar la descripción, el título de un Resource o el de un Nodo
-   oculto: con `nodeId` se muestra como `node-openers`, y sin él, tal como se guardó. Ambas
-   se omiten del Change summary.
+   leen esa declaración. Una fila que ningún descriptor posee nunca se muestra: desde #272
+   una migración borró esas filas y los campos heredados `changeKind`, `changedFields` y
+   `targetKind`, de modo que todo aviso guardado pertenece a un Notice target.
 
 ## Alternativas descartadas
 
