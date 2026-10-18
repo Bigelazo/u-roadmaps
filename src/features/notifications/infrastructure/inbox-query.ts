@@ -66,7 +66,9 @@ function visibleNotices(
     );
   return Prisma.sql`
     WITH pending AS MATERIALIZED (
-      SELECT notice.*, course.name AS "courseName"
+      SELECT notice.*, course.name AS "courseName",
+        -- The role seesEveryNode() names: to teaching staff, no Node is hidden or blocked.
+        participation.role = 'TEACHER' AS "seesEveryNode"
       FROM "RoadmapNotice" notice
       JOIN "Roadmap" roadmap ON roadmap.id = notice."roadmapId"
       JOIN "Participation" participation ON participation."courseOfferingId" = roadmap."courseOfferingId"
@@ -85,15 +87,21 @@ function visibleNotices(
     )`;
 }
 
-/** One `WHEN` per `shownTo` class over its Notice targets, as `isNoticeVisible` decides it. */
+/**
+ * One `WHEN` per `shownTo` class over its Notice targets, as `isNoticeVisible` decides it:
+ * to teaching staff (`seesEveryNode`), every existing Node is visible and opens.
+ */
 function shownToCase(accessibleNodeIds: readonly string[]) {
+  const staff = Prisma.sql`pending."seesEveryNode"`;
   const visibleNode = (column: string) => Prisma.sql`EXISTS (SELECT 1 FROM nodes other
     WHERE other.id::text = pending.data->>${column}::text AND other."roadmapId" = pending."roadmapId"
-      AND other."isVisible")`;
-  const opensNode = Prisma.sql`COALESCE(node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[]), FALSE)`;
+      AND (other."isVisible" OR ${staff}))`;
+  // A notice whose Node no longer exists joins no row (`node.id IS NULL`).
+  const opensNode = Prisma.sql`node.id IS NOT NULL AND (${staff}
+    OR (node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[])))`;
   const conditions: Record<ShownTo, Prisma.Sql> = {
     everyone: Prisma.sql`TRUE`,
-    'node-viewers': Prisma.sql`COALESCE(node."isVisible", FALSE)`,
+    'node-viewers': Prisma.sql`node.id IS NOT NULL AND (node."isVisible" OR ${staff})`,
     'node-openers': opensNode,
     'dependency-viewers': Prisma.sql`${visibleNode('sourceNodeId')} AND ${visibleNode('targetNodeId')}`,
     'node-type-viewers': Prisma.sql`EXISTS (SELECT 1 FROM nodes typed

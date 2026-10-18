@@ -243,7 +243,13 @@ export async function prepareOwnNoticeOpening(
         roadmapId,
         openedAt,
         snapshots: await entryTargetSnapshots(transaction, userId, roadmapId, notices, accessible),
-        summary: changeSummary(roadmap.courseOffering.courseCode, notices, nodes, accessible),
+        summary: changeSummary(
+          roadmap.courseOffering.courseCode,
+          notices,
+          nodes,
+          accessible,
+          participation.role,
+        ),
       },
     });
     return operation.operationId;

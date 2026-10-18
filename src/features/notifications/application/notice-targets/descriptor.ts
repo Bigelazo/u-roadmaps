@@ -42,18 +42,29 @@ export type RoadmapViewDependency = Readonly<{
 
 export type RoadmapViewNodeType = Readonly<{ id: string; name: string; hasVisibleNode: boolean }>;
 
+export type ParticipantRole = 'STUDENT' | 'TEACHER';
+
 /** An active participant, with the Nodes accessible to them (ADR-0014 decision 10 "accessible"). */
 export type ParticipantAccess = Readonly<{
   userId: string;
-  role: 'STUDENT' | 'TEACHER';
+  role: ParticipantRole;
   accessibleNodeIds: ReadonlySet<string>;
 }>;
+
+/**
+ * Teaching staff are told about, and shown, every Node change: a Node's visibility and
+ * Teacher block never hide its changes from them (ADR-0014 decision 14.5). Anyone else,
+ * or a recipient without an active Participation, gets the student rule.
+ */
+export function seesEveryNode(role: ParticipantRole | null) {
+  return role === 'TEACHER';
+}
 
 /** What a descriptor may read about one Roadmap; the module implements it over a transaction. */
 export interface RoadmapView {
   readonly roadmapId: string;
   /** Active Participations, including the actor of the change. */
-  participants(): Promise<readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[]>;
+  participants(): Promise<readonly { userId: string; role: ParticipantRole }[]>;
   node(nodeId: string): Promise<RoadmapViewNode | null>;
   /** Every Node of the Roadmap; once loaded, `node` answers from it. */
   nodes(): Promise<readonly RoadmapViewNode[]>;

@@ -1,6 +1,6 @@
 import { isNoticeVisible, type NoticeVisibilityNode } from './notice-visibility';
 import type { ChangeSummary } from '../contracts/change-summary';
-import { projectTargetNotice } from './notice-targets';
+import { projectTargetNotice, type ParticipantRole } from './notice-targets';
 
 type SummaryNotice = { data: unknown };
 type SummaryNode = NoticeVisibilityNode & { title: string };
@@ -14,12 +14,13 @@ export function changeSummary(
   notices: readonly SummaryNotice[],
   nodes: readonly SummaryNode[],
   accessible: ReadonlySet<string>,
+  role: ParticipantRole,
 ): ChangeSummary {
   const currentNodes = new Map(nodes.map((node) => [node.id, node]));
   const groups = new Map<string, { title: string; items: string[] }>();
   const general: string[] = [];
   for (const notice of notices) {
-    if (!isNoticeVisible(notice.data, nodes, accessible)) continue;
+    if (!isNoticeVisible(notice.data, nodes, accessible, role)) continue;
     const stored = notice.data as Record<string, unknown>;
     const nodeId = typeof stored.nodeId === 'string' ? stored.nodeId : null;
     const node = nodeId ? currentNodes.get(nodeId) : undefined;

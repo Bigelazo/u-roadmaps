@@ -23,6 +23,7 @@ export type {
   NoticeTargetDescriptor,
   NoticeTargetRef,
   ParticipantAccess,
+  ParticipantRole,
   RoadmapView,
   RoadmapViewDependency,
   RoadmapViewNode,
@@ -34,7 +35,7 @@ export type {
   TargetValues,
   TargetWording,
 } from './descriptor';
-export { SCOPE_DEPTH } from './descriptor';
+export { SCOPE_DEPTH, seesEveryNode } from './descriptor';
 
 /** Every Notice target kind handled by the notice lifecycle module (ADR-0024). */
 export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [

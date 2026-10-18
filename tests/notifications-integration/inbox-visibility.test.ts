@@ -142,7 +142,7 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
       const visible = notices.filter(
         (notice) =>
           notice.recipientId === recipientId &&
-          isNoticeVisible(notice.data, nodes, accessibleNodeIds),
+          isNoticeVisible(notice.data, nodes, accessibleNodeIds, participant.role),
       );
       const pending = visible.filter(({ acknowledgedAt }) => acknowledgedAt === null);
       const marks: Record<string, number> = {};

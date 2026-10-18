@@ -36,11 +36,32 @@ const SHOWN: Record<string, [Record<string, string>[], boolean[]]> = {
   'node-type-name': [aboutNodeTypes, [true, false, false]],
 };
 
+// ADR-0014 decision 14.5: teaching staff are shown every Node change, whatever the Node's
+// visibility or Teacher block; a missing Node, a Node type's name and Node access are as above.
+const SHOWN_TO_TEACHING_STAFF: Record<string, boolean[]> = {
+  'node-title': [true, true, true, false],
+  'node-type': [true, true, true, false],
+  'node-creation': [true, true, true, false],
+  'node-description': [true, true, true, false],
+  resource: [true, true, true, false],
+  dependency: [true, true, false],
+};
+
 describe('who a Notice target is shown to', () => {
   it.each(Object.entries(SHOWN))('%s', (noticeTarget, [stored, shown]) => {
     expect(
-      stored.map((data) => isNoticeVisible({ noticeTarget, ...data }, nodes, accessible)),
+      stored.map((data) =>
+        isNoticeVisible({ noticeTarget, ...data }, nodes, accessible, 'STUDENT'),
+      ),
     ).toEqual(shown);
+  });
+
+  it.each(Object.entries(SHOWN))('%s, to teaching staff', (noticeTarget, [stored, shown]) => {
+    expect(
+      stored.map((data) =>
+        isNoticeVisible({ noticeTarget, ...data }, nodes, accessible, 'TEACHER'),
+      ),
+    ).toEqual(SHOWN_TO_TEACHING_STAFF[noticeTarget] ?? shown);
   });
 
   it('covers every Notice target', () => {
@@ -51,6 +72,7 @@ describe('who a Notice target is shown to', () => {
 
   it('never shows a row no descriptor owns', () => {
     for (const data of [...aboutNodes, {}])
-      expect(isNoticeVisible(data, nodes, accessible)).toBe(false);
+      for (const role of ['STUDENT', 'TEACHER'] as const)
+        expect(isNoticeVisible(data, nodes, accessible, role)).toBe(false);
   });
 });

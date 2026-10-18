@@ -10,14 +10,22 @@ export async function isOwnNoticeVisible(
   readAccess: ParticipantAccessReader,
 ) {
   return prisma.$transaction(async (transaction) => {
-    const [access, nodes] = await Promise.all([
+    const [access, nodes, participation] = await Promise.all([
       readAccess(transaction, { userId, roadmapIds: [roadmapId] }),
       transaction.roadmapNode.findMany({
         where: { roadmapId },
         select: { id: true, isVisible: true, nodeTypeId: true },
       }),
+      transaction.participation.findFirst({
+        where: { userId, courseOffering: { roadmap: { id: roadmapId } }, isActive: true },
+        select: { role: true },
+      }),
     ]);
     const accessible = access.get(roadmapId);
-    return accessible !== undefined && isNoticeVisible(data, nodes, accessible);
+    return (
+      accessible !== undefined &&
+      !!participation &&
+      isNoticeVisible(data, nodes, accessible, participation.role)
+    );
   });
 }
