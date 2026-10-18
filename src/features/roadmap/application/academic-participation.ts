@@ -30,6 +30,10 @@ export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' 
   return canEditRoadmap(access) ? 'TEACHER' : 'STUDENT';
 }
 
+/** One equality rule for Course offerings, shared by materialization and omission. */
+const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
+  `${courseCode}:${year}:${semester}`;
+
 /**
  * Reads the U-Campus positions the person holds in one course offering. A
  * person can appear more than once, for instance teaching one section and
@@ -44,12 +48,8 @@ export async function readMufasaCourseAccess(
   });
   if (mufasa.source !== 'MUFASA' || mufasa.isComplete === false)
     return { access: null, isComplete: false };
-  const matches = mufasa.courses.filter(
-    (course) =>
-      course.courseCode === identifier.courseCode &&
-      course.year === identifier.year &&
-      course.semester === identifier.semester,
-  );
+  const key = offeringKey(identifier);
+  const matches = mufasa.courses.filter((course) => offeringKey(course) === key);
   if (matches.length === 0) return { access: null, isComplete: true };
   return {
     isComplete: true,
@@ -134,9 +134,6 @@ export async function materializeParticipation(
     { isolation: 'read-committed' },
   );
 }
-
-const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
-  `${courseCode}:${year}:${semester}`;
 
 /**
  * Deactivates the user's active Participations in the offerings a complete U-Campus report
