@@ -516,6 +516,27 @@ test('asks React Flow to measure again a shown Node it left without handle bound
   expect(updateNodeInternalsMock).toHaveBeenLastCalledWith(['node-1']);
 });
 
+test('leaves measured Nodes and student-hidden Nodes to React Flow', () => {
+  const hiddenNodeRoadmap: StudentRoadmapDto = {
+    ...studentRoadmap,
+    nodes: studentRoadmap.nodes.map((node) =>
+      node.id === 'node-2' ? { ...node, isVisible: false } : node,
+    ),
+  };
+  getInternalNodeMock.mockImplementation((id) =>
+    id === 'node-2' ? { internals: {} } : { internals: { handleBounds: {} } },
+  );
+
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'student', roadmap: hiddenNodeRoadmap }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+
+  expect(updateNodeInternalsMock).not.toHaveBeenCalled();
+});
+
 test('preserves the viewport when the editor panel width changes', async () => {
   vi.useFakeTimers();
   const { rerender } = render(<GraphHarness panelWidth={360} />);
