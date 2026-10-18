@@ -267,7 +267,7 @@ export async function isNodeViewer(
  * actor included: teaching staff always, even on a hidden or Teacher-blocked Node
  * (ADR-0014 decision 14.5); students when `studentsSee` it and the Node is accessible to them.
  */
-export async function nodeOpeners(nodeId: string, roadmap: RoadmapView, studentsSee = true) {
+export async function nodeOpeners(studentsSee: boolean, nodeId: string, roadmap: RoadmapView) {
   return (await roadmap.participantAccess())
     .filter(
       ({ role, accessibleNodeIds }) =>

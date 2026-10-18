@@ -22,7 +22,7 @@ type NodeDescriptionFact = Extract<RoadmapChangeFact, { kind: 'node-description'
  * this change.
  */
 async function canOpenNode(nodeId: string, changes: RoadmapChanges, roadmap: RoadmapView) {
-  return nodeOpeners(nodeId, roadmap, await nodeVisibleThroughout(nodeId, changes, roadmap));
+  return nodeOpeners(await nodeVisibleThroughout(nodeId, changes, roadmap), nodeId, roadmap);
 }
 
 function nodeTitle({ context }: TargetValues) {
