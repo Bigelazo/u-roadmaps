@@ -97,6 +97,20 @@ test('a complete history that omits an offering deactivates its Participation', 
   expect(await overviewOfferings(course.studentId)).toEqual([earlierOffering(course)]);
 });
 
+test('a complete history keeps a past offering it still reports and deactivates the omitted one', async ({
+  course,
+}) => {
+  reportHistory(course.studentId, [course.identifier, earlierOffering(course)]);
+  await visitOverview(course.studentId);
+
+  reportHistory(course.studentId, [earlierOffering(course)]);
+  await visitOverview(course.studentId);
+  expect(await canRead(course.studentId, course)).toBe(false);
+  // During an outage the overview lists the active Participations: only the past one.
+  reports.delete(rutOf(course.studentId));
+  expect(await overviewOfferings(course.studentId)).toEqual([earlierOffering(course)]);
+});
+
 test('teaching staff still see the Completions of a deactivated student', async ({ course }) => {
   await complete(course);
   reportHistory(course.studentId, [earlierOffering(course)]);
