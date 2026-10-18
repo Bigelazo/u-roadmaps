@@ -4,7 +4,7 @@ import { expect, test, type E2EUser } from './fixtures';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { createExistingNode } from './existing-node';
 import { authenticateAs, escapeRegExp, ok } from './helpers';
-import { listNotices, type StoredNotice } from './notices';
+import { listNotices, storeTitleNotices, type StoredNotice } from './notices';
 import { deleteNode, hideNode } from './previewed-writes';
 
 test('Dependency notices preserve route and access changes with Roadmap entry recognition', async ({
@@ -108,8 +108,6 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
         body: expect.stringContaining(`«${dependentTitle}» ahora requiere «${prerequisiteTitle}»`),
         read: false,
         data: {
-          targetKind: 'roadmap',
-          changeKind: 'dependency-added',
           dependencyId,
           dependentNodeTitle: dependentTitle,
           prerequisiteNodeTitle: prerequisiteTitle,
@@ -126,7 +124,9 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     Promise.all(
       [dependentId, transitiveId].map(async (nodeId) =>
         (await nodeNoticesFor(user, nodeId))
-          .filter(({ data }) => data.changeKind === 'node-blocked')
+          .filter(
+            ({ data }) => data.noticeTarget === 'node-access' && data.currentValue === 'Bloqueado',
+          )
           .map(({ data }) => data.nodeId),
       ),
     );
@@ -163,23 +163,20 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     await expect
       .poll(async () =>
         (await nodeNoticesFor(studentWithoutPrerequisite, nodeId)).filter(
-          ({ data }) => data.changeKind === 'node-available',
+          ({ data }) => data.noticeTarget === 'node-access' && data.currentValue === 'Disponible',
         ),
       )
       .toHaveLength(1);
 
   const removedRouteNotice = (await routeNoticesFor(studentWithoutPrerequisite, dependencyId)).find(
-    ({ data }) => data.changeKind === 'dependency-removed',
+    ({ data }) => data.currentValue === 'absent',
   );
   expect(removedRouteNotice).toBeDefined();
   // Newly delivered notices can move an older route notice to another page.
   // Make pagination deterministic instead of depending on earlier test timing.
   // Historical rows were already shown: scrolling them into view must not
   // generate seen signals that refresh and disable the pagination button mid-click.
-  for (let index = 0; index < 12; index++)
-    await sql(
-      `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${studentWithoutPrerequisite.id}', '${roadmapId}', (SELECT "courseOfferingId" FROM "Roadmap" WHERE "id" = '${roadmapId}'), 'Aviso de página ${index}', 'Cambio general', '{"roadmapId":"${roadmapId}","courseCode":"${course.courseCode}","year":2026,"semester":2,"targetKind":"roadmap"}', NOW());`,
-    );
+  await storeTitleNotices(course, studentWithoutPrerequisite.id, 12);
   await selectRouteNotice(studentWithoutPrerequisite, removedRouteNotice!);
   await expect(page).toHaveURL(course.pagePath());
   await expect(
@@ -286,7 +283,9 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
   expect((await noticesFor()).some(({ data }) => data.dependencyId === dependencyId)).toBe(false);
   await expect
     .poll(async () =>
-      (await noticesFor(dependentId)).some(({ data }) => data.changeKind === 'node-blocked'),
+      (await noticesFor(dependentId)).some(
+        ({ data }) => data.noticeTarget === 'node-access' && data.currentValue === 'Bloqueado',
+      ),
     )
     .toBe(true);
 });
