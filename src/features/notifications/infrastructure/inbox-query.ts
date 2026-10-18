@@ -131,16 +131,15 @@ export async function queryInboxPage(
   const standalone = Prisma.sql`data->>'noticeTarget' = ${NOTICE_TARGET.roadmapAvailability}`;
   const rows = await prisma.$queryRaw<InboxNotice[]>(Prisma.sql`
     ${visibleNotices(recipient, filter)}, ranked AS (
-      SELECT visible.*, ${standalone} AS standalone,
-        count(*) OVER roadmap AS "targetCount",
+      SELECT visible.*, count(*) OVER roadmap AS "targetCount",
+        ${grouped} AND NOT ${standalone} AND count(*) OVER roadmap >= 3 AS "isGroup",
         row_number() OVER (roadmap ORDER BY "availableAt" DESC, id DESC) AS position
       FROM visible WINDOW roadmap AS (PARTITION BY "roadmapId", ${standalone})
     )
     SELECT id, "roadmapId", "courseName", subject, body, data, "availableAt", "acknowledgedAt",
-      "targetCount", ${grouped} AND NOT standalone AND "targetCount" >= 3 AS "isGroup"
-    FROM ranked WHERE (
-      NOT ${grouped} OR standalone OR "targetCount" < 3 OR position = 1
-    ) ${cursor ? Prisma.sql`AND ("availableAt", id) < (${cursor.availableAt}, ${cursor.id}::uuid)` : Prisma.empty}
+      "targetCount", "isGroup"
+    -- A group shows only its most recent notice.
+    FROM ranked WHERE (NOT "isGroup" OR position = 1) ${cursor ? Prisma.sql`AND ("availableAt", id) < (${cursor.availableAt}, ${cursor.id}::uuid)` : Prisma.empty}
     ORDER BY "availableAt" DESC, id DESC LIMIT ${limit + 1}
   `);
   return {
