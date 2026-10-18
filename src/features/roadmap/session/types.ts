@@ -50,7 +50,7 @@ export type RoadmapCanvasSessionPersistence = {
   connectNodes(
     input: RoadmapCanvasSessionInput,
     dependency: RoadmapDependencyRequest,
-    previewVersion?: string,
+    previewVersion: string,
   ): Promise<void>;
   deleteDependency(input: RoadmapCanvasSessionInput, dependencyId: string): Promise<void>;
   previewTeacherBlock(
@@ -87,7 +87,7 @@ export type RoadmapCanvasSessionPersistence = {
   deleteNode(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
-    previewVersion?: string,
+    previewVersion: string,
   ): Promise<void>;
   addResource(
     input: RoadmapCanvasSessionInput,

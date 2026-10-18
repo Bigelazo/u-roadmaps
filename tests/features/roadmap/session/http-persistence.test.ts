@@ -288,8 +288,6 @@ test('omits the preview header when a previewed change sends no version', async 
   vi.stubGlobal('fetch', fetchMock);
 
   await http.setVisibility(input, 'node-1', false);
-  await http.connectNodes(input, dependency);
-  await http.deleteNode(input, 'node-1');
 
   for (const [, init] of fetchMock.mock.calls) {
     expect(Object.keys((init as RequestInit).headers ?? {})).not.toContainEqual(
