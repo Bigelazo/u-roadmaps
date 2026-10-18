@@ -1,6 +1,11 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import { nodeOpeners, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
+import {
+  isNodeViewer,
+  nodeOpeners,
+  type NoticeTargetDescriptor,
+  type TargetValues,
+} from './descriptor';
 
 export const resourceRef = (resourceId: string, nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.resource,
@@ -54,17 +59,18 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   matches: (fact): fact is ResourceFact => fact.kind === 'resource',
   target: (fact) => resourceRef(fact.resourceId, fact.nodeId),
   previousValue: (fact) => resourceValue(fact.previous),
-  // Description and Resources reach only who has the Node accessible (ADR-0014 decision 10).
+  // Description and Resources reach only who has the Node accessible (ADR-0014 decision 10),
+  // and teaching staff always (decision 14.5).
   knowers: (fact, _changes, roadmap) => nodeOpeners(fact.nodeId, roadmap),
   audience: (fact, _changes, roadmap) => nodeOpeners(fact.nodeId, roadmap),
-  async current(target, roadmap) {
+  async current(target, roadmap, recipientId) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     if (!node) return null;
     const resourceId = target.targetKey.slice('resource:'.length);
     const resource = await roadmap.resource(resourceId);
     return {
       value: resourceValue(resource?.nodeId === node.id ? resource : null),
-      visible: node.isVisible,
+      visible: await isNodeViewer(node.isVisible, recipientId, roadmap),
       context: { resourceId, nodeTitle: node.title },
     };
   },

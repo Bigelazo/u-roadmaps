@@ -4,6 +4,7 @@ import { resourceContentState } from '@/shared/server/resource-content-state';
 import { ApplicationError } from '@/shared/errors/server';
 import type {
   ParticipantAccess,
+  ParticipantRole,
   RoadmapView,
   RoadmapViewDependency,
   RoadmapViewNode,
@@ -93,6 +94,7 @@ export function roadmapView(
   let allNodeTypes: Promise<readonly RoadmapViewNodeType[]> | undefined;
   const nodes = new Map<string, Promise<RoadmapViewNode | null>>();
   const resources = new Map<string, Promise<RoadmapViewResource | null>>();
+  const roles = new Map<string, Promise<ParticipantRole | null>>();
   const accessible = new Map<string, Promise<ReadonlySet<string>>>();
   let allAccess: Promise<ReadonlyMap<string, ParticipantAccess>> | undefined;
   const nodeTypes = new Map<string, Promise<RoadmapViewNodeType | null>>();
@@ -107,6 +109,21 @@ export function roadmapView(
         orderBy: { userId: 'asc' },
       });
       return participants;
+    },
+    role(userId) {
+      if (participants)
+        return participants.then((all) => all.find((one) => one.userId === userId)?.role ?? null);
+      let role = roles.get(userId);
+      if (!role) {
+        role = transaction.participation
+          .findFirst({
+            where: { userId, courseOffering: { roadmap: { id: roadmapId } }, isActive: true },
+            select: { role: true },
+          })
+          .then((found) => found?.role ?? null);
+        roles.set(userId, role);
+      }
+      return role;
     },
     nodes() {
       allNodes ??= transaction.roadmapNode

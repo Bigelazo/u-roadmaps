@@ -1,8 +1,10 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import {
+  isNodeViewer,
+  nodeViewers,
   nodeVisibleBefore,
-  participantIds,
+  nodeVisibleThroughout,
   type NoticeTargetDescriptor,
   type TargetValues,
 } from './descriptor';
@@ -26,7 +28,8 @@ function names({ context, knownContext }: TargetValues) {
 /**
  * Node type: compared by type identity and worded with the type names the recipient
  * knew, which survive later Node type renames. Whoever sees the Node is told,
- * accessible or blocked (ADR-0014 decision 10).
+ * accessible or blocked (ADR-0014 decision 10); teaching staff see hidden Nodes too
+ * (decision 14.5).
  */
 export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
   noticeTarget: NOTICE_TARGET.nodeType,
@@ -36,22 +39,17 @@ export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
   target: (fact) => nodeTypeRef(fact.nodeId),
   previousValue: (fact) => fact.previous.id,
   previousContext: (fact) => ({ typeName: fact.previous.name }),
-  async knowers(fact, changes, roadmap) {
-    if (!(await nodeVisibleBefore(fact.nodeId, changes, roadmap))) return [];
-    return participantIds(roadmap);
-  },
-  async audience(fact, changes, roadmap) {
-    // Revealing a retyped Node is not a type change: nobody saw the previous type.
-    if (!(await nodeVisibleBefore(fact.nodeId, changes, roadmap))) return [];
-    if (!(await roadmap.node(fact.nodeId))?.isVisible) return [];
-    return participantIds(roadmap);
-  },
-  async current(target, roadmap) {
+  knowers: async (fact, changes, roadmap) =>
+    nodeViewers(await nodeVisibleBefore(fact.nodeId, changes, roadmap), roadmap),
+  // Revealing a retyped Node is not a type change to students: none saw the previous type.
+  audience: async (fact, changes, roadmap) =>
+    nodeViewers(await nodeVisibleThroughout(fact.nodeId, changes, roadmap), roadmap),
+  async current(target, roadmap, recipientId) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     return node
       ? {
           value: node.nodeTypeId,
-          visible: node.isVisible,
+          visible: await isNodeViewer(node.isVisible, recipientId, roadmap),
           context: { typeName: node.nodeTypeName, nodeTitle: node.title },
         }
       : null;

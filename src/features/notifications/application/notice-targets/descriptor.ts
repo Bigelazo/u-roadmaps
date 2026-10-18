@@ -65,6 +65,8 @@ export interface RoadmapView {
   readonly roadmapId: string;
   /** Active Participations, including the actor of the change. */
   participants(): Promise<readonly { userId: string; role: ParticipantRole }[]>;
+  /** The participant's role; null without an active Participation. */
+  role(userId: string): Promise<ParticipantRole | null>;
   node(nodeId: string): Promise<RoadmapViewNode | null>;
   /** Every Node of the Roadmap; once loaded, `node` answers from it. */
   nodes(): Promise<readonly RoadmapViewNode[]>;
@@ -226,10 +228,51 @@ export async function nodeVisibleBefore(
   return (await roadmap.node(nodeId))?.isVisible ?? false;
 }
 
-/** The participants for whom the Node is accessible, the actor included. */
-export async function nodeOpeners(nodeId: string, roadmap: RoadmapView) {
+/**
+ * The Node was visible before this change and still is. Only then do students see a change
+ * of its content; revealing or hiding it reaches them as Node access instead.
+ */
+export async function nodeVisibleThroughout(
+  nodeId: string,
+  changes: RoadmapChanges,
+  roadmap: RoadmapView,
+) {
+  return (
+    (await nodeVisibleBefore(nodeId, changes, roadmap)) &&
+    ((await roadmap.node(nodeId))?.isVisible ?? false)
+  );
+}
+
+/**
+ * The participants a Node change reaches, the actor included: teaching staff always
+ * (ADR-0014 decision 14.5), students only when `studentsSee` it.
+ */
+export async function nodeViewers(studentsSee: boolean, roadmap: RoadmapView) {
+  return (await roadmap.participants())
+    .filter(({ role }) => studentsSee || seesEveryNode(role))
+    .map(({ userId }) => userId);
+}
+
+/** Whether a Node change that students see only when `studentsSee` reaches the recipient. */
+export async function isNodeViewer(
+  studentsSee: boolean,
+  recipientId: string,
+  roadmap: RoadmapView,
+) {
+  return studentsSee || seesEveryNode(await roadmap.role(recipientId));
+}
+
+/**
+ * The participants a change inside the Node (its description or Resources) reaches, the
+ * actor included: teaching staff always, even on a hidden or Teacher-blocked Node
+ * (ADR-0014 decision 14.5); students when `studentsSee` it and the Node is accessible to them.
+ */
+export async function nodeOpeners(nodeId: string, roadmap: RoadmapView, studentsSee = true) {
   return (await roadmap.participantAccess())
-    .filter(({ accessibleNodeIds }) => accessibleNodeIds.has(nodeId))
+    .filter(
+      ({ role, accessibleNodeIds }) =>
+        seesEveryNode(role) || (studentsSee && accessibleNodeIds.has(nodeId)),
+    )
     .map(({ userId }) => userId);
 }
 

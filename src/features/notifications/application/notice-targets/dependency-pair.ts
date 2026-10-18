@@ -3,7 +3,8 @@ import { ABSENT, PRESENT } from '../absorption';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import { dependencyTarget } from '@/shared/route-notice-target';
 import {
-  participantIds,
+  isNodeViewer,
+  nodeViewers,
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
   type RoadmapView,
@@ -26,15 +27,17 @@ function dependencyPair({ targetKey }: NoticeTargetRef) {
   return { sourceNodeId, targetNodeId };
 }
 
-/** Everyone, when the Dependency joins two visible Nodes. */
+/**
+ * Everyone when the Dependency joins two visible Nodes; teaching staff always
+ * (ADR-0014 decision 14.5).
+ */
 async function pairRecipients(
   fact: DependencyFact,
   _changes: RoadmapChanges,
   roadmap: RoadmapView,
 ) {
   // Removals caused by hiding or deleting a Node are not reported as Dependency facts.
-  if (!fact.sourceNode.isVisible || !fact.targetNode.isVisible) return [];
-  return participantIds(roadmap);
+  return nodeViewers(fact.sourceNode.isVisible && fact.targetNode.isVisible, roadmap);
 }
 
 /**
@@ -51,7 +54,7 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
   previousValue: (fact) => pairValue(fact.previous),
   knowers: pairRecipients,
   audience: pairRecipients,
-  async current(target, roadmap) {
+  async current(target, roadmap, recipientId) {
     const { sourceNodeId, targetNodeId } = dependencyPair(target);
     const [source, dependent] = await Promise.all([
       roadmap.node(sourceNodeId),
@@ -61,7 +64,7 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
     const dependency = await roadmap.dependency(sourceNodeId, targetNodeId);
     return {
       value: pairValue(!!dependency),
-      visible: source.isVisible && dependent.isVisible,
+      visible: await isNodeViewer(source.isVisible && dependent.isVisible, recipientId, roadmap),
       context: {
         prerequisiteNodeTitle: source.title,
         dependentNodeTitle: dependent.title,
