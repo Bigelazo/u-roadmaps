@@ -1,4 +1,3 @@
-// @vitest-environment node
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir, mkdtemp, writeFile, rm } from 'node:fs/promises';

@@ -1,4 +1,3 @@
-// @vitest-environment node
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { expect, onTestFinished, vi } from 'vitest';

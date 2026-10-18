@@ -1,4 +1,3 @@
-// @vitest-environment node
 import 'dotenv/config';
 import { expect } from 'vitest';
 import {

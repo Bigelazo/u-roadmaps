@@ -1,4 +1,3 @@
-// @vitest-environment node
 import 'dotenv/config';
 import { afterAll, afterEach, expect, vi } from 'vitest';
 import { teacher, test } from '../../notifications-integration/fixtures';
