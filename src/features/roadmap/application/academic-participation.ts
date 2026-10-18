@@ -150,9 +150,7 @@ async function deactivateParticipations(
     where: { userId: user.id, isActive: true },
     select: {
       courseOfferingId: true,
-      courseOffering: {
-        select: { courseCode: true, year: true, semester: true, roadmap: { select: { id: true } } },
-      },
+      courseOffering: { select: { courseCode: true, year: true, semester: true } },
     },
   });
   for (const { courseOfferingId, courseOffering } of active) {
@@ -160,9 +158,13 @@ async function deactivateParticipations(
     await roadmapChangeTransaction(
       changePort,
       async (transaction) => {
+        // Read the Roadmap inside the transaction, so one created meanwhile is locked too.
+        const roadmap = await transaction.roadmap.findUnique({
+          where: { courseOfferingId },
+          select: { id: true },
+        });
         // Match notice delivery's parent -> Participation -> recipient lock order.
-        if (courseOffering.roadmap)
-          await lockRoadmap(transaction, courseOffering.roadmap.id, 'key-share');
+        if (roadmap) await lockRoadmap(transaction, roadmap.id, 'key-share');
         await transaction.participation.updateMany({
           where: { userId: user.id, courseOfferingId, isActive: true },
           data: { isActive: false },
