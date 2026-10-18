@@ -1,6 +1,6 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import { type NoticeTargetDescriptor, type RoadmapView, type TargetValues } from './descriptor';
+import { nodeOpeners, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
 
 export const resourceRef = (resourceId: string, nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.resource,
@@ -29,14 +29,6 @@ function decode(value: string): ResourceState | null {
   return state as ResourceState;
 }
 
-/** Description and Resources reach only who has the Node accessible (ADR-0014 decision 10). */
-async function accessibleRecipients(nodeId: string, roadmap: RoadmapView) {
-  const recipients: string[] = [];
-  for (const { userId } of await roadmap.participants())
-    if ((await roadmap.accessibleNodeIds(userId)).has(nodeId)) recipients.push(userId);
-  return recipients;
-}
-
 /**
  * The Resource lifecycle composes while pending (ADR-0014 decision 1): added then
  * edited is new with its current title, added then removed returns to absent, and
@@ -62,8 +54,9 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   matches: (fact): fact is ResourceFact => fact.kind === 'resource',
   target: (fact) => resourceRef(fact.resourceId, fact.nodeId),
   previousValue: (fact) => resourceValue(fact.previous),
-  knowers: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
-  audience: (fact, _changes, roadmap) => accessibleRecipients(fact.nodeId, roadmap),
+  // Description and Resources reach only who has the Node accessible (ADR-0014 decision 10).
+  knowers: (fact, _changes, roadmap) => nodeOpeners(fact.nodeId, roadmap),
+  audience: (fact, _changes, roadmap) => nodeOpeners(fact.nodeId, roadmap),
   async current(target, roadmap) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     if (!node) return null;

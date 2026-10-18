@@ -22,6 +22,7 @@ export type {
   KnownTarget,
   NoticeTargetDescriptor,
   NoticeTargetRef,
+  ParticipantAccess,
   RoadmapView,
   RoadmapViewDependency,
   RoadmapViewNode,

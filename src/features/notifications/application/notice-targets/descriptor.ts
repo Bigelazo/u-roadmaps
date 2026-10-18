@@ -42,6 +42,13 @@ export type RoadmapViewDependency = Readonly<{
 
 export type RoadmapViewNodeType = Readonly<{ id: string; name: string; hasVisibleNode: boolean }>;
 
+/** An active participant, with the Nodes accessible to them (ADR-0014 decision 10 "accessible"). */
+export type ParticipantAccess = Readonly<{
+  userId: string;
+  role: 'STUDENT' | 'TEACHER';
+  accessibleNodeIds: ReadonlySet<string>;
+}>;
+
 /** What a descriptor may read about one Roadmap; the module implements it over a transaction. */
 export interface RoadmapView {
   readonly roadmapId: string;
@@ -63,6 +70,11 @@ export interface RoadmapView {
   nodeResources(nodeId: string): Promise<readonly RoadmapViewResource[]>;
   /** Nodes accessible to the participant (ADR-0014 decision 10 "accessible"). */
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
+  /**
+   * Every active participant's access, the actor included, read once for the whole
+   * Roadmap; once loaded, `accessibleNodeIds` answers from it.
+   */
+  participantAccess(): Promise<readonly ParticipantAccess[]>;
   /** The Dependency between an ordered pair of this Roadmap's Nodes, if any. */
   dependency(sourceNodeId: string, targetNodeId: string): Promise<{ id: string } | null>;
   nodeType(nodeTypeId: string): Promise<RoadmapViewNodeType | null>;
@@ -201,6 +213,13 @@ export async function nodeVisibleBefore(
   );
   if (visibility?.kind === 'node-visibility') return visibility.previous;
   return (await roadmap.node(nodeId))?.isVisible ?? false;
+}
+
+/** The participants for whom the Node is accessible, the actor included. */
+export async function nodeOpeners(nodeId: string, roadmap: RoadmapView) {
+  return (await roadmap.participantAccess())
+    .filter(({ accessibleNodeIds }) => accessibleNodeIds.has(nodeId))
+    .map(({ userId }) => userId);
 }
 
 /** The user ids of the Roadmap's active Participations, the actor included. */

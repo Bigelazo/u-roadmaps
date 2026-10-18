@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { onTestFinished } from 'vitest';
 import { prisma } from '@/shared/server/db';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import {
@@ -114,6 +115,29 @@ export function addNode(
       ...state,
     },
   });
+}
+
+/** Enrolls `count` more students in the Course; they are deleted when the test finishes. */
+export async function enrollStudents(course: IntegrationCourse, count: number) {
+  const offering = await prisma.courseOffering.findFirstOrThrow({
+    where: { roadmap: { id: course.roadmapId } },
+  });
+  const ids = Array.from({ length: count }, () => randomUUID());
+  onTestFinished(async () => {
+    await prisma.user.deleteMany({ where: { id: { in: ids } } });
+  });
+  await prisma.user.createMany({
+    data: ids.map((id) => ({
+      id,
+      name: 'Estudiante',
+      institutionalEmail: `${id}@notifications.u-roadmaps.test`,
+      rut: id.slice(0, 20),
+    })),
+  });
+  await prisma.participation.createMany({
+    data: ids.map((userId) => ({ userId, courseOfferingId: offering.id, role: 'STUDENT' })),
+  });
+  return ids;
 }
 
 export async function pendingNotices(userId: string, roadmapId: string) {
