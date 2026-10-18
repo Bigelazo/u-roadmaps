@@ -4,23 +4,30 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mockViewport } from '../../../support/viewport';
 
-const { fitViewMock, screenToFlowPositionMock, setViewportMock, reactFlowHandlers } = vi.hoisted(
-  () => ({
-    fitViewMock: vi.fn(),
-    screenToFlowPositionMock: vi.fn<
-      (
-        position: { x: number; y: number },
-        options?: { snapToGrid?: boolean },
-      ) => { x: number; y: number }
-    >((position) => position),
-    setViewportMock: vi.fn(),
-    reactFlowHandlers: {
-      onMoveEnd: undefined as
-        | ((event: object | null, viewport: { x: number; y: number; zoom: number }) => void)
-        | undefined,
-    },
-  }),
-);
+const {
+  fitViewMock,
+  screenToFlowPositionMock,
+  setViewportMock,
+  getInternalNodeMock,
+  updateNodeInternalsMock,
+  reactFlowHandlers,
+} = vi.hoisted(() => ({
+  fitViewMock: vi.fn(),
+  screenToFlowPositionMock: vi.fn<
+    (
+      position: { x: number; y: number },
+      options?: { snapToGrid?: boolean },
+    ) => { x: number; y: number }
+  >((position) => position),
+  setViewportMock: vi.fn(),
+  getInternalNodeMock: vi.fn<(id: string) => { internals: { handleBounds?: object } }>(),
+  updateNodeInternalsMock: vi.fn<(ids: string[]) => void>(),
+  reactFlowHandlers: {
+    onMoveEnd: undefined as
+      | ((event: object | null, viewport: { x: number; y: number; zoom: number }) => void)
+      | undefined,
+  },
+}));
 
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
@@ -237,7 +244,9 @@ vi.mock('@xyflow/react', () => ({
     screenToFlowPosition: screenToFlowPositionMock,
     getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
     setViewport: setViewportMock,
+    getInternalNode: getInternalNodeMock,
   }),
+  useUpdateNodeInternals: () => updateNodeInternalsMock,
 }));
 
 import {
@@ -383,6 +392,9 @@ beforeEach(() => {
   screenToFlowPositionMock.mockReset();
   screenToFlowPositionMock.mockImplementation((position) => position);
   setViewportMock.mockReset();
+  getInternalNodeMock.mockReset();
+  getInternalNodeMock.mockReturnValue({ internals: { handleBounds: {} } });
+  updateNodeInternalsMock.mockReset();
   reactFlowHandlers.onMoveEnd = undefined;
 });
 
@@ -492,6 +504,16 @@ test('keeps the dimensions React Flow measured when refreshed roadmap data arriv
   // React Flow hides a Node without dimensions and does not always measure it again.
   expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
   expect(screen.getByTestId('node-measured-node-2').textContent).toBe('180x80');
+});
+
+test('asks React Flow to measure again a shown Node it left without handle bounds', () => {
+  getInternalNodeMock.mockImplementation((id) =>
+    id === 'node-1' ? { internals: {} } : { internals: { handleBounds: {} } },
+  );
+
+  renderGraph();
+
+  expect(updateNodeInternalsMock).toHaveBeenLastCalledWith(['node-1']);
 });
 
 test('preserves the viewport when the editor panel width changes', async () => {

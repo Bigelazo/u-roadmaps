@@ -25,6 +25,7 @@ import {
   type EdgeChange,
   type NodeChange,
   useReactFlow,
+  useUpdateNodeInternals,
 } from '@xyflow/react';
 import { LayoutTemplate, Maximize } from 'lucide-react';
 import {
@@ -362,6 +363,23 @@ function RoadmapViewportRestorer({
     appliedTokenRef.current = restoration.token;
     void setViewport(restoration.viewport);
   }, [restoration, setViewport]);
+  return null;
+}
+
+/**
+ * Measures again every shown Node that React Flow left without handle bounds. A measurement
+ * taken just before React Flow adopts new nodes can be lost that way, and React Flow does not
+ * retry it: the Node would stay without Dependencies, or hidden after the next projection.
+ */
+function NodeMeasurementRecovery({ nodes }: { nodes: readonly RoadmapFlowNode[] }) {
+  const { getInternalNode } = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    const unmeasured = nodes.flatMap((node) =>
+      !node.hidden && !getInternalNode(node.id)?.internals.handleBounds ? [node.id] : [],
+    );
+    if (unmeasured.length > 0) updateNodeInternals(unmeasured);
+  }, [getInternalNode, nodes, updateNodeInternals]);
   return null;
 }
 
@@ -904,6 +922,7 @@ function RoadmapGraphContents({
       {' '}
       <RoadmapGraphOverlays slots={overlaySlots} />
       <RoadmapViewportRestorer restoration={viewportRestoration} />
+      <NodeMeasurementRecovery nodes={flow.nodes} />
       <ActionMenuViewportAdjustment
         nodeId={canEdit && !model.useActionSheet ? openActionMenuNodeId : null}
         containerRef={containerRef}
