@@ -23,6 +23,7 @@ export type {
   NoticeReadSide,
   NoticeTargetDescriptor,
   NoticeTargetRef,
+  ParticipantAccess,
   RoadmapView,
   RoadmapViewDependency,
   RoadmapViewNode,

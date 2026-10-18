@@ -3,6 +3,7 @@ import type { Prisma } from '@/shared/server/db';
 import { resourceContentState } from '@/shared/server/resource-content-state';
 import { ApplicationError } from '@/shared/errors/server';
 import type {
+  ParticipantAccess,
   RoadmapView,
   RoadmapViewDependency,
   RoadmapViewNode,
@@ -16,6 +17,23 @@ export type ParticipantAccessReader = (
   query: { userId: string; roadmapIds: readonly string[] },
 ) => Promise<ReadonlyMap<string, ReadonlySet<string>>>;
 
+/** Every active participant of one Roadmap, with their role, and each one's accessible Nodes. */
+export type RoadmapAccessReader = (
+  transaction: Prisma.TransactionClient,
+  roadmapId: string,
+) => Promise<
+  Readonly<{
+    participants: readonly { userId: string; role: ParticipantAccess['role'] }[];
+    accessibleByUser: ReadonlyMap<string, ReadonlySet<string>>;
+  }>
+>;
+
+/** Access found only for an active Participation; without one it is 403. */
+function participationRequired(accessible: ReadonlySet<string> | undefined) {
+  if (!accessible) throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
+  return accessible;
+}
+
 /** One Roadmap's accessible Nodes; without an active Participation it is 403. */
 export async function roadmapNodeAccess(
   readAccess: ParticipantAccessReader,
@@ -24,9 +42,7 @@ export async function roadmapNodeAccess(
   roadmapId: string,
 ): Promise<ReadonlySet<string>> {
   const access = await readAccess(transaction, { userId, roadmapIds: [roadmapId] });
-  const accessible = access.get(roadmapId);
-  if (!accessible) throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
-  return accessible;
+  return participationRequired(access.get(roadmapId));
 }
 
 const nodeSelect = {
@@ -60,12 +76,15 @@ const resourceOrder = [{ createdAt: 'asc' }, { id: 'asc' }] as const;
 /**
  * A memoized view of one Roadmap inside a transaction (it sees the transaction's own
  * writes up to each first read). Single lookups query on demand; once a whole collection
- * is loaded (`nodes`, `resources`, ..., or `preload`), lookups answer from it.
+ * is loaded (`nodes`, `resources`, ..., `participantAccess` or `preload`), lookups answer
+ * from it. Node access needs its readers: `readAccess` for one participant,
+ * `readRoadmapAccess` for every participant at once.
  */
 export function roadmapView(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   readAccess?: ParticipantAccessReader,
+  readRoadmapAccess?: RoadmapAccessReader,
 ): RoadmapView {
   let participants: ReturnType<RoadmapView['participants']> | undefined;
   let allNodes: Promise<readonly RoadmapViewNode[]> | undefined;
@@ -75,6 +94,7 @@ export function roadmapView(
   const nodes = new Map<string, Promise<RoadmapViewNode | null>>();
   const resources = new Map<string, Promise<RoadmapViewResource | null>>();
   const accessible = new Map<string, Promise<ReadonlySet<string>>>();
+  let allAccess: Promise<ReadonlyMap<string, ParticipantAccess>> | undefined;
   const nodeTypes = new Map<string, Promise<RoadmapViewNodeType | null>>();
   const nodeResources = new Map<string, ReturnType<RoadmapView['nodeResources']>>();
   let course: ReturnType<RoadmapView['course']> | undefined;
@@ -148,6 +168,8 @@ export function roadmapView(
       return course;
     },
     accessibleNodeIds(userId) {
+      if (allAccess)
+        return allAccess.then((all) => participationRequired(all.get(userId)?.accessibleNodeIds));
       if (!readAccess) throw new Error('Node access is not available in this view.');
       let ids = accessible.get(userId);
       if (!ids) {
@@ -155,6 +177,19 @@ export function roadmapView(
         accessible.set(userId, ids);
       }
       return ids;
+    },
+    participantAccess() {
+      if (!readRoadmapAccess) throw new Error('Roadmap access is not available in this view.');
+      allAccess ??= readRoadmapAccess(transaction, roadmapId).then(
+        ({ participants, accessibleByUser }) =>
+          new Map(
+            participants.map(({ userId, role }) => [
+              userId,
+              { userId, role, accessibleNodeIds: accessibleByUser.get(userId) ?? new Set() },
+            ]),
+          ),
+      );
+      return allAccess.then((all) => [...all.values()]);
     },
     dependencies() {
       allDependencies ??= transaction.dependency.findMany({

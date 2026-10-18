@@ -1,6 +1,7 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import {
+  nodeOpeners,
   nodeVisibleBefore,
   type NoticeTargetDescriptor,
   type RoadmapView,
@@ -19,11 +20,7 @@ type NodeDescriptionFact = Extract<RoadmapChangeFact, { kind: 'node-description'
 async function canOpenNode(nodeId: string, changes: RoadmapChanges, roadmap: RoadmapView) {
   if (!(await nodeVisibleBefore(nodeId, changes, roadmap))) return [];
   if (!(await roadmap.node(nodeId))?.isVisible) return [];
-  const participants = await roadmap.participants();
-  const accessible = await Promise.all(
-    participants.map(async ({ userId }) => (await roadmap.accessibleNodeIds(userId)).has(nodeId)),
-  );
-  return participants.filter((_, index) => accessible[index]).map(({ userId }) => userId);
+  return nodeOpeners(nodeId, roadmap);
 }
 
 function nodeTitle({ context }: TargetValues) {

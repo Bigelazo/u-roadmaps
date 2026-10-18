@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { Prisma } from '@/shared/server/db';
-import { readParticipantAccess } from '@/features/roadmap/access';
+import { readAccessSnapshot, readParticipantAccess } from '@/features/roadmap/access';
 import {
   acknowledgeOwnNotices as acknowledgeNotices,
   countOwnNodeChanges,
@@ -49,7 +49,7 @@ export function recordRoadmapNotices(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
 ): Promise<NoticeDelivery | undefined> {
-  return recordNoticeTargets(transaction, changes, readParticipantAccess);
+  return recordNoticeTargets(transaction, changes, readParticipantAccess, readAccessSnapshot);
 }
 
 export type InboxIdentity = Readonly<{ userId: string }>;

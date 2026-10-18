@@ -12,7 +12,11 @@ import {
 import { acceptDelivery } from '../notice-delivery';
 import { nodeCreationRef } from '../../application/absorption';
 import { forgetDeletedNode, recordKnowersValueAtEdit, recordKnownValues } from './known-values';
-import { roadmapView, type ParticipantAccessReader } from './roadmap-view';
+import {
+  roadmapView,
+  type ParticipantAccessReader,
+  type RoadmapAccessReader,
+} from './roadmap-view';
 import { reconcileNoticeTarget } from './reconcile';
 import { noticeCourseContext, type NoticeCourseContext } from './course-context';
 import { lockOwnChanges, recordOwnChanges, type OwnTarget } from './own-changes';
@@ -39,13 +43,15 @@ const DELIVERY_CONCURRENCY = 5;
 /**
  * (A) Record, inside the roadmap transaction: fix every recipient's Known value
  * before the change is visible, decide the audience, and return the delivery.
+ * Audiences read every participant's Node access at once, memoized for this change only.
  */
 export async function recordNoticeTargets(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
   readAccess?: ParticipantAccessReader,
+  readRoadmapAccess?: RoadmapAccessReader,
 ): Promise<NoticeDelivery | undefined> {
-  const roadmap = roadmapView(transaction, changes.roadmapId, readAccess);
+  const roadmap = roadmapView(transaction, changes.roadmapId, readAccess, readRoadmapAccess);
   await lockOwnChanges(transaction, changes);
   const targets: RecordedTarget[] = [];
   const ownTargets: OwnTarget[] = [];
@@ -149,7 +155,10 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
     console.warn('Roadmap notice delivery failed', { roadmapId: change.courseContext.roadmapId });
 }
 
-/** (B) Deliver to one recipient in its own transaction, in the shared lock order. */
+/**
+ * (B) Deliver to one recipient in its own transaction, in the shared lock order. Its view
+ * reads only this recipient's access, live under their lock.
+ */
 async function deliverTarget(
   { descriptor, target, previousValue, previousContext, context }: RecordedTarget,
   recipientId: string,
