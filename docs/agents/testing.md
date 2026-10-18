@@ -25,8 +25,15 @@ pnpm test
 ```
 
 Los comandos y su orden están definidos en [package.json](../../package.json).
-`pnpm test:unit` también contiene pruebas con PostgreSQL real: consultar
-[roadmap-change-port.md](../roadmap-change-port.md) para su preparación y adapter.
+`pnpm test:unit` también contiene pruebas con PostgreSQL real, en su proyecto
+`database`: consultar los dos proyectos en
+[Harness de notificaciones con PostgreSQL real](#harness-de-notificaciones-con-postgresql-real)
+para su preparación. Para ejecutar uno de esos archivos:
+
+```sh
+pnpm test:unit tests/features/roadmap/preview-version.test.ts
+```
+
 Para los unitarios que comparan distintos orígenes de NextAuth, cargar el entorno
 y retirar el origen fijo:
 
