@@ -174,17 +174,28 @@ test('visibility and deletion report their facts and recipient access transition
   ]);
 });
 
-test('Dependencies removed by hiding a Node are not reported as Dependency facts', async ({
+test('Dependencies removed by hiding a Node are reported as removed, with the Node hidden', async ({
   course,
 }) => {
   const recording = recordingChangePort();
-  const target = await addNode(course);
-  await prisma.dependency.create({
+  const target = await addNode(course, 'Colas');
+  const dependency = await prisma.dependency.create({
     data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
   });
   await teacherEdits(course, recording.port).update(target.id, { isVisible: false });
   expect(await prisma.dependency.count({ where: { targetNodeId: target.id } })).toBe(0);
-  expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([]);
+  expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([
+    {
+      kind: 'dependency',
+      dependencyId: dependency.id,
+      sourceNodeId: course.change.nodeId,
+      targetNodeId: target.id,
+      previous: true,
+      current: false,
+      sourceNode: { title: expect.any(String), isVisible: true },
+      targetNode: { title: 'Colas', isVisible: false },
+    },
+  ]);
 });
 
 test('dependencies report the pair and distinct access for each recipient; Completion targets its actor', async ({

@@ -153,17 +153,33 @@ test.for(['hidden', 'Teacher-blocked'] as const)(
   },
 );
 
-test('a Dependency notice pending when its Node is hidden stays shown to teaching staff only', async ({
+test('hiding a Node tells teaching staff its known Dependencies are gone and withdraws a pending one', async ({
   course,
 }) => {
-  const node = await addNode(course, 'Árboles');
+  const [stacks, queues, trees] = await Promise.all([
+    addNode(course, 'Pilas'),
+    addNode(course, 'Colas'),
+    addNode(course, 'Árboles'),
+  ]);
   const edits = teacherEdits(course);
-  await edits.connect(course.change.nodeId, node.id);
-  await edits.update(node.id, { isVisible: false });
-  const targets = async (userId: string) =>
-    (await pendingNotices(userId, course.roadmapId)).map(noticeTarget).sort();
-  expect(await targets(course.colleagueId)).toEqual(['dependency', 'node-access']);
-  expect(await targets(course.studentId)).toEqual(['node-access']);
+  await edits.connect(stacks.id, queues.id);
+  await enterRoadmap(course.colleagueId, course.roadmapId);
+  await enterRoadmap(course.studentId, course.roadmapId);
+  await edits.connect(queues.id, trees.id);
+  await edits.update(queues.id, { isVisible: false });
+  const routes = async (userId: string) =>
+    (await pendingNotices(userId, course.roadmapId))
+      .filter((notice) => noticeTarget(notice) === 'dependency')
+      .map(({ body }) => body);
+  expect({
+    colleague: await routes(course.colleagueId),
+    student: await routes(course.studentId),
+    actor: await routes(course.teacherId),
+  }).toEqual({
+    colleague: ['«Colas» ya no requiere «Pilas».'],
+    student: [],
+    actor: [],
+  });
 });
 
 test('a rename while the Node is hidden reaches teaching staff as a rename; revealing it does not', async ({

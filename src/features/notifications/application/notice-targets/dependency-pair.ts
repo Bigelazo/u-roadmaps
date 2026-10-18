@@ -36,7 +36,8 @@ async function pairRecipients(
   _changes: RoadmapChanges,
   roadmap: RoadmapView,
 ) {
-  // Removals caused by hiding or deleting a Node are not reported as Dependency facts.
+  // Removals caused by hiding a Node arrive with the Node already hidden, so they reach
+  // teaching staff only. Removals caused by deleting a Node are not reported as Dependency facts.
   return nodeViewers(fact.sourceNode.isVisible && fact.targetNode.isVisible, roadmap);
 }
 
