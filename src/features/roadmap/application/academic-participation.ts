@@ -22,6 +22,15 @@ export type MufasaCourseAccess = Readonly<{
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
 
+/**
+ * U-Campus's answer for one offering. Without access, `isComplete` says whether that is
+ * authoritative (the complete history omits the offering) or merely unknown.
+ */
+export type CourseAccessReport = Readonly<{
+  access: MufasaCourseAccess | null;
+  isComplete: boolean;
+}>;
+
 export function canEditRoadmap(access: MufasaCourseAccess) {
   return positionCapabilities(effectivePosition(access.positions)).canEdit;
 }
@@ -42,7 +51,7 @@ const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =
 export async function readMufasaCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
-): Promise<{ access: MufasaCourseAccess | null; isComplete: boolean }> {
+): Promise<CourseAccessReport> {
   const mufasa = await getMufasaAcademicCourses(user.rut, {
     useLocalFixtureData: user.useLocalFixtureData === true,
   });
@@ -183,7 +192,7 @@ async function deactivateParticipations(
 export async function applyCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
-  { access, isComplete }: Awaited<ReturnType<typeof readMufasaCourseAccess>>,
+  { access, isComplete }: CourseAccessReport,
   changePort: RoadmapChangePort,
 ) {
   if (access) return materializeParticipation(user, identifier, access, changePort);
