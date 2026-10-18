@@ -111,6 +111,7 @@ export function roadmapView(
       return participants;
     },
     role(userId) {
+      if (allAccess) return allAccess.then((all) => all.get(userId)?.role ?? null);
       if (participants)
         return participants.then((all) => all.find((one) => one.userId === userId)?.role ?? null);
       let role = roles.get(userId);
