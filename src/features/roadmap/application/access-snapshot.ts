@@ -11,7 +11,7 @@ export type AccessSnapshot = Readonly<{
     isTeacherBlocked: boolean;
   }[];
   accessibleByUser: ReadonlyMap<string, ReadonlySet<string>>;
-  participants: readonly { userId: string }[];
+  participants: readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[];
 }>;
 
 type AccessSnapshotParticipant = Readonly<{
@@ -51,7 +51,7 @@ function projectAccessSnapshot({
   return {
     nodes,
     accessibleByUser,
-    participants: activeParticipants.map(({ userId }) => ({ userId })),
+    participants: activeParticipants.map(({ userId, role }) => ({ userId, role })),
   };
 }
 
