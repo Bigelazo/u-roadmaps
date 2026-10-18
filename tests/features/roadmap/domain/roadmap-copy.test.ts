@@ -52,7 +52,7 @@ const source: RoadmapCopySource = {
   ],
   resources: [
     { roadmapNodeId: 'visible', title: 'Guía', url: 'https://example.com', type: 'LINK' },
-    { roadmapNodeId: 'visible', title: 'Clase', url: 'https://video.example', type: 'VIDEO' },
+    { roadmapNodeId: 'visible', title: 'Clase', url: 'https://video.example', type: 'LINK' },
     {
       roadmapNodeId: 'hidden',
       title: 'Apunte',
@@ -150,7 +150,7 @@ describe('planRoadmapCopy', () => {
         roadmapNodeId: nodeById('Visible').id,
         title: 'Clase',
         url: 'https://video.example',
-        type: 'VIDEO',
+        type: 'LINK',
         fileKey: null,
         fileContentType: null,
       },

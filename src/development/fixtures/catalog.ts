@@ -1,7 +1,7 @@
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
 
 type ParticipationRole = 'STUDENT' | 'TEACHER';
-type ResourceType = 'FILE' | 'LINK' | 'VIDEO';
+type ResourceType = 'FILE' | 'LINK';
 type FixtureNodeKind = 'CONTENT' | 'ASSESSMENT' | 'SUPPLEMENTARY' | 'CUSTOM';
 type DescriptionLength = 'SHORT' | 'MEDIUM' | 'LONG';
 export type FileFormat = 'PDF' | 'MARKDOWN' | 'DOCX' | 'XLSX' | 'PPTX';
@@ -633,7 +633,7 @@ const cc1002Resources: readonly ResourceBlueprint[] = [
   {
     node: 4,
     title: 'Video: diseñar funciones pequeñas',
-    type: 'VIDEO',
+    type: 'LINK',
     url: 'https://www.youtube.com/watch?v=8mAITcNt710',
   },
   {
@@ -655,7 +655,7 @@ const cc1002Resources: readonly ResourceBlueprint[] = [
   {
     node: 8,
     title: 'Video: depurar con evidencia',
-    type: 'VIDEO',
+    type: 'LINK',
     url: 'https://www.youtube.com/watch?v=8mAITcNt710',
   },
   {
@@ -685,7 +685,7 @@ const ma1001Resources: readonly ResourceBlueprint[] = [
   {
     node: 4,
     title: 'Video: interpretar una gráfica',
-    type: 'VIDEO',
+    type: 'LINK',
     url: 'https://www.youtube.com/watch?v=Vf7fCTaYgHc',
   },
   {
@@ -722,7 +722,7 @@ const fi1001Resources: readonly ResourceBlueprint[] = [
   {
     node: 4,
     title: 'Video: diagramas de cuerpo libre',
-    type: 'VIDEO',
+    type: 'LINK',
     url: 'https://www.youtube.com/watch?v=K_m3N6MZp6I',
   },
   {
@@ -738,7 +738,7 @@ const fi1001Resources: readonly ResourceBlueprint[] = [
   {
     node: 8,
     title: 'Video: conservar momentum',
-    type: 'VIDEO',
+    type: 'LINK',
     url: 'https://www.youtube.com/watch?v=K_m3N6MZp6I',
   },
   {

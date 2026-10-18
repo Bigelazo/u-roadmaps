@@ -62,7 +62,7 @@ beforeEach(() => {
   removeResource.mockResolvedValue({});
 });
 
-test.each(['LINK', 'VIDEO'] as const)('returns a confirmed %s Resource addition', async (type) => {
+test.each(['LINK'] as const)('returns a confirmed %s Resource addition', async (type) => {
   const response = await POST(
     new Request('http://localhost/resources', {
       method: 'POST',

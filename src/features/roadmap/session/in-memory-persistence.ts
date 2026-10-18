@@ -1,3 +1,4 @@
+import { resourceEditError } from '@/features/roadmap/domain/resource';
 import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
@@ -440,6 +441,7 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async addResource(_input: RoadmapCanvasSessionInput, nodeId: string, resource: ResourceInput) {
+      if (resource.type !== 'LINK') throw new Error('Los recursos externos deben ser Enlaces.');
       appendResource(nodeId, { ...resource, id: crypto.randomUUID() });
     },
 
@@ -457,7 +459,16 @@ export function createInMemoryRoadmapSessionPersistence(
       resourceId: string,
       resource: ResourceInput,
     ) {
-      roadmap = resourceUpdate(roadmap, resourceId, (current) => ({ ...current, ...resource }));
+      roadmap = resourceUpdate(roadmap, resourceId, (current) => {
+        // Session inputs include the unchanged File discriminator and displayed URL.
+        const changes =
+          current.type === 'FILE' && resource.type === 'FILE' && resource.url === current.url
+            ? { title: resource.title }
+            : resource;
+        const error = resourceEditError(current.type, changes);
+        if (error) throw new Error(error);
+        return { ...current, ...changes };
+      });
     },
 
     async deleteResource(_input: RoadmapCanvasSessionInput, resourceId: string) {

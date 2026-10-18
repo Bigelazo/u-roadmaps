@@ -119,7 +119,6 @@ function nodeTypeMedia(nodeType: NodeTypePresentation) {
 
 function resourceTypeLabel(type: Resource['type'] | undefined) {
   if (type === 'FILE') return 'Archivo';
-  if (type === 'VIDEO') return 'Video';
   return 'Enlace';
 }
 

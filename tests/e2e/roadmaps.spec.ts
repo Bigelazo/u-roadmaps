@@ -310,7 +310,7 @@ test('teacher API manages a node type, resources, and dependencies through their
   const resourceId = (await resource.json()).resource.id;
   await ok(
     await api.patch(course.apiPath(`/resources/${resourceId}`), {
-      data: { title: 'Video E2E', type: 'VIDEO' },
+      data: { title: 'Video E2E', type: 'LINK' },
     }),
   );
   await ok(

@@ -23,7 +23,7 @@ type RoadmapNode = {
     id: string;
     title: string;
     url: string;
-    type: 'FILE' | 'LINK' | 'VIDEO';
+    type: 'FILE' | 'LINK';
     fileKey: string | null;
   }>;
 };
