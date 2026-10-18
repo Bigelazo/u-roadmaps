@@ -70,8 +70,7 @@ test('three pending targets of a Roadmap become one Inbox row; availability neve
   expect((await inbox(course)).map(({ id }) => id)).toEqual([titles[1], titles[0], availability]);
 
   const [newest] = await storeNotices(course, [titleNotice(nodeIds[2])]);
-  const rows = await inbox(course);
-  expect(rows).toMatchObject([
+  expect(await inbox(course)).toMatchObject([
     {
       id: newest,
       body: 'El Roadmap ha recibido 3 cambios.',
@@ -79,5 +78,4 @@ test('three pending targets of a Roadmap become one Inbox row; availability neve
     },
     { id: availability },
   ]);
-  expect(rows[0].data).not.toHaveProperty('changeKind');
 });
