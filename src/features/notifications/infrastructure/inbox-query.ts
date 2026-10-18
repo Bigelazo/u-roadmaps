@@ -1,6 +1,6 @@
 import 'server-only';
 import { prisma, Prisma } from '@/shared/server/db';
-import { groupedRoadmapNotice } from '../application/group-roadmap-notices';
+import { groupedRoadmapNotice } from '../application/grouped-roadmap-notice';
 import { noticeTargetDescriptors, type ShownTo } from '../application/notice-targets';
 import { NOTICE_TARGET } from '../application/notice-targets/kinds';
 
