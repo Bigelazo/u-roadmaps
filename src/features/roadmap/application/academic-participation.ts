@@ -7,6 +7,7 @@ import {
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
 import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
+import { prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 
 export type AcademicUser = Readonly<{
@@ -141,18 +142,85 @@ export async function materializeParticipation(
   );
 }
 
-/** Resolves and materializes participation when U-Campus grants course access. */
+const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
+  `${courseCode}:${year}:${semester}`;
+
+/**
+ * Deactivates the user's active Participations in the offerings a complete U-Campus report
+ * omits. The Participations and their Completions stay; the notice lifecycle withdraws
+ * pending notices when a Participation stops being active (ADR-0024). Like activation, a
+ * loss reports no fact: access snapshots and notice audiences read only active ones.
+ */
+async function deactivateParticipations(
+  user: AcademicUser,
+  isOmitted: (offering: CourseOfferingIdentifier) => boolean,
+  changePort: RoadmapChangePort,
+) {
+  const active = await prisma.participation.findMany({
+    where: { userId: user.id, isActive: true },
+    select: {
+      courseOfferingId: true,
+      courseOffering: {
+        select: { courseCode: true, year: true, semester: true, roadmap: { select: { id: true } } },
+      },
+    },
+  });
+  for (const { courseOfferingId, courseOffering } of active) {
+    if (!isOmitted(courseOffering)) continue;
+    await roadmapChangeTransaction(
+      changePort,
+      async (transaction) => {
+        // Match notice delivery's parent -> Participation -> recipient lock order.
+        if (courseOffering.roadmap)
+          await lockRoadmap(transaction, courseOffering.roadmap.id, 'key-share');
+        await transaction.participation.updateMany({
+          where: { userId: user.id, courseOfferingId, isActive: true },
+          data: { isActive: false },
+        });
+      },
+      { isolation: 'read-committed' },
+    );
+  }
+}
+
+/**
+ * Applies one offering's U-Campus answer: materializes the reported access or, when a
+ * complete report omits the offering, deactivates its Participation. A complete report
+ * answers for one offering as authoritatively as for the whole history.
+ */
+export async function applyCourseAccess(
+  user: AcademicUser,
+  identifier: CourseOfferingIdentifier,
+  { access, isComplete }: Awaited<ReturnType<typeof readMufasaCourseAccess>>,
+  changePort: RoadmapChangePort,
+) {
+  if (access) return materializeParticipation(user, identifier, access, changePort);
+  if (isComplete) {
+    const key = offeringKey(identifier);
+    await deactivateParticipations(user, (offering) => offeringKey(offering) === key, changePort);
+  }
+  return null;
+}
+
+/** Brings the user's Participation in one offering in line with U-Campus. */
 export async function synchronizeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
   changePort: RoadmapChangePort,
 ) {
-  const access = await getMufasaCourseAccess(user, identifier);
-  if (!access) return null;
-  return materializeParticipation(user, identifier, access, changePort);
+  return applyCourseAccess(
+    user,
+    identifier,
+    await readMufasaCourseAccess(user, identifier),
+    changePort,
+  );
 }
 
-/** Synchronize every reported offering once, combining all of its positions. */
+/**
+ * Synchronizes every reported offering once, combining all of its positions. A complete
+ * report lists the whole academic history (every period), so it also deactivates the
+ * Participations it no longer contains.
+ */
 export async function synchronizeAcademicParticipations(
   user: AcademicUser,
   changePort: RoadmapChangePort,
@@ -163,7 +231,7 @@ export async function synchronizeAcademicParticipations(
   if (source.source === 'MUFASA' && source.isComplete !== false) {
     const offerings = new Map<string, typeof source.courses>();
     for (const course of source.courses) {
-      const key = `${course.courseCode}:${course.year}:${course.semester}`;
+      const key = offeringKey(course);
       offerings.set(key, [...(offerings.get(key) ?? []), course]);
     }
     // Each offering opens an interactive transaction. Await its commit before
@@ -186,6 +254,11 @@ export async function synchronizeAcademicParticipations(
         changePort,
       );
     }
+    await deactivateParticipations(
+      user,
+      (offering) => !offerings.has(offeringKey(offering)),
+      changePort,
+    );
   }
   return source;
 }

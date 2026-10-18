@@ -3,8 +3,8 @@ import { forbidden } from './errors';
 import 'server-only';
 
 import {
+  applyCourseAccess,
   readMufasaCourseAccess,
-  materializeParticipation,
   type AcademicUser,
 } from './academic-participation';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
@@ -21,11 +21,12 @@ export async function requireRoadmapCreationAccess(
   identifier: CourseOfferingIdentifier,
   changePort: RoadmapChangePort,
 ) {
-  const [{ access, isComplete }, courseOffering] = await Promise.all([
+  const [report, courseOffering] = await Promise.all([
     readMufasaCourseAccess(actor, identifier),
     prisma.courseOffering.findUnique({ where: { courseCode_year_semester: identifier } }),
   ]);
-  if (access) await materializeParticipation(actor, identifier, access, changePort);
+  await applyCourseAccess(actor, identifier, report, changePort);
+  const { access, isComplete } = report;
   // The stored position counts only while U-Campus cannot report completely.
   const participation =
     !isComplete && courseOffering
