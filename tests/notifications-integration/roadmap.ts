@@ -15,6 +15,9 @@ import {
   deleteRoadmapDependency,
   createRoadmapResource,
   deleteRoadmapNode,
+  previewNodeDeletion,
+  previewNodeVisibility,
+  previewRoadmapDependency,
   previewTeacherBlock,
   removeRoadmapResource,
   updateRoadmapNode,
@@ -22,14 +25,23 @@ import {
   updateRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
+import type { TeacherBlockOperation } from '@/features/roadmap/types';
 import { teacher, type IntegrationCourse } from './fixtures';
 
-/** Real Roadmap edits by the course teacher, delivered immediately after commit. */
+/**
+ * Real Roadmap edits by the course teacher, delivered immediately after commit. A change
+ * with a Change impact confirms it as the canvas does: it previews and sends the version.
+ */
 export function teacherEdits(
   course: IntegrationCourse,
   port: RoadmapChangePort = scheduledRoadmapChangePort,
 ) {
   const editor = teacher(course);
+  const changeTeacherBlockConfirmed = async (nodeId: string, operation: TeacherBlockOperation) => {
+    const input = { ...editor, id: nodeId, operation };
+    const { version } = await previewTeacherBlock(input);
+    return changeTeacherBlock({ ...input, previewVersion: version }, port);
+  };
   return {
     create: (title: string) =>
       createRoadmapNode(
@@ -41,21 +53,27 @@ export function teacherEdits(
       ),
     rename: (nodeId: string, title: string) =>
       updateRoadmapNode({ ...editor, id: nodeId, input: { title } }, port),
-    update: (nodeId: string, input: Record<string, unknown>) =>
-      updateRoadmapNode({ ...editor, id: nodeId, input }, port),
-    remove: (nodeId: string) => deleteRoadmapNode({ ...editor, id: nodeId }, port),
-    block: (nodeId: string) =>
-      changeTeacherBlock({ ...editor, id: nodeId, operation: 'BLOCK' }, port),
-    async unblock(nodeId: string) {
-      const input = { ...editor, id: nodeId, operation: 'UNBLOCK' as const };
-      const preview = await previewTeacherBlock(input);
-      return changeTeacherBlock({ ...input, previewVersion: preview.version }, port);
+    async update(nodeId: string, input: Record<string, unknown>) {
+      const previewVersion =
+        input.isVisible === false
+          ? (await previewNodeVisibility({ ...editor, id: nodeId })).version
+          : undefined;
+      return updateRoadmapNode({ ...editor, id: nodeId, input, previewVersion }, port);
     },
+    async remove(nodeId: string) {
+      const { version } = await previewNodeDeletion({ ...editor, id: nodeId });
+      return deleteRoadmapNode({ ...editor, id: nodeId, previewVersion: version }, port);
+    },
+    block: (nodeId: string) => changeTeacherBlockConfirmed(nodeId, 'BLOCK'),
+    unblock: (nodeId: string) => changeTeacherBlockConfirmed(nodeId, 'UNBLOCK'),
     renameType: (nodeTypeId: string, name: string) =>
       updateRoadmapNodeType({ ...editor, id: nodeTypeId, input: { name } }, port),
-    connect: async (sourceNodeId: string, targetNodeId: string) =>
-      (await createRoadmapDependency({ ...editor, input: { sourceNodeId, targetNodeId } }, port))
-        .dependency.id,
+    async connect(sourceNodeId: string, targetNodeId: string) {
+      const request = { ...editor, input: { sourceNodeId, targetNodeId } };
+      const { version } = await previewRoadmapDependency(request);
+      return (await createRoadmapDependency({ ...request, previewVersion: version }, port))
+        .dependency.id;
+    },
     disconnect: (dependencyId: string) =>
       deleteRoadmapDependency({ ...editor, id: dependencyId }, port),
     updateType: (nodeTypeId: string, input: Record<string, unknown>) =>

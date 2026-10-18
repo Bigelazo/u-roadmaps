@@ -2,6 +2,7 @@ import { expect, test } from './fixtures';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { authenticateAs, ok, toast } from './helpers';
+import { changeTeacherBlock } from './previewed-writes';
 
 function dayOffset(days: number) {
   const day = new Date(`${chileCalendarDay()}T12:00:00Z`);
@@ -30,7 +31,7 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
   const first = await createNode('Closure prerequisite', 0);
   const second = await createNode('Closure dependent', 200);
   await createDependency(teacher, offering, first.id, second.id);
-  await ok(await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, offering.apiPath(`/nodes/${first.id}`)));
   await ok(
     await teacher.put(offering.apiPath(`/nodes/${second.id}/teacher-block/schedule`), {
       data: { unlockOn: dayOffset(1) },
@@ -117,7 +118,7 @@ test('closure leaves pending notices untouched and repeated late passes preserve
   });
   const { createNode } = await prepareNodeCreator(teacher, offering);
   const node = await createNode('Pending before closure', 0);
-  await ok(await teacher.post(offering.apiPath(`/nodes/${node.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, offering.apiPath(`/nodes/${node.id}`)));
   const notices = async () =>
     (await (await student.get(`/api/notifications?roadmapId=${offering.roadmapId}`)).json())
       .notifications;
@@ -166,7 +167,7 @@ test('the freeze date stays editable today and a failed closure is not a frozen 
   const today = await createNode('Editable through today', 0);
   await ok(await student.post(offering.apiPath(`/nodes/${today.id}/completion`)));
   const blocked = await createNode('Atomic closure keeps its blocks on failure', 400);
-  await ok(await teacher.post(offering.apiPath(`/nodes/${blocked.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, offering.apiPath(`/nodes/${blocked.id}`)));
   await ok(
     await teacher.put(offering.apiPath(`/nodes/${blocked.id}/teacher-block/schedule`), {
       data: { unlockOn: dayOffset(1) },

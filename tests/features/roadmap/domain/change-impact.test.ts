@@ -25,19 +25,17 @@ test('allows a preview version that still matches the Change impact', () => {
   });
 });
 
-test.each(['hide', 'delete', 'dependency', 'block'] as const)(
-  'allows a %s confirmation that sends no preview version',
-  (change) => {
+test.each([
+  ['hide', 'NODE_VISIBILITY_PREVIEW_STALE'],
+  ['delete', 'NODE_DELETE_PREVIEW_STALE'],
+  ['dependency', 'DEPENDENCY_PREVIEW_STALE'],
+  ['block', 'TEACHER_BLOCK_PREVIEW_STALE'],
+  ['unlock', 'TEACHER_BLOCK_PREVIEW_STALE'],
+] as const)(
+  'requires a %s confirmation to send its previewed Change impact version',
+  (change, reason) => {
     expect(
       decideChangeImpactVersion({ change, sentVersion: undefined, version: 'current' }),
-    ).toEqual({
-      kind: 'ALLOWED',
-    });
+    ).toMatchObject({ kind: 'REJECTED', reason });
   },
 );
-
-test('requires an unlock to confirm its previewed Change impact', () => {
-  expect(
-    decideChangeImpactVersion({ change: 'unlock', sentVersion: undefined, version: 'current' }),
-  ).toMatchObject({ kind: 'REJECTED', reason: 'TEACHER_BLOCK_PREVIEW_STALE' });
-});

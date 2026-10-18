@@ -312,7 +312,7 @@ export function createInMemoryRoadmapSessionPersistence(
     async connectNodes(
       _input: RoadmapCanvasSessionInput,
       request: RoadmapDependencyRequest,
-      previewVersion?: string,
+      previewVersion: string,
     ) {
       const impact = dependencyImpact(roadmap, request);
       rejectStalePreview('dependency', previewVersion, impact);
@@ -428,7 +428,7 @@ export function createInMemoryRoadmapSessionPersistence(
       return deletionImpact(roadmap, nodeId);
     },
 
-    async deleteNode(_input: RoadmapCanvasSessionInput, nodeId: string, previewVersion?: string) {
+    async deleteNode(_input: RoadmapCanvasSessionInput, nodeId: string, previewVersion: string) {
       rejectStalePreview('delete', previewVersion, deletionImpact(roadmap, nodeId));
       roadmap = {
         ...roadmap,

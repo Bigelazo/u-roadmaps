@@ -5,6 +5,7 @@ import { expect, test, type E2EUser } from './fixtures';
 import { sql } from './database';
 import { authenticateAs, ok } from './helpers';
 import { listNotices, recognize } from './notices';
+import { changeTeacherBlock, deleteNode } from './previewed-writes';
 
 async function noticeCount(api: APIRequestContext, query: string) {
   return (await (await api.get(`/api/notifications/counts?${query}`)).json()).count;
@@ -190,12 +191,12 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
 
   const otherNodeResourceNotices = await resourceNotices(student, otherNodeId);
   expect(otherNodeResourceNotices).toHaveLength(0);
-  await ok(await author.delete(roadmapPath(`/nodes/${nodeId}`)), 204);
+  await ok(await deleteNode(author, roadmapPath(`/nodes/${nodeId}`)), 204);
   await expect.poll(() => resourceNotices(student, nodeId)).toHaveLength(0);
   await expect.poll(() => getNotices(student, nodeId)).toHaveLength(1);
   expect((await getNotices(student, nodeId))[0].data.changeKind).toBe('node-deleted');
 
-  await ok(await author.delete(roadmapPath(`/nodes/${otherNodeId}`)), 204);
+  await ok(await deleteNode(author, roadmapPath(`/nodes/${otherNodeId}`)), 204);
   const afterOtherCascade = await resourceNotices(student, otherNodeId);
   expect(afterOtherCascade).toHaveLength(0);
 });
@@ -345,7 +346,7 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
     404,
   );
   await ok(await withProgressApi.post('/api/notifications/openings', { data: opening }));
-  await ok(await author.post(roadmapPath(`/nodes/${nodeId}/teacher-block`)));
+  await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${nodeId}`)));
   await expect.poll(() => latestKind(withProgress)).toBe('node-blocked');
   await expect.poll(() => latestKind(assistant)).toBe('node-blocked');
   const teacherCountAfterBlock = await count(assistant, nodeId);

@@ -3,6 +3,7 @@ import { SignJWT } from 'jose';
 import { expect, test, type E2EUser } from './fixtures';
 import { authenticateAs, ok } from './helpers';
 import { createDependency } from './create-node';
+import { changeTeacherBlock, connectNodes } from './previewed-writes';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -319,22 +320,21 @@ test('teacher API manages a node type, resources, and dependencies through their
     400,
   );
 
-  const dependency = await api.post(course.apiPath('/dependencies'), {
-    data: {
-      sourceNodeId: sourceId,
-      targetNodeId: targetId,
-      sourceHandle: 'bottom',
-      targetHandle: 'top',
-    },
+  const dependency = await connectNodes(api, course.apiPath('/dependencies'), {
+    sourceNodeId: sourceId,
+    targetNodeId: targetId,
+    sourceHandle: 'bottom',
+    targetHandle: 'top',
   });
   await ok(dependency, 201);
   const dependencyId = (await dependency.json()).dependency.id;
-  await ok(
+  const cycle = await ok(
     await api.post(course.apiPath('/dependencies'), {
       data: { sourceNodeId: targetId, targetNodeId: sourceId },
     }),
     409,
   );
+  expect((await cycle.json()).error.code).toBe('DEPENDENCY_CYCLE');
   await ok(await api.delete(course.apiPath(`/dependencies/${dependencyId}`)), 204);
   await ok(await api.delete(course.apiPath(`/resources/${resourceId}`)), 204);
 });
@@ -378,13 +378,11 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   });
   await ok(resourceResponse, 201);
 
-  const dependencyResponse = await api.post(course.apiPath('/dependencies'), {
-    data: {
-      sourceNodeId,
-      targetNodeId,
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    },
+  const dependencyResponse = await connectNodes(api, course.apiPath('/dependencies'), {
+    sourceNodeId,
+    targetNodeId,
+    sourceHandle: 'right',
+    targetHandle: 'left',
   });
   await ok(dependencyResponse, 201);
 
@@ -552,7 +550,8 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   await ok(await student.post(teacherBlockPath(root.id)), 403);
   const preview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`);
   await ok(preview);
-  expect((await preview.json()).nodes).toEqual(
+  const blockImpact = await preview.json();
+  expect(blockImpact.nodes).toEqual(
     expect.arrayContaining(
       [root, left, right, join, leaf].map(({ id, title }) =>
         expect.objectContaining({ id, title }),
@@ -572,7 +571,9 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   await ok(resource, 201);
   await ok(await student.post(course.apiPath(`/nodes/${root.id}/completion`)));
 
-  const block = await teacher.post(teacherBlockPath(root.id));
+  const block = await teacher.post(teacherBlockPath(root.id), {
+    headers: { 'x-teacher-block-preview': blockImpact.version },
+  });
   await ok(block);
   expect((await block.json()).nodes.map((node: { id: string }) => node.id)).toEqual(
     expect.arrayContaining([root.id, left.id, right.id, join.id, leaf.id]),
@@ -624,7 +625,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
     (await afterStaleUnlock.json()).nodes.find((node: { id: string }) => node.id === left.id)
       .isTeacherBlocked,
   ).toBe(true);
-  await ok(await teacher.post(teacherBlockPath(root.id)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${root.id}`)));
   const refreshedUpstreamPreview = await teacher.get(
     `${teacherBlockPath(left.id)}?operation=UNBLOCK`,
   );
@@ -640,7 +641,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
     (await studentRoadmap.json()).nodes.find((node: { id: string }) => node.id === root.id),
   ).toMatchObject({ isCompleted: true });
 
-  await ok(await teacher.post(teacherBlockPath(external.id)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${external.id}`)));
   const branchPreview = await teacher.get(`${teacherBlockPath(root.id)}?operation=BRANCH_UNLOCK`);
   await ok(branchPreview);
   const branch = await branchPreview.json();
@@ -682,11 +683,18 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   await ok(hiddenBlock, 409);
   expect((await hiddenBlock.json()).error.code).toBe('HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN');
 
-  const concurrentBlocks = await Promise.all([
-    teacher.post(teacherBlockPath(root.id)),
-    teacher.post(teacherBlockPath(root.id)),
-  ]);
-  expect(concurrentBlocks.map((response) => response.status())).toEqual([200, 200]);
+  // Two confirmations of the same impact: once one applies, the other's impact is stale.
+  const { version } = await (
+    await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`)
+  ).json();
+  const concurrentBlocks = await Promise.all(
+    Array.from({ length: 2 }, () =>
+      teacher.post(teacherBlockPath(root.id), {
+        headers: { 'x-teacher-block-preview': version },
+      }),
+    ),
+  );
+  expect(concurrentBlocks.map((response) => response.status()).sort()).toEqual([200, 409]);
   const afterConcurrentBlocks = await teacher.get(course.apiPath());
   const concurrentBlockByNodeId = new Map(
     (await afterConcurrentBlocks.json()).nodes.map(
@@ -733,7 +741,7 @@ test('keeps the two-scope unlock confirmation within the dialog at every viewpor
 
   await createDependency(teacher, course, source.id, target.id);
 
-  await ok(await teacher.post(course.apiPath(`/nodes/${source.id}/teacher-block`)));
+  await ok(await changeTeacherBlock(teacher, course.apiPath(`/nodes/${source.id}`)));
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.emulateMedia({ reducedMotion: 'reduce' });

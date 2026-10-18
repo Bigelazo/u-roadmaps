@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
+import { confirmedWrites } from '../support/confirmed-writes';
 
 const input = {
   courseOffering: {
@@ -74,8 +75,8 @@ const roadmap = {
 test('sets a Node to the target visibility, as production does', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
-  await persistence.setVisibility(input, 'selected', false);
-  await persistence.setVisibility(input, 'selected', false);
+  await confirmedWrites(persistence, input).hide('selected');
+  await confirmedWrites(persistence, input).hide('selected');
   const hidden = await persistence.load(input);
   expect(hidden.nodes).toContainEqual(
     expect.objectContaining({ id: 'selected', isVisible: false, isTeacherBlocked: false }),
@@ -193,7 +194,7 @@ test('versions each Change impact by its content, as production does', async () 
   expect((await persistence.previewNodeHiding(input, 'prerequisite')).version).not.toBe(
     first.version,
   );
-  await persistence.connectNodes(input, {
+  await confirmedWrites(persistence, input).connect({
     sourceNodeId: 'independent',
     targetNodeId: 'selected',
     sourceHandle: 'right',
@@ -218,7 +219,7 @@ test('rejects confirming a hide, a Dependency, a deletion or a Teacher block who
   const unlock = await persistence.previewTeacherBlock(input, 'dependent', 'UNBLOCK');
 
   // Another change lands before each confirmation.
-  await persistence.connectNodes(input, link('independent', 'later'));
+  await confirmedWrites(persistence, input).connect(link('independent', 'later'));
   await persistence.deleteDependency(input, 'prerequisite-selected');
   await persistence.deleteDependency(input, 'selected-dependent');
 
@@ -313,13 +314,13 @@ test('never reuses an identifier after a deletion', async () => {
   };
   const createAll = async () => {
     await persistence.addNode(input, node, { x: 0, y: 0 });
-    await persistence.connectNodes(input, dependency);
+    await confirmedWrites(persistence, input).connect(dependency);
     await persistence.addNodeType(input, nodeType);
     await persistence.addResource(input, 'selected', link);
     return created();
   };
   const deleteAll = async (ids: Awaited<ReturnType<typeof created>>) => {
-    await persistence.deleteNode(input, ids.node!);
+    await confirmedWrites(persistence, input).delete(ids.node!);
     await persistence.deleteDependency(input, ids.dependency!);
     await persistence.deleteNodeType(input, ids.nodeType!);
     await persistence.deleteResource(input, ids.resource!);

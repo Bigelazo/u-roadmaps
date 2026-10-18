@@ -5,6 +5,7 @@ import { createDependency, prepareNodeCreator } from './create-node';
 import { createExistingNode } from './existing-node';
 import { authenticateAs, escapeRegExp, ok } from './helpers';
 import { listNotices, type StoredNotice } from './notices';
+import { deleteNode, hideNode } from './previewed-writes';
 
 test('Dependency notices preserve route and access changes with Roadmap entry recognition', async ({
   course,
@@ -91,12 +92,13 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   );
 
   const dependencyId = await createDependency(author, course, prerequisiteId, dependentId);
-  await ok(
+  const duplicate = await ok(
     await author.post(roadmapPath('/dependencies'), {
       data: { sourceNodeId: prerequisiteId, targetNodeId: dependentId },
     }),
     409,
   );
+  expect((await duplicate.json()).error.code).toBe('DEPENDENCY_CONFLICT');
 
   await expect
     .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
@@ -223,15 +225,13 @@ test('cascade Dependency removals from Node visibility and deletion do not creat
   const hiddenSource = await createNode(`Ocultamiento origen ${crypto.randomUUID()}`);
   const hiddenTarget = await createNode(`Ocultamiento destino ${crypto.randomUUID()}`);
   const hiddenDependency = await insertDependency(hiddenSource, hiddenTarget);
-  await ok(
-    await author.patch(roadmapPath(`/nodes/${hiddenTarget}`), { data: { isVisible: false } }),
-  );
+  await ok(await hideNode(author, roadmapPath(`/nodes/${hiddenTarget}`)));
   expect(await routeNotices(hiddenDependency)).toHaveLength(0);
 
   const deleteSource = await createNode(`Eliminación origen ${crypto.randomUUID()}`);
   const deleteTarget = await createNode(`Eliminación destino ${crypto.randomUUID()}`);
   const deleteDependency = await insertDependency(deleteSource, deleteTarget);
-  await ok(await author.delete(roadmapPath(`/nodes/${deleteTarget}`)), 204);
+  await ok(await deleteNode(author, roadmapPath(`/nodes/${deleteTarget}`)), 204);
   expect(await routeNotices(deleteDependency)).toHaveLength(0);
   nodeIds.splice(nodeIds.indexOf(deleteTarget), 1);
 });

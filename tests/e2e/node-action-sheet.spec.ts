@@ -2,6 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test as base, type E2ECourseOffering } from './fixtures';
 import { authenticateAs, toast } from './helpers';
 import { prepareNodeCreator } from './create-node';
+import { connectNodes } from './previewed-writes';
 
 const test = base.extend<{
   touchRoadmap: {
@@ -31,8 +32,9 @@ const test = base.extend<{
     const second = await createNode('Touch dependent', 240);
     expect(
       (
-        await teacher.post(offering.apiPath('/dependencies'), {
-          data: { sourceNodeId: first.id, targetNodeId: second.id },
+        await connectNodes(teacher, offering.apiPath('/dependencies'), {
+          sourceNodeId: first.id,
+          targetNodeId: second.id,
         })
       ).status(),
     ).toBe(201);
@@ -270,7 +272,7 @@ test('touch actions stay unreachable to students, Canvas preview, and frozen Roa
   await expect(page.getByText('Touch prerequisite', { exact: true })).toBeVisible();
   await expect(trigger).toHaveCount(0);
   await expect(sheet).toHaveCount(0);
-  expect((await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`))).status()).toBe(
-    409,
-  );
+  const closedBlock = await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`));
+  expect(closedBlock.status()).toBe(409);
+  expect((await closedBlock.json()).error.code).toBe('ROADMAP_CLOSED');
 });

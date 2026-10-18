@@ -9,6 +9,8 @@ import { recordingChangePort } from './support/recording-change-port';
 import {
   changeTeacherBlock,
   createRoadmapDependency,
+  deleteRoadmapNode,
+  previewNodeDeletion,
   previewNodeVisibility,
   previewRoadmapDependency,
   previewTeacherBlock,
@@ -63,15 +65,29 @@ test('hiding a Node checks a sent visibility preview version against the removed
     node: { isVisible: false },
     dependencies: current.dependencies,
   });
+});
 
-  const unconfirmed = await addNode(course, 'Árboles');
-  await connect(unconfirmed.id, dependent.id);
-  await expect(
-    updateRoadmapNode(
-      { ...teacher(course), id: unconfirmed.id, input: { isVisible: false } },
-      recording.port,
-    ),
-  ).resolves.toMatchObject({ node: { isVisible: false }, dependencies: [expect.anything()] });
+test('hiding a Node without a visibility preview version is refused as stale, while showing it needs none', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const nodeId = course.change.nodeId;
+  await connect(nodeId, (await addNode(course, 'Pilas')).id);
+  const setVisibility = (isVisible: boolean) =>
+    updateRoadmapNode({ ...teacher(course), id: nodeId, input: { isVisible } }, recording.port);
+
+  await expect(setVisibility(false)).rejects.toMatchObject({
+    status: 409,
+    code: 'NODE_VISIBILITY_PREVIEW_STALE',
+  });
+  expect(recording.changes).toEqual([]);
+
+  const { version } = await previewNodeVisibility({ ...teacher(course), id: nodeId });
+  await updateRoadmapNode(
+    { ...teacher(course), id: nodeId, input: { isVisible: false }, previewVersion: version },
+    recording.port,
+  );
+  await expect(setVisibility(true)).resolves.toMatchObject({ node: { isVisible: true } });
 });
 
 test('BLOCK checks a sent Teacher block preview version against the Nodes it blocks', async ({
@@ -95,11 +111,18 @@ test('BLOCK checks a sent Teacher block preview version against the Nodes it blo
   const current = await previewTeacherBlock(request);
   expect(current.nodes).toHaveLength(3);
   await expect(block(current.version)).resolves.toMatchObject({ nodes: current.nodes });
+});
 
-  const unconfirmed = await addNode(course, 'Árboles');
+test('BLOCK without a Teacher block preview version is refused as stale', async ({ course }) => {
+  const recording = recordingChangePort();
+
   await expect(
-    changeTeacherBlock({ ...request, id: unconfirmed.id }, recording.port),
-  ).resolves.toMatchObject({ nodes: [{ id: unconfirmed.id }] });
+    changeTeacherBlock(
+      { ...teacher(course), id: course.change.nodeId, operation: 'BLOCK' },
+      recording.port,
+    ),
+  ).rejects.toMatchObject({ status: 409, code: 'TEACHER_BLOCK_PREVIEW_STALE' });
+  expect(recording.changes).toEqual([]);
 });
 
 test('Dependency creation checks a sent Dependency preview version against the Teacher blocks it adds', async ({
@@ -129,12 +152,35 @@ test('Dependency creation checks a sent Dependency preview version against the T
   const current = await previewRoadmapDependency(request);
   expect(current.nodes).toHaveLength(2);
   await expect(create(current.version)).resolves.toMatchObject({ nodes: current.nodes });
+});
 
-  const unconfirmed = await addNode(course, 'Árboles');
+test('Dependency creation without a Dependency preview version is refused as stale, even when it blocks nothing', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const target = await addNode(course, 'Pilas');
+
   await expect(
     createRoadmapDependency(
-      { ...request, input: { sourceNodeId: source.id, targetNodeId: unconfirmed.id } },
+      {
+        ...teacher(course),
+        input: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
+      },
       recording.port,
     ),
-  ).resolves.toMatchObject({ nodes: [{ id: unconfirmed.id }] });
+  ).rejects.toMatchObject({ status: 409, code: 'DEPENDENCY_PREVIEW_STALE' });
+  expect(recording.changes).toEqual([]);
+});
+
+test('Node deletion without a deletion preview version is refused as stale', async ({ course }) => {
+  const recording = recordingChangePort();
+  const nodeId = course.change.nodeId;
+  const remove = (previewVersion?: string) =>
+    deleteRoadmapNode({ ...teacher(course), id: nodeId, previewVersion }, recording.port);
+
+  await expect(remove()).rejects.toMatchObject({ status: 409, code: 'NODE_DELETE_PREVIEW_STALE' });
+  expect(recording.changes).toEqual([]);
+
+  const { version } = await previewNodeDeletion({ ...teacher(course), id: nodeId });
+  await expect(remove(version)).resolves.toEqual({});
 });

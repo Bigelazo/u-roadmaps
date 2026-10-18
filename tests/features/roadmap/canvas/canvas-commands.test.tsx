@@ -19,6 +19,7 @@ import type {
 } from '@/features/roadmap/canvas/commands/commands';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
+import { confirmedWrites } from '../support/confirmed-writes';
 
 const teachingInput = {
   courseOffering: {
@@ -215,7 +216,7 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request({ kind, nodeId: 'limits' }));
       await canvas.awaiting();
 
-      await canvas.persistence.connectNodes(teachingInput, {
+      await confirmedWrites(canvas.persistence, teachingInput).connect({
         sourceNodeId: 'limits',
         targetNodeId: 'integrals',
         sourceHandle: 'right',
@@ -256,7 +257,7 @@ describe('canvas commands', () => {
         async [write](...args: Parameters<RoadmapCanvasSessionPersistence[typeof write]>) {
           if (raceOnce) {
             raceOnce = false;
-            await adapter.connectNodes(args[0], {
+            await confirmedWrites(adapter, teachingInput).connect({
               sourceNodeId: 'integrals',
               targetNodeId: 'limits',
               sourceHandle: 'right',
@@ -430,7 +431,7 @@ describe('canvas commands', () => {
 
     /** Connects Derivadas to Integrales, which Teacher-blocks Integrales behind the blocked branch. */
     const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
-      persistence.connectNodes(teachingInput, {
+      confirmedWrites(persistence, teachingInput).connect({
         sourceNodeId: 'derivatives',
         targetNodeId: 'integrals',
         sourceHandle: 'right',
@@ -583,7 +584,7 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
       await canvas.awaiting();
 
-      await canvas.persistence.connectNodes(teachingInput, {
+      await confirmedWrites(canvas.persistence, teachingInput).connect({
         sourceNodeId: 'integrals',
         targetNodeId: 'derivatives',
         sourceHandle: 'right',
@@ -613,7 +614,7 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
       await canvas.awaiting();
 
-      await canvas.persistence.changeTeacherBlock(teachingInput, 'integrals', 'BLOCK');
+      await confirmedWrites(canvas.persistence, teachingInput).block('integrals');
       await canvas.confirm('create-dependency');
 
       expect(canvas.commands().pending).toBeNull();
@@ -630,7 +631,7 @@ describe('canvas commands', () => {
         async connectNodes(...args) {
           if (raceOnce) {
             raceOnce = false;
-            await adapter.connectNodes(teachingInput, {
+            await confirmedWrites(adapter, teachingInput).connect({
               sourceNodeId: 'integrals',
               targetNodeId: 'derivatives',
               sourceHandle: 'right',

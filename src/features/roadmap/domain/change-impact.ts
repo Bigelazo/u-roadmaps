@@ -1,6 +1,6 @@
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 
-/** The changes whose confirmation can send back the version of the Change impact it showed. */
+/** The changes whose confirmation sends back the version of the Change impact it showed. */
 export type ChangeWithImpact = 'hide' | 'delete' | 'dependency' | 'block' | 'unlock';
 
 const staleChanges = {
@@ -14,9 +14,9 @@ const staleChanges = {
 export type StaleChangeImpactReason = (typeof staleChanges)[ChangeWithImpact][0];
 
 /**
- * Whether a confirmation may take effect: the Change impact version it sends must still
- * match the current impact's `version`. A missing version passes, except for an unlock,
- * which must confirm the impact it showed.
+ * Whether a confirmation may take effect: it must send the version of the Change impact
+ * it showed, and that version must still match the current impact's `version`. A missing
+ * version is stale.
  */
 export function decideChangeImpactVersion({
   change,
@@ -27,8 +27,7 @@ export function decideChangeImpactVersion({
   sentVersion: string | undefined;
   version: string;
 }): { kind: 'ALLOWED' } | RuleRejection<StaleChangeImpactReason> {
-  const isStale = sentVersion ? sentVersion !== version : change === 'unlock';
-  if (!isStale) return { kind: 'ALLOWED' };
+  if (sentVersion === version) return { kind: 'ALLOWED' };
   const [reason, impact] = staleChanges[change];
   return ruleRejection(
     reason,

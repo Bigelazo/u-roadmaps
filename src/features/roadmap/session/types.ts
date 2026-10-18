@@ -29,8 +29,8 @@ export type RoadmapNodeTypeInput = {
 
 /**
  * Everything the Roadmap canvas session reads and writes. Both adapters (HTTP and the
- * in-memory Practice roadmap) implement every operation. A previewed change accepts the
- * version of the Change impact it confirms, so a changed impact is rejected.
+ * in-memory Practice roadmap) implement every operation. A previewed change sends the
+ * version of the Change impact it confirms; a missing or changed version is rejected.
  */
 export type RoadmapCanvasSessionPersistence = {
   load(input: RoadmapCanvasSessionInput): Promise<AnyRoadmapDto>;
@@ -50,7 +50,7 @@ export type RoadmapCanvasSessionPersistence = {
   connectNodes(
     input: RoadmapCanvasSessionInput,
     dependency: RoadmapDependencyRequest,
-    previewVersion?: string,
+    previewVersion: string,
   ): Promise<void>;
   deleteDependency(input: RoadmapCanvasSessionInput, dependencyId: string): Promise<void>;
   previewTeacherBlock(
@@ -87,7 +87,7 @@ export type RoadmapCanvasSessionPersistence = {
   deleteNode(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
-    previewVersion?: string,
+    previewVersion: string,
   ): Promise<void>;
   addResource(
     input: RoadmapCanvasSessionInput,
