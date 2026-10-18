@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { forgetUcampusUser, failUcampusEndpoint } from './ucampus';
@@ -130,6 +131,24 @@ test('Roadmap reads check the stored Participation; entering the course page syn
   await page.goto(course.pagePath());
   for (const path of [course.apiPath(), course.apiPath('/node-types')])
     await ok(await api.get(path));
+});
+
+test('entering a Course offering that a complete U-Campus history omits revokes its Participation', async ({
+  course,
+  apiAs,
+  createCourse,
+  reportPosition,
+  page,
+}) => {
+  const user = course.users.studentWithoutProgress;
+  const api = await apiAs(user);
+  await ok(await api.get(course.apiPath()));
+  await reportPosition(user, await createCourse({ roadmap: false }), 'STUDENT');
+  await authenticateAs(page.context(), user.id);
+  // A notice link to the withdrawn offering falls back to the Academic overview.
+  await page.goto(`${course.pagePath()}?notice=${randomUUID()}`);
+  await expect(page).toHaveURL(/noticeFallback=course-unavailable/);
+  await ok(await api.get(course.apiPath()), 403);
 });
 
 for (const { name: entry, enter } of entries) {
