@@ -35,7 +35,7 @@ const nodeWithResources = {
     {
       id: 'resource-2',
       title: 'Clase grabada',
-      type: 'VIDEO' as const,
+      type: 'LINK' as const,
       url: 'https://example.com/class',
     },
   ],

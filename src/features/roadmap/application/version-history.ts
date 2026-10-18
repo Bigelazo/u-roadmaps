@@ -18,7 +18,7 @@ import type {
   RoadmapDto,
   RoadmapNode,
 } from '../types';
-import { readUploadedFile } from '../infrastructure/resources/filesystem';
+import { readStoredFile } from '../infrastructure/resources/lifecycle';
 import { versionApiUrl } from '@/shared/version-history-url';
 import { requireUuid } from '@/shared/validation';
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
@@ -246,15 +246,9 @@ export async function downloadRoadmapVersionResource(
   });
   if (!resource?.fileKey)
     throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El recurso no existe en esta versión.');
-  try {
-    return {
-      bytes: await readUploadedFile(resource.fileKey),
-      contentType: resource.fileContentType ?? 'application/octet-stream',
-      title: resource.title,
-    };
-  } catch (error) {
-    // Only a missing file is a missing Resource; other storage failures surface.
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    throw new ApplicationError(404, 'RESOURCE_NOT_FOUND', 'El archivo ya no está disponible.');
-  }
+  return {
+    bytes: await readStoredFile(resource.fileKey),
+    contentType: resource.fileContentType ?? 'application/octet-stream',
+    title: resource.title,
+  };
 }

@@ -9,15 +9,16 @@ import { resourceDto } from '@/features/roadmap/application/roadmap';
 import { requireNode } from '@/features/roadmap/application/editor';
 import {
   requireResourceType,
+  requireLinkResourceType,
   requireString,
   requireUrl,
 } from '@/features/roadmap/application/validation';
+import { validateUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
 import {
-  deleteUploadedFile,
-  saveUploadedFile,
-  validateUploadedFile,
-} from '@/features/roadmap/infrastructure/resources/filesystem';
-import { fileResourceUrl } from '@/features/roadmap/domain/resource';
+  cleanupStoredFiles,
+  withStoredFiles,
+} from '@/features/roadmap/infrastructure/resources/lifecycle';
+import { resourceEditError, fileResourceUrl } from '@/features/roadmap/domain/resource';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
 
@@ -39,7 +40,7 @@ type NewResource = {
   nodeId: string;
   title: string;
   url: string;
-  type: 'FILE' | 'LINK' | 'VIDEO';
+  type: 'FILE' | 'LINK';
   fileKey?: string;
   fileContentType?: string | null;
 };
@@ -74,7 +75,7 @@ export const createRoadmapResource = resourceCreation(
     nodeId: requireUuid(id, 'nodeId'),
     title: requireString(input.title, 'title', 240),
     url: requireUrl(input.url),
-    type: requireResourceType(input.type),
+    type: requireLinkResourceType(input.type),
   }),
 );
 
@@ -124,23 +125,20 @@ export async function uploadRoadmapResource(
   // A refused editor, or a closed Roadmap, never writes bytes; the record decides again.
   await roadmapRead(participant, 'edit', async () => undefined);
   const fileKey = crypto.randomUUID();
-  await saveUploadedFile(fileKey, file);
-  try {
-    return await createUploadedResource(
+  return withStoredFiles('upload Resource', async (files) => {
+    await files.upload(fileKey, file);
+    return createUploadedResource(
       { ...participant, nodeId, title, fileKey, fileContentType: file.type || null },
       changePort,
     );
-  } catch (error) {
-    await deleteUploadedFile(fileKey);
-    throw error;
-  }
+  });
 }
 
 export const updateRoadmapResource = roadmapCommand({
   capability: 'edit',
   parse: ({ id, input }: { id: string; input: JsonObject }) => {
     const resourceId = requireUuid(id, 'resourceId');
-    const changes: { title?: string; url?: string; type?: 'FILE' | 'LINK' | 'VIDEO' } = {};
+    const changes: { title?: string; url?: string; type?: 'FILE' | 'LINK' } = {};
     if ('title' in input) changes.title = requireString(input.title, 'title', 240);
     if ('url' in input) changes.url = requireUrl(input.url);
     if ('type' in input) changes.type = requireResourceType(input.type);
@@ -155,6 +153,8 @@ export const updateRoadmapResource = roadmapCommand({
   access: 'none',
   run: async ({ tx, roadmap, actor, input: { resourceId, changes } }) => {
     const resource = await requireResource(tx, resourceId, roadmap.id);
+    const error = resourceEditError(resource.type, changes);
+    if (error) throw new ApplicationError(400, 'INVALID_RESOURCE_EDIT', error);
     const changed = Object.entries(changes).some(
       ([field, value]) => resource[field as keyof typeof changes] !== value,
     );
@@ -205,6 +205,6 @@ export async function removeRoadmapResource(
   changePort: RoadmapChangePort,
 ) {
   const fileKey = await resourceRemoval(request, changePort);
-  if (fileKey) await deleteUploadedFile(fileKey).catch(() => undefined);
+  if (fileKey) await cleanupStoredFiles('remove Resource', [fileKey]);
   return {};
 }

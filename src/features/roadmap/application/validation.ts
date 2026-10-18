@@ -74,9 +74,9 @@ export function requireNodeTypeIcon(value: unknown): NodeTypeIconId {
   return icon;
 }
 
-export function requireResourceType(value: unknown): 'FILE' | 'LINK' | 'VIDEO' {
-  if (value !== 'FILE' && value !== 'LINK' && value !== 'VIDEO') {
-    throw new ApplicationError(400, 'INVALID_RESOURCE_TYPE', 'type debe ser FILE, LINK o VIDEO.');
+export function requireResourceType(value: unknown): 'FILE' | 'LINK' {
+  if (value !== 'FILE' && value !== 'LINK') {
+    throw new ApplicationError(400, 'INVALID_RESOURCE_TYPE', 'type debe ser FILE o LINK.');
   }
   return value;
 }
@@ -91,4 +91,14 @@ export function requireUrl(value: unknown): string {
     throw new ApplicationError(400, 'INVALID_URL', 'url debe ser una URL válida.');
   }
   return url;
+}
+
+export function requireLinkResourceType(value: unknown): 'LINK' {
+  if (value !== 'LINK')
+    throw new ApplicationError(
+      400,
+      'INVALID_RESOURCE_TYPE',
+      'Los recursos externos deben ser Enlaces. Para un Archivo, sube sus bytes.',
+    );
+  return value;
 }

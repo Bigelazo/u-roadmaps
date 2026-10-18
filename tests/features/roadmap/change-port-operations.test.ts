@@ -540,3 +540,69 @@ test('a failed uploaded Resource transaction compensates its stored bytes', asyn
     await import('@/features/roadmap/infrastructure/resources/filesystem');
   await expect(readUploadedFile(storedFileKey!)).rejects.toMatchObject({ code: 'ENOENT' });
 });
+
+test('external creation refuses Files; uploaded Files can only be renamed and Links cannot convert', async ({
+  course,
+}) => {
+  const { port } = recordingChangePort();
+  const actor = teacher(course);
+  await expect(
+    createRoadmapResource(
+      {
+        ...actor,
+        id: course.change.nodeId,
+        input: { title: 'External PDF', url: 'https://example.test/a.pdf', type: 'FILE' },
+      },
+      port,
+    ),
+  ).rejects.toMatchObject({ status: 400, code: 'INVALID_RESOURCE_TYPE' });
+  const link = await createRoadmapResource(
+    {
+      ...actor,
+      id: course.change.nodeId,
+      input: { title: 'Video', url: 'https://example.test/video', type: 'LINK' },
+    },
+    port,
+  );
+  await expect(
+    updateRoadmapResource({ ...actor, id: link.id, input: { type: 'FILE' } }, port),
+  ).rejects.toMatchObject({ status: 400, code: 'INVALID_RESOURCE_EDIT' });
+  const file = await uploadRoadmapResource(
+    {
+      ...actor,
+      id: course.change.nodeId,
+      file: new File(['content'], 'guide.pdf', { type: 'application/pdf' }),
+    },
+    port,
+  );
+  try {
+    for (const input of [
+      { url: 'https://example.test/replaced' },
+      { type: 'LINK' },
+      { type: 'FILE' },
+    ])
+      await expect(
+        updateRoadmapResource({ ...actor, id: file.id, input }, port),
+      ).rejects.toMatchObject({ status: 400, code: 'INVALID_RESOURCE_EDIT' });
+    const renamed = await updateRoadmapResource(
+      { ...actor, id: file.id, input: { title: 'Renamed.pdf' } },
+      port,
+    );
+    expect(renamed.resource).toMatchObject({ title: 'Renamed.pdf', url: file.url, type: 'FILE' });
+    const edited = await updateRoadmapResource(
+      {
+        ...actor,
+        id: link.id,
+        input: { title: 'Revised', url: 'https://example.test/revised', type: 'LINK' },
+      },
+      port,
+    );
+    expect(edited.resource).toMatchObject({
+      title: 'Revised',
+      url: 'https://example.test/revised',
+      type: 'LINK',
+    });
+  } finally {
+    await removeRoadmapResource({ ...actor, id: file.id }, port);
+  }
+});

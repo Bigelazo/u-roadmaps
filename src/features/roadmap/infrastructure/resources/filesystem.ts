@@ -1,7 +1,6 @@
 import 'server-only';
 
-import { constants } from 'node:fs';
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, open, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const maxUploadBytes = 25 * 1024 * 1024;
@@ -20,9 +19,10 @@ export function validateUploadedFile(file: File) {
   if (file.size > maxUploadBytes) throw new Error('FILE_TOO_LARGE');
 }
 
-export async function saveUploadedFile(fileKey: string, file: File) {
+/** A successful exclusive open proves ownership before any content is written. */
+export async function createStoredFile(fileKey: string) {
   await mkdir(storageDirectory, { recursive: true });
-  await writeFile(storagePath(fileKey), Buffer.from(await file.arrayBuffer()), { flag: 'wx' });
+  return open(storagePath(fileKey), 'wx');
 }
 
 export async function readUploadedFile(fileKey: string) {
@@ -33,11 +33,11 @@ export async function deleteUploadedFile(fileKey: string) {
   await rm(storagePath(fileKey), { force: true });
 }
 
-/** Duplicates stored bytes under a new key; false when the source file is missing. */
+/** Writes into an already exclusively owned destination; false for a missing source. */
 export async function copyUploadedFile(sourceFileKey: string, fileKey: string) {
   await mkdir(storageDirectory, { recursive: true });
   try {
-    await copyFile(storagePath(sourceFileKey), storagePath(fileKey), constants.COPYFILE_EXCL);
+    await copyFile(storagePath(sourceFileKey), storagePath(fileKey));
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;

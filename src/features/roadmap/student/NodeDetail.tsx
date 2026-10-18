@@ -39,7 +39,7 @@ import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 
 function resourceTypeLabel(type: Resource['type']) {
-  return type === 'FILE' ? 'Archivo descargable' : type === 'VIDEO' ? 'Video' : 'Enlace externo';
+  return type === 'FILE' ? 'Archivo descargable' : 'Enlace externo';
 }
 
 function resourceActionIcon(type: Resource['type']) {

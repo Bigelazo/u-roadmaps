@@ -31,7 +31,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium">{item.title}</span>
             <span className="block truncate text-xs text-muted-foreground">
-              {item.type === 'FILE' ? 'Archivo' : item.type === 'VIDEO' ? 'Video' : 'Enlace'}
+              {item.type === 'FILE' ? 'Archivo' : 'Enlace'}
             </span>
           </span>
           <a

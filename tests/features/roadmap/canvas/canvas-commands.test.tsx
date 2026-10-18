@@ -1052,17 +1052,6 @@ describe('canvas commands', () => {
         'Guía actualizada',
       ],
       [
-        'saving a file',
-        {
-          kind: 'update-resource',
-          resourceId: 'guide',
-          resource: { title: 'Guía', url: 'guia.pdf', type: 'FILE' },
-        },
-        'Recurso guardado exitosamente.',
-        async (persistence) => (await limits(persistence)).resources[0].type,
-        'FILE',
-      ],
-      [
         'deleting a Resource',
         { kind: 'delete-resource', resourceId: 'guide' },
         'Recurso eliminado exitosamente.',
@@ -1150,6 +1139,30 @@ describe('canvas commands', () => {
       expect(await read(canvas.persistence)).toEqual(expected);
       expect(successToasts()).toEqual(toast ? [toast] : []);
       expect(canvas.onCommandApplied).toHaveBeenCalledOnce();
+    });
+
+    test('renaming a File applies at once and shows its toast', async () => {
+      const file = { id: 'file', title: 'Guía.pdf', url: 'guia.pdf', type: 'FILE' as const };
+      const persistence = createInMemoryRoadmapSessionPersistence({
+        ...editable,
+        nodes: editable.nodes.map((node) =>
+          node.id === 'limits' ? { ...node, resources: [file] } : node,
+        ),
+      });
+      const canvas = await openCanvas(persistence);
+      await act(async () => {
+        expect(
+          await canvas
+            .commands()
+            .request({
+              kind: 'update-resource',
+              resourceId: file.id,
+              resource: { ...file, title: 'Renamed.pdf' },
+            }),
+        ).toBe(true);
+      });
+      expect((await limits(persistence)).resources).toEqual([{ ...file, title: 'Renamed.pdf' }]);
+      expect(successToasts()).toEqual(['Recurso guardado exitosamente.']);
     });
 
     test('a refused write shows the refusal as the session error, without toast or report', async () => {

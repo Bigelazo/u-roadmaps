@@ -54,7 +54,7 @@ import {
   type CalendarDay,
   type ScheduledUnlockRuleFailure,
 } from '@/features/roadmap/domain/scheduled-unlock';
-import { deleteUploadedFile } from '@/features/roadmap/infrastructure/resources/filesystem';
+import { cleanupStoredFiles } from '@/features/roadmap/infrastructure/resources/lifecycle';
 
 type JsonObject = Record<string, unknown>;
 
@@ -426,7 +426,7 @@ export const deleteRoadmapNode = async (
   changePort: RoadmapChangePort,
 ) => {
   const fileKeys = await nodeDeletion(request, changePort);
-  await Promise.all(fileKeys.map((fileKey) => deleteUploadedFile(fileKey).catch(() => undefined)));
+  await cleanupStoredFiles('delete Node', fileKeys);
   return {};
 };
 

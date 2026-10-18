@@ -248,8 +248,16 @@ A teaching-staff inspection of a Node's information through the same view availa
 _Avoid_: Preview, student access preview, draft preview
 
 **Resource (Recurso)**:
-A URL reference with a title and file, link, or video type to pedagogical material stored outside the database and attached to one node.
-_Avoid_: File, global material
+Pedagogical material with a title, attached to exactly one Node, represented by either a File resource or a Link resource.
+_Avoid_: Global material, video resource
+
+**File resource (Recurso de archivo)**:
+A Resource whose file is uploaded to and retained by U-Roadmaps. Each Roadmap copy owns an independent copy of that file.
+_Avoid_: External file resource, shared file
+
+**Link resource (Recurso de enlace)**:
+A Resource that references material through an external web address, including videos and externally hosted files.
+_Avoid_: Video resource, uploaded file
 
 **Roadmap tutorial (Tutorial del roadmap)**:
 A guided, repeatable walkthrough of the Roadmap canvas on the Practice roadmap for one experience: explanatory for students and observers, interactive for teaching staff, who perform each action themselves. Each User is invited once, on their first Academic overview visit, to choose either tutorial or decline, and a course professor is invited once more to the teaching tutorial after their first Roadmap creation; it can be repeated from the Academic overview or from the Roadmap canvas for the current experience, never inside Canvas preview.

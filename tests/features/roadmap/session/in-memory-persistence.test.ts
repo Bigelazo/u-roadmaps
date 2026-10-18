@@ -356,3 +356,46 @@ test('presents a Node whose Node type is missing with the shared unknown Node ty
     unknownNodeType,
   );
 });
+
+test('Practice resources preserve File ownership and permit Link edits', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  await expect(
+    persistence.addResource(input, 'selected', {
+      title: 'External',
+      url: 'https://example.test/file.pdf',
+      type: 'FILE',
+    }),
+  ).rejects.toThrow('Los recursos externos deben ser Enlaces.');
+  await persistence.uploadResource(input, 'selected', new File(['bytes'], 'guide.pdf'));
+  const loaded = await persistence.load(input);
+  const file = loaded.nodes.flatMap((node) => ('resources' in node ? node.resources : []))[0];
+  for (const changes of [
+    { ...file, type: 'LINK' as const },
+    { ...file, url: 'https://example.test/replaced' },
+  ])
+    await expect(persistence.updateResource(input, file.id, changes)).rejects.toThrow();
+  await persistence.updateResource(input, file.id, { ...file, title: 'Renamed.pdf' });
+  await persistence.addResource(input, 'selected', {
+    title: 'Video',
+    url: 'https://example.test/video',
+    type: 'LINK',
+  });
+  const renamed = (await persistence.load(input)).nodes.flatMap((node) =>
+    'resources' in node ? node.resources : [],
+  );
+  expect(renamed).toContainEqual({ ...file, title: 'Renamed.pdf' });
+  const link = renamed.find((resource) => resource.type === 'LINK')!;
+  await expect(
+    persistence.updateResource(input, link.id, { ...link, type: 'FILE' }),
+  ).rejects.toThrow();
+  await persistence.updateResource(input, link.id, {
+    ...link,
+    title: 'Revised',
+    url: 'https://example.test/revised',
+  });
+  expect(
+    (await persistence.load(input)).nodes.flatMap((node) =>
+      'resources' in node ? node.resources : [],
+    ),
+  ).toContainEqual({ ...link, title: 'Revised', url: 'https://example.test/revised' });
+});
