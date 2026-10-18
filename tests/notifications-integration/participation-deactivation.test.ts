@@ -124,11 +124,16 @@ test('a later complete history that reports the offering again reactivates it', 
   reportHistory(course.studentId, [earlierOffering(course)]);
   await visitOverview(course.studentId);
   expect(await canRead(course.studentId, course)).toBe(false);
+  await teacherEdits(course).rename(course.change.nodeId, 'Recursión');
 
   reportHistory(course.studentId, [course.identifier]);
   expect(await overviewOfferings(course.studentId)).toEqual([course.identifier]);
   const roadmap = await readRoadmapForParticipant(student(course));
   expect(roadmap.nodes).toMatchObject([{ id: course.change.nodeId, isCompleted: true }]);
+  // The edit made during the loss never reached the student; the next one does.
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
+  await teacherEdits(course).rename(course.change.nodeId, 'Recursión y pilas');
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);
 });
 
 test('an incomplete or failed history deactivates nothing', async ({ course }) => {
