@@ -1,10 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { expect, onTestFinished } from 'vitest';
+import { expect } from 'vitest';
 import { prisma } from '@/shared/server/db';
 import { recordRoadmapNotices } from '@/features/notifications/server';
 import type { RoadmapChangePort } from '@/features/roadmap/server';
 import { test, type IntegrationCourse } from './fixtures';
-import { addNode, teacherEdits } from './roadmap';
+import { addNode, enrollStudents, teacherEdits } from './roadmap';
 
 /**
  * Holds each Roadmap edit open after it recorded its notices, until both edits got there,
@@ -52,27 +51,6 @@ async function noticePredicateLocks(transaction: Parameters<RoadmapChangePort['r
 
 /** More students than PostgreSQL's 32 predicate locks per relation before promotion. */
 const MANY_STUDENTS = 48;
-
-async function enrollStudents(course: IntegrationCourse, count: number) {
-  const offering = await prisma.courseOffering.findFirstOrThrow({
-    where: { roadmap: { id: course.roadmapId } },
-  });
-  const ids = Array.from({ length: count }, () => randomUUID());
-  onTestFinished(async () => {
-    await prisma.user.deleteMany({ where: { id: { in: ids } } });
-  });
-  await prisma.user.createMany({
-    data: ids.map((id) => ({
-      id,
-      name: 'Estudiante',
-      institutionalEmail: `${id}@notifications.u-roadmaps.test`,
-      rut: id.slice(0, 20),
-    })),
-  });
-  await prisma.participation.createMany({
-    data: ids.map((userId) => ({ userId, courseOfferingId: offering.id, role: 'STUDENT' })),
-  });
-}
 
 /** A Node every student already knows: a delivered rename recorded their Known values. */
 async function knownNode(course: IntegrationCourse) {

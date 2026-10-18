@@ -3,7 +3,7 @@ import type { APIRequestContext } from '@playwright/test';
 import { insert, sql } from './database';
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
-import { listNotices } from './notices';
+import { listNotices, storeTitleNotices } from './notices';
 
 test('own Inbox requires authentication and isolates notice identities', async ({
   request,
@@ -110,44 +110,16 @@ test('pagination and visible rows preserve notices when entry recognition fails'
   apiAs,
   createCourse,
 }) => {
-  const { roadmapId, courseCode } = course;
+  const { roadmapId } = course;
   const recipient = course.users.multiCourseStudent;
   const otherCourse = await createCourse({
     participants: [{ user: recipient, role: 'STUDENT' }],
   });
   const api = await apiAs(recipient);
-  const subject = `Roadmap disponible: ${courseCode}`;
-  const seed = (id: string, availableAt: Date) =>
-    sql(
-      insert('RoadmapNotice', [
-        {
-          id,
-          eventId: `e2e-inbox-${id}`,
-          recipientId: recipient.id,
-          roadmapId,
-          courseOfferingId: course.id,
-          subject,
-          body: 'Aviso de prueba',
-          data: JSON.stringify({
-            roadmapId,
-            courseCode,
-            year: course.year,
-            semester: course.semester,
-            targetKind: 'roadmap',
-            changeKind: 'roadmap-available',
-            occurredAt: '2026-10-01T12:00:00.000Z',
-            eventCount: 1,
-            actorName: 'Daniela',
-          }),
-          occurredAt: new Date(),
-          availableAt,
-        },
-      ]),
-    );
-  const ids = Array.from({ length: 12 }, () => randomUUID())
+  // Twelve targets stored at the same instant page by id.
+  const ids = (await storeTitleNotices(course, recipient.id, 12, new Date('2026-01-01T00:00:00Z')))
     .sort()
     .reverse();
-  for (const id of ids) await seed(id, new Date('2026-01-01T00:00:00Z'));
   const first = await getJson(api, `/api/notifications?roadmapId=${roadmapId}&limit=10`);
   expect(first.notifications.map((notice: { id: string }) => notice.id)).toEqual(ids.slice(0, 10));
   expect(first.hasMore).toBe(true);
@@ -164,7 +136,11 @@ test('pagination and visible rows preserve notices when entry recognition fails'
   });
   await page.goto(otherCourse.pagePath());
   await page.getByRole('button', { name: 'Avisos, 12 sin leer', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Cargar más avisos' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('list', { name: 'Lista de avisos' })
+      .getByRole('button', { name: /El Roadmap ha recibido 12 cambios\./ }),
+  ).toBeVisible();
   expect(await getJson(api, `/api/notifications/${ids[11]}`)).not.toHaveProperty('seen');
   const failRecognition = true;
   await page.route('**/api/notifications/acknowledge', async (route) => {

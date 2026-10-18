@@ -25,7 +25,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     expect(first).toMatchObject({
       subject: `Nuevo Nodo «${title}»`,
       read: false,
-      data: { eventCount: 1, changeKind: 'node-available' },
+      data: { eventCount: 1, noticeTarget: 'node-creation' },
     });
     for (const description of ['Primer detalle', 'Último detalle'])
       await ok(await author.patch(course.apiPath(`/nodes/${nodeId}`), { data: { description } }));
@@ -57,8 +57,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
       data: {
         eventCount: 1,
         actorName: course.users.teacher.name,
-        changeKind: 'node-updated',
-        changedFields: ['title'],
+        noticeTarget: 'node-title',
       },
     });
     expect(new Date(latest.data.occurredAt).getTime()).toBeGreaterThanOrEqual(

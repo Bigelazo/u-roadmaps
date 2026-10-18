@@ -2,6 +2,9 @@ import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, absorbs, nodeCreationRef } from '../absorption';
 import {
+  isNodeOpener,
+  isNodeViewer,
+  nodeViewers,
   participantIds,
   type EntryValue,
   type NoticeTargetDescriptor,
@@ -32,7 +35,6 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
   noticeTarget: NOTICE_TARGET.nodeCreation,
   noticeClass: 'roadmap-node-changed',
   shownTo: 'node-viewers',
-  readSide: { changeKind: 'node-available', changedFields: [], targetKind: 'node' },
   scope: 'node',
   matches: (fact): fact is NodeCreatedFact => fact.kind === 'node-created',
   target: (fact) => nodeCreationRef(fact.nodeId),
@@ -40,15 +42,13 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
   async knowers(_fact, changes, roadmap) {
     return (await participantIds(roadmap)).filter((userId) => userId !== changes.actorId);
   },
-  async audience(fact, _changes, roadmap) {
-    if (!fact.current.isVisible) return [];
-    return participantIds(roadmap);
-  },
+  audience: (fact, _changes, roadmap) => nodeViewers(fact.current.isVisible, roadmap),
   async current(target, roadmap, recipientId) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     if (!node) return null;
-    if (!node.isVisible) return { value: ABSENT, visible: false };
-    const accessible = (await roadmap.accessibleNodeIds(recipientId)).has(node.id);
+    if (!(await isNodeViewer(node.isVisible, recipientId, roadmap)))
+      return { value: ABSENT, visible: false };
+    const accessible = await isNodeOpener(node.id, recipientId, roadmap);
     const resources = accessible ? await roadmap.nodeResources(node.id) : [];
     return {
       value: PRESENT,

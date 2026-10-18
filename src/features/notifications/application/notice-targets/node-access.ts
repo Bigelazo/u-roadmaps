@@ -1,9 +1,5 @@
 import { NOTICE_TARGET } from './kinds';
-import {
-  accessNoticeDestination,
-  nodeAccessChangeText,
-  nodeAccessState,
-} from '@/shared/node-access';
+import { nodeAccessChangeText, nodeAccessState } from '@/shared/node-access';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { type NoticeTargetDescriptor, type TargetValues } from './descriptor';
 
@@ -29,8 +25,6 @@ export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   noticeTarget: NOTICE_TARGET.nodeAccess,
   noticeClass: 'roadmap-node-changed',
   shownTo: 'everyone',
-  readSide: { changeKind: 'node-available', changedFields: ['access'], targetKind: 'node' },
-  valueReadSide: ({ currentValue }) => accessNoticeDestination(currentValue),
   matches: (fact): fact is NodeAccessFact => fact.kind === 'node-access',
   target: (fact) => nodeAccessRef(fact.nodeId),
   previousValue: (fact) => fact.previous,

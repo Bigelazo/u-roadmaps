@@ -33,7 +33,7 @@ test('entry establishes Node knowledge even when creation delivery has not reach
   await expect.poll(notices).toHaveLength(1);
   expect((await notices())[0].data).toMatchObject({
     noticeTarget: 'resource',
-    changeKind: 'resource-added',
+    knownResource: null,
   });
 });
 
@@ -102,7 +102,7 @@ test('a Node deleted after the captured entry remains a pending deletion when it
   await expect.poll(notices).toHaveLength(0);
   await acknowledgeOpening(recipient, opening);
   await expect.poll(notices).toHaveLength(1);
-  expect((await notices())[0].data.changeKind).toBe('node-deleted');
+  expect((await notices())[0].data.noticeTarget).toBe('node-deletion');
 });
 
 test('recognizing a new Node rebases absorbed values and preserves changes after the captured entry', async ({
@@ -164,7 +164,9 @@ test('pending Roadmap availability absorbs every later notice and recognition es
   const dependent = await creator.createNode('Colas avanzadas', 500);
   // The title edit is committed; deferred absorption can only retain the availability row.
   expect(await notices()).toEqual([
-    expect.objectContaining({ data: expect.objectContaining({ changeKind: 'roadmap-available' }) }),
+    expect.objectContaining({
+      data: expect.objectContaining({ noticeTarget: 'roadmap-availability' }),
+    }),
   ]);
   const opening = await prepareOpening(recipient, roadmapId);
   await createDependency(author, offering, node.id, dependent.id);
@@ -222,5 +224,5 @@ test('deleting a known Node absorbs pending title, access and Resource targets',
     .toEqual(['node-access', 'node-title']);
   await ok(await deleteNode(author, path), 204);
   await expect.poll(notices).toHaveLength(1);
-  expect((await notices())[0].data.changeKind).toBe('node-deleted');
+  expect((await notices())[0].data.noticeTarget).toBe('node-deletion');
 });

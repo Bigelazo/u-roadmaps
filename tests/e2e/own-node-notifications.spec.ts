@@ -4,7 +4,7 @@ import { enterRoadmap } from './enter-roadmap';
 import { expect, test, type E2EUser } from './fixtures';
 import { sql } from './database';
 import { authenticateAs, ok } from './helpers';
-import { listNotices, recognize } from './notices';
+import { listNotices, recognize, storeNotices } from './notices';
 import { changeTeacherBlock, deleteNode } from './previewed-writes';
 
 async function noticeCount(api: APIRequestContext, query: string) {
@@ -29,7 +29,7 @@ test('visible Node changes reach the Inbox and Roadmap entry recognizes them', a
   expect(notices[0]).toMatchObject({
     subject: `Nuevo Nodo «${title}»`,
     read: false,
-    data: { nodeId, actorName: course.users.teacher.name, changeKind: 'node-available' },
+    data: { nodeId, actorName: course.users.teacher.name, noticeTarget: 'node-creation' },
   });
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
@@ -107,12 +107,7 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   expect(afterUpload).toHaveLength(1);
   expect(afterUpload[0]).toMatchObject({
     subject: resourceTitle,
-    data: {
-      targetKind: 'node',
-      nodeId,
-      resourceTitle,
-      changeKind: 'resource-added',
-    },
+    data: { nodeId, resourceTitle, knownResource: null },
   });
 
   const uploadedPath = roadmapPath(`/resources/${uploadedResource.id}`);
@@ -146,10 +141,10 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 1);
   await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
   const noticesBeforeOpening = await getNotices(student, nodeId);
-  expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).toContain('node-updated');
-  expect(noticesBeforeOpening.map((notice) => notice.data.changeKind)).not.toContain(
-    'resource-added',
+  expect(noticesBeforeOpening.map((notice) => notice.data.noticeTarget)).toContain(
+    'node-description',
   );
+  expect(noticesBeforeOpening.map((notice) => notice.data.noticeTarget)).not.toContain('resource');
 
   const studentResourceNotices = await resourceNotices(student, nodeId);
   expect(studentResourceNotices).toHaveLength(0);
@@ -194,7 +189,7 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   await ok(await deleteNode(author, roadmapPath(`/nodes/${nodeId}`)), 204);
   await expect.poll(() => resourceNotices(student, nodeId)).toHaveLength(0);
   await expect.poll(() => getNotices(student, nodeId)).toHaveLength(1);
-  expect((await getNotices(student, nodeId))[0].data.changeKind).toBe('node-deleted');
+  expect((await getNotices(student, nodeId))[0].data.noticeTarget).toBe('node-deletion');
 
   await ok(await deleteNode(author, roadmapPath(`/nodes/${otherNodeId}`)), 204);
   const afterOtherCascade = await resourceNotices(student, otherNodeId);
@@ -210,21 +205,22 @@ test('failed Roadmap entry recognition preserves every page and Node without a b
   const { createNode } = await prepareNodeCreator(teacherApi, course);
   const nodeId = (await createNode(`Nodo de avisos ${crypto.randomUUID()}`, 600)).id;
   await createNode(`Otro ${crypto.randomUUID()}`, 1000);
-  // Historical notices from separate windows exercise pagination independently
-  // of the live 60-second grouping contract.
-  for (let index = 0; index < 11; index++)
-    await sql(
-      `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${course.users.studentWithoutProgress.id}', '${course.roadmapId}', '${course.id}', 'Cambio anterior ${index}', 'Aviso histórico', '{"nodeId":"${nodeId}","targetKind":"node","changeKind":"node-updated"}', NOW());`,
-    );
-  // Future notice classes use the same Node recognition contract.
-  for (const [changeKind, subject] of [
-    ['resource-added', 'Recurso'],
-    ['node-updated', 'Resumen de cambios · Nodo'],
-  ]) {
-    await sql(
-      `INSERT INTO "RoadmapNotice" ("id", "eventId", "recipientId", "roadmapId", "courseOfferingId", "subject", "body", "data", "occurredAt") VALUES ('${crypto.randomUUID()}', '${crypto.randomUUID()}', '${course.users.studentWithoutProgress.id}', '${course.roadmapId}', '${course.id}', '${subject}', 'Aviso futuro', '{"nodeId":"${nodeId}","targetKind":"node","changeKind":"${changeKind}","roadmapId":"${course.roadmapId}","courseCode":"${course.courseCode}","year":2026,"semester":2,"occurredAt":"2026-10-01T12:00:00Z","actorName":"Daniela","eventCount":2}', NOW());`,
-    );
-  }
+  // Thirteen new Resources of one Node page the Inbox without waiting for deliveries.
+  await storeNotices(
+    course,
+    course.users.studentWithoutProgress.id,
+    Array.from({ length: 13 }, (_, index) => {
+      const resourceId = crypto.randomUUID();
+      return {
+        noticeTarget: 'resource',
+        targetKey: `resource:${resourceId}`,
+        nodeId,
+        knownValue: 'null',
+        currentValue: JSON.stringify({ title: `Guía ${index}`, revision: 'e2e' }),
+        context: { resourceId },
+      };
+    }),
+  );
   await expect
     .poll(() => noticeCount(studentApi, `roadmapId=${course.roadmapId}&nodeId=${nodeId}`))
     .toBe(14);
@@ -328,12 +324,13 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   for (const data of [{ title: 'Nuevo título' }, { positionX: 99, positionY: 99 }])
     await author.patch(roadmapPath(`/nodes/${nodeId}`), { data });
   await expect.poll(() => count(withProgress, nodeId)).toBe(afterContent);
-  const latestKind = async (user: E2EUser) =>
-    (await listNotices(await apiAs(user), { nodeId }))[0]?.data.changeKind;
-  await expect.poll(() => latestKind(withProgress)).toBe('node-updated');
-  expect(await latestKind(assistant)).toBe('node-updated');
-  expect(await latestKind(without)).toBe('node-updated');
-  expect(await latestKind(observer)).toBe('node-updated');
+  const latest = async (user: E2EUser) =>
+    (await listNotices(await apiAs(user), { nodeId }))[0]?.data;
+  // The Node type changed last; repeating the title or moving the Node changed nothing.
+  const retyped = { noticeTarget: 'node-type', currentValue: roadmap.nodeTypes[1].id };
+  await expect.poll(() => latest(withProgress)).toMatchObject(retyped);
+  for (const user of [assistant, without, observer])
+    expect(await latest(user)).toMatchObject(retyped);
   const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
   // Unauthenticated: the shared `request` carries no session cookie.
   await ok(await request.post('/api/notifications/openings', { data: opening }), 401);
@@ -347,8 +344,9 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   );
   await ok(await withProgressApi.post('/api/notifications/openings', { data: opening }));
   await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${nodeId}`)));
-  await expect.poll(() => latestKind(withProgress)).toBe('node-blocked');
-  await expect.poll(() => latestKind(assistant)).toBe('node-blocked');
+  const blocked = { noticeTarget: 'node-access', currentValue: 'Bloqueado' };
+  await expect.poll(() => latest(withProgress)).toMatchObject(blocked);
+  await expect.poll(() => latest(assistant)).toMatchObject(blocked);
   const teacherCountAfterBlock = await count(assistant, nodeId);
   const studentCountAfterBlock = await count(withProgress, nodeId);
   await author.patch(roadmapPath(`/nodes/${nodeId}`), {

@@ -34,7 +34,6 @@ test('a pending Node creation absorbs title, description and Resources with the 
     body: 'Nuevo Nodo «Pilas».',
     data: {
       noticeTarget: 'node-creation',
-      changeKind: 'node-available',
       nodeId: node.id,
       nodeTitle: 'Pilas',
       nodeDescription: 'Último en entrar',
@@ -109,7 +108,7 @@ test('deleting a Node absorbs its pending title, access and Resource notices and
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
     {
       subject: 'Recursión',
-      data: { changeKind: 'node-deleted', targetKind: 'roadmap', nodeId, nodeTitle: 'Recursión' },
+      data: { noticeTarget: 'node-deletion', nodeId, nodeTitle: 'Recursión' },
     },
   ]);
   expect(await prisma.noticeKnownValue.count({ where: { nodeId } })).toBe(0);
@@ -150,7 +149,7 @@ test('a Node deleted after entry captured its creation is a pending deletion onc
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
   await acknowledgeOwnNotices(course.studentId, opening);
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
-    { subject: 'Pilas', data: { changeKind: 'node-deleted', nodeId: node.id } },
+    { subject: 'Pilas', data: { noticeTarget: 'node-deletion', nodeId: node.id } },
   ]);
 });
 
@@ -161,7 +160,7 @@ test('entry knows a new Node whose creation notice was never delivered', async (
   await teacherEdits(course).addResource(node.id, 'Guía');
   for (const delivery of deferred.deliveries) await deferred.deliver(delivery);
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
-    { data: { noticeTarget: 'resource', changeKind: 'resource-added' } },
+    { body: 'Nuevo recurso «Guía» en «Pilas».', data: { noticeTarget: 'resource' } },
   ]);
 });
 
@@ -226,7 +225,7 @@ test.for([false, true])(
     expect(await pendingNotices(next.studentId, next.roadmapId)).toMatchObject([
       {
         subject: `Roadmap disponible: ${next.identifier.courseCode}`,
-        data: { changeKind: 'roadmap-available', noticeClass: 'roadmap-available' },
+        data: { noticeTarget: 'roadmap-availability', noticeClass: 'roadmap-available' },
       },
     ]);
     expect(await pendingNotices(next.teacherId, next.roadmapId)).toEqual([]);

@@ -1,7 +1,7 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, nodeDeletionRef } from '../absorption';
-import { participantIds, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
+import { nodeViewers, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
 
 type NodeDeletedFact = Extract<RoadmapChangeFact, { kind: 'node-deleted' }>;
 
@@ -17,18 +17,14 @@ export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
   noticeTarget: NOTICE_TARGET.nodeDeletion,
   noticeClass: 'roadmap-node-changed',
   shownTo: 'everyone',
-  readSide: { changeKind: 'node-deleted', changedFields: [], targetKind: 'roadmap' },
   scope: 'node',
   keepsKnownValue: false,
   matches: (fact): fact is NodeDeletedFact => fact.kind === 'node-deleted',
   target: (fact) => nodeDeletionRef(fact.nodeId),
   previousValue: () => PRESENT,
   knowers: async () => [],
-  // Deleting a hidden Node is not news: nobody saw it last.
-  async audience(fact, _changes, roadmap) {
-    if (!fact.previous.isVisible) return [];
-    return participantIds(roadmap);
-  },
+  // Deleting a hidden Node is news only to teaching staff: no student saw it last.
+  audience: (fact, _changes, roadmap) => nodeViewers(fact.previous.isVisible, roadmap),
   async current(target, roadmap) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     return { value: node ? PRESENT : ABSENT, visible: true };

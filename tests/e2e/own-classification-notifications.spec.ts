@@ -85,8 +85,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     body: `El tipo «${before}» ahora se llama «${after}».`,
     read: false,
     data: {
-      targetKind: 'roadmap',
-      changeKind: 'classification-updated',
+      noticeTarget: 'node-type-name',
       previousTypeName: before,
       nextTypeName: after,
     },
@@ -113,9 +112,7 @@ test('used Type renames deliver one general notice across Sections and recognize
     page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
   ).toBeVisible();
   await expect.poll(() => classification()).toHaveLength(0);
-  const pendingNodes = (await notices()).filter(
-    (n) => nodeIds.includes(String(n.data.nodeId)) && n.data.targetKind === 'node',
-  );
+  const pendingNodes = (await notices()).filter((n) => nodeIds.includes(String(n.data.nodeId)));
   expect(pendingNodes).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
   await ok(
@@ -128,13 +125,15 @@ test('used Type renames deliver one general notice across Sections and recognize
   await expect
     .poll(async () =>
       (await notices()).some(
-        (n) => n.data.nodeId === nodeIds[0] && n.data.changeKind === 'node-updated',
+        (n) => n.data.nodeId === nodeIds[0] && n.data.noticeTarget === 'node-type',
       ),
     )
     .toBe(true);
   expect(
     (await notices()).some(
-      (n) => n.data.nodeId === nodeIds[0] && n.data.changeKind === 'node-available',
+      (n) =>
+        n.data.nodeId === nodeIds[0] &&
+        ['node-creation', 'node-access'].includes(n.data.noticeTarget),
     ),
   ).toBe(false);
   for (const id of nodeIds.slice(0, 2)) {

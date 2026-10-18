@@ -36,8 +36,6 @@ test('adding a Dependency tells every student that the dependent Node now requir
         data: {
           noticeTarget: 'dependency',
           noticeClass: 'roadmap-path-changed',
-          targetKind: 'roadmap',
-          changeKind: 'dependency-added',
           dependencyId,
           sourceNodeId: prerequisite.id,
           targetNodeId: dependent.id,
@@ -73,7 +71,6 @@ test('removing a Dependency names the pair; added then removed, or removed then 
   expect(removed).toMatchObject({
     body: '«Colas» ya no requiere «Pilas».',
     data: {
-      changeKind: 'dependency-removed',
       dependencyId: second,
       knownValue: 'present',
       currentValue: 'absent',
@@ -153,8 +150,6 @@ test('renaming a Node type several times gives one notice from the known name; r
         data: {
           noticeTarget: 'node-type-name',
           noticeClass: 'roadmap-classification-changed',
-          targetKind: 'roadmap',
-          changeKind: 'classification-updated',
           nodeTypeId: course.nodeTypeId,
           previousTypeName: 'Tema',
           nextTypeName: 'Lectura obligatoria',
@@ -235,7 +230,7 @@ test('a pending Roadmap availability absorbs route changes; entry recognizes the
   const dependencyId = await edits.connect(prerequisite.id, dependent.id);
   await edits.updateType(course.nodeTypeId, { name: 'Lectura' });
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
-    { data: { changeKind: 'roadmap-available' } },
+    { data: { noticeTarget: 'roadmap-availability' } },
   ]);
   await enterRoadmap(course.studentId, course.roadmapId);
   await edits.disconnect(dependencyId);

@@ -290,7 +290,6 @@ model NoticeAcknowledgement {
   operationId     String    @db.Uuid
   roadmapId       String    @db.Uuid
   openedAt        DateTime  @db.Timestamptz(3)
-  noticeIds       String[]  @default([]) @db.Uuid
   // ADR-0024: pending notices of every moved Notice target kind captured on entry.
   snapshots       Json      @default("[]")
   summary         Json      @default("null")

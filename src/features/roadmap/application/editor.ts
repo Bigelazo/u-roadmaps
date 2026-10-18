@@ -75,6 +75,36 @@ function dependenciesTouching(transaction: Prisma.TransactionClient, nodeId: str
   });
 }
 
+/**
+ * The Dependency facts of the Dependencies hiding a Node removed, as an explicit deletion
+ * reports them. Read after the hide, so each fact holds the Nodes as it leaves them.
+ */
+async function hidingRemovalFacts(
+  transaction: Prisma.TransactionClient,
+  removed: readonly { id: string; sourceNodeId: string; targetNodeId: string }[],
+): Promise<RoadmapChangeFact[]> {
+  if (removed.length === 0) return [];
+  const nodeIds = removed.flatMap(({ sourceNodeId, targetNodeId }) => [sourceNodeId, targetNodeId]);
+  const nodes = new Map(
+    (
+      await transaction.roadmapNode.findMany({
+        where: { id: { in: nodeIds } },
+        select: { id: true, title: true, isVisible: true },
+      })
+    ).map(({ id, ...node }) => [id, node]),
+  );
+  return removed.map(({ id, sourceNodeId, targetNodeId }) => ({
+    kind: 'dependency',
+    dependencyId: id,
+    sourceNodeId,
+    targetNodeId,
+    previous: true,
+    current: false,
+    sourceNode: nodes.get(sourceNodeId)!,
+    targetNode: nodes.get(targetNodeId)!,
+  }));
+}
+
 type RoadmapRuleFailure =
   | DependencyRuleFailure
   | TeacherBlockRuleFailure
@@ -269,7 +299,7 @@ export const updateRoadmapNode = roadmapCommand({
             requireType(tx, changes.nodeTypeId, roadmap.id),
           ])
         : [null, null];
-    const facts: RoadmapChangeFact[] = [];
+    const facts = await hidingRemovalFacts(tx, removedDependencies);
     if (changes.title !== undefined && changes.title !== node.title)
       facts.push({
         kind: 'node-title',

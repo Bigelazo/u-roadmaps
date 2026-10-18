@@ -92,7 +92,7 @@ test('description and type targets absorb edits independently, withdraw exact re
   await expect
     .poll(async () =>
       (await listNotices(recipient, { roadmapId: course.roadmapId })).some(
-        (notice) => notice.data.changeKind === 'classification-updated',
+        (notice) => notice.data.noticeTarget === 'node-type-name',
       ),
     )
     .toBe(true);

@@ -36,11 +36,33 @@ const SHOWN: Record<string, [Record<string, string>[], boolean[]]> = {
   'node-type-name': [aboutNodeTypes, [true, false, false]],
 };
 
+// ADR-0014 decision 10, «Equipo docente»: teaching staff are shown every Node change,
+// whatever the Node's visibility or Teacher block; a missing Node, a Node type's name and
+// Node access are as above.
+const SHOWN_TO_TEACHING_STAFF: Record<string, boolean[]> = {
+  'node-title': [true, true, true, false],
+  'node-type': [true, true, true, false],
+  'node-creation': [true, true, true, false],
+  'node-description': [true, true, true, false],
+  resource: [true, true, true, false],
+  dependency: [true, true, false],
+};
+
 describe('who a Notice target is shown to', () => {
   it.each(Object.entries(SHOWN))('%s', (noticeTarget, [stored, shown]) => {
     expect(
-      stored.map((data) => isNoticeVisible({ noticeTarget, ...data }, nodes, accessible)),
+      stored.map((data) =>
+        isNoticeVisible({ noticeTarget, ...data }, nodes, accessible, 'STUDENT'),
+      ),
     ).toEqual(shown);
+  });
+
+  it.each(Object.entries(SHOWN))('%s, to teaching staff', (noticeTarget, [stored, shown]) => {
+    expect(
+      stored.map((data) =>
+        isNoticeVisible({ noticeTarget, ...data }, nodes, accessible, 'TEACHER'),
+      ),
+    ).toEqual(SHOWN_TO_TEACHING_STAFF[noticeTarget] ?? shown);
   });
 
   it('covers every Notice target', () => {
@@ -49,24 +71,9 @@ describe('who a Notice target is shown to', () => {
     );
   });
 
-  it('never decides by the legacy changeKind or changedFields', () => {
-    const legacy = { changeKind: 'node-deleted', changedFields: ['title'] };
-    expect(
-      isNoticeVisible(
-        { ...legacy, noticeTarget: 'resource', nodeId: 'blocked' },
-        nodes,
-        accessible,
-      ),
-    ).toBe(false);
-  });
-
-  // Legacy rows may carry a description, a Resource title or a hidden Node's title.
-  it('shows a row no descriptor owns only on a Node the recipient can open', () => {
-    const legacy = { changeKind: 'node-deleted', changedFields: ['description'] };
-    expect(
-      aboutNodes.map((data) => isNoticeVisible({ ...legacy, ...data }, nodes, accessible)),
-    ).toEqual([true, false, false, false]);
-    // Without a Node, it is shown as stored.
-    expect(isNoticeVisible(legacy, nodes, accessible)).toBe(true);
+  it('never shows a row no descriptor owns', () => {
+    for (const data of [...aboutNodes, {}])
+      for (const role of ['STUDENT', 'TEACHER'] as const)
+        expect(isNoticeVisible(data, nodes, accessible, role)).toBe(false);
   });
 });

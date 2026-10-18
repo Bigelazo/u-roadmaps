@@ -21,9 +21,11 @@ autenticado. No hay SDK, credenciales ni servicios externos de notificaciones.
   sustituye sus Avisos por el de eliminación. «Roadmap disponible» pendiente
   absorbe los demás Avisos de ese Roadmap.
 - **Visibilidad.** Solo se muestran y cuentan Objetos visibles para el
-  destinatario; descripción y Recursos de Nodos bloqueados quedan ocultos, pero
-  pendientes. Perder la Participación retira sus Avisos pendientes y sus
-  aperturas de forma definitiva.
+  destinatario; para estudiantes, descripción y Recursos de Nodos bloqueados quedan
+  ocultos, pero pendientes. Al equipo docente, la visibilidad y el Bloqueo docente de un
+  Nodo nunca le ocultan sus avisos ([ADR-0014](adr/0014-target-based-notice-grouping.md),
+  decisión 10, «Equipo docente»). Perder la Participación retira sus Avisos pendientes
+  y sus aperturas de forma definitiva.
 - **Inbox.** Las filas se titulan con el nombre del ramo. Con tres o más Objetos
   pendientes del mismo Roadmap (salvo disponibilidad), el Inbox los presenta en
   una fila agrupada; los contadores suman Objetos, no filas. Se agrupa antes de

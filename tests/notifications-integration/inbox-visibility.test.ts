@@ -76,29 +76,26 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
 
   const targets: { nodeId?: string; [key: string]: unknown }[] = [
     ...chain.flatMap((node) => [
-      { noticeTarget: 'node-title', changeKind: 'node-updated', nodeId: node.id },
-      { noticeTarget: 'node-description', changeKind: 'node-updated', nodeId: node.id },
-      { noticeTarget: 'resource', changeKind: 'resource-updated', nodeId: node.id },
+      { noticeTarget: 'node-title', nodeId: node.id },
+      { noticeTarget: 'node-description', nodeId: node.id },
+      { noticeTarget: 'resource', nodeId: node.id },
     ]),
     ...edges.map(({ sourceNodeId, targetNodeId }) => ({
       noticeTarget: 'dependency',
-      changeKind: 'dependency-added',
       sourceNodeId,
       targetNodeId,
     })),
     {
       noticeTarget: 'node-type-name',
-      changeKind: 'classification-updated',
       nodeTypeId: specialType.id,
     },
-    { noticeTarget: 'node-access', changeKind: 'node-available', nodeId: chain[1].id },
+    { noticeTarget: 'node-access', nodeId: chain[1].id },
     // A Node that no longer exists shows neither its title nor its description.
-    { noticeTarget: 'node-title', changeKind: 'node-updated', nodeId: randomUUID() },
-    { noticeTarget: 'node-description', changeKind: 'node-updated', nodeId: randomUUID() },
-    // A row no descriptor owns is shown only to who can open its Node, and as stored without
-    // one; its legacy keys decide nothing.
-    { changeKind: 'node-deleted', changedFields: ['description'], nodeId: chain[1].id },
-    { changeKind: 'node-updated', changedFields: ['description'] },
+    { noticeTarget: 'node-title', nodeId: randomUUID() },
+    { noticeTarget: 'node-description', nodeId: randomUUID() },
+    // A row no descriptor owns is never shown.
+    { nodeId: chain[0].id },
+    {},
   ];
   const occurredAt = new Date();
   const notices = [studentId, teacherId].flatMap((recipientId) =>
@@ -145,7 +142,7 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
       const visible = notices.filter(
         (notice) =>
           notice.recipientId === recipientId &&
-          isNoticeVisible(notice.data, nodes, accessibleNodeIds),
+          isNoticeVisible(notice.data, nodes, accessibleNodeIds, participant.role),
       );
       const pending = visible.filter(({ acknowledgedAt }) => acknowledgedAt === null);
       const marks: Record<string, number> = {};

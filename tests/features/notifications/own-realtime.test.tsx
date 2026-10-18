@@ -273,6 +273,28 @@ test('an SSE refresh preserves expanded Inbox pages and updates their saved noti
   expect(screen.getByText('Notice 20')).toBeTruthy();
 });
 
+test('the Inbox loads the next page of notices on «Cargar más avisos» until none remain', async () => {
+  stubFetch(async (url: string) => {
+    if (url.includes('/counts')) return Response.json({ count: 2 });
+    const secondPage = new URL(url, 'http://localhost').searchParams.get('after') === 'first';
+    return Response.json({
+      notifications: [
+        secondPage
+          ? { id: 'second', subject: 'Older Node change', createdAt: '2026-10-02' }
+          : { id: 'first', subject: 'Newer Node change', createdAt: '2026-10-03' },
+      ],
+      hasMore: !secondPage,
+    });
+  });
+  renderInbox(<NotificationsInbox identity={identity('student')} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 2 sin leer' }));
+  await screen.findByRole('button', { name: /Newer Node change/ });
+  await userEvent.click(screen.getByRole('button', { name: 'Cargar más avisos' }));
+  await screen.findByRole('button', { name: /Older Node change/ });
+  expect(screen.getByRole('button', { name: /Newer Node change/ })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Cargar más avisos' })).toBeNull();
+});
+
 test('a burst of Inbox signals refreshes once without marking shown rows', async () => {
   const fetch = stubFetch<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
     Response.json(

@@ -1,7 +1,8 @@
 import 'server-only';
 import { prisma, Prisma } from '@/shared/server/db';
-import { groupedRoadmapNotice } from '../application/group-roadmap-notices';
+import { groupedRoadmapNotice } from '../application/grouped-roadmap-notice';
 import { noticeTargetDescriptors, type ShownTo } from '../application/notice-targets';
+import { NOTICE_TARGET } from '../application/notice-targets/kinds';
 
 export type InboxFilter = {
   roadmapId?: string;
@@ -21,6 +22,7 @@ type InboxNotice = {
   availableAt: Date;
   acknowledgedAt: Date | null;
   targetCount: bigint;
+  isGroup: boolean;
 };
 
 /**
@@ -64,7 +66,9 @@ function visibleNotices(
     );
   return Prisma.sql`
     WITH pending AS MATERIALIZED (
-      SELECT notice.*, course.name AS "courseName"
+      SELECT notice.*, course.name AS "courseName",
+        -- The role seesEveryNode() names: to teaching staff, no Node is hidden or blocked.
+        participation.role = 'TEACHER' AS "seesEveryNode"
       FROM "RoadmapNotice" notice
       JOIN "Roadmap" roadmap ON roadmap.id = notice."roadmapId"
       JOIN "Participation" participation ON participation."courseOfferingId" = roadmap."courseOfferingId"
@@ -79,19 +83,25 @@ function visibleNotices(
     ), visible AS (
       SELECT pending.* FROM pending LEFT JOIN nodes node ON node.id::text = pending.data->>'nodeId'
         AND node."roadmapId" = pending."roadmapId"
-      WHERE jsonb_typeof(pending.data) = 'object' AND ${shownToCase(accessibleNodeIds)}
+      WHERE ${shownToCase(accessibleNodeIds)}
     )`;
 }
 
-/** One `WHEN` per `shownTo` class over its Notice targets, as `isNoticeVisible` decides it. */
+/**
+ * One `WHEN` per `shownTo` class over its Notice targets, as `isNoticeVisible` decides it:
+ * to teaching staff (`seesEveryNode`), every existing Node is visible and opens.
+ */
 function shownToCase(accessibleNodeIds: readonly string[]) {
+  const staff = Prisma.sql`pending."seesEveryNode"`;
   const visibleNode = (column: string) => Prisma.sql`EXISTS (SELECT 1 FROM nodes other
     WHERE other.id::text = pending.data->>${column}::text AND other."roadmapId" = pending."roadmapId"
-      AND other."isVisible")`;
-  const opensNode = Prisma.sql`COALESCE(node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[]), FALSE)`;
+      AND (other."isVisible" OR ${staff}))`;
+  // A notice whose Node no longer exists joins no row (`node.id IS NULL`).
+  const opensNode = Prisma.sql`node.id IS NOT NULL AND (${staff}
+    OR (node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[])))`;
   const conditions: Record<ShownTo, Prisma.Sql> = {
     everyone: Prisma.sql`TRUE`,
-    'node-viewers': Prisma.sql`COALESCE(node."isVisible", FALSE)`,
+    'node-viewers': Prisma.sql`node.id IS NOT NULL AND (node."isVisible" OR ${staff})`,
     'node-openers': opensNode,
     'dependency-viewers': Prisma.sql`${visibleNode('sourceNodeId')} AND ${visibleNode('targetNodeId')}`,
     'node-type-viewers': Prisma.sql`EXISTS (SELECT 1 FROM nodes typed
@@ -104,9 +114,8 @@ function shownToCase(accessibleNodeIds: readonly string[]) {
       .map(({ noticeTarget }) => noticeTarget);
     return Prisma.sql`WHEN pending.data->>'noticeTarget' = ANY(${targets}::text[]) THEN ${condition}`;
   });
-  // A row no descriptor owns follows `node-openers` on its Node; without one it is shown as stored.
-  return Prisma.sql`CASE ${Prisma.join(whens, ' ')}
-    ELSE jsonb_typeof(pending.data->'nodeId') IS DISTINCT FROM 'string' OR ${opensNode} END`;
+  // A row no descriptor owns is never shown.
+  return Prisma.sql`CASE ${Prisma.join(whens, ' ')} ELSE FALSE END`;
 }
 
 export async function queryInboxPage(
@@ -118,30 +127,25 @@ export async function queryInboxPage(
     cursor,
   }: { limit: number; grouped: boolean; cursor: { id: string; availableAt: Date } | null },
 ) {
+  // Roadmap availability stands alone: it never joins a Grouped roadmap notice.
+  const standalone = Prisma.sql`data->>'noticeTarget' = ${NOTICE_TARGET.roadmapAvailability}`;
   const rows = await prisma.$queryRaw<InboxNotice[]>(Prisma.sql`
     ${visibleNotices(recipient, filter)}, ranked AS (
-      SELECT visible.*,
-        count(*) OVER (PARTITION BY "roadmapId", COALESCE(data->>'changeKind' = 'roadmap-available', FALSE)) AS "targetCount",
-        row_number() OVER (PARTITION BY "roadmapId", COALESCE(data->>'changeKind' = 'roadmap-available', FALSE)
-          ORDER BY "availableAt" DESC, id DESC) AS position
-      FROM visible
+      SELECT visible.*, count(*) OVER roadmap AS "targetCount",
+        ${grouped} AND NOT ${standalone} AND count(*) OVER roadmap >= 3 AS "isGroup",
+        row_number() OVER (roadmap ORDER BY "availableAt" DESC, id DESC) AS position
+      FROM visible WINDOW roadmap AS (PARTITION BY "roadmapId", ${standalone})
     )
-    SELECT id, "roadmapId", "courseName", subject, body, data, "availableAt", "acknowledgedAt", "targetCount"
-    FROM ranked WHERE (
-      NOT ${grouped} OR data->>'changeKind' = 'roadmap-available' OR "targetCount" < 3 OR position = 1
-    ) ${cursor ? Prisma.sql`AND ("availableAt", id) < (${cursor.availableAt}, ${cursor.id}::uuid)` : Prisma.empty}
+    SELECT id, "roadmapId", "courseName", subject, body, data, "availableAt", "acknowledgedAt",
+      "targetCount", "isGroup"
+    -- A group shows only its most recent notice.
+    FROM ranked WHERE (NOT "isGroup" OR position = 1) ${cursor ? Prisma.sql`AND ("availableAt", id) < (${cursor.availableAt}, ${cursor.id}::uuid)` : Prisma.empty}
     ORDER BY "availableAt" DESC, id DESC LIMIT ${limit + 1}
   `);
   return {
     notices: rows
       .slice(0, limit)
-      .map((row) =>
-        grouped &&
-        Number(row.targetCount) >= 3 &&
-        (row.data as Record<string, unknown>)?.changeKind !== 'roadmap-available'
-          ? groupedRoadmapNotice(row, Number(row.targetCount))
-          : row,
-      ),
+      .map((row) => (row.isGroup ? groupedRoadmapNotice(row, Number(row.targetCount)) : row)),
     hasMore: rows.length > limit,
   };
 }

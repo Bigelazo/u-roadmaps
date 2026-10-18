@@ -147,9 +147,10 @@ otro id.
 | agregada → quitada, o quitada → agregada      | Se retira (regla 3b)                                         |
 | invertida («Colas» pasa a requerir «Árboles») | Dos pares distintos: uno quitado y otro agregado, dos avisos |
 
-Se mantiene la regla vigente: ocultar o eliminar un Nodo **no** genera avisos de
-ruta por las Dependencias eliminadas en consecuencia; lo cubren el aviso de
-acceso o la eliminación del Nodo. Los cambios de acceso causados por la
+Se mantiene la regla vigente para estudiantes: ocultar o eliminar un Nodo **no**
+genera avisos de ruta por las Dependencias eliminadas en consecuencia; lo cubren
+el aviso de acceso o la eliminación del Nodo. Al equipo docente, ocultar un Nodo sí
+le avisa de las Dependencias que pierde (decisión 10, «Equipo docente»). Los cambios de acceso causados por la
 Dependencia se avisan por Nodo (cascadas). Se descartó que las Dependencias no
 tengan aviso propio: a quien ya completó «Colas» no le cambia el acceso cuando
 «Árboles» pasa a requerirlo, pero su ruta sí cambió.
@@ -410,6 +411,20 @@ exactamente lo que cambió para ella. Se descartó **retirar** estos avisos: en 
 ejemplo Ana terminaría sin aviso alguno de una descripción que ahora puede leer.
 Eliminar un Nodo sigue absorbiendo definitivamente sus avisos (decisión 1).
 
+**Equipo docente (2026-10-18, #270):** para un destinatario con Rol de participación
+`TEACHER`, la visibilidad y el Bloqueo docente de un Nodo nunca suprimen un aviso, ni al
+decidir a quién se avisa, ni al registrar su Valor conocido (el equipo docente conoció los
+valores del Nodo oculto), ni al mostrarlo. Vale para todo Objeto del aviso de un Nodo:
+título, descripción, Recursos, Tipo de nodo, creación, eliminación y pares de Dependencia.
+Un aviso pendiente cuyo Nodo queda oculto o con Bloqueo docente sigue visible para él, y un
+renombre hecho mientras el Nodo estaba oculto le llega como renombre. Ocultar un Nodo quita
+sus Dependencias como si se quitaran una a una: a quien conocía una le llega «ya no
+requiere», y un «ahora requiere» pendiente se retira (3b) en vez de anunciar una Dependencia
+que ya no existe. Para estudiantes y
+observadores nada cambia: revelar un Nodo renombrado sigue sin ser un cambio de título
+para ellos. Quedan fuera los avisos de Acceso al Nodo, que siguen dependiendo del estado de
+cada destinatario, y el nombre del Tipo de nodo, que sigue exigiendo un Nodo visible.
+
 **Nota (2026-10-17):** qué Nodos son accesibles para cada participante y a quién se
 muestra un aviso guardado lo rige ahora
 [ADR-0030](0030-participant-access-is-decided-once-in-the-domain.md); cada Notice target
@@ -488,7 +503,10 @@ Reglas:
    próxima apertura: el estudiante no lo ve sin volver a entrar (decisión 5).
 5. **Solo en Nodos que se pueden abrir:** el estudiante no ve la marca en un Nodo
    bloqueado; aparece cuando se desbloquea. El equipo docente la ve también en
-   Nodos ocultos o con Bloqueo docente, que sí puede abrir.
+   Nodos ocultos o con Bloqueo docente, que sí puede abrir. Desde #270 sus avisos
+   sobre esos Nodos se crean, se muestran y se cuentan (decisión 10, «Equipo
+   docente»), de modo que la marca, el Inbox, los contadores y el Resumen de cambios
+   coinciden.
 6. **Pérdida de acceso:** como en la decisión 11, al recuperar la Participación la
    marca empieza de cero.
 

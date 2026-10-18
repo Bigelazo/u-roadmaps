@@ -36,8 +36,6 @@ test('added then edited is a new Resource with its current title; added then rem
     data: {
       noticeTarget: 'resource',
       noticeClass: 'roadmap-resource-changed',
-      changeKind: 'resource-added',
-      targetKind: 'node',
       nodeId,
       resourceId: resource.id,
       resourceTitle: 'Guía 3 resuelta',
@@ -62,7 +60,7 @@ test('an edit details only a title change, and edited then removed names the kno
   expect(edited).toMatchObject({
     subject: 'Guía 3',
     body: 'Se actualizó el recurso «Guía 3» en «Recursividad».',
-    data: { changeKind: 'resource-updated', resourceTitle: 'Guía 3' },
+    data: { noticeTarget: 'resource', resourceTitle: 'Guía 3' },
   });
   await edits.editResource(resource.id, { title: 'Guía 3 resuelta' });
   expect(await pendingResources(course.studentId, course)).toMatchObject([
@@ -78,7 +76,7 @@ test('an edit details only a title change, and edited then removed names the kno
       id: edited.id,
       subject: 'Guía 3',
       body: 'Se eliminó el recurso «Guía 3» de «Recursividad».',
-      data: { changeKind: 'resource-removed', resourceTitle: 'Guía 3', currentResource: null },
+      data: { resourceTitle: 'Guía 3', currentResource: null },
     },
   ]);
 });
@@ -173,12 +171,12 @@ test('creation, deletion and availability absorb Resource targets', async ({ cou
   await edits.remove(created.id);
   expect(
     (await pendingNotices(course.studentId, course.roadmapId)).map(({ data }) => data),
-  ).toMatchObject([{ changeKind: 'node-deleted', nodeId: created.id }]);
+  ).toMatchObject([{ noticeTarget: 'node-deletion', nodeId: created.id }]);
 
   await announceRoadmap(course);
   await edits.addResource(course.change.nodeId, 'Guía 3');
   expect(await pendingNotices(course.classmateId, course.roadmapId)).toMatchObject([
-    { data: { changeKind: 'roadmap-available' } },
+    { data: { noticeTarget: 'roadmap-availability' } },
   ]);
 });
 

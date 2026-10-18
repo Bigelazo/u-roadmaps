@@ -1,5 +1,69 @@
 import type { APIRequestContext, Page } from '@playwright/test';
-import { expect } from './fixtures';
+import { insert, literal, sql } from './database';
+import { expect, type E2EPrimaryCourseOffering } from './fixtures';
+
+/** A Notice target and its values, as the notice lifecycle module stores them in `data`. */
+export type StoredTarget = Readonly<{
+  noticeTarget: string;
+  targetKey: string;
+  knownValue: string;
+  currentValue: string;
+  [key: string]: unknown;
+}>;
+
+/**
+ * Store pending lifecycle notices for one recipient of the course's Roadmap, without
+ * delivery; returns their ids in the order given.
+ */
+export async function storeNotices(
+  course: E2EPrimaryCourseOffering,
+  recipientId: string,
+  targets: readonly StoredTarget[],
+  availableAt = new Date(),
+) {
+  const { roadmapId, courseCode, year, semester } = course;
+  const rows = targets.map((target) => ({
+    id: crypto.randomUUID(),
+    eventId: crypto.randomUUID(),
+    targetKey: target.targetKey,
+    recipientId,
+    roadmapId,
+    courseOfferingId: course.id,
+    subject: 'Aviso de prueba',
+    body: 'Aviso de prueba',
+    data: JSON.stringify({ roadmapId, courseCode, year, semester, context: {}, ...target }),
+    occurredAt: availableAt,
+    availableAt,
+  }));
+  await sql(insert('RoadmapNotice', rows));
+  return rows.map(({ id }) => id);
+}
+
+/**
+ * Store pending renames of `count` visible Nodes whose current titles are already the
+ * renamed ones, so recognizing them leaves nothing pending; returns their ids.
+ */
+export async function storeTitleNotices(
+  course: E2EPrimaryCourseOffering,
+  recipientId: string,
+  count: number,
+  availableAt?: Date,
+) {
+  const nodes: { id: string; title: string }[] = JSON.parse(
+    await sql(
+      `SELECT json_agg(json_build_object('id', id, 'title', title)) FROM (SELECT id, title FROM "RoadmapNode" WHERE "roadmapId" = ${literal(course.roadmapId)} AND "isVisible" ORDER BY id LIMIT ${count}) node;`,
+    ),
+  );
+  expect(nodes).toHaveLength(count);
+  const renames = nodes.map(({ id, title }) => ({
+    noticeTarget: 'node-title',
+    targetKey: `node:${id}:title`,
+    nodeId: id,
+    knownValue: `Antes ${title}`,
+    currentValue: title,
+  }));
+  return storeNotices(course, recipientId, renames, availableAt);
+}
 
 /** Roadmap notices as `/api/notifications` lists them; `data` depends on the notice kind. */
 export type StoredNotice = Readonly<{

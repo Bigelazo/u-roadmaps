@@ -65,13 +65,13 @@ test('access notices retain context through blocking, unlocking, hiding and dele
     .poll(async () => (await noticesFor(withoutProgress, rootId))[0])
     .toMatchObject({
       subject: rootTitle,
-      data: { changeKind: 'node-blocked', targetKind: 'roadmap', nodeTitle: rootTitle },
+      data: { noticeTarget: 'node-access', currentValue: 'Bloqueado', nodeTitle: rootTitle },
     });
   expect(await noticesFor(withoutProgress, dependentId)).toHaveLength(0);
   await expect
     .poll(async () => (await noticesFor(student, dependentId))[0])
     .toMatchObject({
-      data: { changeKind: 'node-blocked', targetKind: 'roadmap' },
+      data: { noticeTarget: 'node-access', currentValue: 'Bloqueado' },
     });
   await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${rootId}`), 'UNBLOCK'));
   await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${rootId}`), 'BRANCH_UNLOCK'));
@@ -94,27 +94,27 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   await ok(await deleteNode(author, roadmapPath(`/nodes/${removedId}`)), 204);
 
   await expect
-    .poll(async () => (await noticesFor(student, removedId))[0]?.data.changeKind)
-    .toBe('node-deleted');
+    .poll(async () => (await noticesFor(student, removedId))[0]?.data.noticeTarget)
+    .toBe('node-deletion');
   await expect
-    .poll(async () => (await noticesFor(student, rootId))[0]?.data.changeKind)
-    .toBe('node-retired');
+    .poll(async () => (await noticesFor(student, rootId))[0]?.data.currentValue)
+    .toBe('Retirado');
   const retired = (await noticesFor(student, rootId))[0];
   expect(retired).toMatchObject({
     subject: rootTitle,
-    data: { changeKind: 'node-retired', targetKind: 'roadmap', nodeTitle: rootTitle },
+    data: { noticeTarget: 'node-access', currentValue: 'Retirado', nodeTitle: rootTitle },
   });
   expect(JSON.stringify(retired)).not.toContain('Detalle privado');
   await expect.poll(() => noticesFor(student, removedId)).toHaveLength(1);
   const deletionNotices = await noticesFor(student, removedId);
-  expect(deletionNotices.map(({ data }) => data.changeKind)).toEqual(['node-deleted']);
+  expect(deletionNotices.map(({ data }) => data.noticeTarget)).toEqual(['node-deletion']);
   expect(deletionNotices[0]).toMatchObject({
     subject: removedTitle,
-    data: { eventCount: 1, targetKind: 'roadmap', nodeTitle: removedTitle },
+    data: { eventCount: 1, nodeTitle: removedTitle },
   });
   await expect
-    .poll(async () => (await noticesFor(withoutProgress, removedId))[0]?.data.changeKind)
-    .toBe('node-deleted');
+    .poll(async () => (await noticesFor(withoutProgress, removedId))[0]?.data.noticeTarget)
+    .toBe('node-deletion');
   expect(await noticesFor(course.users.withdrawnStudent, removedId)).toHaveLength(0);
   expect(await noticesFor(course.users.teacher, removedId)).toHaveLength(0);
   await selectNotice(removedId, removedTitle);

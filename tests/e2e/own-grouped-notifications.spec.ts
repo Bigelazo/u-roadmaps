@@ -34,7 +34,7 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
     {
       courseName: course.courseName,
       body: 'El Roadmap ha recibido 3 cambios.',
-      data: { targetCount: 3, changeKind: 'roadmap-grouped' },
+      data: { targetCount: 3 },
     },
   ]);
   expect(await notices()).toHaveLength(1);

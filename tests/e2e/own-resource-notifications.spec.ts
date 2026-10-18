@@ -43,7 +43,7 @@ test('added then edited then removed withdraws the Resource target', async ({
   const path = course.apiPath(`/resources/${resource.id}`);
   const pending = await editResourceTwice(author, path, notices);
   expect(pending.data).toMatchObject({
-    changeKind: 'resource-added',
+    knownResource: null,
     resourceTitle: 'Guía 3 resuelta',
   });
   await ok(await author.delete(path), 204);
@@ -62,10 +62,10 @@ test('edited then removed retains the recipient-known Resource title', async ({
   expect(await notices()).toHaveLength(0);
   const path = course.apiPath(`/resources/${resource.id}`);
   const pending = await editResourceTwice(author, path, notices);
-  expect(pending.data.changeKind).toBe('resource-updated');
+  expect(pending.body).toContain('Se actualizó el recurso «Guía 3»');
   expect(pending.body).toContain('«Guía 3» ahora se llama «Guía 3 resuelta».');
   await ok(await author.delete(path), 204);
-  await expect.poll(async () => (await notices())[0]?.data.changeKind).toBe('resource-removed');
+  await expect.poll(async () => (await notices())[0]?.data.currentResource).toBeNull();
   expect(await notices()).toHaveLength(1);
   expect((await notices())[0]).toMatchObject({ id: pending.id, data: { resourceTitle: 'Guía 3' } });
   expect((await notices())[0].body).toContain('Se eliminó el recurso «Guía 3»');
@@ -107,7 +107,6 @@ test('Resource recognition rebases edits after opening and retries preserve late
     await acknowledgeOpening(recipient, opening);
     expect(await notices()).toHaveLength(1);
     expect((await notices())[0].data).toMatchObject({
-      changeKind: 'resource-updated',
       resourceTitle: 'Guía 3',
       currentResource: { title: 'Guía posterior' },
     });

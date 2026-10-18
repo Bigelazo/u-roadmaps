@@ -108,13 +108,16 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
       async () =>
         (
           await (await student.get(`/api/notifications?nodeId=${standalone.id}`)).json()
-        ).notifications.map(({ data }: { data: { changeKind: string; actorName?: string } }) => ({
-          changeKind: data.changeKind,
+        ).notifications.map(({ data }: { data: Record<string, unknown> }) => ({
+          noticeTarget: data.noticeTarget,
+          currentValue: data.currentValue,
           actorName: data.actorName,
         })),
       { timeout: 15_000, intervals: [1_000] },
     )
-    .toEqual([{ changeKind: 'node-available', actorName: 'Equipo docente' }]);
+    .toEqual([
+      { noticeTarget: 'node-access', currentValue: 'Disponible', actorName: 'Equipo docente' },
+    ]);
 
   // Unlocking the prerequisite releases the overdue schedule in the same operation.
   await ok(

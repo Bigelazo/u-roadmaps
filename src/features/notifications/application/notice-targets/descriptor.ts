@@ -42,11 +42,31 @@ export type RoadmapViewDependency = Readonly<{
 
 export type RoadmapViewNodeType = Readonly<{ id: string; name: string; hasVisibleNode: boolean }>;
 
+export type ParticipantRole = 'STUDENT' | 'TEACHER';
+
+/** An active participant, with the Nodes accessible to them (ADR-0014 decision 10 "accessible"). */
+export type ParticipantAccess = Readonly<{
+  userId: string;
+  role: ParticipantRole;
+  accessibleNodeIds: ReadonlySet<string>;
+}>;
+
+/**
+ * Teaching staff are told about, and shown, every Node change: a Node's visibility and
+ * Teacher block never hide its changes from them (ADR-0014 decision 10, «Equipo docente»).
+ * Anyone else, or a recipient without an active Participation, gets the student rule.
+ */
+export function seesEveryNode(role: ParticipantRole | null) {
+  return role === 'TEACHER';
+}
+
 /** What a descriptor may read about one Roadmap; the module implements it over a transaction. */
 export interface RoadmapView {
   readonly roadmapId: string;
   /** Active Participations, including the actor of the change. */
-  participants(): Promise<readonly { userId: string; role: 'STUDENT' | 'TEACHER' }[]>;
+  participants(): Promise<readonly { userId: string; role: ParticipantRole }[]>;
+  /** The participant's role; null without an active Participation. */
+  role(userId: string): Promise<ParticipantRole | null>;
   node(nodeId: string): Promise<RoadmapViewNode | null>;
   /** Every Node of the Roadmap; once loaded, `node` answers from it. */
   nodes(): Promise<readonly RoadmapViewNode[]>;
@@ -63,6 +83,11 @@ export interface RoadmapView {
   nodeResources(nodeId: string): Promise<readonly RoadmapViewResource[]>;
   /** Nodes accessible to the participant (ADR-0014 decision 10 "accessible"). */
   accessibleNodeIds(userId: string): Promise<ReadonlySet<string>>;
+  /**
+   * Every active participant's access, the actor included, read once for the whole
+   * Roadmap; once loaded, `accessibleNodeIds` answers from it.
+   */
+  participantAccess(): Promise<readonly ParticipantAccess[]>;
   /** The Dependency between an ordered pair of this Roadmap's Nodes, if any. */
   dependency(sourceNodeId: string, targetNodeId: string): Promise<{ id: string } | null>;
   nodeType(nodeTypeId: string): Promise<RoadmapViewNodeType | null>;
@@ -111,17 +136,6 @@ export type TargetWording = Readonly<{
 }>;
 
 /**
- * One Notice target kind, described once (ADR-0024): identity, Known value baseline,
- * audience (ADR-0014 decision 10), visibility gate, equality and wording.
- * Values are encoded strings; equality is exact string equality.
- */
-export type NoticeReadSide = Readonly<{
-  changeKind: string;
-  changedFields: readonly string[];
-  targetKind: 'node' | 'roadmap';
-}>;
-
-/**
  * Who a recipient's stored notices of a target are shown to (ADR-0030 decision 3):
  * - `everyone`: every recipient;
  * - `node-viewers`: while its Node exists and is visible, even if Blocked;
@@ -132,16 +146,17 @@ export type NoticeReadSide = Readonly<{
 export type ShownTo =
   'everyone' | 'node-viewers' | 'node-openers' | 'dependency-viewers' | 'node-type-viewers';
 
+/**
+ * One Notice target kind, described once (ADR-0024): identity, Known value baseline,
+ * audience (ADR-0014 decision 10), visibility gate, equality and wording.
+ * Values are encoded strings; equality is exact string equality.
+ */
 export interface NoticeTargetDescriptor<F extends RoadmapChangeFact = RoadmapChangeFact> {
   /** Stored as `data.noticeTarget`; also selects the descriptor at read time. */
   readonly noticeTarget: string;
   readonly noticeClass: NoticeClass;
   /** The Inbox, counts, Node change marks, Change summary and single-notice reads follow it. */
   readonly shownTo: ShownTo;
-  /** Legacy keys the notice API still returns and grouping reads; never visibility. */
-  readonly readSide: NoticeReadSide;
-  /** Read-side discriminators that depend on the stored values (stored over `readSide`). */
-  valueReadSide?(values: TargetValues): Partial<NoticeReadSide>;
   /**
    * Broad targets only: the part of the hierarchy Roadmap ⊃ Node ⊃ aspect/Resource the
    * target stands for. A recipient who has not recognized it learns later changes inside
@@ -211,6 +226,66 @@ export async function nodeVisibleBefore(
   );
   if (visibility?.kind === 'node-visibility') return visibility.previous;
   return (await roadmap.node(nodeId))?.isVisible ?? false;
+}
+
+/**
+ * The Node was visible before this change and still is. Only then do students see a change
+ * of its content; revealing or hiding it reaches them as Node access instead.
+ */
+export async function nodeVisibleThroughout(
+  nodeId: string,
+  changes: RoadmapChanges,
+  roadmap: RoadmapView,
+) {
+  return (
+    (await nodeVisibleBefore(nodeId, changes, roadmap)) &&
+    ((await roadmap.node(nodeId))?.isVisible ?? false)
+  );
+}
+
+/**
+ * The participants a Node change reaches, the actor included: teaching staff always
+ * (ADR-0014 decision 10, «Equipo docente»), students only when `studentsSee` it.
+ */
+export async function nodeViewers(studentsSee: boolean, roadmap: RoadmapView) {
+  return (await roadmap.participants())
+    .filter(({ role }) => studentsSee || seesEveryNode(role))
+    .map(({ userId }) => userId);
+}
+
+/** Whether a Node change that students see only when `studentsSee` reaches the recipient. */
+export async function isNodeViewer(
+  studentsSee: boolean,
+  recipientId: string,
+  roadmap: RoadmapView,
+) {
+  return studentsSee || seesEveryNode(await roadmap.role(recipientId));
+}
+
+/**
+ * The participants a change inside the Node (its description or Resources) reaches, the
+ * actor included: teaching staff always, even on a hidden or Teacher-blocked Node
+ * (ADR-0014 decision 10, «Equipo docente»); students when `studentsSee` it and the Node
+ * is accessible to them.
+ */
+export async function nodeOpeners(studentsSee: boolean, nodeId: string, roadmap: RoadmapView) {
+  return (await roadmap.participantAccess())
+    .filter(
+      ({ role, accessibleNodeIds }) =>
+        seesEveryNode(role) || (studentsSee && accessibleNodeIds.has(nodeId)),
+    )
+    .map(({ userId }) => userId);
+}
+
+/**
+ * Whether the recipient sees inside the Node (its description and Resources): teaching staff
+ * always, even on a hidden or Teacher-blocked Node; students when it is accessible to them.
+ */
+export async function isNodeOpener(nodeId: string, recipientId: string, roadmap: RoadmapView) {
+  return (
+    seesEveryNode(await roadmap.role(recipientId)) ||
+    (await roadmap.accessibleNodeIds(recipientId)).has(nodeId)
+  );
 }
 
 /** The user ids of the Roadmap's active Participations, the actor included. */

@@ -214,7 +214,7 @@ test('classification and Dependency repeats reconcile independent targets and wi
       eventCount: 1,
       sourceNodeId: course.nodes.first,
       targetNodeId: nodeId,
-      changeKind: 'dependency-added',
+      currentValue: 'present',
     },
   });
   expect(await feed(teacher)).toHaveLength(0);

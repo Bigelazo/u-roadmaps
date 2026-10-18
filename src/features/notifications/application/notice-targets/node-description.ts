@@ -1,7 +1,9 @@
 import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes';
 import {
-  nodeVisibleBefore,
+  isNodeViewer,
+  nodeOpeners,
+  nodeVisibleThroughout,
   type NoticeTargetDescriptor,
   type RoadmapView,
   type TargetValues,
@@ -15,15 +17,12 @@ export const nodeDescriptionRef = (nodeId: string) => ({
 
 type NodeDescriptionFact = Extract<RoadmapChangeFact, { kind: 'node-description' }>;
 
-/** Participants who can open the Node now; nobody when it was revealed or hidden by this change. */
+/**
+ * Participants who can open the Node now; no student when it was revealed or hidden by
+ * this change.
+ */
 async function canOpenNode(nodeId: string, changes: RoadmapChanges, roadmap: RoadmapView) {
-  if (!(await nodeVisibleBefore(nodeId, changes, roadmap))) return [];
-  if (!(await roadmap.node(nodeId))?.isVisible) return [];
-  const participants = await roadmap.participants();
-  const accessible = await Promise.all(
-    participants.map(async ({ userId }) => (await roadmap.accessibleNodeIds(userId)).has(nodeId)),
-  );
-  return participants.filter((_, index) => accessible[index]).map(({ userId }) => userId);
+  return nodeOpeners(await nodeVisibleThroughout(nodeId, changes, roadmap), nodeId, roadmap);
 }
 
 function nodeTitle({ context }: TargetValues) {
@@ -32,24 +31,24 @@ function nodeTitle({ context }: TargetValues) {
 
 /**
  * Node description: compared as exact text; only recipients for whom the Node is
- * accessible know it or are told (ADR-0014 decision 10).
+ * accessible know it or are told (ADR-0014 decision 10), and teaching staff always
+ * (decision 10, «Equipo docente»).
  */
 export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> = {
   noticeTarget: NOTICE_TARGET.nodeDescription,
   noticeClass: 'roadmap-node-changed',
   shownTo: 'node-openers',
-  readSide: { changeKind: 'node-updated', changedFields: ['description'], targetKind: 'node' },
   matches: (fact): fact is NodeDescriptionFact => fact.kind === 'node-description',
   target: (fact) => nodeDescriptionRef(fact.nodeId),
   previousValue: (fact) => JSON.stringify(fact.previous),
   knowers: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
   audience: (fact, changes, roadmap) => canOpenNode(fact.nodeId, changes, roadmap),
-  async current(target, roadmap) {
+  async current(target, roadmap, recipientId) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     return node
       ? {
           value: JSON.stringify(node.description),
-          visible: node.isVisible,
+          visible: await isNodeViewer(node.isVisible, recipientId, roadmap),
           context: { nodeTitle: node.title },
         }
       : null;

@@ -267,7 +267,8 @@ test('student roadmap shows effective block reasons and restores a completed nod
     .poll(async () => {
       const response = await student.get(`/api/notifications?nodeId=${completedTarget.id}`);
       return (await response.json()).notifications.some(
-        (notice: { data: { changeKind: string } }) => notice.data.changeKind === 'node-available',
+        (notice: { data: { noticeTarget: string; currentValue: string } }) =>
+          notice.data.noticeTarget === 'node-access' && notice.data.currentValue === 'Disponible',
       );
     })
     .toBe(true);
