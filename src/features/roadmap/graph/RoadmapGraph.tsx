@@ -173,7 +173,8 @@ function mapProjectionToFlow(
 /**
  * Keeps the size React Flow measured for each Node a new projection still shows: React Flow
  * hides a Node that arrives without `measured` and drops its handle bounds until it measures
- * the Node again.
+ * the Node again. This prevents that one-frame flash and the re-measuring on every projection;
+ * `NodeMeasurementRecovery` guarantees correctness, including for Nodes not measured yet.
  */
 function keepMeasuredNodes(
   flow: ReturnType<typeof mapProjectionToFlow>,
@@ -370,15 +371,20 @@ function RoadmapViewportRestorer({
  * Measures again every shown Node that React Flow left without handle bounds. A measurement
  * taken just before React Flow adopts new nodes can be lost that way, and React Flow does not
  * retry it: the Node would stay without Dependencies, or hidden after the next projection.
+ * Brand-new Nodes go through the same check until their first measurement lands.
+ *
+ * It relies on two React Flow internals (12.11.3), not documented contracts:
+ * `internals.handleBounds` is the adoption state of a Node, and ReactFlow renders its
+ * `children` after its `StoreUpdater`, so this effect runs once the nodes are adopted.
  */
 function NodeMeasurementRecovery({ nodes }: { nodes: readonly RoadmapFlowNode[] }) {
   const { getInternalNode } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
   useEffect(() => {
-    const unmeasured = nodes.flatMap((node) =>
+    const withoutHandleBounds = nodes.flatMap((node) =>
       !node.hidden && !getInternalNode(node.id)?.internals.handleBounds ? [node.id] : [],
     );
-    if (unmeasured.length > 0) updateNodeInternals(unmeasured);
+    if (withoutHandleBounds.length > 0) updateNodeInternals(withoutHandleBounds);
   }, [getInternalNode, nodes, updateNodeInternals]);
   return null;
 }
