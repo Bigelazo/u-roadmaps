@@ -35,8 +35,8 @@ actor de ADR-0024. Roadmap closure continúa sin reportar cambios.
 Los tests de operaciones están en
 `tests/features/roadmap/change-port-operations.test.ts`. Usan el adapter que graba
 en `tests/features/roadmap/support/recording-change-port.ts`, datos propios y
-PostgreSQL local, sin mocks de Prisma para avisos. Corren en la suite unitaria con
-la preparación existente de `roadmap_notifications_test_db`; requieren
+PostgreSQL local, sin mocks de Prisma para avisos. Corren en el proyecto `database`
+de la suite unitaria, que prepara `roadmap_notifications_test_db`; requieren
 `NOTIFICATIONS_DATABASE_URL` en `.env`, igual que la suite de integración.
 Los tests del módulo de comandos (`tests/features/roadmap/roadmap-command.test.ts`),
 con el mismo adapter y PostgreSQL, comprueban la entrega después del commit, el

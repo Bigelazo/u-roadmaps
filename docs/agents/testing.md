@@ -137,9 +137,13 @@ su Ramo, Curso, Roadmap, Nodos, Tipos de nodo, Participations y Usuarios, y limp
 en `finally`, también ante fallos. Los huérfanos se identifican por `NT-` y
 `notifications.u-roadmaps.test`, reservados para este harness.
 
-Las invocaciones que usan esta base se ejecutan consecutivamente, incluidas
-`pnpm test:unit` y `pnpm test:integration`: la limpieza inicial es global.
-Dentro de una invocación, los workers usan datos independientes.
+La migración y la limpieza de huérfanos ocurren una sola vez por invocación, en
+el `globalSetup`, antes de iniciar los workers; ningún archivo de test las
+ejecuta. Durante la corrida, cada test elimina solo los datos de sus fixtures,
+por lo que los archivos en paralelo no borran datos ajenos. Las invocaciones que
+usan esta base se ejecutan consecutivamente, incluidas `pnpm test:unit` y
+`pnpm test:integration`: la limpieza inicial de una invocación es global y
+borraría los datos de otra en curso.
 
 Los tests de notificaciones llaman a sus interfaces públicas y observan
 `listOwnNotices`, sin simular Prisma ni inspeccionar filas de avisos. La pérdida
@@ -150,8 +154,16 @@ incluye eventos repetidos y eventos distintos para el mismo Notice target.
 Los unitarios registran la limpieza automática del DOM mediante `globals: true`
 en [vitest.config.mts](../../vitest.config.mts). Los escenarios de UI que necesitan
 un viewport declaran y restauran su `matchMedia`; los contratos HTTP sin consultas
-pueden aislar Prisma. La suite unitaria excluye los specs del harness, pero los
-tests de operaciones del Roadmap reutilizan sus fixtures y preparación.
+pueden aislar Prisma. La suite unitaria excluye los specs del harness.
+
+La configuración unitaria tiene dos proyectos de Vitest. `unit` usa jsdom.
+`database` reúne los archivos unitarios con PostgreSQL real, enumerados en
+`notificationsDatabaseTests`: usan entorno node y el `globalSetup` y `setupFiles`
+del harness. Ese `globalSetup` solo se ejecuta si la selección incluye algún
+archivo de `database`. Un archivo nuevo que use las fixtures del harness se agrega
+a esa lista; fuera de ella, las fixtures fallan al importarse en lugar de escribir
+en la base de `DATABASE_URL`. Filtrar por proyecto con
+`pnpm test:unit --project database`.
 
 ## U-Campus local para permisos institucionales
 
