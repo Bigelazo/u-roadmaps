@@ -2,9 +2,10 @@ import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import { ABSENT, PRESENT, absorbs, nodeCreationRef } from '../absorption';
 import {
+  isNodeOpener,
+  isNodeViewer,
   nodeViewers,
   participantIds,
-  seesEveryNode,
   type EntryValue,
   type NoticeTargetDescriptor,
   type TargetValues,
@@ -45,13 +46,9 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
   async current(target, roadmap, recipientId) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     if (!node) return null;
-    // Teaching staff see a hidden new Node too (ADR-0014 decision 14.5); to them, it is
-    // blocked only by its Teacher block.
-    const staff = seesEveryNode(await roadmap.role(recipientId));
-    if (!node.isVisible && !staff) return { value: ABSENT, visible: false };
-    const accessible = staff
-      ? !node.isTeacherBlocked
-      : (await roadmap.accessibleNodeIds(recipientId)).has(node.id);
+    if (!(await isNodeViewer(node.isVisible, recipientId, roadmap)))
+      return { value: ABSENT, visible: false };
+    const accessible = await isNodeOpener(node.id, recipientId, roadmap);
     const resources = accessible ? await roadmap.nodeResources(node.id) : [];
     return {
       value: PRESENT,

@@ -249,3 +249,29 @@ test('revealing a Node changed while hidden tells students only that it is back'
     '«Montículos» volvió a mostrarse en el Roadmap.',
   ]);
 });
+
+test('the creation notice of a Teacher-blocked new Node shows teaching staff its content', async ({
+  course,
+}) => {
+  const edits = teacherEdits(course);
+  const node = await edits.create('Árboles');
+  await edits.addResource(node.id, 'Guía 3');
+  await edits.update(node.id, { description: 'Recorridos' });
+  await edits.block(node.id);
+  const creation = async (userId: string) =>
+    (await pendingNotices(userId, course.roadmapId)).find(
+      (notice) => noticeTarget(notice) === 'node-creation',
+    );
+  expect(await creation(course.colleagueId)).toMatchObject({
+    body: 'Nuevo Nodo «Árboles».',
+    data: {
+      nodeDescription: 'Recorridos',
+      nodeAccess: 'Disponible',
+      resources: [{ title: 'Guía 3' }],
+    },
+  });
+  expect(await creation(course.studentId)).toMatchObject({
+    body: 'Nuevo Nodo «Árboles» (bloqueado).',
+    data: { nodeDescription: null, nodeAccess: 'Bloqueado', resources: [] },
+  });
+});

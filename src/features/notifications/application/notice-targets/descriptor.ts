@@ -276,6 +276,17 @@ export async function nodeOpeners(nodeId: string, roadmap: RoadmapView, students
     .map(({ userId }) => userId);
 }
 
+/**
+ * Whether the recipient sees inside the Node (its description and Resources): teaching staff
+ * always, even on a hidden or Teacher-blocked Node; students when it is accessible to them.
+ */
+export async function isNodeOpener(nodeId: string, recipientId: string, roadmap: RoadmapView) {
+  return (
+    seesEveryNode(await roadmap.role(recipientId)) ||
+    (await roadmap.accessibleNodeIds(recipientId)).has(nodeId)
+  );
+}
+
 /** The user ids of the Roadmap's active Participations, the actor included. */
 export async function participantIds(roadmap: RoadmapView) {
   return (await roadmap.participants()).map(({ userId }) => userId);
