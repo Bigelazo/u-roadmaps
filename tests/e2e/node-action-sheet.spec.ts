@@ -272,7 +272,7 @@ test('touch actions stay unreachable to students, Canvas preview, and frozen Roa
   await expect(page.getByText('Touch prerequisite', { exact: true })).toBeVisible();
   await expect(trigger).toHaveCount(0);
   await expect(sheet).toHaveCount(0);
-  expect((await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`))).status()).toBe(
-    409,
-  );
+  const closedBlock = await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`));
+  expect(closedBlock.status()).toBe(409);
+  expect((await closedBlock.json()).error.code).toBe('ROADMAP_CLOSED');
 });

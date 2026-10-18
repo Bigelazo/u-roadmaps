@@ -328,12 +328,13 @@ test('teacher API manages a node type, resources, and dependencies through their
   });
   await ok(dependency, 201);
   const dependencyId = (await dependency.json()).dependency.id;
-  await ok(
+  const cycle = await ok(
     await api.post(course.apiPath('/dependencies'), {
       data: { sourceNodeId: targetId, targetNodeId: sourceId },
     }),
     409,
   );
+  expect((await cycle.json()).error.code).toBe('DEPENDENCY_CYCLE');
   await ok(await api.delete(course.apiPath(`/dependencies/${dependencyId}`)), 204);
   await ok(await api.delete(course.apiPath(`/resources/${resourceId}`)), 204);
 });

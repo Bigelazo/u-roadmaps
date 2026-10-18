@@ -92,12 +92,13 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   );
 
   const dependencyId = await createDependency(author, course, prerequisiteId, dependentId);
-  await ok(
+  const duplicate = await ok(
     await author.post(roadmapPath('/dependencies'), {
       data: { sourceNodeId: prerequisiteId, targetNodeId: dependentId },
     }),
     409,
   );
+  expect((await duplicate.json()).error.code).toBe('DEPENDENCY_CONFLICT');
 
   await expect
     .poll(async () => routeNoticesFor(studentWithoutPrerequisite, dependencyId))
