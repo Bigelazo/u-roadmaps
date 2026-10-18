@@ -18,7 +18,7 @@ type NodeTitleFact = Extract<RoadmapChangeFact, { kind: 'node-title' }>;
 
 /**
  * Node title: whoever sees the Node is told, accessible or blocked (ADR-0014 decision 10);
- * teaching staff see hidden Nodes too (decision 14.5).
+ * teaching staff see hidden Nodes too (decision 10, «Equipo docente»).
  */
 export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
   noticeTarget: NOTICE_TARGET.nodeTitle,

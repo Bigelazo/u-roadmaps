@@ -60,7 +60,7 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   target: (fact) => resourceRef(fact.resourceId, fact.nodeId),
   previousValue: (fact) => resourceValue(fact.previous),
   // Description and Resources reach only who has the Node accessible (ADR-0014 decision 10),
-  // and teaching staff always (decision 14.5).
+  // and teaching staff always (decision 10, «Equipo docente»).
   knowers: (fact, _changes, roadmap) => nodeOpeners(true, fact.nodeId, roadmap),
   audience: (fact, _changes, roadmap) => nodeOpeners(true, fact.nodeId, roadmap),
   async current(target, roadmap, recipientId) {

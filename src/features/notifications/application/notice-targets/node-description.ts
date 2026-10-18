@@ -32,7 +32,7 @@ function nodeTitle({ context }: TargetValues) {
 /**
  * Node description: compared as exact text; only recipients for whom the Node is
  * accessible know it or are told (ADR-0014 decision 10), and teaching staff always
- * (decision 14.5).
+ * (decision 10, «Equipo docente»).
  */
 export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> = {
   noticeTarget: NOTICE_TARGET.nodeDescription,

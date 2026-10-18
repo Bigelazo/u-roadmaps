@@ -24,8 +24,8 @@ autenticado. No hay SDK, credenciales ni servicios externos de notificaciones.
   destinatario; para estudiantes, descripción y Recursos de Nodos bloqueados quedan
   ocultos, pero pendientes. Al equipo docente, la visibilidad y el Bloqueo docente de un
   Nodo nunca le ocultan sus avisos ([ADR-0014](adr/0014-target-based-notice-grouping.md),
-  decisión 14.5). Perder la Participación retira sus Avisos pendientes y sus
-  aperturas de forma definitiva.
+  decisión 10, «Equipo docente»). Perder la Participación retira sus Avisos pendientes
+  y sus aperturas de forma definitiva.
 - **Inbox.** Las filas se titulan con el nombre del ramo. Con tres o más Objetos
   pendientes del mismo Roadmap (salvo disponibilidad), el Inbox los presenta en
   una fila agrupada; los contadores suman Objetos, no filas. Se agrupa antes de

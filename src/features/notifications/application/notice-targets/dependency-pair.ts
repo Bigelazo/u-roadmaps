@@ -29,7 +29,7 @@ function dependencyPair({ targetKey }: NoticeTargetRef) {
 
 /**
  * Everyone when the Dependency joins two visible Nodes; teaching staff always
- * (ADR-0014 decision 14.5).
+ * (ADR-0014 decision 10, «Equipo docente»).
  */
 async function pairRecipients(
   fact: DependencyFact,

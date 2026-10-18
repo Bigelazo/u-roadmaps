@@ -53,8 +53,8 @@ export type ParticipantAccess = Readonly<{
 
 /**
  * Teaching staff are told about, and shown, every Node change: a Node's visibility and
- * Teacher block never hide its changes from them (ADR-0014 decision 14.5). Anyone else,
- * or a recipient without an active Participation, gets the student rule.
+ * Teacher block never hide its changes from them (ADR-0014 decision 10, «Equipo docente»).
+ * Anyone else, or a recipient without an active Participation, gets the student rule.
  */
 export function seesEveryNode(role: ParticipantRole | null) {
   return role === 'TEACHER';
@@ -245,7 +245,7 @@ export async function nodeVisibleThroughout(
 
 /**
  * The participants a Node change reaches, the actor included: teaching staff always
- * (ADR-0014 decision 14.5), students only when `studentsSee` it.
+ * (ADR-0014 decision 10, «Equipo docente»), students only when `studentsSee` it.
  */
 export async function nodeViewers(studentsSee: boolean, roadmap: RoadmapView) {
   return (await roadmap.participants())
@@ -265,7 +265,8 @@ export async function isNodeViewer(
 /**
  * The participants a change inside the Node (its description or Resources) reaches, the
  * actor included: teaching staff always, even on a hidden or Teacher-blocked Node
- * (ADR-0014 decision 14.5); students when `studentsSee` it and the Node is accessible to them.
+ * (ADR-0014 decision 10, «Equipo docente»); students when `studentsSee` it and the Node
+ * is accessible to them.
  */
 export async function nodeOpeners(studentsSee: boolean, nodeId: string, roadmap: RoadmapView) {
   return (await roadmap.participantAccess())

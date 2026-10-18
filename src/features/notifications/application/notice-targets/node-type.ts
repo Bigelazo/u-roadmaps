@@ -29,7 +29,7 @@ function names({ context, knownContext }: TargetValues) {
  * Node type: compared by type identity and worded with the type names the recipient
  * knew, which survive later Node type renames. Whoever sees the Node is told,
  * accessible or blocked (ADR-0014 decision 10); teaching staff see hidden Nodes too
- * (decision 14.5).
+ * (decision 10, «Equipo docente»).
  */
 export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
   noticeTarget: NOTICE_TARGET.nodeType,

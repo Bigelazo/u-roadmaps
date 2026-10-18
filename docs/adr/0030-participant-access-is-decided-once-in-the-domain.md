@@ -38,8 +38,9 @@ reciba su resultado.
    La declaración se evalúa con un único dato más del destinatario: su Rol de
    participación. Para el equipo docente (`TEACHER`), todo Nodo existente es visible y se
    puede abrir en `node-viewers`, `node-openers` y `dependency-viewers`
-   ([ADR-0014](0014-target-based-notice-grouping.md), decisiones 10 y 14.5); `everyone` y
-   `node-type-viewers` no cambian, y cualquier otro rol recibe la regla del estudiante. La
+   ([ADR-0014](0014-target-based-notice-grouping.md), decisión 10, «Equipo docente»);
+   `everyone` y `node-type-viewers` no cambian, y cualquier otro rol recibe la regla del
+   estudiante. La
    regla vive en `seesEveryNode`: el evaluador en TypeScript la recibe con el rol, y el
    `CASE` del Inbox lee el rol de la Participación que ya une. El test de paridad del Inbox
    compara ambos para estudiantes y equipo docente. Las audiencias y los Valores conocidos

@@ -36,8 +36,9 @@ const SHOWN: Record<string, [Record<string, string>[], boolean[]]> = {
   'node-type-name': [aboutNodeTypes, [true, false, false]],
 };
 
-// ADR-0014 decision 14.5: teaching staff are shown every Node change, whatever the Node's
-// visibility or Teacher block; a missing Node, a Node type's name and Node access are as above.
+// ADR-0014 decision 10, «Equipo docente»: teaching staff are shown every Node change,
+// whatever the Node's visibility or Teacher block; a missing Node, a Node type's name and
+// Node access are as above.
 const SHOWN_TO_TEACHING_STAFF: Record<string, boolean[]> = {
   'node-title': [true, true, true, false],
   'node-type': [true, true, true, false],

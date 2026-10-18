@@ -5,8 +5,9 @@ export type NoticeVisibilityNode = { id: string; isVisible: boolean; nodeTypeId:
 /**
  * Whether a stored notice is shown to a recipient with this role, as its Notice target
  * declares (`shownTo`); a row no descriptor owns is never shown. To teaching staff, a
- * Node's visibility and Teacher block never hide its notices (ADR-0014 decision 14.5).
- * Visibility affects presentation only; hidden notices remain pending for recognition.
+ * Node's visibility and Teacher block never hide its notices (ADR-0014 decision 10,
+ * «Equipo docente»). Visibility affects presentation only; hidden notices remain pending
+ * for recognition.
  */
 export function isNoticeVisible(
   value: unknown,
