@@ -57,6 +57,9 @@ export default async function CoursePage(
 
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
+  // Refresh the stored Participation on entry, before reading it: a complete report can
+  // grant, change or revoke it, and an unavailable source preserves local access.
+  await synchronizeParticipation(user, identifier, roadmapChangePort);
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
     select: {
@@ -72,10 +75,7 @@ export default async function CoursePage(
     redirectUnavailableNotice(noticeId, null, null);
     notFound();
   }
-  // Refresh stored roles on entry; an unavailable source preserves local access.
-  const participation =
-    (await synchronizeParticipation(user, identifier, roadmapChangePort)) ??
-    courseOffering.participants[0];
+  const participation = courseOffering.participants[0];
   redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(courseOffering.roadmap?.closedAt);

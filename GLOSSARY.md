@@ -52,7 +52,7 @@ A participant's read-only view of current and historical U-Campus courses, with 
 _Avoid_: Participation, roster synchronization
 
 **Personal academic synchronization (Sincronización académica personal)**:
-The reconciliation of an authenticated user's U-Campus courses and Institutional course positions into local Participations. A complete successful result can materialize, update, or deactivate Participations, while a failed or partial result leaves the corresponding prior information unchanged.
+The reconciliation of an authenticated user's U-Campus courses and Institutional course positions into local Participations. A complete successful result can materialize, update, or deactivate Participations, while a failed or partial result leaves the corresponding prior information unchanged. A result that lists no course in either U-Campus list counts as partial, so a faulty empty answer never deactivates every Participation.
 _Avoid_: Roster synchronization, authentication, cache refresh
 
 **Student progress tracking (Seguimiento de estudiantes)**:

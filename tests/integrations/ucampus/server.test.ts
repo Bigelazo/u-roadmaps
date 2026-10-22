@@ -275,6 +275,45 @@ it('combines enrolled and taught courses for the academic overview', async () =>
   ]);
 });
 
+it('treats a history that lists no course in either list as incomplete', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  // A fresh Response per call: both endpoints read a body, and a body reads only once.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(new Response('[]'))),
+  );
+
+  await expect(getMufasaAcademicCourses('12345678')).resolves.toEqual({
+    source: 'MUFASA',
+    courses: [],
+    isComplete: false,
+  });
+});
+
+it('keeps a history complete when only one of its lists is empty', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: URL) =>
+      Promise.resolve(
+        new Response(
+          url.pathname.endsWith('/cursos_dictados')
+            ? JSON.stringify([
+                { codigo: 'CC9001', nombre: 'Curso dictado', ano: 2026, periodo: 2, id_cargo: 1 },
+              ])
+            : '[]',
+        ),
+      ),
+    ),
+  );
+
+  await expect(getMufasaAcademicCourses('12345678')).resolves.toMatchObject({
+    source: 'MUFASA',
+    courses: [{ courseCode: 'CC9001' }],
+    isComplete: true,
+  });
+});
+
 it('reads the U-Campus roster of every section in the requested Academic term only', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
   process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';

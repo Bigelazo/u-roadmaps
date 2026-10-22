@@ -213,7 +213,11 @@ export function getMufasaTaughtCourses(
 
 /**
  * Gets both U-Campus lists needed for the academic overview. A successful
- * endpoint remains useful if the other list is temporarily unavailable.
+ * endpoint remains useful if the other list is temporarily unavailable. A
+ * history with no course in either list is not complete: a pure teacher has no
+ * enrolled courses, but an empty answer from both endpoints is more likely a
+ * U-Campus fault than a person without any course, and it must not deactivate
+ * every Participation.
  */
 export async function getMufasaAcademicCourses(
   rut: string | null,
@@ -226,10 +230,12 @@ export async function getMufasaAcademicCourses(
   if (enrolled.source === 'LOCAL' && taught.source === 'LOCAL')
     return { source: 'LOCAL', courses: [] };
 
+  const courses = [...enrolled.courses, ...taught.courses];
   return {
     source: 'MUFASA',
-    courses: [...enrolled.courses, ...taught.courses],
+    courses,
     isComplete:
+      courses.length > 0 &&
       enrolled.source === 'MUFASA' &&
       taught.source === 'MUFASA' &&
       enrolled.isComplete !== false &&
