@@ -1,8 +1,5 @@
-// @vitest-environment node
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
-import { beforeAll, expect } from 'vitest';
+import { expect } from 'vitest';
 import {
   student,
   teacher,
@@ -12,8 +9,6 @@ import {
 import { prisma } from '@/shared/server/db';
 import { readParticipantAccess } from '@/features/roadmap/access';
 import { getRoadmapNodeResources } from '@/features/roadmap/server';
-
-beforeAll(databaseSetup, 60_000);
 
 function addNode(
   course: IntegrationCourse,

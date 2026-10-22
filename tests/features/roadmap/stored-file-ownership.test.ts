@@ -1,8 +1,5 @@
-// @vitest-environment node
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
-import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest';
+import { afterAll, afterEach, expect, vi } from 'vitest';
 import { teacher, test } from '../../notifications-integration/fixtures';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -98,7 +95,6 @@ const { GET: versionDownload } =
   await import('@/app/api/[courseCode]/versions/[year]/[semester]/resources/[resourceId]/file/route');
 const { prisma } = await import('@/shared/server/db');
 const { recordingChangePort } = await import('./support/recording-change-port');
-beforeAll(databaseSetup, 60_000);
 afterEach(async () => {
   Object.assign(faults, {
     partialUpload: false,

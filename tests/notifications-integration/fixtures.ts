@@ -3,6 +3,13 @@ import { test as base } from 'vitest';
 import { prisma } from '@/shared/server/db';
 import { cleanTestData, integrationDatabaseUrl } from './database';
 
+// Only Vitest projects with the harness setup prepare this database and point Prisma at it.
+if (process.env.DATABASE_URL !== integrationDatabaseUrl()) {
+  throw new Error(
+    'List unit files that use these fixtures in the database project of vitest.config.mts.',
+  );
+}
+
 async function createCourse(
   code: string,
   [teacherId, studentId, classmateId, colleagueId]: string[],
