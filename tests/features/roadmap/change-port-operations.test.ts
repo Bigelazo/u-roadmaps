@@ -1,3 +1,4 @@
+import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import 'dotenv/config';
 import { expect } from 'vitest';
 import { teacher, test, type IntegrationCourse } from '../../notifications-integration/fixtures';
@@ -446,7 +447,7 @@ test('Node type commands refuse what the Node type decision rejects, with their 
 test('promotion reports the role change', async ({ course }) => {
   const recording = recordingChangePort();
   await materializeParticipation(
-    { id: course.studentId, rut: null },
+    { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
     course.identifier,
     { name: 'Curso de prueba', positions: ['COURSE_PROFESSOR'] },
     recording.port,
@@ -465,7 +466,7 @@ test('concurrent materializations of one new Course both succeed', async ({ cour
   const courseCode = `RACE${crypto.randomUUID().slice(0, 8)}`;
   const offering = (year: number, semester: number) =>
     materializeParticipation(
-      { id: course.studentId, rut: null },
+      { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
       { courseCode, year, semester },
       { name: 'Curso concurrente', positions: ['STUDENT'] },
       recordingChangePort().port,

@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { CourseRouteComparison } from '@/app/_components/landing/CourseRouteComparison';
 import { InstitutionalLoginForm } from '@/app/_components/InstitutionalLoginForm';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 
 const audienceLanes = [
   {

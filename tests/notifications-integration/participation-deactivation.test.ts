@@ -1,4 +1,4 @@
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import { student, test, type IntegrationCourse } from './fixtures';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { getAcademicOverviewApi } from '@/app/_adapters/academic-overview';
@@ -9,26 +9,27 @@ import {
   synchronizeParticipation,
 } from '@/features/roadmap/server';
 import type {
+  UCampus,
   MufasaCourseMember,
   MufasaEnrolledCourse,
   MufasaEnrolledCoursesResult,
 } from '@/integrations/ucampus/server';
 import { pendingNotices, teacherEdits } from './roadmap';
 
-const { reports, rosters } = vi.hoisted(() => ({
-  reports: new Map<string, MufasaEnrolledCoursesResult>(),
-  rosters: new Map<number, MufasaCourseMember[]>(),
-}));
-vi.mock('@/integrations/ucampus/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/integrations/ucampus/server')>()),
-  getMufasaAcademicCourses: async (rut: string | null) =>
-    (rut && reports.get(rut)) ?? { source: 'LOCAL', courses: [] },
-  getMufasaCourseMembers: async (ramoId: number) => {
+const reports = new Map<string, MufasaEnrolledCoursesResult>();
+const rosters = new Map<number, MufasaCourseMember[]>();
+const ucampus: UCampus = {
+  async getAcademicCourses(rut) {
+    return (rut && reports.get(rut)) || { source: 'LOCAL', courses: [] };
+  },
+  async getCourseMembers(ramoId) {
     const members = rosters.get(ramoId);
     return members ? { source: 'MUFASA', members } : { source: 'LOCAL', members: [] };
   },
-  getMufasaPersonNames: async () => new Map(),
-}));
+  async getPersonNames() {
+    return new Map();
+  },
+};
 
 const rutOf = (userId: string) => userId.slice(0, 20);
 
@@ -56,7 +57,7 @@ const earlierOffering = ({ identifier }: IntegrationCourse) => ({
 });
 
 const visitOverview = (userId: string) =>
-  getAcademicOverviewApi({ id: userId, rut: rutOf(userId) });
+  getAcademicOverviewApi({ id: userId, rut: rutOf(userId), ucampus });
 
 const overviewOfferings = async (userId: string) =>
   (await visitOverview(userId)).offerings.map(({ courseCode, year, semester }) => ({
@@ -116,7 +117,7 @@ test('teaching staff still see the Completions of a deactivated student', async 
     { rut: rutOf(course.studentId), section: '1', institutionalPosition: 'STUDENT' },
   ]);
   const participants = await readCourseParticipants(
-    { id: course.teacherId, rut: rutOf(course.teacherId) },
+    { id: course.teacherId, rut: rutOf(course.teacherId), ucampus },
     course.identifier,
   );
   expect(participants.students).toMatchObject([{ hasEntered: true, completedNodes: 1 }]);
@@ -168,7 +169,7 @@ test('entering one offering deactivates it only when a complete report omits it'
 }) => {
   const enter = (userId: string) =>
     synchronizeParticipation(
-      { id: userId, rut: rutOf(userId) },
+      { id: userId, rut: rutOf(userId), ucampus },
       course.identifier,
       scheduledRoadmapChangePort,
     );

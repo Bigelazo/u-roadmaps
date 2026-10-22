@@ -4,7 +4,8 @@ import { CreateRoadmapDialog } from '@/features/roadmap';
 import { isFirstVisitInvitationDue } from '@/features/roadmap/server';
 import { AcademicOverview } from '@/features/academic-overview';
 import { getAcademicOverviewPage } from '@/app/_adapters/academic-overview';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 import { getInboxIdentity } from '@/features/notifications/server';
 import { UnavailableNoticeFallback } from '@/features/notifications';
 

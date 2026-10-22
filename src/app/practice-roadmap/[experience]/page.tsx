@@ -1,7 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
 import { PracticeRoadmapCanvas } from '@/features/roadmap';
 import { isPracticeExperience, readPracticeRoadmapCalendar } from '@/features/roadmap/server';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 
 export default async function PracticeRoadmapPage(
   props: PageProps<'/practice-roadmap/[experience]'>,

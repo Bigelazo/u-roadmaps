@@ -2,7 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import { readRoadmapVersion } from '@/features/roadmap/server';
 import { parseCourseOfferingIdentifier, RoadmapVersionViewer } from '@/features/roadmap';
 import { ApplicationError } from '@/shared/errors/server';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 
 export default async function RoadmapVersionPage(
   props: PageProps<'/courses/[courseCode]/versions/[year]/[semester]'>,

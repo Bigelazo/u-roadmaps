@@ -6,7 +6,8 @@ import {
   RoadmapCanvasSession,
 } from '@/features/roadmap';
 import { readPostCreationInvitation, synchronizeParticipation } from '@/features/roadmap/server';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapEntryNotifications } from '@/features/notifications';

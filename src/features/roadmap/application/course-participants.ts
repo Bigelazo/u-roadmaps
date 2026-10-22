@@ -1,11 +1,6 @@
 import 'server-only';
 
 import {
-  getMufasaAcademicCourses,
-  getMufasaCourseMembers,
-  getMufasaPersonNames,
-} from '@/integrations/ucampus/server';
-import {
   effectivePosition,
   positionCapabilities,
   type InstitutionalCoursePosition,
@@ -58,8 +53,7 @@ async function readInstitutionalRoster(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
 ): Promise<RosterEntry[] | null> {
-  const options = { useLocalFixtureData: actor.useLocalFixtureData === true };
-  const { courses } = await getMufasaAcademicCourses(actor.rut, options);
+  const { courses } = await actor.ucampus.getAcademicCourses(actor.rut);
   const ramoId = courses.find(
     (course) =>
       course.courseCode === identifier.courseCode &&
@@ -68,7 +62,7 @@ async function readInstitutionalRoster(
       course.ramoId !== null,
   )?.ramoId;
   if (!ramoId) return null;
-  const roster = await getMufasaCourseMembers(ramoId, identifier, options);
+  const roster = await actor.ucampus.getCourseMembers(ramoId, identifier);
   if (roster.source !== 'MUFASA' || roster.members.length === 0) return null;
 
   const byRut = new Map<
@@ -87,7 +81,7 @@ async function readInstitutionalRoster(
       where: { rut: { in: ruts } },
       select: { id: true, name: true, rut: true },
     }),
-    getMufasaPersonNames(ruts, options),
+    actor.ucampus.getPersonNames(ruts),
   ]);
   const usersByRut = new Map(localUsers.map((user) => [user.rut, user]));
   return [...byRut].map(([rut, { sections, positions }]) => {

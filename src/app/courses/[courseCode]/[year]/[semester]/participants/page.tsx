@@ -3,7 +3,8 @@ import { roadmapChangePort } from '@/app/_adapters/roadmap-changes';
 import { CourseParticipants, parseCourseOfferingIdentifier } from '@/features/roadmap';
 import { readCourseParticipants, synchronizeParticipation } from '@/features/roadmap/server';
 import { ApplicationError } from '@/shared/errors/server';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 
 export default async function CourseParticipantsPage(
   props: PageProps<'/courses/[courseCode]/[year]/[semester]/participants'>,

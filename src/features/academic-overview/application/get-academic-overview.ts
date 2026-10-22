@@ -1,7 +1,7 @@
 import 'server-only';
 
 import {
-  getMufasaAcademicCourses,
+  type MufasaEnrolledCourse,
   isCourseLeadPosition,
   isTeachingPosition,
   type MufasaEnrolledCoursesResult,
@@ -27,17 +27,14 @@ async function getAcademicOverview(
   { source, isPastClosure }: AcademicOverviewSources,
 ) {
   const [mufasa, localCourses] = await Promise.all([
-    source ??
-      getMufasaAcademicCourses(actor.rut, {
-        useLocalFixtureData: actor.useLocalFixtureData === true,
-      }),
+    source ?? actor.ucampus.getAcademicCourses(actor.rut),
     readLocalAcademicOverview(actor, isPastClosure),
   ]);
   return { mufasa, localCourses };
 }
 
 function courseFromMufasa(
-  course: Awaited<ReturnType<typeof getMufasaAcademicCourses>>['courses'][number],
+  course: MufasaEnrolledCourse,
   localCourse: AcademicOverviewCourse | undefined,
   isComplete: boolean,
   isPastClosure: RoadmapClosureCalendar,

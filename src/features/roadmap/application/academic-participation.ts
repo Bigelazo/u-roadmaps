@@ -3,7 +3,7 @@ import { lockRoadmap, roadmapChangeTransaction } from './roadmap-command';
 import 'server-only';
 
 import {
-  getMufasaAcademicCourses,
+  type UCampus,
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
 import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
@@ -14,7 +14,7 @@ export type AcademicUser = Readonly<{
   id: string;
   name?: string;
   rut: string | null;
-  useLocalFixtureData?: boolean;
+  ucampus: UCampus;
 }>;
 
 export type MufasaCourseAccess = Readonly<{
@@ -42,9 +42,7 @@ export async function readMufasaCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
 ): Promise<CourseAccessReport> {
-  const mufasa = await getMufasaAcademicCourses(user.rut, {
-    useLocalFixtureData: user.useLocalFixtureData === true,
-  });
+  const mufasa = await user.ucampus.getAcademicCourses(user.rut);
   if (mufasa.source !== 'MUFASA' || mufasa.isComplete === false)
     return { access: null, isComplete: false };
   const key = offeringKey(identifier);
@@ -192,9 +190,7 @@ export async function synchronizeAcademicParticipations(
   user: AcademicUser,
   changePort: RoadmapChangePort,
 ) {
-  const source = await getMufasaAcademicCourses(user.rut, {
-    useLocalFixtureData: user.useLocalFixtureData === true,
-  });
+  const source = await user.ucampus.getAcademicCourses(user.rut);
   if (source.source === 'MUFASA' && source.isComplete !== false) {
     const offerings = new Map<string, typeof source.courses>();
     for (const course of source.courses) {

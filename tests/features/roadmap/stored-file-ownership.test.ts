@@ -1,3 +1,4 @@
+import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import 'dotenv/config';
 import { afterAll, afterEach, expect, vi } from 'vitest';
 import { teacher, test } from '../../notifications-integration/fixtures';
@@ -21,7 +22,11 @@ const faults = vi.hoisted(() => ({
   lateSettled: false,
 }));
 vi.mock('@/app/_adapters/auth', () => ({
-  requireAuthenticatedUser: async () => ({ id: faults.userId, rut: null }),
+  requireAuthenticatedUser: async () => ({
+    id: faults.userId,
+    rut: null,
+    ucampus: localFixtureUCampus,
+  }),
 }));
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof import('node:fs/promises')>();
@@ -461,7 +466,7 @@ for (const version of [false, true]) {
     const download = () =>
       version
         ? downloadRoadmapVersionResource(
-            { id: course.teacherId, rut: null },
+            { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
             course.identifier,
             resource.id,
           )
@@ -579,7 +584,7 @@ test('downloads keep participant Node access separate from frozen version teache
   await expect(download(course.studentId)).rejects.toMatchObject({ code: 'TEACHER_BLOCK' });
   await expect(
     downloadRoadmapVersionResource(
-      { id: course.teacherId, rut: null },
+      { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
       course.identifier,
       resource.id,
     ),
@@ -587,7 +592,7 @@ test('downloads keep participant Node access separate from frozen version teache
   await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
   await expect(
     downloadRoadmapVersionResource(
-      { id: course.studentId, rut: null },
+      { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
       course.identifier,
       resource.id,
     ),
@@ -595,7 +600,7 @@ test('downloads keep participant Node access separate from frozen version teache
   expect(
     (
       await downloadRoadmapVersionResource(
-        { id: course.teacherId, rut: null },
+        { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
         course.identifier,
         resource.id,
       )
@@ -628,7 +633,7 @@ test('downloads keep participant Node access separate from frozen version teache
   });
   await expect(
     downloadRoadmapVersionResource(
-      { id: course.teacherId, rut: null },
+      { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
       { ...course.identifier, year: 2027 },
       resource.id,
     ),

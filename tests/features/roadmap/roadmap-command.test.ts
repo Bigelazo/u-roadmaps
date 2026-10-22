@@ -1,3 +1,4 @@
+import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { expect, onTestFinished, vi } from 'vitest';
@@ -250,7 +251,10 @@ function roadmapReads(course: IntegrationCourse): Promise<unknown>[] {
     getNodeTypesForActor(student(course)),
     getRoadmapNodeResources({ ...student(course), nodeId }),
     readSimulatedRoadmap(teacher(course)),
-    readCourseParticipants({ id: course.teacherId, rut: null }, course.identifier),
+    readCourseParticipants(
+      { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
+      course.identifier,
+    ),
   ];
 }
 

@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   getMufasaAcademicCourses,
+  localFixtureUCampus,
   getMufasaCourseMembers,
   getMufasaEnrolledCourses,
   getMufasaPersonNames,
@@ -155,12 +156,17 @@ it('keeps development fixture profiles on their local course offerings', async (
     );
   vi.stubGlobal('fetch', fetch);
 
-  await expect(
-    getMufasaEnrolledCourses('10000001', { useLocalFixtureData: true }),
-  ).resolves.toEqual({
+  await expect(localFixtureUCampus.getAcademicCourses('10000001')).resolves.toEqual({
     source: 'LOCAL',
     courses: [],
   });
+  await expect(
+    localFixtureUCampus.getCourseMembers(675, { year: 2026, semester: 2 }),
+  ).resolves.toEqual({
+    source: 'LOCAL',
+    members: [],
+  });
+  await expect(localFixtureUCampus.getPersonNames(['10000001'])).resolves.toEqual(new Map());
   expect(fetch).not.toHaveBeenCalled();
 });
 

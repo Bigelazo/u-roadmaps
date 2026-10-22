@@ -1,7 +1,7 @@
 export type AcademicOverviewActor = Readonly<{
   id: string;
   rut: string | null;
-  useLocalFixtureData?: boolean;
+  ucampus: import('@/integrations/ucampus/server').UCampus;
 }>;
 
 export type AcademicOverviewSource = 'MUFASA' | 'LOCAL';

@@ -1,3 +1,4 @@
+import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import { expect } from 'vitest';
 import { student, test, type IntegrationCourse } from './fixtures';
 import { prisma } from '@/shared/server/db';
@@ -19,7 +20,7 @@ const complete = (course: IntegrationCourse, nodeId: string) =>
 
 const promote = (course: IntegrationCourse) =>
   materializeParticipation(
-    { id: course.studentId, rut: null },
+    { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
     course.identifier,
     { name: 'Curso de prueba', positions: ['COURSE_PROFESSOR'] },
     scheduledRoadmapChangePort,
