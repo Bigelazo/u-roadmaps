@@ -7,7 +7,6 @@ type StoredUser = {
   teachingTutorialOpenedAt: Date | null;
 };
 
-// In-memory stand-in for the User table these functions read and stamp.
 const store = vi.hoisted(() => ({ users: new Map<string, StoredUser>() }));
 
 vi.mock('@/shared/server/db', () => ({

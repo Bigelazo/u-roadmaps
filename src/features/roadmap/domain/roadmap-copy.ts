@@ -29,12 +29,6 @@ export type RoadmapCopySource = Readonly<{
   }[];
 }>;
 
-/**
- * Maps a frozen version's content onto a new Roadmap. Visible Nodes start
- * Teacher-blocked, hidden Nodes stay hidden and unblocked, Scheduled unlocks are
- * dropped, Custom node types are copied and Predefined node types stay shared.
- * File Resources get new file keys; `fileCopies` lists the bytes to duplicate.
- */
 export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, newId: () => string) {
   const remap = (ids: readonly { id: string }[]) => new Map(ids.map(({ id }) => [id, newId()]));
   const typeIds = remap(source.customNodeTypes);
@@ -100,7 +94,6 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
   };
 }
 
-/** The planned Resources to create once bytes are copied; a file missing from storage omits its Resource. */
 export function resourcesWithStoredFiles<T extends { fileKey: string | null }>(
   resources: readonly T[],
   storedFileKeys: ReadonlySet<string>,

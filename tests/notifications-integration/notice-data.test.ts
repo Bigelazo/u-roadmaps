@@ -2,8 +2,6 @@ import { expect } from 'vitest';
 import { test } from './fixtures';
 import { addNode, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
 
-// #272: visibility, grouping and recognition read the Notice target, so the notice API's
-// `data` no longer carries the legacy read-side fields.
 test('the notice API returns each Notice target without the legacy read-side fields', async ({
   course,
 }) => {

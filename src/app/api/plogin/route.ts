@@ -33,10 +33,6 @@ async function resolveInstitutionalLogin(
   );
 }
 
-// El portal VTI devuelve el token por una redirección GET. La transacción de
-// un solo uso creada por `/api/plogin/start` protege este callback, por lo que
-// el servidor puede completar la sesión y llevar a la persona directamente a
-// su resumen académico sin una página intermedia.
 export async function GET(request: Request) {
   const rawToken = new URL(request.url).searchParams.get('jwt');
   return resolveInstitutionalLogin(request, completeInstitutionalLogin(request, rawToken));

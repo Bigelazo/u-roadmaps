@@ -39,7 +39,6 @@ const recordedVersionSelect = {
   },
 } as const;
 
-/** The Course (Ramo) with its offerings, refused unless the actor has a version horizon. */
 async function requireCourseWithHorizon(actor: RoadmapActor, courseCode: string) {
   const course = await prisma.course.findUnique({
     where: { code: courseCode },
@@ -72,7 +71,6 @@ async function requireCourseWithHorizon(actor: RoadmapActor, courseCode: string)
   return { course, horizon };
 }
 
-/** The recorded source edition, which outlives the source Roadmap itself. */
 function recordedSource(roadmap: {
   sourceYear: number | null;
   sourceSemester: number | null;
@@ -124,10 +122,6 @@ export async function readRoadmapVersionHistory(actor: RoadmapActor, courseCode:
 
 export type RoadmapVersionHistory = Awaited<ReturnType<typeof readRoadmapVersionHistory>>;
 
-/**
- * A closed Roadmap of the Course within the actor's horizon. Every refusal looks
- * missing, so the API never reveals which Courses or versions exist.
- */
 async function requireVisibleVersion(actor: RoadmapActor, identifier: CourseOfferingIdentifier) {
   const missing = () =>
     new ApplicationError(404, 'VERSION_NOT_FOUND', 'La versión solicitada no existe.');
@@ -145,7 +139,6 @@ async function requireVisibleVersion(actor: RoadmapActor, identifier: CourseOffe
   return { course, horizon, offering, roadmap: { ...roadmap, closedAt: roadmap.closedAt } };
 }
 
-// Reads only the Roadmap's own content: never Participations, Completions or visits.
 export async function readRoadmapVersion(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
@@ -171,7 +164,6 @@ export async function readRoadmapVersion(
     getAvailableTypes(roadmap.id),
   ]);
   const term = { year: offering.year, semester: offering.semester };
-  // Oldest first, ending at this version, following each copy to its source.
   const ancestry: AcademicTermKey[] = [term];
   let oldest: {
     sourceRoadmapId: string | null;
@@ -179,7 +171,6 @@ export async function readRoadmapVersion(
     sourceSemester: number | null;
   } = roadmap;
   const visited = new Set([roadmap.id]);
-  // The guard stops on a corrupt cyclic lineage instead of looping forever.
   while (oldest.sourceRoadmapId && !visited.has(oldest.sourceRoadmapId)) {
     visited.add(oldest.sourceRoadmapId);
     const ancestor = await prisma.roadmap.findUnique({
@@ -195,7 +186,6 @@ export async function readRoadmapVersion(
     ancestry.unshift(ancestor.courseOffering);
     oldest = ancestor;
   }
-  // The oldest reachable version still names its source's edition if that source was removed.
   const removedSource = recordedSource(oldest);
   if (removedSource) ancestry.unshift(removedSource);
   const lineage = ancestry

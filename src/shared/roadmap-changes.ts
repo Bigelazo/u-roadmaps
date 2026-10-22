@@ -2,11 +2,6 @@ import type { CourseOfferingIdentifier } from './course-offering';
 import type { NodeAccessState } from './node-access';
 import type { resourceContentState } from './server/resource-content-state';
 
-/**
- * Roadmap changes: per-object facts the roadmap feature reports through its change
- * port (ADR-0024). Shared so the notifications module can consume them without
- * importing roadmap server code.
- */
 export type RoadmapNodeState = Readonly<{
   id: string;
   title: string;
@@ -15,7 +10,6 @@ export type RoadmapNodeState = Readonly<{
   isVisible: boolean;
 }>;
 
-/** Facts describe mutations, not notice audiences. Access is computed by roadmap per person. */
 export type RoadmapChangeFact =
   | { kind: 'node-created'; nodeId: string; previous: null; current: RoadmapNodeState }
   | {
@@ -61,7 +55,6 @@ export type RoadmapChangeFact =
       targetNode: { title: string; isVisible: boolean };
     }
   | { kind: 'node-type-name'; nodeTypeId: string; previous: string; current: string }
-  /** The Roadmap became available (empty or copied); its audience is the notifications module's. */
   | {
       kind: 'roadmap-created';
       previous: null;

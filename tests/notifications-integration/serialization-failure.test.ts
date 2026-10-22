@@ -13,7 +13,6 @@ test('a raw query that hits a serialization failure is recognized', async ({ cou
       await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${course.roadmapId}::uuid`;
       snapshotTaken();
       await committed;
-      // The row changed after this transaction's snapshot: 40001 on this statement.
       await transaction.$executeRaw`UPDATE "Roadmap" SET id = id WHERE id = ${course.roadmapId}::uuid`;
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },

@@ -1,11 +1,9 @@
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 
-/** Case- and whitespace-insensitive identity of a Node type name. */
 export function normalizeName(name: string): string {
   return name.trim().toLocaleLowerCase('es-CL');
 }
 
-/** A change to a Node type; an update without `name` changes only its appearance. */
 export type NodeTypeChange =
   | { kind: 'create'; name: string }
   | { kind: 'update'; nodeTypeId: string; name?: string }
@@ -19,14 +17,6 @@ export type NodeTypeRuleFailure =
 
 export type NodeTypeDecision = { kind: 'ALLOWED' } | RuleRejection<NodeTypeRuleFailure>;
 
-/**
- * Whether a Node type change is allowed. A predefined Node type is immutable, a name is
- * unique among the predefined and Roadmap Node types once normalized, and a Node type is
- * not deleted while a Node uses it.
- *
- * @param nodeTypes the Node types available in the Roadmap: the predefined ones and its own.
- * @param nodes the Nodes to check for use of the Node type; only a deletion reads them.
- */
 export function decideNodeTypeChange({
   nodeTypes,
   nodes,

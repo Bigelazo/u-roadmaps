@@ -14,17 +14,14 @@ import {
 const card = (x: number, y: number) => ({ x, y, width: 190, height: 120 });
 
 it('leaves through the side that faces the other node', () => {
-  // Nodos contiguos en la misma fila: costado derecho hacia el izquierdo.
   const row = floatingEdgeGeometry(card(480, 0), card(720, 0));
   expect(row.sourcePosition).toBe(Position.Right);
   expect(row.targetPosition).toBe(Position.Left);
 
-  // Salto de fila hacia atrás: el eje horizontal domina, así que sale por la izquierda.
   const wrap = floatingEdgeGeometry(card(960, 0), card(0, 170));
   expect(wrap.sourcePosition).toBe(Position.Left);
   expect(wrap.targetPosition).toBe(Position.Right);
 
-  // Nodo claramente debajo: el eje vertical domina.
   const down = floatingEdgeGeometry(card(-287, -254), card(0, 170));
   expect(down.sourcePosition).toBe(Position.Bottom);
   expect(down.targetPosition).toBe(Position.Top);

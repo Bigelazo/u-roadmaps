@@ -15,16 +15,11 @@ const STATE: Record<NodeState, { isVisible?: boolean; isTeacherBlocked?: boolean
   'Teacher-blocked': { isTeacherBlocked: true },
 };
 
-/** Puts a Node in the state through a real edit, as a colleague would. */
 function applyState(edits: Edits, nodeId: string, state: NodeState) {
   if (state === 'hidden') return edits.update(nodeId, { isVisible: false });
   if (state === 'Teacher-blocked') return edits.block(nodeId);
 }
 
-/**
- * Each Node change, made by the course teacher on a Node in the given state, and the
- * Notice target that tells it. Creation reaches its state after the Node is created.
- */
 const CHANGES: Record<
   string,
   {
@@ -86,8 +81,6 @@ const CHANGES: Record<
   },
 };
 
-// Students are told what they can see (ADR-0014 decision 10): never a hidden Node, and on a
-// Blocked node only its title, Node type, creation, deletion and Dependencies.
 const STUDENT_TOLD: Record<string, NodeState[]> = {
   title: ['visible', 'Teacher-blocked'],
   description: ['visible'],
@@ -100,7 +93,6 @@ const STUDENT_TOLD: Record<string, NodeState[]> = {
 
 const MATRIX = Object.keys(CHANGES).flatMap((change) =>
   (Object.keys(STATE) as NodeState[])
-    // A hidden Node has no Dependencies: hiding removes them and none can be added.
     .filter((state) => change !== 'Dependency' || state !== 'hidden')
     .map((state) => [change, state] as const),
 );
@@ -139,7 +131,6 @@ test.for(['hidden', 'Teacher-blocked'] as const)(
       counts: await countOwnNotices(userId, params),
       marks: await countOwnNodeChangeTargets(userId, params),
     });
-    // Node access notices are per recipient, as before: hiding or blocking tells everyone.
     expect(await shown(course.colleagueId)).toEqual({
       targets: ['node-access', 'node-description'],
       counts: { count: 2 },
@@ -195,8 +186,6 @@ test('a rename while the Node is hidden reaches teaching staff as a rename; reve
       .map(({ body }) => body);
   expect(await titles(course.colleagueId)).toEqual(['«Heaps» pasó a llamarse «Montículos».']);
   expect(await titles(course.studentId)).toEqual([]);
-  // To students, as before, hiding and revealing returns the Node to the access they knew,
-  // and the rename made in between is no title change.
   await edits.update(node.id, { isVisible: true });
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
   expect(await titles(course.colleagueId)).toEqual(['«Heaps» pasó a llamarse «Montículos».']);
@@ -207,7 +196,6 @@ test('teaching staff recognize changes on a hidden Node as on a visible one', as
 }) => {
   const node = await addNode(course, 'Heaps', { isVisible: false, description: 'Antes' });
   const edits = teacherEdits(course);
-  // The first entry shows no Change summary.
   await enterRoadmap(course.colleagueId, course.roadmapId);
   await edits.rename(node.id, 'Montículos');
   await edits.update(node.id, { description: 'Después' });

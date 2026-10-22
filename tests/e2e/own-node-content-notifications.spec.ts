@@ -88,7 +88,6 @@ test('description and type targets absorb edits independently, withdraw exact re
       data: { name: 'Taller renombrado' },
     }),
   );
-  // Wait for the separate classification effect to commit before checking the pending assignment.
   await expect
     .poll(async () =>
       (await listNotices(recipient, { roadmapId: course.roadmapId })).some(

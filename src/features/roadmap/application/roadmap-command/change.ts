@@ -7,25 +7,16 @@ import { accessChanges } from '../access-changes';
 import { readAccessSnapshot } from '../access-snapshot';
 import { conflict, roadmapClosed, roadmapNotFound } from '../errors';
 
-/** Attempts of one serializable change before a serialization failure becomes a 409. */
 const SERIALIZABLE_MAX_ATTEMPTS = 5;
 
 export type RoadmapChangeReporter = (changes: RoadmapChanges) => Promise<void>;
 
 export type ChangeTransactionOptions = Readonly<{
-  /** SERIALIZABLE unless the caller is not retry-safe (Roadmap creation, materialisation). */
   isolation?: 'serializable' | 'read-committed';
   timeout?: number;
-  /** The message of the 409 once every serializable attempt hit a serialization failure. */
   conflictMessage?: string;
 }>;
 
-/**
- * The one transaction policy for Roadmap changes. A serializable change prefers index
- * scans and retries serialization failures with backoff. What `operation` reports goes
- * to the port inside the transaction; the port's deliveries run only after the commit,
- * and only the committed attempt's. A failed delivery is logged and never fails the change.
- */
 export async function roadmapChangeTransaction<T>(
   port: RoadmapChangePort,
   operation: (transaction: Prisma.TransactionClient, report: RoadmapChangeReporter) => Promise<T>,
@@ -75,27 +66,15 @@ async function serializableTransaction<T>(
     } catch (error) {
       if (!isSerializationFailure(error)) throw error;
       if (attempt === SERIALIZABLE_MAX_ATTEMPTS - 1) throw conflict(conflictMessage);
-      // Separate attempts so unrelated concurrent Roadmaps can finish their writes.
       await delay(50 * 2 ** attempt + Math.random() * 50);
     }
   }
 }
 
-/**
- * Under SERIALIZABLE a sequential scan takes a relation-level predicate lock, so an edit
- * on one Roadmap would conflict with any concurrent write to that table on another
- * Roadmap. Small tables make the planner prefer sequential scans even where an index
- * matches (#220), so serializable Roadmap transactions steer it to index scans, which
- * lock only the rows and index pages they read.
- */
 async function preferIndexScans(transaction: Prisma.TransactionClient) {
   await transaction.$executeRaw`SET LOCAL enable_seqscan = off`;
 }
 
-/**
- * A serialization failure, as Prisma reports it (P2034), as the pg adapter reports it
- * at COMMIT, or wrapped in a raw query's failure (P2010).
- */
 export function isSerializationFailure(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError)
     return (
@@ -116,18 +95,8 @@ function isAdapterWriteConflict(error: unknown) {
   );
 }
 
-/**
- * `update` serialises changes to the Roadmap's content. `key-share` records participant
- * progress (Completion, Canvas preview): it lets progress run concurrently and still
- * conflicts with the Roadmap closure's FOR UPDATE.
- */
 export type RoadmapLock = 'update' | 'key-share';
 
-/**
- * Locks the Roadmap row. Taking it before any Node row keeps the parent-before-Node
- * order that Completion's KEY SHARE lock and notice delivery follow, so baseline
- * capture and Node deletion cannot invert it through foreign-key locks.
- */
 export async function lockRoadmap(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -139,10 +108,6 @@ export async function lockRoadmap(
     await transaction.$queryRaw`SELECT id FROM "Roadmap" WHERE id = ${roadmapId}::uuid FOR KEY SHARE`;
 }
 
-/**
- * Whose Node access a change can affect: every active participant (`roadmap`), only the
- * actor (`actor`, Completion), or nobody (`none`, which skips both snapshots).
- */
 export type AccessScope = 'roadmap' | 'actor' | 'none';
 
 export type RoadmapChangeTarget = Readonly<{
@@ -157,11 +122,6 @@ export type Roadmap = Prisma.RoadmapGetPayload<true>;
 
 export type RoadmapChangeOutcome<Result> = { result: Result; facts: RoadmapChangeFact[] };
 
-/**
- * Changes one Roadmap inside a change transaction: locks it, refuses a closed Roadmap
- * on the state read under the lock, runs `change` between the access snapshots its scope
- * needs, and reports its content facts and access facts once.
- */
 export async function changeRoadmap<Result>(
   transaction: Prisma.TransactionClient,
   report: RoadmapChangeReporter,

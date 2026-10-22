@@ -20,7 +20,6 @@ function chileDayOffset(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-/** Simulates the scheduled day arriving without waiting for the calendar. */
 async function moveScheduleToYesterday(nodeId: string) {
   await sql(
     `UPDATE "RoadmapNode" SET "teacherUnlockOn" = ${literal(chileDayOffset(-1))}::date WHERE id = ${literal(nodeId)};`,
@@ -45,7 +44,6 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
 
   await createDependency(teacher, course, prerequisite.id, scheduled.id);
 
-  // A schedule needs a Teacher block and a future day.
   const unblocked = await teacher.put(schedulePath(standalone.id), {
     data: { unlockOn: chileDayOffset(1) },
   });
@@ -74,7 +72,6 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
 
   await ok(await teacher.put(schedulePath(standalone.id), { data: { unlockOn: tomorrow } }));
 
-  // The new Node absorbs its block; entry establishes Bloqueado for later unlocks.
   const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
   await expect
     .poll(async () =>
@@ -89,8 +86,6 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   await ok(await student.post('/api/notifications/openings', { data: opening }));
   await ok(await student.post('/api/notifications/acknowledge', { data: opening }));
 
-  // Both days arrive. The E2E server checks every second (SCHEDULED_UNLOCK_INTERVAL_MS):
-  // the free node is released and notified, while the one behind a blocked prerequisite waits.
   await moveScheduleToYesterday(scheduled.id);
   await moveScheduleToYesterday(standalone.id);
   await expect
@@ -100,9 +95,6 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
     status: 'BLOCKED',
     reason: 'TEACHER_BLOCK',
   });
-  // The release is stored immediately (no grouping window, see ADR-0014);
-  // its latest change is attributed to teaching staff.
-  // The stored attribution has no name; the Inbox projects the teaching staff label.
   await expect
     .poll(
       async () =>
@@ -119,11 +111,9 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
       { noticeTarget: 'node-access', currentValue: 'Disponible', actorName: 'Equipo docente' },
     ]);
 
-  // Unlocking the prerequisite releases the overdue schedule in the same operation.
   await ok(
     await changeTeacherBlock(teacher, course.apiPath(`/nodes/${prerequisite.id}`), 'UNBLOCK'),
   );
-  // Only the student's own pending prerequisite remains.
   expect(await studentAccess(scheduled.id)).toEqual({
     status: 'BLOCKED',
     reason: 'PREREQUISITE_BLOCK',

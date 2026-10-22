@@ -5,7 +5,6 @@ import { prisma } from '@/shared/server/db';
 import { synchronizeAcademicParticipations } from '@/features/roadmap/application/academic-participation';
 import type { RoadmapChanges } from '@/features/roadmap/application/change-port';
 
-// Use real PostgreSQL with one available connection, as under pool contention.
 vi.mock('@prisma/adapter-pg', async (importOriginal) => {
   const original = await importOriginal<typeof import('@prisma/adapter-pg')>();
   return {
@@ -55,7 +54,6 @@ test('a complete academic history synchronizes with a constrained connection poo
     { id: course.studentId, rut: null },
     {
       async report(transaction, changes) {
-        // Real transactional work held long enough to expose queued starts (>2s).
         await transaction.$executeRaw`SELECT pg_sleep(0.3)`;
         reported.push(changes);
       },

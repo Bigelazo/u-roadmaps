@@ -39,12 +39,9 @@ export type E2EUser = {
   id: string;
   name: string;
   institutionalEmail: string;
-  /** RUT body without verifier, as stored on the User. */
   rut: string;
 };
 
-// The `course` and `createCourse` fixture names follow the spec's "Curso": they
-// create Course offerings, each under its own Course (Ramo).
 export type E2ECourseOffering = {
   id: string;
   courseCode: string;
@@ -56,7 +53,6 @@ export type E2ECourseOffering = {
   pagePath(): string;
 };
 
-/** The test's own copy of the CC1002 Course offering, its Roadmap and Users. */
 export type E2EPrimaryCourseOffering = E2ECourseOffering & {
   roadmapId: string;
   nodes: { first: string; second: string; hidden: string };
@@ -64,11 +60,9 @@ export type E2EPrimaryCourseOffering = E2ECourseOffering & {
 };
 
 export type CourseOfferingOptions = {
-  /** Copy the CC1002 Roadmap template. Defaults to true. */
   roadmap?: boolean;
   year?: number;
   semester?: number;
-  /** Another offering of the test's Course (Ramo), instead of a new Course. */
   sameCourseAs?: E2ECourseOffering;
   participants?: readonly {
     user: E2EUser;
@@ -84,7 +78,6 @@ function catalogUserIdByRut(rut: string) {
   return user.id;
 }
 
-// Each User takes its Participation and progress from a CC1002 catalog User.
 const templateUsers = {
   teacher: { catalogId: developmentFixtureIds.daniela, label: 'Docente' },
   teachingAssistant: { catalogId: developmentFixtureIds.nicolas, label: 'Ayudante' },
@@ -104,7 +97,6 @@ const templateUsers = {
     catalogId: catalogUserIdByRut('20000050'),
     label: 'Estudiante retirado',
   },
-  // Also enrolled in MA1001 and FI1001 in the catalog; tests add other Courses explicitly.
   multiCourseStudent: {
     catalogId: catalogUserIdByRut('20000002'),
     label: 'Estudiante multicurso',
@@ -125,22 +117,15 @@ function templateParticipation(catalogUserId: string) {
   return participation;
 }
 
-// Unique within an invocation (worker indexes are never reused); globalSetup
-// removes earlier invocations' data, so codes and RUTs cannot collide.
 let serial = 0;
 function nextSerial(workerIndex: number) {
   serial += 1;
   if (workerIndex > 999 || serial > 9999) throw new Error('E2E serial space exhausted.');
   const worker = String(workerIndex).padStart(3, '0');
   const number = String(serial).padStart(4, '0');
-  // RUT bodies 3xxxxxxx stay outside the catalog's 1000000x and 20000xxx ranges.
   return { token: `w${worker}n${number}`, rut: `3${worker}${number}` };
 }
 
-/**
- * User rows as stored. Test Users start with the first-visit tutorial invitation already
- * shown, so it does not cover other specs' Academic overview; specs about it reset it.
- */
 function userRows(users: readonly E2EUser[]) {
   return users.map((user) => ({ ...user, tutorialInvitationShownAt: new Date() }));
 }
@@ -155,7 +140,6 @@ function newUser(key: CourseUserKey, workerIndex: number): E2EUser {
   };
 }
 
-/** SQL for a Course (Ramo), its Course offering and optionally a copy of the CC1002 Roadmap. */
 function courseOfferingScript(options: CourseOfferingOptions, workerIndex: number) {
   const { token } = nextSerial(workerIndex);
   const courseCode =
@@ -233,36 +217,25 @@ export const test = base.extend<{
   rejectClosure: (
     course: E2ECourseOffering,
   ) => Promise<{ resume: () => Promise<void>; wasAttempted: () => Promise<boolean> }>;
-  /**
-   * Makes PostgreSQL reject inserts of notices for one Roadmap, or for the
-   * Roadmap of a Course offering when the test has yet to create it.
-   */
   rejectNoticeInserts: (
     target: ({ roadmapId: string } | { courseOfferingId: string }) & { noticeClass?: NoticeClass },
   ) => Promise<{ wasAttempted: () => Promise<boolean> }>;
-  /** Makes PostgreSQL reject inserts of Resources into a Course offering's Roadmap. */
   rejectResourceInserts: (offering: E2ECourseOffering) => Promise<void>;
   reportPosition: (
     user: E2EUser,
     offering: E2ECourseOffering,
     position: MufasaInstitutionalCoursePosition | null,
-    /** The U-Campus Course (Ramo) identifier reported with the course, if any. */
     ramoId?: number,
   ) => Promise<void>;
-  /** Registers the U-Campus `integrantes` of a Course (Ramo) for this test. */
   reportRoster: (
     ramoId: number,
     offering: E2ECourseOffering,
     members: readonly UcampusRosterMember[],
   ) => Promise<void>;
-  /** The test's API client authenticated as a User (one per User); disposed when the test ends. */
   apiAs: (user: Pick<E2EUser, 'id'>) => Promise<APIRequestContext>;
-  /** An API client authenticated as the primary Course offering's teacher. */
   teacherApi: APIRequestContext;
-  /** An API client authenticated as the primary Course offering's student without progress. */
   studentApi: APIRequestContext;
 }>({
-  // Everything a test creates; removed even when the test fails.
   ownedTestData: async ({}, provide) => {
     const owned: OwnedTestData = {
       courseCodes: [],
@@ -337,7 +310,6 @@ export const test = base.extend<{
 
   createTerm: async ({ ownedTestData }, provide, testInfo) => {
     await provide(async (semester = 1) => {
-      // Worker indexes are not reused. Reserve 100 terms per worker, outside real years.
       termSerial += 1;
       const year = syntheticTermYearStart + testInfo.workerIndex * 100 + termSerial;
       if (termSerial >= 100 || year > syntheticTermYearEnd)
@@ -367,7 +339,6 @@ export const test = base.extend<{
           );
         },
       };
-      // Hold the old synthetic term open until the test makes it due.
       await term.setFreezeDate('9999-12-30');
       return term;
     });

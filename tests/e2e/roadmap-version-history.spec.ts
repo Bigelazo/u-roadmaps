@@ -60,11 +60,9 @@ test('a closed version records its creator and the teaching staff active at clos
     participants: [{ user: assistant, role: 'TEACHER' }],
   });
 
-  // The creator leaves before closure and is still credited.
   await setParticipation(creator, created, { isActive: false });
   await closedTerm.setFreezeDate(yesterday());
   await waitForClosure(closed);
-  // Later Participation changes never rewrite the recorded staff.
   await setParticipation(assistant, created, { institutionalPosition: 'COURSE_PROFESSOR' });
   await sql(
     insert('Participation', [
@@ -117,7 +115,6 @@ test('the horizon stops at the latest active teaching term and advances on rejoi
     await term.setFreezeDate(yesterday());
     await waitForClosure(offerings[index]);
   }
-  // Inactive teaching staff in the latest term does not extend the horizon.
   await sql(
     insert('Participation', [
       {
@@ -202,7 +199,6 @@ test('teaching staff reach the history from the Roadmap and from past offerings'
   const version = page.getByRole('listitem', { name: `Edición ${pastTerm.year}-1` });
   await expect(version).toContainText('Creada desde cero');
   await expect(version).toContainText(`${teacher.name} · Profesor de cátedra`);
-  // Seeded without a recorded creator, which is never inferred.
   await expect(version).toContainText('Creador no registrado');
 
   await page.goto('/academic-overview');

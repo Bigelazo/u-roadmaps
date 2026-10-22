@@ -29,10 +29,6 @@ import {
 import type { TeacherBlockOperation } from '@/features/roadmap/types';
 import { teacher, type IntegrationCourse } from './fixtures';
 
-/**
- * Real Roadmap edits by the course teacher, delivered immediately after commit. A change
- * with a Change impact confirms it as the canvas does: it previews and sends the version.
- */
 export function teacherEdits(
   course: IntegrationCourse,
   port: RoadmapChangePort = scheduledRoadmapChangePort,
@@ -117,7 +113,6 @@ export function addNode(
   });
 }
 
-/** Enrolls `count` more students in the Course; they are deleted when the test finishes. */
 export async function enrollStudents(course: IntegrationCourse, count: number) {
   const offering = await prisma.courseOffering.findFirstOrThrow({
     where: { roadmap: { id: course.roadmapId } },
@@ -145,7 +140,6 @@ export async function pendingNotices(userId: string, roadmapId: string) {
     .notifications;
 }
 
-/** Enter the Roadmap: capture the pending notices and recognize them. */
 export async function enterRoadmap(userId: string, roadmapId: string) {
   const opening = await prepareOwnRoadmapOpening(userId, {
     roadmapId,
@@ -154,7 +148,6 @@ export async function enterRoadmap(userId: string, roadmapId: string) {
   return acknowledgeOwnNotices(userId, opening);
 }
 
-/** A port that records through the notice lifecycle module and lets the test run each delivery. */
 export function deferredNoticePort() {
   const deliveries: NoticeDelivery[] = [];
   const port: RoadmapChangePort = {
@@ -170,7 +163,6 @@ export function deferredNoticePort() {
   };
 }
 
-/** The Roadmap became available: recorded and delivered through the notice lifecycle module. */
 export async function announceRoadmap(course: IntegrationCourse) {
   const offering = await prisma.courseOffering.findFirstOrThrow({
     where: { roadmap: { id: course.roadmapId } },

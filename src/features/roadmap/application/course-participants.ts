@@ -24,18 +24,14 @@ export type CourseMember = Readonly<{
   key: string;
   name: string;
   sections: string[];
-  /** Null only for local teaching staff whose U-Campus position is still unknown. */
   institutionalPosition: InstitutionalCoursePosition | null;
-  /** Whether the person has entered U-Roadmaps at least once. */
   hasEntered: boolean;
-  /** Completed visible Nodes; null for teaching staff or without a Roadmap. */
   completedNodes: number | null;
   completion: number | null;
 }>;
 
 export type CourseParticipants = Readonly<{
   course: Readonly<CourseOfferingIdentifier & { name: string }>;
-  /** MUFASA lists the full U-Campus roster; LOCAL only people who already entered. */
   source: 'MUFASA' | 'LOCAL';
   hasRoadmap: boolean;
   visibleNodes: number;
@@ -58,7 +54,6 @@ function compareSections(a: string, b: string) {
   return a.localeCompare(b, 'es-CL', { numeric: true });
 }
 
-/** The offering's full U-Campus roster, or null when U-Campus cannot provide it. */
 async function readInstitutionalRoster(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
@@ -76,7 +71,6 @@ async function readInstitutionalRoster(
   const roster = await getMufasaCourseMembers(ramoId, identifier, options);
   if (roster.source !== 'MUFASA' || roster.members.length === 0) return null;
 
-  // A person can hold several positions or sections; the effective one decides their group.
   const byRut = new Map<
     string,
     { sections: Set<string>; positions: InstitutionalCoursePosition[] }
@@ -110,7 +104,6 @@ async function readInstitutionalRoster(
   });
 }
 
-/** Active local Participations, the only roster available while U-Campus is unreachable. */
 async function readLocalRoster(courseOfferingId: string): Promise<RosterEntry[]> {
   const participations = await prisma.participation.findMany({
     where: { courseOfferingId, isActive: true },
@@ -125,13 +118,11 @@ async function readLocalRoster(courseOfferingId: string): Promise<RosterEntry[]>
     name: user.name,
     userId: user.id,
     sections: [],
-    // Legacy student Participations predate stored positions.
     institutionalPosition: institutionalPosition ?? (role === 'STUDENT' ? 'STUDENT' : null),
     isTeachingStaff: role === 'TEACHER',
   }));
 }
 
-/** Completed visible Nodes per local User. */
 async function readCompletedVisibleNodes(roadmapId: string, userIds: string[]) {
   const counts = await prisma.completion.groupBy({
     by: ['userId'],
@@ -141,16 +132,10 @@ async function readCompletedVisibleNodes(roadmapId: string, userIds: string[]) {
   return new Map(counts.map(({ userId, _count }) => [userId, _count._all]));
 }
 
-/**
- * Student progress tracking (GLOSSARY): the offering's members and each
- * student's Roadmap completion, for its active teaching staff only. The offering
- * may have no Roadmap yet.
- */
 export async function readCourseParticipants(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
 ): Promise<CourseParticipants> {
-  // Only the access check runs in the read snapshot; U-Campus is never called inside it.
   const courseOffering = await roadmapRead(
     { userId: actor.id, identifier },
     'oversee',

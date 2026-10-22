@@ -218,7 +218,6 @@ test('rejects confirming a hide, a Dependency, a deletion or a Teacher block who
   const deletion = await persistence.previewNodeDeletion(input, 'prerequisite');
   const unlock = await persistence.previewTeacherBlock(input, 'dependent', 'UNBLOCK');
 
-  // Another change lands before each confirmation.
   await confirmedWrites(persistence, input).connect(link('independent', 'later'));
   await persistence.deleteDependency(input, 'prerequisite-selected');
   await persistence.deleteDependency(input, 'selected-dependent');

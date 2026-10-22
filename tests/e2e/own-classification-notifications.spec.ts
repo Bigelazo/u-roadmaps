@@ -30,7 +30,6 @@ test('used Type renames deliver one general notice across Sections and recognize
     (await notices(user)).filter((n) => n.data.nextTypeName === after);
   const patch = async (data: Record<string, unknown>) =>
     ok(await author.patch(roadmapPath(`/node-types/${typeId}`), { data }));
-  // Unauthenticated: the shared `request` carries no session cookie.
   await ok(
     await request.patch(roadmapPath(`/node-types/${roadmap.nodeTypes[0].id}`), {
       data: { name: before },
@@ -121,7 +120,6 @@ test('used Type renames deliver one general notice across Sections and recognize
     }),
   );
   await expect.poll(() => classification()).toHaveLength(0);
-  // Reassigning the Node type is stored immediately (no grouping window, see ADR-0014).
   await expect
     .poll(async () =>
       (await notices()).some(

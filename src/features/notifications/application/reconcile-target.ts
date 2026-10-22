@@ -3,7 +3,6 @@ export type TargetReconciliation =
   | { action: 'withdraw' }
   | { action: 'no-op' };
 
-/** Compares one Notice target with the recipient's Known value and pending notice. */
 export function reconcileTarget({
   knownValue,
   pending,

@@ -2,11 +2,6 @@ import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/shared/course-offering';
 
-/**
- * The Course offering every stored notice belongs to, for navigation and the read side
- * (stored flat in `data`). An actor without a name (the Scheduled unlock) is stored as
- * `actorName: null`; the read side projects its label (`noticeActorLabel`).
- */
 export type NoticeCourseContext = Readonly<
   CourseOfferingIdentifier & {
     roadmapId: string;
@@ -17,7 +12,6 @@ export type NoticeCourseContext = Readonly<
   }
 >;
 
-/** Course context of a Roadmap's notices; the actor is named when there is one. */
 export async function noticeCourseContext(
   client: Prisma.TransactionClient,
   roadmapId: string,
@@ -45,7 +39,6 @@ export async function noticeCourseContext(
   };
 }
 
-/** Course context loaded at most once, and only if a notice is written. */
 export function lazyNoticeCourseContext(transaction: Prisma.TransactionClient, roadmapId: string) {
   let context: Promise<NoticeCourseContext> | undefined;
   return () =>

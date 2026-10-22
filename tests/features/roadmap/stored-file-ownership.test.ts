@@ -263,7 +263,6 @@ test('a missing source omits its Resource and does not retain an empty destinati
   const { roadmap } = await source.copy();
   expect(roadmap.id).not.toBe(course.roadmapId);
   expect(await readdir(directory)).toEqual([]);
-  // Give the teacher access to the newly created Course offering to observe its public Resources.
   await prisma.participation.create({
     data: { userId: course.teacherId, role: 'TEACHER', courseOfferingId: roadmap.courseOfferingId },
   });
@@ -329,7 +328,6 @@ test('a retried upload registration retains the original bytes without repeating
       async report(tx) {
         if (retry) {
           retry = false;
-          // A second filesystem creation would now fail instead of repeating upload I/O.
           faults.collision = true;
           await tx.$executeRawUnsafe(`CREATE FUNCTION pg_temp.fail_upload_commit() RETURNS trigger
             LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'retry registration' USING ERRCODE = '40001'; END $$`);

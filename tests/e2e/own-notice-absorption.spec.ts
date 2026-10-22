@@ -44,7 +44,6 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
     await acknowledgeOpening(recipient, opening);
     expect(await count()).toBe(0);
 
-    // No browser/Inbox is open; a later edit is delivered immediately.
     const laterTitle = `${title} actualizado`;
     await ok(
       await author.patch(course.apiPath(`/nodes/${nodeId}`), { data: { title: laterTitle } }),
@@ -64,7 +63,6 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
       new Date(first.data.occurredAt).getTime(),
     );
     await expect.poll(() => count()).toBe(1);
-    // Retrying the earlier opening cannot absorb the later notice.
     await acknowledgeOpening(recipient, opening);
     await expect.poll(() => count()).toBe(1);
 

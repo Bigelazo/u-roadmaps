@@ -100,10 +100,6 @@ export function nodeTypeDto(nodeType: {
   };
 }
 
-/**
- * The optional frozen version to copy, identified by its Academic term as
- * `{ year, semester }`. A `courseCode` defaults to the target's own Course.
- */
 function parseCopySource(
   value: unknown,
   identifier: CourseOfferingIdentifier,
@@ -130,10 +126,6 @@ function parseCopySource(
   };
 }
 
-/**
- * Writes a frozen version's content into the new Roadmap, recording it as the source.
- * File bytes are duplicated first; a file missing from storage omits its Resource.
- */
 async function persistRoadmapCopy(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -159,7 +151,6 @@ async function persistRoadmapCopy(
   });
 }
 
-/** Copies a frozen version of the same Course into the new Roadmap. */
 async function copyFrozenVersion(
   transaction: Prisma.TransactionClient,
   identifier: CourseOfferingIdentifier,
@@ -227,15 +218,11 @@ async function copyFrozenVersion(
   );
 }
 
-// Copying file bytes inside the transaction can outlast Prisma's 5 s default.
-// Not serializable: copying files is not retry-safe.
 const copyTransactionOptions = { isolation: 'read-committed', timeout: 30_000 } as const;
 
 const roadmapConflict = () =>
   new ApplicationError(409, 'ROADMAP_CONFLICT', 'Ya existe un roadmap para este curso.');
 
-// The course may arrive without a description when it is already materialized from
-// U-Campus. In that case it keeps the registered name and department.
 export async function createRoadmap(
   identifier: CourseOfferingIdentifier,
   body: JsonObject,
@@ -318,7 +305,6 @@ export async function createRoadmap(
       copyTransactionOptions,
     ),
   ).catch((error) => {
-    // A concurrent creation (double click, two tabs) committed first.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
       throw roadmapConflict();
     throw error;

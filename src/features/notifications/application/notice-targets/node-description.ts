@@ -17,10 +17,6 @@ export const nodeDescriptionRef = (nodeId: string) => ({
 
 type NodeDescriptionFact = Extract<RoadmapChangeFact, { kind: 'node-description' }>;
 
-/**
- * Participants who can open the Node now; no student when it was revealed or hidden by
- * this change.
- */
 async function canOpenNode(nodeId: string, changes: RoadmapChanges, roadmap: RoadmapView) {
   return nodeOpeners(await nodeVisibleThroughout(nodeId, changes, roadmap), nodeId, roadmap);
 }
@@ -29,11 +25,6 @@ function nodeTitle({ context }: TargetValues) {
   return String(context.nodeTitle ?? '');
 }
 
-/**
- * Node description: compared as exact text; only recipients for whom the Node is
- * accessible know it or are told (ADR-0014 decision 10), and teaching staff always
- * (decision 10, «Equipo docente»).
- */
 export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> = {
   noticeTarget: NOTICE_TARGET.nodeDescription,
   noticeClass: 'roadmap-node-changed',
@@ -58,7 +49,6 @@ export const nodeDescriptionTarget: NoticeTargetDescriptor<NodeDescriptionFact> 
     const knownKeys = new Set(known.map(({ targetKey }) => targetKey));
     return (await roadmap.nodes()).flatMap((node) => {
       const target = nodeDescriptionRef(node.id);
-      // A blocked recipient never saw the description, unless it already knew one.
       if (!accessible.has(node.id) && !knownKeys.has(target.targetKey)) return [];
       return [
         {

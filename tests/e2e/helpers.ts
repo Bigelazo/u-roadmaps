@@ -24,7 +24,6 @@ export async function authenticateAs(context: BrowserContext, userId: string) {
   await context.addCookies([{ name: sessionCookieName, value, domain: 'localhost', path: '/' }]);
 }
 
-/** Asserts a response's status, printing its body when the status differs. */
 export async function ok(response: APIResponse, status = 200) {
   expect(response.status(), await response.text()).toBe(status);
   return response;
@@ -34,7 +33,6 @@ export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** A toast in the app-level stack, found by its title (Base UI also mirrors it into a live region). */
 export function toast(page: Page, message: string) {
   return page
     .locator('[data-slot="toast-viewport"] [data-slot="toast"]')

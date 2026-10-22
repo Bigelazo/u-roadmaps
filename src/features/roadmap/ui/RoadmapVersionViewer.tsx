@@ -16,7 +16,6 @@ import type { RoadmapVersion } from '@/features/roadmap/version-types';
 
 export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVersion }>) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  // Without `editing`, the teaching projection renders a read-only canvas.
   const projection = useMemo<RoadmapGraphProjection>(
     () => ({ kind: 'teaching', roadmap: version }),
     [version],

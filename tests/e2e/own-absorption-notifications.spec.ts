@@ -162,7 +162,6 @@ test('pending Roadmap availability absorbs every later notice and recognition es
   const removed = await creator.createNode('Eliminado antes de entrar', 200);
   await ok(await deleteNode(author, offering.apiPath(`/nodes/${removed.id}`)), 204);
   const dependent = await creator.createNode('Colas avanzadas', 500);
-  // The title edit is committed; deferred absorption can only retain the availability row.
   expect(await notices()).toEqual([
     expect.objectContaining({
       data: expect.objectContaining({ noticeTarget: 'roadmap-availability' }),

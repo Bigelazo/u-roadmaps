@@ -45,7 +45,6 @@ export type RoadmapNodeData = Record<string, unknown> &
 
 export type RoadmapFlowNode = Node<RoadmapNodeData, 'roadmap'>;
 
-/** Changes stay marked after the Roadmap entry recognizes them, until this Node is opened. */
 function NodeChangeBadge({ nodeId }: { nodeId: string }) {
   const count = useNodeChangeCount(nodeId);
   if (!count) return null;
@@ -64,7 +63,6 @@ function NodeChangeBadge({ nodeId }: { nodeId: string }) {
 
 type TooltipSide = 'top' | 'bottom' | 'left' | 'right';
 
-/** A focusable icon that names itself and shows that name in a tooltip. */
 function StatusIconBadge({
   label,
   side,
@@ -432,8 +430,6 @@ function NodeActionBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | '
 }
 
 function NodeNotificationBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'id' | 'data'>) {
-  // Only a Node its viewer can open can clear the mark. Teaching staff open hidden
-  // and Teacher-blocked Nodes; a student cannot open a locked one.
   if (!data.notificationsEnabled || !data.roadmapId || data.status === 'locked') return null;
   return <NodeChangeBadge nodeId={id} />;
 }

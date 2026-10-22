@@ -240,7 +240,6 @@ const sections = (students: readonly string[]) => [
   { label: '2', memberIds: students.slice(Math.ceil(students.length / 2)) },
 ];
 
-// Synthetic calendar dates keep the current catalog editable across local runs.
 export const fixtureAcademicTerms = [
   { year: 2024, semester: 2, day: '2025-01-20' },
   { year: 2025, semester: 1, day: '2025-07-20' },
@@ -258,7 +257,6 @@ export const fixtureAcademicTerms = [
   sourcePdfUrl: 'https://fixtures.u-roadmaps.test/calendar.pdf',
 }));
 
-// Stable reserved identities; append new editions without renumbering existing assets.
 const historicalEditions = [
   {
     number: 6,
@@ -554,7 +552,6 @@ type RoadmapBlueprint = {
   resources: readonly ResourceBlueprint[];
 };
 
-// Every fixture Roadmap assigns kinds to its nodes in this order.
 const nodeKinds: readonly FixtureNodeKind[] = [
   ...Array<FixtureNodeKind>(7).fill('CONTENT'),
   ...Array<FixtureNodeKind>(3).fill('SUPPLEMENTARY'),
@@ -1024,7 +1021,6 @@ function materializeRoadmap(blueprint: RoadmapBlueprint, roadmapIndex: number) {
   };
 }
 
-// Each edition has independent node, resource and file identities.
 const originalRoadmapBlueprint: RoadmapBlueprint = {
   ...roadmapBlueprints[2],
   id: developmentFixtureIds.roadmaps.fi1001Original,
@@ -1151,10 +1147,6 @@ type FixtureRoadmap = (typeof fixtureRoadmaps)[number];
 
 export const normalizedNodeTypeName = (name: string) => name.toLocaleLowerCase('es-CL');
 
-/**
- * A fixture Roadmap with fresh identities for another Course offering. File
- * Resources are excluded: their uploads are shared with the original.
- */
 export function copyFixtureRoadmap(roadmap: FixtureRoadmap, newId: () => string) {
   const roadmapId = newId();
   const nodeIds = new Map(roadmap.nodes.map(({ id }) => [id, newId()]));
@@ -1250,8 +1242,6 @@ export const fixtureCompletions = fixtureRoadmaps.flatMap((roadmap, roadmapIndex
   });
 });
 
-// These make the development personas visibly exercise the two independent
-// teacher simulations for CC1002. They never share or alter student progress.
 export const fixtureSimulatedCompletions = [
   {
     userId: developmentFixtureIds.daniela,

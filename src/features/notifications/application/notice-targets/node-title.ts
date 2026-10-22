@@ -16,10 +16,6 @@ export const nodeTitleRef = (nodeId: string) => ({
 
 type NodeTitleFact = Extract<RoadmapChangeFact, { kind: 'node-title' }>;
 
-/**
- * Node title: whoever sees the Node is told, accessible or blocked (ADR-0014 decision 10);
- * teaching staff see hidden Nodes too (decision 10, «Equipo docente»).
- */
 export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
   noticeTarget: NOTICE_TARGET.nodeTitle,
   noticeClass: 'roadmap-node-changed',
@@ -29,7 +25,6 @@ export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
   previousValue: (fact) => fact.previous,
   knowers: async (fact, changes, roadmap) =>
     nodeViewers(await nodeVisibleBefore(fact.nodeId, changes, roadmap), roadmap),
-  // Revealing a renamed Node is not a title change to students: none saw the previous title.
   audience: async (fact, changes, roadmap) =>
     nodeViewers(await nodeVisibleThroughout(fact.nodeId, changes, roadmap), roadmap),
   async current(target, roadmap, recipientId) {

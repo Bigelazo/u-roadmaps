@@ -76,7 +76,6 @@ export function readRoadmapForParticipant(participant: RoadmapParticipant) {
   );
 }
 
-/** A student's Completion; it can change Node access only for that student. */
 export const completeNode = roadmapCommand({
   capability: 'complete',
   lock: 'key-share',
@@ -111,7 +110,6 @@ export function readSimulatedRoadmap(participant: RoadmapParticipant) {
   );
 }
 
-/** Canvas preview progress: the teacher's own simulated Completion, which notifies nobody. */
 export const completeSimulatedNode = roadmapCommand({
   capability: 'edit',
   lock: 'key-share',
@@ -124,9 +122,6 @@ export const completeSimulatedNode = roadmapCommand({
       roadmapId: roadmap.id,
     });
     await requireNodeAccess(tx, { roadmapId: roadmap.id, nodeId, completedNodeIds });
-    // ON CONFLICT DO NOTHING, not an upsert: when a concurrent request inserts the same
-    // simulated Completion first, an upsert fails with a unique violation (P2002, a 409),
-    // while this raises a serialization failure that the change transaction retries.
     await tx.simulatedCompletion.createMany({
       data: {
         participationId: participation.id,
@@ -145,7 +140,6 @@ export const completeSimulatedNode = roadmapCommand({
   },
 });
 
-/** Clears the teacher's Canvas preview progress. */
 export const resetSimulatedCompletions = roadmapCommand({
   capability: 'edit',
   lock: 'key-share',

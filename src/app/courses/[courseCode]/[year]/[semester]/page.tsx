@@ -57,8 +57,6 @@ export default async function CoursePage(
 
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
-  // Refresh the stored Participation on entry, before reading it: a complete report can
-  // grant, change or revoke it, and an unavailable source preserves local access.
   await synchronizeParticipation(user, identifier, roadmapChangePort);
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
@@ -82,7 +80,6 @@ export default async function CoursePage(
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
-  // Landing here from Roadmap creation may show the one-time teaching tutorial invitation.
   const invitation = await readCourseCreationInvitation({
     userId: user.id,
     roadmapId: courseOffering.roadmap?.id,

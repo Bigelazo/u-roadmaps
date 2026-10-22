@@ -5,7 +5,6 @@ import type { RoadmapChangePort } from '@/features/roadmap/server';
 import { test, type IntegrationCourse } from './fixtures';
 import { enrollStudents, pendingNotices, teacherEdits } from './roadmap';
 
-/** Counts every query the notice lifecycle module sends through the roadmap transaction. */
 function countedQueries(transaction: Prisma.TransactionClient, count: () => void) {
   const counted =
     <A extends unknown[], R>(query: (...args: A) => R, self: object) =>
@@ -28,7 +27,6 @@ function countedQueries(transaction: Prisma.TransactionClient, count: () => void
   });
 }
 
-/** Records the edit's notices counting their queries, then delivers them. */
 async function recordingQueries(
   course: IntegrationCourse,
   edit: (port: RoadmapChangePort) => Promise<unknown>,

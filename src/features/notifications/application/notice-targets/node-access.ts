@@ -15,12 +15,6 @@ function nodeTitle({ context }: TargetValues) {
   return String(context.nodeTitle ?? '');
 }
 
-/**
- * Node access: Disponible / Bloqueado / Retirado per recipient. Roadmap reports one
- * transition per recipient whose state changed; the state at edit time is recorded as
- * the current value, so deferred delivery compares against it (not the live Roadmap).
- * Hidden Nodes still get notices: Retirado is itself the news.
- */
 export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
   noticeTarget: NOTICE_TARGET.nodeAccess,
   noticeClass: 'roadmap-node-changed',

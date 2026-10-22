@@ -47,7 +47,6 @@ function isCrossSiteCallback(request: Request) {
   return origin !== null && origin !== siteOrigin(request).origin;
 }
 
-/** Starts the one-time VTI callback transaction without creating an app session. */
 export async function startVtiLogin() {
   const loginTarget = parseLoginUrl(process.env.NEXT_PUBLIC_VTI_LOGIN_URL);
   if (!loginTarget) return null;
@@ -60,10 +59,6 @@ export async function startVtiLogin() {
   return { loginTarget, state };
 }
 
-/**
- * Validates the VTI callback and returns institutional identity only. It never
- * creates a local User, session, Participation, or Participation role.
- */
 export async function authenticateVtiCallback(
   request: Request,
   state: string | undefined,

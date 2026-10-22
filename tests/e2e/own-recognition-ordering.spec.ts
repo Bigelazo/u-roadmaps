@@ -11,8 +11,6 @@ import {
 } from './notices';
 import { deleteNode } from './previewed-writes';
 
-// Two server-captured entries emulate tabs whose acknowledgement requests arrive
-// in reverse order, without relying on browser timing or mocked notice delivery.
 test('an older Roadmap entry cannot undo knowledge recognized by a newer entry', async ({
   course,
   teacherApi: author,
@@ -24,7 +22,6 @@ test('an older Roadmap entry cannot undo knowledge recognized by a newer entry',
     await ok(await author.patch(course.apiPath(`/nodes/${nodeId}`), { data: { title } }));
     await expect.poll(async () => (await notices())[0]?.data.currentTitle).toBe(title);
   };
-  // This test asserts the acknowledgement summary, so it reads the response body.
   const acknowledge = async (opening: RoadmapOpening) =>
     (await ok(await recipient.post('/api/notifications/acknowledge', { data: opening }))).json();
   await rename('Título de la entrada antigua');
@@ -57,7 +54,6 @@ test('older absorbed Node creation snapshots cannot roll back newer recognized c
       data: { title: 'Nodo de la entrada nueva', description: 'Descripción reconocida nueva' },
     }),
   );
-  // The HTTP editor commits the content before prepare captures the broad snapshot.
   const newer = await prepareOpening(recipient, course.roadmapId);
   await acknowledgeOpening(recipient, newer);
   await acknowledgeOpening(recipient, older);
@@ -104,7 +100,6 @@ test('a newer entry recognizes Node absence after an older entry recreates its d
 }) => {
   const nodeId = course.nodes.first;
   const notices = () => listNotices(recipient, { nodeId });
-  // Establish lifecycle knowledge independently of later deletion delivery.
   await recognize(recipient, course.roadmapId);
   const older = await prepareOpening(recipient, course.roadmapId);
   await ok(await deleteNode(author, course.apiPath(`/nodes/${nodeId}`)), 204);

@@ -57,7 +57,6 @@ async function openNodeMenu(page: Page, title: string, item: string) {
 }
 
 function blockedByTeacher(page: Page, title: string) {
-  // While editing, a Teacher block shows as the lock on the Node's menu trigger.
   return practiceNode(page, title).locator('svg.lucide-lock-keyhole');
 }
 
@@ -81,7 +80,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await authenticateAs(page.context(), user.id);
   await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
 
-  // Centering is optional and repeatable, through Next or the canvas control.
   await expectStep(page, 'Centrar roadmap');
   await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
   await next(page, 'Nodos');
@@ -99,7 +97,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await next(page, 'Crea un nodo');
   await expect(tourPopover(page)).toContainText('archivo .md');
 
-  // Cancelling the creation dialog keeps the step and highlights "Crear en el mapa" again.
   const creator = page.getByRole('button', { name: 'Crear en el mapa' });
   const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
   await creator.click();
@@ -125,15 +122,12 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await markdownConfirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
   await expect(description).toHaveValue(markdown);
   await transfer.dispose();
-  // Portaled popups, like the Node type options, stay usable during an action step.
   await dialog.getByLabel('Tipo').click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
   await expect(dialog.getByLabel('Tipo')).toContainText('Evaluación');
   await expect(dialog.getByRole('checkbox', { name: 'Visible para estudiantes' })).toBeChecked();
   await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
-  // "Tipos de nodo" is explained on its own, without creating a Custom node type.
   await expectStep(page, 'Tipos de nodo');
-  // Completed actions cannot be replayed through either navigation control.
   await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
   await page.keyboard.press('ArrowLeft');
   await expectStep(page, 'Tipos de nodo');
@@ -146,7 +140,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await next(page, 'Conecta tu nodo');
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
 
-  // The new Node may still be settling into place, so the drag is retried until it connects.
   await expect(async () => {
     await connect(page, 'Nodo de práctica', 'Control 1');
     await expect(page.locator('.react-flow__edge')).toHaveCount(9, { timeout: 1000 });
@@ -195,7 +188,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await page.screenshot({ path: 'test-results/tutorial-dependencies.png' });
   await next(page, 'Selecciona tu nodo');
 
-  // Selecting another Node keeps the step.
   await practiceNode(page, 'Introducción').click();
   await expect(page.locator('[aria-label="Editor de nodo"]')).toBeVisible();
   await expectStep(page, 'Selecciona tu nodo');
@@ -233,7 +225,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expectStep(page, 'Editor de nodo');
   await next(page, 'Bloquea un nodo');
 
-  // The confirmation is portaled, and stays usable.
   await blockMenuTrigger.click();
   const blockAction = blockNode.getByRole('button', { name: 'Bloquear nodo', exact: true });
   await expect(blockAction).toHaveClass(/driver-active-element/);
@@ -271,7 +262,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expectStep(page, 'Desbloqueo programado');
   await expect(page.getByLabel('Panel de edición del roadmap', { exact: true })).toBeHidden();
   await expect(practiceNode(page, 'Proyecto final')).toHaveClass(/driver-active-element/);
-  // React Flow transforms can round a fully visible node's intersection just below 1.
   await expect(practiceNode(page, 'Proyecto final')).toBeInViewport({ ratio: 0.99 });
   await expect(blockedByTeacher(page, 'Ejercicios guiados')).toHaveCount(0);
   await next(page, 'Oculta un nodo');
@@ -280,7 +270,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   );
   await page.screenshot({ path: 'test-results/tutorial-hide.png' });
 
-  // Cancelling the confirmation keeps the step.
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
   await expect(confirmation).toContainText('se eliminarán sus conexiones con');
   await expect(confirmation).toHaveClass(/driver-active-element/);

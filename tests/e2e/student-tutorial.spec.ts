@@ -34,7 +34,6 @@ async function expectStep(page: Page, index: number) {
   );
 }
 
-/** Advances with "Siguiente", checking every step shown on the way. */
 async function advanceTo(page: Page, index: number) {
   let current = Number(
     (await tourPopover(page).locator('.driver-popover-progress-text').innerText()).split(' ')[0],

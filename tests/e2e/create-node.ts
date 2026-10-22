@@ -2,7 +2,6 @@ import type { APIRequestContext } from '@playwright/test';
 import { expect, type E2ECourseOffering } from './fixtures';
 import { connectNodes } from './previewed-writes';
 
-/** Prepare Nodes through the same HTTP interface used by teaching staff. */
 export async function prepareNodeCreator(
   api: APIRequestContext,
   course: E2ECourseOffering,
@@ -32,7 +31,6 @@ export async function prepareNodeCreator(
   };
 }
 
-/** Create a Dependency through the teaching staff HTTP interface; returns its id. */
 export async function createDependency(
   api: APIRequestContext,
   course: E2ECourseOffering,

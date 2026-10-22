@@ -5,7 +5,6 @@ import { authenticateAs, fixtureRoadmapPath, ok } from './helpers';
 
 const [cc1002Roadmap] = fixtureRoadmaps;
 
-// Read-only seeded catalog identities.
 const fixture = {
   daniela: developmentFixtureIds.daniela,
   nicolas: developmentFixtureIds.nicolas,

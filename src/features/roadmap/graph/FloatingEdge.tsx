@@ -29,10 +29,6 @@ function sameRect(a: NodeRect | null, b: NodeRect | null) {
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
-/**
- * Arista que elige sus extremos según la posición relativa de los nodos, en vez
- * de quedar clavada a los conectores guardados en la dependencia.
- */
 export const FloatingEdge = memo(function FloatingEdge({
   id,
   source,

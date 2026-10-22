@@ -55,7 +55,6 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true
 
 async function confirmNodeDeletion(page: Page, offering: E2ECourseOffering, nodeId: string) {
   const confirmation = page.getByRole('alertdialog');
-  // Revalidation, the DELETE, and the projection reload finish asynchronously after the tap.
   const deleted = page.waitForResponse(
     (response) =>
       response.request().method() === 'DELETE' &&
@@ -105,7 +104,6 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
   await expect(trigger).toBeFocused();
 
   await trigger.tap();
-  // A tap over the Node body hits the full-screen backdrop and cannot select it.
   const nodeBox = await node.boundingBox();
   await page.touchscreen.tap(nodeBox!.x + nodeBox!.width / 2, nodeBox!.y + nodeBox!.height / 2);
   await expect(sheet).toBeHidden();
@@ -169,10 +167,8 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
     .toBe(true);
   await composer.getByRole('tab', { name: 'Enlace', exact: true }).tap();
   await composer.getByLabel('Título', { exact: true }).fill('Touch Resource draft');
-  // Collapse the existing mobile editor to keep the canvas controls reachable.
   await page.getByRole('group', { name: 'Editor de nodo', exact: true }).locator('summary').tap();
 
-  // Opening a different Node's composer must preserve the existing draft until confirmed.
   const secondTrigger = page
     .locator(`.react-flow__node[data-id="${second.id}"]`)
     .getByRole('button', { name: 'Abrir menú de acciones del nodo' });

@@ -1,7 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
-// La política de cargos no toca la base de datos; el cliente Prisma exige una
-// conexión al importarse.
 vi.mock('@/shared/server/db', () => ({ prisma: {} }));
 
 import {
@@ -25,8 +23,6 @@ afterEach(() => {
 const identifier = { courseCode: 'CC3002', year: 2026, semester: 2 };
 const user = { id: '11111111-1111-4111-8111-111111111111', rut: '19039752' };
 
-// Stub fetch with mockImplementation, not mockResolvedValue: both U-Campus endpoints read
-// a body, and one shared Response body can be read only once.
 function mufasaResponse(courses: Array<Record<string, unknown>>) {
   return new Response(JSON.stringify(courses), {
     status: 200,

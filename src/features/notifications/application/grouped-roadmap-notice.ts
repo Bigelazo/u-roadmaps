@@ -11,10 +11,6 @@ type PendingNotice = {
   availableAt: Date;
 };
 
-/**
- * The Grouped roadmap notice the Inbox shows in place of a Roadmap's pending targets,
- * projected from the newest one.
- */
 export function groupedRoadmapNotice(notice: PendingNotice, count: number): PendingNotice {
   const data = notice.data as Record<string, NoticeData>;
   return {

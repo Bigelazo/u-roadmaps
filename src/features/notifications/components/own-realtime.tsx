@@ -8,10 +8,8 @@ import {
 } from '@/shared/client/roadmap-events';
 
 export const OWN_INBOX_REFRESH_EVENT = 'own-inbox-updated';
-// Coalesce bursts of delivery and recognition signals into one refresh.
 const INBOX_SIGNAL_COALESCE_MS = 100;
 
-/** Mounted once by the application provider, never by Inbox/count consumers. */
 export function OwnInboxRealtime({ userId }: { userId: string }) {
   useEffect(() => {
     if (typeof EventSource === 'undefined') return;
@@ -77,8 +75,6 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
       }
       connection.addEventListener('error', () => {
         if (!active || connection !== source || connection.readyState !== 2) return;
-        // EventSource retries interrupted streams itself, but HTTP failures can
-        // close it permanently. Recreate only that closed connection.
         connection.close();
         retry = setTimeout(connect, retryDelay);
         retryDelay = Math.min(retryDelay * 2, 30_000);

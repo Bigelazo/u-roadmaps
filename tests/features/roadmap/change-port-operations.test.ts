@@ -44,7 +44,6 @@ function addNodeType(course: { roadmapId: string }, name: string) {
   });
 }
 
-/** Matches a recorded `node-access` fact carrying at least `fields`. */
 function access(fields: Record<string, unknown>) {
   return expect.objectContaining({ kind: 'node-access', ...fields });
 }
@@ -130,7 +129,6 @@ test('description and type edits report previous values and write no notice base
       current: { id: nextType.id, name: 'Taller' },
     },
   ]);
-  // Known values are recorded by the notice lifecycle module through the port.
   expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
 });
 
@@ -155,7 +153,6 @@ test('visibility and deletion report their facts and recipient access transition
       current: 'Retirado',
     }),
   );
-  // Access baselines are recorded by the notice lifecycle module through the port.
   expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
   recording.changes.length = 0;
   await edits.remove(nodeId);
@@ -253,7 +250,6 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   ]);
   recording.changes.length = 0;
   await deleteRoadmapDependency({ ...input, id: result.dependency.id }, recording.port);
-  // Only the classmate, who has not completed the prerequisite, regains access.
   expect(recording.facts()).toMatchObject([
     { kind: 'dependency', previous: true, current: false },
     { kind: 'node-access', recipientId: course.classmateId, previous: 'Bloqueado' },

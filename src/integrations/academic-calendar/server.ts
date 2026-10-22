@@ -54,7 +54,6 @@ function isOfficialPdfUrl(url: URL) {
   return url.protocol === 'https:' && url.hostname === 'ingenieria.uchile.cl';
 }
 
-/** Finds the semester-specific PDF inside its heading section, never by page order. */
 export function selectTermCalendarPdf(
   pageHtml: string,
   term: AcademicTermIdentifier,
@@ -115,7 +114,6 @@ function calendarDay(raw: string, inferredYear?: number) {
   return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
 }
 
-/** Extracts only the first main-term occurrence; the PDFs can append summer dates. */
 export function extractAcademicTermDates(pdfText: string): AcademicTermDates {
   const text = pdfText.replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n');
   const lastClassMatch = text.match(

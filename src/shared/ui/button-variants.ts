@@ -37,7 +37,6 @@ const buttonVariantClasses = cva(
   },
 );
 
-/** The variant classes, merged so a variant's border or color overrides the base one. */
 export function buttonVariants(props?: Parameters<typeof buttonVariantClasses>[0]) {
   return cn(buttonVariantClasses(props));
 }

@@ -14,7 +14,6 @@ export type ProvisionalStoredFiles = {
   copyAll(copies: readonly { sourceFileKey: string; fileKey: string }[]): Promise<Set<string>>;
 };
 
-/** Best-effort cleanup also serves operations whose database change has already committed. */
 export async function cleanupStoredFiles(operation: string, fileKeys: Iterable<string>) {
   await Promise.all(
     Array.from(fileKeys, async (fileKey) => {
@@ -27,10 +26,6 @@ export async function cleanupStoredFiles(operation: string, fileKeys: Iterable<s
   );
 }
 
-/**
- * The callback returns only after the existing database orchestration commits.
- * Compensation is bounded to this process: crashes or persistent disk errors can leave bytes.
- */
 export async function withStoredFiles<Result>(
   operation: string,
   run: (files: ProvisionalStoredFiles) => Promise<Result>,
@@ -41,7 +36,6 @@ export async function withStoredFiles<Result>(
   function start<T>(write: () => Promise<T>): Promise<T> {
     const pending = write();
     started.push(pending);
-    // A callback may fail before awaiting its write; the scope still waits and compensates it.
     void pending.catch(() => undefined);
     return pending;
   }
@@ -96,7 +90,6 @@ export async function withStoredFiles<Result>(
   }
 }
 
-/** Only absent bytes are unavailable material; storage faults keep their original cause. */
 export async function readStoredFile(fileKey: string) {
   try {
     return await readUploadedFile(fileKey);

@@ -8,11 +8,9 @@ type Props = Omit<ComponentProps<typeof Sidebar>, 'id' | 'side' | 'className'> &
   id: string;
   railLabel: string;
   panelWidth: number;
-  /** Without it the panel keeps its width and shows no rail. */
   onPanelWidthChange?: (width: number) => void;
 };
 
-/** The right-hand Roadmap Sidebar shared by the Node editor panel and the student Node detail. */
 export function RoadmapSidePanel({
   id,
   railLabel,

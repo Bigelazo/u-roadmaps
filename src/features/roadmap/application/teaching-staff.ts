@@ -1,7 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 
-/** Capture this offering-scoped projection at closure for version authorship. */
 export async function readCourseOfferingTeachingStaff(
   client: Prisma.TransactionClient,
   courseOfferingId: string,

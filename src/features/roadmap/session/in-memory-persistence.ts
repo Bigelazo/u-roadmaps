@@ -58,7 +58,6 @@ function nodeResources(node: AnyRoadmapNode): Resource[] {
   return 'resources' in node ? node.resources : [];
 }
 
-/** Projects a teaching Roadmap for a student with the given Completions, as the server does. */
 function asStudentRoadmap(
   roadmap: AnyRoadmapDto,
   completedNodeIds: ReadonlySet<string>,
@@ -105,12 +104,10 @@ function resourceUpdate(
   } as AnyRoadmapDto;
 }
 
-/** A Change impact with a version derived from its content, as the server derives its own. */
 function versioned<Impact extends object>(impact: Impact) {
   return { ...impact, version: JSON.stringify(impact) };
 }
 
-/** Rejects a confirmation whose sent preview version no longer matches the current impact. */
 function rejectStalePreview(
   change: ChangeWithImpact,
   sentVersion: string | undefined,
@@ -204,12 +201,6 @@ function teacherBlockPreview(
 
 export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
 
-/**
- * A Roadmap canvas persistence held in memory that follows the server's Roadmap rules.
- * Seeded with a teaching Roadmap and `studentProgress`, it serves that student's view
- * of the Roadmap and records their Completions locally. With `createdNodePosition`, every
- * created Node lands there instead of where it was asked to go.
- */
 export function createInMemoryRoadmapSessionPersistence(
   initialRoadmap: AnyRoadmapDto,
   options: { studentProgress?: InMemoryStudentProgress; createdNodePosition?: Point } = {},
@@ -372,8 +363,6 @@ export function createInMemoryRoadmapSessionPersistence(
       nodeId: string,
       unlockOn: string | null,
     ) {
-      // A schedule is always after today and a Practice roadmap lives for one session, so no
-      // Scheduled unlock falls due here and unblocking never has one to release.
       mutateNode(nodeId, (node) => {
         if (!('isTeacherBlocked' in node)) return node;
         const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
@@ -460,7 +449,6 @@ export function createInMemoryRoadmapSessionPersistence(
       resource: ResourceInput,
     ) {
       roadmap = resourceUpdate(roadmap, resourceId, (current) => {
-        // Session inputs include the unchanged File discriminator and displayed URL.
         const changes =
           current.type === 'FILE' && resource.type === 'FILE' && resource.url === current.url
             ? { title: resource.title }

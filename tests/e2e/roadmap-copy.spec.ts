@@ -38,7 +38,6 @@ type RoadmapBody = {
 
 type ResourceBody = RoadmapBody['nodes'][number]['resources'][number];
 
-/** Copied Resource content; file URLs are omitted because every edition downloads its own. */
 function resourceContent({ title, url, type }: ResourceBody) {
   return { title, type, url: type === 'FILE' ? undefined : url };
 }
@@ -51,7 +50,6 @@ function roadmapCount(offering: E2ECourseOffering) {
   `);
 }
 
-/** A closed version with a hidden Node, a Scheduled unlock and a file Resource, plus an empty next offering. */
 const copyScenario = test.extend<{
   scenario: {
     closed: E2ECourseOffering;
@@ -93,7 +91,6 @@ const copyScenario = test.extend<{
         { user: studentWithoutProgress, role: 'STUDENT' },
       ],
     });
-    // The fixture reports every teacher as course professor; the assistant is not one.
     await reportPosition(teachingAssistant, next, 'TEACHING_ASSISTANT');
     const api = await apiAs(teacher);
     const before: RoadmapBody = await (await api.get(closed.apiPath())).json();
@@ -101,7 +98,6 @@ const copyScenario = test.extend<{
     await sql(
       `UPDATE "RoadmapNode" SET "isTeacherBlocked" = true, "teacherUnlockOn" = '2099-01-01' WHERE "id" = ${literal(scheduledNodeId)};`,
     );
-    // Unique bytes let a test find every stored copy of this file.
     const fileContent = `contenido ${closed.courseCode}`;
     const upload = await api.post(closed.apiPath(`/nodes/${scheduledNodeId}/resources`), {
       multipart: {
@@ -116,7 +112,6 @@ const copyScenario = test.extend<{
   },
 });
 
-/** The creation body copying a version of the same Course, named by its Academic term. */
 function sourceOf(offering: E2ECourseOffering) {
   return { source: { year: offering.year, semester: offering.semester } };
 }
@@ -160,7 +155,6 @@ copyScenario(
       });
       expect(copied.teacherUnlockOn).toBeUndefined();
       expect(typeName(copy, copied.nodeTypeId)).toBe(typeName(source, original.nodeTypeId));
-      // Predefined node types stay shared; Custom node types get fresh identities.
       expect(copied.nodeTypeId === original.nodeTypeId).toBe(
         predefined(source, original.nodeTypeId),
       );
@@ -183,14 +177,12 @@ copyScenario(
         .sort();
     expect(edges(copy)).toEqual(edges(source));
 
-    // No Participations' progress travels with the copy.
     const progress = await queryJson<number>(`
       SELECT (SELECT count(*) FROM "Completion" c JOIN "RoadmapNode" n ON n."id" = c."roadmapNodeId" WHERE n."roadmapId" = ${literal((await created.json()).roadmap.id)})
            + (SELECT count(*) FROM "SimulatedCompletion" WHERE "roadmapId" = ${literal((await created.json()).roadmap.id)});
     `);
     expect(Number(progress)).toBe(0);
 
-    // Once closed, the copy names its source and lineage.
     await scenario.nextTerm.setFreezeDate(yesterday());
     await waitForClosure({ ...next, roadmapId: (await created.json()).roadmap.id });
     const version = await (
@@ -206,7 +198,6 @@ copyScenario(
       next.year,
     ]);
 
-    // Removing the source Roadmap keeps the recorded origin and lineage.
     const sourceFileKey = await fileKeyOf(fileResources(source)[0]!.id);
     await sql(`DELETE FROM "Roadmap" WHERE "id" = ${literal(closed.roadmapId!)};`);
     await rm(join(uploadsDirectory(), sourceFileKey), { force: true });
@@ -362,7 +353,6 @@ async function download(api: APIRequestContext, url: string) {
   return (await response.body()).toString();
 }
 
-/** Stored files holding exactly these bytes, so leftovers of a failed copy are visible. */
 async function storedCopies(content: string) {
   const directory = uploadsDirectory();
   const names = await readdir(directory);
@@ -375,7 +365,6 @@ async function storedCopies(content: string) {
 copyScenario(
   'copied file Resources own their bytes independently of the version',
   async ({ scenario, teacherApi: api }) => {
-    // A closed version refuses every edit, so independence is checked from the new edition.
     const { closed, next, source, fileContent } = scenario;
     await ok(await api.post(next.apiPath(), { data: sourceOf(closed) }), 201);
     const copy: RoadmapBody = await (await api.get(next.apiPath())).json();
@@ -386,7 +375,6 @@ copyScenario(
     expect(await download(api, copied!.url)).toBe(fileContent);
     expect(await download(api, original!.url)).toBe(fileContent);
 
-    // Replacing the file means removing it and uploading new bytes on the same Node.
     const removed = await api.delete(next.apiPath(`/resources/${copied!.id}`));
     expect(removed.ok()).toBe(true);
     expect(await download(api, original!.url)).toBe(fileContent);

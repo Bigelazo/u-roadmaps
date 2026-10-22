@@ -11,7 +11,6 @@ export default async function RoadmapVersionHistoryPage(
   if (!courseCode) notFound();
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
-  // Students and outsiders get the same answer as a missing Course.
   const history = await readRoadmapVersionHistory(user, courseCode).catch((error: unknown) => {
     if (error instanceof ApplicationError && (error.status === 403 || error.status === 404))
       return null;

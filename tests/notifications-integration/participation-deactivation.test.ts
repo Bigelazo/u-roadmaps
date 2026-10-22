@@ -15,7 +15,6 @@ import type {
 } from '@/integrations/ucampus/server';
 import { pendingNotices, teacherEdits } from './roadmap';
 
-// U-Campus answers per RUT and per Ramo; anything unregistered is unreachable.
 const { reports, rosters } = vi.hoisted(() => ({
   reports: new Map<string, MufasaEnrolledCoursesResult>(),
   rosters: new Map<number, MufasaCourseMember[]>(),
@@ -35,7 +34,6 @@ const rutOf = (userId: string) => userId.slice(0, 20);
 
 type Reported = Partial<Omit<MufasaEnrolledCourse, 'semester'>> & IntegrationCourse['identifier'];
 
-/** A U-Campus history listing exactly these Course offerings, as a student by default. */
 function reportHistory(userId: string, offerings: Reported[], { isComplete = true } = {}) {
   reports.set(rutOf(userId), {
     source: 'MUFASA',
@@ -52,10 +50,6 @@ function reportHistory(userId: string, offerings: Reported[], { isComplete = tru
   });
 }
 
-/**
- * An earlier offering of the same Course. A complete history is never empty, so a history
- * that omits the test's offering still lists this one.
- */
 const earlierOffering = ({ identifier }: IntegrationCourse) => ({
   ...identifier,
   year: identifier.year - 1,
@@ -92,7 +86,6 @@ test('a complete history that omits an offering deactivates its Participation', 
 
   expect(await canRead(course.studentId, course)).toBe(false);
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
-  // During a later outage the overview falls back to active Participations only.
   reports.delete(rutOf(course.studentId));
   expect(await overviewOfferings(course.studentId)).toEqual([earlierOffering(course)]);
 });
@@ -106,7 +99,6 @@ test('a complete history keeps a past offering it still reports and deactivates 
   reportHistory(course.studentId, [earlierOffering(course)]);
   await visitOverview(course.studentId);
   expect(await canRead(course.studentId, course)).toBe(false);
-  // During an outage the overview lists the active Participations: only the past one.
   reports.delete(rutOf(course.studentId));
   expect(await overviewOfferings(course.studentId)).toEqual([earlierOffering(course)]);
 });
@@ -144,7 +136,6 @@ test('a later complete history that reports the offering again reactivates it', 
   expect(await overviewOfferings(course.studentId)).toEqual([course.identifier]);
   const roadmap = await readRoadmapForParticipant(student(course));
   expect(roadmap.nodes).toMatchObject([{ id: course.change.nodeId, isCompleted: true }]);
-  // The edit made during the loss never reached the student; the next one does.
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
   await teacherEdits(course).rename(course.change.nodeId, 'Recursión y pilas');
   expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);

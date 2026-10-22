@@ -4,10 +4,6 @@ import type {
 } from '@/features/roadmap/session/types';
 import type { RoadmapDependencyRequest } from '@/features/roadmap/types';
 
-/**
- * Previewed writes confirmed the way the canvas confirms them: each reads its Change impact
- * and sends that version back. Tests use them to arrange another editor's change.
- */
 export function confirmedWrites(
   persistence: RoadmapCanvasSessionPersistence,
   input: RoadmapCanvasSessionInput,

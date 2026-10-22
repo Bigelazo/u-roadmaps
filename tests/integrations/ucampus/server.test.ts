@@ -277,7 +277,6 @@ it('combines enrolled and taught courses for the academic overview', async () =>
 
 it('treats a history that lists no course in either list as incomplete', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
-  // A fresh Response per call: both endpoints read a body, and a body reads only once.
   vi.stubGlobal(
     'fetch',
     vi.fn(() => Promise.resolve(new Response('[]'))),
@@ -317,7 +316,6 @@ it('keeps a history complete when only one of its lists is empty', async () => {
 it('reads the U-Campus roster of every section in the requested Academic term only', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
   process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  // Recorded shape: MUFASA ignores id_periodo when id_ramo is given and mixes id_cargo types.
   const fetch = vi.fn().mockResolvedValue(
     new Response(
       JSON.stringify([

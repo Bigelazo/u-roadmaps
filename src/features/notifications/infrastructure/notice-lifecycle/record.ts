@@ -21,10 +21,8 @@ import { reconcileNoticeTarget } from './reconcile';
 import { noticeCourseContext, type NoticeCourseContext } from './course-context';
 import { lockOwnChanges, recordOwnChanges, type OwnTarget } from './own-changes';
 
-/** Runs a recorded change's delivery work once the roadmap transaction has committed. */
 export type NoticeDeliveryScheduler = (task: () => Promise<void>) => void | Promise<void>;
 
-/** Deferred delivery of one recorded Roadmap change; safe to retry. */
 export type NoticeDelivery = (schedule: NoticeDeliveryScheduler) => Promise<void>;
 
 type RecordedTarget = Readonly<{
@@ -34,17 +32,11 @@ type RecordedTarget = Readonly<{
   previousContext?: TargetContext;
   context?: Readonly<Record<string, unknown>>;
   recipientIds: readonly string[];
-  /** A deleted Node's recipients who never recognized it: their creation notice is withdrawn. */
   unawareRecipientIds?: readonly string[];
 }>;
 
 const DELIVERY_CONCURRENCY = 5;
 
-/**
- * (A) Record, inside the roadmap transaction: fix every recipient's Known value
- * before the change is visible, decide the audience, and return the delivery.
- * Audiences read every participant's Node access at once, memoized for this change only.
- */
 export async function recordNoticeTargets(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
@@ -72,7 +64,6 @@ export async function recordNoticeTargets(
     );
     const atEdit = descriptor.currentAtEdit?.(fact);
     if (atEdit) {
-      // Only knowers have a Known value to hold the value at edit time.
       const knowerIds = new Set(knowers);
       if (atEdit.recipientIds.some((recipientId) => !knowerIds.has(recipientId)))
         throw new Error(`${descriptor.noticeTarget}: currentAtEdit names a non-knower.`);
@@ -91,7 +82,6 @@ export async function recordNoticeTargets(
     let recipientIds = audience.filter((recipientId) => recipientId !== changes.actorId);
     let unawareRecipientIds: string[] = [];
     if (fact.kind === 'node-deleted') {
-      // Settled here, not at delivery, so a delivery that never runs leaves no Known value.
       const settled = await forgetDeletedNode(
         transaction,
         changes.roadmapId,
@@ -144,7 +134,6 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
     ),
   ]);
   let failed = false;
-  // Bound recipient transactions without dropping later recipients on failure.
   for (let offset = 0; offset < deliveries.length; offset += DELIVERY_CONCURRENCY) {
     const results = await Promise.allSettled(
       deliveries.slice(offset, offset + DELIVERY_CONCURRENCY).map((deliver) => deliver()),
@@ -155,10 +144,6 @@ async function deliverTargets(targets: readonly RecordedTarget[], change: Record
     console.warn('Roadmap notice delivery failed', { roadmapId: change.courseContext.roadmapId });
 }
 
-/**
- * (B) Deliver to one recipient in its own transaction, in the shared lock order. Its view
- * reads only this recipient's access, live under their lock.
- */
 async function deliverTarget(
   { descriptor, target, previousValue, previousContext, context }: RecordedTarget,
   recipientId: string,
@@ -192,10 +177,6 @@ async function deliverTarget(
   });
 }
 
-/**
- * A deleted Node's recipient who never recognized it: withdraw a creation notice that a
- * delivery committed while the roadmap transaction was running (idempotent).
- */
 async function withdrawCreation(
   { target }: RecordedTarget,
   recipientId: string,

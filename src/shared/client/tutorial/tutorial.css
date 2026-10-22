@@ -1,18 +1,9 @@
-/*
- * The tutorial's layers, around driver.js 1.9.0's own: its overlay sits at 10000 and its
- * popover at 1000000000 (driver.css).
- * - exit control: the "Salir" button, just above the overlay.
- * - acting layer: portaled menus, dialogs and popups during an action step, above the
- *   overlay and highlighted element but below the tour popover.
- * - exit confirmation: "¿Salir del tutorial?", above the tour popover.
- */
 :root {
   --tutorial-z-exit-control: 10001;
   --tutorial-z-acting-layer: 100000;
   --tutorial-z-exit-confirmation: 1000000001;
 }
 
-/* driver.js popovers in the U-Roadmaps visual language; tokens follow the active theme. */
 .driver-popover.u-roadmaps-tour {
   font-family: var(--font-sans, inherit);
   color: var(--popover-foreground);
@@ -107,19 +98,16 @@
   border-bottom-color: var(--popover);
 }
 
-/* driver.js disables pointer events outside the tour; the exit confirmation must stay usable. */
 .driver-active .u-roadmaps-tour-exit,
 .driver-active .u-roadmaps-tour-exit * {
   pointer-events: auto;
 }
 
-/* An action step on the whole canvas: keep React Flow's pass-through layers pass-through. */
 .driver-active .driver-active-element .react-flow__viewport-portal,
 .driver-active .driver-active-element .react-flow__edgelabel-renderer {
   pointer-events: none;
 }
 
-/* Only "Salir" sits above the overlay, so the surrounding canvas stays dimmed. */
 .driver-active [data-tutorial-exit] {
   z-index: var(--tutorial-z-exit-control);
 }
@@ -128,16 +116,6 @@
   pointer-events: auto;
 }
 
-/*
- * During an action step, portaled layers (menus, dialogs, Select popups) sit above the
- * overlay and take clicks, so the expected interaction is fully usable. The exit
- * confirmation keeps its own, higher layer.
- *
- * Base UI dependency: Base UI 1.7.0 marks each portal container with the internal
- * `data-base-ui-portal` attribute, which is not public API. It is the only Base UI
- * internal the tutorial relies on, and only these two rules use it: check them when
- * upgrading @base-ui/react.
- */
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) > * {
   z-index: var(--tutorial-z-acting-layer) !important;
 }
@@ -146,12 +124,10 @@
   pointer-events: auto;
 }
 
-/* The creation menu overlaps its floating trigger by design; keep the trigger in front. */
 .driver-active button[aria-label='Crear en el mapa'] {
   z-index: calc(var(--tutorial-z-acting-layer) + 1);
 }
 
-/* Following the open menu must leave its sibling trigger usable to close it again. */
 .driver-active.u-roadmaps-tour-acting button[aria-label='Crear en el mapa'],
 .driver-active.u-roadmaps-tour-acting button[aria-label='Crear en el mapa'] * {
   pointer-events: auto;

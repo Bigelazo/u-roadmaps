@@ -28,7 +28,6 @@ export function optionalString(
   return requireString(value, field, maxLength);
 }
 
-/** Validate optional Node description text without changing its exact content. */
 export function nodeDescription(value: unknown): string | null | undefined {
   if (value === undefined || value === null) return value;
   if (typeof value !== 'string' || !value.trim())

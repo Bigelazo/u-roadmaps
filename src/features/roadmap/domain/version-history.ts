@@ -9,7 +9,6 @@ function compareTerms(a: AcademicTermKey, b: AcademicTermKey) {
   return a.year - b.year || a.semester - b.semester;
 }
 
-/** Latest Academic term in which the person holds an active teaching-staff Participation. */
 export function versionHistoryHorizon(
   participations: readonly (AcademicTermKey & {
     role: 'STUDENT' | 'TEACHER';
@@ -28,12 +27,10 @@ export function isWithinVersionHorizon(term: AcademicTermKey, horizon: AcademicT
   return compareTerms(term, horizon) <= 0;
 }
 
-/** Newest edition first. */
 export function compareEditionsNewestFirst(a: AcademicTermKey, b: AcademicTermKey) {
   return compareTerms(b, a);
 }
 
-/** Recorded staff by position precedence, then by name. */
 export function compareRecordedStaff(
   a: { name: string; institutionalPosition: InstitutionalCoursePosition | null },
   b: { name: string; institutionalPosition: InstitutionalCoursePosition | null },

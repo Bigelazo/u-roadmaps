@@ -16,7 +16,6 @@ type NodePropsOverrides = Partial<Omit<NodeProps<RoadmapFlowNode>, 'data'>> & {
   data?: Partial<RoadmapFlowNode['data']>;
 };
 
-/** Roadmap Node props for an available, connectable, draggable card. */
 function nodeProps({ data, ...props }: NodePropsOverrides = {}) {
   return {
     id: 'node',
@@ -44,11 +43,9 @@ function nodeProps({ data, ...props }: NodePropsOverrides = {}) {
   } as NodeProps<RoadmapFlowNode>;
 }
 
-/** Inert student-view props: not draggable and not connectable. */
 const studentNodeProps = (overrides: NodePropsOverrides) =>
   nodeProps({ draggable: false, isConnectable: false, ...overrides });
 
-/** Renders a Roadmap Node whose rerenders stay inside the React Flow provider. */
 function renderNode(props: NodeProps<RoadmapFlowNode>) {
   const { rerender } = render(
     <ReactFlowProvider>

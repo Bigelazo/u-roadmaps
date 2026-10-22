@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process';
 import { isLocalDatabase } from '../support/local-database';
 
-/** The only database E2E code may touch: the local roadmap_e2e_db. */
 export function e2eDatabaseUrl() {
   const connection = process.env.E2E_DATABASE_URL;
   if (!connection) throw new Error('Set E2E_DATABASE_URL in .env.');
@@ -11,11 +10,6 @@ export function e2eDatabaseUrl() {
   return connection;
 }
 
-/**
- * Runs a SQL script with psql in one transaction and returns its unaligned output.
- * The generated Prisma client does not load under Playwright's CommonJS transform
- * (see issue #164), so test data and verification queries share this helper.
- */
 export function sql(script: string) {
   const database = new URL(e2eDatabaseUrl());
   return new Promise<string>((resolve, reject) => {
@@ -45,7 +39,6 @@ export function sql(script: string) {
   });
 }
 
-/** Returns the JSON value printed by the last statement of a script. */
 export async function queryJson<T>(script: string): Promise<T> {
   const output = await sql(script);
   return JSON.parse(output.split('\n').at(-1) || 'null') as T;

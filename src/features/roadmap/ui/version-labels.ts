@@ -2,7 +2,6 @@ import type { RoadmapVersionHistory } from '@/features/roadmap/version-types';
 
 type Version = RoadmapVersionHistory['versions'][number];
 
-/** Roadmaps that predate recorded authorship never get an inferred creator. */
 export function creatorLabel(creator: { name: string } | null): string {
   return creator?.name ?? 'Creador no registrado';
 }

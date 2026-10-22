@@ -35,7 +35,6 @@ function asApplicationError(error: unknown): never {
   throw error;
 }
 
-/** Starts VTI without creating a local application session. */
 export async function startInstitutionalLogin(request: Request) {
   const started = await startVtiLogin();
   if (!started)
@@ -54,11 +53,6 @@ export async function startInstitutionalLogin(request: Request) {
   return response;
 }
 
-/**
- * Validates the VTI callback, reconciles only the local User, and creates the
- * local NextAuth session. Course Participation and its role stay out of this
- * flow and are resolved by the Roadmap authorization path.
- */
 export function completeInstitutionalLogin(request: Request, rawToken: FormDataEntryValue | null) {
   const state = vtiLoginState(request);
   if (request.method === 'GET' && (!state || typeof rawToken !== 'string' || !rawToken.trim())) {

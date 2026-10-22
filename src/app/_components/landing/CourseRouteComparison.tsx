@@ -12,19 +12,13 @@ type CourseMaterial = {
   title: string;
   detail: string;
   downloads?: number;
-  /** El equipo docente publica a mano lo que aún no corresponde ver. */
   published: boolean;
   nodeId: RouteSpecimenNodeId;
-  /** En teléfonos cada sección se resume a sus primeras filas. */
   compactHidden?: boolean;
 };
 
 type CourseSection = { title: string; materials: CourseMaterial[] };
 
-/**
- * Cita de U-Cursos: archivos y enlaces viven en secciones distintas y se ordenan por fecha
- * y por tipo, no por cómo se estudia. Cada fila conoce el nodo de la ruta que la contiene.
- */
 const coursePages: { title: string; titleColumn: string; sections: CourseSection[] }[] = [
   {
     title: 'Material docente',
@@ -113,7 +107,6 @@ const coursePages: { title: string; titleColumn: string; sections: CourseSection
   },
 ];
 
-/** Recorrido automático: el orden de la ruta, que salta por la tabla. */
 const routeOrder: RouteSpecimenNodeId[] = [
   'variables',
   'conditionals',
@@ -196,7 +189,6 @@ function CoursePageExcerpt({
   return (
     <div className="flex flex-col gap-3">
       {coursePages.map((page) => (
-        // Hoja de otra plataforma: tipografía de sistema y colores propios, ajenos a U-Roadmaps.
         <div
           key={page.title}
           className="overflow-hidden rounded-md bg-white font-[Arial,Helvetica,sans-serif] text-[13px] text-[#333] shadow-[0_18px_50px_rgb(0_0_0/18%)]"
@@ -233,7 +225,6 @@ export function CourseRouteComparison({ className }: { className?: string }) {
   const [touring, setTouring] = useState(true);
   const [traces, setTraces] = useState<Trace[]>([]);
 
-  // Recorre la ruta una vez al cargar; cualquier interacción toma el control.
   useEffect(() => {
     if (!touring) return;
     const timers = routeOrder.map((nodeId, step) =>
@@ -271,10 +262,8 @@ export function CourseRouteComparison({ className }: { className?: string }) {
       const row = material.getBoundingClientRect();
       const x1 = row.right - origin.left;
       const y1 = row.top + row.height / 2 - origin.top;
-      // La traza llega al borde del lienzo a la altura del nodo; el contorno del nodo marca el destino.
       const x2 = canvas.left - origin.left;
       const y2 = node.top + node.height / 2 - origin.top;
-      // Apiladas (teléfono y tableta), la ruta no queda a la derecha de la tabla: sin traza.
       if (x2 - x1 < 32 || row.height === 0) return;
       const bend = (x2 - x1) / 2;
       next.push({

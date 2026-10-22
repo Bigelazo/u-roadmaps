@@ -19,7 +19,6 @@ export type MufasaEnrolledCourse = Readonly<{
   year: number;
   semester: 1 | 2;
   section: string | null;
-  /** U-Campus identifier of the Course (Ramo), used to read the offering's roster. */
   ramoId: number | null;
   isTeaching: boolean;
   institutionalPosition: MufasaInstitutionalCoursePosition | null;
@@ -137,7 +136,6 @@ function parseCourse(value: unknown, isTeaching: boolean): MufasaEnrolledCourse 
   };
 }
 
-/** Reads one MUFASA endpoint, or null when it is not configured for this request. */
 async function requestMufasa(
   endpoint: string,
   params: Record<string, string>,
@@ -176,8 +174,6 @@ async function getMufasaCourses(
       try {
         return [parseCourse(course, isTeaching)];
       } catch {
-        // Historical snapshots can include periods that the overview cannot represent.
-        // Keep the valid portion of an otherwise successful Mufasa response.
         return [];
       }
     });
@@ -190,12 +186,10 @@ async function getMufasaCourses(
       ...(courses.length !== remoteCourses.length ? { isComplete: false } : {}),
     };
   } catch {
-    // The overview remains useful with materialized offerings during a remote outage.
     return { source: 'LOCAL', courses: [] };
   }
 }
 
-/** Gets the authenticated person's enrolled U-Campus courses. */
 export function getMufasaEnrolledCourses(
   rut: string | null,
   options: GetMufasaEnrolledCoursesOptions = {},
@@ -203,7 +197,6 @@ export function getMufasaEnrolledCourses(
   return getMufasaCourses(rut, 'cursos_inscritos', false, options);
 }
 
-/** Gets the U-Campus course offerings taught by the authenticated person. */
 export function getMufasaTaughtCourses(
   rut: string | null,
   options: GetMufasaEnrolledCoursesOptions = {},
@@ -211,14 +204,6 @@ export function getMufasaTaughtCourses(
   return getMufasaCourses(rut, 'cursos_dictados', true, options);
 }
 
-/**
- * Gets both U-Campus lists needed for the academic overview. A successful
- * endpoint remains useful if the other list is temporarily unavailable. A
- * history with no course in either list is not complete: a pure teacher has no
- * enrolled courses, but an empty answer from both endpoints is more likely a
- * U-Campus fault than a person without any course, and it must not deactivate
- * every Participation.
- */
 export async function getMufasaAcademicCourses(
   rut: string | null,
   options: GetMufasaEnrolledCoursesOptions = {},
@@ -269,11 +254,6 @@ function parseCourseMember(value: unknown): MufasaCourseMember | null {
   };
 }
 
-/**
- * Gets every U-Campus member (students and teaching staff) of all sections of
- * one Course offering. MUFASA does not narrow `id_ramo` by period, so the
- * Academic term is filtered here.
- */
 export async function getMufasaCourseMembers(
   ramoId: number,
   { year, semester }: Readonly<{ year: number; semester: number }>,
@@ -315,10 +295,6 @@ function personName(record: Record<string, unknown>) {
   return name || readString(record, ['alias']);
 }
 
-/**
- * Gets the display names of U-Campus people by RUT. Names are best effort:
- * people missing from the response, or a failed request, have no entry.
- */
 export async function getMufasaPersonNames(
   ruts: readonly string[],
   options: GetMufasaEnrolledCoursesOptions = {},

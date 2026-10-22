@@ -412,7 +412,6 @@ export type RoadmapGraphProps = {
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
   confirmedAutomaticLayout?: { token: string; direction: RoadmapLayoutDirection } | null;
-  /** Called once "Centrar mapa" has fitted the view. */
   onFitView?: () => void;
 };
 
@@ -459,7 +458,6 @@ type NodeActionMenuState = {
   nodeId: string;
 } | null;
 
-/** A menu state applies only while its editing session and Node selection are current. */
 function activeMenuNodeId(
   state: NodeActionMenuState,
   editing: RoadmapGraphEditing | undefined,
@@ -563,9 +561,6 @@ function useRoadmapGraphController({
   }, [editing, projectionKind, projectionRoadmap]);
   const layoutDirection = confirmedAutomaticLayout?.direction ?? 'TB';
   const onEditingIntent = editing?.onEditingIntent;
-  // The canvas keeps positions that a drag has not reloaded yet, so only a new
-  // roadmap can replace them. The callbacks live in a ref so that a container
-  // render does not rebuild the graph.
   const handlers = useRef<{ onEditingIntent?: (intent: RoadmapGraphEditingIntent) => void }>({
     onEditingIntent,
   });
@@ -672,7 +667,6 @@ function useRoadmapGraphController({
     const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
     const positions = immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction));
     const changed = changedNodePositions(flow.nodes, positions);
-    // A layout that moves no Node has nothing to confirm.
     if (changed.length === 0) return;
     emitEditingIntent({
       kind: 'apply-automatic-layout',

@@ -6,7 +6,6 @@ export type CourseOfferingIdentifierParams = Readonly<{
   semester: string;
 }>;
 
-/** The canonical Course code of a route parameter, or null when it cannot be one. */
 export function parseCourseCode(param: string): string | null {
   let courseCode: string;
   try {

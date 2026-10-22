@@ -15,7 +15,6 @@ for (const { option, experience } of choices) {
     await authenticateAs(page.context(), user.id);
     await page.goto('/academic-overview');
 
-    // A question-mark icon, not a text button.
     const icon = page.getByRole('button', { name: 'Abrir tutorial' });
     await expect(icon).toBeVisible();
     await expect(icon).toHaveText('');

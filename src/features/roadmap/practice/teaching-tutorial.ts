@@ -8,7 +8,6 @@ import { NODE_TYPES_MENU_ITEM_LABEL } from '@/features/roadmap/editor/types';
 import { practiceNodeIds } from './practice-roadmap';
 import { canvas, nodeSelector, nodeTypeAndResourcesStep } from './student-tutorial';
 
-/** "Crear en el mapa", its menu while open, or the creation dialog while open. */
 function nodeCreator() {
   const dialog = [...document.querySelectorAll('[role="dialog"]')].find((candidate) =>
     candidate.textContent?.includes('Agregar al mapa'),
@@ -17,7 +16,6 @@ function nodeCreator() {
   return dialog ?? layer?.querySelector('[role="menu"]') ?? layer ?? null;
 }
 
-/** Keeps action confirmations clear of the tutorial popover after the canvas resizes. */
 function confirmationOrCanvas() {
   return (
     document.querySelector('[role="alertdialog"]:not(.u-roadmaps-tour-exit)') ??
@@ -25,7 +23,6 @@ function confirmationOrCanvas() {
   );
 }
 
-/** Follows the requested Node's block control into its action menu and confirmation. */
 function branchBlockControl() {
   const confirmation = document.querySelector('[role="alertdialog"]:not(.u-roadmaps-tour-exit)');
   const menu = document.getElementById(`node-actions-${practiceNodeIds.b}`);
@@ -45,7 +42,6 @@ function branchBlockControl() {
   );
 }
 
-/** Keeps the requested Node highlighted, then follows its menu and confirmation. */
 function nodeControlOrConfirmation(nodeId: string) {
   return () =>
     document.querySelector('[role="alertdialog"]:not(.u-roadmaps-tour-exit)') ??
@@ -53,17 +49,12 @@ function nodeControlOrConfirmation(nodeId: string) {
     document.querySelector(nodeSelector(nodeId));
 }
 
-/** The open Node detail in "Vista estudiante", or the given Node. */
 function nodeDetailOr(nodeId: string) {
   return () =>
     document.querySelector('[aria-labelledby="student-node-detail-title"]') ??
     document.querySelector(nodeSelector(nodeId));
 }
 
-/**
- * The teaching Roadmap tutorial on the Practice roadmap. Action steps advance only when
- * the canvas reports their action took effect. Built per run: it remembers the new Node.
- */
 export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAction>[] {
   let createdNodeId: string | null = null;
   return [
@@ -101,7 +92,6 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       },
     },
     {
-      // The "Tipos de nodo" item while its menu is open, otherwise "Crear en el mapa".
       element: () =>
         document.querySelector(`[aria-label="${NODE_TYPES_MENU_ITEM_LABEL}"]`) ??
         document.querySelector('button[aria-label="Crear en el mapa"]'),
@@ -225,7 +215,6 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: nodeDetailOr(practiceNodeIds.a),
       title: 'Completa un nodo',
-      // The student view keeps the editor's viewport, which may leave Introducción out.
       prepare: () => clickElement('button[aria-label="Centrar mapa"]'),
       description: 'Abre Introducción y presiona "Completar", como lo haría un estudiante.',
       advanceWhen: (action) =>

@@ -33,8 +33,6 @@ async function listedIds(userId: string, roadmapId: string) {
   return ids.sort();
 }
 
-// The Inbox SQL is a set-based optimisation; the participant view and notice visibility are
-// the rule it must agree with.
 test('the Inbox, its counts and Node change marks agree with the participant view', async ({
   course,
 }) => {
@@ -90,10 +88,8 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
       nodeTypeId: specialType.id,
     },
     { noticeTarget: 'node-access', nodeId: chain[1].id },
-    // A Node that no longer exists shows neither its title nor its description.
     { noticeTarget: 'node-title', nodeId: randomUUID() },
     { noticeTarget: 'node-description', nodeId: randomUUID() },
-    // A row no descriptor owns is never shown.
     { nodeId: chain[0].id },
     {},
   ];
@@ -110,7 +106,6 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
       data: { ...data, ...course.identifier, roadmapId },
       occurredAt,
       availableAt: occurredAt,
-      // Recognized Resource notices leave the Inbox but still mark their Node.
       acknowledgedAt: data.noticeTarget === 'resource' ? occurredAt : null,
     })),
   );
@@ -149,7 +144,6 @@ test('the Inbox, its counts and Node change marks agree with the participant vie
       for (const { data } of visible)
         if (data.nodeId) marks[data.nodeId] = (marks[data.nodeId] ?? 0) + 1;
       const params = new URLSearchParams({ roadmapId });
-      // One comparison per recipient and state, labelled so a mismatch names both.
       expect({
         state,
         role: participant.role,

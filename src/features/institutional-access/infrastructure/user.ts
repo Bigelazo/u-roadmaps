@@ -9,7 +9,6 @@ export class InstitutionalIdentityConflict extends Error {
   }
 }
 
-/** Reconciles a local User after VTI has authenticated an institutional identity. */
 export async function reconcileInstitutionalUser({ rut, institutionalEmail, name }: VtiIdentity) {
   return prisma.$transaction(
     async (transaction) => {

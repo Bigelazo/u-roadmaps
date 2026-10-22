@@ -15,10 +15,8 @@ import {
   type TutorialStep,
 } from './tutorial-support';
 
-/** Set on the body during an action step, so portaled menus, dialogs and popups stay usable. */
 const actingClass = 'u-roadmaps-tour-acting';
 
-/** Shared driver.js look and Spanish labels. Animations stay on (ADR-0022). */
 const baseConfig: Config = {
   animate: true,
   popoverClass: 'u-roadmaps-tour',
@@ -34,12 +32,6 @@ const baseConfig: Config = {
   progressText: '{{current}} de {{total}}',
 };
 
-/**
- * Keeps focus where it is when driver.js renders its popover. driver.js 1.9.0 offers no
- * option for this: it calls `focus()` on the popover synchronously right after
- * `onPopoverRender`. So `HTMLElement.prototype.focus` is patched for that one call only,
- * and a microtask restores it if driver.js made no call. Check this on upgrading driver.js.
- */
 function skipDriverPopoverFocus() {
   const focus = HTMLElement.prototype.focus;
   const restore = () => {
@@ -49,11 +41,6 @@ function skipDriverPopoverFocus() {
   queueMicrotask(restore);
 }
 
-/**
- * Runs a Roadmap tutorial as soon as its first element exists. It advances only through
- * its own controls; completed action steps cannot be revisited. Esc, the close control
- * and overlay clicks ask before leaving.
- */
 export function RoadmapTutorial<Action = never>({
   steps,
   actions,
@@ -100,10 +87,6 @@ export function RoadmapTutorial<Action = never>({
       isActionStep(index) && !steps[index].allowManualAdvance;
     const disablesInteraction = (step: TutorialStep<Action>) =>
       !step.advanceWhen && !step.allowInteraction;
-    // React can rewrite a highlighted element's classes after driver.js added its own (a
-    // React Flow node toggles its interaction classes once a Node menu finishes closing),
-    // which would leave the step without its highlight. driver.js 1.9.0 marks the element
-    // with these classes; check them on upgrading driver.js.
     const restoreHighlight = (index: number) => {
       const element = tour.getActiveElement();
       if (!element || element.classList.contains('driver-active-element')) return;
@@ -115,7 +98,6 @@ export function RoadmapTutorial<Action = never>({
       if (offset === 1 && !byAction && isRequiredActionStep(tour.getActiveIndex())) return;
       const index = (tour.getActiveIndex() ?? 0) + offset;
       if (index < 0) return;
-      // The canvas keeps the action's effects, so returning would require repeating it.
       if (offset === -1 && isRequiredActionStep(index)) return;
       if (index >= steps.length) {
         tour.destroy();
@@ -160,8 +142,6 @@ export function RoadmapTutorial<Action = never>({
       onPrevClick: () => void move(tour, -1),
       onDoneClick: () => void move(tour, 1),
       onCloseClick: askExit,
-      // driver.js focuses its popover right after rendering it. When an action step only
-      // follows its control, focus stays where the user is working, like an open Select.
       onPopoverRender: () => {
         if (!following) return;
         following = false;
@@ -186,10 +166,6 @@ export function RoadmapTutorial<Action = never>({
       if (step.advanceWhen(action)) void move(tour, 1, true);
       else if (!confirmingRef.current) highlightAgain();
     });
-    // An action step follows its control as it changes, for instance into a dialog and back.
-    // A poll, not observers: a MutationObserver misses a control that only moves (a menu
-    // or dialog animating into place through transforms), and a ResizeObserver misses
-    // moves that keep its size, so the highlight would lag behind or stay on a stale spot.
     const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
       document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
@@ -203,14 +179,12 @@ export function RoadmapTutorial<Action = never>({
       if (!isActionStep(index)) return;
       const element = resolveElement(steps[index].element);
       if (element && element !== tour.getActiveElement()) highlightAgain();
-      // Keeps the highlight on a control that is still moving, like an opening menu.
       else tour.refresh();
     }, 150);
 
     let exitTimer: ReturnType<typeof setTimeout> | undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (confirmingRef.current || !tour.isActive()) return;
-      // Within a page dialog or menu, Esc belongs to it: an action step then follows back.
       if (
         event.target instanceof Element &&
         event.target.closest(
@@ -219,14 +193,12 @@ export function RoadmapTutorial<Action = never>({
         !event.target.closest('.driver-popover')
       )
         return;
-      // Deferred, so the confirmation opened here does not also receive this Esc.
       if (event.key === 'Escape') {
         clearTimeout(exitTimer);
         exitTimer = setTimeout(askExit, 0);
       } else if (event.key === 'ArrowRight') void move(tour, 1);
       else if (event.key === 'ArrowLeft') void move(tour, -1);
     };
-    // Capture runs before the exit confirmation handles its own Esc.
     window.addEventListener('keydown', onKeyDown, true);
 
     void (async () => {
@@ -249,7 +221,6 @@ export function RoadmapTutorial<Action = never>({
 
   const resume = () => {
     setIsConfirmingExit(false);
-    // Released after the closing key or click has been handled.
     queueMicrotask(() => {
       confirmingRef.current = false;
     });
@@ -281,10 +252,6 @@ export function RoadmapTutorial<Action = never>({
   );
 }
 
-/**
- * On the origin page, after a Roadmap tutorial was finished or left: highlights the
- * question-mark icon and says the tutorial can be repeated from there.
- */
 export function TutorialClosingPopover() {
   useEffect(() => {
     let pending = false;

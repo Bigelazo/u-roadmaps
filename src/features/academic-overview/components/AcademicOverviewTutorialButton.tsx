@@ -10,10 +10,6 @@ import { TutorialChoiceDialog } from '@/shared/client/tutorial/tutorial-choice-d
 import { useClaimTutorialInvitation } from '@/shared/client/tutorial/tutorial-records';
 import { Button } from '@/shared/ui/button';
 
-/**
- * The Academic overview question-mark icon that lets any User pick a Roadmap tutorial.
- * When `invited`, the same choice opens by itself as the first-visit invitation.
- */
 export function AcademicOverviewTutorialButton({
   invited = false,
 }: Readonly<{ invited?: boolean }>) {

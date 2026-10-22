@@ -2,10 +2,6 @@ import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 import { participantNodeAccess, toParticipant } from '@/features/roadmap/domain/participant-view';
 
-/**
- * One participant's accessible Nodes in each of several Roadmaps. A Roadmap without an active
- * Participation of theirs has no entry.
- */
 export async function readParticipantAccess(
   transaction: Prisma.TransactionClient,
   { userId, roadmapIds }: { userId: string; roadmapIds: readonly string[] },
@@ -34,7 +30,6 @@ export async function readParticipantAccess(
   for (const { role, courseOffering } of participations) {
     const roadmapId = courseOffering.roadmap?.id;
     if (!roadmapId) continue;
-    // Every Roadmap's Dependencies are passed: the view keeps only those between its visible Nodes.
     const view = participantNodeAccess({
       participant: toParticipant(role, completedNodeIds),
       nodes: nodes.filter((node) => node.roadmapId === roadmapId),

@@ -76,7 +76,6 @@ test('removing a Dependency names the pair; added then removed, or removed then 
       currentValue: 'absent',
     },
   });
-  // The same pair with a new Dependency id is the same target.
   await edits.connect(prerequisite.id, dependent.id);
   expect(await routeNotices(course.studentId, course.roadmapId)).toEqual([]);
 });

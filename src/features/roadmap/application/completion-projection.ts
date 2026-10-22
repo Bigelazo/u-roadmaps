@@ -113,7 +113,6 @@ export async function loadRoadmapProjectionData(
   };
 }
 
-/** A student's access to each visible Node of a Roadmap; hidden Nodes have no entry. */
 export async function loadStudentNodeAccess(
   transaction: Prisma.TransactionClient,
   { roadmapId, completedNodeIds }: { roadmapId: string; completedNodeIds: ReadonlySet<string> },

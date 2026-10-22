@@ -45,7 +45,6 @@ type NewResource = {
   fileContentType?: string | null;
 };
 
-/** Adds a Resource to a Node: one content fact, no access change. */
 function resourceCreation<Input>(parse: (input: Input) => NewResource) {
   return roadmapCommand({
     capability: 'edit',
@@ -81,7 +80,6 @@ export const createRoadmapResource = resourceCreation(
 
 type UploadedResource = Omit<NewResource, 'url' | 'type'> & { fileKey: string };
 
-/** Records bytes already saved under `fileKey` as a FILE Resource; the upload parsed them. */
 const createUploadedResource = resourceCreation(
   ({ nodeId, title, fileKey, fileContentType }: UploadedResource) => ({
     nodeId,
@@ -103,11 +101,6 @@ function uploadedFileError(error: unknown): never {
   throw error;
 }
 
-/**
- * Parses and authorises the upload, saves the file's bytes, then records them; a refused or
- * failed record deletes the bytes. The bytes are saved outside the change transaction,
- * which may retry.
- */
 export async function uploadRoadmapResource(
   { id, file, ...participant }: RoadmapParticipant & { id: string; file: unknown },
   changePort: RoadmapChangePort,
@@ -122,7 +115,6 @@ export async function uploadRoadmapResource(
   }
   const nodeId = requireUuid(id, 'nodeId');
   const title = requireString(file.name, 'title', 240);
-  // A refused editor, or a closed Roadmap, never writes bytes; the record decides again.
   await roadmapRead(participant, 'edit', async () => undefined);
   const fileKey = crypto.randomUUID();
   return withStoredFiles('upload Resource', async (files) => {
@@ -176,7 +168,6 @@ export const updateRoadmapResource = roadmapCommand({
   },
 });
 
-/** Removes the Resource and returns its stored file's key, if any. */
 const resourceRemoval = roadmapCommand({
   capability: 'edit',
   parse: ({ id }: { id: string }) => requireUuid(id, 'resourceId'),
@@ -199,7 +190,6 @@ const resourceRemoval = roadmapCommand({
   },
 });
 
-/** Removes the Resource, then its stored file once the removal committed. */
 export async function removeRoadmapResource(
   request: Parameters<typeof resourceRemoval>[0],
   changePort: RoadmapChangePort,

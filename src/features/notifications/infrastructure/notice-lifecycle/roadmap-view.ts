@@ -12,13 +12,11 @@ import type {
   RoadmapViewResource,
 } from '../../application/notice-targets';
 
-/** One participant's accessible Nodes per Roadmap; a Roadmap without their active Participation is absent. */
 export type ParticipantAccessReader = (
   transaction: Prisma.TransactionClient,
   query: { userId: string; roadmapIds: readonly string[] },
 ) => Promise<ReadonlyMap<string, ReadonlySet<string>>>;
 
-/** Every active participant of one Roadmap, with their role, and each one's accessible Nodes. */
 export type RoadmapAccessReader = (
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -29,13 +27,11 @@ export type RoadmapAccessReader = (
   }>
 >;
 
-/** Access found only for an active Participation; without one it is 403. */
 function participationRequired(accessible: ReadonlySet<string> | undefined) {
   if (!accessible) throw new ApplicationError(403, 'FORBIDDEN', 'No tienes acceso a este Roadmap.');
   return accessible;
 }
 
-/** One Roadmap's accessible Nodes; without an active Participation it is 403. */
 export async function roadmapNodeAccess(
   readAccess: ParticipantAccessReader,
   transaction: Prisma.TransactionClient,
@@ -74,13 +70,6 @@ function viewResource(
 
 const resourceOrder = [{ createdAt: 'asc' }, { id: 'asc' }] as const;
 
-/**
- * A memoized view of one Roadmap inside a transaction (it sees the transaction's own
- * writes up to each first read). Single lookups query on demand; once a whole collection
- * is loaded (`nodes`, `resources`, ..., `participantAccess` or `preload`), lookups answer
- * from it. Node access needs its readers: `readAccess` for one participant,
- * `readRoadmapAccess` for every participant at once.
- */
 export function roadmapView(
   transaction: Prisma.TransactionClient,
   roadmapId: string,

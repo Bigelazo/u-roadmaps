@@ -1,6 +1,5 @@
 'use client';
 
-// The academic overview's Roadmap creation: empty or copied from a closed version.
 
 import { useRouter } from 'next/navigation';
 import { useId, useState, useTransition } from 'react';
@@ -46,7 +45,6 @@ async function creationError(response: Response) {
   return 'No se pudo crear el roadmap.';
 }
 
-/** Frozen versions of the Course, newest first; null when the history is unavailable. */
 async function frozenVersions(courseCode: string): Promise<Version[] | null> {
   const response = await fetch(versionHistoryApiUrl(courseCode)).catch(() => null);
   if (!response?.ok) return null;

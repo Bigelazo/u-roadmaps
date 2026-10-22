@@ -1,7 +1,6 @@
 import 'server-only';
 import type { Prisma } from '@/shared/server/db';
 
-/** Acknowledge only when the pending target still matches the captured value. */
 export async function acknowledgeCapturedNotice(
   transaction: Prisma.TransactionClient,
   identity: { id: string; recipientId: string; roadmapId: string },

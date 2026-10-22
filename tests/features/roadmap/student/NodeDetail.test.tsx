@@ -60,7 +60,6 @@ const nodeTypes: NodeType[] = [
   },
 ];
 
-/** Renders the detail of an available `node` with inert callbacks unless overridden. */
 function renderDetail(props: Partial<ComponentProps<typeof StudentNodeDetail>> = {}) {
   return render(
     <StudentNodeDetail

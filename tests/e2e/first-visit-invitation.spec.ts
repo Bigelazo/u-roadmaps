@@ -3,7 +3,6 @@ import { literal, sql } from './database';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
 
-// Test Users start with the invitation already shown; these specs make it a first visit.
 const forgetInvitation = (userId: string) =>
   sql(`UPDATE "User" SET "tutorialInvitationShownAt" = NULL WHERE "id" = ${literal(userId)};`);
 

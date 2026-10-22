@@ -2,12 +2,10 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { literal, literalList, queryJson, sql } from './database';
 
-// Test-owned rows are recognizable without IDs, so orphans can be removed safely.
 export const syntheticTermYearStart = 1000;
 export const syntheticTermYearEnd = 1999;
 export const courseCodePrefix = 'E2E-';
 export const userEmailDomain = 'e2e.u-roadmaps.test';
-/** Tables a test can make PostgreSQL reject writes to, with their trigger name prefix. */
 export const rejectionPrefixes = {
   Roadmap: 'e2e_reject_closure_',
   RoadmapNotice: 'e2e_reject_notices_',
@@ -15,7 +13,6 @@ export const rejectionPrefixes = {
 } as const;
 export type RejectedTable = keyof typeof rejectionPrefixes;
 
-/** What one test created, or every test-owned leftover of an interrupted run. */
 export type TestDataScope =
   | {
       courseCodes: readonly string[];
@@ -28,10 +25,6 @@ export type TestDataScope =
 export const uploadsDirectory = () =>
   join(process.cwd(), process.env.UPLOADS_DIRECTORY || 'uploads-e2e');
 
-/**
- * Drops notice rejection triggers, then deletes Courses (Ramos) and Users with
- * everything that cascades from them and the uploaded files of their Resources.
- */
 export async function removeTestData(scope: TestDataScope) {
   try {
     for (const table of Object.keys(rejectionPrefixes) as RejectedTable[])

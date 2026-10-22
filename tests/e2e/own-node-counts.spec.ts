@@ -35,12 +35,10 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
       await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), { data: { description } }),
     );
   }
-  // Repeated edits to one object count once, and the mark arrives live.
   await expect(mark(course.nodes.first)).toHaveAccessibleName('1 cambio sin revisar');
   await expect(mark(course.nodes.first)).toHaveText('1');
   expect(await changes()).toEqual({ [course.nodes.first]: 1 });
   await expect(mark(course.nodes.second)).toHaveCount(0);
-  // The canvas no longer repeats the global bell.
   await expect(page.getByRole('button', { name: /avisos sin leer para este Roadmap/ })).toHaveCount(
     0,
   );
@@ -49,7 +47,6 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
   await page.reload();
   expect((await acknowledged).status()).toBe(200);
   await page.getByRole('button', { name: 'Entendido' }).click();
-  // Entering empties the Inbox, but the Node keeps its mark until it is reviewed.
   await expect.poll(pending).toBe(0);
   await expect(mark(course.nodes.first)).toHaveText('1');
 
@@ -57,7 +54,6 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
   await expect(mark(course.nodes.first)).toHaveCount(0);
   await expect.poll(changes).toEqual({});
 
-  // A later change marks the Node again, without reopening the reviewed one.
   await ok(
     await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), {
       data: { description: 'Tercera revisión' },

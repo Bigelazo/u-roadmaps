@@ -47,7 +47,6 @@ function dependency(id: string, sourceNodeId: string, targetNodeId: string) {
   return { id, sourceNodeId, targetNodeId, sourceHandle: 'right', targetHandle: 'left' } as const;
 }
 
-/** Límites → Derivadas, with Integrales unconnected and Series hidden. */
 const roadmap: RoadmapDto = {
   course: { code: 'CC1001', name: 'Cálculo', department: 'DIM' },
   courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
@@ -70,7 +69,6 @@ async function openCanvas(
 ) {
   const onCommandApplied = vi.fn();
   const report = vi.fn<(action: PracticeCanvasAction) => void>();
-  // The Practice roadmap is told about every canvas action that took effect.
   const input = { ...teachingInput, practice: { nodeChangeCounts: {}, onAction: report } };
   const wrapper = ({ children }: { children: ReactNode }) => (
     <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
@@ -100,7 +98,6 @@ async function openCanvas(
   };
 }
 
-/** The fixture Roadmap with these Nodes Teacher-blocked. */
 function withTeacherBlocks(...nodeIds: string[]): RoadmapDto {
   return {
     ...roadmap,
@@ -110,7 +107,6 @@ function withTeacherBlocks(...nodeIds: string[]): RoadmapDto {
   };
 }
 
-/** A Custom node type no Node uses. */
 const laboratory: NodeType = {
   id: 'laboratory',
   name: 'Laboratorio',
@@ -251,7 +247,6 @@ describe('canvas commands', () => {
     async (kind, write, impactName, latestDependencies) => {
       const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
       let raceOnce = true;
-      // Another editor connects the Node after the confirmation revalidated, before the write lands.
       const persistence: RoadmapCanvasSessionPersistence = {
         ...adapter,
         async [write](...args: Parameters<RoadmapCanvasSessionPersistence[typeof write]>) {
@@ -429,7 +424,6 @@ describe('canvas commands', () => {
       expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual([]);
     });
 
-    /** Connects Derivadas to Integrales, which Teacher-blocks Integrales behind the blocked branch. */
     const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
       confirmedWrites(persistence, teachingInput).connect({
         sourceNodeId: 'derivatives',
@@ -476,7 +470,6 @@ describe('canvas commands', () => {
         withTeacherBlocks('limits', 'derivatives'),
       );
       let raceOnce = true;
-      // Another editor extends the blocked branch after the confirmation revalidated.
       const persistence: RoadmapCanvasSessionPersistence = {
         ...adapter,
         async changeTeacherBlock(...args) {
@@ -625,7 +618,6 @@ describe('canvas commands', () => {
     test('shows the latest Change impact when the creation is refused as stale, and confirms it again', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits'));
       let raceOnce = true;
-      // Another editor connects Integrales onwards after the confirmation revalidated.
       const persistence: RoadmapCanvasSessionPersistence = {
         ...adapter,
         async connectNodes(...args) {
@@ -979,10 +971,6 @@ describe('canvas commands', () => {
 
   describe('unconfirmed writes', () => {
     const guide = { id: 'guide', title: 'Guía', url: 'https://example.test/guia', type: 'LINK' };
-    /**
-     * Límites is Teacher-blocked, so it can be scheduled, and links a guide; Laboratorio is a
-     * Custom node type that can be edited.
-     */
     const editable: RoadmapDto = {
       ...withTeacherBlocks('limits'),
       nodeTypes: withLaboratory.nodeTypes,
@@ -1232,7 +1220,6 @@ describe('canvas commands', () => {
         ...adapter,
         async moveNode(input, nodeId, position) {
           if (nodeId === 'derivatives') throw new Error();
-          // The successful move settles after the failure.
           await new Promise((resolve) => setTimeout(resolve, 20));
           return adapter.moveNode(input, nodeId, position);
         },
@@ -1421,7 +1408,6 @@ describe('canvas commands', () => {
       await act(() =>
         canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' }),
       );
-      // A Roadmap change reloads the Canvas preview too.
       await act(() =>
         canvas.commands().request({
           kind: 'move-nodes',

@@ -39,7 +39,6 @@ async function bounds(locator: Locator) {
 async function expectTopRightToast(page: Page, toast: Locator) {
   const navigation = await bounds(page.getByRole('banner'));
   const viewport = page.viewportSize()!;
-  // Toasts slide in from above and scale while the stack expands: wait for them to settle.
   await expect
     .poll(async () => {
       const box = await bounds(toast);
@@ -262,7 +261,6 @@ test('keeps feedback visible beside an open editor', async ({ page, course }) =>
   await page.getByRole('button', { name: 'Guardar cambios' }).click();
   const error = toast(page, 'No se pudo guardar el nodo.');
   await expect(error).toBeVisible();
-  // Both notifications stay in the stack; hovering expands it so each one can be read and closed.
   await error.hover();
   await expect(success).toBeVisible();
   await expectTopRightToast(page, error);
@@ -331,7 +329,6 @@ test('keeps radial node actions evenly sized and separated', async ({ page, cour
         first.x + first.width / 2 - second.x - second.width / 2,
         first.y + first.height / 2 - second.y - second.height / 2,
       );
-      // These controls are circular, so their rectangular bounds can overlap at the corners.
       expect(centerDistance).toBeGreaterThanOrEqual((first.width + second.width) / 2);
     }
   }

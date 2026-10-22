@@ -6,10 +6,6 @@ import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { useClaimTutorialInvitation } from '@/shared/client/tutorial/tutorial-records';
 import type { PostCreationInvitationWording } from '../types';
 
-/**
- * Invites a course professor, on the Roadmap canvas they just created, to the teaching
- * tutorial. "Salir" from the tutorial returns to `origin`, this new Roadmap.
- */
 export function PostCreationInvitationDialog({
   wording,
   origin,

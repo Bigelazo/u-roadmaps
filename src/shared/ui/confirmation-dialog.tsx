@@ -184,7 +184,6 @@ function ConfirmationDialog({
 }: ConfirmationDialogProps) {
   const isPending = pendingActionId !== undefined;
   const finalFocusRef = React.useRef<HTMLElement | null>(null);
-  // Enter must never confirm a consequential action by default.
   const cancelRef = React.useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = React.useRef(false);
 

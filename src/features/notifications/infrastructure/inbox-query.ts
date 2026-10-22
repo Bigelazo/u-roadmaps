@@ -25,19 +25,10 @@ type InboxNotice = {
   isGroup: boolean;
 };
 
-/**
- * Pending notices fill the Inbox. Unreviewed notices mark a Node on the canvas:
- * recognized or not, they changed after the recipient last opened that Node.
- */
 type NoticeScope = 'pending' | 'unreviewed';
 
-/** The recipient, with the Nodes they can open in the Roadmaps the request reads. */
 export type InboxRecipient = Readonly<{ userId: string; accessibleNodeIds: readonly string[] }>;
 
-/**
- * Keep the backlog in PostgreSQL; only the requested page leaves it. Node access is decided
- * by the participant view and arrives as data.
- */
 function visibleNotices(
   { userId, accessibleNodeIds }: InboxRecipient,
   filter: InboxFilter,
@@ -87,16 +78,11 @@ function visibleNotices(
     )`;
 }
 
-/**
- * One `WHEN` per `shownTo` class over its Notice targets, as `isNoticeVisible` decides it:
- * to teaching staff (`seesEveryNode`), every existing Node is visible and opens.
- */
 function shownToCase(accessibleNodeIds: readonly string[]) {
   const staff = Prisma.sql`pending."seesEveryNode"`;
   const visibleNode = (column: string) => Prisma.sql`EXISTS (SELECT 1 FROM nodes other
     WHERE other.id::text = pending.data->>${column}::text AND other."roadmapId" = pending."roadmapId"
       AND (other."isVisible" OR ${staff}))`;
-  // A notice whose Node no longer exists joins no row (`node.id IS NULL`).
   const opensNode = Prisma.sql`node.id IS NOT NULL AND (${staff}
     OR (node."isVisible" AND node.id = ANY(${accessibleNodeIds}::uuid[])))`;
   const conditions: Record<ShownTo, Prisma.Sql> = {
@@ -114,7 +100,6 @@ function shownToCase(accessibleNodeIds: readonly string[]) {
       .map(({ noticeTarget }) => noticeTarget);
     return Prisma.sql`WHEN pending.data->>'noticeTarget' = ANY(${targets}::text[]) THEN ${condition}`;
   });
-  // A row no descriptor owns is never shown.
   return Prisma.sql`CASE ${Prisma.join(whens, ' ')} ELSE FALSE END`;
 }
 
@@ -127,7 +112,6 @@ export async function queryInboxPage(
     cursor,
   }: { limit: number; grouped: boolean; cursor: { id: string; availableAt: Date } | null },
 ) {
-  // Roadmap availability stands alone: it never joins a Grouped roadmap notice.
   const standalone = Prisma.sql`data->>'noticeTarget' = ${NOTICE_TARGET.roadmapAvailability}`;
   const rows = await prisma.$queryRaw<InboxNotice[]>(Prisma.sql`
     ${visibleNotices(recipient, filter)}, ranked AS (
@@ -158,7 +142,6 @@ export async function queryInboxCounts(recipient: InboxRecipient, filter: InboxF
   return { count: Number(row?.count ?? 0) };
 }
 
-/** Count changed objects, not notices: a target recognized and changed again counts once. */
 export async function queryNodeChangeCounts(recipient: InboxRecipient, roadmapId: string) {
   const rows = await prisma.$queryRaw<{ nodeId: string; count: bigint }[]>(Prisma.sql`
     ${visibleNotices(recipient, { roadmapId }, 'unreviewed')}

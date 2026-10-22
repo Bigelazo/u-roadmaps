@@ -34,7 +34,6 @@ test('reads one participant’s accessible Nodes in each Roadmap where their Par
 }) => {
   const first = course.change.nodeId;
   const dependent = await addNode(course, 'Pilas');
-  // Neither a hidden nor a Teacher-blocked Node is accessible to anyone.
   await addNode(course, 'Colas', { isVisible: false });
   await addNode(course, 'Árboles', { isTeacherBlocked: true });
   await prisma.dependency.create({ data: { sourceNodeId: first, targetNodeId: dependent.id } });

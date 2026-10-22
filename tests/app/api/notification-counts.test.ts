@@ -16,7 +16,6 @@ vi.mock('@/shared/server/db', async () => {
   const { sqltag, join, empty } = await import('@prisma/client/runtime/client');
   return { prisma: database, Prisma: { sql: sqltag, join, empty } };
 });
-// Participant access itself is covered by the notifications harness.
 vi.mock('@/features/roadmap/access', () => ({ readParticipantAccess: async () => new Map() }));
 vi.mock('@/app/_adapters/auth', () => ({
   requireAuthenticatedUser: async () => ({ id: session.userId }),

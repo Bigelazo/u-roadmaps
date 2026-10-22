@@ -22,10 +22,6 @@ export type MufasaCourseAccess = Readonly<{
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
 
-/**
- * U-Campus's answer for one offering. Without access, `isComplete` says whether that is
- * authoritative (the complete history omits the offering) or merely unknown.
- */
 export type CourseAccessReport = Readonly<{
   access: MufasaCourseAccess | null;
   isComplete: boolean;
@@ -39,15 +35,9 @@ export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' 
   return canEditRoadmap(access) ? 'TEACHER' : 'STUDENT';
 }
 
-/** One equality rule for Course offerings, shared by materialization and omission. */
 const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
   `${courseCode}:${year}:${semester}`;
 
-/**
- * Reads the U-Campus positions the person holds in one course offering. A
- * person can appear more than once, for instance teaching one section and
- * assisting another, so every position counts toward the resolved access.
- */
 export async function readMufasaCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
@@ -71,7 +61,6 @@ export async function readMufasaCourseAccess(
   };
 }
 
-/** Materializes the institutionally reported participation for one offering. */
 export async function materializeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
@@ -84,9 +73,6 @@ export async function materializeParticipation(
   return roadmapChangeTransaction(
     changePort,
     async (transaction, report) => {
-      // ON CONFLICT DO NOTHING, not an upsert: an upsert reads before it inserts, so
-      // concurrent syncs of the same Course (one per offering, or parallel requests)
-      // both insert and the second fails with a unique violation.
       await transaction.course.createMany({
         data: { code: identifier.courseCode, name: access.name, department: '' },
         skipDuplicates: true,
@@ -103,7 +89,6 @@ export async function materializeParticipation(
         where: { courseOfferingId: courseOffering.id },
         select: { id: true },
       });
-      // Match notice delivery's parent -> Participation -> recipient lock order.
       if (roadmap) await lockRoadmap(transaction, roadmap.id, 'key-share');
       const [previous] = await transaction.$queryRaw<{ role: string }[]>`
       SELECT role FROM "Participation" WHERE "userId" = ${user.id}::uuid
@@ -144,12 +129,6 @@ export async function materializeParticipation(
   );
 }
 
-/**
- * Deactivates the user's active Participations in the offerings a complete U-Campus report
- * omits. The Participations and their Completions stay; the notice lifecycle withdraws
- * pending notices when a Participation stops being active (ADR-0024). Like activation, a
- * loss reports no fact: access snapshots and notice audiences read only active ones.
- */
 async function deactivateParticipations(
   user: AcademicUser,
   isOmitted: (offering: CourseOfferingIdentifier) => boolean,
@@ -167,12 +146,10 @@ async function deactivateParticipations(
     await roadmapChangeTransaction(
       changePort,
       async (transaction) => {
-        // Read the Roadmap inside the transaction, so one created meanwhile is locked too.
         const roadmap = await transaction.roadmap.findUnique({
           where: { courseOfferingId },
           select: { id: true },
         });
-        // Match notice delivery's parent -> Participation -> recipient lock order.
         if (roadmap) await lockRoadmap(transaction, roadmap.id, 'key-share');
         await transaction.participation.updateMany({
           where: { userId: user.id, courseOfferingId, isActive: true },
@@ -184,11 +161,6 @@ async function deactivateParticipations(
   }
 }
 
-/**
- * Applies one offering's U-Campus answer: materializes the reported access or, when a
- * complete report omits the offering, deactivates its Participation. A complete report
- * answers for one offering as authoritatively as for the whole history.
- */
 export async function applyCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
@@ -203,7 +175,6 @@ export async function applyCourseAccess(
   return null;
 }
 
-/** Brings the user's Participation in one offering in line with U-Campus. */
 export async function synchronizeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
@@ -217,11 +188,6 @@ export async function synchronizeParticipation(
   );
 }
 
-/**
- * Synchronizes every reported offering once, combining all of its positions. A complete
- * report lists the whole academic history (every period), so it also deactivates the
- * Participations it no longer contains.
- */
 export async function synchronizeAcademicParticipations(
   user: AcademicUser,
   changePort: RoadmapChangePort,
@@ -235,8 +201,6 @@ export async function synchronizeAcademicParticipations(
       const key = offeringKey(course);
       offerings.set(key, [...(offerings.get(key) ?? []), course]);
     }
-    // Each offering opens an interactive transaction. Await its commit before
-    // starting the next so a long academic history cannot flood the pool's queue.
     for (const courses of offerings.values()) {
       const course = courses[0];
       await materializeParticipation(

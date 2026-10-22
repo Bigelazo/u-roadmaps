@@ -2,7 +2,6 @@ import 'server-only';
 import { subscribeToPostgresSignals } from './postgres-signals';
 import { prisma } from '@/shared/server/db';
 
-/** Authenticated invalidations only; projections remain authorized HTTP requests. */
 export async function openNotificationStream(userId: string, signal: AbortSignal) {
   let unsubscribe: (() => void) | undefined;
   let stopped = false;
@@ -41,7 +40,6 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
           if (change.kind === 'inbox' && change.userId === userId) {
             send('inbox', { userId });
           } else if (change.kind === 'roadmap' && (!change.userId || change.userId === userId)) {
-            // Inactive memberships still receive invalidation so HTTP can revoke access.
             const courseOfferingId = String(change.courseOfferingId);
             if (change.userId !== userId && !memberships.has(courseOfferingId)) {
               const participation = await prisma.participation.findFirst({
@@ -49,19 +47,14 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
                 select: { id: true },
               });
               if (!participation) return;
-              // Every connected tab would otherwise query on each Roadmap write.
               memberships.add(courseOfferingId);
             }
-            // User-scoped Participation/Completion signals also verify revocation.
-            // Students ignore ordinary content signals, but must still ask HTTP
-            // to remove protected content after their Participation is lost.
             const accessLost =
               change.userId === userId &&
               !(await prisma.participation.findFirst({
                 where: { userId, courseOfferingId, isActive: true },
                 select: { id: true },
               }));
-            // Visibility can change without a Notice write (for example a Completion).
             send('inbox', { userId });
             send('roadmap', { ...change, userId, ...(accessLost ? { accessLost: true } : {}) });
           }
@@ -91,7 +84,6 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
         heartbeat = setInterval(() => {
           enqueue(': keepalive\n\n');
         }, 15_000);
-        // Reauthenticate periodically rather than holding an expired JWT indefinitely.
         lifetime = setTimeout(stop, 5 * 60_000);
       },
       cancel: stop,

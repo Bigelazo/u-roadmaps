@@ -2,7 +2,6 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { insert, literal, sql } from './database';
 import { expect, type E2EPrimaryCourseOffering } from './fixtures';
 
-/** A Notice target and its values, as the notice lifecycle module stores them in `data`. */
 export type StoredTarget = Readonly<{
   noticeTarget: string;
   targetKey: string;
@@ -11,10 +10,6 @@ export type StoredTarget = Readonly<{
   [key: string]: unknown;
 }>;
 
-/**
- * Store pending lifecycle notices for one recipient of the course's Roadmap, without
- * delivery; returns their ids in the order given.
- */
 export async function storeNotices(
   course: E2EPrimaryCourseOffering,
   recipientId: string,
@@ -39,10 +34,6 @@ export async function storeNotices(
   return rows.map(({ id }) => id);
 }
 
-/**
- * Store pending renames of `count` visible Nodes whose current titles are already the
- * renamed ones, so recognizing them leaves nothing pending; returns their ids.
- */
 export async function storeTitleNotices(
   course: E2EPrimaryCourseOffering,
   recipientId: string,
@@ -65,7 +56,6 @@ export async function storeTitleNotices(
   return storeNotices(course, recipientId, renames, availableAt);
 }
 
-/** Roadmap notices as `/api/notifications` lists them; `data` depends on the notice kind. */
 export type StoredNotice = Readonly<{
   id: string;
   subject: string;
@@ -75,7 +65,6 @@ export type StoredNotice = Readonly<{
   data: Record<string, any>;
 }>;
 
-/** Lists the recipient's notices, e.g. `{ nodeId, limit: 100 }` or `{ roadmapId, read: false }`. */
 export async function listNotices(
   api: APIRequestContext,
   query: Record<string, string | number | boolean>,
@@ -88,14 +77,12 @@ export async function listNotices(
   return (await response.json()).notifications as StoredNotice[];
 }
 
-/** The recipient's unread notices about one Node. */
 export function pendingNotices(api: APIRequestContext, nodeId: string) {
   return listNotices(api, { nodeId, read: false });
 }
 
 export type RoadmapOpening = { roadmapId: string; operationId: string };
 
-/** Records that the recipient opened a Roadmap; acknowledge it to recognize its notices. */
 export async function prepareOpening(api: APIRequestContext, roadmapId: string) {
   const opening: RoadmapOpening = { roadmapId, operationId: crypto.randomUUID() };
   expect((await api.post('/api/notifications/openings', { data: opening })).status()).toBe(200);
@@ -106,12 +93,10 @@ export async function acknowledgeOpening(api: APIRequestContext, opening: Roadma
   expect((await api.post('/api/notifications/acknowledge', { data: opening })).status()).toBe(200);
 }
 
-/** Opens a Roadmap and acknowledges that opening, recognizing the notices it showed. */
 export async function recognize(api: APIRequestContext, roadmapId: string) {
   await acknowledgeOpening(api, await prepareOpening(api, roadmapId));
 }
 
-/** The Node with this id in a Roadmap response body; throws when it is missing. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function findNode(roadmap: { nodes: any[] }, nodeId: string) {
   const node = roadmap.nodes.find((candidate: { id: string }) => candidate.id === nodeId);
@@ -122,7 +107,6 @@ export function findNode(roadmap: { nodes: any[] }, nodeId: string) {
 export type StreamFrame = { kind: string; data: { userId: string; courseCode?: string } };
 export type StreamWindow = Window & { notificationFrames: StreamFrame[] };
 
-/** Opens the native notification EventSource in a page and waits for its ready frame. */
 export async function openNativeStream(page: Page) {
   await page.goto('/api/notifications/counts');
   await page.evaluate(() => {
@@ -142,7 +126,6 @@ export async function openNativeStream(page: Page) {
     .toBe('ready');
 }
 
-/** Frames received so far by the stream that `openNativeStream` opened in the page. */
 export function streamFrames(page: Page) {
   return page.evaluate(() => (window as unknown as StreamWindow).notificationFrames);
 }

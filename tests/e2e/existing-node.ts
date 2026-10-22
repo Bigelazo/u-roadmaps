@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { insert, sql } from './database';
 
-/** Prepare a visible Node without emitting notices or opening a delivery window. */
 export async function createExistingNode(input: {
   roadmapId: string;
   nodeTypeId: string;

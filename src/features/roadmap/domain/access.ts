@@ -60,7 +60,6 @@ export function transitivePrerequisiteNodeIds(
   return transitiveNodeIds(nodeId, nodeIdsByTarget(dependencies));
 }
 
-/** The visible Nodes of a Roadmap and the Dependencies between them. */
 export function visibleRoadmapGraph<
   Node extends { id: string; isVisible: boolean },
   Dependency extends RoadmapGraphDependency,
@@ -76,10 +75,6 @@ export function visibleRoadmapGraph<
   };
 }
 
-/**
- * The visible, not yet Teacher-blocked Nodes that a new Dependency from a Teacher-blocked
- * Node to `targetNodeId` would block, in the order of `nodes`.
- */
 export function dependencyTeacherBlockImpact(
   nodes: readonly { id: string; title: string; isVisible: boolean; isTeacherBlocked: boolean }[],
   dependencies: readonly RoadmapGraphDependency[],
@@ -142,7 +137,6 @@ export function eligibleBranchUnlockNodeIds({
   );
 }
 
-/** Why a participant cannot open or complete a blocked Node. */
 export function blockedNodeAccessMessage(
   access: Extract<StudentNodeAccess, { status: 'BLOCKED' }>,
 ) {

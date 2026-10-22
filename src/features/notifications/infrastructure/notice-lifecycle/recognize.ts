@@ -16,21 +16,14 @@ import { roadmapView, type ParticipantAccessReader } from './roadmap-view';
 import { reconcileNoticeTarget } from './reconcile';
 import { lazyNoticeCourseContext, type NoticeCourseContext } from './course-context';
 
-/**
- * One target as entry exposed it: a pending notice (`id`), or a value the recipient saw
- * without one (`id` null). `onlyPending` values advance the Known value but only rebase a
- * pending notice; values inside a recognized broad target reconcile fully.
- */
 export type TargetSnapshot = NoticeTargetRef &
   Readonly<{
     id: string | null;
     currentValue: string;
-    /** Presentation context of the captured value, recognized with it. */
     context?: TargetContext;
     onlyPending?: boolean;
   }>;
 
-/** (C) Capture: the pending lifecycle notices of an opening record. */
 export function pendingTargetSnapshots(
   notices: readonly { id: string; data: Prisma.JsonValue }[],
 ): TargetSnapshot[] {
@@ -73,7 +66,6 @@ function targetSnapshot(value: Prisma.JsonValue) {
   return { snapshot, target, descriptor };
 }
 
-/** (C) Recognize captured values once, rebasing any later delivery onto them. */
 export async function recognizeTargetSnapshots(
   transaction: Prisma.TransactionClient,
   {
@@ -94,7 +86,6 @@ export async function recognizeTargetSnapshots(
   const identity = { recipientId, roadmapId };
   const courseContext = lazyNoticeCourseContext(transaction, roadmapId);
   const recognized = snapshots.map(targetSnapshot);
-  // Recognition never edits the Roadmap: one view, loaded at once, serves every target.
   const roadmap = roadmapView(transaction, roadmapId, readAccess);
   if (recognized.length) await roadmap.preload();
   let acknowledged = 0;
@@ -121,7 +112,6 @@ export async function recognizeTargetSnapshots(
   for (const { snapshot, target, descriptor } of broad) {
     if (descriptor.scope !== 'node' || !snapshot.nodeId) continue;
     if (await descriptor.current(target, roadmap, recipientId)) continue;
-    // The Node entry showed is gone: the recipient knew it, so its deletion is news.
     await transaction.noticeKnownValue.deleteMany({
       where: { ...identity, targetKey: nodeCreationRef(snapshot.nodeId).targetKey },
     });
@@ -140,7 +130,6 @@ export async function recognizeTargetSnapshots(
       occurredAt: new Date(),
     });
   }
-  // Changes inside a recognized broad target that entry did not show are news now.
   const captured = new Set(recognized.map(({ snapshot }) => snapshot.targetKey));
   for (const { snapshot, descriptor } of broad) {
     if (snapshot.onlyPending) continue;
@@ -156,11 +145,6 @@ export async function recognizeTargetSnapshots(
   return acknowledged;
 }
 
-/**
- * Reconcile, in one pass, the recipient's Known values in a recognized broad target that
- * entry did not capture: only targets with a pending notice or a changed value are
- * reconciled one by one; the rest are compared against the already loaded view.
- */
 async function reconcileUncaptured(
   transaction: Prisma.TransactionClient,
   input: {
@@ -218,10 +202,6 @@ async function reconcileUncaptured(
   }
 }
 
-/**
- * The recipient now knows `knownValue` for the target. Any pending notice is
- * rebased on it; with `onlyPending`, a target without one stays silent.
- */
 export async function recognizeKnownValue(
   transaction: Prisma.TransactionClient,
   input: {
@@ -229,7 +209,6 @@ export async function recognizeKnownValue(
     descriptor: NoticeTargetDescriptor;
     target: NoticeTargetRef;
     knownValue: string;
-    /** Presentation context of the recognized value. */
     context?: TargetContext;
     eventId: string;
     courseContext: () => Promise<NoticeCourseContext>;

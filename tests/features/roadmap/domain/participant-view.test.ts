@@ -81,8 +81,6 @@ test.each([
 });
 
 test('teaching staff reach every visible Node without a Teacher block, whatever its prerequisites', () => {
-  // The dependent is deliberately not Teacher-blocked: the rule must not lean on the write-side
-  // invariant that a Teacher block propagates to its dependents.
   const view = participantNodeAccess({
     participant: { role: 'TEACHER' },
     nodes: [

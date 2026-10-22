@@ -11,7 +11,6 @@ export default async function RoadmapVersionPage(
   if (!identifier) notFound();
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
-  // Every refusal arrives as a missing version.
   const version = await readRoadmapVersion(user, identifier).catch((error: unknown) => {
     if (error instanceof ApplicationError && error.status === 404) return null;
     throw error;

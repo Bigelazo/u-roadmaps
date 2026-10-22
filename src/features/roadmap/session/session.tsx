@@ -75,7 +75,6 @@ export function RoadmapCanvasSessionPersistenceProvider({
   return <persistenceContext.Provider value={persistence}>{children}</persistenceContext.Provider>;
 }
 
-/** What a Roadmap canvas session shows; its writes run through `canvasCommands`. */
 type RoadmapCanvasSessionState = {
   roadmap: AnyRoadmapDto | null;
   simulationRoadmap: StudentRoadmapDto | null;
@@ -102,7 +101,6 @@ function useInjectedSession(
   const [simulationKey, setSimulationKey] = useState<string | null>(null);
   const [closedKey, setClosedKey] = useState<string | null>(null);
   const [accessLost, setAccessLost] = useState(false);
-  // The message belongs to the session key it was raised for, so it hides after a key change.
   const [error, setError] = useState<{ message: string; key: string } | null>(null);
   const key = roadmapCanvasSessionKey(input);
   const activeKeyRef = useRef(key);
@@ -114,9 +112,6 @@ function useInjectedSession(
   const title = input.courseOffering.title;
   const experienceKind = input.experience.kind;
   const experienceTerm = input.experience.term;
-  // Persistence only sees the Course offering and experience. The other input fields
-  // (notifications, entry key, target Node, practice callbacks) are read by the view, and
-  // leaving them out keeps every operation's identity stable while they change.
   const stableInput = useMemo<RoadmapCanvasSessionInput>(
     () => ({
       courseOffering: {
@@ -261,21 +256,14 @@ function useInjectedSession(
       if (activeKeyRef.current !== requestKey) return;
       if (cause instanceof RoadmapClosedError) {
         setClosedKey(requestKey);
-        // Keep the refusal visible even if the recovery read fails.
         await refresh().catch(() => false);
       }
-      // Recovery may finish after the participant changes Course offering.
       if (activeKeyRef.current !== requestKey) return;
       setError({ message: messageFor(cause, fallback), key: requestKey });
     },
     [refresh],
   );
 
-  /**
-   * Runs a write, then reloads the Roadmap unless `reload` is false; a failed write is the
-   * session error. The write took effect once it resolves: a failed reload is shown as the
-   * session error but does not undo it.
-   */
   const mutate = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string, reload = true) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
@@ -299,7 +287,6 @@ function useInjectedSession(
     [refresh, reportFailure, stableInput],
   );
 
-  /** Runs a read whose failure is reported as the session error; resolves `null` then. */
   const read = useCallback(
     async <T,>(operation: () => Promise<T>, fallback: string) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
@@ -375,7 +362,6 @@ export function useRoadmapCanvasSession(
     [request],
   );
   const prepareCanvasPreview = options.canvasPreview?.onEnter ?? noop;
-  // Reported once per entry, although the Canvas preview reloads on every Roadmap change.
   const enterCanvasPreview = useCallback(() => {
     prepareCanvasPreview();
     report?.({ type: 'enterCanvasPreview' });

@@ -327,13 +327,11 @@ function useNodeEditorController(
       scheduleTeacherUnlock: withCurrentNode((currentNode, unlockOn: string | null) =>
         onIntent({ kind: 'schedule-teacher-unlock', nodeId: currentNode.id, unlockOn }),
       ),
-      // A dirty draft must be discarded before the editor closes this Node.
       closeNode: withCurrentNode((currentNode) => {
         void guardDraft({ kind: 'deselect-node', nodeId: currentNode.id }).then((proceed) => {
           if (proceed) onIntent({ kind: 'close', nodeId: currentNode.id });
         });
       }),
-      // The canvas commands ask about the draft before a deletion opens.
       requestNodeDeletion: withCurrentNode((currentNode) =>
         onIntent({ kind: 'delete-node', nodeId: currentNode.id }),
       ),
@@ -357,7 +355,6 @@ function useNodeEditorController(
   const hasDraft = nodeEditorStateIsDirty(state);
   useEffect(() => {
     if (!hasDraft) return;
-    // Closing or reloading the tab would otherwise drop the draft without the editor's guard.
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
@@ -387,7 +384,6 @@ function useNodeEditorController(
       resourceSession: state.resourceSession,
       isDirty: nodeEditorStateIsDirty(state),
       unsavedFields: unsavedNodeFields(activeNode, state.nodeDraft),
-      // An empty title stays submittable so the form can explain why it cannot be saved.
       canSaveNode:
         !state.remoteConflict &&
         !state.pendingEditorEffect &&

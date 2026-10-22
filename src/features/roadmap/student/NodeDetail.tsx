@@ -58,7 +58,6 @@ type ContentProps = {
   isReadOnly?: boolean;
   isModal?: boolean;
   isSidebar?: boolean;
-  /** Teaching staff see this view as a preview of their unsaved Node. */
   isTeacherPreview?: boolean;
   nodeType?: NodeType;
 };

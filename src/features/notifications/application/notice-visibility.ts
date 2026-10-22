@@ -2,18 +2,10 @@ import { descriptorForNoticeTarget, seesEveryNode, type ParticipantRole } from '
 
 export type NoticeVisibilityNode = { id: string; isVisible: boolean; nodeTypeId: string };
 
-/**
- * Whether a stored notice is shown to a recipient with this role, as its Notice target
- * declares (`shownTo`); a row no descriptor owns is never shown. To teaching staff, a
- * Node's visibility and Teacher block never hide its notices (ADR-0014 decision 10,
- * «Equipo docente»). Visibility affects presentation only; hidden notices remain pending
- * for recognition.
- */
 export function isNoticeVisible(
   value: unknown,
   nodes: readonly NoticeVisibilityNode[],
   accessible: ReadonlySet<string>,
-  /** Null without an active Participation: the student rule, as `seesEveryNode` decides. */
   role: ParticipantRole | null,
 ): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;

@@ -177,7 +177,6 @@ test('roadmap creation rejects conflicts and preserves authorization and cross-r
   apiAs,
 }) => {
   const { teachingAssistant, studentWithoutProgress } = course.users;
-  // The teaching assistant studies this Course offering, which has no Roadmap yet.
   const withoutRoadmap = await createCourse({
     roadmap: false,
     participants: [
@@ -683,7 +682,6 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
   await ok(hiddenBlock, 409);
   expect((await hiddenBlock.json()).error.code).toBe('HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN');
 
-  // Two confirmations of the same impact: once one applies, the other's impact is stale.
   const { version } = await (
     await teacher.get(`${teacherBlockPath(root.id)}?operation=BLOCK`)
   ).json();
@@ -850,8 +848,6 @@ test('teacher and student workflows render on a test-owned course offering', asy
   teacherApi: api,
 }) => {
   const { teacher, studentWithoutProgress: student } = course.users;
-  // Like the catalog's students: another current Course offering, plus one Course
-  // with a previous-term offering and a current offering without Roadmap.
   await createCourse({ participants: [{ user: student, role: 'STUDENT' }] });
   const previousTerm = await createCourse({
     semester: 1,
@@ -896,7 +892,6 @@ test('teacher and student workflows render on a test-owned course offering', asy
   await expect(page.getByRole('heading', { name: 'Primavera 2026' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Semestres anteriores/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Otoño 2026' })).toHaveCount(0);
-  // A single past term opens with “Semestres anteriores”, without a second disclosure.
   await page.getByRole('button', { name: /Semestres anteriores/ }).click();
   await expect(page.getByRole('heading', { level: 3, name: 'Otoño 2026' })).toBeVisible();
   await expect(page.getByRole('listitem')).toHaveCount(4);
@@ -1241,8 +1236,6 @@ test('withdrawn participations remain local to their course offering', async ({
   course,
   createCourse,
 }) => {
-  // Like the catalog's Camila: teaches `course`, studies another current Course
-  // offering and withdrew from the current offering of a Course studied last term.
   const user = course.users.teachingAssistant;
   const studied = await createCourse({ participants: [{ user, role: 'STUDENT' }] });
   const previousTerm = await createCourse({
@@ -1273,8 +1266,6 @@ async function vtiToken(
     .sign(new TextEncoder().encode(secret));
 }
 
-/** Claims VTI sends for a User: a zero-padded RUT, email and name. The verifier
- *  digit is a placeholder; the application does not check it. */
 function vtiClaims({ rut, institutionalEmail, name }: E2EUser) {
   return { identification: `0000${rut}-5`, email: institutionalEmail, name };
 }

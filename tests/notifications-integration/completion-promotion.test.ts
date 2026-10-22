@@ -47,12 +47,10 @@ test('Completion creates no notice and advances the student’s Known access', a
   const dependent = await addNode(course, 'Colas');
   const edits = teacherEdits(course);
   await edits.connect(prerequisite.id, dependent.id);
-  // Recognized: the student's Known access of Colas is Bloqueado.
   await enterRoadmap(course.studentId, course.roadmapId);
   const before = await pendingNotices(course.studentId, course.roadmapId);
   await complete(course, prerequisite.id);
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual(before);
-  // Blocking it now is news against the Known value the Completion produced.
   await edits.block(dependent.id);
   expect(accessBodies(await pendingNotices(course.studentId, course.roadmapId))).toEqual([
     '«Colas» fue bloqueado.',
@@ -69,7 +67,6 @@ test('promotion withdraws pending access notices; later ones compare with the st
   expect(accessBodies(await pendingNotices(course.studentId, course.roadmapId))).toHaveLength(1);
   await promote(course);
   expect(accessBodies(await pendingNotices(course.studentId, course.roadmapId))).toEqual([]);
-  // Staff see Colas as Disponible despite the prerequisite: blocking it is news.
   await edits.block(dependent.id);
   expect(accessBodies(await pendingNotices(course.studentId, course.roadmapId))).toEqual([
     '«Colas» fue bloqueado.',
@@ -89,7 +86,6 @@ test('regaining a Participation starts from zero, with no stale Known values', a
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
   await edits.rename(nodeId, 'Recursión simple');
   await deactivate(true);
-  // A stale Known «Recursividad» would turn this into a revert with nothing to tell.
   await edits.rename(nodeId, 'Recursividad');
   expect(await pendingNotices(course.studentId, course.roadmapId)).toMatchObject([
     { body: '«Recursión simple» pasó a llamarse «Recursividad».' },
@@ -103,10 +99,8 @@ for (const order of ['after', 'before'] as const)
     const prerequisite = await addNode(course, 'Pilas');
     const dependent = await addNode(course, 'Colas');
     await teacherEdits(course).update(dependent.id, { isVisible: false });
-    // Recognized: the student's Known access of Colas is Retirado.
     await enterRoadmap(course.studentId, course.roadmapId);
     expect(accessBodies(await pendingNotices(course.studentId, course.roadmapId))).toEqual([]);
-    // The teacher shows Colas behind Pilas (Retirado → Bloqueado); delivery is deferred.
     const deferred = deferredNoticePort();
     const shows = teacherEdits(course, deferred.port);
     await shows.update(dependent.id, { isVisible: true });

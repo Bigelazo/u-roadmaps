@@ -46,11 +46,9 @@ export function noticeRecord(notice: {
   availableAt: Date;
   acknowledgedAt: Date | null;
 }) {
-  // Notices are worded at read time; a row without stored values keeps its cached text.
   const projected = projectTargetNotice(notice.data);
   return {
     id: notice.id,
-    // Rows are titled by the Course so the reader knows which Roadmap changed.
     ...(notice.courseName ? { courseName: notice.courseName } : {}),
     subject: projected?.wording.subject ?? notice.subject,
     body: projected?.wording.body ?? notice.body,
@@ -88,7 +86,6 @@ function inboxFilter(params: URLSearchParams): InboxFilter {
   };
 }
 
-/** The recipient's accessible Nodes in the filtered Roadmap, or in every Roadmap of theirs. */
 async function inboxRecipient(
   userId: string,
   roadmapId: string | undefined,
@@ -153,7 +150,6 @@ export async function countOwnNodeChanges(
   return queryNodeChangeCounts(await inboxRecipient(userId, roadmapId, readAccess), roadmapId);
 }
 
-/** Opening a Node reviews its changes for the canvas mark; it never recognizes notices. */
 export async function reviewOwnNode(userId: string, input: Record<string, unknown>) {
   const roadmapId = uuid(input.roadmapId);
   const nodeId = uuid(input.nodeId);
@@ -194,8 +190,6 @@ export async function findOwnNotice(
   return { ...notice, courseName: offering?.course.name };
 }
 
-// Capture committed, visible identities on the server when the Roadmap opens.
-// Retrying recognition can never expand this set, even if delivery committed later.
 export async function prepareOwnNoticeOpening(
   userId: string,
   roadmapId: string,
@@ -284,10 +278,6 @@ export async function acknowledgeOwnNotices(
     const visited = await transaction.roadmapVisit.findUnique({
       where: { recipientId_roadmapId: { recipientId: userId, roadmapId } },
     });
-    // A later entry captured all pending targets too. Its recognition must not
-    // be undone by a delayed acknowledgement from an older tab. This watermark
-    // survives pruning receipts, and the recipient/Roadmap lock makes the check
-    // and all following baseline writes one indivisible operation.
     if (visited && retained.openingSequence <= visited.lastRecognizedOpeningSequence) {
       await transaction.noticeAcknowledgement.update({
         where: { recipientId_operationId: { recipientId: userId, operationId } },

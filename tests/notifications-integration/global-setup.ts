@@ -3,9 +3,6 @@ import { config } from 'dotenv';
 import { cleanTestData, integrationClient, integrationDatabaseUrl } from './database';
 
 export default async function setup() {
-  // Export only this variable: workers fork from this process, and loading all of .env here
-  // would leak values such as NEXTAUTH_URL into every unit test. setup.ts loads the full .env on
-  // purpose, but only in the workers of the database project and the harness.
   const file: Record<string, string> = {};
   config({ processEnv: file, quiet: true });
   process.env.NOTIFICATIONS_DATABASE_URL ??= file.NOTIFICATIONS_DATABASE_URL;

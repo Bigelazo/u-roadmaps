@@ -13,7 +13,6 @@ const authenticationCookieNames = [
   vtiLoginStateCookieName,
 ];
 
-/** Ends the local U-Roadmaps session; ADR-0005 defers VTI SSO logout. */
 export function endInstitutionalSession(request: Request) {
   const response = NextResponse.redirect(siteUrl('/', request), 303);
   for (const name of authenticationCookieNames) response.cookies.delete(name);

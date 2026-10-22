@@ -83,7 +83,6 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
   const otherNodeId = (await createNode(`Otra Unidad ${crypto.randomUUID()}`, 4400)).id;
   await expect.poll(() => count(nodeId)).toBe(1);
   await expect.poll(() => count(otherNodeId)).toBe(1);
-  // Resource targets are independent after the new Nodes have been recognized.
   for (const user of [student, teacher]) await recognize(await apiAs(user), course.roadmapId);
   const initialNodeCount = await count(nodeId);
   const initialOtherNodeCount = await count(otherNodeId);
@@ -137,7 +136,6 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
     }),
   );
 
-  // The unrecognized addition was removed: only the Node update remains (#181).
   await expect.poll(() => count(nodeId)).toBe(initialNodeCount + 1);
   await expect.poll(() => count(otherNodeId)).toBe(initialOtherNodeCount + 1);
   const noticesBeforeOpening = await getNotices(student, nodeId);
@@ -205,7 +203,6 @@ test('failed Roadmap entry recognition preserves every page and Node without a b
   const { createNode } = await prepareNodeCreator(teacherApi, course);
   const nodeId = (await createNode(`Nodo de avisos ${crypto.randomUUID()}`, 600)).id;
   await createNode(`Otro ${crypto.randomUUID()}`, 1000);
-  // Thirteen new Resources of one Node page the Inbox without waiting for deliveries.
   await storeNotices(
     course,
     course.users.studentWithoutProgress.id,
@@ -251,7 +248,6 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   const roadmap = await (await ok(await author.get(roadmapPath()))).json();
   const observer = await createUser();
   const outsider = await createUser();
-  // The current persistence model represents observers with the student-equivalent role.
   await sql(
     `INSERT INTO "Participation" ("id", "userId", "courseOfferingId", "role", "isActive") VALUES ('${crypto.randomUUID()}', '${observer.id}', '${course.id}', 'STUDENT', true);`,
   );
@@ -288,12 +284,9 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   expect(await count(without, hidden)).toBe(0);
   await author.patch(roadmapPath(`/nodes/${hidden}`), { data: { isVisible: true } });
   await expect.poll(() => count(without, hidden)).toBe(1);
-  // Recognize publication before testing independent content and access targets.
   for (const user of [without, observer, withProgress, assistant])
     await recognize(await apiAs(user), course.roadmapId);
   await createDependency(author, course, prerequisite, nodeId);
-  // Dependency access notices are delivered after the HTTP response. Wait for
-  // them before capturing the baseline for the subsequent content changes.
   for (const user of [without, observer, withProgress])
     await expect.poll(() => count(user, nodeId)).toBe(1);
   const withProgressApi = await apiAs(withProgress);
@@ -312,8 +305,6 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   ]) {
     await ok(await author.patch(roadmapPath(`/nodes/${nodeId}`), { data }));
   }
-  // Title and type are visible even when prerequisites block the Node;
-  // description follows the accessible-content audience.
   await expect.poll(() => count(without, nodeId)).toBe(beforeContent.get(without)! + 2);
   await expect.poll(() => count(observer, nodeId)).toBe(beforeContent.get(observer)! + 2);
   await expect
@@ -326,13 +317,11 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   await expect.poll(() => count(withProgress, nodeId)).toBe(afterContent);
   const latest = async (user: E2EUser) =>
     (await listNotices(await apiAs(user), { nodeId }))[0]?.data;
-  // The Node type changed last; repeating the title or moving the Node changed nothing.
   const retyped = { noticeTarget: 'node-type', currentValue: roadmap.nodeTypes[1].id };
   await expect.poll(() => latest(withProgress)).toMatchObject(retyped);
   for (const user of [assistant, without, observer])
     expect(await latest(user)).toMatchObject(retyped);
   const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
-  // Unauthenticated: the shared `request` carries no session cookie.
   await ok(await request.post('/api/notifications/openings', { data: opening }), 401);
   for (const user of [outsider, course.users.withdrawnStudent])
     await ok(await (await apiAs(user)).post('/api/notifications/openings', { data: opening }), 403);

@@ -4,7 +4,6 @@ import { Client } from 'pg';
 type Change = Record<string, unknown>;
 type Subscriber = { receive: (change: Change) => void; disconnected: () => void };
 type SignalConnection = { subscribe: (subscriber: Subscriber) => () => void };
-// Next may bundle the route more than once; share the listener across those modules.
 const processSignals = globalThis as typeof globalThis & {
   roadmapSignalConnection?: Promise<SignalConnection>;
 };
@@ -60,13 +59,11 @@ async function connect(): Promise<SignalConnection> {
   };
 }
 
-/** One PostgreSQL LISTEN connection per Node process, shared by its SSE tabs. */
 export async function subscribeToPostgresSignals(subscriber: Subscriber) {
   const connection = await (processSignals.roadmapSignalConnection ??= connect());
   try {
     return connection.subscribe(subscriber);
   } catch {
-    // The last tab of that listener left while this one was waiting for it.
     return (await (processSignals.roadmapSignalConnection ??= connect())).subscribe(subscriber);
   }
 }

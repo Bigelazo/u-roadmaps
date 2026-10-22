@@ -127,7 +127,6 @@ test('contextual unlock traverses every blocked prerequisite in convergent paths
   });
 });
 
-// This is a compile-time contract test, so it has no runtime assertion.
 // eslint-disable-next-line vitest/expect-expect
 test('models hidden nodes and teacher blocks as incompatible states', () => {
   // @ts-expect-error Hidden nodes cannot retain a teacher block.

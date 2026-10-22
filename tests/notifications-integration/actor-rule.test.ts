@@ -6,7 +6,6 @@ type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
 
 const targetOf = ({ data }: Notice) => (data as { noticeTarget?: string }).noticeTarget;
 
-/** Teacher A is the course teacher; teacher B is a colleague on the same Roadmap. */
 function teachers(course: IntegrationCourse) {
   return {
     a: teacherEdits(course),

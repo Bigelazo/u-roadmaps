@@ -3,7 +3,6 @@ import { requireCourseOfferingIdentifier } from '@/app/_adapters/roadmap';
 import { applicationErrorResponse, parseJsonObject } from '@/app/_adapters/http';
 import { ApplicationError } from '@/shared/errors/types';
 
-// These HTTP contracts do not query the database.
 vi.mock('@/shared/server/db', () => ({ Prisma: {} }));
 
 test('translates an invalid Course offering identifier into the existing HTTP error', async () => {

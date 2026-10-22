@@ -27,7 +27,6 @@ export async function requireRoadmapCreationAccess(
   ]);
   await applyCourseAccess(actor, identifier, report, changePort);
   const { access, isComplete } = report;
-  // The stored position counts only while U-Campus cannot report completely.
   const participation =
     !isComplete && courseOffering
       ? await prisma.participation.findUnique({

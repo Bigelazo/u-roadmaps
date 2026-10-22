@@ -82,7 +82,6 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
   const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
   await dialog.getByLabel('Título').fill('Nodo con Markdown');
-  // The confirmation makes the creation dialog inert, so locate the field by its id.
   const description = page.locator('#new-node-description');
 
   const invalid = await fileDrop(page, 'notas.txt', 'texto', 'text/plain');

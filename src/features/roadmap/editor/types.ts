@@ -28,7 +28,6 @@ export type ResourceSession =
   | { kind: 'adding-link'; value: ResourceInput }
   | { kind: 'editing-existing'; resourceId: string; value: ResourceInput };
 
-/** The canvas writes the Node editor applies and waits for. */
 export type NodeEditorEffect = CanvasCommandOf<
   'update-node' | 'add-resource' | 'upload-resource' | 'update-resource' | 'delete-resource'
 >;
@@ -46,7 +45,6 @@ export type NodeEditorCommand = {
   kind: 'open-resource';
   nodeId: string;
   mode: 'file' | 'link';
-  /** A prefilled link, for instance suggested by the teaching Roadmap tutorial. */
   value?: ResourceInput;
 };
 
@@ -57,7 +55,6 @@ export type NodeEditorGuardReason =
   | { kind: 'open-resource'; nodeId: string }
   | { kind: 'enter-canvas-preview' };
 
-/** Editor-only UI intents, plus the canvas commands the Node editor asks for. */
 export type NodeEditorIntent =
   | { kind: 'close'; nodeId: string }
   | {
@@ -95,5 +92,4 @@ export type NodeTypeDraft = {
   color?: NodeTypeColor;
 };
 
-/** The accessible name of the "Tipos de nodo" item, also found by the teaching Roadmap tutorial. */
 export const NODE_TYPES_MENU_ITEM_LABEL = 'Gestionar tipos de nodo';

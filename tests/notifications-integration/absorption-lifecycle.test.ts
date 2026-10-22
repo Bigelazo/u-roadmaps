@@ -79,7 +79,6 @@ test('a pending creation notice whose Node no longer exists is not shown or coun
 }) => {
   const node = await teacherEdits(course).create('Efímero');
   expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);
-  // A creation notice left behind by a deletion whose withdrawal never ran.
   await prisma.roadmapNode.delete({ where: { id: node.id } });
   const params = new URLSearchParams({ roadmapId: course.roadmapId });
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
@@ -174,7 +173,6 @@ test('deleting a new Node forgets its unrecognized creation even if the deletion
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
 });
 
-/** A new Course offering of the same Course with this course's people, and its Roadmap. */
 async function newRoadmap(course: IntegrationCourse, copy: boolean) {
   await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
   const identifier = { ...course.identifier, year: 2027, semester: 1 };

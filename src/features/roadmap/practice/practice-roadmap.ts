@@ -24,12 +24,9 @@ export const practiceNodeIds = {
   h: 'practice-node-h',
 } as const;
 
-/** New tutorial Nodes sit below Control 1 (960, 160), just above Material de apoyo (640, 400). */
 export const practiceCreatedNodePosition = { x: 960, y: 360 } as const;
 
-/** The simulated progress shown in the student experience. */
 export const practiceStudentProgress = { completedNodeIds: [practiceNodeIds.a] } as const;
-/** The Node change marks shown on the Practice roadmap. */
 export const practiceNodeChangeCounts: Readonly<Record<string, number>> = {
   [practiceNodeIds.c]: 1,
 };
@@ -56,10 +53,6 @@ function node(
   } as RoadmapNode;
 }
 
-/**
- * The fixed Practice roadmap (ADR-0025) in the teaching shape. `today` is the
- * Chilean calendar day, so the Scheduled unlock stays in the future.
- */
 export function practiceRoadmap(term: PracticeAcademicTerm, today: string): RoadmapDto {
   const dependency = (id: number, sourceNodeId: string, targetNodeId: string) => ({
     id: `practice-dependency-${id}`,
@@ -186,7 +179,6 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
 
 const exitOrigins = [/^\/academic-overview$/, /^\/courses\/[A-Za-z0-9%-]+\/\d{4}\/[12]$/];
 
-/** Where "Salir" returns: an allow-listed origin, or the home page. */
 export function practiceExitHref(origin: string | null | undefined) {
   return origin && exitOrigins.some((pattern) => pattern.test(origin)) ? origin : '/';
 }

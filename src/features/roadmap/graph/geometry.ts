@@ -3,14 +3,9 @@ import { Position } from '@xyflow/react';
 export type NodeRect = { x: number; y: number; width: number; height: number };
 export type Point = { x: number; y: number };
 
-/** Tamaño, en píxeles del lienzo, de cada celda del roadmap. */
 export const roadmapGridSize = 20;
 const roadmapNodeSeparation = roadmapGridSize;
 
-/**
- * Tamaño mínimo de una tarjeta, expresado en celdas completas del roadmap.
- * El mínimo conserva espacio para el icono, el título corto y el padding.
- */
 const roadmapNodeMinimumSize = {
   width: roadmapGridSize * 6,
   height: roadmapGridSize * 4,
@@ -26,11 +21,6 @@ function roundUpToRoadmapNodeStep(value: number) {
   return Math.ceil(value / roadmapNodeDimensionStep) * roadmapNodeDimensionStep;
 }
 
-/**
- * Calcula un rectángulo que se adapta al título sin abandonar la cuadrícula.
- * Las tarjetas mantienen una altura máxima fija; el texto que no cabe en dos
- * líneas se recorta visualmente en la tarjeta.
- */
 export function roadmapNodeSizeForTitle(title: string) {
   const characterCount = Math.max(Array.from(title.trim()).length, 1);
   const width = Math.min(
@@ -45,7 +35,6 @@ export function roadmapNodeSizeForTitle(title: string) {
   return { width, height: roadmapNodeMaximumHeight };
 }
 
-/** Ajusta una posición a la intersección más cercana de la cuadrícula del roadmap. */
 export function snapToRoadmapGrid(position: Point): Point {
   return {
     x: Math.round(position.x / roadmapGridSize) * roadmapGridSize,
@@ -96,10 +85,6 @@ function positionsAtDistance(distance: number) {
   return positions;
 }
 
-/**
- * Encuentra la primera posición libre para una tarjeta alrededor del punto pedido.
- * Cada intento conserva la cuadrícula y deja una celda de separación entre tarjetas.
- */
 export function findOpenRoadmapPosition(
   occupied: readonly NodeRect[],
   desired: Point,
@@ -125,11 +110,6 @@ export function nodeCenter(rect: NodeRect): Point {
   return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
 }
 
-/**
- * Elige el lado por el que una arista abandona `from` en dirección a `to`.
- * Domina el eje con mayor separación entre centros: usar arriba o abajo cuando
- * la distancia horizontal es la grande deja la arista sin espacio para trazarse.
- */
 export function nearestSide(from: Point, to: Point): Position {
   const horizontal = Math.abs(from.x - to.x);
   const vertical = Math.abs(from.y - to.y);
@@ -137,7 +117,6 @@ export function nearestSide(from: Point, to: Point): Position {
   return from.y > to.y ? Position.Top : Position.Bottom;
 }
 
-/** Punto medio del lado indicado, que es donde queda centrado su conector. */
 export function sideAnchor(rect: NodeRect, side: Position): Point {
   switch (side) {
     case Position.Top:

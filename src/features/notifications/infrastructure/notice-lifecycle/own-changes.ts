@@ -15,7 +15,6 @@ import { reconcileNoticeTarget } from './reconcile';
 import { lazyNoticeCourseContext } from './course-context';
 import { advanceKnownValue, type RecipientRoadmap } from './known-values';
 
-/** A target the actor's change touched and the actor sees (the actor is in its audience). */
 export type OwnTarget = Readonly<{
   descriptor: NoticeTargetDescriptor;
   fact: RoadmapChangeFact;
@@ -26,12 +25,6 @@ export type OwnTarget = Readonly<{
 const promoted = ({ actorId, facts }: RoadmapChanges) =>
   facts.some((fact) => fact.kind === 'participation-role' && fact.recipientId === actorId);
 
-/**
- * Take the actor's recipient/Roadmap lock before any Known value of theirs may be written
- * (whether the actor is in a target's audience is only known later, so any notice-bearing
- * change takes it). Other recipients' locks are taken only at delivery, in their own
- * transactions, so this is the only advisory lock the roadmap transaction holds.
- */
 export async function lockOwnChanges(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
@@ -40,16 +33,6 @@ export async function lockOwnChanges(
     await lockRecipientRoadmap(transaction, changes.actorId, changes.roadmapId);
 }
 
-/**
- * The actor rule (ADR-0024), recorded inside the roadmap transaction after every
- * target's Known values: the actor's own change advances the actor's Known value; a
- * pending notice of the actor's for that target, or a colleague's difference not yet
- * delivered to the actor, absorbs the change instead (withdrawn on a return to the
- * Known value). The actor never gets a notice for a purely own change. Completion
- * is the case of a student's own access transition.
- * Promotion to teaching staff re-baselines access to the staff view instead.
- * Callers hold the lock from `lockOwnChanges`.
- */
 export async function recordOwnChanges(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,
@@ -84,13 +67,7 @@ export async function recordOwnChanges(
     }
     const current = await descriptor.current(target, roadmap, identity.recipientId);
     if (!current) continue;
-    // The actor now knows the value they produced (Known value includes "the one they
-    // produced themselves"). Targets recorded at edit time (Node access) take the value
-    // the change reported.
     const value = descriptor.currentAtEdit?.(fact).value ?? current.value;
-    // A Known value behind the value the change started from means a colleague's
-    // difference is still untold (its delivery has not run): reconcile as if that notice
-    // already existed and absorbed the own change, so delivery order does not matter.
     const advanced = await advanceKnownValue(
       transaction,
       identity,
@@ -103,7 +80,6 @@ export async function recordOwnChanges(
   }
 }
 
-/** The promoted actor now knows every Node's access as teaching staff see it. */
 async function rebaselineStaffAccess(
   transaction: Prisma.TransactionClient,
   identity: RecipientRoadmap,

@@ -8,7 +8,6 @@ import { prepareOpening } from './notices';
 const openings = [
   {
     context: 'Roadmap',
-    // Preparing a Roadmap entry captures notices without recognizing them.
     open: (student: APIRequestContext, course: E2EPrimaryCourseOffering) =>
       prepareOpening(student, course.roadmapId),
   },
@@ -32,7 +31,6 @@ for (const { context, open } of openings) {
       queryJson<unknown[]>(
         `SELECT coalesce(jsonb_agg(n ORDER BY n.id), '[]') FROM "RoadmapNotice" n WHERE "roadmapId" = ${literal(course.roadmapId)} AND "recipientId" = ${literal(recipient.id)};`,
       );
-    // Delivery runs after the edit response; wait for this recipient's notice.
     await expect.poll(notices).toHaveLength(1);
     const before = await notices();
     expect(before.length).toBeGreaterThan(0);

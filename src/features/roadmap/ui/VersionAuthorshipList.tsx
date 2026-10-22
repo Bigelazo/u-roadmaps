@@ -13,7 +13,6 @@ const positionLabels: Record<InstitutionalCoursePosition, string> = {
 
 type Version = RoadmapVersionHistory['versions'][number];
 
-/** The creator and Teaching staff rows of a version's description list. */
 export function VersionAuthorshipList({
   creator,
   teachingStaff,

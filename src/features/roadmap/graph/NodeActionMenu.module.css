@@ -24,7 +24,6 @@
 }
 
 .menuRing {
-  /* Keep the actions clustered around the close button. */
   --radius: 4.5rem;
   --action-size: 2rem;
   position: absolute;

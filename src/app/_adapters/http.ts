@@ -46,7 +46,6 @@ type AuthenticatedUser = Awaited<ReturnType<typeof requireAuthenticatedUser>>;
 type RouteParams = Readonly<Record<string, string>>;
 type RouteContext = { params: Promise<RouteParams> };
 
-/** Authenticates the User and answers with the JSON that `read` resolves to. */
 export function authenticatedJson<Context = unknown>(
   read: (user: AuthenticatedUser, request: Request, context: Context) => Promise<unknown>,
 ) {
@@ -58,13 +57,9 @@ export function authenticatedJson<Context = unknown>(
 }
 
 type CourseRouteOptions<Identifier, Prepared, WithBody extends boolean> = {
-  /** Runs before anything else, so its errors win (query validation, a body read first). */
   prepare?: (request: Request) => Prepared | Promise<Prepared>;
-  /** Parses the course identity from the params; defaults to the Course offering identifier. */
   identify?: (params: RouteParams) => Identifier;
-  /** Parses the JSON object body alongside authentication. */
   body?: WithBody;
-  /** Reads params and authenticates in parallel before parsing the identity. */
   authWithParams?: boolean;
 };
 
@@ -77,12 +72,6 @@ type CourseRouteInput<Identifier, Prepared, WithBody extends boolean> = {
   body: WithBody extends true ? JsonObject : undefined;
 };
 
-/**
- * Wraps a course route handler with its preamble: read params, parse the course identity and
- * authenticate (optionally parsing the body). The step order decides which error wins, so each
- * option keeps the order the route had: identity before authentication, or params and
- * authentication in parallel when `authWithParams` is set.
- */
 export function courseRoute<
   Prepared = undefined,
   WithBody extends boolean = false,
