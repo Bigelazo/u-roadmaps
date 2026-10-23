@@ -83,7 +83,9 @@ vi.mock('@xyflow/react', () => ({
     screenToFlowPosition: (position: { x: number; y: number }) => position,
     getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
     setViewport: vi.fn(),
+    getInternalNode: () => undefined,
   }),
+  useUpdateNodeInternals: () => () => undefined,
 }));
 
 const teacherRoadmap: RoadmapDto = {

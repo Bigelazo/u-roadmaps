@@ -4,23 +4,30 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mockViewport } from '../../../support/viewport';
 
-const { fitViewMock, screenToFlowPositionMock, setViewportMock, reactFlowHandlers } = vi.hoisted(
-  () => ({
-    fitViewMock: vi.fn(),
-    screenToFlowPositionMock: vi.fn<
-      (
-        position: { x: number; y: number },
-        options?: { snapToGrid?: boolean },
-      ) => { x: number; y: number }
-    >((position) => position),
-    setViewportMock: vi.fn(),
-    reactFlowHandlers: {
-      onMoveEnd: undefined as
-        | ((event: object | null, viewport: { x: number; y: number; zoom: number }) => void)
-        | undefined,
-    },
-  }),
-);
+const {
+  fitViewMock,
+  screenToFlowPositionMock,
+  setViewportMock,
+  getInternalNodeMock,
+  updateNodeInternalsMock,
+  reactFlowHandlers,
+} = vi.hoisted(() => ({
+  fitViewMock: vi.fn(),
+  screenToFlowPositionMock: vi.fn<
+    (
+      position: { x: number; y: number },
+      options?: { snapToGrid?: boolean },
+    ) => { x: number; y: number }
+  >((position) => position),
+  setViewportMock: vi.fn(),
+  getInternalNodeMock: vi.fn<(id: string) => { internals: { handleBounds?: object } }>(),
+  updateNodeInternalsMock: vi.fn<(ids: string[]) => void>(),
+  reactFlowHandlers: {
+    onMoveEnd: undefined as
+      | ((event: object | null, viewport: { x: number; y: number; zoom: number }) => void)
+      | undefined,
+  },
+}));
 
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
@@ -44,7 +51,13 @@ vi.mock('@xyflow/react', () => ({
     onMoveEnd,
     children,
   }: {
-    nodes: { id: string; position: { x: number; y: number }; data: object; selected?: boolean }[];
+    nodes: {
+      id: string;
+      position: { x: number; y: number };
+      data: object;
+      selected?: boolean;
+      measured?: { width?: number; height?: number };
+    }[];
     onNodesChange: (changes: unknown[]) => void;
     onNodeClick: (event: { currentTarget: HTMLElement }, node: (typeof nodes)[number]) => void;
     onConnect?: (connection: {
@@ -80,7 +93,26 @@ vi.mock('@xyflow/react', () => ({
             {`${node.position.x},${node.position.y}`}
           </output>
         ))}
+        {nodes.map((node) => (
+          <output key={node.id} data-testid={`node-measured-${node.id}`}>
+            {node.measured ? `${node.measured.width}x${node.measured.height}` : ''}
+          </output>
+        ))}
         <output data-testid="selected-node">{nodes.find((node) => node.selected)?.id ?? ''}</output>
+        <button
+          type="button"
+          onClick={() =>
+            onNodesChange(
+              nodes.map((node) => ({
+                id: node.id,
+                type: 'dimensions',
+                dimensions: { width: 180, height: 80 },
+              })),
+            )
+          }
+        >
+          Medir nodos
+        </button>
         <button
           type="button"
           onClick={() =>
@@ -193,21 +225,28 @@ vi.mock('@xyflow/react', () => ({
   },
   applyEdgeChanges: <T,>(changes: T[], edges: T[]) => edges,
   applyNodeChanges: <T extends { id: string; position: { x: number; y: number } }>(
-    changes: { id: string; type: string; position?: { x: number; y: number } }[],
+    changes: {
+      id: string;
+      type: string;
+      position?: { x: number; y: number };
+      dimensions?: { width: number; height: number };
+    }[],
     nodes: T[],
   ) =>
     nodes.map((node) => {
-      const change = changes.find(
-        (candidate) => candidate.id === node.id && candidate.type === 'position',
-      );
-      return change?.position ? { ...node, position: change.position } : node;
+      const change = changes.find((candidate) => candidate.id === node.id);
+      if (change?.position) return { ...node, position: change.position };
+      if (change?.dimensions) return { ...node, measured: change.dimensions };
+      return node;
     }),
   useReactFlow: () => ({
     fitView: fitViewMock,
     screenToFlowPosition: screenToFlowPositionMock,
     getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
     setViewport: setViewportMock,
+    getInternalNode: getInternalNodeMock,
   }),
+  useUpdateNodeInternals: () => updateNodeInternalsMock,
 }));
 
 import {
@@ -352,6 +391,9 @@ beforeEach(() => {
   screenToFlowPositionMock.mockReset();
   screenToFlowPositionMock.mockImplementation((position) => position);
   setViewportMock.mockReset();
+  getInternalNodeMock.mockReset();
+  getInternalNodeMock.mockReturnValue({ internals: { handleBounds: {} } });
+  updateNodeInternalsMock.mockReset();
   reactFlowHandlers.onMoveEnd = undefined;
 });
 
@@ -445,6 +487,53 @@ test('keeps the selected node when refreshed roadmap data arrives', () => {
   rerender(<GraphHarness initialSelectedNodeId="node-2" roadmapData={updatedRoadmap} />);
 
   expect(screen.getByTestId('selected-node').textContent).toBe('node-2');
+});
+
+test('keeps the dimensions React Flow measured when refreshed roadmap data arrives', async () => {
+  const user = userEvent.setup();
+  const updatedRoadmap = structuredClone(roadmap);
+  updatedRoadmap.nodes[1].isTeacherBlocked = true;
+  const { rerender } = render(<GraphHarness />);
+  await user.click(screen.getByRole('button', { name: 'Medir nodos' }));
+  expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
+
+  rerender(<GraphHarness roadmapData={updatedRoadmap} />);
+
+  // React Flow hides a Node without dimensions and does not always measure it again.
+  expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
+  expect(screen.getByTestId('node-measured-node-2').textContent).toBe('180x80');
+});
+
+test('asks React Flow to measure again a shown Node it left without handle bounds', () => {
+  getInternalNodeMock.mockImplementation((id) =>
+    id === 'node-1' ? { internals: {} } : { internals: { handleBounds: {} } },
+  );
+
+  renderGraph();
+
+  expect(updateNodeInternalsMock).toHaveBeenLastCalledWith(['node-1']);
+});
+
+test('leaves measured Nodes and student-hidden Nodes to React Flow', () => {
+  const hiddenNodeRoadmap: StudentRoadmapDto = {
+    ...studentRoadmap,
+    // The student DTO type never carries a hidden Node; the graph still hides one defensively.
+    nodes: studentRoadmap.nodes.map((node) =>
+      node.id === 'node-2' ? ({ ...node, isVisible: false } as unknown as typeof node) : node,
+    ),
+  };
+  getInternalNodeMock.mockImplementation((id) =>
+    id === 'node-2' ? { internals: {} } : { internals: { handleBounds: {} } },
+  );
+
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'student', roadmap: hiddenNodeRoadmap }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+
+  expect(updateNodeInternalsMock).not.toHaveBeenCalled();
 });
 
 test('preserves the viewport when the editor panel width changes', async () => {
