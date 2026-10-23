@@ -1,6 +1,6 @@
 import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import 'dotenv/config';
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 import { teacher, test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma } from '@/shared/server/db';
 import { recordingChangePort } from './support/recording-change-port';
@@ -306,6 +306,54 @@ test('scheduled releases report committed access transitions and are idempotent'
   recording.changes.length = 0;
   await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
   expect(recording.facts()).toEqual([]);
+});
+
+test('a conflicting scheduled release allows other due Roadmaps to release and retries next pass', async ({
+  course,
+  otherCourse,
+}) => {
+  await prisma.roadmapNode.updateMany({
+    where: { id: { in: [course.change.nodeId, otherCourse.change.nodeId] } },
+    data: { isTeacherBlocked: true, teacherUnlockOn: new Date('2026-10-01T00:00:00Z') },
+  });
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const recording = recordingChangePort();
+  let failedRoadmapId: string | undefined;
+  try {
+    const released = await releaseScheduledTeacherUnlocks(
+      {
+        async report(transaction, changes) {
+          failedRoadmapId ??= changes.roadmapId;
+          if (changes.roadmapId === failedRoadmapId) {
+            await transaction.$executeRaw`DO $$ BEGIN
+              RAISE EXCEPTION 'Concurrent Roadmap edit' USING ERRCODE = '40001';
+            END $$`;
+          }
+          return recording.port.report(transaction, changes);
+        },
+      },
+      '2026-10-08',
+    );
+    const failed = [course, otherCourse].find(({ roadmapId }) => roadmapId === failedRoadmapId)!;
+    const successful = failed === course ? otherCourse : course;
+    expect(released).toContainEqual({
+      identifier: successful.identifier,
+      releasedNodeIds: [successful.change.nodeId],
+    });
+    expect(released).not.toContainEqual(expect.objectContaining({ identifier: failed.identifier }));
+    expect(warning).toHaveBeenCalledWith('Scheduled unlock release failed', {
+      roadmapId: failed.roadmapId,
+      identifier: failed.identifier,
+      error: expect.objectContaining({ code: 'CONFLICT' }),
+    });
+    expect(await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08')).toContainEqual({
+      identifier: failed.identifier,
+      releasedNodeIds: [failed.change.nodeId],
+    });
+    expect(await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08')).toEqual([]);
+  } finally {
+    warning.mockRestore();
+  }
 });
 
 test('Resource lifecycle reports absence and exact previous content, including uploaded files', async ({

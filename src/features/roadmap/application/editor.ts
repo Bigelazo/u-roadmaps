@@ -791,28 +791,36 @@ export const releaseScheduledTeacherUnlocks = async (
   });
   const released = [];
   for (const roadmap of roadmaps) {
-    if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
-    const releasedNodeIds = await roadmapChangeTransaction(
-      changePort,
-      (transaction, report) =>
-        changeRoadmap(
-          transaction,
-          report,
-          {
-            roadmapId: roadmap.id,
-            identifier: roadmap.courseOffering,
-            actorId: SCHEDULED_UNLOCK_ACTOR_ID,
-            access: 'roadmap',
-            lock: 'update',
-          },
-          async () => ({
-            result: [...(await releaseDueScheduledUnlocks(transaction, roadmap.id, today))],
-            facts: [],
-          }),
-        ),
-      { conflictMessage: 'El desbloqueo programado entra en conflicto con otra modificación.' },
-    ).catch(nothingReleasedOnClosure);
-    released.push({ identifier: roadmap.courseOffering, releasedNodeIds });
+    try {
+      if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
+      const releasedNodeIds = await roadmapChangeTransaction(
+        changePort,
+        (transaction, report) =>
+          changeRoadmap(
+            transaction,
+            report,
+            {
+              roadmapId: roadmap.id,
+              identifier: roadmap.courseOffering,
+              actorId: SCHEDULED_UNLOCK_ACTOR_ID,
+              access: 'roadmap',
+              lock: 'update',
+            },
+            async () => ({
+              result: [...(await releaseDueScheduledUnlocks(transaction, roadmap.id, today))],
+              facts: [],
+            }),
+          ),
+        { conflictMessage: 'El desbloqueo programado entra en conflicto con otra modificación.' },
+      ).catch(nothingReleasedOnClosure);
+      released.push({ identifier: roadmap.courseOffering, releasedNodeIds });
+    } catch (error) {
+      console.warn('Scheduled unlock release failed', {
+        roadmapId: roadmap.id,
+        identifier: roadmap.courseOffering,
+        error,
+      });
+    }
   }
   return released;
 };
