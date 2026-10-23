@@ -517,8 +517,9 @@ test('asks React Flow to measure again a shown Node it left without handle bound
 test('leaves measured Nodes and student-hidden Nodes to React Flow', () => {
   const hiddenNodeRoadmap: StudentRoadmapDto = {
     ...studentRoadmap,
+    // The student DTO type never carries a hidden Node; the graph still hides one defensively.
     nodes: studentRoadmap.nodes.map((node) =>
-      node.id === 'node-2' ? { ...node, isVisible: false } : node,
+      node.id === 'node-2' ? ({ ...node, isVisible: false } as unknown as typeof node) : node,
     ),
   };
   getInternalNodeMock.mockImplementation((id) =>
