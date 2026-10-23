@@ -17,7 +17,6 @@ import * as m from 'motion/react-m';
 import { cn } from 'cn';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 
-
 const nodeTypes = {
   content: { name: 'Contenido', Icon: BookOpen, color: '#024AD8' },
   assessment: { name: 'Evaluación', Icon: ClipboardCheck, color: '#FF5050' },

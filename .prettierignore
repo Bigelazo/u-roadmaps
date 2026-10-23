@@ -1,4 +1,11 @@
 .agents/
+# Vendored skills and agent definitions retain their upstream formatting.
+.claude/agents/
+.claude/skills/
+.codex/skills/
+# Tool-managed settings and local machine configuration.
+.claude/settings*.json
+.mcp.json
 .next/
 .next-e2e/
 DESIGN.md

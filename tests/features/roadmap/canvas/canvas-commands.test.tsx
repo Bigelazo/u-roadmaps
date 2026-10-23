@@ -1140,13 +1140,11 @@ describe('canvas commands', () => {
       const canvas = await openCanvas(persistence);
       await act(async () => {
         expect(
-          await canvas
-            .commands()
-            .request({
-              kind: 'update-resource',
-              resourceId: file.id,
-              resource: { ...file, title: 'Renamed.pdf' },
-            }),
+          await canvas.commands().request({
+            kind: 'update-resource',
+            resourceId: file.id,
+            resource: { ...file, title: 'Renamed.pdf' },
+          }),
         ).toBe(true);
       });
       expect((await limits(persistence)).resources).toEqual([{ ...file, title: 'Renamed.pdf' }]);
