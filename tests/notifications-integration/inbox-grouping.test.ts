@@ -7,7 +7,6 @@ import { listOwnNotices } from '@/features/notifications/server';
 
 let clock = Date.now() - 60_000;
 
-/** Pending lifecycle notices for the student, each one second newer than the last. */
 async function storeNotices(
   course: IntegrationCourse,
   targets: readonly Record<string, unknown>[],

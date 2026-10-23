@@ -16,7 +16,6 @@ type Props = {
   titleError?: string;
 };
 
-/** Title, Markdown description and Node type fields shared by the Node creator and editor. */
 export function NodeContentFields({
   idPrefix,
   nodeTypes,

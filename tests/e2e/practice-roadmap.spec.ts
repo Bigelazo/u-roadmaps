@@ -18,7 +18,6 @@ function practiceNode(page: Page, title: string) {
   return page.locator('.react-flow__node').filter({ hasText: title });
 }
 
-/** Whether an Academic term's Roadmap freeze date has not passed (synthetic terms included). */
 async function isOpenAcademicTerm(label: string) {
   const [season, year] = label.split(' ');
   const semester = season === 'Otoño' ? 1 : 2;
@@ -52,7 +51,6 @@ async function openPractice(page: Page, experience: 'student' | 'teaching', orig
   await leaveTutorial(page);
 }
 
-/** The Roadmap tutorial starts on opening; leave it to explore freely. */
 async function leaveTutorial(page: Page) {
   await expect(page.locator('.driver-popover')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -119,7 +117,6 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await expect(page.getByRole('link', { name: 'Historial de versiones' })).toHaveCount(0);
   await expect(page.getByLabel(`${titles.h}: oculto para estudiantes`)).toBeVisible();
 
-  // Create
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
   const createDialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
@@ -127,7 +124,6 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await createDialog.getByRole('button', { name: 'Agregar nodo' }).click();
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
 
-  // Connect
   const edges = page.locator('.react-flow__edge');
   await expect(edges).toHaveCount(8);
   await practiceNode(page, 'Nodo de práctica').click();
@@ -135,7 +131,6 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await connect(page, titles.g, 'Nodo de práctica');
   await expect(edges).toHaveCount(9);
 
-  // Block
   await nodeAction(page, titles.b, 'Bloquear nodo');
   await page
     .getByRole('alertdialog', { name: /^¿Bloquear “/ })
@@ -143,7 +138,6 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
     .click();
   await expectNodeAction(page, titles.b, 'Desbloquear');
 
-  // Hide, which removes the Node's Dependencies
   await nodeAction(page, titles.g, 'Ocultar para estudiantes');
   await page
     .getByRole('alertdialog', { name: /^¿Ocultar “/ })
@@ -152,7 +146,6 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await expect(page.getByLabel(`${titles.g}: oculto para estudiantes`)).toBeVisible();
   await expect(edges).toHaveCount(7);
 
-  // Add a Resource
   await nodeAction(page, titles.a, 'Agregar recurso');
   const composer = page.getByRole('form', { name: 'Editor de recurso' });
   await composer.getByRole('tab', { name: 'Enlace' }).click();
@@ -163,7 +156,6 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
   await composer.getByRole('button', { name: 'Agregar enlace' }).click();
   await expect(practiceNode(page, titles.a).getByRole('img', { name: '1 enlace' })).toBeVisible();
 
-  // Delete
   await page.keyboard.press('Escape');
   await nodeAction(page, titles.d, 'Eliminar nodo');
   await page

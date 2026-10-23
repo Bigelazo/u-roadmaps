@@ -5,7 +5,6 @@ import { prisma } from '@/shared/server/db';
 import { synchronizeAcademicParticipations } from '@/features/roadmap/application/academic-participation';
 import type { RoadmapChanges } from '@/features/roadmap/application/change-port';
 
-// Use real PostgreSQL with one available connection, as under pool contention.
 vi.mock('@prisma/adapter-pg', async (importOriginal) => {
   const original = await importOriginal<typeof import('@prisma/adapter-pg')>();
   return {
@@ -18,8 +17,11 @@ vi.mock('@prisma/adapter-pg', async (importOriginal) => {
   };
 });
 
-const { academicCourses } = vi.hoisted(() => ({ academicCourses: vi.fn() }));
-vi.mock('@/integrations/ucampus/server', () => ({ getMufasaAcademicCourses: academicCourses }));
+import {
+  localFixtureUCampus,
+  type UCampus,
+  type MufasaEnrolledCoursesResult,
+} from '@/integrations/ucampus/server';
 
 afterAll(() => prisma.$disconnect());
 
@@ -30,7 +32,10 @@ test('a complete academic history synchronizes with a constrained connection poo
     courseCode: course.identifier.courseCode,
     name: 'Curso de prueba',
     year: 2000 + index,
-    semester: 1,
+    semester: 1 as const,
+    section: '1',
+    ramoId: null,
+    isTeaching: true,
     institutionalPosition: 'COURSE_PROFESSOR' as const,
   }));
   for (const offering of courses) {
@@ -44,18 +49,22 @@ test('a complete academic history synchronizes with a constrained connection poo
       },
     });
   }
-  const source = {
+  const source: MufasaEnrolledCoursesResult = {
     source: 'MUFASA',
     isComplete: true,
     courses: [...courses, { ...courses[0], institutionalPosition: 'OBSERVER' }],
   };
-  academicCourses.mockResolvedValue(source);
+  const ucampus: UCampus = {
+    ...localFixtureUCampus,
+    async getAcademicCourses() {
+      return source;
+    },
+  };
   const reported: RoadmapChanges[] = [];
   const result = await synchronizeAcademicParticipations(
-    { id: course.studentId, rut: null },
+    { id: course.studentId, rut: null, ucampus },
     {
       async report(transaction, changes) {
-        // Real transactional work held long enough to expose queued starts (>2s).
         await transaction.$executeRaw`SELECT pg_sleep(0.3)`;
         reported.push(changes);
       },

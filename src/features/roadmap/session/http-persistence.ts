@@ -139,7 +139,6 @@ function isNodeHidingImpact(value: unknown): value is NodeHidingImpact {
   );
 }
 
-/** Sends a previewed change's Change impact version back in its header, when there is one. */
 function previewHeader(name: string, previewVersion: string | undefined) {
   return previewVersion ? { headers: { [name]: previewVersion } } : {};
 }
@@ -168,7 +167,6 @@ async function request(
   return response.json();
 }
 
-/** Reads a JSON body and rejects with the fallback message when it has an unexpected shape. */
 async function fetchValid<T>(
   input: RoadmapCanvasSessionInput,
   suffix: string,

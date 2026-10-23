@@ -5,10 +5,6 @@ import { projectTargetNotice, type ParticipantRole } from './notice-targets';
 type SummaryNotice = { data: unknown };
 type SummaryNode = NoticeVisibilityNode & { title: string };
 
-/**
- * The Change summary shows what the Inbox shows, worded by each Notice target's descriptor.
- * Notices arrive newest first, and group insertion order preserves that ordering.
- */
 export function changeSummary(
   courseCode: string,
   notices: readonly SummaryNotice[],
@@ -24,7 +20,6 @@ export function changeSummary(
     const stored = notice.data as Record<string, unknown>;
     const nodeId = typeof stored.nodeId === 'string' ? stored.nodeId : null;
     const node = nodeId ? currentNodes.get(nodeId) : undefined;
-    // Nodes are named by their current title (a deleted Node by the title it had).
     const projected = projectTargetNotice(stored, node ? { nodeTitle: node.title } : {});
     if (!projected) continue;
     const item = projected.wording.summary ?? projected.wording.body;

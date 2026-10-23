@@ -1,6 +1,5 @@
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 
-/** The changes whose confirmation sends back the version of the Change impact it showed. */
 export type ChangeWithImpact = 'hide' | 'delete' | 'dependency' | 'block' | 'unlock';
 
 const staleChanges = {
@@ -13,11 +12,6 @@ const staleChanges = {
 
 export type StaleChangeImpactReason = (typeof staleChanges)[ChangeWithImpact][0];
 
-/**
- * Whether a confirmation may take effect: it must send the version of the Change impact
- * it showed, and that version must still match the current impact's `version`. A missing
- * version is stale.
- */
 export function decideChangeImpactVersion({
   change,
   sentVersion,

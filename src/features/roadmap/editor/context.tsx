@@ -16,7 +16,6 @@ type NodeEditorContextValue = {
   nodeDraft: NodeUpdate;
   resourceSession: ResourceSession;
   isDirty: boolean;
-  /** Saved Node fields that differ in the draft, in form order. */
   unsavedFields: readonly ('title' | 'description' | 'nodeTypeId')[];
   canSaveNode: boolean;
   isVisibilityPending: boolean;

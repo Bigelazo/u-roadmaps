@@ -1,11 +1,9 @@
 import type * as React from 'react';
 import { cn } from 'cn';
 
-/** A bordered card whose rows are separated by dividers. */
 export const dividedListClassName =
   'divide-y divide-fog overflow-hidden rounded-xl border border-fog bg-card';
 
-/** The full-height page canvas around a centered content column. */
 export function PageShell({
   className,
   children,

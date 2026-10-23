@@ -42,10 +42,6 @@ export function applicationResult<Value>(
   return ResultAsync.fromPromise(Promise.resolve().then(operation), normalizeApplicationError);
 }
 
-/**
- * Resolves to the success value or throws the error, for callers that map thrown errors.
- * Takes a thunk so the `neverthrow/must-use-result` lint sees the Result returned.
- */
 export async function unwrap<Value, Failure>(
   result: () => Result<Value, Failure> | ResultAsync<Value, Failure>,
 ): Promise<Value> {

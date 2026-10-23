@@ -25,8 +25,6 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   const nodeIds: string[] = [];
 
   const createNode = async (title: string) => {
-    // Existing Nodes start with no delivery window; this journey tests the
-    // Dependency's access transition rather than Node creation.
     const id = await createExistingNode({
       roadmapId,
       nodeTypeId,
@@ -66,9 +64,6 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   const dependentId = await createNode(dependentTitle);
   const transitiveId = await createNode(transitiveTitle);
 
-  // Progress is scenario preparation, before the Dependency changes access.
-  // Seed it with the owned fixture data instead of competing Serializable
-  // completion transactions while other workers prepare their Courses.
   await sql(
     insert('Completion', [
       {
@@ -85,7 +80,6 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     ]),
   );
 
-  // Establish a transitive branch while every student's access is unchanged.
   const branchDependencyId = crypto.randomUUID();
   await sql(
     `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES ('${branchDependencyId}', '${dependentId}', '${transitiveId}');`,
@@ -172,15 +166,10 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     ({ data }) => data.currentValue === 'absent',
   );
   expect(removedRouteNotice).toBeDefined();
-  // Newly delivered notices can move an older route notice to another page.
-  // Make pagination deterministic instead of depending on earlier test timing.
-  // Historical rows were already shown: scrolling them into view must not
-  // generate seen signals that refresh and disable the pagination button mid-click.
   await storeTitleNotices(course, studentWithoutPrerequisite.id, 12);
   await selectRouteNotice(studentWithoutPrerequisite, removedRouteNotice!);
   await expect(page).toHaveURL(course.pagePath());
   await expect(
-    // Repeats are now stored immediately (no grouping window, see ADR-0014).
     page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
   ).toContainText(`«${dependentTitle}» ya no requiere «${prerequisiteTitle}»`);
   await expect.poll(() => noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
@@ -206,8 +195,6 @@ test('cascade Dependency removals from Node visibility and deletion do not creat
     return id;
   };
   const insertDependency = async (sourceNodeId: string, targetNodeId: string) => {
-    // Prepare an existing edge without opening a delivery window: this case
-    // tests cascade removal, while explicit edits are covered above.
     const id = crypto.randomUUID();
     await sql(
       `INSERT INTO "Dependency" ("id", "sourceNodeId", "targetNodeId") VALUES (${literal(id)}, ${literal(sourceNodeId)}, ${literal(targetNodeId)});`,
@@ -247,8 +234,6 @@ test('a PostgreSQL route-notice failure preserves the confirmed Dependency mutat
   const dependentTitle = `Fallo de aviso de ruta ${crypto.randomUUID()}`;
 
   const createNode = async (title: string) => {
-    // Existing Nodes start with no delivery window; this journey tests the
-    // Dependency's access transition rather than Node creation.
     const id = await createExistingNode({
       roadmapId: course.roadmapId,
       nodeTypeId,

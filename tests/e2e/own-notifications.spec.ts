@@ -83,7 +83,6 @@ test('Roadmap creation persists one own notice for each eligible Participation a
   await authenticateAs(page.context(), multiCourseStudent.id);
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
-  // Rows are titled by the Course; the stored subject stays in the API record.
   const row = page
     .getByRole('list', { name: 'Lista de avisos' })
     .getByRole('button', { name: first.courseName });
@@ -116,7 +115,6 @@ test('pagination and visible rows preserve notices when entry recognition fails'
     participants: [{ user: recipient, role: 'STUDENT' }],
   });
   const api = await apiAs(recipient);
-  // Twelve targets stored at the same instant page by id.
   const ids = (await storeTitleNotices(course, recipient.id, 12, new Date('2026-01-01T00:00:00Z')))
     .sort()
     .reverse();
@@ -228,7 +226,6 @@ test('a PostgreSQL notification failure preserves the committed Roadmap and crea
       { user: multiCourseStudent, role: 'STUDENT' },
     ],
   });
-  // The Roadmap does not exist yet, so the failure is scoped to its Course offering.
   await rejectNoticeInserts({ courseOfferingId: offering.id });
   await ok(await teacherApi.post(offering.apiPath(), { data: {} }), 201);
   await ok(await teacherApi.get(offering.apiPath()));

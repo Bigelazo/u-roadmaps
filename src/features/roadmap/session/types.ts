@@ -27,11 +27,6 @@ export type RoadmapNodeTypeInput = {
   color: NodeTypeColor;
 };
 
-/**
- * Everything the Roadmap canvas session reads and writes. Both adapters (HTTP and the
- * in-memory Practice roadmap) implement every operation. A previewed change sends the
- * version of the Change impact it confirms; a missing or changed version is rejected.
- */
 export type RoadmapCanvasSessionPersistence = {
   load(input: RoadmapCanvasSessionInput): Promise<AnyRoadmapDto>;
   complete(input: RoadmapCanvasSessionInput, nodeId: string): Promise<void>;
@@ -70,10 +65,6 @@ export type RoadmapCanvasSessionPersistence = {
     unlockOn: string | null,
   ): Promise<void>;
   previewNodeHiding(input: RoadmapCanvasSessionInput, nodeId: string): Promise<NodeHidingImpact>;
-  /**
-   * Shows (`visible`) or hides the Node: the target visibility, never the current one.
-   * Hiding sends the version of its previewed Change impact.
-   */
   setVisibility(
     input: RoadmapCanvasSessionInput,
     nodeId: string,
@@ -125,17 +116,13 @@ export type RoadmapCanvasSessionInput = {
     readonly title: string;
   };
   readonly experience: RoadmapCanvasExperience;
-  /** Present on the Practice roadmap, which belongs to no Course offering. */
   readonly practice?: {
-    /** Return destination for the exit control inside the Practice canvas. */
     readonly exitHref?: string;
     readonly nodeChangeCounts: Readonly<Record<string, number>>;
-    /** Told about canvas actions that took effect, for the teaching Roadmap tutorial. */
     readonly onAction?: (action: PracticeCanvasAction) => void;
   };
 };
 
-/** A canvas action that took effect on the Practice roadmap. */
 export type PracticeCanvasAction =
   | { readonly type: 'fitView' }
   | { readonly type: 'selectNode'; readonly nodeId: string }

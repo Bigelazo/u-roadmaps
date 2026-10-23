@@ -55,7 +55,6 @@ function projectAccessSnapshot({
   };
 }
 
-/** Every active participant's Node access, read inside the editing transaction. */
 export async function readAccessSnapshot(
   transaction: Prisma.TransactionClient,
   roadmapId: string,

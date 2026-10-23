@@ -24,9 +24,6 @@ test.for(DEPENDENCY_ENDS)(
           AND ${dependencyKeyNode(end)} = ${end === 'source' ? source : target}`;
       return rows.map((row) => row['QUERY PLAN']).join('\n');
     });
-    // The key part is an index condition only on an index built on that exact expression
-    // and predicate. The index name is not asserted: on a near-empty table the planner
-    // may cost the other end's index (same roadmapId prefix) equally.
     const part = end === 'source' ? 2 : 3;
     expect(plan).toMatch(
       new RegExp(`Index Cond: .*split_part\\("targetKey", ':'::text, ${part}\\)`),

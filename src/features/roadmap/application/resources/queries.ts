@@ -11,7 +11,6 @@ import { readStoredFile } from '@/features/roadmap/infrastructure/resources/life
 import { nodeNotFound, resourceNotFound } from '@/features/roadmap/application/errors';
 import { requireUuid } from '@/shared/validation';
 
-/** Students reach a Node's Resources only with the access Completion requires. */
 async function requireStudentResourceAccess(
   { tx, participation, roadmap }: RoadmapReadContext,
   nodeId: string,
@@ -57,7 +56,6 @@ export async function downloadRoadmapResource({
     const { fileKey, fileContentType, title } = found;
     return { fileKey, fileContentType, title };
   });
-  // The stored bytes are read after the snapshot, outside the transaction.
   return {
     bytes: await readStoredFile(resource.fileKey),
     contentType: resource.fileContentType ?? 'application/octet-stream',

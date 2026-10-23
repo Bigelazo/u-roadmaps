@@ -6,7 +6,8 @@ import {
   RoadmapCanvasSession,
 } from '@/features/roadmap';
 import { readPostCreationInvitation, synchronizeParticipation } from '@/features/roadmap/server';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapEntryNotifications } from '@/features/notifications';
@@ -57,6 +58,7 @@ export default async function CoursePage(
 
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
+  await synchronizeParticipation(user, identifier, roadmapChangePort);
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
     select: {
@@ -72,17 +74,13 @@ export default async function CoursePage(
     redirectUnavailableNotice(noticeId, null, null);
     notFound();
   }
-  // Refresh stored roles on entry; an unavailable source preserves local access.
-  const participation =
-    (await synchronizeParticipation(user, identifier, roadmapChangePort)) ??
-    courseOffering.participants[0];
+  const participation = courseOffering.participants[0];
   redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(courseOffering.roadmap?.closedAt);
   const courseName = courseOffering.course.name ?? identifier.courseCode;
   const inboxIdentity = getInboxIdentity(user.id);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
-  // Landing here from Roadmap creation may show the one-time teaching tutorial invitation.
   const invitation = await readCourseCreationInvitation({
     userId: user.id,
     roadmapId: courseOffering.roadmap?.id,

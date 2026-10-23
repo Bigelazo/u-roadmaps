@@ -7,7 +7,6 @@ type StoredUser = {
   teachingTutorialOpenedAt: Date | null;
 };
 
-// In-memory stand-in for the User and Roadmap tables these functions read and stamp.
 const store = vi.hoisted(() => ({
   users: new Map<string, StoredUser>(),
   createdRoadmaps: new Map<string, string[]>(),

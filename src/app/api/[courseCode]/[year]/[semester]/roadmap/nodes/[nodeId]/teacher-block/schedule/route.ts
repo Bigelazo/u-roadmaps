@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { courseRoute, parseJsonObject } from '@/app/_adapters/http';
 import { scheduleTeacherUnlock } from '@/features/roadmap/server';
 
-// The body is read before authentication, so a malformed body wins over a missing session.
 export const PUT = courseRoute(
   async ({ identifier, user, params, prepared: body }) =>
     NextResponse.json(

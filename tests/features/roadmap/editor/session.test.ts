@@ -24,7 +24,6 @@ function run(actions: NodeEditorAction[], state = createNodeEditorState(node)) {
   return actions.reduce<NodeEditorState>(nodeEditorReducer, state);
 }
 
-/** A Resource form adding `link`, whose effect is in flight. */
 function addingLink() {
   const state = run([
     { type: 'open-resource', mode: 'link' },

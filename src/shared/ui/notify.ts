@@ -3,12 +3,9 @@ import { toast } from '@/shared/ui/toast-manager';
 type Tone = 'success' | 'error' | 'neutral';
 
 export type NotifyOptions = {
-  /** Reusing an id updates the open toast instead of stacking a new one. */
   id?: string;
-  /** Keeps the toast open until it is closed. */
   persistent?: boolean;
   action?: { label: string; onClick: () => void };
-  /** Fires on auto-dismiss, the close button, swipe and `notify.close`. */
   onClose?: () => void;
 };
 
@@ -37,7 +34,6 @@ function show(
   });
 }
 
-/** The app's only toast API; the root layout mounts the `Toaster` that renders it. */
 export const notify = {
   success: (message: string, options?: NotifyOptions) => show('success', message, options),
   error: (message: string, options?: NotifyOptions) => show('error', message, options),

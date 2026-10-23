@@ -52,7 +52,6 @@ type Mapping = {
 
 const api = (suffix: string) => `/api/CC1001/2026/2/roadmap${suffix}`;
 
-/** Every persistence operation and the request it sends; previewed changes forward their version. */
 const mappings: Record<string, Mapping> = {
   'load a teaching Roadmap': {
     call: () => http.load(input),

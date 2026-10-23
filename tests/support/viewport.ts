@@ -1,6 +1,5 @@
 import { vi } from 'vitest';
 
-/** Stubs `innerWidth` and `matchMedia` so the app's breakpoint hooks see `width`. */
 export function mockViewport(width: number) {
   vi.stubGlobal('innerWidth', width);
   vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({

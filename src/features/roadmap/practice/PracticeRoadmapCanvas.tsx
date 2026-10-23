@@ -22,10 +22,6 @@ import { RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
 import { createTutorialActions } from '@/shared/client/tutorial/tutorial-support';
 import { useRecordTutorialOpening } from '@/shared/client/tutorial/tutorial-records';
 
-/**
- * The real Roadmap canvas over a fresh in-memory copy of the Practice roadmap.
- * Nothing done here reaches the server, and every mount starts over.
- */
 export function PracticeRoadmapCanvas({
   experience,
   term,

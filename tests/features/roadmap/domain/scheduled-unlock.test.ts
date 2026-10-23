@@ -64,10 +64,8 @@ test('ignores schedules on nodes without a teacher block', () => {
 });
 
 test('places the Chilean calendar day across daylight-saving offsets', () => {
-  // 02:30 UTC is still the previous day in Chile during summer (UTC-3).
   expect(chileCalendarDay(new Date('2026-12-01T02:30:00Z'))).toBe('2026-11-30');
   expect(chileCalendarDay(new Date('2026-12-01T03:30:00Z'))).toBe('2026-12-01');
-  // During winter (UTC-4) midnight arrives one hour later.
   expect(chileCalendarDay(new Date('2026-07-01T03:30:00Z'))).toBe('2026-06-30');
   expect(chileCalendarDay(new Date('2026-07-01T04:30:00Z'))).toBe('2026-07-01');
 });

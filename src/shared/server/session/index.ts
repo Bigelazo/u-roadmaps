@@ -1,9 +1,6 @@
 import 'server-only';
 
 import { getServerSession, type NextAuthOptions, type Session } from 'next-auth';
-import { prisma } from '@/shared/server/db';
-import { ApplicationError, applicationResult } from '@/shared/errors/server';
-import { isUuid } from '@/shared/validation';
 
 const sessionSecret = process.env.NEXTAUTH_SECRET;
 
@@ -30,21 +27,4 @@ export const authOptions: NextAuthOptions = {
 export async function getApplicationSession(): Promise<Session | null> {
   if (!sessionSecret) return null;
   return getServerSession(authOptions);
-}
-
-export async function resolveSessionUser(session: Session | null) {
-  const userId = session?.user?.id;
-  if (!isUuid(userId)) return null;
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  return user && { ...user, useLocalFixtureData: session?.user?.useLocalFixtureData === true };
-}
-
-export function requireAuthenticatedUser() {
-  return applicationResult(async () => {
-    const user = await resolveSessionUser(await getApplicationSession());
-    if (!user) {
-      throw new ApplicationError(401, 'UNAUTHENTICATED', 'Debes iniciar sesión para continuar.');
-    }
-    return user;
-  });
 }

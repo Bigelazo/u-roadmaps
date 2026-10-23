@@ -2,7 +2,8 @@ import { notFound, redirect } from 'next/navigation';
 import { readRoadmapVersionHistory } from '@/features/roadmap/server';
 import { parseCourseCode, RoadmapVersionHistory } from '@/features/roadmap';
 import { ApplicationError } from '@/shared/errors/server';
-import { getApplicationSession, resolveSessionUser } from '@/shared/server/session';
+import { getApplicationSession } from '@/shared/server/session';
+import { resolveSessionUser } from '@/app/_adapters/auth';
 
 export default async function RoadmapVersionHistoryPage(
   props: PageProps<'/courses/[courseCode]/versions'>,
@@ -11,7 +12,6 @@ export default async function RoadmapVersionHistoryPage(
   if (!courseCode) notFound();
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
-  // Students and outsiders get the same answer as a missing Course.
   const history = await readRoadmapVersionHistory(user, courseCode).catch((error: unknown) => {
     if (error instanceof ApplicationError && (error.status === 403 || error.status === 404))
       return null;

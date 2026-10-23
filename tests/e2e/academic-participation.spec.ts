@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { forgetUcampusUser, failUcampusEndpoint } from './ucampus';
@@ -61,7 +62,6 @@ test('only a confirmed course professor can create, and an outage never widens a
     participants: [{ user, role: 'TEACHER' }],
   });
   const api = await apiAs(user);
-  // An empty institutional result cannot confirm the professorship in this offering.
   await reportPosition(user, offering, null);
   const refused = await api.post(offering.apiPath(), { data: {} });
   await ok(refused, 403);
@@ -103,7 +103,6 @@ const entries: {
     },
   },
   {
-    // A deep link to the page works without first entering the course page.
     name: 'Student progress tracking entry',
     enter: async (page, _api, course, userId) => {
       await authenticateAs(page.context(), userId);
@@ -130,6 +129,23 @@ test('Roadmap reads check the stored Participation; entering the course page syn
   await page.goto(course.pagePath());
   for (const path of [course.apiPath(), course.apiPath('/node-types')])
     await ok(await api.get(path));
+});
+
+test('entering a Course offering that a complete U-Campus history omits revokes its Participation', async ({
+  course,
+  apiAs,
+  createCourse,
+  reportPosition,
+  page,
+}) => {
+  const user = course.users.studentWithoutProgress;
+  const api = await apiAs(user);
+  await ok(await api.get(course.apiPath()));
+  await reportPosition(user, await createCourse({ roadmap: false }), 'STUDENT');
+  await authenticateAs(page.context(), user.id);
+  await page.goto(`${course.pagePath()}?notice=${randomUUID()}`);
+  await expect(page).toHaveURL(/noticeFallback=course-unavailable/);
+  await ok(await api.get(course.apiPath()), 403);
 });
 
 for (const { name: entry, enter } of entries) {
@@ -184,8 +200,6 @@ test('promotion withdraws student access leftovers and retains colleague content
   ).toEqual(['node-title']);
   const knownTitle = pending[0].data.knownTitle;
   expect(knownTitle).not.toBe('Cambio de colega');
-  // Staff keep colleague changes; their own edit is absorbed by the pending notice
-  // (ADR-0024 actor rule) instead of producing a notice of its own.
   await ok(await assistant.patch(nodePath, { data: { title: 'Cambio propio' } }));
   expect(await notices()).toEqual([
     expect.objectContaining({

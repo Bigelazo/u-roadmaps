@@ -73,8 +73,6 @@ export function useNotifications(input: ListInput) {
     setFetching(true);
     try {
       let result = await list(input);
-      // Recognition signals and notice arrivals must refresh the expanded feed,
-      // including an expansion requested while this refresh was in flight.
       for (let loaded = 1; loaded < pagination.current.pages && result.hasMore; loaded++) {
         if (current !== generation.current) return;
         const next = await list({ ...input, after: result.notifications.at(-1)?.id });
@@ -92,7 +90,6 @@ export function useNotifications(input: ListInput) {
     } finally {
       if (current === generation.current) setFetching(false);
     }
-    // The serialized query is the complete input identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   useInboxRefresh(refetch, generation);
@@ -187,8 +184,6 @@ function ActiveNodeChangeCounts({
   children: ReactNode;
 }) {
   const { byNode, refetch } = useNodeChangeCounts(roadmapId);
-  // Review once per opening: changes arriving while the Node stays open remain
-  // marked, because a student's open Node does not show them until re-entry.
   const reviewedOpening = useRef<string | null>(null);
   useEffect(() => {
     if (!openedNodeId) {
@@ -215,7 +210,6 @@ export function NodeChangeCountsProvider({
   roadmapId: string;
   openedNodeId?: string | null;
   enabled: boolean;
-  /** Fixed marks shown instead of the server's, as on the Practice roadmap. */
   simulatedCounts?: Readonly<Record<string, number>>;
   children: ReactNode;
 }) {

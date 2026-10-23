@@ -19,7 +19,6 @@ import {
 } from '../fixtures/catalog';
 import { developmentFixtureFileContents } from './assets';
 
-// Uploaded files are runtime data, not build dependencies.
 const fixtureUploadsDirectory = join(
   /* turbopackIgnore: true */ process.cwd(),
   process.env.UPLOADS_DIRECTORY || 'uploads',
@@ -122,7 +121,6 @@ export async function resetDevelopmentData() {
     await transaction.user.createMany({
       data: fixtureUsers.map((user) => ({
         ...user,
-        // Catalog browser checks stay read-only; invitation tests own their Users.
         ...(process.env.U_ROADMAPS_E2E_DATA === 'true'
           ? { tutorialInvitationShownAt: new Date('2026-08-15T12:00:00.000Z') }
           : {}),

@@ -3,7 +3,6 @@ import 'server-only';
 import { closeDueRoadmaps } from '@/features/roadmap/server';
 import { startPeriodicPass } from './periodic-pass';
 
-/** Periodic pass in the persistent Node process; missed passes are safe to repeat. */
 export function startRoadmapClosure() {
   startPeriodicPass({
     run: closeDueRoadmaps,

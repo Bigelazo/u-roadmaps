@@ -17,9 +17,6 @@ function adapterConflict() {
   return Object.assign(error, { cause: { kind: 'TransactionWriteConflict' } });
 }
 
-// A raw query's serialization failure (P2010) is checked against the real error in
-// tests/notifications-integration/serialization-failure.test.ts; retries and their
-// deliveries against PostgreSQL in tests/features/roadmap/roadmap-command.test.ts.
 describe('isSerializationFailure', () => {
   it('recognizes a Prisma write conflict', () => {
     expect(isSerializationFailure(prismaError('P2034'))).toBe(true);

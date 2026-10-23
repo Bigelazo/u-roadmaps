@@ -191,7 +191,6 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
   const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
   const { extension, editableTitle } = resourceTitle(resourceValue, editingResource);
   const isAddingFile = mode === 'file' && !isEditingResource;
-  // Text fields stay submittable so a submit can explain what is missing.
   const canSave = isAddingFile
     ? Boolean(selectedFile)
     : hasResourceChanges(resourceValue, editingResource);

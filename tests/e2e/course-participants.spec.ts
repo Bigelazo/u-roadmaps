@@ -7,7 +7,6 @@ import {
 } from '@/development/fixtures/catalog';
 import { authenticateAs } from './helpers';
 
-// Expected progress comes from the CC1002 catalog the `course` fixture copies.
 const template = fixtureRoadmaps.find(({ id }) => id === developmentFixtureIds.roadmaps.cc1002)!;
 const visibleNodeIds = new Set(template.nodes.filter((node) => node.isVisible).map(({ id }) => id));
 
@@ -40,7 +39,6 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
   const { teacher, teachingAssistant, studentWithProgress, studentComplete } = course.users;
   const { studentWithoutProgress, multiCourseStudent, withdrawnStudent } = course.users;
   const ramoId = Number(teacher.rut);
-  // RUT bodies 9xxxxxxx belong to no User: this student never entered U-Roadmaps.
   const neverEntered = `9${teacher.rut.slice(1)}`;
   const earlierTermStudent = `8${teacher.rut.slice(1)}`;
   const name = (first: string) => ({ first, lastName: 'Prueba', secondLastName: teacher.rut });
@@ -55,7 +53,6 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
     },
     { rut: studentWithProgress.rut, section: '1', position: 'STUDENT', name: name('Valentina') },
     { rut: studentComplete.rut, section: '2', position: 'STUDENT', name: name('Ignacio') },
-    // Without a U-Campus name, the person keeps their U-Roadmaps name.
     { rut: studentWithoutProgress.rut, section: '1', position: 'STUDENT' },
     { rut: neverEntered, section: '2', position: 'STUDENT', name: name('Josefa') },
     { rut: multiCourseStudent.rut, section: '1', position: 'OBSERVER', name: name('Matías') },
@@ -77,7 +74,6 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
   ).toBeVisible();
   await expect(page.getByText('No pudimos obtener el listado completo')).toHaveCount(0);
 
-  // The observer is listed but outside the average; the student who never entered counts as 0%.
   const average = (withProgress + complete + withoutProgress + 0) / visibleNodes / 4;
   const summary = page.getByRole('region', { name: 'Completación promedio del roadmap' });
   await expect(summary).toContainText(`${Math.round(average * 100)}%`);

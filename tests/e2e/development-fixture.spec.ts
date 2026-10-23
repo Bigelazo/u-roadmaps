@@ -5,7 +5,6 @@ import { authenticateAs, fixtureRoadmapPath, ok } from './helpers';
 
 const [cc1002Roadmap] = fixtureRoadmaps;
 
-// Read-only seeded catalog identities.
 const fixture = {
   daniela: developmentFixtureIds.daniela,
   nicolas: developmentFixtureIds.nicolas,
@@ -190,7 +189,8 @@ test('the reset fixture exposes the three complete roadmap scenarios', async ({ 
 test('academic overview and development session retain their public JSON and cookie contracts', async ({
   request,
   apiAs,
-}) => {
+  page,
+}, testInfo) => {
   const anonymousOverview = await ok(await request.get('/api/academic-overview'), 401);
   await expect(anonymousOverview.json()).resolves.toEqual({
     error: {
@@ -217,7 +217,7 @@ test('academic overview and development session retain their public JSON and coo
     }),
   );
 
-  const developmentSession = await request.post('/api/development/session', {
+  const developmentSession = await page.request.post('/api/development/session', {
     data: { userId: fixture.daniela },
   });
   await ok(developmentSession);
@@ -228,6 +228,10 @@ test('academic overview and development session retain their public JSON and coo
   expect(developmentSession.headers()['set-cookie']).toContain('HttpOnly');
   expect(developmentSession.headers()['set-cookie']).toMatch(/SameSite=Lax/i);
   expect(developmentSession.headers()['set-cookie']).toContain('Path=/');
+  await page.goto('/academic-overview');
+  await expect(page.getByRole('heading', { name: 'Resumen académico' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Introducción a la Programación' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('fixture-academic-overview.png') });
 });
 
 test('fixture files are downloadable only through their authorized roadmap representation', async ({

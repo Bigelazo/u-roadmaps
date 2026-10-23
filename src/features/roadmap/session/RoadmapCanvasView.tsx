@@ -105,10 +105,6 @@ function RoadmapCanvasLoading({ isSimulation = false }: { isSimulation?: boolean
   );
 }
 
-/**
- * Shows `message` as a toast with a stable id while it is set and closes it once it clears.
- * Closing the toast (timeout, button, swipe or unmount) calls `onClose` so the source state clears.
- */
 function useStateToast(
   tone: 'error' | 'neutral',
   id: string,
@@ -465,15 +461,10 @@ function useRoadmapCanvasController({ input }: Props) {
   };
 }
 
-/**
- * Real Roadmap notices are fetched and acknowledged only outside the Practice roadmap,
- * which belongs to no Course offering and only shows its fixed change marks.
- */
 function fetchesRoadmapNotices(input: RoadmapCanvasSessionInput) {
   return Boolean(input.notificationsEnabled) && !input.practice;
 }
 
-/** Node change marks show the server's counts, or the Practice roadmap's fixed ones. */
 function showsNodeChangeMarks(input: RoadmapCanvasSessionInput) {
   return fetchesRoadmapNotices(input) || Boolean(input.practice);
 }
@@ -630,7 +621,6 @@ function RoadmapCanvasConfirmation({
       confirmation={pending && roadmap ? canvasConfirmation(pending, roadmap) : null}
       pendingActionId={pending?.phase === 'confirming' ? pending.choice : undefined}
       onCancel={cancel}
-      // The dialog offers only the choices the canvas confirmation built from the module's.
       onAction={(choice) => void confirm(choice as CanvasConfirmationChoice)}
     />
   );
@@ -934,7 +924,6 @@ function roadmapPath({
   return `/courses/${encodeURIComponent(courseCode)}/${year}/${semester}`;
 }
 
-/** The question-mark icon that opens the Roadmap tutorial of this experience. */
 function RoadmapTutorialLink({
   experience,
   origin,
@@ -952,7 +941,6 @@ function RoadmapTutorialLink({
               aria-label="Abrir tutorial"
               className={buttonVariants({ variant: 'outline', size: 'icon' })}
               href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
-              // Rendering the Practice route records tutorial openings.
               prefetch={false}
             >
               <CircleHelp />

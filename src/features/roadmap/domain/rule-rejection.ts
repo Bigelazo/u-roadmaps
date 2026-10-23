@@ -1,4 +1,3 @@
-/** A Roadmap rule's refusal, with the explanation every adapter shows. */
 export type RuleRejection<Reason extends string> = {
   kind: 'REJECTED';
   reason: Reason;

@@ -79,7 +79,6 @@ test('first entry clears pending notices silently and opening a Node or Inbox re
   await page.keyboard.press('Escape');
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toBeVisible();
-  // Opening the Node only reviews its canvas mark; it recognizes nothing (ADR-0014, decision 14).
   await expect
     .poll(() => mutations.map((url) => new URL(url).pathname))
     .toEqual(['/api/notifications/node-changes']);
@@ -182,7 +181,6 @@ test('entry from Academic overview groups changes under current Node titles and 
   await expect(dialog.locator('time, a')).toHaveCount(0);
   await expect(dialog.getByText(course.users.teacher.name)).toHaveCount(0);
   await expect.poll(pending).toHaveLength(0);
-  // Refreshing with the summary still open creates an entry with no pending changes.
   const refreshed = page.waitForResponse((response) =>
     response.url().endsWith('/api/notifications/acknowledge'),
   );

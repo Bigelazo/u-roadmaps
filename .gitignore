@@ -24,3 +24,7 @@ loc-chart.html
 .agents/skills/impeccable/scripts/bin/
 .claude/skills/impeccable/scripts/bin/
 .claude/worktrees/
+
+# Local architecture exports.
+/archify/
+/.archify/

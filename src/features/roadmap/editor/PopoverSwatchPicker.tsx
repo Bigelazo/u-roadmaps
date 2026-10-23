@@ -15,21 +15,17 @@ type Swatch<T> = { value: T; label: string; style?: CSSProperties; content?: Rea
 
 type Props<T> = {
   id: string;
-  /** Accessible name of the trigger, which also announces the current selection. */
   ariaLabel: string;
   title: string;
-  /** Visible trigger content: the current selection or a prompt to choose one. */
   selection: ReactNode;
   contentClassName: string;
   gridClassName: string;
   swatchClassName: string;
-  /** Labelled sections render inside a scroll area; a single unlabelled one renders as a grid. */
   sections: { label?: string; swatches: Swatch<T>[] }[];
   value: T | undefined;
   onSelect: (value: T) => void;
 };
 
-/** Outline trigger that opens a titled popover of toggle swatches and closes on selection. */
 export function PopoverSwatchPicker<T extends string>({
   id,
   ariaLabel,

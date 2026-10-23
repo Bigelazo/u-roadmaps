@@ -56,7 +56,6 @@ test('type notices reach recipients who see the Node blocked; nobody hears of a 
     expect(await pendingNotices(recipient, course.roadmapId)).toMatchObject([
       { data: { noticeTarget: 'node-type', nodeId: blocked.id } },
     ]);
-  // Revealing a retyped Node is not a type change for anyone.
   await edits.update(hidden.id, { isVisible: true, nodeTypeId: course.nodeTypeId });
   expect(typeTargets(await pendingNotices(course.studentId, course.roadmapId))).toHaveLength(1);
 });
@@ -77,7 +76,6 @@ test('a pending type notice keeps the type names the recipient knew after Node t
       data: { knownTypeName: 'Tema', currentTypeName: 'Lectura' },
     },
   ]);
-  // A later assignment names the new current type; the known one is still the name recipients knew.
   await edits.update(node.id, { nodeTypeId: workshop.id });
   expect(typeTargets(await pendingNotices(course.studentId, course.roadmapId))).toMatchObject([
     { body: '«Pilas» pasó de tipo «Tema» a tipo «Taller».' },

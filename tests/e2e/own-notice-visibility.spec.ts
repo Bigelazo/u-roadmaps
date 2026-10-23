@@ -86,7 +86,6 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
   teacherApi: author,
   studentApi: recipient,
 }) => {
-  // Returns the acknowledgement body, which carries the recognition summary.
   const recognize = async () => {
     const opening = await prepareOpening(recipient, course.roadmapId);
     const response = await ok(

@@ -6,10 +6,6 @@ import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 
 export type RoadmapLayoutDirection = 'TB' | 'LR';
 
-/**
- * Ordena las dependencias de arriba abajo. Dagre trabaja con centros; React Flow,
- * con la esquina superior izquierda, por lo que se corrige el ancla al final.
- */
 export function layoutRoadmapGraph(
   nodes: RoadmapFlowNode[],
   edges: RoadmapFlowEdge[],

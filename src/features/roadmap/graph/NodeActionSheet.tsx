@@ -39,7 +39,6 @@ export function NodeActionSheet({
   onClose: () => void;
   finalFocus: () => HTMLElement | false | null;
 }) {
-  // Keep the last Node while the sheet animates closed so its content does not collapse.
   const [lastNode, setLastNode] = useState(node);
   if (node && node !== lastNode) setLastNode(node);
   const shownNode = node ?? lastNode;
@@ -59,8 +58,6 @@ export function NodeActionSheet({
         if (!open) onClose();
       }}
       onOpenChangeComplete={(open) => {
-        // Base UI can suppress focus restoration after an outside touch. Restore
-        // explicitly once the modal releases the page, unless an action took focus.
         if (!open)
           requestAnimationFrame(() => {
             const target = finalFocus();

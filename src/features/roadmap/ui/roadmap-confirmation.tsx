@@ -23,7 +23,6 @@ function quoted(title: string) {
   return `“${title}”`;
 }
 
-/** Names up to three Nodes in prose; longer lists collapse to a count. */
 function nodeNames(titles: readonly string[]) {
   if (titles.length > 3) return `${titles.length} nodos`;
   const names = titles.map(quoted);
@@ -67,7 +66,6 @@ const canvasPreviewResetConfirmation = {
   actions: [{ id: canvasConfirmationChoices.resetCanvasPreview, label: 'Reiniciar progreso' }],
 } as const satisfies ConfirmationPresentation;
 
-/** The choices of the Node editor's own confirmations, which never reach the canvas module. */
 export const nodeEditorConfirmationActionIds = {
   deleteResource: 'delete-resource',
   discardEditorDraft: 'discard-draft',
@@ -263,7 +261,6 @@ function affectedTitles(
   );
 }
 
-/** Describes the dependents an access change carries along, naming them when they are few. */
 function dependentsPhrase(titles: readonly string[], state: { one: string; many: string }) {
   if (titles.length > 3) return `Los ${nodeNames(titles)} que dependen de él ${state.many}`;
   return titles.length === 1
@@ -429,7 +426,6 @@ export function nodeDeletionConfirmation({
 export function roadmapNodeVisibilityConfirmation(
   roadmap: RoadmapConfirmationRoadmap,
   node: RoadmapNodeIdentity,
-  /** Whether the current operation hides the Node; false means publishing it. */
   isHiding: boolean,
   dependencies: readonly StructuralDependency[],
 ): ConfirmationPresentation {
@@ -471,7 +467,6 @@ export function roadmapNodeVisibilityConfirmation(
   };
 }
 
-/** Presents the pending Confirmed action; nothing while its Change impact is being read. */
 export function canvasConfirmation(
   pending: PendingConfirmation,
   roadmap: RoadmapConfirmationRoadmap,
@@ -506,7 +501,6 @@ export function canvasConfirmation(
         : null;
     }
     case 'create-dependency':
-      // A creation without Change impact applies at once, so it has nothing to confirm.
       return pending.impact?.nodes.length
         ? roadmapDependencyConfirmation({
             roadmap,

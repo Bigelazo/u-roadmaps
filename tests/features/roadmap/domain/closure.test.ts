@@ -18,7 +18,6 @@ test.each([
   ['2026-07-20', '2026-07-21T04:00:00.000Z'],
   ['2027-01-20', '2027-01-21T03:00:00.000Z'],
   ['2026-04-04', '2026-04-05T04:00:00.000Z'],
-  // Spring skips midnight: the next Chilean day starts at 01:00.
   ['2026-09-05', '2026-09-06T04:00:00.000Z'],
   ['2026-09-06', '2026-09-07T03:00:00.000Z'],
 ])('closes after the whole freeze day %s, across daylight-saving transitions', (day, expected) => {
@@ -28,7 +27,6 @@ test.each([
 test.each([
   ['2026-07-10', '2026-07-11T03:59:59.999Z', false],
   ['2026-07-10', '2026-07-11T04:00:00.000Z', true],
-  // Without a synchronized date, the first-semester fallback is 20 July.
   [null, '2026-07-21T03:59:59.999Z', false],
   [null, '2026-07-21T04:00:00.000Z', true],
 ])(

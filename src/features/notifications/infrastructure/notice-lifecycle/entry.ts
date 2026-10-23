@@ -12,13 +12,6 @@ import {
 import { pendingTargetSnapshots, type TargetSnapshot } from './recognize';
 import { roadmapView } from './roadmap-view';
 
-/**
- * (C) Capture what entering the Roadmap shows the recipient: its pending lifecycle
- * notices, the broad targets it has not recognized (even when their notice never
- * arrived), and the entry value of every target, as each descriptor enumerates them.
- * Values inside a recognized broad target reconcile fully; the rest only rebase pending
- * notices.
- */
 export async function entryTargetSnapshots(
   transaction: Prisma.TransactionClient,
   recipientId: string,
@@ -57,7 +50,6 @@ export async function entryTargetSnapshots(
         shown.push({ ...target, currentValue, ...(context ? { context } : {}) });
   }
 
-  // Broad targets entry shows although their notice is not in the Inbox (e.g. still on its way).
   const isBroad = ({ noticeTarget }: { noticeTarget: string }) =>
     !!descriptorForNoticeTarget(noticeTarget)?.scope;
   const unannounced = shown
@@ -76,17 +68,14 @@ export async function entryTargetSnapshots(
       ),
     }));
 
-  // Broad targets first: their contents are then recognized as known Nodes.
   const narrow = pending.filter((snapshot) => !isBroad(snapshot));
   return [...broad, ...narrow, ...state] as Prisma.InputJsonArray;
 }
 
-/** Broadest scope first (Roadmap availability before Node creation). */
 function broadness({ noticeTarget }: { noticeTarget: string }) {
   return SCOPE_DEPTH[descriptorForNoticeTarget(noticeTarget)?.scope ?? 'node'];
 }
 
-/** An unrecognized broad target that no longer exists has nothing left to tell. */
 async function forgetVanishedBroadTargets(
   transaction: Prisma.TransactionClient,
   identity: { recipientId: string; roadmapId: string },
@@ -107,7 +96,6 @@ async function forgetVanishedBroadTargets(
   return known.filter(({ targetKey }) => !vanished.has(targetKey));
 }
 
-/** A target inside a broad target the recipient never recognized and cannot see stays unknown. */
 async function insideHiddenUnknownTarget(
   target: NoticeTargetRef,
   roadmap: RoadmapView,

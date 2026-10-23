@@ -318,7 +318,6 @@ function editingCapability(overrides: Partial<RoadmapGraphEditing> = {}): Roadma
 
 type GraphOptions = Omit<Partial<RoadmapGraphProps>, 'projection'> & {
   roadmap?: RoadmapDto;
-  /** Grants the editing capability; omit it for a non-editable teaching projection. */
   editing?: Partial<RoadmapGraphEditing>;
 };
 
@@ -421,7 +420,6 @@ test.each([
 
   expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Abrir acciones node-1' })).toBeNull();
-  // Absorbs 'does not expose automatic ordering when the Roadmap cannot be edited'.
   expect(screen.queryByRole('alertdialog')).toBeNull();
 });
 
@@ -620,7 +618,6 @@ test.each([
 ])('keeps new cards inside the unsnapped viewport at width $width', async ({ width, expected }) => {
   const user = userEvent.setup();
   mockCanvasRect(width, 99);
-  // React Flow inherits snapToGrid unless the conversion explicitly opts out.
   screenToFlowPositionMock.mockImplementation(({ x, y }, options) => {
     const position = { x: x - 7, y: y - 9 };
     return options?.snapToGrid === false

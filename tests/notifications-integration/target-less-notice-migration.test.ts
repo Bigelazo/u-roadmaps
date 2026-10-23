@@ -8,8 +8,6 @@ import { prisma } from '@/shared/server/db';
 
 const MIGRATION = 'prisma/migrations/20261017120000_delete_target_less_notices/migration.sql';
 
-// ADR-0024 "start from zero": a notice no Notice target owns is deleted, and the legacy
-// read-side keys leave every remaining notice.
 test('the migration deletes target-less notices and keeps lifecycle notices', async ({
   course,
 }) => {
@@ -33,7 +31,6 @@ test('the migration deletes target-less notices and keeps lifecycle notices', as
       occurredAt: new Date(),
     },
   });
-  // A lifecycle notice stored before the read-side keys were dropped.
   await prisma.$executeRaw`UPDATE "RoadmapNotice" SET data = data || jsonb_build_object(
     'changeKind', 'node-updated', 'changedFields', '["title"]'::jsonb, 'targetKind', 'node')
     WHERE id = ${lifecycle.id}::uuid`;
@@ -41,7 +38,6 @@ test('the migration deletes target-less notices and keeps lifecycle notices', as
   const client = integrationClient(integrationDatabaseUrl());
   await client.connect();
   try {
-    // Run the migration in a transaction that is rolled back, so other workers keep their rows.
     await client.query('BEGIN');
     await client.query(await readFile(MIGRATION, 'utf8'));
     const { rows } = await client.query(

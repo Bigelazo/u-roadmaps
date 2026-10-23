@@ -34,7 +34,6 @@ function outcome(
 
 describe('Roadmap capability', () => {
   test.each([
-    // capability, participant, open Roadmap, closed Roadmap, missing Roadmap
     ['read', 'active teaching staff', 'ALLOWED', 'ALLOWED', 'ROADMAP_NOT_FOUND'],
     ['read', 'active student', 'ALLOWED', 'ALLOWED', 'ROADMAP_NOT_FOUND'],
     ['read', 'inactive teaching staff', 'FORBIDDEN', 'FORBIDDEN', 'FORBIDDEN'],

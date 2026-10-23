@@ -16,7 +16,6 @@ const bodies = async (userId: string, roadmapId: string) =>
     .map(({ body }) => body)
     .sort();
 
-/** A second member of the teaching staff, who did not make the change. */
 async function addTeacher(course: IntegrationCourse) {
   const id = randomUUID();
   onTestFinished(async () => {
@@ -105,7 +104,6 @@ test('blocking a Node notifies each recipient once per Node whose state changed 
     '«Pilas» fue bloqueado.',
   ]);
   expect(await bodies(course.classmateId, course.roadmapId)).toEqual(['«Listas» fue bloqueado.']);
-  // The block covers the branch for teaching staff, with the same wording as students.
   expect(await bodies(staff, course.roadmapId)).toEqual([
     '«Colas» fue bloqueado.',
     '«Listas» fue bloqueado.',
@@ -135,7 +133,6 @@ test('a deferred delivery reconciles against the access recorded at edit time', 
   const deferred = deferredNoticePort();
   const edits = teacherEdits(course, deferred.port);
   await edits.block(node.id);
-  // The Node is unblocked behind the module's back before delivery runs.
   await prisma.roadmapNode.update({ where: { id: node.id }, data: { isTeacherBlocked: false } });
   await deferred.deliver(deferred.deliveries[0]);
   expect(await bodies(course.studentId, course.roadmapId)).toEqual(['«Colas» fue bloqueado.']);
@@ -189,7 +186,6 @@ test('a Scheduled unlock release notifies like a manual unlock, from teaching st
       },
     },
   ]);
-  // The label is projected at read time; the stored attribution has no name.
   const [stored] = await prisma.roadmapNotice.findMany({
     where: { recipientId: course.studentId, roadmapId: course.roadmapId, acknowledgedAt: null },
   });

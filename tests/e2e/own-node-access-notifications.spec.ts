@@ -19,7 +19,6 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   await page.goto('/academic-overview');
   const withoutProgress = course.users.studentWithoutProgress;
   const { nodeTypeId } = await prepareNodeCreator(author, course);
-  // Existing visible Nodes avoid creation notices during these access changes.
   const existingNode = (title: string) =>
     createExistingNode({
       roadmapId: course.roadmapId,
@@ -43,7 +42,6 @@ test('access notices retain context through blocking, unlocking, hiding and dele
       })
       .first()
       .click();
-    // Repeats are stored immediately without a summary (no grouping window, see ADR-0014).
     await expect(
       page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
     ).toBeVisible();

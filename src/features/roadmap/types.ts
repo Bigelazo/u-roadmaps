@@ -40,7 +40,6 @@ type RoadmapNodeDetails = RoadmapNodeSummary & {
 export type VisibleRoadmapNode = RoadmapNodeDetails & {
   isVisible: true;
   isTeacherBlocked: boolean;
-  /** Chilean calendar day (`YYYY-MM-DD`) on which its Teacher block is scheduled to end. */
   teacherUnlockOn?: string;
 };
 
@@ -102,13 +101,11 @@ export type TeacherBlockPreview = {
   version: string;
 };
 
-/** The Nodes a new Dependency would Teacher-block. */
 export type DependencyImpact = {
   nodes: TeacherBlockImpact[];
   version: string;
 };
 
-/** The Dependencies hiding a Node would remove. */
 export type NodeHidingImpact = {
   dependencies: Array<{ id: string; sourceNodeId: string; targetNodeId: string }>;
   version: string;
@@ -137,13 +134,10 @@ export type RoadmapDto = RoadmapDtoBase<RoadmapNode>;
 export type StudentRoadmapDto = RoadmapDtoBase<StudentRoadmapNode>;
 export type AnyRoadmapDto = RoadmapDto | StudentRoadmapDto;
 
-/** Whether the post-creation invitation offers to do or to repeat the teaching tutorial. */
 export type PostCreationInvitationWording = 'hacer' | 'repetir';
 
-/** The Roadmap tutorial and canvas experience offered on the Practice roadmap. */
 export type PracticeExperience = 'student' | 'teaching';
 
-/** A tutorial invitation shown once per User. */
 export type TutorialInvitation = 'first-visit' | 'post-creation';
 
 export function isTutorialInvitation(value: unknown): value is TutorialInvitation {

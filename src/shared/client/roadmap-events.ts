@@ -1,6 +1,5 @@
 type CourseOfferingIdentifier = { courseCode: string; year: number; semester: number };
 
-/** Authorized Roadmap invalidations received through the application SSE connection. */
 export const ROADMAP_CHANGE_RECEIVED_EVENT = 'u-roadmaps:roadmap-change-received';
 
 export function subscribeToRoadmapChanges(
@@ -31,7 +30,6 @@ export function requestRoadmapRecovery() {
   window.dispatchEvent(new Event(ROADMAP_RECOVERY_EVENT));
 }
 
-/** Event-driven recovery, with no polling or recognition of notices. */
 export function subscribeToRoadmapRecovery(listener: () => void) {
   const foreground = () => {
     if (document.visibilityState === 'visible') listener();

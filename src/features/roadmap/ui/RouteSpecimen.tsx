@@ -17,10 +17,6 @@ import * as m from 'motion/react-m';
 import { cn } from 'cn';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 
-/**
- * Ejemplar estático y fiel del canvas del estudiante: mismos tamaños, tipos predefinidos,
- * insignias de estado y aristas que RoadmapNode y RoadmapGraph, sin cargar React Flow.
- */
 
 const nodeTypes = {
   content: { name: 'Contenido', Icon: BookOpen, color: '#024AD8' },
@@ -125,7 +121,6 @@ const dependencies = [
 const viewBox = { width: 424, height: 500 };
 const nodeHeight = roadmapNodeSizeForTitle('').height;
 const edgeRadius = 8;
-/** Entrada de la ruta: los nodos llegan por profundidad y cada dependencia se traza entre ellos. */
 const stagger = 0.11;
 const easeOutExpo = [0.16, 1, 0.3, 1] as const;
 const completedCount = nodes.filter((node) => node.status === 'completed').length;
@@ -136,18 +131,15 @@ function nodeWidth(node: SpecimenNode) {
   return roadmapNodeSizeForTitle(node.title).width;
 }
 
-/** Orden de llegada de cada nodo: su profundidad en la ruta. */
 function nodeDepth(id: RouteSpecimenNodeId): number {
   const parents = dependencies.filter(([, target]) => target === id);
   return parents.length ? 1 + Math.max(...parents.map(([source]) => nodeDepth(source))) : 0;
 }
 
-/** Arista escalonada de abajo hacia arriba, como getSmoothStepPath con borderRadius 8. */
 function stepPath(source: SpecimenNode, target: SpecimenNode) {
   const sx = source.x + nodeWidth(source) / 2;
   const sy = source.y + nodeHeight;
   const tx = target.x + nodeWidth(target) / 2;
-  // El nodo actual tiene un anillo de 6px; la flecha termina en su borde.
   const ty = target.y - (target.current ? 6 : 0);
   if (sx === tx) return `M ${sx} ${sy} L ${tx} ${ty}`;
   const my = (sy + ty) / 2;
@@ -223,7 +215,6 @@ function ResourceBadge({ node, width }: { node: SpecimenNode; width: number }) {
 }
 
 type RouteSpecimenInteraction = {
-  /** Nodo que otra vista señala; recibe un contorno Blue. */
   highlightedNodeId?: RouteSpecimenNodeId | null;
   onNodeHover?: (nodeId: RouteSpecimenNodeId | null) => void;
 };
@@ -263,7 +254,6 @@ function NodeOutline({
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         initial={false}
         animate={{ opacity: highlighted ? 1 : 0, scale: highlighted ? 1 : 0.96 }}
-        // Aparece cuando la traza de la otra vista llega al lienzo: fila, borde, contorno.
         transition={{ delay: highlighted ? 0.45 : 0, duration: 0.3, ease: easeOutExpo }}
       />
     </>

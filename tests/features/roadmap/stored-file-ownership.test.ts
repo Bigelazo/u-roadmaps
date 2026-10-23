@@ -1,8 +1,6 @@
-// @vitest-environment node
+import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
-import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest';
+import { afterAll, afterEach, expect, vi } from 'vitest';
 import { teacher, test } from '../../notifications-integration/fixtures';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,7 +22,11 @@ const faults = vi.hoisted(() => ({
   lateSettled: false,
 }));
 vi.mock('@/app/_adapters/auth', () => ({
-  requireAuthenticatedUser: async () => ({ id: faults.userId, rut: null }),
+  requireAuthenticatedUser: async () => ({
+    id: faults.userId,
+    rut: null,
+    ucampus: localFixtureUCampus,
+  }),
 }));
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof import('node:fs/promises')>();
@@ -98,7 +100,6 @@ const { GET: versionDownload } =
   await import('@/app/api/[courseCode]/versions/[year]/[semester]/resources/[resourceId]/file/route');
 const { prisma } = await import('@/shared/server/db');
 const { recordingChangePort } = await import('./support/recording-change-port');
-beforeAll(databaseSetup, 60_000);
 afterEach(async () => {
   Object.assign(faults, {
     partialUpload: false,
@@ -267,7 +268,6 @@ test('a missing source omits its Resource and does not retain an empty destinati
   const { roadmap } = await source.copy();
   expect(roadmap.id).not.toBe(course.roadmapId);
   expect(await readdir(directory)).toEqual([]);
-  // Give the teacher access to the newly created Course offering to observe its public Resources.
   await prisma.participation.create({
     data: { userId: course.teacherId, role: 'TEACHER', courseOfferingId: roadmap.courseOfferingId },
   });
@@ -333,7 +333,6 @@ test('a retried upload registration retains the original bytes without repeating
       async report(tx) {
         if (retry) {
           retry = false;
-          // A second filesystem creation would now fail instead of repeating upload I/O.
           faults.collision = true;
           await tx.$executeRawUnsafe(`CREATE FUNCTION pg_temp.fail_upload_commit() RETURNS trigger
             LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'retry registration' USING ERRCODE = '40001'; END $$`);
@@ -467,7 +466,7 @@ for (const version of [false, true]) {
     const download = () =>
       version
         ? downloadRoadmapVersionResource(
-            { id: course.teacherId, rut: null },
+            { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
             course.identifier,
             resource.id,
           )
@@ -585,7 +584,7 @@ test('downloads keep participant Node access separate from frozen version teache
   await expect(download(course.studentId)).rejects.toMatchObject({ code: 'TEACHER_BLOCK' });
   await expect(
     downloadRoadmapVersionResource(
-      { id: course.teacherId, rut: null },
+      { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
       course.identifier,
       resource.id,
     ),
@@ -593,7 +592,7 @@ test('downloads keep participant Node access separate from frozen version teache
   await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
   await expect(
     downloadRoadmapVersionResource(
-      { id: course.studentId, rut: null },
+      { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
       course.identifier,
       resource.id,
     ),
@@ -601,7 +600,7 @@ test('downloads keep participant Node access separate from frozen version teache
   expect(
     (
       await downloadRoadmapVersionResource(
-        { id: course.teacherId, rut: null },
+        { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
         course.identifier,
         resource.id,
       )
@@ -634,7 +633,7 @@ test('downloads keep participant Node access separate from frozen version teache
   });
   await expect(
     downloadRoadmapVersionResource(
-      { id: course.teacherId, rut: null },
+      { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
       { ...course.identifier, year: 2027 },
       resource.id,
     ),

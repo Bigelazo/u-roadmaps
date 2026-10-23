@@ -27,7 +27,6 @@ function sideEffectCounts(offering: E2ECourseOffering) {
   `);
 }
 
-/** A closed version with an uploaded file, taught by `teacher`, plus a later offering. */
 const closedVersion = test.extend<{
   version: {
     closed: E2ECourseOffering;
@@ -113,7 +112,6 @@ closedVersion(
     expect(body.nodeTypes.length).toBeGreaterThan(0);
     expect(body.dependencies.length).toBeGreaterThan(0);
 
-    // No student data anywhere in the response.
     const serialized = JSON.stringify(body);
     expect(serialized).not.toContain(course.users.studentWithProgress.name);
     expect(serialized).not.toContain(course.users.studentWithProgress.id);
@@ -149,7 +147,6 @@ closedVersion(
   async ({ version, apiAs, createUser, createCourse, page }) => {
     const { closed, resourceId } = version;
     const earlierTeacher = await createUser();
-    // Synthetic terms grow, so a year below the version's precedes it.
     await createCourse({
       year: closed.year - 1,
       semester: closed.semester,
@@ -210,13 +207,11 @@ closedVersion(
     const download = page.waitForEvent('download');
     await details.getByRole('link', { name: /guia\.txt/ }).click();
     expect((await download).suggestedFilename()).toBe('guia.txt');
-    // Read-only: no editing or Completion affordances.
     await expect(page.getByRole('button', { name: /Completar|Recurso|Guardar/ })).toHaveCount(0);
     await canvas.getByText('Información de la versión', { exact: true }).click();
     await expect(page.getByRole('list', { name: 'Linaje' })).toHaveText(
       `Edición ${closedYear}-${closed.semester}`,
     );
-    // Loading the page and its canvas leaves no visits, recognitions or Completions.
     expect(await sideEffectCounts(closed)).toEqual(before);
   },
 );

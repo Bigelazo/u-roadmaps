@@ -11,7 +11,6 @@ import {
 
 export const inputClassName = 'h-11';
 
-/** Resets the Item card look so rows match the plain divided lists they replace. */
 export const dividedItemClassName =
   'flex-nowrap rounded-none border-0 border-b border-border px-0 last:border-b-0';
 

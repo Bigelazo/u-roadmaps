@@ -8,21 +8,14 @@ import type {
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
 
-/**
- * One canvas write that takes effect at once. It resolves the id of the Node it created,
- * if any. Afterwards the Roadmap reloads, or only the Canvas preview for a simulated write.
- */
 export type UnconfirmedWrite<Kind extends UnconfirmedCommandKind> = {
   write: (
     persistence: RoadmapCanvasSessionPersistence,
     input: RoadmapCanvasSessionInput,
     command: CanvasCommandOf<Kind>,
   ) => Promise<string | void>;
-  /** The session error when the write fails without a message of its own. */
   fallback: string;
-  /** The toast shown once the write took effect. */
   success?: (command: CanvasCommandOf<Kind>) => string;
-  /** What the Practice roadmap is told once the write took effect. */
   report?: (
     command: CanvasCommandOf<Kind>,
     createdNodeId: string | void,
@@ -30,7 +23,6 @@ export type UnconfirmedWrite<Kind extends UnconfirmedCommandKind> = {
   reloads?: 'canvas-preview';
 };
 
-/** Completing a Node in the Canvas preview shows the toast a student sees for a real Completion. */
 const completionSuccess = () => 'Nodo completado.';
 
 export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedWrite<Kind> } = {
@@ -45,9 +37,7 @@ export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedW
     fallback: 'No se pudo guardar el nodo.',
     success: () => 'Cambios guardados exitosamente.',
   },
-  /** No toast: the dropped Node is its own feedback, and a failed move is the session error. */
   'move-nodes': {
-    /** Each Node moves on its own, so a failed move keeps the others; it fails with the first. */
     write: async (persistence, input, { positions }) => {
       const moves = await Promise.allSettled(
         positions.map(({ nodeId, position }) => persistence.moveNode(input, nodeId, position)),

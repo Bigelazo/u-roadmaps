@@ -9,10 +9,6 @@ function nodeTitle({ context }: TargetValues) {
   return String(context.nodeTitle ?? '');
 }
 
-/**
- * Node deletion: a broad target that replaces the pending notices about its Node. A
- * deleted Node never changes again, so no Known value is kept: recognizing it is final.
- */
 export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
   noticeTarget: NOTICE_TARGET.nodeDeletion,
   noticeClass: 'roadmap-node-changed',
@@ -23,7 +19,6 @@ export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
   target: (fact) => nodeDeletionRef(fact.nodeId),
   previousValue: () => PRESENT,
   knowers: async () => [],
-  // Deleting a hidden Node is news only to teaching staff: no student saw it last.
   audience: (fact, _changes, roadmap) => nodeViewers(fact.previous.isVisible, roadmap),
   async current(target, roadmap) {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);

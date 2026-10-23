@@ -225,7 +225,6 @@ test('opens on Cancel, then restores focus to the element that opened the confir
   await user.click(trigger);
   const dialog = await screen.findByRole('alertdialog', { name: 'Archivar cambios' });
   const cancel = within(dialog).getByRole('button', { name: 'Cancelar' });
-  // Enter right after opening must cancel, never confirm.
   await waitFor(() => expect(cancel.matches(':focus')).toBe(true));
   await user.click(cancel);
 

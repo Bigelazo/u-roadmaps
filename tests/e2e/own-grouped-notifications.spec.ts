@@ -14,7 +14,6 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
   const notices = () =>
     listNotices(recipient, { groupBy: 'roadmapId', roadmapId: course.roadmapId });
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-  // Enter before edits so the canvas can display arriving counts without recognition.
   const recognized = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/notifications/acknowledge') && response.status() === 200,
@@ -48,7 +47,6 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
     );
   }
   await expect(page.getByRole('button', { name: 'Avisos, 3 sin leer', exact: true })).toBeVisible();
-  // The global bell is the only Inbox counter inside the canvas.
   await expect(page.getByRole('button', { name: /avisos sin leer para este Roadmap/ })).toHaveCount(
     0,
   );
@@ -65,7 +63,6 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
   await row.click();
   await expect(page).toHaveURL(course.pagePath());
   await expect.poll(notices).toHaveLength(0);
-  // A fresh set of pending targets crosses back below the threshold.
   for (const node of nodes) {
     await ok(
       await author.patch(course.apiPath(`/nodes/${node.id}`), {

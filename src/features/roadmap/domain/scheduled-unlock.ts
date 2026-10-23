@@ -4,7 +4,6 @@ import {
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
 
-/** An ISO calendar day (`YYYY-MM-DD`) in the America/Santiago time zone. */
 export type CalendarDay = string;
 
 type ScheduledUnlockNode = {
@@ -43,10 +42,6 @@ export type ScheduledUnlockRuleFailure =
 export type ScheduledUnlockDecision =
   { kind: 'ALLOWED'; day: CalendarDay | null } | RuleRejection<ScheduledUnlockRuleFailure>;
 
-/**
- * Whether `unlockOn` is a Scheduled unlock day at all, whatever the Node: a calendar day
- * after `today`, or `null` to discard the schedule.
- */
 export function decideScheduledUnlockDay({
   unlockOn,
   today,
@@ -68,10 +63,6 @@ export function decideScheduledUnlockDay({
   return { kind: 'ALLOWED', day: unlockOn };
 }
 
-/**
- * Whether `unlockOn` can become the Node's Scheduled unlock: a calendar day after `today`
- * for a visible Node with a Teacher block. `null` discards the schedule.
- */
 export function decideScheduledUnlock({
   node,
   unlockOn,
@@ -91,10 +82,6 @@ export function decideScheduledUnlock({
   return day;
 }
 
-/**
- * Scheduled Teacher blocks whose day has arrived and whose transitive prerequisites
- * are free of Teacher blocks, counting prerequisites released by this same pass.
- */
 export function dueScheduledUnlockNodeIds({
   nodes,
   dependencies,

@@ -20,7 +20,6 @@ for (const target of ['dependency', 'node-type-name'] as const)
       nodeTypeId: typeId,
       title: 'Origen conocido',
     });
-    // This test asserts the acknowledgement summary, so it reads the response body.
     const recognize = async () => {
       const opening = await prepareOpening(recipient, course.roadmapId);
       return (
@@ -76,7 +75,6 @@ for (const target of ['dependency', 'node-type-name'] as const)
     expect(await count()).toBe(1);
     await hide();
     await expect.poll(targetNotices).toHaveLength(0);
-    // Only the access withdrawal remains visible; the route target stays pending.
     await expect.poll(count).toBe(1);
     await ok(await recipient.get(`/api/notifications/${id}`), 404);
     await show();

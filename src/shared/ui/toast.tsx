@@ -8,8 +8,6 @@ import { cn } from 'cn';
 import { Button } from '@/shared/ui/button';
 import { toast } from '@/shared/ui/toast-manager';
 
-// Adapted from the shadcn base-nova registry: the viewport is anchored top-right below the
-// global navigation, so the stack grows downward and toasts enter/leave through the top.
 function ToastProvider({ ...props }: ToastPrimitive.Provider.Props) {
   return <ToastPrimitive.Provider {...props} />;
 }
@@ -171,7 +169,6 @@ function ToastList() {
   ));
 }
 
-/** Publishes the global navigation height so the viewport sits below it even when it wraps. */
 function useGlobalNavigationHeight() {
   React.useEffect(() => {
     const navigation = document.querySelector('[data-global-navigation]');

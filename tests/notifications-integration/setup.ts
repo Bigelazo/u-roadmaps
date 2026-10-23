@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { afterAll } from 'vitest';
 import { integrationDatabaseUrl } from './database';
 

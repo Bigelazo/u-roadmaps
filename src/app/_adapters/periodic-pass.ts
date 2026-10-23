@@ -2,7 +2,6 @@ import 'server-only';
 
 const DEFAULT_INTERVAL_MS = 5 * 60_000;
 
-/** Starts immediately, suppresses overlapping passes and does not keep Node alive. */
 export function startPeriodicPass({
   run,
   intervalMs,

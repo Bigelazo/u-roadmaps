@@ -1,9 +1,7 @@
-// @vitest-environment node
+import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
 import { randomUUID } from 'node:crypto';
-import { beforeAll, expect, onTestFinished, vi } from 'vitest';
+import { expect, onTestFinished, vi } from 'vitest';
 import {
   student,
   teacher,
@@ -37,9 +35,6 @@ import {
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 
-beforeAll(databaseSetup, 60_000);
-
-/** Starts the four editor previews, over the course's Node and a second Node. */
 async function editorPreviews(course: IntegrationCourse) {
   const nodeId = course.change.nodeId;
   const target = await prisma.roadmapNode.create({
@@ -63,7 +58,6 @@ async function editorPreviews(course: IntegrationCourse) {
   ];
 }
 
-/** Holds the Roadmap row FOR UPDATE in another transaction, as an editor or closure would. */
 async function holdRoadmapLock(
   roadmapId: string,
   beforeRelease: (tx: Prisma.TransactionClient) => Promise<unknown> = async () => undefined,
@@ -84,7 +78,6 @@ async function holdRoadmapLock(
   );
   const pid = await lockedBy;
   return {
-    /** Resolves once another backend waits for this lock. */
     async blocksAnother() {
       for (;;) {
         const [{ waiting }] = await prisma.$queryRaw<{ waiting: number }[]>`
@@ -101,7 +94,6 @@ async function holdRoadmapLock(
   };
 }
 
-/** `operation`'s outcome, or 'blocked' when it is still waiting after `ms`. */
 function settledWithin<T>(operation: Promise<T>, ms = 2_000) {
   return Promise.race([
     operation.then(
@@ -112,10 +104,6 @@ function settledWithin<T>(operation: Promise<T>, ms = 2_000) {
   ]);
 }
 
-/**
- * Makes the transaction's COMMIT fail with `sqlstate`: a deferred constraint trigger on a
- * temporary table raises it while committing, after everything the transaction ran.
- */
 async function failCommit(tx: Prisma.TransactionClient, sqlstate: string) {
   await tx.$executeRawUnsafe(`CREATE FUNCTION pg_temp.fail_commit() RETURNS trigger
     LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'commit failed' USING ERRCODE = '${sqlstate}'; END $$`);
@@ -125,7 +113,6 @@ async function failCommit(tx: Prisma.TransactionClient, sqlstate: string) {
   await tx.$executeRawUnsafe(`INSERT INTO commit_guard VALUES (1)`);
 }
 
-/** A test command that blocks a Node, which changes its access for every participant. */
 const blockNode = (access: AccessScope) =>
   roadmapCommand({
     capability: 'edit',
@@ -200,7 +187,6 @@ test('invalid input is refused before authorisation and before the Roadmap lock'
 }) => {
   const editing = await holdRoadmapLock(course.roadmapId);
   const { port } = recordingChangePort();
-  // A student may not edit, so a refusal other than 400 would come from the guard.
   const nonEditor = student(course);
   const nodeId = course.change.nodeId;
   try {
@@ -215,7 +201,6 @@ test('invalid input is refused before authorisation and before the Roadmap lock'
         ),
         scheduleTeacherUnlock({ ...nonEditor, id: nodeId, unlockOn: '17-10-2026' }, port),
         deleteRoadmapDependency({ ...nonEditor, id: 'not-a-dependency' }, port),
-        // A student may complete, so only parsing first keeps this off the lock.
         completeNode({ ...nonEditor, nodeId: 'not-a-node' }, port),
         completeSimulatedNode({ ...nonEditor, nodeId: 'not-a-node' }, port),
       ].map((operation) => settledWithin(operation)),
@@ -259,7 +244,6 @@ test('an upload is parsed and authorised before its bytes are saved', async ({ c
   });
 });
 
-/** Every Roadmap read, each asked by the participant it serves. */
 function roadmapReads(course: IntegrationCourse): Promise<unknown>[] {
   const nodeId = course.change.nodeId;
   return [
@@ -267,8 +251,10 @@ function roadmapReads(course: IntegrationCourse): Promise<unknown>[] {
     getNodeTypesForActor(student(course)),
     getRoadmapNodeResources({ ...student(course), nodeId }),
     readSimulatedRoadmap(teacher(course)),
-    // Without a RUT, Student progress tracking lists the local roster only.
-    readCourseParticipants({ id: course.teacherId, rut: null }, course.identifier),
+    readCourseParticipants(
+      { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
+      course.identifier,
+    ),
   ];
 }
 
@@ -303,7 +289,6 @@ test('an inactive Participation is refused by every Roadmap read', async ({ cour
       status: 'rejected',
       reason: { status: 403, code: 'FORBIDDEN' },
     });
-  // Reads only check the stored Participation; they never materialise one.
   expect(await prisma.participation.count({ where: { ...offering, isActive: true } })).toBe(0);
 });
 

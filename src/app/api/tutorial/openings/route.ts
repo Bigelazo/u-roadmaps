@@ -3,7 +3,6 @@ import { handleApplicationResult, parseJsonObject } from '@/app/_adapters/http';
 import { isPracticeExperience, recordPracticeRoadmapOpened } from '@/features/roadmap/server';
 import { ApplicationError } from '@/shared/errors/server';
 
-/** Records that the User opened a Roadmap tutorial on the Practice roadmap. */
 export async function POST(request: Request) {
   return handleApplicationResult(async () => {
     const user = await requireAuthenticatedUser();

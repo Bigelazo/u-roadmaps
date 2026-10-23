@@ -24,11 +24,6 @@ export type RoadmapGraphEditingIntent =
       'move-nodes' | 'apply-automatic-layout' | 'create-dependency' | 'delete-dependencies'
     >;
 
-/**
- * The complete graph-editing capability. Its presence is the only thing that
- * enables editing mechanics; individual operations are not independently
- * configurable at this seam.
- */
 export type RoadmapGraphEditing = {
   onEditingIntent: (intent: RoadmapGraphEditingIntent) => void;
 };

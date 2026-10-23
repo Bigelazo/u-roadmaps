@@ -19,60 +19,38 @@ type Operation<T> = (
   input: RoadmapCanvasSessionInput,
 ) => Promise<T>;
 
-/** What a Confirmed action can do: read and write through the session. */
 export type ConfirmedActionContext = {
-  /** Resolves `null` when the read fails; the session reports the failure. */
   read: <T>(operation: Operation<T>, fallback: string) => Promise<T | null>;
-  /** Resolves whether the write succeeded; the session reports a failure and reloads. */
   mutate: (operation: Operation<unknown>, fallback: string) => Promise<boolean>;
-  /** Like `mutate`, but for a Canvas preview write: it reloads the Canvas preview instead. */
   mutateCanvasPreview: (operation: Operation<unknown>, fallback: string) => Promise<boolean>;
 };
 
-/**
- * One Confirmed action. Without `readImpact` it has no Change impact; with it, the engine
- * shows the impact, reads it again on confirmation and applies `run` only when it is
- * unchanged.
- */
 export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
   readImpact?: (
     context: ConfirmedActionContext,
     request: CanvasCommandOf<Kind>,
   ) => Promise<ChangeImpactOf[Kind] | null>;
-  /** Whether this impact needs teaching staff to confirm it; otherwise it applies at once. */
   needsConfirmation?: (impact: ChangeImpactOf[Kind]) => boolean;
-  /**
-   * Applies the request with its latest impact and the confirmation choice teaching staff
-   * made. Resolves whether it succeeded, or, when only part of it did, the rest to confirm
-   * again.
-   */
   run: (
     context: ConfirmedActionContext,
     request: CanvasCommandOf<Kind>,
     impact: ChangeImpactOf[Kind],
     choice: CanvasConfirmationChoice | undefined,
   ) => Promise<boolean | { retry: CanvasCommandOf<Kind> }>;
-  /**
-   * The toast shown once the request took effect with the confirmation choice teaching
-   * staff made, except for the `remaining` part.
-   */
   success?: (
     request: CanvasCommandOf<Kind>,
     choice: CanvasConfirmationChoice | undefined,
     remaining?: CanvasCommandOf<Kind>,
   ) => string;
-  /** What the Practice roadmap is told once the whole request took effect. */
   report?: (
     request: CanvasCommandOf<Kind>,
     choice: CanvasConfirmationChoice | undefined,
   ) => PracticeCanvasAction;
 };
 
-/** The unlock scopes teaching staff can choose between; blocking reads only its own impact. */
 const teacherBlockImpactOperations = (operation: TeacherBlockOperation) =>
   operation === 'BLOCK' ? (['BLOCK'] as const) : (['UNBLOCK', 'BRANCH_UNLOCK'] as const);
 
-/** The operation each Teacher block choice applies; any other choice applies the requested one. */
 const teacherBlockOperationByChoice: Partial<
   Readonly<Record<CanvasConfirmationChoice, TeacherBlockOperation>>
 > = {
@@ -86,7 +64,6 @@ const chosenTeacherBlockOperation = (
   choice?: CanvasConfirmationChoice,
 ) => (choice && teacherBlockOperationByChoice[choice]) || requested;
 
-/** The toast for each Teacher block operation applied. */
 const teacherBlockSuccess: Readonly<Record<TeacherBlockOperation, string>> = {
   BLOCK: 'Nodo bloqueado exitosamente.',
   UNBLOCK: 'Nodo desbloqueado exitosamente.',
@@ -157,7 +134,6 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         'No se pudo cambiar el bloqueo docente.',
       );
     },
-    /** Unlocking behind blocked prerequisites unlocks them too, so it names several Nodes. */
     success: ({ operation }, choice) =>
       choice === canvasConfirmationChoices.unlockPrerequisites
         ? 'Nodos desbloqueados exitosamente.'
@@ -208,7 +184,6 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         : 'Dependencias eliminadas exitosamente.',
   },
   'apply-automatic-layout': {
-    /** The confirmed layout is written as one Node move. */
     run: ({ mutate }, { positions }) => {
       const { write, fallback } = unconfirmedWrites['move-nodes'];
       return mutate(

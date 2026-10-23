@@ -1,10 +1,5 @@
 import 'server-only';
 
-// El servidor `standalone` escucha en `HOSTNAME`/`PORT` detrás de un proxy, de
-// modo que `request.url` apunta al origen interno (`0.0.0.0:5210`). Las
-// redirecciones y la comprobación de origen deben usar el origen público:
-// primero `NEXTAUTH_URL`, luego las cabeceras del proxy y, como último recurso,
-// la URL de la petición.
 function configuredOrigin(): URL | null {
   const value = process.env.NEXTAUTH_URL;
   if (!value) return null;
@@ -34,9 +29,6 @@ function forwardedOrigin(request: Request): URL | null {
   }
 }
 
-// El proxy termina TLS, así que un `NEXTAUTH_URL` con esquema `http` degradaría
-// las cookies de sesión y haría fallar la comprobación de origen contra la
-// cabecera `Origin`, que el navegador envía como `https`.
 function upgradedToProxyProtocol(origin: URL, request: Request): URL {
   if (
     origin.protocol === 'http:' &&

@@ -13,10 +13,6 @@ function text({ context }: TargetValues) {
   };
 }
 
-/**
- * Roadmap availability: the broadest target. Until the recipient recognizes the new
- * Roadmap (empty or copied), it is the only notice for that Roadmap.
- */
 export const roadmapAvailabilityTarget: NoticeTargetDescriptor<RoadmapCreatedFact> = {
   noticeTarget: NOTICE_TARGET.roadmapAvailability,
   noticeClass: 'roadmap-available',
@@ -32,7 +28,6 @@ export const roadmapAvailabilityTarget: NoticeTargetDescriptor<RoadmapCreatedFac
     const course = await roadmap.course();
     return course ? { value: PRESENT, visible: true, context: course } : null;
   },
-  // A Roadmap the recipient has not recognized (even if its notice is on its way).
   entryValues: async (roadmap, _recipientId, known) =>
     known.some(({ knownValue }) => absorbs(knownValue))
       ? [{ target: availabilityRef(roadmap.roadmapId), currentValue: PRESENT }]

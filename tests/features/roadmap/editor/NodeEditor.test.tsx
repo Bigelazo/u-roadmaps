@@ -135,7 +135,6 @@ function renderEditor(
   return { ...view, props, perform, onIntent, ref, rerenderWith };
 }
 
-/** Editor props whose session shows `node` with `overrides`. */
 function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'session'> {
   return {
     session: {
@@ -146,7 +145,6 @@ function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'sessi
   };
 }
 
-/** A perform effect that stays pending until the test resolves its latest call. */
 function deferredPerform() {
   let resolveLatest!: (result: NodeEditorPerformResult) => void;
   const perform = vi.fn(
@@ -588,7 +586,6 @@ test('projects an unsaved Node type through the public preview intent', async ()
   const { onIntent } = renderEditor();
 
   await user.click(screen.getByRole('combobox', { name: 'Tipo' }));
-  // Base UI opens the Select on the animation frame after mousedown, not within the click.
   await user.click(await screen.findByRole('option', { name: 'Evaluación' }));
   await user.click(screen.getByRole('button', { name: 'Previsualizar cambios' }));
 

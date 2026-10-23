@@ -58,15 +58,12 @@ import { cleanupStoredFiles } from '@/features/roadmap/infrastructure/resources/
 
 type JsonObject = Record<string, unknown>;
 
-/** Nil UUID: no participant matches it, so every affected participant is notified. */
 export const SCHEDULED_UNLOCK_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
 
-/** Prisma filter for the dependencies that start or end at `nodeId`. */
 function touchingNode(nodeId: string) {
   return { OR: [{ sourceNodeId: nodeId }, { targetNodeId: nodeId }] };
 }
 
-/** The Dependencies hiding `nodeId` removes, in the order its visibility preview hashes. */
 function dependenciesTouching(transaction: Prisma.TransactionClient, nodeId: string) {
   return transaction.dependency.findMany({
     where: touchingNode(nodeId),
@@ -75,10 +72,6 @@ function dependenciesTouching(transaction: Prisma.TransactionClient, nodeId: str
   });
 }
 
-/**
- * The Dependency facts of the Dependencies hiding a Node removed, as an explicit deletion
- * reports them. Read after the hide, so each fact holds the Nodes as it leaves them.
- */
 async function hidingRemovalFacts(
   transaction: Prisma.TransactionClient,
   removed: readonly { id: string; sourceNodeId: string; targetNodeId: string }[],
@@ -130,13 +123,11 @@ function ruleError({ reason, message }: RuleRejection<RoadmapRuleFailure>) {
   return new ApplicationError(RULE_FAILURE_STATUS[reason], reason, message);
 }
 
-/** A preview's impact with its `version`, the hash a confirmation sends back. */
 function versioned<Impact extends object>(impact: Impact) {
   const version = createHash('sha256').update(JSON.stringify(impact)).digest('base64url');
   return { ...impact, version };
 }
 
-/** Rejects a confirmation whose sent preview version no longer matches the current impact. */
 function rejectStalePreview(
   change: ChangeWithImpact,
   sentVersion: string | undefined,
@@ -183,10 +174,6 @@ async function requireType(transaction: Prisma.TransactionClient, id: string, ro
   return nodeType;
 }
 
-/**
- * Refuses a Node type change the Node type decision rejects and returns the Node types
- * available in the Roadmap. Only a deletion reads the Nodes that use the type.
- */
 async function decideNodeType(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -242,7 +229,6 @@ type NodeChanges = {
   positionY?: number;
 };
 
-/** A Node edit; only a visibility change can change anyone's Node access. */
 export const updateRoadmapNode = roadmapCommand({
   capability: 'edit',
   parse: ({
@@ -252,7 +238,6 @@ export const updateRoadmapNode = roadmapCommand({
   }: {
     id: string;
     input: JsonObject;
-    /** The visibility preview's version; required only when the edit hides the Node. */
     previewVersion?: string;
   }) => {
     const nodeId = requireUuid(id, 'nodeId');
@@ -272,7 +257,6 @@ export const updateRoadmapNode = roadmapCommand({
     const node = await requireNode(tx, nodeId, roadmap.id);
     if (changes.nodeTypeId !== undefined) await requireType(tx, changes.nodeTypeId, roadmap.id);
     const isVisible = changes.isVisible ?? node.isVisible;
-    // Only a hidden Node loses Dependencies; skip the read on ordinary edits and moves.
     const dependencies = isVisible ? [] : await dependenciesTouching(tx, node.id);
     if (changes.isVisible === false) {
       rejectStalePreview('hide', previewVersion, versioned({ dependencies }));
@@ -387,7 +371,6 @@ export const previewNodeDeletion = async ({
   );
 };
 
-/** Deletes the Node and returns the keys of its stored files. */
 const nodeDeletion = roadmapCommand({
   capability: 'edit',
   parse: ({ id, previewVersion }: { id: string; previewVersion?: string }) => ({
@@ -420,7 +403,6 @@ const nodeDeletion = roadmapCommand({
   },
 });
 
-/** Deletes the Node, then its stored files once the deletion committed. */
 export const deleteRoadmapNode = async (
   request: Parameters<typeof nodeDeletion>[0],
   changePort: RoadmapChangePort,
@@ -509,7 +491,6 @@ function parseDependency({ input }: { input: JsonObject }) {
   };
 }
 
-/** Decides the Dependency on the Roadmap's graph: its endpoints and the Nodes it blocks. */
 async function decideRoadmapDependency(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
@@ -519,7 +500,6 @@ async function decideRoadmapDependency(
     transaction.roadmapNode.findMany({
       where: { roadmapId },
       select: { id: true, title: true, isVisible: true, isTeacherBlocked: true },
-      // Equal titles keep one order, so the preview's version is stable.
       orderBy: { id: 'asc' },
     }),
     transaction.dependency.findMany({
@@ -529,7 +509,6 @@ async function decideRoadmapDependency(
   ]);
   const decision = decideDependency({ nodes, dependencies, sourceNodeId, targetNodeId });
   if (decision.kind === 'REJECTED') throw ruleError(decision);
-  // The decision guarantees both Nodes exist.
   const nodeFacts = (id: string) => {
     const { title, isVisible } = nodes.find((node) => node.id === id)!;
     return { title, isVisible };
@@ -537,7 +516,6 @@ async function decideRoadmapDependency(
   return {
     sourceNode: nodeFacts(sourceNodeId),
     targetNode: nodeFacts(targetNodeId),
-    /** The Dependency preview: the dependents its source's Teacher block would block. */
     preview: versioned({ nodes: decision.teacherBlockedNodes }),
   };
 }
@@ -665,7 +643,6 @@ async function teacherBlockPreview(
         isTeacherBlocked: true,
         nodeType: { select: { name: true, icon: true, color: true } },
       },
-      // Equal titles keep one order, so the preview's version is stable.
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
     }),
     transaction.dependency.findMany({
@@ -715,7 +692,6 @@ export const changeTeacherBlock = roadmapCommand({
             : { isTeacherBlocked: false, teacherUnlockOn: null },
       });
     }
-    // Unlocking a prerequisite can release dependents whose scheduled day already arrived.
     if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(tx, roadmap.id);
     return { result: preview, facts: [] };
   },
@@ -769,12 +745,10 @@ async function releaseDueScheduledUnlocks(
   return releasedNodeIds;
 }
 
-/** A Scheduled unlock date; it changes nobody's access until the day arrives. */
 export const scheduleTeacherUnlock = roadmapCommand({
   capability: 'edit',
   parse: ({ id, unlockOn }: { id: string; unlockOn: unknown }) => {
     const nodeId = requireUuid(id, 'nodeId');
-    // One clock read: the Node's rule in `run` decides against the same day.
     const today = chileCalendarDay();
     const decision = decideScheduledUnlockDay({ unlockOn, today });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
@@ -793,14 +767,12 @@ export const scheduleTeacherUnlock = roadmapCommand({
   },
 });
 
-/** A Roadmap closed (or removed) since the pass listed it releases nothing. */
 function nothingReleasedOnClosure(error: unknown): string[] {
   const refusals = ['ROADMAP_CLOSED', 'ROADMAP_NOT_FOUND'];
   if (error instanceof ApplicationError && refusals.includes(error.code)) return [];
   throw error;
 }
 
-/** Releases every due scheduled unlock; run by the daily scheduled job. */
 export const releaseScheduledTeacherUnlocks = async (
   changePort: RoadmapChangePort,
   today: CalendarDay = chileCalendarDay(),
@@ -819,8 +791,6 @@ export const releaseScheduledTeacherUnlocks = async (
   });
   const released = [];
   for (const roadmap of roadmaps) {
-    // A node waiting for blocked prerequisites stays due on every pass; checking outside a
-    // transaction keeps those passes from contending with teaching edits on its Roadmap.
     if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
     const releasedNodeIds = await roadmapChangeTransaction(
       changePort,

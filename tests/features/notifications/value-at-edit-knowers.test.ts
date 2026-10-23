@@ -21,8 +21,6 @@ const changes = {
   facts: [accessFact],
 } as unknown as RoadmapChanges;
 
-// The value at edit time is stored on existing Known values only: every recipient it
-// names must be a knower, whose baseline the same change records first.
 test('every target with a value at edit time names only its knowers', async () => {
   const withValueAtEdit = noticeTargetDescriptors.filter((each) => each.currentAtEdit);
   expect(withValueAtEdit.map(({ noticeTarget }) => noticeTarget)).toEqual(['node-access']);

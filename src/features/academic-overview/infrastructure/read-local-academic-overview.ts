@@ -8,7 +8,6 @@ import type {
   RoadmapClosureCalendar,
 } from '../types';
 
-/** The person's Completions of visible Nodes, counted per Roadmap. */
 async function readCompletedVisibleNodes(userId: string, roadmapIds: string[]) {
   if (roadmapIds.length === 0) return new Map<string, number>();
   const completions = await prisma.completion.findMany({

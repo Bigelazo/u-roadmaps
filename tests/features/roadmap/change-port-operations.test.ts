@@ -1,8 +1,6 @@
-// @vitest-environment node
+import { localFixtureUCampus } from '@/integrations/ucampus/server';
 import 'dotenv/config';
-import '../../notifications-integration/setup';
-import databaseSetup from '../../notifications-integration/global-setup';
-import { beforeAll, expect } from 'vitest';
+import { expect } from 'vitest';
 import { teacher, test, type IntegrationCourse } from '../../notifications-integration/fixtures';
 import { prisma } from '@/shared/server/db';
 import { recordingChangePort } from './support/recording-change-port';
@@ -28,8 +26,6 @@ import { createRoadmap } from '@/features/roadmap/application/roadmap';
 import { materializeParticipation } from '@/features/roadmap/application/academic-participation';
 import { teacherEdits } from '../../notifications-integration/roadmap';
 
-beforeAll(databaseSetup, 60_000);
-
 async function addNode(course: IntegrationCourse, title = 'Pilas') {
   const type = await prisma.nodeType.findFirstOrThrow({ where: { roadmapId: course.roadmapId } });
   return prisma.roadmapNode.create({
@@ -49,7 +45,6 @@ function addNodeType(course: { roadmapId: string }, name: string) {
   });
 }
 
-/** Matches a recorded `node-access` fact carrying at least `fields`. */
 function access(fields: Record<string, unknown>) {
   return expect.objectContaining({ kind: 'node-access', ...fields });
 }
@@ -135,7 +130,6 @@ test('description and type edits report previous values and write no notice base
       current: { id: nextType.id, name: 'Taller' },
     },
   ]);
-  // Known values are recorded by the notice lifecycle module through the port.
   expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
 });
 
@@ -160,7 +154,6 @@ test('visibility and deletion report their facts and recipient access transition
       current: 'Retirado',
     }),
   );
-  // Access baselines are recorded by the notice lifecycle module through the port.
   expect(await prisma.noticeKnownValue.count({ where: { roadmapId: course.roadmapId } })).toBe(0);
   recording.changes.length = 0;
   await edits.remove(nodeId);
@@ -258,7 +251,6 @@ test('dependencies report the pair and distinct access for each recipient; Compl
   ]);
   recording.changes.length = 0;
   await deleteRoadmapDependency({ ...input, id: result.dependency.id }, recording.port);
-  // Only the classmate, who has not completed the prerequisite, regains access.
   expect(recording.facts()).toMatchObject([
     { kind: 'dependency', previous: true, current: false },
     { kind: 'node-access', recipientId: course.classmateId, previous: 'Bloqueado' },
@@ -455,7 +447,7 @@ test('Node type commands refuse what the Node type decision rejects, with their 
 test('promotion reports the role change', async ({ course }) => {
   const recording = recordingChangePort();
   await materializeParticipation(
-    { id: course.studentId, rut: null },
+    { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
     course.identifier,
     { name: 'Curso de prueba', positions: ['COURSE_PROFESSOR'] },
     recording.port,
@@ -474,7 +466,7 @@ test('concurrent materializations of one new Course both succeed', async ({ cour
   const courseCode = `RACE${crypto.randomUUID().slice(0, 8)}`;
   const offering = (year: number, semester: number) =>
     materializeParticipation(
-      { id: course.studentId, rut: null },
+      { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
       { courseCode, year, semester },
       { name: 'Curso concurrente', positions: ['STUDENT'] },
       recordingChangePort().port,

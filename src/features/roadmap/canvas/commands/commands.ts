@@ -20,11 +20,6 @@ export type RoadmapNodePlacement = {
   readonly position: RoadmapNodePosition;
 };
 
-/**
- * The canvas writes teaching staff can ask for, each named after the state it leads to.
- * The Graph and the Node editor emit subsets of it directly; no member carries the
- * current state, so no caller has to invert a flag.
- */
 export type CanvasCommand =
   | { readonly kind: 'hide-node'; readonly nodeId: string }
   | { readonly kind: 'show-node'; readonly nodeId: string }
@@ -43,7 +38,6 @@ export type CanvasCommand =
   | { readonly kind: 'delete-dependencies'; readonly dependencyIds: readonly string[] }
   | { readonly kind: 'move-nodes'; readonly positions: readonly RoadmapNodePlacement[] }
   | {
-      /** Geometry is calculated in the Graph; confirmation and persistence belong to the canvas. */
       readonly kind: 'apply-automatic-layout';
       readonly positions: readonly RoadmapNodePlacement[];
       readonly direction: RoadmapLayoutDirection;
@@ -78,7 +72,6 @@ export type CanvasCommandOf<Kind extends CanvasCommand['kind']> = Extract<
   { kind: Kind }
 >;
 
-/** The choices teaching staff can confirm a pending Confirmed action with, by identifier. */
 export const canvasConfirmationChoices = {
   autoLayout: 'auto-layout',
   hideNode: 'hide-node',
@@ -97,16 +90,10 @@ export const canvasConfirmationChoices = {
 export type CanvasConfirmationChoice =
   (typeof canvasConfirmationChoices)[keyof typeof canvasConfirmationChoices];
 
-/**
- * The Teacher block impacts a confirmation offers, by operation: blocking reads BLOCK
- * alone, and an unlock reads both scopes so teaching staff can unlock only the Node or
- * also its dependents.
- */
 export type TeacherBlockChangeImpact = {
   readonly [Operation in TeacherBlockOperation]?: TeacherBlockPreview;
 };
 
-/** The Change impact each Confirmed action shows; `null` when it has none. */
 export type ChangeImpactOf = {
   'hide-node': NodeHidingImpact;
   'show-node': null;
@@ -119,19 +106,12 @@ export type ChangeImpactOf = {
   'reset-canvas-preview': null;
 };
 
-/** Canvas commands that take effect only after teaching staff confirm them. */
 export type ConfirmedActionKind = keyof ChangeImpactOf;
 
-/** Canvas commands that take effect at once, without a confirmation. */
 export type UnconfirmedCommandKind = Exclude<CanvasCommand['kind'], ConfirmedActionKind>;
 
 export type UnconfirmedCommand = CanvasCommandOf<UnconfirmedCommandKind>;
 
-/**
- * The single pending Confirmed action of a Roadmap canvas session, as plain data.
- * `reading-impact` reads its Change impact, `awaiting` waits for a choice and `confirming`
- * reads the impact again and applies `choice`.
- */
 export type PendingConfirmation = {
   [Kind in ConfirmedActionKind]: {
     readonly kind: Kind;

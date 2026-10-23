@@ -18,7 +18,6 @@ it.each([
   });
 });
 
-// Enumerate all 64 subsets, with expected precedence supplied by the spec.
 const precedence = [
   'COURSE_PROFESSOR',
   'COORDINATING_PROFESSOR',

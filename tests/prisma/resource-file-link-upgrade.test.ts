@@ -1,4 +1,3 @@
-// @vitest-environment node
 import 'dotenv/config';
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -243,7 +242,6 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
       context: {},
     },
   });
-  // Unknown/malformed identities must neither abort the upgrade nor acquire a guessed baseline.
   const malformedTargets = ['resource:not-a-uuid', `resource:${video.id.replaceAll('-', '')}`];
   const malformedKnown = await Promise.all(
     malformedTargets.map((targetKey) =>
@@ -327,9 +325,7 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
   await prisma.nodeChangeReview.create({
     data: { recipientId: ids.user, nodeId: ids.node, reviewedAt: date },
   });
-  // The same migration must also preserve frozen editions and every original timestamp/URL.
   await prisma.roadmap.update({ where: { id: ids.roadmap }, data: { closedAt: date } });
-  // A late failure must roll back schema, material and all notice stores together.
   const beforeFailure = await sql.query(`SELECT jsonb_build_object(
     'resources', (SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM "Resource" r),
     'known', (SELECT jsonb_agg(to_jsonb(k) ORDER BY "targetKey") FROM "NoticeKnownValue" k),
@@ -448,8 +444,7 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
   expect(await prisma.roadmapVisit.findFirst()).toMatchObject({
     lastRecognizedOpeningSequence: BigInt(0),
   });
-  expect(await prisma.roadmapNotice.count()).toBe(7); // only the type-only notice withdrew
-  // PostgreSQL protects both ownership directions after conversion.
+  expect(await prisma.roadmapNotice.count()).toBe(7);
   for (const [kind, key, contentType] of [
     ['FILE', null, null],
     ['LINK', randomUUID(), null],
@@ -466,7 +461,6 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
   await expect(
     sql.query('UPDATE "Resource" SET type=\'VIDEO\' WHERE id=$1', [video.id]),
   ).rejects.toMatchObject({ code: '22P02' });
-  // Recognize the pre-migration capture after a later genuine edit, using the public lifecycle.
   await prisma.roadmap.update({ where: { id: ids.roadmap }, data: { closedAt: null } });
   const { updateRoadmapResource } = await import('@/features/roadmap/server');
   const { recordRoadmapNotices, acknowledgeOwnNotices, listOwnNotices } =

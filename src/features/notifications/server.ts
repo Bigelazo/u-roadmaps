@@ -21,10 +21,8 @@ import {
 } from './infrastructure/notice-lifecycle';
 export { reviewOwnNode } from './infrastructure/own-inbox';
 
-/** Public types of the notice lifecycle module: a recorded change's deferred delivery and its scheduler. */
 export type { NoticeDelivery, NoticeDeliveryScheduler };
 
-// Notifications receive Node access from the participant view.
 export function listOwnNotices(userId: string, params: URLSearchParams) {
   return listNotices(userId, params, readParticipantAccess);
 }
@@ -41,10 +39,6 @@ export function acknowledgeOwnNotices(userId: string, input: Record<string, unkn
   return acknowledgeNotices(userId, input, readParticipantAccess);
 }
 
-/**
- * Notice lifecycle module (ADR-0024): record Known values inside the roadmap
- * transaction and return the deferred delivery of the change's notices.
- */
 export function recordRoadmapNotices(
   transaction: Prisma.TransactionClient,
   changes: RoadmapChanges,

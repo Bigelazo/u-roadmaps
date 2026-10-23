@@ -10,7 +10,6 @@ import {
   synchronizeAcademicParticipations,
 } from '@/features/roadmap/server';
 
-/** The synchronized U-Campus courses and the Roadmap closure calendar the overview reads. */
 async function overviewSources(actor: AcademicOverviewActor) {
   const [source, isPastClosure] = await Promise.all([
     synchronizeAcademicParticipations(actor, roadmapChangePort),

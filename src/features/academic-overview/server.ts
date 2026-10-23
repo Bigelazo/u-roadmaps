@@ -9,7 +9,6 @@ import type {
 
 export type { AcademicOverviewActor, AcademicOverviewSources } from './types';
 
-/** Returns the page-specific, grouped projection of the Academic overview. */
 export async function getAcademicOverviewPage(
   actor: AcademicOverviewActor,
   sources: AcademicOverviewSources,
@@ -19,7 +18,6 @@ export async function getAcademicOverviewPage(
   return getOverview(actor, sources);
 }
 
-/** Returns the API-specific projection without normalizing its observable order. */
 export async function getAcademicOverviewApi(
   actor: AcademicOverviewActor,
   sources: AcademicOverviewSources,

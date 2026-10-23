@@ -71,7 +71,6 @@ test('recipients who see the Node blocked are told; nobody is told about a hidde
     expect(await pendingNotices(recipient, course.roadmapId)).toMatchObject([
       { body: '«Grafos» pasó a llamarse «Grafos dirigidos».', data: { nodeId: blocked.id } },
     ]);
-  // Revealing the renamed Node is not a title change for anyone.
   await edits.update(hidden.id, { isVisible: true, title: 'Montículos binarios' });
   expect(titleTargets(await pendingNotices(course.studentId, course.roadmapId))).toHaveLength(1);
 });
@@ -127,7 +126,6 @@ test('counts, the Node change mark and the Grouped roadmap notice count title ta
   expect(await countOwnNotices(course.studentId, params)).toEqual({ count: 1 });
   await enterRoadmap(course.studentId, course.roadmapId);
   await edits.rename(nodeId, 'Recursión');
-  // Recognized and changed again, the same target marks its Node once.
   expect(await countOwnNodeChangeTargets(course.studentId, params)).toEqual({
     byNode: { [nodeId]: 1 },
   });

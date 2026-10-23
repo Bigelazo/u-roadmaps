@@ -3,6 +3,12 @@ import { test as base } from 'vitest';
 import { prisma } from '@/shared/server/db';
 import { cleanTestData, integrationDatabaseUrl } from './database';
 
+if (process.env.DATABASE_URL !== integrationDatabaseUrl()) {
+  throw new Error(
+    'List unit files that use these fixtures in the database project of vitest.config.mts.',
+  );
+}
+
 async function createCourse(
   code: string,
   [teacherId, studentId, classmateId, colleagueId]: string[],
@@ -66,15 +72,10 @@ export type IntegrationCourse = Awaited<ReturnType<typeof createCourse>>;
 
 type CourseParticipants = Pick<IntegrationCourse, 'teacherId' | 'studentId' | 'identifier'>;
 
-/**
- * The course teacher, as Roadmap operations receive them. Computed from the fields, so a
- * course derived with another teacher or Course offering stays consistent.
- */
 export function teacher({ teacherId, identifier }: Omit<CourseParticipants, 'studentId'>) {
   return { userId: teacherId, identifier };
 }
 
-/** The course student, as Roadmap operations receive them. */
 export function student({ studentId, identifier }: Omit<CourseParticipants, 'teacherId'>) {
   return { userId: studentId, identifier };
 }
@@ -95,6 +96,5 @@ async function course(
 
 export const test = base.extend<{ course: IntegrationCourse; otherCourse: IntegrationCourse }>({
   course,
-  /** A second Course offering with its own Roadmap and participants. */
   otherCourse: course,
 });

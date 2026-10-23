@@ -16,7 +16,6 @@ export const resourceRef = (resourceId: string, nodeId: string) => ({
 type ResourceFact = Extract<RoadmapChangeFact, { kind: 'resource' }>;
 type ResourceState = Readonly<{ title: string; revision: string }>;
 
-/** A Resource is one unit: absent, or present with its title and opaque content revision. */
 export function resourceValue(state: ResourceState | null) {
   return JSON.stringify(state && { title: state.title, revision: state.revision });
 }
@@ -34,11 +33,6 @@ function decode(value: string): ResourceState | null {
   return state as ResourceState;
 }
 
-/**
- * The Resource lifecycle composes while pending (ADR-0014 decision 1): added then
- * edited is new with its current title, added then removed returns to absent, and
- * an edit details only a title change.
- */
 function lifecycle({ knownValue, currentValue, context }: TargetValues) {
   const known = decode(knownValue);
   const current = decode(currentValue);
@@ -59,8 +53,6 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   matches: (fact): fact is ResourceFact => fact.kind === 'resource',
   target: (fact) => resourceRef(fact.resourceId, fact.nodeId),
   previousValue: (fact) => resourceValue(fact.previous),
-  // Description and Resources reach only who has the Node accessible (ADR-0014 decision 10),
-  // and teaching staff always (decision 10, «Equipo docente»).
   knowers: (fact, _changes, roadmap) => nodeOpeners(true, fact.nodeId, roadmap),
   audience: (fact, _changes, roadmap) => nodeOpeners(true, fact.nodeId, roadmap),
   async current(target, roadmap, recipientId) {
@@ -84,14 +76,12 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
     const knownKeys = new Set(known.map(({ targetKey }) => targetKey));
     const shown = resources.flatMap((resource) => {
       const target = resourceRef(resource.id, resource.nodeId);
-      // A blocked recipient never saw the Node's Resources, unless it already knew this one.
       if (!accessible.has(resource.nodeId) && !knownKeys.has(target.targetKey)) return [];
       return [{ target, currentValue: resourceValue(resource) }];
     });
     const present = new Set(
       resources.map((resource) => resourceRef(resource.id, resource.nodeId).targetKey),
     );
-    // A known Resource of a remaining Node that is gone is shown as removed.
     const removed = known
       .filter(({ targetKey, nodeId }) => nodeId && nodeIds.has(nodeId) && !present.has(targetKey))
       .map((target) => ({ target, currentValue: resourceValue(null) }));
@@ -99,7 +89,6 @@ export const resourceTarget: NoticeTargetDescriptor<ResourceFact> = {
   },
   wording(values) {
     const { change, resourceTitle, titleChange, nodeTitle } = lifecycle(values);
-    // The Inbox names the Node; the Change summary groups items under it already.
     const inNode = (preposition: string, withNode: boolean) =>
       withNode ? ` ${preposition} «${nodeTitle}»` : '';
     const sentence = (withNode: boolean) =>

@@ -92,7 +92,6 @@ function sameResourceInput(first: ResourceInput, second: ResourceInput) {
   return first.title === second.title && first.url === second.url && first.type === second.type;
 }
 
-/** Field-by-field and order-sensitive: the same Resources in the same order. */
 function sameResources(first: readonly Resource[], second: readonly Resource[]) {
   return JSON.stringify(first) === JSON.stringify(second);
 }
@@ -251,8 +250,6 @@ export function nodeEditorReducer(
             previous.isTeacherBlocked !== action.node.isTeacherBlocked ||
             !sameResources(previous.resources, action.node.resources));
         const isPendingEffectResult = refreshMatchesPendingEffect(state, action.node);
-        // The result of the pending effect, arriving before it resolves, keeps that
-        // effect current so it can still close its Resource form.
         const keepsPendingEffectCurrent = Boolean(
           changed && state.pendingEditorEffect && isPendingEffectResult,
         );

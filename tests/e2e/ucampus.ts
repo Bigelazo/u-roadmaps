@@ -14,7 +14,6 @@ type Course = {
 type RosterRow = Record<string, unknown> & { rut: number };
 type Person = { rut: number; nombre1: string; apellido1: string; apellido2: string };
 
-/** A real local HTTP boundary, with per-test U-Campus responses keyed by RUT. */
 export async function startUcampus() {
   const coursesByRut = new Map<string, Course[]>();
   const failures = new Set<string>();
@@ -97,7 +96,6 @@ export async function reportUcampusPosition(
   position: MufasaInstitutionalCoursePosition | null,
   ramoId?: number,
 ) {
-  // Send the documented institution labels; parsing stays part of the HTTP test.
   const labels = {
     STUDENT: null,
     COURSE_PROFESSOR: 'profesor de cátedra',
@@ -139,13 +137,10 @@ export type UcampusRosterMember = {
   rut: string;
   section: string;
   position: MufasaInstitutionalCoursePosition;
-  /** The U-Campus person name; omitted people have no `personas` entry. */
   name?: { first: string; lastName: string; secondLastName: string };
-  /** Defaults to the offering's own Academic term. */
   term?: { year: number; semester: number };
 };
 
-// Recorded MUFASA shape: students carry a numeric 0 and staff positions a string id.
 const rosterPositions: Record<MufasaInstitutionalCoursePosition, [number | string, string]> = {
   STUDENT: [0, 'Alumno'],
   COURSE_PROFESSOR: ['1', 'Profesor de Cátedra'],
@@ -155,7 +150,6 @@ const rosterPositions: Record<MufasaInstitutionalCoursePosition, [number | strin
   OBSERVER: ['10', 'Oyente'],
 };
 
-/** Registers the `integrantes` of a Course (Ramo) and the `personas` names of its members. */
 export async function reportUcampusRoster(
   ramoId: number,
   offering: E2ECourseOffering,

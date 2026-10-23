@@ -16,26 +16,16 @@ export type TargetReconciliationInput = Readonly<{
   descriptor: NoticeTargetDescriptor;
   identity: RecipientRoadmap;
   target: NoticeTargetRef;
-  /** Known value (and its context) to record when the recipient has no baseline yet. */
   fallbackKnown: string;
   fallbackContext?: TargetContext;
   roadmap: RoadmapView;
-  /** Context the change itself reported (see `NoticeTargetDescriptor.factContext`). */
   context?: Readonly<Record<string, unknown>>;
-  /** Loaded only when a notice is written. */
   courseContext: () => Promise<NoticeCourseContext>;
   eventId: string;
   occurredAt: Date;
-  /** A change inside this broad target: rewrite its pending notice even if its values held. */
   absorbing?: boolean;
 }>;
 
-/**
- * Reconcile a target within the hierarchy Roadmap ⊃ Node ⊃ aspect/Resource: a broad
- * target the recipient has not recognized absorbs the change (its notice is brought up
- * to date instead); a broad notice, once written, replaces the pending notices it
- * contains. Callers hold the recipient/Roadmap lock.
- */
 export async function reconcileNoticeTarget(
   transaction: Prisma.TransactionClient,
   input: TargetReconciliationInput,
@@ -80,11 +70,6 @@ async function reconcileInScope(
   });
 }
 
-/**
- * The single reconciliation path: compare the target's live value with the
- * recipient's Known value and pending notice, then withdraw, keep, update in
- * place (same notice id) or create. Returns the pending notice left, if any.
- */
 async function reconcileOne(
   transaction: Prisma.TransactionClient,
   input: TargetReconciliationInput,
@@ -95,7 +80,6 @@ async function reconcileOne(
     where: { ...identity, targetKey: target.targetKey, acknowledgedAt: null },
   });
   if (!current) {
-    // The target no longer exists: nothing is left to tell or to compare.
     if (pending) await transaction.roadmapNotice.delete({ where: { id: pending.id } });
     await transaction.noticeKnownValue.deleteMany({
       where: { ...identity, targetKey: target.targetKey },
@@ -116,7 +100,6 @@ async function reconcileOne(
           input.fallbackKnown,
           input.fallbackContext,
         );
-  // A pending row without stored values can only be replaced in place.
   const pendingValues = pending
     ? (storedTargetValues(pending.data)?.values ?? {
         knownValue: '',
@@ -127,8 +110,6 @@ async function reconcileOne(
   const result = reconcileTarget({
     knownValue: known.knownValue,
     pending: pendingValues,
-    // Targets recorded at edit time reconcile against that state (it may be newer than
-    // this delivery, never older than the recorded change).
     currentValue: input.descriptor.currentAtEdit
       ? (known.currentValue ?? known.knownValue)
       : current.value,
@@ -145,14 +126,12 @@ async function reconcileOne(
   const values = {
     knownValue: result.action === 'no-op' ? pendingValues!.knownValue : result.knownValue,
     currentValue: result.action === 'no-op' ? pendingValues!.currentValue : result.currentValue,
-    // Live context wins over the change's, which wins over what the pending notice kept.
     context: { ...pendingValues?.context, ...input.context, ...current.context },
     knownContext: known.context,
   };
   const wording = descriptor.wording(values);
   const courseContext = await input.courseContext();
   const row = {
-    // Text is projected at read time; the columns keep a cache of it.
     subject: wording.subject,
     body: wording.body,
     data: {

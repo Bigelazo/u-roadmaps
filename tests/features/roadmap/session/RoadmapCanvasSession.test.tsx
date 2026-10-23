@@ -12,12 +12,9 @@ import { Toaster } from '@/shared/ui/toast';
 import { closeToast, findToast, queryToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
 
-// The public canvas seam renders a mobile sidebar in these scenarios.
 beforeEach(() => mockViewport(640));
-// The runner cleans up each canvas before these file-scoped globals are restored.
 afterAll(() => vi.unstubAllGlobals());
 
-// Canvas commands are covered by the canvas command module tests; the editor is not needed.
 vi.mock('next/dynamic', () => ({ default: () => () => null }));
 
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
@@ -200,7 +197,6 @@ describe('RoadmapCanvasSession', () => {
 
     rerenderSession(studentInput('current', courseInput('CC1003', 'Álgebra I')));
 
-    // Toasts live in the app-level Toaster, so a success outlives the Course offering switch.
     expect(queryToast('Nodo completado.')).toBeTruthy();
     resolvePreviousRoadmap(roadmap);
     expect(await screen.findByRole('button', { name: 'Integrales' })).toBeTruthy();
@@ -209,7 +205,6 @@ describe('RoadmapCanvasSession', () => {
   });
 
   test('student and observer sessions retain their Roadmap on changes and recovery until re-entry', async () => {
-    // Observers use the same student experience at the public canvas seam.
     const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
     const load = vi.spyOn(persistence, 'load');
     const input = studentInput();

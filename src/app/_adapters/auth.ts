@@ -1,6 +1,28 @@
-import { unwrap } from '@/shared/errors/server';
-import { requireAuthenticatedUser as requireSessionUser } from '@/shared/server/session';
+import 'server-only';
 
-export function requireAuthenticatedUser() {
-  return unwrap(() => requireSessionUser());
+import type { Session } from 'next-auth';
+import { getApplicationSession } from '@/shared/server/session';
+import { prisma } from '@/shared/server/db';
+import { isUuid } from '@/shared/validation';
+import { ApplicationError } from '@/shared/errors/server';
+import { localFixtureUCampus, mufasaUCampus } from '@/integrations/ucampus/server';
+
+export async function resolveSessionUser(session: Session | null) {
+  const userId = session?.user?.id;
+  if (!isUuid(userId)) return null;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  return (
+    user && {
+      ...user,
+      ucampus: session?.user?.useLocalFixtureData === true ? localFixtureUCampus : mufasaUCampus,
+    }
+  );
+}
+
+export async function requireAuthenticatedUser() {
+  const user = await resolveSessionUser(await getApplicationSession());
+  if (!user) {
+    throw new ApplicationError(401, 'UNAUTHENTICATED', 'Debes iniciar sesión para continuar.');
+  }
+  return user;
 }

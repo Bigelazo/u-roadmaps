@@ -45,7 +45,6 @@ test('native SSE isolates Inbox and Roadmap frames from a User outside the Cours
         }),
       ]),
     );
-    // A bounded observation of the real connection would catch either leaked signal.
     await expect(
       outsiderPage.waitForFunction(
         () =>
@@ -120,7 +119,6 @@ test('Resource notices stream to two tabs while student content stays stable unt
         ).status(),
       ).toBe(200);
     }
-    // Pending additions absorb edits into one Resource target (#181).
     await expect.poll(async () => (await notices())[0]?.data.resourceTitle).toBe('Última guía');
     expect(await notices()).toHaveLength(1);
     await expect(page.getByRole('link', { name: 'Última guía' })).toBeHidden();
@@ -129,7 +127,6 @@ test('Resource notices stream to two tabs while student content stays stable unt
       other.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }),
     ).toBeVisible();
     const [latest] = await notices();
-    // Opening the Inbox leaves pending notices unchanged.
     expect(latest.id).toBe(first.id);
     expect(latest).toMatchObject({
       read: false,
@@ -139,7 +136,6 @@ test('Resource notices stream to two tabs while student content stays stable unt
         noticeClass: 'roadmap-resource-changed',
       },
     });
-    // The already-open Node did not recognize these subsequent arrivals.
     await other.getByRole('button', { name: /Última guía/ }).click();
     await expect(
       other.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
@@ -197,7 +193,6 @@ test('classification and Dependency repeats reconcile independent targets and wi
     204,
   );
   await connect();
-  // Repeats reconcile one pending target per pair and Node type name (ADR-0014).
   await expect.poll(async () => (await feed(student)).length).toBe(2);
   const delivered = await feed(student);
   const byClass = (noticeClass: string) =>

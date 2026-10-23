@@ -25,12 +25,6 @@ function names({ context, knownContext }: TargetValues) {
   };
 }
 
-/**
- * Node type: compared by type identity and worded with the type names the recipient
- * knew, which survive later Node type renames. Whoever sees the Node is told,
- * accessible or blocked (ADR-0014 decision 10); teaching staff see hidden Nodes too
- * (decision 10, «Equipo docente»).
- */
 export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
   noticeTarget: NOTICE_TARGET.nodeType,
   noticeClass: 'roadmap-node-changed',
@@ -41,7 +35,6 @@ export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
   previousContext: (fact) => ({ typeName: fact.previous.name }),
   knowers: async (fact, changes, roadmap) =>
     nodeViewers(await nodeVisibleBefore(fact.nodeId, changes, roadmap), roadmap),
-  // Revealing a retyped Node is not a type change to students: none saw the previous type.
   audience: async (fact, changes, roadmap) =>
     nodeViewers(await nodeVisibleThroughout(fact.nodeId, changes, roadmap), roadmap),
   async current(target, roadmap, recipientId) {

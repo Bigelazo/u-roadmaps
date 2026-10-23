@@ -9,20 +9,16 @@ const nodes = [
 ];
 const accessible = new Set(['open']);
 
-// An accessible Node, a Blocked node, a hidden Node and a missing Node.
 const aboutNodes = ['open', 'blocked', 'hidden', 'missing'].map((nodeId) => ({ nodeId }));
-// Both endpoints visible (one Blocked), a hidden endpoint, a missing endpoint.
 const aboutDependencies = [
   ['open', 'blocked'],
   ['open', 'hidden'],
   ['missing', 'open'],
 ].map(([sourceNodeId, targetNodeId]) => ({ sourceNodeId, targetNodeId }));
-// A type with a visible (Blocked) Node, a type with only hidden Nodes, an unused type.
 const aboutNodeTypes = ['type', 'hidden-type', 'unused-type'].map((nodeTypeId) => ({
   nodeTypeId,
 }));
 
-// ADR-0030 decision 3, per Notice target: whether each stored notice above is shown.
 const SHOWN: Record<string, [Record<string, string>[], boolean[]]> = {
   'node-title': [aboutNodes, [true, true, false, false]],
   'node-type': [aboutNodes, [true, true, false, false]],
@@ -36,9 +32,6 @@ const SHOWN: Record<string, [Record<string, string>[], boolean[]]> = {
   'node-type-name': [aboutNodeTypes, [true, false, false]],
 };
 
-// ADR-0014 decision 10, «Equipo docente»: teaching staff are shown every Node change,
-// whatever the Node's visibility or Teacher block; a missing Node, a Node type's name and
-// Node access are as above.
 const SHOWN_TO_TEACHING_STAFF: Record<string, boolean[]> = {
   'node-title': [true, true, true, false],
   'node-type': [true, true, true, false],

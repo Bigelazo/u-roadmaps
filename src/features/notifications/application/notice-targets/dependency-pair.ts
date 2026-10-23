@@ -16,36 +16,23 @@ export const dependencyPairRef = (sourceNodeId: string, targetNodeId: string) =>
   nodeId: null,
 });
 
-/** A Dependency pair's value: whether the requirement exists. */
 const pairValue = (exists: boolean) => (exists ? PRESENT : ABSENT);
 
 type DependencyFact = Extract<RoadmapChangeFact, { kind: 'dependency' }>;
 
-/** The ordered (prerequisite, dependent) pair a `dependency:<source>:<target>` key names. */
 function dependencyPair({ targetKey }: NoticeTargetRef) {
   const [, sourceNodeId, targetNodeId] = targetKey.split(':');
   return { sourceNodeId, targetNodeId };
 }
 
-/**
- * Everyone when the Dependency joins two visible Nodes; teaching staff always
- * (ADR-0014 decision 10, «Equipo docente»).
- */
 async function pairRecipients(
   fact: DependencyFact,
   _changes: RoadmapChanges,
   roadmap: RoadmapView,
 ) {
-  // Removals caused by hiding a Node arrive with the Node already hidden, so they reach
-  // teaching staff only. Removals caused by deleting a Node are not reported as Dependency facts.
   return nodeViewers(fact.sourceNode.isVisible && fact.targetNode.isVisible, roadmap);
 }
 
-/**
- * Dependency pair: keyed by the ordered pair of Nodes, not the Dependency id, so removing
- * and re-adding the same requirement nets to nothing and a reversal is another target.
- * Everyone is told, whatever their own Completions (ADR-0014 decision 10).
- */
 export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
   noticeTarget: NOTICE_TARGET.dependency,
   noticeClass: 'roadmap-path-changed',
@@ -80,7 +67,6 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
     const present = new Set(pairs.map(({ targetKey }) => targetKey));
     return [
       ...pairs.map((target) => ({ target, currentValue: PRESENT })),
-      // A known requirement that is gone is shown as removed.
       ...known
         .filter(({ targetKey }) => !present.has(targetKey))
         .map((target) => ({ target, currentValue: ABSENT })),

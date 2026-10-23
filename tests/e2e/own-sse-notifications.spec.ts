@@ -49,7 +49,6 @@ test('real SSE keeps student content stable while notices and counters update, i
       .getByRole('button', { name: /^Avisos(,|$)/ })
       .getAttribute('aria-label');
     const title = `Live SSE ${crypto.randomUUID()}`;
-    // The edit is stored immediately (no grouping window or summary, see ADR-0014).
     await teacherPage.getByLabel('Título', { exact: true }).fill(title);
     await teacherPage.getByLabel('Descripción').fill('Delivered through real SSE');
     await teacherPage.getByRole('button', { name: 'Guardar cambios' }).click();
@@ -59,7 +58,6 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect(page.getByText('Delivered through real SSE', { exact: true })).toBeHidden();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect.poll(() => count()).toBe(2);
-    // HTTP recognition in one tab must update the already open Inbox in another.
     const roadmapId = (await (await student.request.get(course.apiPath())).json()).roadmap.id;
     await recognize(page.request, roadmapId);
     await expect.poll(count).toBe(0);
@@ -86,7 +84,6 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeHidden();
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    // Clicking a notice on the same Roadmap is a new entry, despite client routing.
     await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
     await page
       .getByRole('button', { name: new RegExp(title) })
@@ -109,7 +106,6 @@ test('real SSE keeps student content stable while notices and counters update, i
     await page.getByRole('button', { name: 'Entendido' }).click();
     await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeVisible();
 
-    // Revocation still makes an authorized HTTP request and clears protected content.
     const denied = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === course.apiPath() && response.status() === 403,

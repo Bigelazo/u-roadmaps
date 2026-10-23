@@ -104,7 +104,6 @@ test('a student Completion advances known access before a later Teacher block', 
   studentApi: student,
 }) => {
   const unchanged = course.nodes.first;
-  // Capture access knowledge during an unrelated teaching visibility edit.
   await ok(
     await author.patch(course.apiPath(`/nodes/${unchanged}`), { data: { isVisible: true } }),
   );
@@ -154,7 +153,6 @@ test('Completion withdraws returned access and preserves a genuinely pending pub
   await expect
     .poll(async () => (await hiddenNotices())[0]?.data)
     .toMatchObject({ knownValue: 'Retirado', currentValue: 'Bloqueado' });
-  // Completion must preserve the publication's last-known Retirado baseline.
   await ok(await student.post(course.apiPath(`/nodes/${course.nodes.second}/completion`)));
   await expect
     .poll(async () => (await hiddenNotices())[0]?.data)

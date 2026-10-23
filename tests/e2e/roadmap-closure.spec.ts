@@ -54,7 +54,6 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
     status: 'BLOCKED',
     reason: 'PREREQUISITE_BLOCK',
   });
-  // Completion and Canvas preview progress share the editing refusal of a closed Roadmap.
   for (const refused of [
     await student.post(offering.apiPath(`/nodes/${first.id}/completion`)),
     await teacher.delete(offering.apiPath('/simulation')),
@@ -135,7 +134,6 @@ test('closure leaves pending notices untouched and repeated late passes preserve
   await term.setFreezeDate(dayOffset(-1));
   const closedAt = await waitForClosure(offering);
   expect(await notices()).toEqual(pending);
-  // Another due Roadmap proves a subsequent pass ran; no fixed sleep.
   await term.setFreezeDate(dayOffset(-10));
   const later = await createCourse({ ...term });
   await waitForClosure(later);
@@ -327,14 +325,12 @@ test('the Academic overview offers Roadmap creation only before the offering clo
   const historyLink = (courseName: string) =>
     page.getByRole('link', { name: `Historial de versiones de ${courseName}` });
 
-  // A closed offering listed as the latest term offers its history, not creation.
   await authenticateAs(page.context(), professor.id);
   await page.goto('/academic-overview');
   await expect(historyLink(closed.courseName)).toBeVisible();
   await expect(createButton(closed.courseName)).toHaveCount(0);
   await expect(page.getByText(onlyProfessor)).toHaveCount(0);
 
-  // Among previous terms, the closed offering still offers no creation.
   const open = await createCourse({ ...openTerm, roadmap: false, participants: asProfessor });
   await page.goto('/academic-overview');
   await expect(createButton(open.courseName)).toBeVisible();
@@ -384,8 +380,6 @@ test('an open teaching canvas refuses its next save and becomes read-only after 
   await page.goto(offering.pagePath());
   await page.locator(`.react-flow__node[data-id="${node.id}"]`).click();
   await page.getByLabel('Título', { exact: true }).fill('Late draft');
-  // Hold background recovery at the pre-closure projection so this exercises
-  // the save refusal, rather than a focus refresh discovering closure first.
   const openProjection = await (await teacher.get(offering.apiPath())).json();
   let saveAttempted = false;
   page.on('request', (request) => {

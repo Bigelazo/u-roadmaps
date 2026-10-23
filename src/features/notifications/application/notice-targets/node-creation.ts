@@ -26,11 +26,6 @@ function text(values: TargetValues) {
   return { subject, body: `${subject}${blocked ? ' (bloqueado)' : ''}.` };
 }
 
-/**
- * Node creation: a broad target. Until the recipient recognizes the new Node, every
- * change inside it updates this one notice, which shows the Node as it is now; a
- * hidden or deleted new Node returns to absent.
- */
 export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
   noticeTarget: NOTICE_TARGET.nodeCreation,
   noticeClass: 'roadmap-node-changed',
@@ -64,7 +59,6 @@ export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {
     };
   },
   async entryValues(roadmap, _recipientId, known) {
-    // A visible new Node the recipient has not recognized (even if its notice is on its way).
     const shown: EntryValue[] = [];
     for (const { nodeId, knownValue } of known) {
       const node = nodeId && absorbs(knownValue) ? await roadmap.node(nodeId) : null;

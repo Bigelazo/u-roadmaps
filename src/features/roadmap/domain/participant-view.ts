@@ -5,15 +5,9 @@ import {
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
 
-/**
- * A participant of a Course offering whose Node access is decided. `STUDENT` covers students,
- * observers and Canvas preview (with simulated Completions); teaching staff appear only as
- * Roadmap notice recipients.
- */
 export type Participant =
   { role: 'STUDENT'; completedNodeIds: ReadonlySet<string> } | { role: 'TEACHER' };
 
-/** The participant a Participation role stands for; only students carry their Completions. */
 export function toParticipant(
   role: Participant['role'],
   completedNodeIds: ReadonlySet<string>,
@@ -29,7 +23,6 @@ function teachingStaffAccess({ isTeacherBlocked }: ParticipantNode): StudentNode
     : { status: 'ACCESSIBLE' };
 }
 
-/** The Nodes that exist for a participant (the visible ones) and the access each one grants. */
 export function participantNodeAccess<
   Node extends ParticipantNode,
   Dependency extends RoadmapGraphDependency,
@@ -50,8 +43,7 @@ export function participantNodeAccess<
           dependencies: graph.dependencies,
           completedNodeIds: participant.completedNodeIds,
         })
-      : // Teaching staff, as notice recipients: visible and not Teacher-blocked (ADR-0030).
-        new Map(graph.nodes.map((node) => [node.id, teachingStaffAccess(node)]));
+      : new Map(graph.nodes.map((node) => [node.id, teachingStaffAccess(node)]));
   const accessibleNodeIds: ReadonlySet<string> = new Set(
     [...accessByNodeId].filter(([, access]) => access.status === 'ACCESSIBLE').map(([id]) => id),
   );
@@ -64,15 +56,9 @@ type StudentRoadmapSourceNode = ParticipantNode & {
   positionX: number;
   positionY: number;
   description: string | null;
-  /** Already mapped by the adapter (the server builds file download URLs). */
   resources: Resource[];
 };
 
-/**
- * A student's Roadmap: hidden Nodes are absent, a Blocked node exposes only its id, title,
- * Node type, position and access, and an accessible Node adds its description, Resources and
- * Completion. A retained Completion of a Blocked node stays hidden until every block is removed.
- */
 export function studentRoadmapNodes<Dependency extends RoadmapGraphDependency>({
   nodes,
   dependencies,

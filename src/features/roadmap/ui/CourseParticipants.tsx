@@ -34,7 +34,6 @@ function sectionsLabel(sections: readonly string[]) {
   return `${sections.length === 1 ? 'Sección' : 'Secciones'} ${sections.join(', ')}`;
 }
 
-/** Neutral track with a Jade fill; the value is always repeated as text beside it. */
 function ProgressTrack({ ratio, label }: Readonly<{ ratio: number; label: string }>) {
   const value = Math.round(ratio * 100);
   return (

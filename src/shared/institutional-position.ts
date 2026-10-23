@@ -1,4 +1,3 @@
-/** Effective U-Campus position, ordered by the domain's permission precedence. */
 export const POSITION_PRIORITY = [
   'COURSE_PROFESSOR',
   'COORDINATING_PROFESSOR',

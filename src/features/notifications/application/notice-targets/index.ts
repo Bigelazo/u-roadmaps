@@ -37,7 +37,6 @@ export type {
 } from './descriptor';
 export { SCOPE_DEPTH, seesEveryNode } from './descriptor';
 
-/** Every Notice target kind handled by the notice lifecycle module (ADR-0024). */
 export const noticeTargetDescriptors: readonly NoticeTargetDescriptor[] = [
   nodeTitleTarget,
   nodeDescriptionTarget,
@@ -55,14 +54,12 @@ export function descriptorForFact(fact: RoadmapChangeFact) {
   return noticeTargetDescriptors.find((descriptor) => descriptor.matches(fact)) ?? null;
 }
 
-/** The descriptor of a Notice target kind; null for a kind no descriptor owns. */
 export function descriptorForNoticeTarget(noticeTarget: unknown) {
   return (
     noticeTargetDescriptors.find((descriptor) => descriptor.noticeTarget === noticeTarget) ?? null
   );
 }
 
-/** The descriptor and stored values of a notice; null for a row without them. */
 export function storedTargetValues(
   data: unknown,
 ): { descriptor: NoticeTargetDescriptor; values: TargetValues } | null {
@@ -92,7 +89,6 @@ export function targetContext(value: unknown): TargetContext {
     : {};
 }
 
-/** Attribution label of a stored notice: an attributed actor without a name is teaching staff. */
 export function noticeActorLabel(data: unknown): { actorName?: string } {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
   const { actorId, actorName } = data as { actorId?: unknown; actorName?: unknown };
@@ -100,11 +96,6 @@ export function noticeActorLabel(data: unknown): { actorName?: string } {
   return typeof actorId === 'string' ? { actorName: 'Equipo docente' } : {};
 }
 
-/**
- * Read-time projection of a notice: its text and API data come from the descriptor, so
- * wording changes need no migration; null for a row without stored values.
- * `live` overrides stored presentation context (e.g. the current Node title).
- */
 export function projectTargetNotice<D>(
   data: D,
   live: TargetContext = {},

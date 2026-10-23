@@ -7,17 +7,11 @@ import { Spinner } from '@/shared/ui/spinner';
 import { cn } from 'cn';
 
 const tones = {
-  /** Sobre Ink: el borde Primary Bright mantiene el contorno visible y el texto blanco sobre Primary. */
   dark: 'border-primary-bright bg-primary text-primary-foreground hover:bg-primary-deep',
   light: 'bg-primary text-primary-foreground hover:bg-primary-deep',
   outline: '',
 } as const;
 
-/**
- * Inicia el ingreso institucional. El envío es una navegación nativa hacia U-Pasaporte,
- * así que el estado pendiente se marca al enviar y se limpia si el navegador restaura la
- * página desde la caché al volver atrás.
- */
 export function InstitutionalLoginForm({
   tone = 'light',
   size = 'lg',
@@ -26,7 +20,6 @@ export function InstitutionalLoginForm({
 }: {
   tone?: keyof typeof tones;
   size?: 'default' | 'lg';
-  /** Bajo `sm` muestra solo «Ingresar»; el nombre accesible no cambia. */
   compact?: boolean;
   className?: string;
 }) {

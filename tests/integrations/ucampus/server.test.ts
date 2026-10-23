@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   getMufasaAcademicCourses,
+  localFixtureUCampus,
   getMufasaCourseMembers,
   getMufasaEnrolledCourses,
   getMufasaPersonNames,
@@ -155,12 +156,17 @@ it('keeps development fixture profiles on their local course offerings', async (
     );
   vi.stubGlobal('fetch', fetch);
 
-  await expect(
-    getMufasaEnrolledCourses('10000001', { useLocalFixtureData: true }),
-  ).resolves.toEqual({
+  await expect(localFixtureUCampus.getAcademicCourses('10000001')).resolves.toEqual({
     source: 'LOCAL',
     courses: [],
   });
+  await expect(
+    localFixtureUCampus.getCourseMembers(675, { year: 2026, semester: 2 }),
+  ).resolves.toEqual({
+    source: 'LOCAL',
+    members: [],
+  });
+  await expect(localFixtureUCampus.getPersonNames(['10000001'])).resolves.toEqual(new Map());
   expect(fetch).not.toHaveBeenCalled();
 });
 
@@ -275,10 +281,47 @@ it('combines enrolled and taught courses for the academic overview', async () =>
   ]);
 });
 
+it('treats a history that lists no course in either list as incomplete', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => Promise.resolve(new Response('[]'))),
+  );
+
+  await expect(getMufasaAcademicCourses('12345678')).resolves.toEqual({
+    source: 'MUFASA',
+    courses: [],
+    isComplete: false,
+  });
+});
+
+it('keeps a history complete when only one of its lists is empty', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: URL) =>
+      Promise.resolve(
+        new Response(
+          url.pathname.endsWith('/cursos_dictados')
+            ? JSON.stringify([
+                { codigo: 'CC9001', nombre: 'Curso dictado', ano: 2026, periodo: 2, id_cargo: 1 },
+              ])
+            : '[]',
+        ),
+      ),
+    ),
+  );
+
+  await expect(getMufasaAcademicCourses('12345678')).resolves.toMatchObject({
+    source: 'MUFASA',
+    courses: [{ courseCode: 'CC9001' }],
+    isComplete: true,
+  });
+});
+
 it('reads the U-Campus roster of every section in the requested Academic term only', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
   process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  // Recorded shape: MUFASA ignores id_periodo when id_ramo is given and mixes id_cargo types.
   const fetch = vi.fn().mockResolvedValue(
     new Response(
       JSON.stringify([

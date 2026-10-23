@@ -31,7 +31,6 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
       deleted: () => deleteNode(teacher, endpoint),
     };
     expect((await restrict[restriction]()).status()).toBe(restriction === 'deleted' ? 204 : 200);
-    // A real notice arriving confirms the change reached this tab without a canvas reload.
     await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
     await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -50,7 +49,6 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Completar', exact: true })).toBeEnabled();
     await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
-    // Re-enter through authorized HTTP: the rejected action created no Completion.
     const current = await ok(await student.get(course.apiPath()));
     const currentNode = (await current.json()).nodes.find(
       (candidate: { id: string }) => candidate.id === node.id,
@@ -138,7 +136,6 @@ test('student endpoints conceal prerequisite-blocked nodes without erasing past 
   expect((await resources.json()).error.code).toBe('PREREQUISITE_BLOCK');
   const download = await ok(await student.get(fileResource.url), 403);
   expect((await download.json()).error.code).toBe('PREREQUISITE_BLOCK');
-  // The Node collection only accepts creation; listing it would bypass the access projection.
   const nodeCollection = await student.get(course.apiPath('/nodes'));
   expect(nodeCollection.status()).toBe(405);
   expect(await nodeCollection.text()).not.toContain('Detalle que no debe filtrarse');

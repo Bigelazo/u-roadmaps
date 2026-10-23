@@ -66,7 +66,6 @@ test('a pending description hides while the Node is blocked and reappears when u
   const [pending] = descriptionTargets(await pendingNotices(course.studentId, course.roadmapId));
   await edits.block(node.id);
   expect(descriptionTargets(await pendingNotices(course.studentId, course.roadmapId))).toEqual([]);
-  // Only the access notice is counted while the description is hidden.
   expect(
     await countOwnNotices(course.studentId, new URLSearchParams({ roadmapId: course.roadmapId })),
   ).toEqual({ count: 1 });

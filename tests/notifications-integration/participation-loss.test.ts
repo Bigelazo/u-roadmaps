@@ -10,7 +10,6 @@ test('Participation loss withdraws pending notices even after access returns', a
   const edits = teacherEdits(course, deferred.port);
   await edits.rename(course.change.nodeId, 'Recursión');
   await deferred.deliver(deferred.deliveries[0]);
-  // A delivery committed before the loss and delivered after it must stay withdrawn.
   await edits.rename(course.change.nodeId, 'Recursión avanzada');
   expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);
   await prisma.participation.update({

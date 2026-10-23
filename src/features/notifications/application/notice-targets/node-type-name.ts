@@ -16,10 +16,8 @@ export const typeNameRef = (nodeTypeId: string) => ({
 
 type NodeTypeNameFact = Extract<RoadmapChangeFact, { kind: 'node-type-name' }>;
 
-/** The Node type a `node-type:<id>:name` key names. */
 const nodeTypeId = ({ targetKey }: NoticeTargetRef) => targetKey.split(':')[1];
 
-/** Everyone, when the type has at least one visible Node. */
 async function typeRecipients(
   fact: NodeTypeNameFact,
   _changes: RoadmapChanges,
@@ -29,10 +27,6 @@ async function typeRecipients(
   return participantIds(roadmap);
 }
 
-/**
- * Node type name: each type is its own target, and only its name; icon and color edits
- * report nothing. Compared from the known name (ADR-0014 decision 1).
- */
 export const typeNameTarget: NoticeTargetDescriptor<NodeTypeNameFact> = {
   noticeTarget: NOTICE_TARGET.nodeTypeName,
   noticeClass: 'roadmap-classification-changed',

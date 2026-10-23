@@ -3,22 +3,28 @@ import { lockRoadmap, roadmapChangeTransaction } from './roadmap-command';
 import 'server-only';
 
 import {
-  getMufasaAcademicCourses,
+  type UCampus,
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
 import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
+import { prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 
 export type AcademicUser = Readonly<{
   id: string;
   name?: string;
   rut: string | null;
-  useLocalFixtureData?: boolean;
+  ucampus: UCampus;
 }>;
 
 export type MufasaCourseAccess = Readonly<{
   name: string;
   positions: readonly MufasaInstitutionalCoursePosition[];
+}>;
+
+export type CourseAccessReport = Readonly<{
+  access: MufasaCourseAccess | null;
+  isComplete: boolean;
 }>;
 
 export function canEditRoadmap(access: MufasaCourseAccess) {
@@ -29,26 +35,18 @@ export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' 
   return canEditRoadmap(access) ? 'TEACHER' : 'STUDENT';
 }
 
-/**
- * Reads the U-Campus positions the person holds in one course offering. A
- * person can appear more than once, for instance teaching one section and
- * assisting another, so every position counts toward the resolved access.
- */
+const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
+  `${courseCode}:${year}:${semester}`;
+
 export async function readMufasaCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
-): Promise<{ access: MufasaCourseAccess | null; isComplete: boolean }> {
-  const mufasa = await getMufasaAcademicCourses(user.rut, {
-    useLocalFixtureData: user.useLocalFixtureData === true,
-  });
+): Promise<CourseAccessReport> {
+  const mufasa = await user.ucampus.getAcademicCourses(user.rut);
   if (mufasa.source !== 'MUFASA' || mufasa.isComplete === false)
     return { access: null, isComplete: false };
-  const matches = mufasa.courses.filter(
-    (course) =>
-      course.courseCode === identifier.courseCode &&
-      course.year === identifier.year &&
-      course.semester === identifier.semester,
-  );
+  const key = offeringKey(identifier);
+  const matches = mufasa.courses.filter((course) => offeringKey(course) === key);
   if (matches.length === 0) return { access: null, isComplete: true };
   return {
     isComplete: true,
@@ -61,14 +59,6 @@ export async function readMufasaCourseAccess(
   };
 }
 
-export async function getMufasaCourseAccess(
-  user: AcademicUser,
-  identifier: CourseOfferingIdentifier,
-) {
-  return (await readMufasaCourseAccess(user, identifier)).access;
-}
-
-/** Materializes the institutionally reported participation for one offering. */
 export async function materializeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
@@ -81,9 +71,6 @@ export async function materializeParticipation(
   return roadmapChangeTransaction(
     changePort,
     async (transaction, report) => {
-      // ON CONFLICT DO NOTHING, not an upsert: an upsert reads before it inserts, so
-      // concurrent syncs of the same Course (one per offering, or parallel requests)
-      // both insert and the second fails with a unique violation.
       await transaction.course.createMany({
         data: { code: identifier.courseCode, name: access.name, department: '' },
         skipDuplicates: true,
@@ -100,7 +87,6 @@ export async function materializeParticipation(
         where: { courseOfferingId: courseOffering.id },
         select: { id: true },
       });
-      // Match notice delivery's parent -> Participation -> recipient lock order.
       if (roadmap) await lockRoadmap(transaction, roadmap.id, 'key-share');
       const [previous] = await transaction.$queryRaw<{ role: string }[]>`
       SELECT role FROM "Participation" WHERE "userId" = ${user.id}::uuid
@@ -141,33 +127,76 @@ export async function materializeParticipation(
   );
 }
 
-/** Resolves and materializes participation when U-Campus grants course access. */
+async function deactivateParticipations(
+  user: AcademicUser,
+  isOmitted: (offering: CourseOfferingIdentifier) => boolean,
+  changePort: RoadmapChangePort,
+) {
+  const active = await prisma.participation.findMany({
+    where: { userId: user.id, isActive: true },
+    select: {
+      courseOfferingId: true,
+      courseOffering: { select: { courseCode: true, year: true, semester: true } },
+    },
+  });
+  for (const { courseOfferingId, courseOffering } of active) {
+    if (!isOmitted(courseOffering)) continue;
+    await roadmapChangeTransaction(
+      changePort,
+      async (transaction) => {
+        const roadmap = await transaction.roadmap.findUnique({
+          where: { courseOfferingId },
+          select: { id: true },
+        });
+        if (roadmap) await lockRoadmap(transaction, roadmap.id, 'key-share');
+        await transaction.participation.updateMany({
+          where: { userId: user.id, courseOfferingId, isActive: true },
+          data: { isActive: false },
+        });
+      },
+      { isolation: 'read-committed' },
+    );
+  }
+}
+
+export async function applyCourseAccess(
+  user: AcademicUser,
+  identifier: CourseOfferingIdentifier,
+  { access, isComplete }: CourseAccessReport,
+  changePort: RoadmapChangePort,
+) {
+  if (access) return materializeParticipation(user, identifier, access, changePort);
+  if (isComplete) {
+    const key = offeringKey(identifier);
+    await deactivateParticipations(user, (offering) => offeringKey(offering) === key, changePort);
+  }
+  return null;
+}
+
 export async function synchronizeParticipation(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
   changePort: RoadmapChangePort,
 ) {
-  const access = await getMufasaCourseAccess(user, identifier);
-  if (!access) return null;
-  return materializeParticipation(user, identifier, access, changePort);
+  return applyCourseAccess(
+    user,
+    identifier,
+    await readMufasaCourseAccess(user, identifier),
+    changePort,
+  );
 }
 
-/** Synchronize every reported offering once, combining all of its positions. */
 export async function synchronizeAcademicParticipations(
   user: AcademicUser,
   changePort: RoadmapChangePort,
 ) {
-  const source = await getMufasaAcademicCourses(user.rut, {
-    useLocalFixtureData: user.useLocalFixtureData === true,
-  });
+  const source = await user.ucampus.getAcademicCourses(user.rut);
   if (source.source === 'MUFASA' && source.isComplete !== false) {
     const offerings = new Map<string, typeof source.courses>();
     for (const course of source.courses) {
-      const key = `${course.courseCode}:${course.year}:${course.semester}`;
+      const key = offeringKey(course);
       offerings.set(key, [...(offerings.get(key) ?? []), course]);
     }
-    // Each offering opens an interactive transaction. Await its commit before
-    // starting the next so a long academic history cannot flood the pool's queue.
     for (const courses of offerings.values()) {
       const course = courses[0];
       await materializeParticipation(
@@ -186,6 +215,11 @@ export async function synchronizeAcademicParticipations(
         changePort,
       );
     }
+    await deactivateParticipations(
+      user,
+      (offering) => !offerings.has(offeringKey(offering)),
+      changePort,
+    );
   }
   return source;
 }

@@ -9,10 +9,6 @@ async function releaseDueScheduledUnlocks() {
   await releaseScheduledTeacherUnlocks(scheduledRoadmapChangePort);
 }
 
-/**
- * Periodically releases Scheduled unlocks from the single persistent Node process.
- * Each pass is idempotent, so a late or repeated pass only releases what is due.
- */
 export function startScheduledUnlockRelease() {
   startPeriodicPass({
     run: releaseDueScheduledUnlocks,

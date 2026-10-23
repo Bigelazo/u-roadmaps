@@ -33,8 +33,6 @@ import { buttonVariants } from '@/shared/ui/button-variants';
 import { cn } from 'cn';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
 
-// TEACHING_STAFF is the fallback for teaching staff without a reported position:
-// it has no position color, so its plate is neutral and its marker an outline.
 const positionDetails: Record<
   AcademicOverviewInstitutionalPosition | 'TEACHING_STAFF',
   Readonly<{ label: string; color: string | null }>
@@ -51,7 +49,6 @@ const positionDetails: Record<
   OBSERVER: { label: 'Oyente', color: 'var(--position-observer)' },
 };
 
-/** The person's institutional position in the course, always named next to its color. */
 function PositionPlate({
   position,
 }: Readonly<{ position: (typeof positionDetails)[keyof typeof positionDetails] }>) {
@@ -73,7 +70,6 @@ function PositionPlate({
   );
 }
 
-/** The participant's own route progress: completed visible Nodes over all visible Nodes. */
 function CourseProgress({
   progress,
 }: Readonly<{ progress: NonNullable<AcademicOverviewCourse['progress']> }>) {
@@ -181,7 +177,6 @@ function CourseRoadmapAction({
           />
         ) : null}
         {isPastOffering ? (
-          // A closed Roadmap is read-only history, so it is not the row's primary action.
           <Link
             aria-label={`Ver roadmap de ${course.name}`}
             className={buttonVariants({ variant: 'outline' })}
@@ -240,7 +235,6 @@ function CourseActions({
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
 }>) {
-  // Teaching staff who cannot create the Roadmap still reach the version history.
   const awaitsCreation =
     course.role === 'TEACHER' &&
     !course.hasRoadmap &&
@@ -324,7 +318,6 @@ function CourseRow({
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:justify-end">
           <CourseActions
             course={course}
-            // A listed current term can already be past its closure instant.
             isPastOffering={isPastTerm || course.isPastClosure}
             renderRoadmapCreation={renderRoadmapCreation}
             notificationsEnabled={notificationsEnabled}
@@ -349,7 +342,6 @@ function CourseList({
   notificationsEnabled: boolean;
 }>) {
   return (
-    // Rows share one action column, so statuses and actions line up from row to row.
     <ul className={cn(dividedListClassName, 'sm:grid sm:grid-cols-[minmax(0,1fr)_auto]')}>
       {term.courses.map((course) => (
         <CourseRow
@@ -372,7 +364,6 @@ function AcademicTermSection({
   notificationsEnabled,
 }: Readonly<{
   term: AcademicOverviewTerm;
-  /** A past term sits under “Semestres anteriores”, one heading level deeper. */
   isPastTerm?: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
@@ -441,7 +432,6 @@ function PreviousTermsSection({
         <div className="pt-6">
           <Separator />
           {previousTerms.length === 1 ? (
-            // A single past term needs no second disclosure.
             <div className="pt-6">
               <AcademicTermSection
                 isPastTerm
@@ -494,11 +484,9 @@ export function AcademicOverview({
   notice,
 }: Readonly<{
   overview: AcademicOverviewPage;
-  /** Why the person was sent back here, such as losing access to a Roadmap. */
   notice?: React.ReactNode;
   renderRoadmapCreation: RoadmapCreationAction;
   notificationsEnabled: boolean;
-  /** Whether this visit shows the first-visit tutorial invitation. */
   tutorialInvitation?: boolean;
 }>) {
   const [currentTerm, ...previousTerms] = overview.terms;

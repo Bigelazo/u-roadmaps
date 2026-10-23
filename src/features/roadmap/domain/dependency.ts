@@ -24,10 +24,6 @@ export type DependencyDecision =
   | { kind: 'ALLOWED'; teacherBlockedNodes: { id: string; title: string }[] }
   | RuleRejection<DependencyRuleFailure>;
 
-/**
- * Whether a Dependency from `sourceNodeId` to `targetNodeId` can be created and, when the
- * source keeps a Teacher block, the Nodes it would block, by title.
- */
 export function decideDependency({
   nodes,
   dependencies,

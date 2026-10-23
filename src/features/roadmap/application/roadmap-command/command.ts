@@ -21,7 +21,6 @@ import {
 } from './change';
 import { forbidden, roadmapClosed, roadmapNotFound } from '../errors';
 
-/** Who asks, and for which Course offering's Roadmap. */
 export type RoadmapParticipant = Readonly<{
   userId: string;
   identifier: CourseOfferingIdentifier;
@@ -35,7 +34,6 @@ const REFUSAL_ERRORS: Readonly<Record<RoadmapRefusal, () => ApplicationError>> =
   ROADMAP_CLOSED: () => roadmapClosed(),
 };
 
-/** Decides the Roadmap capability and throws its refusal, or returns what it decided over. */
 function requireRoadmapCapability<
   Participation extends CapabilityParticipation,
   Roadmap extends CapabilityRoadmap,
@@ -51,33 +49,21 @@ function requireRoadmapCapability<
 
 export type RoadmapCommandContext<Parsed> = Readonly<{
   tx: Prisma.TransactionClient;
-  /** The Roadmap as read under its lock. */
   roadmap: Roadmap;
   participation: Participation;
   actor: RoadmapParticipant;
   input: Parsed;
 }>;
 
-/** A participant's write to an existing Roadmap (ADR-0029). */
 export type RoadmapCommand<Input, Parsed, Result> = Readonly<{
   capability: Extract<RoadmapCapability, 'complete' | 'edit'>;
-  /** Pure; runs once, before the transaction, so invalid input never waits for the lock. */
   parse: (input: Input) => Parsed;
-  /** Required: forgetting it would silently drop Roadmap notices (ADR-0024). */
   access: AccessScope | ((input: Parsed) => AccessScope);
-  /** `key-share` for participant progress (Completion, Canvas preview); `update` otherwise. */
   lock?: RoadmapLock;
-  /** The message of the 409 once concurrent modifications exhausted every attempt. */
   conflictMessage?: string;
-  /** The mutation and its content facts. It never calls the port. */
   run: (context: RoadmapCommandContext<Parsed>) => Promise<RoadmapChangeOutcome<Result>>;
 }>;
 
-/**
- * The participant's Course offering and stored Participation, without locking. A missing
- * Course offering answers like a missing Roadmap. Nothing here synchronises with U-Campus:
- * that happens only when a page is entered.
- */
 async function resolveParticipant(
   transaction: Prisma.TransactionClient,
   { userId, identifier }: RoadmapParticipant,
@@ -93,7 +79,6 @@ async function resolveParticipant(
   return { courseOffering, participation };
 }
 
-/** Resolves the participant and decides the capability over an existing Roadmap. */
 async function resolveParticipantRoadmap(
   transaction: Prisma.TransactionClient,
   participant: RoadmapParticipant,
@@ -108,12 +93,6 @@ async function resolveParticipantRoadmap(
   return { courseOffering, participation: allowed.participation, roadmap: allowed.roadmap };
 }
 
-/**
- * Turns a command declaration into the operation every caller runs: parse, then in one
- * serializable change transaction resolve and decide the capability, lock the Roadmap,
- * refuse a closed one, run the command between the access snapshots its scope needs,
- * and report its content and access facts once. Deliveries run after the commit.
- */
 export function roadmapCommand<Input, Parsed, Result>(
   command: RoadmapCommand<Input, Parsed, Result>,
 ) {
@@ -154,17 +133,11 @@ export type RoadmapReadContext<ReadRoadmap extends Roadmap | null = Roadmap> = R
   roadmap: ReadRoadmap;
 }>;
 
-/**
- * A participant's read of a Roadmap: the same resolution and capability decision as a
- * command, over the stored Participation only, in one REPEATABLE READ snapshot and without
- * a lock. A closed Roadmap stays readable.
- */
 export function roadmapRead<T>(
   participant: RoadmapParticipant,
   capability: RoadmapCapability,
   read: (context: RoadmapReadContext) => Promise<T>,
 ): Promise<T>;
-/** A read that also serves a Course offering whose Roadmap does not exist yet. */
 export function roadmapRead<T>(
   participant: RoadmapParticipant,
   capability: RoadmapCapability,
@@ -182,7 +155,6 @@ export function roadmapRead<T>(
       const { courseOffering, participation } = await resolveParticipant(tx, participant);
       if (options && !courseOffering.roadmap) {
         if (!participationGrants(participation, capability)) throw forbidden();
-        // Only the optional-Roadmap overload passes `options`, so its reader accepts null.
         const readOffering = read as (context: RoadmapReadContext<Roadmap | null>) => Promise<T>;
         return readOffering({ tx, courseOffering, participation, roadmap: null });
       }
