@@ -36,7 +36,7 @@ export type RoadmapClosureCalendar = (
 ) => boolean;
 
 export type AcademicOverviewSources = Readonly<{
-  source?: import('@/integrations/ucampus/server').MufasaEnrolledCoursesResult;
+  history?: import('@/integrations/ucampus/server').AcademicHistory;
   isPastClosure: RoadmapClosureCalendar;
 }>;
 

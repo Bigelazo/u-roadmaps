@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 vi.mock('@/shared/server/db', () => ({ prisma: {} }));
 
@@ -7,31 +7,33 @@ import {
   canEditRoadmap,
   readMufasaCourseAccess,
 } from '@/features/roadmap/application/academic-participation';
-import { mufasaUCampus, isCourseLeadPosition } from '@/integrations/ucampus/server';
-
-const originalToken = process.env.MUFASA_TOKEN;
-const originalBaseUrl = process.env.MUFASA_BASE_URL;
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  if (originalToken === undefined) delete process.env.MUFASA_TOKEN;
-  else process.env.MUFASA_TOKEN = originalToken;
-  if (originalBaseUrl === undefined) delete process.env.MUFASA_BASE_URL;
-  else process.env.MUFASA_BASE_URL = originalBaseUrl;
-});
+import {
+  isCourseLeadPosition,
+  localFixtureUCampus,
+  type AcademicHistory,
+  type MufasaEnrolledCourse,
+} from '@/integrations/ucampus/server';
 
 const identifier = { courseCode: 'CC3002', year: 2026, semester: 2 };
-const user = {
-  id: '11111111-1111-4111-8111-111111111111',
-  rut: '19039752',
-  ucampus: mufasaUCampus,
-};
+function userWith(history: AcademicHistory) {
+  return {
+    id: '11111111-1111-4111-8111-111111111111',
+    rut: '19039752',
+    ucampus: { ...localFixtureUCampus, getAcademicHistory: async () => history },
+  };
+}
 
-function mufasaResponse(courses: Array<Record<string, unknown>>) {
-  return new Response(JSON.stringify(courses), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+function reported(course: Partial<MufasaEnrolledCourse>): MufasaEnrolledCourse {
+  return {
+    ...identifier,
+    semester: 2,
+    name: 'Metodologías de Diseño y Programación',
+    section: '1',
+    ramoId: 675,
+    isTeaching: true,
+    institutionalPosition: 'STUDENT',
+    ...course,
+  };
 }
 
 it.each([
@@ -58,30 +60,14 @@ it.each([
 });
 
 it('collects every position the person holds in one course offering', async () => {
-  process.env.MUFASA_TOKEN = 'private-token';
-  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  const course = {
-    codigo: 'CC3002',
-    nombre: 'Metodologías de Diseño y Programación',
-    ano: 2026,
-    periodo: 2,
-  };
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockImplementation((url: URL) =>
-      Promise.resolve(
-        mufasaResponse(
-          url.toString().includes('cursos_dictados')
-            ? [
-                { ...course, seccion: '1', id_cargo: 1 },
-                { ...course, seccion: '2', id_cargo: 2 },
-                { ...course, ano: 2025, seccion: '1', id_cargo: 1 },
-              ]
-            : [],
-        ),
-      ),
-    ),
-  );
+  const user = userWith({
+    status: 'complete',
+    courses: [
+      reported({ section: '1', institutionalPosition: 'COURSE_PROFESSOR' }),
+      reported({ section: '2', institutionalPosition: 'AUXILIARY_PROFESSOR' }),
+      reported({ year: 2025, institutionalPosition: 'COURSE_PROFESSOR' }),
+    ],
+  });
 
   await expect(readMufasaCourseAccess(user, identifier)).resolves.toEqual({
     isComplete: true,
@@ -92,23 +78,8 @@ it('collects every position the person holds in one course offering', async () =
   });
 });
 
-it('reports no access when U-Campus does not place the person in the offering', async () => {
-  process.env.MUFASA_TOKEN = 'private-token';
-  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  vi.stubGlobal(
-    'fetch',
-    vi
-      .fn()
-      .mockImplementation((url: URL) =>
-        Promise.resolve(
-          mufasaResponse(
-            url.toString().includes('cursos_inscritos')
-              ? [{ codigo: 'CC3002', nombre: 'Metodologías', ano: 2025, periodo: 1 }]
-              : [],
-          ),
-        ),
-      ),
-  );
+it('reports no access when a complete history does not place the person in the offering', async () => {
+  const user = userWith({ status: 'complete', courses: [reported({ year: 2025, semester: 1 })] });
 
   await expect(readMufasaCourseAccess(user, identifier)).resolves.toEqual({
     access: null,
@@ -116,66 +87,12 @@ it('reports no access when U-Campus does not place the person in the offering', 
   });
 });
 
-it('reports no complete answer when U-Campus lists no course at all', async () => {
-  process.env.MUFASA_TOKEN = 'private-token';
-  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockImplementation(() => Promise.resolve(mufasaResponse([]))),
-  );
-
-  await expect(readMufasaCourseAccess(user, identifier)).resolves.toEqual({
+it.each([
+  ['partial', { status: 'partial', courses: [reported({})] }],
+  ['unavailable', { status: 'unavailable' }],
+] as const)('reports no complete answer for a %s history', async (_, history) => {
+  await expect(readMufasaCourseAccess(userWith(history), identifier)).resolves.toEqual({
     access: null,
     isComplete: false,
   });
-});
-
-it('reports no access while U-Campus is unreachable', async () => {
-  process.env.MUFASA_TOKEN = 'private-token';
-  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
-
-  await expect(readMufasaCourseAccess(user, identifier)).resolves.toEqual({
-    access: null,
-    isComplete: false,
-  });
-});
-
-it('accepts an in-process U-Campus adapter for course access without contacting MUFASA', async () => {
-  process.env.MUFASA_TOKEN = 'private-token';
-  const fetch = vi.fn().mockRejectedValue(new Error('Unexpected network request'));
-  vi.stubGlobal('fetch', fetch);
-  const actor = {
-    ...user,
-    ucampus: {
-      async getAcademicCourses() {
-        return {
-          source: 'MUFASA' as const,
-          isComplete: true,
-          courses: [
-            {
-              ...identifier,
-              semester: 2 as const,
-              name: 'Metodologías',
-              section: '1',
-              ramoId: 675,
-              isTeaching: true,
-              institutionalPosition: 'COURSE_PROFESSOR' as const,
-            },
-          ],
-        };
-      },
-      async getCourseMembers() {
-        return { source: 'LOCAL' as const, members: [] as [] };
-      },
-      async getPersonNames() {
-        return new Map<string, string>();
-      },
-    },
-  };
-  await expect(readMufasaCourseAccess(actor, identifier)).resolves.toEqual({
-    isComplete: true,
-    access: { name: 'Metodologías', positions: ['COURSE_PROFESSOR'] },
-  });
-  expect(fetch).not.toHaveBeenCalled();
 });
