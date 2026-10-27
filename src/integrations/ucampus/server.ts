@@ -150,20 +150,18 @@ async function requestMufasa(endpoint: string, params: Record<string, string>): 
   return response.json();
 }
 
-/** One MUFASA course list, or null when it could not be read at all. */
-type CourseList = Readonly<{ courses: MufasaEnrolledCourse[]; isWhole: boolean }> | null;
-
+/** One MUFASA course list as a verdict of its own: complete when every course could be read. */
 async function getMufasaCourseList(
   rut: string,
   endpoint: 'cursos_dictados' | 'cursos_inscritos',
   isTeaching: boolean,
-): Promise<CourseList> {
+): Promise<AcademicHistory> {
   try {
     const payload = await requestMufasa(
       endpoint,
       endpoint === 'cursos_inscritos' ? { rut, id_periodo: 'todos' } : { rut, periodo: 'todos' },
     );
-    if (payload === null) return null;
+    if (payload === null) return { status: 'unavailable' };
     const remoteCourses = enrolledCoursesPayload(payload);
     const courses = remoteCourses.flatMap((course) => {
       try {
@@ -172,10 +170,10 @@ async function getMufasaCourseList(
         return [];
       }
     });
-    if (remoteCourses.length > 0 && courses.length === 0) return null;
-    return { courses, isWhole: courses.length === remoteCourses.length };
+    if (remoteCourses.length > 0 && courses.length === 0) return { status: 'unavailable' };
+    return { status: courses.length === remoteCourses.length ? 'complete' : 'partial', courses };
   } catch {
-    return null;
+    return { status: 'unavailable' };
   }
 }
 
@@ -186,9 +184,10 @@ export async function getMufasaAcademicHistory(rut: string | null): Promise<Acad
     getMufasaCourseList(rut, 'cursos_inscritos', false),
     getMufasaCourseList(rut, 'cursos_dictados', true),
   ]);
-  if (!enrolled && !taught) return { status: 'unavailable' };
-  const courses = [...(enrolled?.courses ?? []), ...(taught?.courses ?? [])];
-  const isComplete = courses.length > 0 && enrolled?.isWhole === true && taught?.isWhole === true;
+  const lists = [enrolled, taught];
+  if (lists.every((list) => list.status === 'unavailable')) return { status: 'unavailable' };
+  const courses = lists.flatMap((list) => (list.status === 'unavailable' ? [] : list.courses));
+  const isComplete = courses.length > 0 && lists.every((list) => list.status === 'complete');
   return { status: isComplete ? 'complete' : 'partial', courses };
 }
 
@@ -303,7 +302,13 @@ export function createMufasaUCampus(): UCampus {
     getAcademicHistory(rut) {
       if (!rut) return getMufasaAcademicHistory(rut);
       let history = histories.get(rut);
-      if (!history) histories.set(rut, (history = getMufasaAcademicHistory(rut)));
+      if (!history) {
+        // Never remember a rejection: an unexpected failure is an unavailable history too.
+        history = getMufasaAcademicHistory(rut).catch((): AcademicHistory => ({
+          status: 'unavailable',
+        }));
+        histories.set(rut, history);
+      }
       return history;
     },
     getCourseMembers: getMufasaCourseMembers,

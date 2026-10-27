@@ -18,12 +18,13 @@ import type {
   AcademicOverviewApiResponse,
   AcademicOverviewCourse,
   AcademicOverviewPage,
+  AcademicOverviewSource,
   AcademicOverviewSources,
   RoadmapClosureCalendar,
 } from '../types';
 
 /** The public `source` field: any U-Campus answer, complete or partial, reads as MUFASA. */
-function overviewSource(history: AcademicHistory) {
+function overviewSource(history: AcademicHistory): AcademicOverviewSource {
   return history.status === 'unavailable' ? 'LOCAL' : 'MUFASA';
 }
 
@@ -98,16 +99,25 @@ function apiOffering(course: AcademicOverviewCourse): AcademicOverviewApiOfferin
   };
 }
 
+/** Reads the local overview and projects the Academic history over it, for both entry points. */
+async function readAcademicOverview(
+  actor: AcademicOverviewActor,
+  { history, isPastClosure }: AcademicOverviewSources,
+) {
+  const localCourses = await readLocalAcademicOverview(actor, isPastClosure);
+  return {
+    source: overviewSource(history),
+    courses: projectOverviewCourses(history, localCourses, isPastClosure),
+  };
+}
+
 export async function getAcademicOverviewPage(
   actor: AcademicOverviewActor,
   sources: AcademicOverviewSources,
 ): Promise<AcademicOverviewPage> {
-  const { history, isPastClosure } = sources;
-  const localCourses = await readLocalAcademicOverview(actor, isPastClosure);
-  const courses = projectOverviewCourses(history, localCourses, isPastClosure);
-
+  const { source, courses } = await readAcademicOverview(actor, sources);
   return {
-    source: overviewSource(history),
+    source,
     terms: groupAcademicOverviewCoursesByAcademicTerm(uniqueAcademicOverviewCourses(courses)),
   };
 }
@@ -116,9 +126,6 @@ export async function getAcademicOverviewApi(
   actor: AcademicOverviewActor,
   sources: AcademicOverviewSources,
 ): Promise<AcademicOverviewApiResponse> {
-  const { history, isPastClosure } = sources;
-  const localCourses = await readLocalAcademicOverview(actor, isPastClosure);
-  const offerings = projectOverviewCourses(history, localCourses, isPastClosure).map(apiOffering);
-
-  return { source: overviewSource(history), offerings };
+  const { source, courses } = await readAcademicOverview(actor, sources);
+  return { source, offerings: courses.map(apiOffering) };
 }

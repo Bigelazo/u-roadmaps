@@ -161,6 +161,19 @@ it('remembers a failed history as unavailable for that adapter instance only', a
   });
 });
 
+it('never remembers a rejection, even when the request throws synchronously', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const fetch = vi.fn(() => {
+    throw new TypeError('fetch is broken');
+  });
+  vi.stubGlobal('fetch', fetch);
+  const ucampus = createMufasaUCampus();
+
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
 it('does not remember course members or person names', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
   const fetch = vi.fn(() => Promise.resolve(new Response('[]')));
