@@ -2,7 +2,7 @@ import { afterAll, expect, vi } from 'vitest';
 import type { PoolConfig } from 'pg';
 import { test } from './fixtures';
 import { prisma } from '@/shared/server/db';
-import { synchronizeAcademicParticipations } from '@/features/roadmap/application/academic-participation';
+import { synchronizeAcademicHistory } from '@/features/roadmap/server';
 import type { RoadmapChanges } from '@/features/roadmap/application/change-port';
 
 vi.mock('@prisma/adapter-pg', async (importOriginal) => {
@@ -20,7 +20,7 @@ vi.mock('@prisma/adapter-pg', async (importOriginal) => {
 import {
   localFixtureUCampus,
   type UCampus,
-  type MufasaEnrolledCoursesResult,
+  type AcademicHistory,
 } from '@/integrations/ucampus/server';
 
 afterAll(() => prisma.$disconnect());
@@ -49,19 +49,18 @@ test('a complete academic history synchronizes with a constrained connection poo
       },
     });
   }
-  const source: MufasaEnrolledCoursesResult = {
-    source: 'MUFASA',
-    isComplete: true,
+  const history: AcademicHistory = {
+    status: 'complete',
     courses: [...courses, { ...courses[0], institutionalPosition: 'OBSERVER' }],
   };
   const ucampus: UCampus = {
     ...localFixtureUCampus,
-    async getAcademicCourses() {
-      return source;
+    async getAcademicHistory() {
+      return history;
     },
   };
   const reported: RoadmapChanges[] = [];
-  const result = await synchronizeAcademicParticipations(
+  const result = await synchronizeAcademicHistory(
     { id: course.studentId, rut: null, ucampus },
     {
       async report(transaction, changes) {
@@ -70,7 +69,7 @@ test('a complete academic history synchronizes with a constrained connection poo
       },
     },
   );
-  expect(result).toEqual(source);
+  expect(result).toEqual(history);
   expect(reported).toHaveLength(courses.length);
   expect(
     await prisma.participation.count({

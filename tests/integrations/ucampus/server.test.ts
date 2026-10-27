@@ -1,9 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
-  getMufasaAcademicCourses,
+  createMufasaUCampus,
+  getMufasaAcademicHistory,
   localFixtureUCampus,
   getMufasaCourseMembers,
-  getMufasaEnrolledCourses,
   getMufasaPersonNames,
 } from '@/integrations/ucampus/server';
 
@@ -19,146 +19,182 @@ afterEach(() => {
   else process.env.MUFASA_BASE_URL = originalBaseUrl;
 });
 
-it('reads enrolled courses from MUFASA without exposing its token in the URL', async () => {
-  process.env.MUFASA_TOKEN = 'private-token';
-  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  const fetch = vi.fn().mockResolvedValue(
-    new Response(
-      JSON.stringify([
-        {
-          codigo: 'CC5002',
-          nombre: 'Desarrollo de software',
-          ano: 2026,
-          periodo: 2,
-          seccion: '1',
-        },
-      ]),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
+type MufasaList = unknown[] | Response;
+
+/** Answers each MUFASA course list; a list left out answers with no course. */
+function stubCourseLists(lists: { enrolled?: MufasaList; taught?: MufasaList }) {
+  const answer = (list: MufasaList = []) =>
+    list instanceof Response ? list.clone() : new Response(JSON.stringify(list));
+  const fetch = vi.fn((url: URL) =>
+    Promise.resolve(
+      answer(url.pathname.endsWith('/cursos_dictados') ? lists.taught : lists.enrolled),
     ),
   );
   vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
 
-  await expect(getMufasaEnrolledCourses('12345678')).resolves.toEqual({
-    source: 'MUFASA',
-    courses: [
-      {
-        courseCode: 'CC5002',
-        name: 'Desarrollo de software',
-        year: 2026,
-        semester: 2,
-        section: '1',
-        ramoId: null,
-        isTeaching: false,
-        institutionalPosition: 'STUDENT',
-      },
-    ],
+const enrolledCourse = {
+  codigo: 'CC5002',
+  nombre: 'Desarrollo de software',
+  ano: 2026,
+  periodo: 2,
+};
+const parsedEnrolledCourse = {
+  courseCode: 'CC5002',
+  name: 'Desarrollo de software',
+  year: 2026,
+  semester: 2,
+  section: null,
+  ramoId: null,
+  isTeaching: false,
+  institutionalPosition: 'STUDENT',
+};
+
+it('reads both course lists from MUFASA without exposing its token in the URL', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
+  const fetch = stubCourseLists({ enrolled: [{ ...enrolledCourse, seccion: '1' }] });
+
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({
+    status: 'complete',
+    courses: [{ ...parsedEnrolledCourse, section: '1' }],
   });
-  const [url, options] = fetch.mock.calls[0] as [URL, RequestInit];
-  expect(url.toString()).toBe(
+  expect(fetch.mock.calls.map(([url]) => url.toString())).toEqual([
     'https://mufasa.example.test/api/cursos_inscritos?rut=12345678&id_periodo=todos',
-  );
+    'https://mufasa.example.test/api/cursos_dictados?rut=12345678&periodo=todos',
+  ]);
+  const [, options] = fetch.mock.calls[0] as unknown as [URL, RequestInit];
   expect(options.headers).toEqual({
     Accept: 'application/json',
     Authorization: 'Bearer private-token',
   });
 });
 
-it('keeps valid enrolled courses when MUFASA includes a course with an unsupported period', async () => {
+it('answers a partial history when MUFASA includes a course it cannot parse', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify([
-          {
-            codigo: 'CC5002',
-            nombre: 'Desarrollo de software',
-            ano: 2026,
-            periodo: 2,
-          },
-          {
-            codigo: 'CC0000',
-            nombre: 'Registro con período no compatible',
-            ano: 2025,
-            periodo: 3,
-          },
-        ]),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-    ),
-  );
-
-  await expect(getMufasaEnrolledCourses('12345678')).resolves.toEqual({
-    source: 'MUFASA',
-    isComplete: false,
-    courses: [
-      {
-        courseCode: 'CC5002',
-        name: 'Desarrollo de software',
-        year: 2026,
-        semester: 2,
-        section: null,
-        ramoId: null,
-        isTeaching: false,
-        institutionalPosition: 'STUDENT',
-      },
+  stubCourseLists({
+    enrolled: [
+      enrolledCourse,
+      { codigo: 'CC0000', nombre: 'Registro con período no compatible', ano: 2025, periodo: 3 },
     ],
+  });
+
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({
+    status: 'partial',
+    courses: [parsedEnrolledCourse],
   });
 });
 
-it('falls back to local offerings when MUFASA is unavailable or returns an invalid snapshot', async () => {
+it('answers a partial history when exactly one course list fails', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue(new Response(JSON.stringify([{ codigo: 'CC5002' }]))),
-  );
+  stubCourseLists({ enrolled: [enrolledCourse], taught: new Response('', { status: 503 }) });
 
-  await expect(getMufasaEnrolledCourses('12345678')).resolves.toEqual({
-    source: 'LOCAL',
-    courses: [],
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({
+    status: 'partial',
+    courses: [parsedEnrolledCourse],
   });
+});
+
+it.each([
+  ['fail', new Response('', { status: 503 })],
+  ['return only invalid courses', [{ codigo: 'CC5002' }]],
+])('answers an unavailable history when both course lists %s', async (_, list) => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  stubCourseLists({ enrolled: list, taught: list });
+
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+});
+
+it('answers an unavailable history without contacting MUFASA when no token or RUT is known', async () => {
+  delete process.env.MUFASA_TOKEN;
+  const fetch = stubCourseLists({ enrolled: [enrolledCourse] });
+
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+  process.env.MUFASA_TOKEN = 'private-token';
+  await expect(getMufasaAcademicHistory(null)).resolves.toEqual({ status: 'unavailable' });
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 it('still queries MUFASA in development when E2E fixtures are enabled', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
   vi.stubEnv('NODE_ENV', 'development');
   vi.stubEnv('U_ROADMAPS_E2E_DATA', 'true');
-  vi.stubGlobal(
-    'fetch',
-    vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify([
-            { codigo: 'CC5002', nombre: 'Desarrollo de software', ano: 2026, periodo: 2 },
-          ]),
-        ),
-      ),
-  );
+  stubCourseLists({ enrolled: [enrolledCourse] });
 
-  await expect(getMufasaEnrolledCourses('12345678')).resolves.toMatchObject({
-    source: 'MUFASA',
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toMatchObject({
+    status: 'complete',
   });
+});
+
+it('shares one pair of MUFASA requests per RUT within one adapter instance', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const fetch = stubCourseLists({ enrolled: [enrolledCourse] });
+  const ucampus = createMufasaUCampus();
+
+  const [first, concurrent] = await Promise.all([
+    ucampus.getAcademicHistory('12345678'),
+    ucampus.getAcademicHistory('12345678'),
+  ]);
+  const later = await ucampus.getAcademicHistory('12345678');
+
+  expect(first).toEqual({ status: 'complete', courses: [parsedEnrolledCourse] });
+  expect(concurrent).toBe(first);
+  expect(later).toBe(first);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  await createMufasaUCampus().getAcademicHistory('12345678');
+  expect(fetch).toHaveBeenCalledTimes(4);
+});
+
+it('remembers a failed history as unavailable for that adapter instance only', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const failure = new Response('', { status: 503 });
+  stubCourseLists({ enrolled: failure, taught: failure });
+  const ucampus = createMufasaUCampus();
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+
+  const fetch = stubCourseLists({ enrolled: [enrolledCourse] });
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+  expect(fetch).not.toHaveBeenCalled();
+  await expect(createMufasaUCampus().getAcademicHistory('12345678')).resolves.toMatchObject({
+    status: 'complete',
+  });
+});
+
+it('never remembers a rejection, even when the request throws synchronously', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const fetch = vi.fn(() => {
+    throw new TypeError('fetch is broken');
+  });
+  vi.stubGlobal('fetch', fetch);
+  const ucampus = createMufasaUCampus();
+
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it('does not remember course members or person names', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const fetch = vi.fn(() => Promise.resolve(new Response('[]')));
+  vi.stubGlobal('fetch', fetch);
+  const ucampus = createMufasaUCampus();
+
+  await ucampus.getCourseMembers(675, { year: 2026, semester: 2 });
+  await ucampus.getCourseMembers(675, { year: 2026, semester: 2 });
+  await ucampus.getPersonNames(['12345678']);
+  await ucampus.getPersonNames(['12345678']);
+  expect(fetch).toHaveBeenCalledTimes(4);
 });
 
 it('keeps development fixture profiles on their local course offerings', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
   vi.stubEnv('NODE_ENV', 'development');
   vi.stubEnv('U_ROADMAPS_DEV_DATA', 'true');
-  const fetch = vi
-    .fn()
-    .mockResolvedValue(
-      new Response(
-        JSON.stringify([
-          { codigo: 'CC5002', nombre: 'Desarrollo de software', ano: 2026, periodo: 2 },
-        ]),
-      ),
-    );
-  vi.stubGlobal('fetch', fetch);
+  const fetch = stubCourseLists({ enrolled: [enrolledCourse] });
 
-  await expect(localFixtureUCampus.getAcademicCourses('10000001')).resolves.toEqual({
-    source: 'LOCAL',
-    courses: [],
+  await expect(localFixtureUCampus.getAcademicHistory('10000001')).resolves.toEqual({
+    status: 'unavailable',
   });
   await expect(
     localFixtureUCampus.getCourseMembers(675, { year: 2026, semester: 2 }),
@@ -174,60 +210,33 @@ it('queries MUFASA for a real user while development fixtures are enabled', asyn
   process.env.MUFASA_TOKEN = 'private-token';
   vi.stubEnv('NODE_ENV', 'development');
   vi.stubEnv('U_ROADMAPS_DEV_DATA', 'true');
-  vi.stubGlobal(
-    'fetch',
-    vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify([
-            { codigo: 'CC5002', nombre: 'Desarrollo de software', ano: 2026, periodo: 2 },
-          ]),
-        ),
-      ),
-  );
+  stubCourseLists({ enrolled: [enrolledCourse] });
 
-  await expect(getMufasaEnrolledCourses('12345678')).resolves.toEqual({
-    source: 'MUFASA',
-    courses: [
-      {
-        courseCode: 'CC5002',
-        name: 'Desarrollo de software',
-        year: 2026,
-        semester: 2,
-        section: null,
-        ramoId: null,
-        isTeaching: false,
-        institutionalPosition: 'STUDENT',
-      },
-    ],
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({
+    status: 'complete',
+    courses: [parsedEnrolledCourse],
   });
 });
 
 it('identifies teaching positions returned alongside enrolled courses', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify([
-          { codigo: 'CC1001', nombre: 'Ayudantía', ano: 2026, periodo: 2, id_cargo: 3 },
-          { codigo: 'CC1002', nombre: 'Auxiliaría', ano: 2026, periodo: 2, id_cargo: '2' },
-          { codigo: 'CC1003', nombre: 'Cátedra', ano: 2026, periodo: 2, id_cargo: 1 },
-          {
-            codigo: 'CC1004',
-            nombre: 'Coordinación',
-            ano: 2026,
-            periodo: 2,
-            cargo: 'Profesor Coordinador',
-          },
-        ]),
-      ),
-    ),
-  );
+  stubCourseLists({
+    enrolled: [
+      { codigo: 'CC1001', nombre: 'Ayudantía', ano: 2026, periodo: 2, id_cargo: 3 },
+      { codigo: 'CC1002', nombre: 'Auxiliaría', ano: 2026, periodo: 2, id_cargo: '2' },
+      { codigo: 'CC1003', nombre: 'Cátedra', ano: 2026, periodo: 2, id_cargo: 1 },
+      {
+        codigo: 'CC1004',
+        nombre: 'Coordinación',
+        ano: 2026,
+        periodo: 2,
+        cargo: 'Profesor Coordinador',
+      },
+    ],
+  });
 
-  await expect(getMufasaEnrolledCourses('12345678')).resolves.toMatchObject({
-    source: 'MUFASA',
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toMatchObject({
+    status: 'complete',
     courses: [
       { courseCode: 'CC1001', institutionalPosition: 'TEACHING_ASSISTANT' },
       { courseCode: 'CC1002', institutionalPosition: 'AUXILIARY_PROFESSOR' },
@@ -237,85 +246,29 @@ it('identifies teaching positions returned alongside enrolled courses', async ()
   });
 });
 
-it('combines enrolled and taught courses for the academic overview', async () => {
+it('combines enrolled and taught courses into a complete history', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
-  process.env.MUFASA_BASE_URL = 'https://mufasa.example.test/api';
-  const fetch = vi.fn((url: URL) => {
-    if (url.pathname.endsWith('/cursos_dictados')) {
-      return Promise.resolve(
-        new Response(
-          JSON.stringify([
-            {
-              codigo: 'CC9001',
-              nombre: 'Curso dictado',
-              ano: 2026,
-              periodo: 2,
-              id_cargo: 1,
-            },
-          ]),
-        ),
-      );
-    }
-    return Promise.resolve(
-      new Response(
-        JSON.stringify([{ codigo: 'CC9002', nombre: 'Curso inscrito', ano: 2026, periodo: 2 }]),
-      ),
-    );
+  stubCourseLists({
+    enrolled: [{ codigo: 'CC9002', nombre: 'Curso inscrito', ano: 2026, periodo: 2 }],
+    taught: [{ codigo: 'CC9001', nombre: 'Curso dictado', ano: 2026, periodo: 2, id_cargo: 1 }],
   });
-  vi.stubGlobal('fetch', fetch);
 
-  await expect(getMufasaAcademicCourses('12345678')).resolves.toMatchObject({
-    source: 'MUFASA',
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toMatchObject({
+    status: 'complete',
     courses: [
       { courseCode: 'CC9002', isTeaching: false },
-      {
-        courseCode: 'CC9001',
-        isTeaching: true,
-        institutionalPosition: 'COURSE_PROFESSOR',
-      },
+      { courseCode: 'CC9001', isTeaching: true, institutionalPosition: 'COURSE_PROFESSOR' },
     ],
   });
-  expect(fetch.mock.calls.map(([url]) => (url as URL).toString())).toEqual([
-    'https://mufasa.example.test/api/cursos_inscritos?rut=12345678&id_periodo=todos',
-    'https://mufasa.example.test/api/cursos_dictados?rut=12345678&periodo=todos',
-  ]);
 });
 
-it('treats a history that lists no course in either list as incomplete', async () => {
+it('answers a partial history when neither list includes a course', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => Promise.resolve(new Response('[]'))),
-  );
+  stubCourseLists({});
 
-  await expect(getMufasaAcademicCourses('12345678')).resolves.toEqual({
-    source: 'MUFASA',
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({
+    status: 'partial',
     courses: [],
-    isComplete: false,
-  });
-});
-
-it('keeps a history complete when only one of its lists is empty', async () => {
-  process.env.MUFASA_TOKEN = 'private-token';
-  vi.stubGlobal(
-    'fetch',
-    vi.fn((url: URL) =>
-      Promise.resolve(
-        new Response(
-          url.pathname.endsWith('/cursos_dictados')
-            ? JSON.stringify([
-                { codigo: 'CC9001', nombre: 'Curso dictado', ano: 2026, periodo: 2, id_cargo: 1 },
-              ])
-            : '[]',
-        ),
-      ),
-    ),
-  );
-
-  await expect(getMufasaAcademicCourses('12345678')).resolves.toMatchObject({
-    source: 'MUFASA',
-    courses: [{ courseCode: 'CC9001' }],
-    isComplete: true,
   });
 });
 

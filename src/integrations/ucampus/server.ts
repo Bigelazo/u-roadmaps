@@ -24,9 +24,13 @@ export type MufasaEnrolledCourse = Readonly<{
   institutionalPosition: MufasaInstitutionalCoursePosition | null;
 }>;
 
-export type MufasaEnrolledCoursesResult =
-  | Readonly<{ source: 'MUFASA'; courses: MufasaEnrolledCourse[]; isComplete?: boolean }>
-  | Readonly<{ source: 'LOCAL'; courses: [] }>;
+/**
+ * The Academic history verdict. Only a complete history may deactivate Participations;
+ * a partial one reports some rows but omits or drops others; an unavailable one reports none.
+ */
+export type AcademicHistory =
+  | Readonly<{ status: 'complete' | 'partial'; courses: readonly MufasaEnrolledCourse[] }>
+  | Readonly<{ status: 'unavailable' }>;
 
 const defaultMufasaBaseUrl = 'https://apps.dcc.uchile.cl/servicios/puente/ucampus/api/fcfm_mufasa';
 
@@ -146,19 +150,18 @@ async function requestMufasa(endpoint: string, params: Record<string, string>): 
   return response.json();
 }
 
-async function getMufasaCourses(
-  rut: string | null,
+/** One MUFASA course list as a verdict of its own: complete when every course could be read. */
+async function getMufasaCourseList(
+  rut: string,
   endpoint: 'cursos_dictados' | 'cursos_inscritos',
   isTeaching: boolean,
-): Promise<MufasaEnrolledCoursesResult> {
-  if (!rut) return { source: 'LOCAL', courses: [] };
-
+): Promise<AcademicHistory> {
   try {
     const payload = await requestMufasa(
       endpoint,
       endpoint === 'cursos_inscritos' ? { rut, id_periodo: 'todos' } : { rut, periodo: 'todos' },
     );
-    if (payload === null) return { source: 'LOCAL', courses: [] };
+    if (payload === null) return { status: 'unavailable' };
     const remoteCourses = enrolledCoursesPayload(payload);
     const courses = remoteCourses.flatMap((course) => {
       try {
@@ -167,48 +170,25 @@ async function getMufasaCourses(
         return [];
       }
     });
-    if (remoteCourses.length > 0 && courses.length === 0) {
-      throw new Error('MUFASA returned no valid courses.');
-    }
-    return {
-      source: 'MUFASA',
-      courses,
-      ...(courses.length !== remoteCourses.length ? { isComplete: false } : {}),
-    };
+    if (remoteCourses.length > 0 && courses.length === 0) return { status: 'unavailable' };
+    return { status: courses.length === remoteCourses.length ? 'complete' : 'partial', courses };
   } catch {
-    return { source: 'LOCAL', courses: [] };
+    return { status: 'unavailable' };
   }
 }
 
-export function getMufasaEnrolledCourses(rut: string | null): Promise<MufasaEnrolledCoursesResult> {
-  return getMufasaCourses(rut, 'cursos_inscritos', false);
-}
-
-export function getMufasaTaughtCourses(rut: string | null): Promise<MufasaEnrolledCoursesResult> {
-  return getMufasaCourses(rut, 'cursos_dictados', true);
-}
-
-export async function getMufasaAcademicCourses(
-  rut: string | null,
-): Promise<MufasaEnrolledCoursesResult> {
+/** Reads both MUFASA course lists and classifies them into an Academic history verdict. */
+export async function getMufasaAcademicHistory(rut: string | null): Promise<AcademicHistory> {
+  if (!rut) return { status: 'unavailable' };
   const [enrolled, taught] = await Promise.all([
-    getMufasaEnrolledCourses(rut),
-    getMufasaTaughtCourses(rut),
+    getMufasaCourseList(rut, 'cursos_inscritos', false),
+    getMufasaCourseList(rut, 'cursos_dictados', true),
   ]);
-  if (enrolled.source === 'LOCAL' && taught.source === 'LOCAL')
-    return { source: 'LOCAL', courses: [] };
-
-  const courses = [...enrolled.courses, ...taught.courses];
-  return {
-    source: 'MUFASA',
-    courses,
-    isComplete:
-      courses.length > 0 &&
-      enrolled.source === 'MUFASA' &&
-      taught.source === 'MUFASA' &&
-      enrolled.isComplete !== false &&
-      taught.isComplete !== false,
-  };
+  const lists = [enrolled, taught];
+  if (lists.every((list) => list.status === 'unavailable')) return { status: 'unavailable' };
+  const courses = lists.flatMap((list) => (list.status === 'unavailable' ? [] : list.courses));
+  const isComplete = courses.length > 0 && lists.every((list) => list.status === 'complete');
+  return { status: isComplete ? 'complete' : 'partial', courses };
 }
 
 export type MufasaCourseMember = Readonly<{
@@ -302,9 +282,9 @@ export async function getMufasaPersonNames(ruts: readonly string[]): Promise<Map
   return names;
 }
 
-/** The U-Campus seam. LOCAL results preserve existing local Participations. */
+/** The U-Campus seam. It never rejects: failures become an unavailable Academic history. */
 export type UCampus = Readonly<{
-  getAcademicCourses(rut: string | null): Promise<MufasaEnrolledCoursesResult>;
+  getAcademicHistory(rut: string | null): Promise<AcademicHistory>;
   getCourseMembers(
     ramoId: number,
     term: Readonly<{ year: number; semester: number }>,
@@ -312,15 +292,33 @@ export type UCampus = Readonly<{
   getPersonNames(ruts: readonly string[]): Promise<Map<string, string>>;
 }>;
 
-export const mufasaUCampus: UCampus = {
-  getAcademicCourses: getMufasaAcademicCourses,
-  getCourseMembers: getMufasaCourseMembers,
-  getPersonNames: getMufasaPersonNames,
-};
+/**
+ * A U-Campus adapter for one request. It remembers the in-flight Academic history per RUT,
+ * so every caller in the request shares one pair of MUFASA requests; nothing outlives it.
+ */
+export function createMufasaUCampus(): UCampus {
+  const histories = new Map<string, Promise<AcademicHistory>>();
+  return {
+    getAcademicHistory(rut) {
+      if (!rut) return getMufasaAcademicHistory(rut);
+      let history = histories.get(rut);
+      if (!history) {
+        // Never remember a rejection: an unexpected failure is an unavailable history too.
+        history = getMufasaAcademicHistory(rut).catch((): AcademicHistory => ({
+          status: 'unavailable',
+        }));
+        histories.set(rut, history);
+      }
+      return history;
+    },
+    getCourseMembers: getMufasaCourseMembers,
+    getPersonNames: getMufasaPersonNames,
+  };
+}
 
 export const localFixtureUCampus: UCampus = {
-  async getAcademicCourses() {
-    return { source: 'LOCAL', courses: [] };
+  async getAcademicHistory() {
+    return { status: 'unavailable' };
   },
   async getCourseMembers() {
     return { source: 'LOCAL', members: [] };

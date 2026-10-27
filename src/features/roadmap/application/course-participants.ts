@@ -53,7 +53,8 @@ async function readInstitutionalRoster(
   actor: RoadmapActor,
   identifier: CourseOfferingIdentifier,
 ): Promise<RosterEntry[] | null> {
-  const { courses } = await actor.ucampus.getAcademicCourses(actor.rut);
+  const history = await actor.ucampus.getAcademicHistory(actor.rut);
+  const courses = history.status === 'unavailable' ? [] : history.courses;
   const ramoId = courses.find(
     (course) =>
       course.courseCode === identifier.courseCode &&

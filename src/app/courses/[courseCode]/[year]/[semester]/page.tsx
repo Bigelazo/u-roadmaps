@@ -5,7 +5,7 @@ import {
   PostCreationInvitationDialog,
   RoadmapCanvasSession,
 } from '@/features/roadmap';
-import { readPostCreationInvitation, synchronizeParticipation } from '@/features/roadmap/server';
+import { readPostCreationInvitation, synchronizeCourseOffering } from '@/features/roadmap/server';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 import { prisma } from '@/shared/server/db';
@@ -58,23 +58,18 @@ export default async function CoursePage(
 
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
-  await synchronizeParticipation(user, identifier, roadmapChangePort);
+  const { participation } = await synchronizeCourseOffering(user, identifier, roadmapChangePort);
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { courseCode_year_semester: identifier },
     select: {
       course: { select: { name: true } },
       roadmap: { select: { id: true, closedAt: true } },
-      participants: {
-        where: { userId: user.id, isActive: true },
-        select: { role: true },
-      },
     },
   });
   if (!courseOffering) {
     redirectUnavailableNotice(noticeId, null, null);
     notFound();
   }
-  const participation = courseOffering.participants[0];
   redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(courseOffering.roadmap?.closedAt);

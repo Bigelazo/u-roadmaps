@@ -1,7 +1,6 @@
 export type AcademicOverviewActor = Readonly<{
   id: string;
   rut: string | null;
-  ucampus: import('@/integrations/ucampus/server').UCampus;
 }>;
 
 export type AcademicOverviewSource = 'MUFASA' | 'LOCAL';
@@ -36,7 +35,7 @@ export type RoadmapClosureCalendar = (
 ) => boolean;
 
 export type AcademicOverviewSources = Readonly<{
-  source?: import('@/integrations/ucampus/server').MufasaEnrolledCoursesResult;
+  history: import('@/integrations/ucampus/server').AcademicHistory;
   isPastClosure: RoadmapClosureCalendar;
 }>;
 
