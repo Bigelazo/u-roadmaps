@@ -293,11 +293,23 @@ export type UCampus = Readonly<{
   getPersonNames(ruts: readonly string[]): Promise<Map<string, string>>;
 }>;
 
-export const mufasaUCampus: UCampus = {
-  getAcademicHistory: getMufasaAcademicHistory,
-  getCourseMembers: getMufasaCourseMembers,
-  getPersonNames: getMufasaPersonNames,
-};
+/**
+ * A U-Campus adapter for one request. It remembers the in-flight Academic history per RUT,
+ * so every caller in the request shares one pair of MUFASA requests; nothing outlives it.
+ */
+export function createMufasaUCampus(): UCampus {
+  const histories = new Map<string, Promise<AcademicHistory>>();
+  return {
+    getAcademicHistory(rut) {
+      if (!rut) return getMufasaAcademicHistory(rut);
+      let history = histories.get(rut);
+      if (!history) histories.set(rut, (history = getMufasaAcademicHistory(rut)));
+      return history;
+    },
+    getCourseMembers: getMufasaCourseMembers,
+    getPersonNames: getMufasaPersonNames,
+  };
+}
 
 export const localFixtureUCampus: UCampus = {
   async getAcademicHistory() {
