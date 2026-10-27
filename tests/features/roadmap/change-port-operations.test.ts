@@ -21,9 +21,9 @@ import {
   updateRoadmapNodeType,
   deleteRoadmapNodeType,
   completeNode,
+  synchronizeCourseOffering,
 } from '@/features/roadmap/server';
 import { createRoadmap } from '@/features/roadmap/application/roadmap';
-import { materializeParticipation } from '@/features/roadmap/application/academic-participation';
 import { teacherEdits } from '../../notifications-integration/roadmap';
 
 async function addNode(course: IntegrationCourse, title = 'Pilas') {
@@ -492,31 +492,33 @@ test('Node type commands refuse what the Node type decision rejects, with their 
   }
 });
 
-test('promotion reports the role change', async ({ course }) => {
-  const recording = recordingChangePort();
-  await materializeParticipation(
-    { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
-    course.identifier,
-    { name: 'Curso de prueba', positions: ['COURSE_PROFESSOR'] },
-    recording.port,
-  );
-  expect(recording.facts()).toEqual([
-    {
-      kind: 'participation-role',
-      recipientId: course.studentId,
-      previous: 'STUDENT',
-      current: 'TEACHER',
-    },
-  ]);
-});
-
 test('concurrent materializations of one new Course both succeed', async ({ course }) => {
   const courseCode = `RACE${crypto.randomUUID().slice(0, 8)}`;
-  const offering = (year: number, semester: number) =>
-    materializeParticipation(
-      { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
+  const offering = (year: number, semester: 1 | 2) =>
+    synchronizeCourseOffering(
+      {
+        id: course.studentId,
+        rut: null,
+        ucampus: {
+          ...localFixtureUCampus,
+          getAcademicHistory: async () => ({
+            status: 'complete',
+            courses: [
+              {
+                courseCode,
+                year,
+                semester,
+                name: 'Curso concurrente',
+                section: '1',
+                ramoId: null,
+                isTeaching: false,
+                institutionalPosition: 'STUDENT',
+              },
+            ],
+          }),
+        },
+      },
       { courseCode, year, semester },
-      { name: 'Curso concurrente', positions: ['STUDENT'] },
       recordingChangePort().port,
     );
   try {

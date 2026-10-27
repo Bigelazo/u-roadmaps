@@ -3,6 +3,7 @@ import { lockRoadmap, roadmapChangeTransaction } from './roadmap-command';
 import 'server-only';
 
 import {
+  type AcademicHistory,
   type UCampus,
   type MufasaEnrolledCourse,
   type MufasaInstitutionalCoursePosition,
@@ -22,7 +23,8 @@ export type AcademicUser = Readonly<{
   ucampus: UCampus;
 }>;
 
-export type MufasaCourseAccess = Readonly<{
+type CourseAccess = Readonly<{
+  identifier: CourseOfferingIdentifier;
   name: string;
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
@@ -37,30 +39,27 @@ export type CourseOfferingSynchronization =
     }>
   | Readonly<{ status: 'partial' | 'unavailable'; participation: ActiveParticipation }>;
 
-export function canEditRoadmap(access: MufasaCourseAccess) {
-  return positionCapabilities(effectivePosition(access.positions)).canEdit;
-}
-
-export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' {
-  return canEditRoadmap(access) ? 'TEACHER' : 'STUDENT';
-}
-
 const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
   `${courseCode}:${year}:${semester}`;
 
-function courseAccess(
-  courses: readonly MufasaEnrolledCourse[],
-  identifier: CourseOfferingIdentifier,
-): MufasaCourseAccess | null {
-  const key = offeringKey(identifier);
-  const matches = courses.filter((course) => offeringKey(course) === key);
-  if (matches.length === 0) return null;
-  return {
-    name: matches[0].name,
-    positions: matches.flatMap((course) =>
-      course.institutionalPosition ? [course.institutionalPosition] : [],
-    ),
-  };
+/** Groups the reported section rows into Course offerings, keyed by `offeringKey`. */
+function reportedOfferings(courses: readonly MufasaEnrolledCourse[]) {
+  const offerings = new Map<string, CourseAccess>();
+  for (const { courseCode, year, semester, name, institutionalPosition } of courses) {
+    const key = offeringKey({ courseCode, year, semester });
+    const access = offerings.get(key) ?? {
+      identifier: { courseCode, year, semester },
+      name,
+      positions: [],
+    };
+    offerings.set(key, {
+      ...access,
+      positions: institutionalPosition
+        ? [...access.positions, institutionalPosition]
+        : access.positions,
+    });
+  }
+  return offerings;
 }
 
 function readActiveParticipation(user: AcademicUser, identifier: CourseOfferingIdentifier) {
@@ -69,10 +68,9 @@ function readActiveParticipation(user: AcademicUser, identifier: CourseOfferingI
   });
 }
 
-export async function materializeParticipation(
+async function materializeParticipation(
   user: AcademicUser,
-  identifier: CourseOfferingIdentifier,
-  access: MufasaCourseAccess,
+  { identifier, ...access }: CourseAccess,
   changePort: RoadmapChangePort,
 ) {
   const institutionalPosition = effectivePosition(access.positions);
@@ -185,52 +183,35 @@ export async function synchronizeCourseOffering(
       status: history.status,
       participation: await readActiveParticipation(user, identifier),
     };
-  const access = courseAccess(history.courses, identifier);
+  const key = offeringKey(identifier);
+  const access = reportedOfferings(history.courses).get(key);
   if (!access) {
-    const key = offeringKey(identifier);
     await deactivateParticipations(user, (offering) => offeringKey(offering) === key, changePort);
     return { status: 'complete', position: null, participation: null };
   }
   const participation =
-    (await materializeParticipation(user, identifier, access, changePort)) ??
+    (await materializeParticipation(user, access, changePort)) ??
     (await readActiveParticipation(user, identifier));
   return { status: 'complete', position: effectivePosition(access.positions), participation };
 }
 
-export async function synchronizeAcademicParticipations(
+/**
+ * Synchronizes the user's whole Academic history and returns it. Only a complete history changes
+ * Participations: every reported Course offering is materialized and every omitted active
+ * Participation is deactivated. A partial or unavailable history leaves them unchanged.
+ */
+export async function synchronizeAcademicHistory(
   user: AcademicUser,
   changePort: RoadmapChangePort,
-) {
+): Promise<AcademicHistory> {
   const history = await user.ucampus.getAcademicHistory(user.rut);
-  if (history.status === 'complete') {
-    const offerings = new Map<string, MufasaEnrolledCourse[]>();
-    for (const course of history.courses) {
-      const key = offeringKey(course);
-      offerings.set(key, [...(offerings.get(key) ?? []), course]);
-    }
-    for (const courses of offerings.values()) {
-      const course = courses[0];
-      await materializeParticipation(
-        user,
-        {
-          courseCode: course.courseCode,
-          year: course.year,
-          semester: course.semester,
-        },
-        {
-          name: course.name,
-          positions: courses.flatMap(({ institutionalPosition }) =>
-            institutionalPosition ? [institutionalPosition] : [],
-          ),
-        },
-        changePort,
-      );
-    }
-    await deactivateParticipations(
-      user,
-      (offering) => !offerings.has(offeringKey(offering)),
-      changePort,
-    );
-  }
+  if (history.status !== 'complete') return history;
+  const offerings = reportedOfferings(history.courses);
+  for (const access of offerings.values()) await materializeParticipation(user, access, changePort);
+  await deactivateParticipations(
+    user,
+    (offering) => !offerings.has(offeringKey(offering)),
+    changePort,
+  );
   return history;
 }

@@ -2,7 +2,7 @@ import { afterAll, expect, vi } from 'vitest';
 import type { PoolConfig } from 'pg';
 import { test } from './fixtures';
 import { prisma } from '@/shared/server/db';
-import { synchronizeAcademicParticipations } from '@/features/roadmap/application/academic-participation';
+import { synchronizeAcademicHistory } from '@/features/roadmap/server';
 import type { RoadmapChanges } from '@/features/roadmap/application/change-port';
 
 vi.mock('@prisma/adapter-pg', async (importOriginal) => {
@@ -60,7 +60,7 @@ test('a complete academic history synchronizes with a constrained connection poo
     },
   };
   const reported: RoadmapChanges[] = [];
-  const result = await synchronizeAcademicParticipations(
+  const result = await synchronizeAcademicHistory(
     { id: course.studentId, rut: null, ucampus },
     {
       async report(transaction, changes) {

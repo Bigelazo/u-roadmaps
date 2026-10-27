@@ -3,40 +3,13 @@ import { expect } from 'vitest';
 import { test, type IntegrationCourse } from '../../../notifications-integration/fixtures';
 import { recordingChangePort } from '../support/recording-change-port';
 import { prisma } from '@/shared/server/db';
-import {
-  academicRole,
-  canEditRoadmap,
-  synchronizeCourseOffering,
-} from '@/features/roadmap/application/academic-participation';
+import { synchronizeAcademicHistory, synchronizeCourseOffering } from '@/features/roadmap/server';
 import { requireRoadmapCreationAccess } from '@/features/roadmap/application/participation';
 import {
-  isCourseLeadPosition,
   localFixtureUCampus,
   type AcademicHistory,
   type MufasaEnrolledCourse,
 } from '@/integrations/ucampus/server';
-
-test.each([
-  ['COURSE_PROFESSOR', 'TEACHER', true, true],
-  ['COORDINATING_PROFESSOR', 'TEACHER', true, false],
-  ['AUXILIARY_PROFESSOR', 'TEACHER', true, false],
-  ['TEACHING_ASSISTANT', 'TEACHER', true, false],
-  ['OBSERVER', 'STUDENT', false, false],
-  [null, 'STUDENT', false, false],
-] as const)('derives permissions for %s', (position, role, edit, create) => {
-  const access = { name: 'Curso', positions: position ? [position] : [] };
-  expect(academicRole(access)).toBe(role);
-  expect(canEditRoadmap(access)).toBe(edit);
-  expect(isCourseLeadPosition(position)).toBe(create);
-});
-
-test.each([
-  [['OBSERVER', 'TEACHING_ASSISTANT'], 'TEACHER'],
-  [['TEACHING_ASSISTANT', 'AUXILIARY_PROFESSOR'], 'TEACHER'],
-  [['COORDINATING_PROFESSOR', 'COURSE_PROFESSOR'], 'TEACHER'],
-] as const)('uses the highest applicable rights for %s', (positions, role) => {
-  expect(academicRole({ name: 'Curso', positions })).toBe(role);
-});
 
 type Reported = Partial<Omit<MufasaEnrolledCourse, 'semester'>> &
   Pick<MufasaEnrolledCourse, 'courseCode' | 'year'> & { semester?: number };
@@ -241,4 +214,58 @@ test('Roadmap creation falls back to the stored active Participation without a c
     'rejected',
   );
   expect(await createRoadmap(course.teacherId, course, complete(earlier(course)))).toBe('rejected');
+});
+
+const synchronizeHistory = (userId: string, history: AcademicHistory) =>
+  synchronizeAcademicHistory(userWith(userId, history), recordingChangePort().port);
+
+const activeOfferings = async (userId: string) =>
+  (
+    await prisma.participation.findMany({
+      where: { userId, isActive: true },
+      select: { role: true, courseOffering: { select: { courseCode: true, year: true } } },
+    })
+  ).map(({ role, courseOffering }) => ({ role, ...courseOffering }));
+
+test('a complete whole history materializes every reported offering, even without a Roadmap', async ({
+  course,
+}) => {
+  const later = { ...course.identifier, year: course.identifier.year + 1 };
+  const history = complete(
+    course.identifier,
+    earlier(course),
+    { ...earlier(course), section: '2', institutionalPosition: 'TEACHING_ASSISTANT' },
+    later,
+  );
+  expect(await synchronizeHistory(course.studentId, history)).toEqual(history);
+  expect(await activeOfferings(course.studentId)).toEqual(
+    expect.arrayContaining([
+      { role: 'STUDENT', courseCode: course.identifier.courseCode, year: later.year },
+      { role: 'TEACHER', courseCode: course.identifier.courseCode, year: earlier(course).year },
+    ]),
+  );
+  expect(await activeOfferings(course.studentId)).toHaveLength(3);
+  expect(await prisma.roadmap.count({ where: { courseOffering: later } })).toBe(0);
+});
+
+test('a complete whole history deactivates every omitted active Participation', async ({
+  course,
+}) => {
+  await synchronizeHistory(course.studentId, complete(course.identifier, earlier(course)));
+  const history = complete({ ...course.identifier, year: course.identifier.year + 1 });
+  expect(await synchronizeHistory(course.studentId, history)).toEqual(history);
+  expect(await activeOfferings(course.studentId)).toEqual([
+    { role: 'STUDENT', courseCode: course.identifier.courseCode, year: course.identifier.year + 1 },
+  ]);
+});
+
+test.for([
+  { status: 'partial', courses: [reported({ courseCode: 'OTHER', year: 2000 })] },
+  { status: 'unavailable' },
+] as const)('a $status whole history preserves everything', async (history, { course }) => {
+  await synchronizeHistory(course.studentId, complete(course.identifier, earlier(course)));
+  const before = await activeOfferings(course.studentId);
+  expect(await synchronizeHistory(course.studentId, history)).toEqual(history);
+  expect(await activeOfferings(course.studentId)).toEqual(before);
+  expect(await prisma.courseOffering.count({ where: { courseCode: 'OTHER' } })).toBe(0);
 });

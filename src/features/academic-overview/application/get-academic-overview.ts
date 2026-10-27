@@ -22,17 +22,6 @@ import type {
   RoadmapClosureCalendar,
 } from '../types';
 
-async function getAcademicOverview(
-  actor: AcademicOverviewActor,
-  { history: synchronized, isPastClosure }: AcademicOverviewSources,
-) {
-  const [history, localCourses] = await Promise.all([
-    synchronized ?? actor.ucampus.getAcademicHistory(actor.rut),
-    readLocalAcademicOverview(actor, isPastClosure),
-  ]);
-  return { history, localCourses };
-}
-
 /** The public `source` field: any U-Campus answer, complete or partial, reads as MUFASA. */
 function overviewSource(history: AcademicHistory) {
   return history.status === 'unavailable' ? 'LOCAL' : 'MUFASA';
@@ -113,8 +102,9 @@ export async function getAcademicOverviewPage(
   actor: AcademicOverviewActor,
   sources: AcademicOverviewSources,
 ): Promise<AcademicOverviewPage> {
-  const { history, localCourses } = await getAcademicOverview(actor, sources);
-  const courses = projectOverviewCourses(history, localCourses, sources.isPastClosure);
+  const { history, isPastClosure } = sources;
+  const localCourses = await readLocalAcademicOverview(actor, isPastClosure);
+  const courses = projectOverviewCourses(history, localCourses, isPastClosure);
 
   return {
     source: overviewSource(history),
@@ -126,10 +116,9 @@ export async function getAcademicOverviewApi(
   actor: AcademicOverviewActor,
   sources: AcademicOverviewSources,
 ): Promise<AcademicOverviewApiResponse> {
-  const { history, localCourses } = await getAcademicOverview(actor, sources);
-  const offerings = projectOverviewCourses(history, localCourses, sources.isPastClosure).map(
-    apiOffering,
-  );
+  const { history, isPastClosure } = sources;
+  const localCourses = await readLocalAcademicOverview(actor, isPastClosure);
+  const offerings = projectOverviewCourses(history, localCourses, isPastClosure).map(apiOffering);
 
   return { source: overviewSource(history), offerings };
 }
