@@ -3,8 +3,7 @@ import { expect } from 'vitest';
 import { student, test, type IntegrationCourse } from './fixtures';
 import { prisma } from '@/shared/server/db';
 import { scheduledRoadmapChangePort } from '@/app/_adapters/roadmap-changes';
-import { completeNode } from '@/features/roadmap/server';
-import { materializeParticipation } from '@/features/roadmap/application/academic-participation';
+import { completeNode, synchronizeCourseOffering } from '@/features/roadmap/server';
 import { addNode, deferredNoticePort, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
@@ -19,10 +18,29 @@ const complete = (course: IntegrationCourse, nodeId: string) =>
   completeNode({ ...student(course), nodeId }, scheduledRoadmapChangePort);
 
 const promote = (course: IntegrationCourse) =>
-  materializeParticipation(
-    { id: course.studentId, rut: null, ucampus: localFixtureUCampus },
+  synchronizeCourseOffering(
+    {
+      id: course.studentId,
+      rut: null,
+      ucampus: {
+        ...localFixtureUCampus,
+        getAcademicHistory: async () => ({
+          status: 'complete',
+          courses: [
+            {
+              ...course.identifier,
+              semester: course.identifier.semester as 1 | 2,
+              name: 'Curso de prueba',
+              section: '1',
+              ramoId: null,
+              isTeaching: true,
+              institutionalPosition: 'COURSE_PROFESSOR',
+            },
+          ],
+        }),
+      },
+    },
     course.identifier,
-    { name: 'Curso de prueba', positions: ['COURSE_PROFESSOR'] },
     scheduledRoadmapChangePort,
   );
 

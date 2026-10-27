@@ -42,7 +42,7 @@ export {
 export { type RoadmapActor } from '@/features/roadmap/application/participation';
 
 export {
-  synchronizeAcademicParticipations,
+  synchronizeAcademicHistory,
   synchronizeCourseOffering,
 } from './application/academic-participation';
 export { readCourseParticipants, type CourseParticipants } from './application/course-participants';

@@ -5,23 +5,23 @@ import {
   getAcademicOverviewPage as projectPage,
   type AcademicOverviewActor,
 } from '@/features/academic-overview/server';
-import {
-  readRoadmapClosureCalendar,
-  synchronizeAcademicParticipations,
-} from '@/features/roadmap/server';
+import { readRoadmapClosureCalendar, synchronizeAcademicHistory } from '@/features/roadmap/server';
+import type { UCampus } from '@/integrations/ucampus/server';
 
-async function overviewSources(actor: AcademicOverviewActor) {
+type OverviewUser = AcademicOverviewActor & Readonly<{ ucampus: UCampus }>;
+
+async function overviewSources(user: OverviewUser) {
   const [history, isPastClosure] = await Promise.all([
-    synchronizeAcademicParticipations(actor, roadmapChangePort),
+    synchronizeAcademicHistory(user, roadmapChangePort),
     readRoadmapClosureCalendar(),
   ]);
   return { history, isPastClosure };
 }
 
-export async function getAcademicOverviewApi(actor: AcademicOverviewActor) {
-  return projectApi(actor, await overviewSources(actor));
+export async function getAcademicOverviewApi(user: OverviewUser) {
+  return projectApi(user, await overviewSources(user));
 }
 
-export async function getAcademicOverviewPage(actor: AcademicOverviewActor) {
-  return projectPage(actor, await overviewSources(actor));
+export async function getAcademicOverviewPage(user: OverviewUser) {
+  return projectPage(user, await overviewSources(user));
 }
