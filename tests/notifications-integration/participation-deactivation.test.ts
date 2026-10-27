@@ -6,7 +6,7 @@ import {
   completeNode,
   readCourseParticipants,
   readRoadmapForParticipant,
-  synchronizeParticipation,
+  synchronizeCourseOffering,
 } from '@/features/roadmap/server';
 import type {
   UCampus,
@@ -171,7 +171,7 @@ test('entering one offering deactivates it only when a complete report omits it'
   course,
 }) => {
   const enter = (userId: string) =>
-    synchronizeParticipation(
+    synchronizeCourseOffering(
       { id: userId, rut: rutOf(userId), ucampus },
       course.identifier,
       scheduledRoadmapChangePort,

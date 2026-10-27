@@ -2,17 +2,9 @@ import type { RoadmapChangePort } from './change-port';
 import { forbidden } from './errors';
 import 'server-only';
 
-import {
-  applyCourseAccess,
-  readMufasaCourseAccess,
-  type AcademicUser,
-} from './academic-participation';
+import { synchronizeCourseOffering, type AcademicUser } from './academic-participation';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import { decideRoadmapCreation } from '@/features/roadmap/domain/roadmap-capability';
-import { effectivePosition } from '@/shared/institutional-position';
-import { prisma } from '@/shared/server/db';
-
-export { synchronizeParticipation } from './academic-participation';
 
 export type RoadmapActor = AcademicUser;
 
@@ -21,25 +13,11 @@ export async function requireRoadmapCreationAccess(
   identifier: CourseOfferingIdentifier,
   changePort: RoadmapChangePort,
 ) {
-  const [report, courseOffering] = await Promise.all([
-    readMufasaCourseAccess(actor, identifier),
-    prisma.courseOffering.findUnique({ where: { courseCode_year_semester: identifier } }),
-  ]);
-  await applyCourseAccess(actor, identifier, report, changePort);
-  const { access, isComplete } = report;
-  const participation =
-    !isComplete && courseOffering
-      ? await prisma.participation.findUnique({
-          where: {
-            userId_courseOfferingId: { userId: actor.id, courseOfferingId: courseOffering.id },
-          },
-        })
-      : null;
+  const synchronization = await synchronizeCourseOffering(actor, identifier, changePort);
   const decision = decideRoadmapCreation({
-    report: isComplete ? { position: access && effectivePosition(access.positions) } : null,
-    participation,
+    report: synchronization.status === 'complete' ? { position: synchronization.position } : null,
+    participation: synchronization.participation,
   });
   if (decision.kind === 'REJECTED')
     throw forbidden('Solo el profesor de cátedra puede crear el roadmap de este curso.');
-  return { actor, courseOffering };
 }

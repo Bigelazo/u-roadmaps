@@ -7,7 +7,11 @@ import {
   type MufasaEnrolledCourse,
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
-import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
+import {
+  effectivePosition,
+  positionCapabilities,
+  type InstitutionalCoursePosition,
+} from '@/shared/institutional-position';
 import { prisma } from '@/shared/server/db';
 import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 
@@ -23,10 +27,15 @@ export type MufasaCourseAccess = Readonly<{
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
 
-export type CourseAccessReport = Readonly<{
-  access: MufasaCourseAccess | null;
-  isComplete: boolean;
-}>;
+type ActiveParticipation = Awaited<ReturnType<typeof readActiveParticipation>>;
+
+export type CourseOfferingSynchronization =
+  | Readonly<{
+      status: 'complete';
+      position: InstitutionalCoursePosition | null;
+      participation: ActiveParticipation;
+    }>
+  | Readonly<{ status: 'partial' | 'unavailable'; participation: ActiveParticipation }>;
 
 export function canEditRoadmap(access: MufasaCourseAccess) {
   return positionCapabilities(effectivePosition(access.positions)).canEdit;
@@ -39,24 +48,25 @@ export function academicRole(access: MufasaCourseAccess): 'STUDENT' | 'TEACHER' 
 const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
   `${courseCode}:${year}:${semester}`;
 
-export async function readMufasaCourseAccess(
-  user: AcademicUser,
+function courseAccess(
+  courses: readonly MufasaEnrolledCourse[],
   identifier: CourseOfferingIdentifier,
-): Promise<CourseAccessReport> {
-  const history = await user.ucampus.getAcademicHistory(user.rut);
-  if (history.status !== 'complete') return { access: null, isComplete: false };
+): MufasaCourseAccess | null {
   const key = offeringKey(identifier);
-  const matches = history.courses.filter((course) => offeringKey(course) === key);
-  if (matches.length === 0) return { access: null, isComplete: true };
+  const matches = courses.filter((course) => offeringKey(course) === key);
+  if (matches.length === 0) return null;
   return {
-    isComplete: true,
-    access: {
-      name: matches[0].name,
-      positions: matches.flatMap((course) =>
-        course.institutionalPosition ? [course.institutionalPosition] : [],
-      ),
-    },
+    name: matches[0].name,
+    positions: matches.flatMap((course) =>
+      course.institutionalPosition ? [course.institutionalPosition] : [],
+    ),
   };
+}
+
+function readActiveParticipation(user: AcademicUser, identifier: CourseOfferingIdentifier) {
+  return prisma.participation.findFirst({
+    where: { userId: user.id, isActive: true, courseOffering: identifier },
+  });
 }
 
 export async function materializeParticipation(
@@ -159,31 +169,32 @@ async function deactivateParticipations(
   }
 }
 
-export async function applyCourseAccess(
+/**
+ * Synchronizes the user's Participation in one Course offering and returns the resulting active
+ * one. Only a complete history changes it: a listed offering with a recognized position is
+ * materialized, an omitted one is deactivated. Otherwise the stored active Participation stands.
+ */
+export async function synchronizeCourseOffering(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
-  { access, isComplete }: CourseAccessReport,
   changePort: RoadmapChangePort,
-) {
-  if (access) return materializeParticipation(user, identifier, access, changePort);
-  if (isComplete) {
+): Promise<CourseOfferingSynchronization> {
+  const history = await user.ucampus.getAcademicHistory(user.rut);
+  if (history.status !== 'complete')
+    return {
+      status: history.status,
+      participation: await readActiveParticipation(user, identifier),
+    };
+  const access = courseAccess(history.courses, identifier);
+  if (!access) {
     const key = offeringKey(identifier);
     await deactivateParticipations(user, (offering) => offeringKey(offering) === key, changePort);
+    return { status: 'complete', position: null, participation: null };
   }
-  return null;
-}
-
-export async function synchronizeParticipation(
-  user: AcademicUser,
-  identifier: CourseOfferingIdentifier,
-  changePort: RoadmapChangePort,
-) {
-  return applyCourseAccess(
-    user,
-    identifier,
-    await readMufasaCourseAccess(user, identifier),
-    changePort,
-  );
+  const participation =
+    (await materializeParticipation(user, identifier, access, changePort)) ??
+    (await readActiveParticipation(user, identifier));
+  return { status: 'complete', position: effectivePosition(access.positions), participation };
 }
 
 export async function synchronizeAcademicParticipations(
