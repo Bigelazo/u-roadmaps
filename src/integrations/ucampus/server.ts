@@ -24,9 +24,13 @@ export type MufasaEnrolledCourse = Readonly<{
   institutionalPosition: MufasaInstitutionalCoursePosition | null;
 }>;
 
-export type MufasaEnrolledCoursesResult =
-  | Readonly<{ source: 'MUFASA'; courses: MufasaEnrolledCourse[]; isComplete?: boolean }>
-  | Readonly<{ source: 'LOCAL'; courses: [] }>;
+/**
+ * The Academic history verdict. Only a complete history may deactivate Participations;
+ * a partial one reports some rows but omits or drops others; an unavailable one reports none.
+ */
+export type AcademicHistory =
+  | Readonly<{ status: 'complete' | 'partial'; courses: readonly MufasaEnrolledCourse[] }>
+  | Readonly<{ status: 'unavailable' }>;
 
 const defaultMufasaBaseUrl = 'https://apps.dcc.uchile.cl/servicios/puente/ucampus/api/fcfm_mufasa';
 
@@ -146,19 +150,20 @@ async function requestMufasa(endpoint: string, params: Record<string, string>): 
   return response.json();
 }
 
-async function getMufasaCourses(
-  rut: string | null,
+/** One MUFASA course list, or null when it could not be read at all. */
+type CourseList = Readonly<{ courses: MufasaEnrolledCourse[]; isWhole: boolean }> | null;
+
+async function getMufasaCourseList(
+  rut: string,
   endpoint: 'cursos_dictados' | 'cursos_inscritos',
   isTeaching: boolean,
-): Promise<MufasaEnrolledCoursesResult> {
-  if (!rut) return { source: 'LOCAL', courses: [] };
-
+): Promise<CourseList> {
   try {
     const payload = await requestMufasa(
       endpoint,
       endpoint === 'cursos_inscritos' ? { rut, id_periodo: 'todos' } : { rut, periodo: 'todos' },
     );
-    if (payload === null) return { source: 'LOCAL', courses: [] };
+    if (payload === null) return null;
     const remoteCourses = enrolledCoursesPayload(payload);
     const courses = remoteCourses.flatMap((course) => {
       try {
@@ -167,48 +172,24 @@ async function getMufasaCourses(
         return [];
       }
     });
-    if (remoteCourses.length > 0 && courses.length === 0) {
-      throw new Error('MUFASA returned no valid courses.');
-    }
-    return {
-      source: 'MUFASA',
-      courses,
-      ...(courses.length !== remoteCourses.length ? { isComplete: false } : {}),
-    };
+    if (remoteCourses.length > 0 && courses.length === 0) return null;
+    return { courses, isWhole: courses.length === remoteCourses.length };
   } catch {
-    return { source: 'LOCAL', courses: [] };
+    return null;
   }
 }
 
-export function getMufasaEnrolledCourses(rut: string | null): Promise<MufasaEnrolledCoursesResult> {
-  return getMufasaCourses(rut, 'cursos_inscritos', false);
-}
-
-export function getMufasaTaughtCourses(rut: string | null): Promise<MufasaEnrolledCoursesResult> {
-  return getMufasaCourses(rut, 'cursos_dictados', true);
-}
-
-export async function getMufasaAcademicCourses(
-  rut: string | null,
-): Promise<MufasaEnrolledCoursesResult> {
+/** Reads both MUFASA course lists and classifies them into an Academic history verdict. */
+export async function getMufasaAcademicHistory(rut: string | null): Promise<AcademicHistory> {
+  if (!rut) return { status: 'unavailable' };
   const [enrolled, taught] = await Promise.all([
-    getMufasaEnrolledCourses(rut),
-    getMufasaTaughtCourses(rut),
+    getMufasaCourseList(rut, 'cursos_inscritos', false),
+    getMufasaCourseList(rut, 'cursos_dictados', true),
   ]);
-  if (enrolled.source === 'LOCAL' && taught.source === 'LOCAL')
-    return { source: 'LOCAL', courses: [] };
-
-  const courses = [...enrolled.courses, ...taught.courses];
-  return {
-    source: 'MUFASA',
-    courses,
-    isComplete:
-      courses.length > 0 &&
-      enrolled.source === 'MUFASA' &&
-      taught.source === 'MUFASA' &&
-      enrolled.isComplete !== false &&
-      taught.isComplete !== false,
-  };
+  if (!enrolled && !taught) return { status: 'unavailable' };
+  const courses = [...(enrolled?.courses ?? []), ...(taught?.courses ?? [])];
+  const isComplete = courses.length > 0 && enrolled?.isWhole === true && taught?.isWhole === true;
+  return { status: isComplete ? 'complete' : 'partial', courses };
 }
 
 export type MufasaCourseMember = Readonly<{
@@ -302,9 +283,9 @@ export async function getMufasaPersonNames(ruts: readonly string[]): Promise<Map
   return names;
 }
 
-/** The U-Campus seam. LOCAL results preserve existing local Participations. */
+/** The U-Campus seam. It never rejects: failures become an unavailable Academic history. */
 export type UCampus = Readonly<{
-  getAcademicCourses(rut: string | null): Promise<MufasaEnrolledCoursesResult>;
+  getAcademicHistory(rut: string | null): Promise<AcademicHistory>;
   getCourseMembers(
     ramoId: number,
     term: Readonly<{ year: number; semester: number }>,
@@ -313,14 +294,14 @@ export type UCampus = Readonly<{
 }>;
 
 export const mufasaUCampus: UCampus = {
-  getAcademicCourses: getMufasaAcademicCourses,
+  getAcademicHistory: getMufasaAcademicHistory,
   getCourseMembers: getMufasaCourseMembers,
   getPersonNames: getMufasaPersonNames,
 };
 
 export const localFixtureUCampus: UCampus = {
-  async getAcademicCourses() {
-    return { source: 'LOCAL', courses: [] };
+  async getAcademicHistory() {
+    return { status: 'unavailable' };
   },
   async getCourseMembers() {
     return { source: 'LOCAL', members: [] };

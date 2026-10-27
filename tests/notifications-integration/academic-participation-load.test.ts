@@ -20,7 +20,7 @@ vi.mock('@prisma/adapter-pg', async (importOriginal) => {
 import {
   localFixtureUCampus,
   type UCampus,
-  type MufasaEnrolledCoursesResult,
+  type AcademicHistory,
 } from '@/integrations/ucampus/server';
 
 afterAll(() => prisma.$disconnect());
@@ -49,15 +49,14 @@ test('a complete academic history synchronizes with a constrained connection poo
       },
     });
   }
-  const source: MufasaEnrolledCoursesResult = {
-    source: 'MUFASA',
-    isComplete: true,
+  const history: AcademicHistory = {
+    status: 'complete',
     courses: [...courses, { ...courses[0], institutionalPosition: 'OBSERVER' }],
   };
   const ucampus: UCampus = {
     ...localFixtureUCampus,
-    async getAcademicCourses() {
-      return source;
+    async getAcademicHistory() {
+      return history;
     },
   };
   const reported: RoadmapChanges[] = [];
@@ -70,7 +69,7 @@ test('a complete academic history synchronizes with a constrained connection poo
       },
     },
   );
-  expect(result).toEqual(source);
+  expect(result).toEqual(history);
   expect(reported).toHaveLength(courses.length);
   expect(
     await prisma.participation.count({

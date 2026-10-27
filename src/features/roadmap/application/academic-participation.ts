@@ -4,6 +4,7 @@ import 'server-only';
 
 import {
   type UCampus,
+  type MufasaEnrolledCourse,
   type MufasaInstitutionalCoursePosition,
 } from '@/integrations/ucampus/server';
 import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
@@ -42,11 +43,10 @@ export async function readMufasaCourseAccess(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
 ): Promise<CourseAccessReport> {
-  const mufasa = await user.ucampus.getAcademicCourses(user.rut);
-  if (mufasa.source !== 'MUFASA' || mufasa.isComplete === false)
-    return { access: null, isComplete: false };
+  const history = await user.ucampus.getAcademicHistory(user.rut);
+  if (history.status !== 'complete') return { access: null, isComplete: false };
   const key = offeringKey(identifier);
-  const matches = mufasa.courses.filter((course) => offeringKey(course) === key);
+  const matches = history.courses.filter((course) => offeringKey(course) === key);
   if (matches.length === 0) return { access: null, isComplete: true };
   return {
     isComplete: true,
@@ -190,10 +190,10 @@ export async function synchronizeAcademicParticipations(
   user: AcademicUser,
   changePort: RoadmapChangePort,
 ) {
-  const source = await user.ucampus.getAcademicCourses(user.rut);
-  if (source.source === 'MUFASA' && source.isComplete !== false) {
-    const offerings = new Map<string, typeof source.courses>();
-    for (const course of source.courses) {
+  const history = await user.ucampus.getAcademicHistory(user.rut);
+  if (history.status === 'complete') {
+    const offerings = new Map<string, MufasaEnrolledCourse[]>();
+    for (const course of history.courses) {
       const key = offeringKey(course);
       offerings.set(key, [...(offerings.get(key) ?? []), course]);
     }
@@ -221,5 +221,5 @@ export async function synchronizeAcademicParticipations(
       changePort,
     );
   }
-  return source;
+  return history;
 }

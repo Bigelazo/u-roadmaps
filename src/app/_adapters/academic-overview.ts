@@ -11,11 +11,11 @@ import {
 } from '@/features/roadmap/server';
 
 async function overviewSources(actor: AcademicOverviewActor) {
-  const [source, isPastClosure] = await Promise.all([
+  const [history, isPastClosure] = await Promise.all([
     synchronizeAcademicParticipations(actor, roadmapChangePort),
     readRoadmapClosureCalendar(),
   ]);
-  return { source, isPastClosure };
+  return { history, isPastClosure };
 }
 
 export async function getAcademicOverviewApi(actor: AcademicOverviewActor) {

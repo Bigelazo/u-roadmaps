@@ -12,15 +12,15 @@ import type {
   UCampus,
   MufasaCourseMember,
   MufasaEnrolledCourse,
-  MufasaEnrolledCoursesResult,
+  AcademicHistory,
 } from '@/integrations/ucampus/server';
 import { pendingNotices, teacherEdits } from './roadmap';
 
-const reports = new Map<string, MufasaEnrolledCoursesResult>();
+const reports = new Map<string, AcademicHistory>();
 const rosters = new Map<number, MufasaCourseMember[]>();
 const ucampus: UCampus = {
-  async getAcademicCourses(rut) {
-    return (rut && reports.get(rut)) || { source: 'LOCAL', courses: [] };
+  async getAcademicHistory(rut) {
+    return (rut && reports.get(rut)) || { status: 'unavailable' };
   },
   async getCourseMembers(ramoId) {
     const members = rosters.get(ramoId);
@@ -35,10 +35,13 @@ const rutOf = (userId: string) => userId.slice(0, 20);
 
 type Reported = Partial<Omit<MufasaEnrolledCourse, 'semester'>> & IntegrationCourse['identifier'];
 
-function reportHistory(userId: string, offerings: Reported[], { isComplete = true } = {}) {
+function reportHistory(
+  userId: string,
+  offerings: Reported[],
+  { status = 'complete' as 'complete' | 'partial' } = {},
+) {
   reports.set(rutOf(userId), {
-    source: 'MUFASA',
-    isComplete,
+    status,
     courses: offerings.map((offering) => ({
       name: 'Curso de prueba',
       section: '1',
@@ -143,7 +146,7 @@ test('a later complete history that reports the offering again reactivates it', 
 });
 
 test('an incomplete or failed history deactivates nothing', async ({ course }) => {
-  reportHistory(course.studentId, [], { isComplete: false });
+  reportHistory(course.studentId, [], { status: 'partial' });
   expect(await overviewOfferings(course.studentId)).toEqual([course.identifier]);
   reports.delete(rutOf(course.studentId));
   expect(await overviewOfferings(course.studentId)).toEqual([course.identifier]);
@@ -173,7 +176,7 @@ test('entering one offering deactivates it only when a complete report omits it'
       course.identifier,
       scheduledRoadmapChangePort,
     );
-  reportHistory(course.classmateId, [], { isComplete: false });
+  reportHistory(course.classmateId, [], { status: 'partial' });
   await enter(course.classmateId);
   expect(await canRead(course.classmateId, course)).toBe(true);
 
