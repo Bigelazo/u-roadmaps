@@ -29,7 +29,12 @@ type CourseAccess = Readonly<{
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
 
-type ActiveParticipation = Awaited<ReturnType<typeof readActiveParticipation>>;
+/** What callers read of the active Participation: its role, its position, and that it is active. */
+type ActiveParticipation = Readonly<{
+  role: ReturnType<typeof positionCapabilities>['role'];
+  institutionalPosition: InstitutionalCoursePosition | null;
+  isActive: boolean;
+}> | null;
 
 export type CourseOfferingSynchronization =
   | Readonly<{
@@ -45,10 +50,11 @@ const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =
 /** Groups the reported section rows into Course offerings, keyed by `offeringKey`. */
 function reportedOfferings(courses: readonly MufasaEnrolledCourse[]) {
   const offerings = new Map<string, CourseAccess>();
-  for (const { courseCode, year, semester, name, institutionalPosition } of courses) {
-    const key = offeringKey({ courseCode, year, semester });
+  for (const course of courses) {
+    const key = offeringKey(course);
+    const { name, institutionalPosition } = course;
     const access = offerings.get(key) ?? {
-      identifier: { courseCode, year, semester },
+      identifier: { courseCode: course.courseCode, year: course.year, semester: course.semester },
       name,
       positions: [],
     };
@@ -62,7 +68,10 @@ function reportedOfferings(courses: readonly MufasaEnrolledCourse[]) {
   return offerings;
 }
 
-function readActiveParticipation(user: AcademicUser, identifier: CourseOfferingIdentifier) {
+function readActiveParticipation(
+  user: AcademicUser,
+  identifier: CourseOfferingIdentifier,
+): Promise<ActiveParticipation> {
   return prisma.participation.findFirst({
     where: { userId: user.id, isActive: true, courseOffering: identifier },
   });
@@ -83,13 +92,9 @@ async function materializeParticipation(
         data: { code: identifier.courseCode, name: access.name, department: '' },
         skipDuplicates: true,
       });
-      const { courseCode, year, semester } = identifier;
-      await transaction.courseOffering.createMany({
-        data: { courseCode, year, semester },
-        skipDuplicates: true,
-      });
+      await transaction.courseOffering.createMany({ data: identifier, skipDuplicates: true });
       const courseOffering = await transaction.courseOffering.findUniqueOrThrow({
-        where: { courseCode_year_semester: { courseCode, year, semester } },
+        where: { courseCode_year_semester: identifier },
       });
       const roadmap = await transaction.roadmap.findUnique({
         where: { courseOfferingId: courseOffering.id },

@@ -44,7 +44,7 @@ The composite identity of a Course offering, formed by its canonical Course code
 _Avoid_: Roadmap identifier, academic identity, URL parameters
 
 **Academic history (Historial académico)**:
-A student's private record of course offerings retained in their institutional studies. Withdrawn offerings are absent as if never enrolled. Only that student can view the complete history; teaching staff see only offerings in which they also participate.
+A person's private record of course offerings retained in their institutional studies, both those they take and those they teach. Withdrawn offerings are absent as if never enrolled. Only that person can view the complete history; teaching staff see only offerings in which they also participate.
 _Avoid_: Public profile, current roster
 
 **Academic overview (Resumen académico)**:
