@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import {
+  createMufasaUCampus,
   getMufasaAcademicHistory,
   localFixtureUCampus,
   getMufasaCourseMembers,
@@ -124,6 +125,53 @@ it('still queries MUFASA in development when E2E fixtures are enabled', async ()
   await expect(getMufasaAcademicHistory('12345678')).resolves.toMatchObject({
     status: 'complete',
   });
+});
+
+it('shares one pair of MUFASA requests per RUT within one adapter instance', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const fetch = stubCourseLists({ enrolled: [enrolledCourse] });
+  const ucampus = createMufasaUCampus();
+
+  const [first, concurrent] = await Promise.all([
+    ucampus.getAcademicHistory('12345678'),
+    ucampus.getAcademicHistory('12345678'),
+  ]);
+  const later = await ucampus.getAcademicHistory('12345678');
+
+  expect(first).toEqual({ status: 'complete', courses: [parsedEnrolledCourse] });
+  expect(concurrent).toBe(first);
+  expect(later).toBe(first);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  await createMufasaUCampus().getAcademicHistory('12345678');
+  expect(fetch).toHaveBeenCalledTimes(4);
+});
+
+it('remembers a failed history as unavailable for that adapter instance only', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const failure = new Response('', { status: 503 });
+  stubCourseLists({ enrolled: failure, taught: failure });
+  const ucampus = createMufasaUCampus();
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+
+  const fetch = stubCourseLists({ enrolled: [enrolledCourse] });
+  await expect(ucampus.getAcademicHistory('12345678')).resolves.toEqual({ status: 'unavailable' });
+  expect(fetch).not.toHaveBeenCalled();
+  await expect(createMufasaUCampus().getAcademicHistory('12345678')).resolves.toMatchObject({
+    status: 'complete',
+  });
+});
+
+it('does not remember course members or person names', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  const fetch = vi.fn(() => Promise.resolve(new Response('[]')));
+  vi.stubGlobal('fetch', fetch);
+  const ucampus = createMufasaUCampus();
+
+  await ucampus.getCourseMembers(675, { year: 2026, semester: 2 });
+  await ucampus.getCourseMembers(675, { year: 2026, semester: 2 });
+  await ucampus.getPersonNames(['12345678']);
+  await ucampus.getPersonNames(['12345678']);
+  expect(fetch).toHaveBeenCalledTimes(4);
 });
 
 it('keeps development fixture profiles on their local course offerings', async () => {
