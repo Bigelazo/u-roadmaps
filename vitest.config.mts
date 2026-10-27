@@ -7,6 +7,7 @@ import { defineConfig, type TestUserConfig } from 'vitest/config';
  */
 const notificationsDatabaseTests = [
   'tests/features/roadmap/{change-port-operations,participant-access,preview-version,roadmap-command,stored-file-ownership}.test.ts',
+  'tests/features/roadmap/application/academic-participation.test.ts',
   'tests/prisma/**/*.test.ts',
 ];
 

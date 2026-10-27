@@ -337,6 +337,10 @@ export default defineConfig([
     settings: { vitest: { vitestImports: ['../../notifications-integration/fixtures'] } },
   },
   {
+    files: ['tests/features/roadmap/application/academic-participation.test.ts'],
+    settings: { vitest: { vitestImports: ['../../../notifications-integration/fixtures'] } },
+  },
+  {
     files: ['tests/**/*.test.tsx'],
     ...testingLibrary.configs['flat/react'],
   },

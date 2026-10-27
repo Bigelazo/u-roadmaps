@@ -39,12 +39,12 @@ export {
   createRoadmapForActor,
   getNodeTypesForActor,
 } from '@/features/roadmap/application/queries';
-export {
-  synchronizeParticipation,
-  type RoadmapActor,
-} from '@/features/roadmap/application/participation';
+export { type RoadmapActor } from '@/features/roadmap/application/participation';
 
-export { synchronizeAcademicParticipations } from './application/academic-participation';
+export {
+  synchronizeAcademicParticipations,
+  synchronizeCourseOffering,
+} from './application/academic-participation';
 export { readCourseParticipants, type CourseParticipants } from './application/course-participants';
 export {
   downloadRoadmapVersionResource,
