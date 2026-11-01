@@ -12,7 +12,7 @@ Single-context layout — one `GLOSSARY.md` + `docs/adr/` at the repo root. See 
 
 ### Testing
 
-Run E2E tests against the existing local PostgreSQL service, and take UI screenshots. See `docs/agents/testing.md`.
+Set up a worktree, run any test suite (locked against parallel sessions), and take UI screenshots. See `docs/agents/testing.md`.
 
 ## graphify
 

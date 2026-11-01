@@ -18,6 +18,22 @@ CREATE USER roadmap_e2e_user WITH PASSWORD 'roadmap_e2e_password';
 CREATE DATABASE roadmap_e2e_db OWNER roadmap_e2e_user;
 ```
 
+### Worktrees y sesiones en paralelo
+
+Un worktree nuevo se prepara con `pnpm worktree:setup`: copia `.env` del checkout
+principal, instala dependencias y genera Prisma y los tipos de rutas.
+
+Todos los worktrees y sesiones comparten las bases de pruebas y los puertos
+3200/3201. Fuera de CI, ejecutar las suites con `pnpm test:unit:locked`,
+`pnpm test:integration:locked` y `pnpm test:e2e:locked`. Aceptan los mismos
+argumentos y esperan su turno en el lock de
+[with-test-db.sh](../../scripts/with-test-db.sh).
+
+Los hooks de [lefthook.yml](../../lefthook.yml) revisan formato y lint al hacer
+commit, y tipos al hacer push. [CI](../../.github/workflows/ci.yml) ejecuta esas
+verificaciones y las suites unitaria y de integración en cada PR a `main`; E2E
+queda fuera de CI.
+
 La validación agregada se ejecuta con:
 
 ```sh
@@ -150,7 +166,8 @@ ejecuta. Durante la corrida, cada test elimina solo los datos de sus fixtures,
 por lo que los archivos en paralelo no borran datos ajenos. Las invocaciones que
 usan esta base se ejecutan consecutivamente, incluidas `pnpm test:unit` y
 `pnpm test:integration`: la limpieza inicial de una invocación es global y
-borraría los datos de otra en curso.
+borraría los datos de otra en curso. Las variantes `:locked` hacen cumplir ese
+orden entre worktrees.
 
 Los tests de notificaciones llaman a sus interfaces públicas y observan
 `listOwnNotices`, sin simular Prisma ni inspeccionar filas de avisos. La pérdida
