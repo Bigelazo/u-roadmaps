@@ -17,6 +17,24 @@ export type NodeTypeRuleFailure =
 
 export type NodeTypeDecision = { kind: 'ALLOWED' } | RuleRejection<NodeTypeRuleFailure>;
 
+export function nodeTypeNotFound() {
+  return ruleRejection(
+    'NODE_TYPE_NOT_FOUND',
+    'El tipo no existe o no está disponible en este roadmap.',
+  );
+}
+
+/** A Node may only take a Node type available in its Roadmap: a predefined one or one of the Roadmap. */
+export function decideNodeTypeAssignment({
+  nodeTypes,
+  nodeTypeId,
+}: {
+  nodeTypes: readonly { id: string }[];
+  nodeTypeId: string;
+}): { kind: 'ALLOWED' } | RuleRejection<'NODE_TYPE_NOT_FOUND'> {
+  return nodeTypes.some(({ id }) => id === nodeTypeId) ? { kind: 'ALLOWED' } : nodeTypeNotFound();
+}
+
 export function decideNodeTypeChange({
   nodeTypes,
   nodes,
@@ -29,11 +47,7 @@ export function decideNodeTypeChange({
   const changedId = change.kind === 'create' ? null : change.nodeTypeId;
   if (changedId !== null) {
     const nodeType = nodeTypes.find(({ id }) => id === changedId);
-    if (!nodeType)
-      return ruleRejection(
-        'NODE_TYPE_NOT_FOUND',
-        'El tipo no existe o no está disponible en este roadmap.',
-      );
+    if (!nodeType) return nodeTypeNotFound();
     if (nodeType.isPredefined)
       return ruleRejection('PREDEFINED_TYPE_IMMUTABLE', 'Los tipos predefinidos son inmutables.');
   }

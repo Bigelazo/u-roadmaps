@@ -2,6 +2,13 @@ export function fileResourceUrl(fileKey: string) {
   return `https://files.u-roadmaps.invalid/${fileKey}`;
 }
 
+/** External Resources are Link resources; a File resource is created by uploading its bytes. */
+export function externalResourceError(type: unknown): string | null {
+  return type === 'LINK'
+    ? null
+    : 'Los recursos externos deben ser Enlaces. Para un Archivo, sube sus bytes.';
+}
+
 export function resourceEditError(
   type: 'FILE' | 'LINK',
   changes: { title?: string; type?: 'FILE' | 'LINK'; url?: string },

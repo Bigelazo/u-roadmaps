@@ -23,6 +23,7 @@ import {
 } from '@/features/roadmap/application/validation';
 import {
   decideNodeTypeChange,
+  nodeTypeNotFound,
   normalizeName,
   type NodeTypeChange,
   type NodeTypeRuleFailure,
@@ -164,13 +165,7 @@ async function requireType(transaction: Prisma.TransactionClient, id: string, ro
   const nodeType = await transaction.nodeType.findFirst({
     where: { id, OR: [{ isPredefined: true }, { roadmapId }] },
   });
-  if (!nodeType) {
-    throw new ApplicationError(
-      404,
-      'NODE_TYPE_NOT_FOUND',
-      'El tipo no existe o no está disponible en este roadmap.',
-    );
-  }
+  if (!nodeType) throw ruleError(nodeTypeNotFound());
   return nodeType;
 }
 

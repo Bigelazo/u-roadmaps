@@ -1,4 +1,4 @@
-import { resourceEditError } from '@/features/roadmap/domain/resource';
+import { externalResourceError, resourceEditError } from '@/features/roadmap/domain/resource';
 import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
@@ -7,7 +7,11 @@ import {
 } from '@/features/roadmap/domain/change-impact';
 import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
 import { decideDependency } from '@/features/roadmap/domain/dependency';
-import { decideNodeTypeChange, type NodeTypeChange } from '@/features/roadmap/domain/node-type';
+import {
+  decideNodeTypeAssignment,
+  decideNodeTypeChange,
+  type NodeTypeChange,
+} from '@/features/roadmap/domain/node-type';
 import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
 import {
   chileCalendarDay,
@@ -241,6 +245,11 @@ export function createInMemoryRoadmapSessionPersistence(
     if (decision.kind === 'REJECTED') throw new Error(decision.message);
   };
 
+  const requireAvailableNodeType = (nodeTypeId: string) => {
+    const decision = decideNodeTypeAssignment({ nodeTypes: roadmap.nodeTypes, nodeTypeId });
+    if (decision.kind === 'REJECTED') throw new Error(decision.message);
+  };
+
   const appendResource = (nodeId: string, resource: Resource) =>
     mutateNode(nodeId, (node) =>
       'resources' in node
@@ -296,6 +305,7 @@ export function createInMemoryRoadmapSessionPersistence(
   };
 
   const addNode = (node: NewRoadmapNode, requested: Point) => {
+    requireAvailableNodeType(node.nodeTypeId);
     const id = crypto.randomUUID();
     const position = options.createdNodePosition ?? requested;
     const created: RoadmapNode = {
@@ -457,6 +467,7 @@ export function createInMemoryRoadmapSessionPersistence(
         case 'add-node':
           return { createdNodeId: addNode(command.node, command.position) };
         case 'update-node':
+          requireAvailableNodeType(command.value.nodeTypeId);
           return mutateNode(
             command.nodeId,
             (node) =>
@@ -484,10 +495,11 @@ export function createInMemoryRoadmapSessionPersistence(
           return setVisibility(command.nodeId, true);
         case 'delete-node':
           return deleteNode(command.nodeId, previewVersion);
-        case 'add-resource':
-          if (command.resource.type !== 'LINK')
-            throw new Error('Los recursos externos deben ser Enlaces.');
+        case 'add-resource': {
+          const error = externalResourceError(command.resource.type);
+          if (error) throw new Error(error);
           return appendResource(command.nodeId, { ...command.resource, id: crypto.randomUUID() });
+        }
         case 'upload-resource':
           return appendResource(command.nodeId, {
             id: crypto.randomUUID(),

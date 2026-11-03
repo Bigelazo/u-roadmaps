@@ -1,5 +1,9 @@
 import { expect, test } from 'vitest';
-import { decideNodeTypeChange, type NodeTypeChange } from '@/features/roadmap/domain/node-type';
+import {
+  decideNodeTypeAssignment,
+  decideNodeTypeChange,
+  type NodeTypeChange,
+} from '@/features/roadmap/domain/node-type';
 
 const nodeTypes = [
   { id: 'content', name: 'Contenido', isPredefined: true },
@@ -86,6 +90,16 @@ test.each<[string, NodeTypeChange, { reason: string; message: string } | null]>(
   ],
 ])('%s', (_case, change, rejection) => {
   expect(decideNodeTypeChange({ nodeTypes, nodes, change })).toEqual(
+    rejection ? { kind: 'REJECTED', ...rejection } : { kind: 'ALLOWED' },
+  );
+});
+
+test.each([
+  ['assigns a predefined Node type', 'content', null],
+  ['assigns a Node type of the Roadmap', 'workshop', null],
+  ['rejects assigning a Node type that is not available in the Roadmap', 'missing', notFound],
+])('%s', (_case, nodeTypeId, rejection) => {
+  expect(decideNodeTypeAssignment({ nodeTypes, nodeTypeId })).toEqual(
     rejection ? { kind: 'REJECTED', ...rejection } : { kind: 'ALLOWED' },
   );
 });
