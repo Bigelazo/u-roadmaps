@@ -137,9 +137,6 @@ test('rejects a student Completion of a blocked Node, as production does', async
   );
 });
 
-const staleMessage = (impact: string) =>
-  `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`;
-
 const independent = {
   id: 'independent',
   title: 'Independiente',
@@ -152,76 +149,16 @@ const independent = {
   resources: [],
 } satisfies RoadmapDto['nodes'][number];
 
-test('versions each Change impact by its content, as production does', async () => {
-  const persistence = createInMemoryRoadmapSessionPersistence({
-    ...roadmap,
-    nodes: [...roadmap.nodes, independent],
-  });
-  const hide = (nodeId: string) => persistence.readChangeImpact({ kind: 'hide-node', nodeId });
-  const first = await hide('selected');
-
-  expect(await hide('selected')).toEqual(first);
-  expect((await hide('prerequisite')).version).not.toBe(first.version);
-  await executeWithChangeImpact(persistence, {
-    kind: 'create-dependency',
-    sourceNodeId: 'independent',
-    targetNodeId: 'selected',
-    sourceHandle: 'right',
-    targetHandle: 'left',
-  });
-  expect((await hide('selected')).version).not.toBe(first.version);
-});
-
-test('rejects confirming a hide, a Dependency, a deletion or a Teacher block whose Change impact changed', async () => {
-  const persistence = createInMemoryRoadmapSessionPersistence({
-    ...roadmap,
-    nodes: [...roadmap.nodes, independent, { ...independent, id: 'later', title: 'Posterior' }],
-  });
-  const link = (sourceNodeId: string, targetNodeId: string) =>
-    ({
-      kind: 'create-dependency',
-      sourceNodeId,
-      targetNodeId,
-      sourceHandle: 'right',
-      targetHandle: 'left',
-    }) as const;
-  const hide = { kind: 'hide-node', nodeId: 'dependent' } as const;
-  const connect = link('selected', 'independent');
+test('refuses to confirm a Change impact that changed since its preview, as production does', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
   const remove = { kind: 'delete-node', nodeId: 'prerequisite' } as const;
-  const unlock = {
-    kind: 'change-teacher-block',
-    nodeId: 'dependent',
-    operation: 'UNBLOCK',
-  } as const;
-  const hiding = await persistence.readChangeImpact(hide);
-  const dependency = await persistence.readChangeImpact(connect);
-  const deletion = await persistence.readChangeImpact(remove);
-  const unlocking = await persistence.readChangeImpact(unlock);
-
-  await executeWithChangeImpact(persistence, link('independent', 'later'));
+  const { version } = await persistence.readChangeImpact(remove);
   await persistence.execute({ kind: 'delete-dependency', dependencyId: 'prerequisite-selected' });
-  await persistence.execute({ kind: 'delete-dependency', dependencyId: 'selected-dependent' });
 
-  await expect(persistence.execute(hide, hiding.version)).rejects.toThrow(
-    staleMessage('de ocultar el nodo'),
+  await expect(persistence.execute(remove, version)).rejects.toThrow(
+    'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
   );
-  await expect(persistence.execute(connect, dependency.version)).rejects.toThrow(
-    staleMessage('de la dependencia'),
-  );
-  await expect(persistence.execute(remove, deletion.version)).rejects.toThrow(
-    staleMessage('de la eliminación'),
-  );
-  await expect(persistence.execute(unlock, unlocking.version)).rejects.toThrow(
-    staleMessage('del desbloqueo'),
-  );
-  await expect(persistence.execute(unlock)).rejects.toThrow(staleMessage('del desbloqueo'));
-  expect(await persistence.load()).toMatchObject({
-    nodes: expect.arrayContaining([
-      expect.objectContaining({ id: 'prerequisite' }),
-      expect.objectContaining({ id: 'dependent', isVisible: true, isTeacherBlocked: true }),
-    ]),
-    dependencies: [expect.objectContaining({ sourceNodeId: 'independent', targetNodeId: 'later' })],
-  });
+  expect((await persistence.load()).nodes.map(({ id }) => id)).toContain('prerequisite');
 
   await executeWithChangeImpact(persistence, remove);
   expect((await persistence.load()).nodes.map(({ id }) => id)).not.toContain('prerequisite');
@@ -389,6 +326,26 @@ test('presents a Node whose Node type is missing with the shared unknown Node ty
   expect(
     (await persistence.readChangeImpact({ kind: 'delete-node', nodeId: 'selected' })).node.nodeType,
   ).toEqual(unknownNodeType);
+});
+
+test('lists the Resources of a deletion Change impact by title, as production does', async () => {
+  const link = (id: string, title: string) =>
+    ({ id, title, url: 'https://example.com', type: 'LINK' }) as const;
+  const persistence = createInMemoryRoadmapSessionPersistence({
+    ...roadmap,
+    nodes: roadmap.nodes.map((node) =>
+      node.id === 'selected'
+        ? { ...node, resources: [link('slides', 'Presentación'), link('guide', 'Guía')] }
+        : node,
+    ),
+  });
+
+  expect(
+    (await persistence.readChangeImpact({ kind: 'delete-node', nodeId: 'selected' })).resources,
+  ).toEqual([
+    { id: 'guide', title: 'Guía' },
+    { id: 'slides', title: 'Presentación' },
+  ]);
 });
 
 test('refuses a non-Link external Resource with the message of production', async () => {

@@ -3,11 +3,8 @@ import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
   confirmChange,
-  decideChangeImpactVersion,
   planChange,
-  versionChangeImpact,
   type ChangeConsequences,
-  type ChangeWithImpact,
   type RoadmapChange,
   type RoadmapSnapshot,
 } from '@/features/roadmap/domain/change-impact';
@@ -17,16 +14,12 @@ import {
   decideNodeTypeChange,
   type NodeTypeChange,
 } from '@/features/roadmap/domain/node-type';
-import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
 import {
   chileCalendarDay,
   decideScheduledUnlock,
 } from '@/features/roadmap/domain/scheduled-unlock';
-import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
   AnyRoadmapDto,
-  NodeDeletionImpact,
-  NodeHidingImpact,
   Resource,
   RoadmapDependency,
   RoadmapDependencyRequest,
@@ -86,12 +79,6 @@ function asStudentRoadmap(
   });
 }
 
-function incidentDependencies(roadmap: AnyRoadmapDto, nodeId: string) {
-  return roadmap.dependencies.filter(
-    ({ sourceNodeId, targetNodeId }) => sourceNodeId === nodeId || targetNodeId === nodeId,
-  );
-}
-
 function resourceUpdate(
   roadmap: AnyRoadmapDto,
   resourceId: string,
@@ -113,15 +100,6 @@ function resourceUpdate(
   } as AnyRoadmapDto;
 }
 
-function rejectStalePreview(
-  change: ChangeWithImpact,
-  sentVersion: string | undefined,
-  { version }: { version: string },
-) {
-  const decision = decideChangeImpactVersion({ change, sentVersion, version });
-  if (decision.kind === 'REJECTED') throw new Error(decision.message);
-}
-
 function teachingNodes(roadmap: AnyRoadmapDto) {
   return roadmap.nodes.filter((node): node is RoadmapNode => 'isTeacherBlocked' in node);
 }
@@ -134,44 +112,6 @@ function changeImpact(roadmap: AnyRoadmapDto, change: RoadmapChange) {
   const plan = planChange(snapshotOf(roadmap), change);
   if (plan.kind === 'REJECTED') throw new Error(plan.message);
   return plan.impact;
-}
-
-function hidingImpact(roadmap: AnyRoadmapDto, nodeId: string): NodeHidingImpact {
-  return versionChangeImpact({
-    dependencies: decideVisibilityChange({
-      nodeId,
-      isVisible: false,
-      dependencies: roadmap.dependencies,
-    }).removedDependencies.map(({ id, sourceNodeId, targetNodeId }) => ({
-      id,
-      sourceNodeId,
-      targetNodeId,
-    })),
-  });
-}
-
-function nodeTypeFor(roadmap: AnyRoadmapDto, nodeId: string) {
-  const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
-  const nodeType = roadmap.nodeTypes.find((candidate) => candidate.id === node?.nodeTypeId);
-  return nodeType ?? unknownNodeType;
-}
-
-function deletionImpact(roadmap: AnyRoadmapDto, nodeId: string): NodeDeletionImpact {
-  const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
-  const { name, icon, color } = nodeTypeFor(roadmap, nodeId);
-  const titleOf = (id: string) =>
-    roadmap.nodes.find((candidate) => candidate.id === id)?.title ?? '';
-  return versionChangeImpact({
-    node: { title: node?.title ?? '', nodeType: { name, icon, color } },
-    dependencies: incidentDependencies(roadmap, nodeId).map(
-      ({ id, sourceNodeId, targetNodeId }) => ({
-        id,
-        sourceTitle: titleOf(sourceNodeId),
-        targetTitle: titleOf(targetNodeId),
-      }),
-    ),
-    resources: (node ? nodeResources(node) : []).map(({ id, title }) => ({ id, title })),
-  });
 }
 
 /** Applies every Node move of a batch, then rethrows the first failure, as the HTTP adapter does. */
@@ -232,30 +172,10 @@ export function createInMemoryRoadmapSessionPersistence(
       ),
     );
 
-  const setVisibility = (nodeId: string, visible: boolean, previewVersion?: string) => {
-    if (!visible) rejectStalePreview('hide', previewVersion, hidingImpact(roadmap, nodeId));
-    const change = decideVisibilityChange({
-      nodeId,
-      isVisible: visible,
-      dependencies: roadmap.dependencies,
-    });
+  const setVisibility = (nodeId: string, isVisible: boolean) =>
     mutateNode(nodeId, (node) =>
-      'isVisible' in node
-        ? ({
-            ...node,
-            isVisible: visible,
-            ...(change.clearsTeacherBlock
-              ? { isTeacherBlocked: false, teacherUnlockOn: undefined }
-              : {}),
-          } as AnyRoadmapNode)
-        : node,
+      'isVisible' in node ? ({ ...node, isVisible } as AnyRoadmapNode) : node,
     );
-    const removed = new Set(change.removedDependencies.map(({ id }) => id));
-    roadmap = {
-      ...roadmap,
-      dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
-    };
-  };
 
   const complete = (nodeId: string) => {
     if (studentCompletions) {
@@ -344,13 +264,10 @@ export function createInMemoryRoadmapSessionPersistence(
   };
 
   const deleteNode = (nodeId: string, previewVersion?: string) => {
-    rejectStalePreview('delete', previewVersion, deletionImpact(roadmap, nodeId));
+    confirm({ kind: 'delete-node', nodeId }, previewVersion);
     roadmap = {
       ...roadmap,
       nodes: roadmap.nodes.filter(({ id }) => id !== nodeId),
-      dependencies: roadmap.dependencies.filter(
-        ({ sourceNodeId, targetNodeId }) => sourceNodeId !== nodeId && targetNodeId !== nodeId,
-      ),
     } as AnyRoadmapDto;
   };
 
@@ -403,19 +320,8 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async readChangeImpact<Command extends ChangeImpactCommand>(command: Command) {
-      const impact = (): ReadChangeImpactOf<ChangeImpactCommand['kind']> => {
-        switch (command.kind) {
-          case 'hide-node':
-            return hidingImpact(roadmap, command.nodeId);
-          case 'delete-node':
-            return deletionImpact(roadmap, command.nodeId);
-          case 'change-teacher-block':
-          case 'create-dependency':
-            return changeImpact(roadmap, command);
-        }
-      };
-      // TypeScript cannot narrow the generic result per case; each case reads its kind's impact.
-      return impact() as ReadChangeImpactOf<Command['kind']>;
+      // The module plans each kind's own Change impact; TypeScript cannot narrow it per kind.
+      return changeImpact(roadmap, command) as ReadChangeImpactOf<Command['kind']>;
     },
 
     async execute(command, previewVersion) {
@@ -448,7 +354,8 @@ export function createInMemoryRoadmapSessionPersistence(
         case 'schedule-teacher-unlock':
           return scheduleTeacherUnlock(command.nodeId, command.unlockOn);
         case 'hide-node':
-          return setVisibility(command.nodeId, false, previewVersion);
+          confirm(command, previewVersion);
+          return setVisibility(command.nodeId, false);
         case 'show-node':
           return setVisibility(command.nodeId, true);
         case 'delete-node':

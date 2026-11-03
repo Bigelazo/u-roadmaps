@@ -1,7 +1,6 @@
 import { expect, test } from 'vitest';
 import {
   confirmChange,
-  decideChangeImpactVersion,
   planChange,
   type RoadmapSnapshot,
 } from '@/features/roadmap/domain/change-impact';
@@ -305,6 +304,89 @@ test('a Node unlock also releases the due Scheduled unlocks it no longer holds, 
   });
 });
 
+const touching = roadmap(
+  [
+    node('theory', { title: 'Teoría', isTeacherBlocked: true, teacherUnlockOn: '2026-11-04' }),
+    node('intro', { title: 'Introducción' }),
+    node('quiz', { title: 'Control' }),
+    node('unrelated', { title: 'Anexo' }),
+  ],
+  [
+    ['theory', 'quiz'],
+    ['intro', 'theory'],
+    ['intro', 'unrelated'],
+  ],
+);
+
+test('hiding a Node removes every Dependency touching it, by identifier, with its Teacher block and Scheduled unlock', () => {
+  expect(planChange(touching, { kind: 'hide-node', nodeId: 'theory' })).toEqual({
+    kind: 'ALLOWED',
+    impact: {
+      dependencies: [
+        { id: 'intro-theory', sourceNodeId: 'intro', targetNodeId: 'theory' },
+        { id: 'theory-quiz', sourceNodeId: 'theory', targetNodeId: 'quiz' },
+      ],
+      version: expect.any(String),
+    },
+    consequences: {
+      blockedNodeIds: [],
+      unblockedNodeIds: ['theory'],
+      removedDependencyIds: ['intro-theory', 'theory-quiz'],
+    },
+  });
+});
+
+test('deleting a Node shows it with its Node type, its Dependencies by identifier and its Resources by title then identifier', () => {
+  const snapshot = {
+    ...touching,
+    nodes: touching.nodes.map((candidate) =>
+      candidate.id === 'theory'
+        ? {
+            ...candidate,
+            resources: [
+              { id: 'slides', title: 'Presentación' },
+              { id: 'guide-b', title: 'Guía' },
+              { id: 'guide-a', title: 'Guía' },
+            ],
+          }
+        : candidate,
+    ),
+  };
+
+  expect(planChange(snapshot, { kind: 'delete-node', nodeId: 'theory' })).toEqual({
+    kind: 'ALLOWED',
+    impact: {
+      node: { title: 'Teoría', nodeType: content },
+      dependencies: [
+        { id: 'intro-theory', sourceTitle: 'Introducción', targetTitle: 'Teoría' },
+        { id: 'theory-quiz', sourceTitle: 'Teoría', targetTitle: 'Control' },
+      ],
+      resources: [
+        { id: 'guide-a', title: 'Guía' },
+        { id: 'guide-b', title: 'Guía' },
+        { id: 'slides', title: 'Presentación' },
+      ],
+      version: expect.any(String),
+    },
+    consequences: {
+      blockedNodeIds: [],
+      unblockedNodeIds: [],
+      removedDependencyIds: ['intro-theory', 'theory-quiz'],
+    },
+  });
+});
+
+test.each(['hide-node', 'delete-node'] as const)(
+  'refuses to %s a Node that is not in the Roadmap',
+  (kind) => {
+    expect(planChange(touching, { kind, nodeId: 'missing' })).toEqual({
+      kind: 'REJECTED',
+      reason: 'NODE_NOT_FOUND',
+      message: 'El nodo no existe en este roadmap.',
+    });
+  },
+);
+
 function versionOf(plan: ReturnType<typeof planChange>) {
   if (plan.kind === 'REJECTED') throw new Error(plan.message);
   return plan.impact.version;
@@ -385,40 +467,26 @@ test('refuses to confirm a Dependency that breaks a rule before checking its ver
 });
 
 test.each([
-  ['hide', 'NODE_VISIBILITY_PREVIEW_STALE', 'El impacto de ocultar el nodo cambió.'],
-  ['delete', 'NODE_DELETE_PREVIEW_STALE', 'El impacto de la eliminación cambió.'],
-  ['dependency', 'DEPENDENCY_PREVIEW_STALE', 'El impacto de la dependencia cambió.'],
-  ['block', 'TEACHER_BLOCK_PREVIEW_STALE', 'El impacto del bloqueo cambió.'],
-  ['unlock', 'TEACHER_BLOCK_PREVIEW_STALE', 'El impacto del desbloqueo cambió.'],
-] as const)('rejects a stale %s preview version', (change, reason, message) => {
-  expect(
-    decideChangeImpactVersion({ change, sentVersion: 'previewed', version: 'current' }),
-  ).toEqual({
-    kind: 'REJECTED',
-    reason,
-    message: `${message} Revisa y confirma la previsualización actualizada.`,
-  });
-});
-
-test('allows a preview version that still matches the Change impact', () => {
-  expect(
-    decideChangeImpactVersion({ change: 'unlock', sentVersion: 'same', version: 'same' }),
-  ).toEqual({
-    kind: 'ALLOWED',
-  });
-});
-
-test.each([
-  ['hide', 'NODE_VISIBILITY_PREVIEW_STALE'],
-  ['delete', 'NODE_DELETE_PREVIEW_STALE'],
-  ['dependency', 'DEPENDENCY_PREVIEW_STALE'],
-  ['block', 'TEACHER_BLOCK_PREVIEW_STALE'],
-  ['unlock', 'TEACHER_BLOCK_PREVIEW_STALE'],
+  ['hide-node', undefined, 'NODE_VISIBILITY_PREVIEW_STALE', 'de ocultar el nodo'],
+  ['hide-node', 'previewed', 'NODE_VISIBILITY_PREVIEW_STALE', 'de ocultar el nodo'],
+  ['delete-node', undefined, 'NODE_DELETE_PREVIEW_STALE', 'de la eliminación'],
+  ['delete-node', 'previewed', 'NODE_DELETE_PREVIEW_STALE', 'de la eliminación'],
 ] as const)(
-  'requires a %s confirmation to send its previewed Change impact version',
-  (change, reason) => {
-    expect(
-      decideChangeImpactVersion({ change, sentVersion: undefined, version: 'current' }),
-    ).toMatchObject({ kind: 'REJECTED', reason });
+  'refuses to confirm %s with the preview version %s as stale',
+  (kind, previewVersion, reason, impact) => {
+    expect(confirmChange(touching, { kind, nodeId: 'theory' }, previewVersion)).toEqual({
+      kind: 'REJECTED',
+      reason,
+      message: `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`,
+    });
+  },
+);
+
+test.each(['hide-node', 'delete-node'] as const)(
+  'confirms %s whose previewed Change impact is unchanged',
+  (kind) => {
+    const plan = planChange(touching, { kind, nodeId: 'theory' });
+
+    expect(confirmChange(touching, { kind, nodeId: 'theory' }, versionOf(plan))).toEqual(plan);
   },
 );

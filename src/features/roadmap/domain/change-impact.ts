@@ -13,6 +13,8 @@ import {
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
   DependencyImpact,
+  NodeDeletionImpact,
+  NodeHidingImpact,
   TeacherBlockImpact,
   TeacherBlockOperation,
   TeacherBlockPreview,
@@ -38,11 +40,14 @@ export type RoadmapSnapshot = {
 /** A Confirmed action that has a Change impact. */
 export type RoadmapChange =
   | { kind: 'create-dependency'; sourceNodeId: string; targetNodeId: string }
-  | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation };
+  | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
+  | { kind: 'hide-node' | 'delete-node'; nodeId: string };
 
 type ChangeImpactOf = {
   'create-dependency': DependencyImpact;
   'change-teacher-block': TeacherBlockPreview;
+  'hide-node': NodeHidingImpact;
+  'delete-node': NodeDeletionImpact;
 };
 
 /** What a change does besides its primary change, for each adapter to persist in its storage. */
@@ -71,13 +76,21 @@ export function planChange<Change extends RoadmapChange>(
   snapshot: RoadmapSnapshot,
   change: Change,
 ): ChangePlan<Change['kind']> {
-  const anyChange: RoadmapChange = change;
   // TypeScript cannot narrow the generic result per kind; each kind plans its own Change impact.
-  return (
-    anyChange.kind === 'create-dependency'
-      ? planDependency(snapshot, anyChange)
-      : planTeacherBlock(snapshot, anyChange)
-  ) as ChangePlan<Change['kind']>;
+  return planAnyChange(snapshot, change) as ChangePlan<Change['kind']>;
+}
+
+function planAnyChange(snapshot: RoadmapSnapshot, change: RoadmapChange): ChangePlan {
+  switch (change.kind) {
+    case 'create-dependency':
+      return planDependency(snapshot, change);
+    case 'change-teacher-block':
+      return planTeacherBlock(snapshot, change);
+    case 'hide-node':
+      return planHiding(snapshot, change.nodeId);
+    case 'delete-node':
+      return planDeletion(snapshot, change.nodeId);
+  }
 }
 
 /** Plans a change for its confirmation, refusing it as stale unless `previewVersion` is still current. */
@@ -87,19 +100,75 @@ export function confirmChange<Change extends RoadmapChange>(
   previewVersion: string | undefined,
 ): ChangePlan<Change['kind']> | RuleRejection<StaleChangeImpactReason> {
   const plan = planChange(snapshot, change);
-  if (plan.kind === 'REJECTED') return plan;
+  if (plan.kind === 'REJECTED' || plan.impact.version === previewVersion) return plan;
   const anyChange: RoadmapChange = change;
-  const decision = decideChangeImpactVersion({
-    change:
-      anyChange.kind === 'create-dependency'
-        ? 'dependency'
-        : anyChange.operation === 'BLOCK'
-          ? 'block'
-          : 'unlock',
-    sentVersion: previewVersion,
-    version: plan.impact.version,
-  });
-  return decision.kind === 'REJECTED' ? decision : plan;
+  const [reason, impact] =
+    staleImpacts[anyChange.kind === 'change-teacher-block' ? anyChange.operation : anyChange.kind];
+  return ruleRejection(
+    reason,
+    `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`,
+  );
+}
+
+const staleImpacts = {
+  'hide-node': ['NODE_VISIBILITY_PREVIEW_STALE', 'de ocultar el nodo'],
+  'delete-node': ['NODE_DELETE_PREVIEW_STALE', 'de la eliminación'],
+  'create-dependency': ['DEPENDENCY_PREVIEW_STALE', 'de la dependencia'],
+  BLOCK: ['TEACHER_BLOCK_PREVIEW_STALE', 'del bloqueo'],
+  UNBLOCK: ['TEACHER_BLOCK_PREVIEW_STALE', 'del desbloqueo'],
+  BRANCH_UNLOCK: ['TEACHER_BLOCK_PREVIEW_STALE', 'del desbloqueo'],
+} as const;
+
+export type StaleChangeImpactReason = (typeof staleImpacts)[keyof typeof staleImpacts][0];
+
+function planHiding(snapshot: RoadmapSnapshot, nodeId: string): ChangePlan<'hide-node'> {
+  if (!snapshot.nodes.some(({ id }) => id === nodeId)) return nodeNotFound();
+  const dependencies = dependenciesTouching(snapshot, nodeId).map(
+    ({ id, sourceNodeId, targetNodeId }) => ({ id, sourceNodeId, targetNodeId }),
+  );
+  return {
+    kind: 'ALLOWED',
+    impact: versionChangeImpact({ dependencies }),
+    consequences: {
+      blockedNodeIds: [],
+      unblockedNodeIds: [nodeId],
+      removedDependencyIds: dependencies.map(({ id }) => id),
+    },
+  };
+}
+
+function planDeletion(snapshot: RoadmapSnapshot, nodeId: string): ChangePlan<'delete-node'> {
+  const node = snapshot.nodes.find(({ id }) => id === nodeId);
+  if (!node) return nodeNotFound();
+  const titleOf = (id: string) => snapshot.nodes.find((candidate) => candidate.id === id)!.title;
+  const dependencies = dependenciesTouching(snapshot, nodeId);
+  return {
+    kind: 'ALLOWED',
+    impact: versionChangeImpact({
+      node: { title: node.title, nodeType: nodeTypeOf(snapshot, node.nodeTypeId) },
+      dependencies: dependencies.map(({ id, sourceNodeId, targetNodeId }) => ({
+        id,
+        sourceTitle: titleOf(sourceNodeId),
+        targetTitle: titleOf(targetNodeId),
+      })),
+      resources: [...node.resources].sort(byTitle).map(({ id, title }) => ({ id, title })),
+    }),
+    consequences: {
+      blockedNodeIds: [],
+      unblockedNodeIds: [],
+      removedDependencyIds: dependencies.map(({ id }) => id),
+    },
+  };
+}
+
+function nodeNotFound() {
+  return ruleRejection('NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+}
+
+function dependenciesTouching(snapshot: RoadmapSnapshot, nodeId: string) {
+  return snapshot.dependencies
+    .filter(({ sourceNodeId, targetNodeId }) => sourceNodeId === nodeId || targetNodeId === nodeId)
+    .sort(byId);
 }
 
 function planDependency(
@@ -110,8 +179,7 @@ function planDependency(
     return ruleRejection('SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
   const sourceNode = snapshot.nodes.find(({ id }) => id === sourceNodeId);
   const targetNode = snapshot.nodes.find(({ id }) => id === targetNodeId);
-  if (!sourceNode || !targetNode)
-    return ruleRejection('NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!sourceNode || !targetNode) return nodeNotFound();
   if (!sourceNode.isVisible || !targetNode.isVisible)
     return ruleRejection(
       'HIDDEN_NODE_DEPENDENCY_FORBIDDEN',
@@ -143,7 +211,7 @@ function planTeacherBlock(
   { nodeId, operation }: Extract<RoadmapChange, { kind: 'change-teacher-block' }>,
 ): ChangePlan<'change-teacher-block'> {
   const selectedNode = snapshot.nodes.find(({ id }) => id === nodeId);
-  if (!selectedNode) return ruleRejection('NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!selectedNode) return nodeNotFound();
   if (!selectedNode.isVisible)
     return ruleRejection(
       'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
@@ -232,7 +300,7 @@ function nodeTypeOf(snapshot: RoadmapSnapshot, nodeTypeId: string) {
  * (cyrb53), so the version fits an HTTP header whatever the Node titles are. The server always
  * recomputes the Change impact, so a forged version gains nothing beyond a fresh preview.
  */
-export function versionChangeImpact<Impact extends object>(impact: Impact) {
+function versionChangeImpact<Impact extends object>(impact: Impact) {
   const content = JSON.stringify(impact);
   let first = 0xdeadbeef;
   let second = 0x41c6ce57;
@@ -252,10 +320,11 @@ export function versionChangeImpact<Impact extends object>(impact: Impact) {
 const titleCollator = new Intl.Collator('es');
 
 function byTitle(left: { id: string; title: string }, right: { id: string; title: string }) {
-  return (
-    titleCollator.compare(left.title, right.title) ||
-    (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)
-  );
+  return titleCollator.compare(left.title, right.title) || byId(left, right);
+}
+
+function byId(left: { id: string }, right: { id: string }) {
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
 
 /** The visible Nodes without a Teacher block from `nodeId` onwards, which a blocked prerequisite would block. */
@@ -266,33 +335,4 @@ function cascadingTeacherBlock(snapshot: RoadmapSnapshot, nodeId: string) {
     .filter((node) => !node.isTeacherBlocked && reachedNodeIds.has(node.id))
     .map(({ id, title }) => ({ id, title }))
     .sort(byTitle);
-}
-
-export type ChangeWithImpact = 'hide' | 'delete' | 'dependency' | 'block' | 'unlock';
-
-const staleChanges = {
-  hide: ['NODE_VISIBILITY_PREVIEW_STALE', 'de ocultar el nodo'],
-  delete: ['NODE_DELETE_PREVIEW_STALE', 'de la eliminación'],
-  dependency: ['DEPENDENCY_PREVIEW_STALE', 'de la dependencia'],
-  block: ['TEACHER_BLOCK_PREVIEW_STALE', 'del bloqueo'],
-  unlock: ['TEACHER_BLOCK_PREVIEW_STALE', 'del desbloqueo'],
-} as const satisfies Record<ChangeWithImpact, readonly [string, string]>;
-
-export type StaleChangeImpactReason = (typeof staleChanges)[ChangeWithImpact][0];
-
-export function decideChangeImpactVersion({
-  change,
-  sentVersion,
-  version,
-}: {
-  change: ChangeWithImpact;
-  sentVersion: string | undefined;
-  version: string;
-}): { kind: 'ALLOWED' } | RuleRejection<StaleChangeImpactReason> {
-  if (sentVersion === version) return { kind: 'ALLOWED' };
-  const [reason, impact] = staleChanges[change];
-  return ruleRejection(
-    reason,
-    `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`,
-  );
 }

@@ -236,10 +236,10 @@ describe('canvas commands', () => {
   });
 
   test.each([
-    ['hide-node', [{ id: 'limits-derivatives' }, { sourceNodeId: 'limits' }]],
+    ['hide-node', [{ sourceNodeId: 'limits' }, { id: 'limits-derivatives' }]],
     [
       'delete-node',
-      [{ targetTitle: 'Derivadas' }, { sourceTitle: 'Límites', targetTitle: 'Integrales' }],
+      [{ sourceTitle: 'Límites', targetTitle: 'Integrales' }, { targetTitle: 'Derivadas' }],
     ],
   ] as const)(
     'shows the new Change impact instead of applying %s when it changed after opening',
@@ -272,11 +272,15 @@ describe('canvas commands', () => {
   );
 
   test.each([
-    ['hide-node', 'de ocultar el nodo', [{ id: 'limits-derivatives' }, {}]],
+    [
+      'hide-node',
+      'de ocultar el nodo',
+      [{ sourceNodeId: 'integrals' }, { id: 'limits-derivatives' }],
+    ],
     [
       'delete-node',
       'de la eliminación',
-      [{ targetTitle: 'Derivadas' }, { sourceTitle: 'Integrales' }],
+      [{ sourceTitle: 'Integrales' }, { targetTitle: 'Derivadas' }],
     ],
   ] as const)(
     'shows the latest Change impact when the %s write is refused as stale, and confirms it again',
