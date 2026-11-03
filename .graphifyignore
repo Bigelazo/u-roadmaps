@@ -1,0 +1,12 @@
+# Index the application and its own documentation, not installed agent tools.
+.agents/skills/
+.claude/skills/
+.codex/skills/
+.claude/agents/
+skills-lock.json
+
+# Isolated checkouts.
+.worktrees/
+
+# Historical measurements are evidence about a snapshot, not current behavior.
+docs/measurements/
