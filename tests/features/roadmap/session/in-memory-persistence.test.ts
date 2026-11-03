@@ -331,6 +331,29 @@ test('follows the Node type rules with the messages of production', async () => 
   expect((await persistence.load()).nodeTypes.map(({ id }) => id)).toEqual(['content']);
 });
 
+test('refuses a Node type that is not available in the Roadmap, as production does', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  const before = await persistence.load();
+  const unavailable = 'El tipo no existe o no está disponible en este roadmap.';
+
+  await expect(
+    persistence.execute({
+      kind: 'add-node',
+      node: { title: 'Nuevo', description: '', nodeTypeId: 'missing', isVisible: true },
+      position: { x: 0, y: 0 },
+    }),
+  ).rejects.toThrow(unavailable);
+  await expect(
+    persistence.execute({
+      kind: 'update-node',
+      nodeId: 'selected',
+      value: { title: 'Seleccionado', description: '', nodeTypeId: 'missing' },
+    }),
+  ).rejects.toThrow(unavailable);
+
+  expect(await persistence.load()).toEqual(before);
+});
+
 test('never reuses an identifier after a deletion', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence({ ...roadmap, dependencies: [] });
   const node = { title: 'Nuevo', description: '', nodeTypeId: 'content', isVisible: true };
@@ -400,19 +423,25 @@ test('presents a Node whose Node type is missing with the shared unknown Node ty
   ).toEqual(unknownNodeType);
 });
 
-test('Practice resources preserve File ownership and permit Link edits', async () => {
+test('refuses a non-Link external Resource with the message of production', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
-  const update = (resourceId: string, resource: ResourceInput) =>
-    persistence.execute({ kind: 'update-resource', resourceId, resource });
-  const resources = async () =>
-    (await persistence.load()).nodes.flatMap((node) => ('resources' in node ? node.resources : []));
+
   await expect(
     persistence.execute({
       kind: 'add-resource',
       nodeId: 'selected',
       resource: { title: 'External', url: 'https://example.test/file.pdf', type: 'FILE' },
     }),
-  ).rejects.toThrow('Los recursos externos deben ser Enlaces.');
+  ).rejects.toThrow('Los recursos externos deben ser Enlaces. Para un Archivo, sube sus bytes.');
+  expect(await persistence.load()).toEqual(roadmap);
+});
+
+test('Practice resources preserve File ownership and permit Link edits', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  const update = (resourceId: string, resource: ResourceInput) =>
+    persistence.execute({ kind: 'update-resource', resourceId, resource });
+  const resources = async () =>
+    (await persistence.load()).nodes.flatMap((node) => ('resources' in node ? node.resources : []));
   await persistence.execute({
     kind: 'upload-resource',
     nodeId: 'selected',
