@@ -11,9 +11,10 @@ import {
   type ReactNode,
 } from 'react';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommandSession } from '@/features/roadmap/canvas/commands/declarations';
 import {
   useCanvasCommands,
-  type CanvasCommandSession,
   type CanvasCommands,
 } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
@@ -38,6 +39,13 @@ function messageFor(cause: unknown, fallback: string) {
 }
 
 const refreshFailure = 'No se pudo actualizar el roadmap. Puedes reintentar.';
+/** For a failure that carries no message at all; the adapters always give one. */
+const genericFailure = 'No se pudo completar la acción.';
+/** Commands whose effect shows in the Canvas preview, which reloads instead of the Roadmap. */
+const canvasPreviewCommandKinds: ReadonlySet<CanvasCommand['kind']> = new Set([
+  'complete-simulated-node',
+  'reset-canvas-preview',
+]);
 const loadFailure = 'No se pudo cargar el roadmap.';
 
 function matchesExperience(
@@ -268,53 +276,16 @@ function useInjectedSession(
   }, []);
 
   const reportFailure = useCallback(
-    async (cause: unknown, fallback: string, requestKey: string) => {
+    async (cause: unknown, requestKey: string) => {
       if (activeKeyRef.current !== requestKey) return;
       if (cause instanceof RoadmapClosedError) {
         setClosedKey(requestKey);
         await refresh().catch(() => false);
       }
       if (activeKeyRef.current !== requestKey) return;
-      setError({ message: messageFor(cause, fallback), key: requestKey });
+      setError({ message: messageFor(cause, genericFailure), key: requestKey });
     },
     [refresh],
-  );
-
-  const mutate = useCallback(
-    async <T,>(operation: () => Promise<T>, fallback: string, reload = true) => {
-      const requestKey = roadmapCanvasSessionKey(stableInput);
-      let result: T;
-      try {
-        result = await operation();
-      } catch (cause) {
-        await reportFailure(cause, fallback, requestKey);
-        return { success: false, result: undefined };
-      }
-      try {
-        if (reload) await refresh();
-        if (activeKeyRef.current === requestKey) setError(null);
-      } catch (cause) {
-        if (activeKeyRef.current === requestKey) {
-          setError({ message: messageFor(cause, refreshFailure), key: requestKey });
-        }
-      }
-      return { success: activeKeyRef.current === requestKey, result };
-    },
-    [refresh, reportFailure, stableInput],
-  );
-
-  const read = useCallback(
-    async <T,>(operation: () => Promise<T>, fallback: string) => {
-      const requestKey = roadmapCanvasSessionKey(stableInput);
-      try {
-        const result = await operation();
-        return activeKeyRef.current === requestKey ? result : null;
-      } catch (cause) {
-        await reportFailure(cause, fallback, requestKey);
-        return null;
-      }
-    },
-    [reportFailure, stableInput],
   );
 
   const loadSimulation = useCallback(async () => {
@@ -331,14 +302,53 @@ function useInjectedSession(
       return true;
     } catch (cause) {
       if (activeKeyRef.current === requestKey) {
-        setError({
-          message: messageFor(cause, 'No se pudo cargar la previsualización.'),
-          key: requestKey,
-        });
+        setError({ message: messageFor(cause, genericFailure), key: requestKey });
       }
       return false;
     }
   }, [persistence, stableInput]);
+
+  const preview = useCallback<CanvasCommandSession['preview']>(
+    async (command) => {
+      const requestKey = roadmapCanvasSessionKey(stableInput);
+      try {
+        const impact = await persistence.preview(command);
+        return activeKeyRef.current === requestKey ? impact : null;
+      } catch (cause) {
+        await reportFailure(cause, requestKey);
+        return null;
+      }
+    },
+    [persistence, reportFailure, stableInput],
+  );
+
+  const execute = useCallback<CanvasCommandSession['execute']>(
+    async (command, previewVersion) => {
+      const requestKey = roadmapCanvasSessionKey(stableInput);
+      let createdNodeId: string | void;
+      try {
+        createdNodeId = await persistence.execute(command, previewVersion);
+      } catch (cause) {
+        await reportFailure(cause, requestKey);
+        return { applied: false };
+      }
+      const changesCanvasPreview = canvasPreviewCommandKinds.has(command.kind);
+      try {
+        if (!changesCanvasPreview) await refresh();
+        if (activeKeyRef.current === requestKey) setError(null);
+      } catch (cause) {
+        if (activeKeyRef.current === requestKey) {
+          setError({ message: messageFor(cause, refreshFailure), key: requestKey });
+        }
+      }
+      const applied = activeKeyRef.current === requestKey;
+      if (applied && changesCanvasPreview) await loadSimulation();
+      return { applied, createdNodeId: createdNodeId || undefined };
+    },
+    [loadSimulation, persistence, refresh, reportFailure, stableInput],
+  );
+
+  const commandSession = useMemo(() => ({ preview, execute }), [execute, preview]);
 
   return {
     state: {
@@ -354,7 +364,7 @@ function useInjectedSession(
         (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
       loadSimulation,
     },
-    commandSession: { persistence, read, mutate, loadSimulation },
+    commandSession,
   };
 }
 

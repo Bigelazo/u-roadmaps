@@ -1188,7 +1188,7 @@ describe('canvas commands', () => {
       expect(canvas.onCommandApplied).not.toHaveBeenCalled();
     });
 
-    test('a failed write without a message shows its fallback as the session error', async () => {
+    test('a failed write without any message shows the generic failure as the session error', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(editable);
       const canvas = await openCanvas(
         intercepting(adapter, 'add-resource', async () => {
@@ -1206,7 +1206,7 @@ describe('canvas commands', () => {
       });
 
       expect(applied).toBe(false);
-      expect(canvas.session().error).toBe('No se pudo agregar el recurso.');
+      expect(canvas.session().error).toBe('No se pudo completar la acción.');
       expect(successToasts()).toEqual([]);
       expect(canvas.reported()).toEqual([]);
     });
