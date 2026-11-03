@@ -385,8 +385,8 @@ describe('canvas commands', () => {
           BLOCK: {
             mode: 'BLOCK',
             nodes: [
-              { id: 'limits', relation: 'SELECTED_NODE' },
               { id: 'derivatives', relation: 'DEPENDENT' },
+              { id: 'limits', relation: 'SELECTED_NODE' },
             ],
           },
         },
@@ -416,7 +416,7 @@ describe('canvas commands', () => {
         expect(await canvas.awaiting()).toMatchObject({
           impact: {
             UNBLOCK: { mode: 'SINGLE', nodes: [{ id: 'limits' }] },
-            BRANCH_UNLOCK: { mode: 'BRANCH', nodes: [{ id: 'limits' }, { id: 'derivatives' }] },
+            BRANCH_UNLOCK: { mode: 'BRANCH', nodes: [{ id: 'derivatives' }, { id: 'limits' }] },
           },
         });
 
@@ -441,8 +441,8 @@ describe('canvas commands', () => {
         UNBLOCK: {
           mode: 'UPSTREAM',
           nodes: [
-            { id: 'limits', relation: 'PREREQUISITE' },
             { id: 'derivatives', relation: 'SELECTED_NODE' },
+            { id: 'limits', relation: 'PREREQUISITE' },
           ],
         },
       });
@@ -480,7 +480,7 @@ describe('canvas commands', () => {
         phase: 'awaiting',
         impact: {
           UNBLOCK: { mode: 'SINGLE', nodes: [{ id: 'limits' }] },
-          BRANCH_UNLOCK: { nodes: [{ id: 'limits' }, { id: 'derivatives' }, { id: 'integrals' }] },
+          BRANCH_UNLOCK: { nodes: [{ id: 'derivatives' }, { id: 'integrals' }, { id: 'limits' }] },
         },
       });
       expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual([
@@ -517,7 +517,7 @@ describe('canvas commands', () => {
       );
       expect(canvas.commands().pending).toMatchObject({
         phase: 'awaiting',
-        impact: { BRANCH_UNLOCK: { nodes: [{}, {}, { id: 'integrals' }] } },
+        impact: { BRANCH_UNLOCK: { nodes: [{}, { id: 'integrals' }, {}] } },
       });
       expect(await teacherBlockedNodeIds(persistence)).toHaveLength(3);
 

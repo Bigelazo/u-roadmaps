@@ -5,6 +5,7 @@ import {
   planChange,
   type RoadmapSnapshot,
 } from '@/features/roadmap/domain/change-impact';
+import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 
 type SnapshotNode = RoadmapSnapshot['nodes'][number];
 
@@ -144,6 +145,166 @@ test('a Dependency from a Teacher-blocked Node blocks the target and its visible
   });
 });
 
+function teacherBlock(nodeId: string, operation: 'BLOCK' | 'UNBLOCK' | 'BRANCH_UNLOCK') {
+  return { kind: 'change-teacher-block', nodeId, operation } as const;
+}
+
+const content = { name: 'Contenido', icon: 'BookOpen', color: '#024AD8' };
+
+test('a Teacher block blocks the Node and its visible dependents without one, by title then identifier', () => {
+  const snapshot = roadmap(
+    [
+      node('selected', { title: 'Seleccionado' }),
+      node('visible-b', { title: 'Visible' }),
+      node('visible-a', { title: 'Visible', nodeTypeId: 'missing' }),
+      node('blocked', { title: 'Bloqueado', isTeacherBlocked: true }),
+      node('hidden', { title: 'Oculto', isVisible: false }),
+      node('unrelated', { title: 'Anexo' }),
+    ],
+    [
+      ['selected', 'visible-b'],
+      ['selected', 'blocked'],
+      ['blocked', 'visible-a'],
+    ],
+  );
+
+  expect(planChange(snapshot, teacherBlock('selected', 'BLOCK'))).toEqual({
+    kind: 'ALLOWED',
+    impact: {
+      mode: 'BLOCK',
+      nodes: [
+        { id: 'selected', title: 'Seleccionado', nodeType: content, relation: 'SELECTED_NODE' },
+        { id: 'visible-a', title: 'Visible', nodeType: unknownNodeType, relation: 'DEPENDENT' },
+        { id: 'visible-b', title: 'Visible', nodeType: content, relation: 'DEPENDENT' },
+      ],
+      version: expect.any(String),
+    },
+    consequences: {
+      blockedNodeIds: ['selected', 'visible-a', 'visible-b'],
+      unblockedNodeIds: [],
+      removedDependencyIds: [],
+    },
+  });
+});
+
+test.each([
+  ['missing', 'NODE_NOT_FOUND', 'El nodo no existe en este roadmap.'],
+  [
+    'draft',
+    'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
+    'Un nodo oculto no puede tener un bloqueo docente.',
+  ],
+])('refuses a Teacher block on the %s Node', (nodeId, reason, message) => {
+  const snapshot = roadmap([node('draft', { isVisible: false })]);
+
+  expect(planChange(snapshot, teacherBlock(nodeId, 'BLOCK'))).toEqual({
+    kind: 'REJECTED',
+    reason,
+    message,
+  });
+});
+
+const convergent = roadmap(
+  [
+    node('d', { title: 'D', isTeacherBlocked: true }),
+    node('c', { title: 'C', isTeacherBlocked: true }),
+    node('b', { title: 'B', isTeacherBlocked: true }),
+    node('a', { title: 'A', isTeacherBlocked: true }),
+    node('free', { title: 'Libre' }),
+  ],
+  [
+    ['a', 'c'],
+    ['b', 'c'],
+    ['free', 'c'],
+    ['c', 'd'],
+  ],
+);
+
+test('a Node unlock with a Teacher-blocked prerequisite unlocks every blocked prerequisite through convergent paths', () => {
+  expect(planChange(convergent, teacherBlock('c', 'BRANCH_UNLOCK'))).toEqual({
+    kind: 'ALLOWED',
+    impact: {
+      mode: 'UPSTREAM',
+      nodes: [
+        { id: 'a', title: 'A', nodeType: content, relation: 'PREREQUISITE' },
+        { id: 'b', title: 'B', nodeType: content, relation: 'PREREQUISITE' },
+        { id: 'c', title: 'C', nodeType: content, relation: 'SELECTED_NODE' },
+      ],
+      version: expect.any(String),
+    },
+    consequences: {
+      blockedNodeIds: [],
+      unblockedNodeIds: ['a', 'b', 'c'],
+      removedDependencyIds: [],
+    },
+  });
+});
+
+test('a Node unlock without a Teacher-blocked prerequisite unlocks only the selected Node', () => {
+  expect(planChange(convergent, teacherBlock('a', 'UNBLOCK'))).toMatchObject({
+    impact: {
+      mode: 'SINGLE',
+      nodes: [{ id: 'a', title: 'A', nodeType: content, relation: 'SELECTED_NODE' }],
+    },
+    consequences: { unblockedNodeIds: ['a'] },
+  });
+});
+
+test('a Branch unlock unlocks the eligible dependents, keeping those an external blocked prerequisite holds', () => {
+  const snapshot = roadmap(
+    [
+      node('root', { title: 'Raíz', isTeacherBlocked: true }),
+      node('held', { title: 'Retenido', isTeacherBlocked: true }),
+      node('outside', { title: 'Externo', isTeacherBlocked: true }),
+      node('after-held', { title: 'Posterior', isTeacherBlocked: true }),
+      node('eligible', { title: 'Elegible', isTeacherBlocked: true }),
+    ],
+    [
+      ['root', 'held'],
+      ['outside', 'held'],
+      ['held', 'after-held'],
+      ['root', 'eligible'],
+    ],
+  );
+
+  expect(planChange(snapshot, teacherBlock('root', 'BRANCH_UNLOCK'))).toMatchObject({
+    impact: {
+      mode: 'BRANCH',
+      nodes: [
+        { id: 'eligible', relation: 'DEPENDENT' },
+        { id: 'root', relation: 'SELECTED_NODE' },
+      ],
+    },
+    consequences: { unblockedNodeIds: ['eligible', 'root'] },
+  });
+});
+
+test('a Node unlock also releases the due Scheduled unlocks it no longer holds, outside its Change impact', () => {
+  const snapshot = roadmap(
+    [
+      node('unlocked', { title: 'Desbloqueado', isTeacherBlocked: true }),
+      node('released', { isTeacherBlocked: true, teacherUnlockOn: '2026-11-03' }),
+      node('future', { isTeacherBlocked: true, teacherUnlockOn: '2026-11-04' }),
+      node('still-blocked', { isTeacherBlocked: true }),
+      node('waiting', { isTeacherBlocked: true, teacherUnlockOn: '2026-11-02' }),
+    ],
+    [
+      ['unlocked', 'released'],
+      ['unlocked', 'future'],
+      ['unlocked', 'waiting'],
+      ['still-blocked', 'waiting'],
+    ],
+  );
+
+  expect(planChange(snapshot, teacherBlock('unlocked', 'UNBLOCK'))).toMatchObject({
+    impact: { mode: 'SINGLE', nodes: [{ id: 'unlocked' }] },
+    consequences: { unblockedNodeIds: ['unlocked', 'released'] },
+  });
+  expect(planChange(snapshot, teacherBlock('unlocked', 'BLOCK'))).toMatchObject({
+    consequences: { unblockedNodeIds: [] },
+  });
+});
+
 function versionOf(plan: ReturnType<typeof planChange>) {
   if (plan.kind === 'REJECTED') throw new Error(plan.message);
   return plan.impact.version;
@@ -193,6 +354,20 @@ test.each([
     reason: 'DEPENDENCY_PREVIEW_STALE',
     message:
       'El impacto de la dependencia cambió. Revisa y confirma la previsualización actualizada.',
+  });
+});
+
+test.each([
+  ['BLOCK', 'del bloqueo'],
+  ['UNBLOCK', 'del desbloqueo'],
+  ['BRANCH_UNLOCK', 'del desbloqueo'],
+] as const)('refuses to confirm a stale %s as stale', (operation, impact) => {
+  const snapshot = roadmap([node('intro', { isTeacherBlocked: true })]);
+
+  expect(confirmChange(snapshot, teacherBlock('intro', operation), undefined)).toEqual({
+    kind: 'REJECTED',
+    reason: 'TEACHER_BLOCK_PREVIEW_STALE',
+    message: `El impacto ${impact} cambió. Revisa y confirma la previsualización actualizada.`,
   });
 });
 

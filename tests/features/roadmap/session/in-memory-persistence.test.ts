@@ -3,6 +3,7 @@ import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/sess
 import type { RoadmapDto } from '@/features/roadmap/types';
 import type { ResourceInput } from '@/features/roadmap/editor/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
+import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { executeWithChangeImpact } from '../support/execute-with-change-impact';
 
 const roadmap = {
@@ -82,60 +83,27 @@ test('sets a Node to the target visibility, as production does', async () => {
   );
 });
 
-test('models upstream Node unlock through the same Teacher block policy as production', async () => {
-  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
-
+test('a confirmed Node unlock unlocks its Change impact and releases a due Scheduled unlock waiting on it', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence({
+    ...roadmap,
+    nodes: roadmap.nodes.map((node) =>
+      node.id === 'dependent' ? { ...node, teacherUnlockOn: chileCalendarDay() } : node,
+    ),
+  });
   const unlock = {
     kind: 'change-teacher-block',
     nodeId: 'selected',
     operation: 'UNBLOCK',
   } as const;
+
   await expect(persistence.readChangeImpact(unlock)).resolves.toMatchObject({
     mode: 'UPSTREAM',
-    nodes: [
-      { id: 'prerequisite', relation: 'PREREQUISITE' },
-      { id: 'selected', relation: 'SELECTED_NODE' },
-    ],
+    nodes: [{ id: 'prerequisite' }, { id: 'selected' }],
   });
   await executeWithChangeImpact(persistence, unlock);
 
   expect((await persistence.load()).nodes).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ id: 'prerequisite', isTeacherBlocked: false }),
-      expect.objectContaining({ id: 'selected', isTeacherBlocked: false }),
-      expect.objectContaining({ id: 'dependent', isTeacherBlocked: true }),
-    ]),
-  );
-});
-
-test('models Branch unlock through the same Teacher block policy as production', async () => {
-  const persistence = createInMemoryRoadmapSessionPersistence({
-    ...roadmap,
-    nodes: roadmap.nodes.map((node) =>
-      node.id === 'prerequisite' ? { ...node, isTeacherBlocked: false } : node,
-    ),
-  });
-
-  const branchUnlock = {
-    kind: 'change-teacher-block',
-    nodeId: 'selected',
-    operation: 'BRANCH_UNLOCK',
-  } as const;
-  await expect(persistence.readChangeImpact(branchUnlock)).resolves.toMatchObject({
-    mode: 'BRANCH',
-    nodes: [
-      { id: 'selected', relation: 'SELECTED_NODE' },
-      { id: 'dependent', relation: 'DEPENDENT' },
-    ],
-  });
-
-  await executeWithChangeImpact(persistence, branchUnlock);
-  expect((await persistence.load()).nodes).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ id: 'prerequisite', isTeacherBlocked: false }),
-      expect.objectContaining({ id: 'selected', isTeacherBlocked: false }),
-      expect.objectContaining({ id: 'dependent', isTeacherBlocked: false }),
-    ]),
+    roadmap.nodes.map((node) => ({ ...node, isTeacherBlocked: false })),
   );
 });
 

@@ -38,23 +38,15 @@ import {
   planChange,
   versionChangeImpact,
   type ChangeConsequences,
+  type ChangeRuleFailure,
   type ChangeWithImpact,
-  type DependencyRuleFailure,
   type RoadmapSnapshot,
   type StaleChangeImpactReason,
 } from '@/features/roadmap/domain/change-impact';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
 import type { ApplicationErrorStatus } from '@/shared/errors/types';
-import type {
-  NodeDeletionImpact,
-  TeacherBlockOperation,
-  TeacherBlockPreview,
-} from '@/features/roadmap/types';
-import {
-  decideTeacherBlock,
-  type TeacherBlockRuleFailure,
-} from '@/features/roadmap/domain/teacher-block';
+import type { NodeDeletionImpact, TeacherBlockOperation } from '@/features/roadmap/types';
 import type { RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
 import {
@@ -110,11 +102,7 @@ async function hidingRemovalFacts(
 }
 
 type RoadmapRuleFailure =
-  | DependencyRuleFailure
-  | TeacherBlockRuleFailure
-  | ScheduledUnlockRuleFailure
-  | NodeTypeRuleFailure
-  | StaleChangeImpactReason;
+  ChangeRuleFailure | ScheduledUnlockRuleFailure | NodeTypeRuleFailure | StaleChangeImpactReason;
 
 const RULE_FAILURE_STATUS: Readonly<Record<RoadmapRuleFailure, ApplicationErrorStatus>> = {
   NODE_NOT_FOUND: 404,
@@ -151,6 +139,7 @@ function rejectStalePreview(
 async function loadRoadmapSnapshot(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
+  today = chileCalendarDay(),
 ): Promise<RoadmapSnapshot> {
   const [nodes, dependencies, nodeTypes] = await Promise.all([
     transaction.roadmapNode.findMany({
@@ -178,7 +167,7 @@ async function loadRoadmapSnapshot(
     })),
     dependencies,
     nodeTypes,
-    today: chileCalendarDay(),
+    today,
   };
 }
 
@@ -650,38 +639,8 @@ export const previewNodeVisibility = async ({
 
 type TeacherBlockRequest = { id: string; operation: TeacherBlockOperation };
 
-function parseTeacherBlock({ id, operation }: TeacherBlockRequest) {
-  return { nodeId: requireUuid(id, 'nodeId'), operation };
-}
-
-async function teacherBlockPreview(
-  transaction: Prisma.TransactionClient,
-  roadmapId: string,
-  { nodeId, operation }: ReturnType<typeof parseTeacherBlock>,
-) {
-  const [nodes, dependencies] = await Promise.all([
-    transaction.roadmapNode.findMany({
-      where: { roadmapId },
-      select: {
-        id: true,
-        title: true,
-        isVisible: true,
-        isTeacherBlocked: true,
-        nodeType: { select: { name: true, icon: true, color: true } },
-      },
-      orderBy: [{ title: 'asc' }, { id: 'asc' }],
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId } },
-      select: { sourceNodeId: true, targetNodeId: true },
-    }),
-  ]);
-  const decision = decideTeacherBlock({ nodes, dependencies, nodeId, operation });
-  if (decision.kind === 'REJECTED') throw ruleError(decision);
-  return versionChangeImpact({
-    mode: decision.mode,
-    nodes: decision.nodes,
-  }) satisfies TeacherBlockPreview;
+function teacherBlockChange({ id, operation }: TeacherBlockRequest) {
+  return { kind: 'change-teacher-block', nodeId: requireUuid(id, 'nodeId'), operation } as const;
 }
 
 export const previewTeacherBlock = async ({
@@ -689,37 +648,26 @@ export const previewTeacherBlock = async ({
   operation,
   ...participant
 }: RoadmapParticipant & TeacherBlockRequest) => {
-  const request = parseTeacherBlock({ id, operation });
-  return roadmapRead(participant, 'edit', ({ tx, roadmap }) =>
-    teacherBlockPreview(tx, roadmap.id, request),
-  );
+  const change = teacherBlockChange({ id, operation });
+  return roadmapRead(participant, 'edit', async ({ tx, roadmap }) => {
+    const plan = planChange(await loadRoadmapSnapshot(tx, roadmap.id), change);
+    if (plan.kind === 'REJECTED') throw ruleError(plan);
+    return plan.impact;
+  });
 };
 
 export const changeTeacherBlock = roadmapCommand({
   capability: 'edit',
   parse: ({ previewVersion, ...request }: TeacherBlockRequest & { previewVersion?: string }) => ({
-    ...parseTeacherBlock(request),
+    change: teacherBlockChange(request),
     previewVersion,
   }),
   access: 'roadmap',
-  run: async ({ tx, roadmap, input }) => {
-    const preview = await teacherBlockPreview(tx, roadmap.id, input);
-    rejectStalePreview(
-      input.operation === 'BLOCK' ? 'block' : 'unlock',
-      input.previewVersion,
-      preview,
-    );
-    if (preview.nodes.length > 0) {
-      await tx.roadmapNode.updateMany({
-        where: { id: { in: preview.nodes.map((node) => node.id) } },
-        data:
-          input.operation === 'BLOCK'
-            ? { isTeacherBlocked: true }
-            : { isTeacherBlocked: false, teacherUnlockOn: null },
-      });
-    }
-    if (input.operation !== 'BLOCK') await releaseDueScheduledUnlocks(tx, roadmap.id);
-    return { result: preview, facts: [] };
+  run: async ({ tx, roadmap, input: { change, previewVersion } }) => {
+    const plan = confirmChange(await loadRoadmapSnapshot(tx, roadmap.id), change, previewVersion);
+    if (plan.kind === 'REJECTED') throw ruleError(plan);
+    await persistConsequences(tx, plan.consequences);
+    return { result: plan.impact, facts: [] };
   },
 });
 
@@ -736,39 +684,7 @@ async function dueScheduledUnlocks(
   roadmapId: string,
   today: CalendarDay,
 ) {
-  const [nodes, dependencies] = await Promise.all([
-    client.roadmapNode.findMany({
-      where: { roadmapId },
-      select: { id: true, isVisible: true, isTeacherBlocked: true, teacherUnlockOn: true },
-    }),
-    client.dependency.findMany({
-      where: { sourceNode: { roadmapId } },
-      select: { sourceNodeId: true, targetNodeId: true },
-    }),
-  ]);
-  return dueScheduledUnlockNodeIds({
-    nodes: nodes.map((node) => ({
-      ...node,
-      teacherUnlockOn: node.teacherUnlockOn ? calendarDayOf(node.teacherUnlockOn) : null,
-    })),
-    dependencies,
-    today,
-  });
-}
-
-async function releaseDueScheduledUnlocks(
-  transaction: Prisma.TransactionClient,
-  roadmapId: string,
-  today = chileCalendarDay(),
-) {
-  const releasedNodeIds = await dueScheduledUnlocks(transaction, roadmapId, today);
-  if (releasedNodeIds.size > 0) {
-    await transaction.roadmapNode.updateMany({
-      where: { id: { in: [...releasedNodeIds] } },
-      data: { isTeacherBlocked: false, teacherUnlockOn: null },
-    });
-  }
-  return releasedNodeIds;
+  return [...dueScheduledUnlockNodeIds(await loadRoadmapSnapshot(client, roadmapId, today))];
 }
 
 export const scheduleTeacherUnlock = roadmapCommand({
@@ -818,7 +734,7 @@ export const releaseScheduledTeacherUnlocks = async (
   const released = [];
   for (const roadmap of roadmaps) {
     try {
-      if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).size === 0) continue;
+      if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).length === 0) continue;
       const releasedNodeIds = await roadmapChangeTransaction(
         changePort,
         (transaction, report) =>
@@ -832,10 +748,15 @@ export const releaseScheduledTeacherUnlocks = async (
               access: 'roadmap',
               lock: 'update',
             },
-            async () => ({
-              result: [...(await releaseDueScheduledUnlocks(transaction, roadmap.id, today))],
-              facts: [],
-            }),
+            async () => {
+              const unblockedNodeIds = await dueScheduledUnlocks(transaction, roadmap.id, today);
+              await persistConsequences(transaction, {
+                blockedNodeIds: [],
+                unblockedNodeIds,
+                removedDependencyIds: [],
+              });
+              return { result: unblockedNodeIds, facts: [] };
+            },
           ),
         { conflictMessage: 'El desbloqueo programado entra en conflicto con otra modificación.' },
       ).catch(nothingReleasedOnClosure);

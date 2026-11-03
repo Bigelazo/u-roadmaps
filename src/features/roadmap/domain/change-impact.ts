@@ -1,11 +1,23 @@
 import {
+  eligibleBranchUnlockNodeIds,
   transitiveDependentNodeIds,
+  transitivePrerequisiteNodeIds,
   visibleRoadmapGraph,
   wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
-import type { CalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
-import type { DependencyImpact } from '@/features/roadmap/types';
+import {
+  dueScheduledUnlockNodeIds,
+  type CalendarDay,
+} from '@/features/roadmap/domain/scheduled-unlock';
+import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
+import type {
+  DependencyImpact,
+  TeacherBlockImpact,
+  TeacherBlockOperation,
+  TeacherBlockPreview,
+  TeacherBlockUnlockMode,
+} from '@/features/roadmap/types';
 
 /** The part of a teaching Roadmap that the Change impact rules read. */
 export type RoadmapSnapshot = {
@@ -24,10 +36,13 @@ export type RoadmapSnapshot = {
 };
 
 /** A Confirmed action that has a Change impact. */
-export type RoadmapChange = {
-  kind: 'create-dependency';
-  sourceNodeId: string;
-  targetNodeId: string;
+export type RoadmapChange =
+  | { kind: 'create-dependency'; sourceNodeId: string; targetNodeId: string }
+  | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation };
+
+type ChangeImpactOf = {
+  'create-dependency': DependencyImpact;
+  'change-teacher-block': TeacherBlockPreview;
 };
 
 /** What a change does besides its primary change, for each adapter to persist in its storage. */
@@ -39,32 +54,48 @@ export type ChangeConsequences = {
   removedDependencyIds: string[];
 };
 
-export type DependencyRuleFailure =
+export type ChangeRuleFailure =
   | 'SELF_DEPENDENCY'
   | 'NODE_NOT_FOUND'
   | 'HIDDEN_NODE_DEPENDENCY_FORBIDDEN'
   | 'DEPENDENCY_CONFLICT'
-  | 'DEPENDENCY_CYCLE';
+  | 'DEPENDENCY_CYCLE'
+  | 'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN';
 
-export type ChangePlan =
-  | { kind: 'ALLOWED'; impact: DependencyImpact; consequences: ChangeConsequences }
-  | RuleRejection<DependencyRuleFailure>;
+export type ChangePlan<Kind extends RoadmapChange['kind'] = RoadmapChange['kind']> =
+  | { kind: 'ALLOWED'; impact: ChangeImpactOf[Kind]; consequences: ChangeConsequences }
+  | RuleRejection<ChangeRuleFailure>;
 
 /** Plans a change for its preview: its rule rejection, or its versioned Change impact and consequences. */
-export function planChange(snapshot: RoadmapSnapshot, change: RoadmapChange): ChangePlan {
-  return planDependency(snapshot, change);
+export function planChange<Change extends RoadmapChange>(
+  snapshot: RoadmapSnapshot,
+  change: Change,
+): ChangePlan<Change['kind']> {
+  const anyChange: RoadmapChange = change;
+  // TypeScript cannot narrow the generic result per kind; each kind plans its own Change impact.
+  return (
+    anyChange.kind === 'create-dependency'
+      ? planDependency(snapshot, anyChange)
+      : planTeacherBlock(snapshot, anyChange)
+  ) as ChangePlan<Change['kind']>;
 }
 
 /** Plans a change for its confirmation, refusing it as stale unless `previewVersion` is still current. */
-export function confirmChange(
+export function confirmChange<Change extends RoadmapChange>(
   snapshot: RoadmapSnapshot,
-  change: RoadmapChange,
+  change: Change,
   previewVersion: string | undefined,
-): ChangePlan | RuleRejection<StaleChangeImpactReason> {
+): ChangePlan<Change['kind']> | RuleRejection<StaleChangeImpactReason> {
   const plan = planChange(snapshot, change);
   if (plan.kind === 'REJECTED') return plan;
+  const anyChange: RoadmapChange = change;
   const decision = decideChangeImpactVersion({
-    change: 'dependency',
+    change:
+      anyChange.kind === 'create-dependency'
+        ? 'dependency'
+        : anyChange.operation === 'BLOCK'
+          ? 'block'
+          : 'unlock',
     sentVersion: previewVersion,
     version: plan.impact.version,
   });
@@ -74,7 +105,7 @@ export function confirmChange(
 function planDependency(
   snapshot: RoadmapSnapshot,
   { sourceNodeId, targetNodeId }: Extract<RoadmapChange, { kind: 'create-dependency' }>,
-): ChangePlan {
+): ChangePlan<'create-dependency'> {
   if (sourceNodeId === targetNodeId)
     return ruleRejection('SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
   const sourceNode = snapshot.nodes.find(({ id }) => id === sourceNodeId);
@@ -105,6 +136,95 @@ function planDependency(
       removedDependencyIds: [],
     },
   };
+}
+
+function planTeacherBlock(
+  snapshot: RoadmapSnapshot,
+  { nodeId, operation }: Extract<RoadmapChange, { kind: 'change-teacher-block' }>,
+): ChangePlan<'change-teacher-block'> {
+  const selectedNode = snapshot.nodes.find(({ id }) => id === nodeId);
+  if (!selectedNode) return ruleRejection('NODE_NOT_FOUND', 'El nodo no existe en este roadmap.');
+  if (!selectedNode.isVisible)
+    return ruleRejection(
+      'HIDDEN_NODE_TEACHER_BLOCK_FORBIDDEN',
+      'Un nodo oculto no puede tener un bloqueo docente.',
+    );
+  const { mode, changedNodeIds } = teacherBlockScope(snapshot, nodeId, operation);
+  const nodes = snapshot.nodes
+    .filter(({ id }) => changedNodeIds.has(id))
+    .sort(byTitle)
+    .map(({ id, title, nodeTypeId }): TeacherBlockImpact => ({
+      id,
+      title,
+      nodeType: nodeTypeOf(snapshot, nodeTypeId),
+      relation:
+        id === nodeId ? 'SELECTED_NODE' : mode === 'UPSTREAM' ? 'PREREQUISITE' : 'DEPENDENT',
+    }));
+  const nodeIds = nodes.map(({ id }) => id);
+  return {
+    kind: 'ALLOWED',
+    impact: versionChangeImpact({ mode, nodes }),
+    consequences:
+      mode === 'BLOCK'
+        ? { blockedNodeIds: nodeIds, unblockedNodeIds: [], removedDependencyIds: [] }
+        : {
+            blockedNodeIds: [],
+            unblockedNodeIds: [...nodeIds, ...releasedScheduledUnlocks(snapshot, changedNodeIds)],
+            removedDependencyIds: [],
+          },
+  };
+}
+
+/** The Nodes whose due Scheduled unlock no Teacher-blocked prerequisite holds once `unlockedNodeIds` are unlocked. */
+function releasedScheduledUnlocks(snapshot: RoadmapSnapshot, unlockedNodeIds: ReadonlySet<string>) {
+  return dueScheduledUnlockNodeIds({
+    ...snapshot,
+    nodes: snapshot.nodes.map((node) =>
+      unlockedNodeIds.has(node.id) ? { ...node, isTeacherBlocked: false } : node,
+    ),
+  });
+}
+
+function teacherBlockScope(
+  snapshot: RoadmapSnapshot,
+  nodeId: string,
+  operation: TeacherBlockOperation,
+): { mode: TeacherBlockUnlockMode; changedNodeIds: ReadonlySet<string> } {
+  if (operation === 'BLOCK')
+    return {
+      mode: 'BLOCK',
+      changedNodeIds: new Set(cascadingTeacherBlock(snapshot, nodeId).map(({ id }) => id)),
+    };
+  const teacherBlockedNodeIds = new Set(
+    snapshot.nodes.filter((node) => node.isTeacherBlocked).map(({ id }) => id),
+  );
+  const prerequisiteNodeIds = transitivePrerequisiteNodeIds(snapshot.dependencies, nodeId);
+  if ([...prerequisiteNodeIds].some((id) => teacherBlockedNodeIds.has(id)))
+    return {
+      mode: 'UPSTREAM',
+      changedNodeIds: new Set(
+        [nodeId, ...prerequisiteNodeIds].filter((id) => teacherBlockedNodeIds.has(id)),
+      ),
+    };
+  if (operation === 'UNBLOCK')
+    return {
+      mode: 'SINGLE',
+      changedNodeIds: new Set(teacherBlockedNodeIds.has(nodeId) ? [nodeId] : []),
+    };
+  return {
+    mode: 'BRANCH',
+    changedNodeIds: eligibleBranchUnlockNodeIds({
+      dependencies: snapshot.dependencies,
+      teacherBlockedNodeIds,
+      rootNodeId: nodeId,
+    }),
+  };
+}
+
+function nodeTypeOf(snapshot: RoadmapSnapshot, nodeTypeId: string) {
+  const { name, icon, color } =
+    snapshot.nodeTypes.find(({ id }) => id === nodeTypeId) ?? unknownNodeType;
+  return { name, icon, color };
 }
 
 /**
