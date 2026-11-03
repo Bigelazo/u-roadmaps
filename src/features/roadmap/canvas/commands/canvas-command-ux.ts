@@ -31,9 +31,10 @@ export type CommandOutcome<Kind extends CanvasCommand['kind']> = ExecutionResult
   readonly remaining?: CanvasCommandOf<Kind>;
 };
 
-// The members below are methods, so that one kind's entry reads as an entry for any kind.
-
-/** How a Confirmed action reads its Change impact, if it has one, and applies once confirmed. */
+/**
+ * How a Confirmed action reads its Change impact, if it has one, and applies once confirmed.
+ * Members here and below are methods, so that one kind's entry reads as an entry for any kind.
+ */
 export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
   impact?(
     session: CanvasCommandSession,

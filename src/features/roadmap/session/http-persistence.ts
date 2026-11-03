@@ -21,7 +21,6 @@ type RequestOptions = {
 };
 
 // Routes declare methods, so that one kind's route reads as a route for any command.
-
 type Route<Kind extends PersistedCommand['kind']> = {
   /** One request, or one per Node for a batch of Node moves. */
   requests(command: CanvasCommandOf<Kind>): RouteRequest | readonly RouteRequest[];

@@ -37,10 +37,6 @@ export type CanvasCommands = {
 
 type ChangeImpact = ChangeImpactOf[ConfirmedActionKind];
 
-function uxOf(kind: CanvasCommand['kind']): CanvasCommandUx<CanvasCommand['kind']> {
-  return canvasCommandUx[kind];
-}
-
 function confirmedActionOf(kind: ConfirmedActionKind): ConfirmedAction<ConfirmedActionKind> {
   return canvasCommandUx[kind].confirmedAction;
 }
@@ -92,7 +88,7 @@ export function useCanvasCommands({
       command: CanvasCommand,
       outcome: CommandOutcome<CanvasCommand['kind']>,
     ) {
-      const ux = uxOf(command.kind);
+      const ux: CanvasCommandUx<CanvasCommand['kind']> = canvasCommandUx[command.kind];
       const message = ux.success?.(command, outcome);
       if (message) notify.success(message);
       if (outcome.remaining) return;
@@ -116,13 +112,9 @@ export function useCanvasCommands({
       impact: ChangeImpact,
       choice?: CanvasConfirmationChoice,
     ): Promise<boolean> {
+      const confirmedAction = confirmedActionOf(opened.kind);
       setPending(pendingConfirmation(opened, impact, 'confirming', choice));
-      const result = await confirmedActionOf(opened.kind).apply(
-        session,
-        opened.request,
-        impact,
-        choice,
-      );
+      const result = await confirmedAction.apply(session, opened.request, impact, choice);
       if (result) {
         const remaining = result === true ? undefined : result.retry;
         if (!remaining) setPending(null);
