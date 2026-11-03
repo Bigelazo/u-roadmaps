@@ -311,14 +311,6 @@ test('uploads a file Resource as multipart form data without setting its boundar
   expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty('headers');
 });
 
-test('rejects a preview without a version, which the confirmation could not send back', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ dependencies: [] })));
-
-  await expect(http.previewNodeHiding(input, 'node-1')).rejects.toThrow(
-    'No se pudo calcular el impacto de ocultar el nodo.',
-  );
-});
-
 test('translates a server Resource failure into the existing user-facing message', async () => {
   vi.stubGlobal(
     'fetch',

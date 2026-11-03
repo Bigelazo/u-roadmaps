@@ -7,9 +7,7 @@ import type {
   DependencyImpact,
   NodeDeletionImpact,
   NodeHidingImpact,
-  RoadmapDto,
   StudentRoadmapDto,
-  TeacherBlockImpact,
   TeacherBlockOperation,
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
@@ -42,113 +40,16 @@ async function failureError(response: Response, fallback: string) {
   return new Error(fallback);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isRoadmap(value: unknown): value is AnyRoadmapDto {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.nodes) &&
-    Array.isArray(value.nodeTypes) &&
-    value.nodes.every(
-      (node) =>
-        isRecord(node) && ('access' in node || ('isVisible' in node && 'isTeacherBlocked' in node)),
-    )
-  );
-}
-
-function isStudentRoadmap(value: unknown): value is StudentRoadmapDto {
-  return isRoadmap(value) && value.nodes.every((node) => isRecord(node) && 'access' in node);
-}
-
-function isTeachingRoadmap(value: unknown): value is RoadmapDto {
-  return (
-    isRoadmap(value) &&
-    value.nodes.every(
-      (node) =>
-        isRecord(node) &&
-        'isVisible' in node &&
-        typeof node.isVisible === 'boolean' &&
-        'isTeacherBlocked' in node &&
-        typeof node.isTeacherBlocked === 'boolean',
-    )
-  );
-}
-
-function isTitledRecord(value: unknown): value is TeacherBlockImpact {
-  return isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string';
-}
-
-function isDeletionDependency(value: unknown) {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.sourceTitle === 'string' &&
-    typeof value.targetTitle === 'string'
-  );
-}
-
-function isTeacherBlockPreview(value: unknown): value is TeacherBlockPreview {
-  return (
-    isRecord(value) &&
-    typeof value.version === 'string' &&
-    Array.isArray(value.nodes) &&
-    value.nodes.every(isTitledRecord)
-  );
-}
-
-function isNodeDeletionImpact(value: unknown): value is NodeDeletionImpact {
-  if (!isRecord(value) || typeof value.version !== 'string') return false;
-  const node = value.node;
-  return (
-    isRecord(node) &&
-    typeof node.title === 'string' &&
-    isRecord(node.nodeType) &&
-    typeof node.nodeType.name === 'string' &&
-    typeof node.nodeType.icon === 'string' &&
-    typeof node.nodeType.color === 'string' &&
-    Array.isArray(value.dependencies) &&
-    value.dependencies.every(isDeletionDependency) &&
-    Array.isArray(value.resources) &&
-    value.resources.every(isTitledRecord)
-  );
-}
-
-function isDependencyImpact(value: unknown): value is DependencyImpact {
-  return (
-    isRecord(value) &&
-    typeof value.version === 'string' &&
-    Array.isArray(value.nodes) &&
-    value.nodes.every(isTitledRecord)
-  );
-}
-
-function isNodeHidingImpact(value: unknown): value is NodeHidingImpact {
-  return (
-    isRecord(value) &&
-    typeof value.version === 'string' &&
-    Array.isArray(value.dependencies) &&
-    value.dependencies.every(
-      (dependency) =>
-        isRecord(dependency) &&
-        typeof dependency.id === 'string' &&
-        typeof dependency.sourceNodeId === 'string' &&
-        typeof dependency.targetNodeId === 'string',
-    )
-  );
-}
-
 function previewHeader(name: string, previewVersion: string | undefined) {
   return previewVersion ? { headers: { [name]: previewVersion } } : {};
 }
 
-async function request(
+async function request<T = void>(
   input: RoadmapCanvasSessionInput,
   suffix: string,
   init: RequestInit,
   fallback: string,
-) {
+): Promise<T> {
   const headers =
     init.body instanceof FormData || init.body === undefined
       ? init.headers
@@ -163,43 +64,24 @@ async function request(
       throw new RoadmapAccessLostError(error.message);
     throw error;
   }
-  if (response.status === 204) return undefined;
-  return response.json();
-}
-
-async function fetchValid<T>(
-  input: RoadmapCanvasSessionInput,
-  suffix: string,
-  init: RequestInit,
-  isValid: (body: unknown) => body is T,
-  fallback: string,
-) {
-  const body: unknown = await request(input, suffix, init, fallback);
-  if (!isValid(body)) throw new Error(fallback);
-  return body;
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
 }
 
 export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistence = {
   load: (input) =>
-    fetchValid<AnyRoadmapDto>(
-      input,
-      '',
-      { cache: 'no-store' },
-      input.experience.kind === 'teaching' ? isTeachingRoadmap : isStudentRoadmap,
-      'No se pudo cargar el roadmap.',
-    ),
+    request<AnyRoadmapDto>(input, '', { cache: 'no-store' }, 'No se pudo cargar el roadmap.'),
 
   loadSimulation: (input) =>
-    fetchValid(
+    request<StudentRoadmapDto>(
       input,
       '/simulation',
       { cache: 'no-store' },
-      isStudentRoadmap,
       'No se pudo cargar la previsualización.',
     ),
 
   async addNode(input, node: NewRoadmapNode, position: Point) {
-    const body = await request(
+    const { node: created } = await request<{ node: { id: string } }>(
       input,
       '/nodes',
       {
@@ -213,9 +95,7 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
       },
       'No se pudo crear el nodo.',
     );
-    return isRecord(body) && isRecord(body.node) && typeof body.node.id === 'string'
-      ? body.node.id
-      : undefined;
+    return created.id;
   },
 
   async updateNode(input, nodeId: string, node: NodeUpdate) {
@@ -237,11 +117,10 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   previewRoadmapDependency: (input, { sourceNodeId, targetNodeId, sourceHandle, targetHandle }) =>
-    fetchValid(
+    request<DependencyImpact>(
       input,
       `/dependencies?${new URLSearchParams({ sourceNodeId, targetNodeId, sourceHandle, targetHandle })}`,
       {},
-      isDependencyImpact,
       'No se pudo calcular el impacto de la dependencia.',
     ),
 
@@ -263,11 +142,10 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   previewTeacherBlock: (input, nodeId, operation: TeacherBlockOperation) =>
-    fetchValid(
+    request<TeacherBlockPreview>(
       input,
       `/nodes/${nodeId}/teacher-block?operation=${operation}`,
       {},
-      isTeacherBlockPreview,
       'No se pudo calcular el impacto del bloqueo docente.',
     ),
 
@@ -307,11 +185,10 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   previewNodeHiding: (input, nodeId) =>
-    fetchValid(
+    request<NodeHidingImpact>(
       input,
       `/nodes/${nodeId}?operation=HIDE`,
       {},
-      isNodeHidingImpact,
       'No se pudo calcular el impacto de ocultar el nodo.',
     ),
 
@@ -329,11 +206,10 @@ export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistenc
   },
 
   previewNodeDeletion: (input, nodeId) =>
-    fetchValid(
+    request<NodeDeletionImpact>(
       input,
       `/nodes/${nodeId}?operation=DELETE`,
       {},
-      isNodeDeletionImpact,
       'No se pudo calcular el impacto de eliminar el nodo.',
     ),
 

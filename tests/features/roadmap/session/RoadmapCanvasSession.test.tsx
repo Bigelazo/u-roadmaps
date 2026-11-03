@@ -254,6 +254,32 @@ describe('RoadmapCanvasSession', () => {
     expect(await screen.findByRole('button', { name: 'Límites' })).toBeTruthy();
   });
 
+  test.each([
+    ['a teaching projection in a student session', teachingRoadmap, studentInput()],
+    ['a student projection in a teaching session', roadmap, teachingInput],
+  ])('refuses %s with the load failure message', async (_name, loaded, input) => {
+    renderSession(createInMemoryRoadmapSessionPersistence(loaded), input);
+
+    expect(await screen.findByText('No se pudo cargar el roadmap.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Límites' })).toBeNull();
+  });
+
+  test('refuses a reloaded projection that no longer matches the experience', async () => {
+    const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+    const load = vi.spyOn(persistence, 'load');
+    renderSession(persistence);
+    await screen.findByRole('button', { name: 'Límites' });
+
+    load.mockResolvedValue({
+      ...roadmap,
+      nodes: [{ ...roadmap.nodes[0], title: 'Proyección de estudiante' }],
+    });
+    act(() => signalChange(teachingInput.courseOffering.identifier));
+
+    expect(await findToast('No se pudo cargar el roadmap.')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Proyección de estudiante' })).toBeNull();
+  });
+
   test('an access invalidation removes student content after authoritative HTTP denial', async () => {
     const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
     const load = vi.spyOn(persistence, 'load');

@@ -40,6 +40,16 @@ function messageFor(cause: unknown, fallback: string) {
 }
 
 const refreshFailure = 'No se pudo actualizar el roadmap. Puedes reintentar.';
+const loadFailure = 'No se pudo cargar el roadmap.';
+
+function matchesExperience(
+  roadmap: AnyRoadmapDto,
+  experience: RoadmapCanvasSessionInput['experience']['kind'],
+) {
+  return roadmap.nodes.every((node) =>
+    experience === 'teaching' ? 'isTeacherBlocked' in node : 'access' in node,
+  );
+}
 
 type CanvasPreviewView = {
   selectedNodeId: string | null;
@@ -123,12 +133,20 @@ function useInjectedSession(
     [courseCode, experienceKind, experienceTerm, semester, title, year],
   );
 
+  const loadRoadmap = useCallback(async () => {
+    const loadedRoadmap = await persistence.load(stableInput);
+    if (!matchesExperience(loadedRoadmap, stableInput.experience.kind)) {
+      throw new Error(loadFailure);
+    }
+    return loadedRoadmap;
+  }, [persistence, stableInput]);
+
   const refresh = useCallback(
     async (applyProjection = true) => {
       const requestVersion = ++requestVersionRef.current;
       const requestKey = roadmapCanvasSessionKey(stableInput);
       try {
-        const loadedRoadmap = await persistence.load(stableInput);
+        const loadedRoadmap = await loadRoadmap();
         if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== requestKey) {
           return false;
         }
@@ -149,7 +167,7 @@ function useInjectedSession(
         throw cause;
       }
     },
-    [persistence, stableInput],
+    [loadRoadmap, stableInput],
   );
 
   useEffect(() => {
@@ -209,7 +227,7 @@ function useInjectedSession(
     setRoadmapKey(null);
     setSimulationKey(null);
     setError(null);
-    void persistence.load(stableInput).then(
+    void loadRoadmap().then(
       (loadedRoadmap) => {
         if (requestVersion !== requestVersionRef.current || activeKeyRef.current !== key) return;
         setRoadmap(loadedRoadmap);
@@ -221,7 +239,7 @@ function useInjectedSession(
           setRoadmap(null);
           setAccessLost(true);
         }
-        setError({ message: messageFor(cause, 'No se pudo cargar el roadmap.'), key });
+        setError({ message: messageFor(cause, loadFailure), key });
       },
     );
     return () => {
@@ -229,7 +247,7 @@ function useInjectedSession(
       requestVersionRef.current += 1;
       simulationVersionRef.current = Math.max(simulationVersionRef.current, simulationVersion + 1);
     };
-  }, [key, persistence, stableInput]);
+  }, [key, loadRoadmap]);
 
   const retryRefresh = useCallback(() => {
     void refresh().then(
