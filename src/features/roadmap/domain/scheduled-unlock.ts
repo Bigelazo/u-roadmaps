@@ -10,7 +10,7 @@ type ScheduledUnlockNode = {
   id: string;
   isVisible: boolean;
   isTeacherBlocked: boolean;
-  teacherUnlockOn?: CalendarDay | null;
+  teacherUnlockOn: CalendarDay | null;
 };
 
 const chileCalendarDayFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -98,7 +98,7 @@ export function dueScheduledUnlockNodeIds({
     (node) =>
       node.isVisible &&
       node.isTeacherBlocked &&
-      node.teacherUnlockOn &&
+      node.teacherUnlockOn !== null &&
       node.teacherUnlockOn <= today,
   );
   const released = new Set<string>();

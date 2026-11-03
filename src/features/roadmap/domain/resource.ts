@@ -2,8 +2,8 @@ export function fileResourceUrl(fileKey: string) {
   return `https://files.u-roadmaps.invalid/${fileKey}`;
 }
 
-/** External Resources are Link resources; a File resource is created by uploading its bytes. */
-export function externalResourceError(type: unknown): string | null {
+/** A Resource created from a request is a Link resource; a File resource is created by uploading its bytes. */
+export function linkResourceOnlyError(type: unknown): string | null {
   return type === 'LINK'
     ? null
     : 'Los recursos externos deben ser Enlaces. Para un Archivo, sube sus bytes.';

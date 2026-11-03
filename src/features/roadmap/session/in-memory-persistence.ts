@@ -1,11 +1,11 @@
-import { externalResourceError, resourceEditError } from '@/features/roadmap/domain/resource';
+import { linkResourceOnlyError, resourceEditError } from '@/features/roadmap/domain/resource';
 import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
   confirmChange,
   planChange,
   type ChangeConsequences,
-  type RoadmapChange,
+  type ChangeWithImpact,
   type RoadmapSnapshot,
 } from '@/features/roadmap/domain/change-impact';
 import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
@@ -28,11 +28,7 @@ import type {
   StudentRoadmapDto,
 } from '@/features/roadmap/types';
 import type { ResourceInput } from '@/features/roadmap/editor/types';
-import type {
-  ChangeImpactCommand,
-  ReadChangeImpactOf,
-  RoadmapNodePlacement,
-} from '@/features/roadmap/canvas/commands/commands';
+import type { RoadmapNodePlacement } from '@/features/roadmap/canvas/commands/commands';
 import type {
   NewRoadmapNode,
   RoadmapCanvasSessionPersistence,
@@ -101,10 +97,14 @@ function teachingNodes(roadmap: AnyRoadmapDto) {
 }
 
 function snapshotOf(roadmap: AnyRoadmapDto): RoadmapSnapshot {
-  return { ...roadmap, nodes: teachingNodes(roadmap), today: chileCalendarDay() };
+  const nodes = teachingNodes(roadmap).map((node) => ({
+    ...node,
+    teacherUnlockOn: (node.isVisible && node.teacherUnlockOn) || null,
+  }));
+  return { ...roadmap, nodes, today: chileCalendarDay() };
 }
 
-function changeImpact(roadmap: AnyRoadmapDto, change: RoadmapChange) {
+function changeImpact<Change extends ChangeWithImpact>(roadmap: AnyRoadmapDto, change: Change) {
   const plan = planChange(snapshotOf(roadmap), change);
   if (plan.kind === 'REJECTED') throw new Error(plan.message);
   return plan.impact;
@@ -223,7 +223,7 @@ export function createInMemoryRoadmapSessionPersistence(
     } as AnyRoadmapDto;
   };
 
-  const confirm = (change: RoadmapChange, previewVersion?: string) => {
+  const confirm = (change: ChangeWithImpact, previewVersion?: string) => {
     const plan = confirmChange(snapshotOf(roadmap), change, previewVersion);
     if (plan.kind === 'REJECTED') throw new Error(plan.message);
     applyConsequences(plan.consequences);
@@ -315,9 +315,8 @@ export function createInMemoryRoadmapSessionPersistence(
       return asStudentRoadmap(roadmap, canvasPreviewCompletions);
     },
 
-    async readChangeImpact<Command extends ChangeImpactCommand>(command: Command) {
-      // The module plans each kind's own Change impact; TypeScript cannot narrow it per kind.
-      return changeImpact(roadmap, command) as ReadChangeImpactOf<Command['kind']>;
+    async readChangeImpact(command) {
+      return changeImpact(roadmap, command);
     },
 
     async execute(command, previewVersion) {
@@ -357,7 +356,7 @@ export function createInMemoryRoadmapSessionPersistence(
         case 'delete-node':
           return deleteNode(command.nodeId, previewVersion);
         case 'add-resource': {
-          const error = externalResourceError(command.resource.type);
+          const error = linkResourceOnlyError(command.resource.type);
           if (error) throw new Error(error);
           return appendResource(command.nodeId, { ...command.resource, id: crypto.randomUUID() });
         }

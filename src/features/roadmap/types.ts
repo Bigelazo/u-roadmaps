@@ -95,7 +95,7 @@ export type TeacherBlockImpact = {
   nodeType?: { name: string; icon: string; color: string };
 };
 
-export type TeacherBlockPreview = {
+export type TeacherBlockOperationImpact = {
   mode: TeacherBlockUnlockMode;
   nodes: TeacherBlockImpact[];
   version: string;

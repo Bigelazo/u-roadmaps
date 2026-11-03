@@ -15,6 +15,7 @@ function node(id: string, overrides: Partial<SnapshotNode> = {}): SnapshotNode {
     nodeTypeId: 'content',
     isVisible: true,
     isTeacherBlocked: false,
+    teacherUnlockOn: null,
     resources: [],
     ...overrides,
   };
@@ -103,6 +104,7 @@ test('a Dependency from a Node without a Teacher block blocks nothing', () => {
     planChange(roadmap([node('intro'), node('theory')]), dependency('intro', 'theory')),
   ).toEqual({
     kind: 'ALLOWED',
+    stale: expect.anything(),
     impact: { nodes: [], version: expect.any(String) },
     consequences: { blockedNodeIds: [], unblockedNodeIds: [], removedDependencyIds: [] },
   });
@@ -128,6 +130,7 @@ test('a Dependency from a Teacher-blocked Node blocks the target and its visible
 
   expect(planChange(snapshot, dependency('intro', 'theory'))).toEqual({
     kind: 'ALLOWED',
+    stale: expect.anything(),
     impact: {
       nodes: [
         { id: 'exercises-a', title: 'Ejercicios' },
@@ -169,6 +172,7 @@ test('a Teacher block blocks the Node and its visible dependents without one, by
 
   expect(planChange(snapshot, teacherBlock('selected', 'BLOCK'))).toEqual({
     kind: 'ALLOWED',
+    stale: expect.anything(),
     impact: {
       mode: 'BLOCK',
       nodes: [
@@ -222,6 +226,7 @@ const convergent = roadmap(
 test('a Node unlock with a Teacher-blocked prerequisite unlocks every blocked prerequisite through convergent paths', () => {
   expect(planChange(convergent, teacherBlock('c', 'BRANCH_UNLOCK'))).toEqual({
     kind: 'ALLOWED',
+    stale: expect.anything(),
     impact: {
       mode: 'UPSTREAM',
       nodes: [
@@ -321,6 +326,7 @@ const touching = roadmap(
 test('hiding a Node removes every Dependency touching it, by identifier, with its Teacher block and Scheduled unlock', () => {
   expect(planChange(touching, { kind: 'hide-node', nodeId: 'theory' })).toEqual({
     kind: 'ALLOWED',
+    stale: expect.anything(),
     impact: {
       dependencies: [
         { id: 'intro-theory', sourceNodeId: 'intro', targetNodeId: 'theory' },
@@ -355,6 +361,7 @@ test('deleting a Node shows it with its Node type, its Dependencies by identifie
 
   expect(planChange(snapshot, { kind: 'delete-node', nodeId: 'theory' })).toEqual({
     kind: 'ALLOWED',
+    stale: expect.anything(),
     impact: {
       node: { title: 'Teoría', nodeType: content },
       dependencies: [

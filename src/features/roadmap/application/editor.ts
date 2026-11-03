@@ -37,7 +37,7 @@ import {
   planChange,
   type ChangeConsequences,
   type ChangeRuleFailure,
-  type RoadmapChange,
+  type ChangeWithImpact,
   type RoadmapSnapshot,
   type StaleChangeImpactReason,
 } from '@/features/roadmap/domain/change-impact';
@@ -161,7 +161,7 @@ async function persistConsequences(
     await transaction.dependency.deleteMany({ where: { id: { in: removedDependencyIds } } });
 }
 
-function previewChange<Change extends RoadmapChange>(
+function readChangeImpact<Change extends ChangeWithImpact>(
   participant: RoadmapParticipant,
   change: Change,
 ) {
@@ -172,8 +172,8 @@ function previewChange<Change extends RoadmapChange>(
   });
 }
 
-/** Confirms a previewed change over the Roadmap snapshot and persists its consequences. */
-async function confirmPreviewedChange<Change extends RoadmapChange>(
+/** Confirms a change over the Roadmap snapshot, against its read Change impact, and persists its consequences. */
+async function persistConfirmedChange<Change extends ChangeWithImpact>(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
   change: Change,
@@ -300,7 +300,7 @@ export const updateRoadmapNode = roadmapCommand({
     if (changes.nodeTypeId !== undefined) await requireType(tx, changes.nodeTypeId, roadmap.id);
     const hiding =
       changes.isVisible === false
-        ? await confirmPreviewedChange(
+        ? await persistConfirmedChange(
             tx,
             roadmap.id,
             { kind: 'hide-node', nodeId },
@@ -370,7 +370,7 @@ export const previewNodeDeletion = async ({
   id,
   ...participant
 }: RoadmapParticipant & { id: string }) => {
-  return previewChange(participant, { kind: 'delete-node', nodeId: requireUuid(id, 'nodeId') });
+  return readChangeImpact(participant, { kind: 'delete-node', nodeId: requireUuid(id, 'nodeId') });
 };
 
 const nodeDeletion = roadmapCommand({
@@ -382,7 +382,7 @@ const nodeDeletion = roadmapCommand({
   access: 'roadmap',
   conflictMessage: 'La eliminación entra en conflicto con otra modificación.',
   run: async ({ tx, roadmap, input: { nodeId, previewVersion } }) => {
-    const { impact } = await confirmPreviewedChange(
+    const { impact } = await persistConfirmedChange(
       tx,
       roadmap.id,
       { kind: 'delete-node', nodeId },
@@ -509,7 +509,7 @@ export const createRoadmapDependency = roadmapCommand({
   access: 'roadmap',
   conflictMessage: 'La dependencia entra en conflicto con otra modificación.',
   run: async ({ tx, roadmap, input: { dependency: input, previewVersion } }) => {
-    const { snapshot, impact } = await confirmPreviewedChange(
+    const { snapshot, impact } = await persistConfirmedChange(
       tx,
       roadmap.id,
       dependencyChange(input),
@@ -527,7 +527,7 @@ export const previewRoadmapDependency = async ({
   input,
   ...participant
 }: RoadmapParticipant & { input: JsonObject }) => {
-  return previewChange(participant, dependencyChange(parseDependency({ input })));
+  return readChangeImpact(participant, dependencyChange(parseDependency({ input })));
 };
 
 export const deleteRoadmapDependency = roadmapCommand({
@@ -572,7 +572,7 @@ export const previewNodeVisibility = async ({
   id,
   ...participant
 }: RoadmapParticipant & { id: string }) => {
-  return previewChange(participant, { kind: 'hide-node', nodeId: requireUuid(id, 'nodeId') });
+  return readChangeImpact(participant, { kind: 'hide-node', nodeId: requireUuid(id, 'nodeId') });
 };
 
 type TeacherBlockRequest = { id: string; operation: TeacherBlockOperation };
@@ -586,7 +586,7 @@ export const previewTeacherBlock = async ({
   operation,
   ...participant
 }: RoadmapParticipant & TeacherBlockRequest) => {
-  return previewChange(participant, teacherBlockChange({ id, operation }));
+  return readChangeImpact(participant, teacherBlockChange({ id, operation }));
 };
 
 export const changeTeacherBlock = roadmapCommand({
@@ -597,7 +597,7 @@ export const changeTeacherBlock = roadmapCommand({
   }),
   access: 'roadmap',
   run: async ({ tx, roadmap, input: { change, previewVersion } }) => {
-    const { impact } = await confirmPreviewedChange(tx, roadmap.id, change, previewVersion);
+    const { impact } = await persistConfirmedChange(tx, roadmap.id, change, previewVersion);
     return { result: impact, facts: [] };
   },
 });

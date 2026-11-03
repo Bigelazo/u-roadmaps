@@ -8,7 +8,7 @@ import type {
   Resource,
   RoadmapDto,
   TeacherBlockImpact,
-  TeacherBlockPreview,
+  TeacherBlockOperationImpact,
 } from '@/features/roadmap/types';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
@@ -239,13 +239,13 @@ export function roadmapDependencyDeletionConfirmation(
 type RoadmapTeacherBlockConfirmationInput = {
   roadmap: RoadmapConfirmationRoadmap;
   nodeId: string;
-  preview: TeacherBlockPreview;
-  individualPreview?: TeacherBlockPreview;
-  branchPreview?: TeacherBlockPreview;
+  preview: TeacherBlockOperationImpact;
+  individualPreview?: TeacherBlockOperationImpact;
+  branchPreview?: TeacherBlockOperationImpact;
 };
 
 function affectedTitles(
-  preview: TeacherBlockPreview,
+  preview: TeacherBlockOperationImpact,
   nodeId: string,
   relation?: TeacherBlockImpact['relation'],
 ) {
