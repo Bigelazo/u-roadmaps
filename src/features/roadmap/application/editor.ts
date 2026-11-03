@@ -610,14 +610,6 @@ function calendarDayDate(day: CalendarDay) {
   return new Date(`${day}T00:00:00.000Z`);
 }
 
-async function dueScheduledUnlocks(
-  client: Prisma.TransactionClient,
-  roadmapId: string,
-  today: CalendarDay,
-) {
-  return [...dueScheduledUnlockNodeIds(await loadRoadmapSnapshot(client, roadmapId, today))];
-}
-
 export const scheduleTeacherUnlock = roadmapCommand({
   capability: 'edit',
   parse: ({ id, unlockOn }: { id: string; unlockOn: unknown }) => {
@@ -665,7 +657,6 @@ export const releaseScheduledTeacherUnlocks = async (
   const released = [];
   for (const roadmap of roadmaps) {
     try {
-      if ((await dueScheduledUnlocks(prisma, roadmap.id, today)).length === 0) continue;
       const releasedNodeIds = await roadmapChangeTransaction(
         changePort,
         (transaction, report) =>
@@ -680,7 +671,11 @@ export const releaseScheduledTeacherUnlocks = async (
               lock: 'update',
             },
             async () => {
-              const unblockedNodeIds = await dueScheduledUnlocks(transaction, roadmap.id, today);
+              const unblockedNodeIds = [
+                ...dueScheduledUnlockNodeIds(
+                  await loadRoadmapSnapshot(transaction, roadmap.id, today),
+                ),
+              ];
               await persistConsequences(transaction, {
                 blockedNodeIds: [],
                 unblockedNodeIds,
