@@ -376,7 +376,7 @@ describe('RoadmapCanvasSession', () => {
     expect(screen.getByRole('button', { name: 'Límites' })).not.toBeNull();
   });
 
-  test('routes current teaching Canvas preview through the session and isolates simulated Completions', async () => {
+  test('routes current teaching Canvas preview through the session and isolates Canvas preview Completions', async () => {
     const user = userEvent.setup();
     const persistence = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
     renderSession(persistence);

@@ -80,5 +80,5 @@ export type PracticeCanvasAction =
   | { readonly type: 'addResource'; readonly nodeId: string }
   | { readonly type: 'deleteNode'; readonly nodeId: string }
   | { readonly type: 'enterCanvasPreview' }
-  | { readonly type: 'completeSimulatedNode'; readonly nodeId: string }
+  | { readonly type: 'completeCanvasPreviewNode'; readonly nodeId: string }
   | { readonly type: 'exitCanvasPreview' };

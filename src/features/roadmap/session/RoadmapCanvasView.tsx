@@ -79,8 +79,8 @@ const NodeEditor = dynamic(
 
 type Props = { input: RoadmapCanvasSessionInput };
 
-function RoadmapCanvasLoading({ isSimulation = false }: { isSimulation?: boolean }) {
-  const title = isSimulation ? 'Cargando simulación...' : 'Cargando roadmap...';
+function RoadmapCanvasLoading({ isCanvasPreview = false }: { isCanvasPreview?: boolean }) {
+  const title = isCanvasPreview ? 'Cargando simulación...' : 'Cargando roadmap...';
 
   return (
     <section
@@ -95,7 +95,7 @@ function RoadmapCanvasLoading({ isSimulation = false }: { isSimulation?: boolean
           </EmptyMedia>
           <EmptyTitle>{title}</EmptyTitle>
           <EmptyDescription>
-            {isSimulation
+            {isCanvasPreview
               ? 'Preparando la vista de estudiante.'
               : 'Preparando los nodos y sus conexiones.'}
           </EmptyDescription>
@@ -209,7 +209,7 @@ function useRoadmapCanvasController({ input }: Props) {
     retryRefresh,
     accessLost,
     canvasCommands,
-    simulationRoadmap,
+    canvasPreviewRoadmap,
     canvasPreviewWorkflow,
     isClosed,
   } = useRoadmapCanvasSession(input, {
@@ -297,7 +297,7 @@ function useRoadmapCanvasController({ input }: Props) {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [canEditRoadmap, closeTeacherPreview, isCanvasPreview, isEditorOpen, teacherPreviewNode]);
 
-  const displayedRoadmap = isCanvasPreview ? simulationRoadmap : roadmap;
+  const displayedRoadmap = isCanvasPreview ? canvasPreviewRoadmap : roadmap;
   const accessibleNodeIds = useMemo(() => {
     if (!roadmap) return new Set<string>();
     return new Set(
@@ -504,7 +504,7 @@ export function RoadmapCanvasView({ input }: Props) {
     return <RoadmapCanvasLoading />;
   }
   if (!displayedRoadmap || !graphProjection) {
-    return <RoadmapCanvasLoading isSimulation />;
+    return <RoadmapCanvasLoading isCanvasPreview />;
   }
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
   const addNodeAtOpenPosition = (

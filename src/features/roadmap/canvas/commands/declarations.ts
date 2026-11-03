@@ -205,8 +205,8 @@ export const commandDeclarations: {
   'add-node-type': { success: () => 'Tipo de nodo creado exitosamente.' },
   'update-node-type': { success: () => 'Tipo de nodo guardado exitosamente.' },
   'complete-node': { success: completionSuccess },
-  'complete-simulated-node': {
+  'complete-canvas-preview-node': {
     success: completionSuccess,
-    report: ({ nodeId }) => ({ type: 'completeSimulatedNode', nodeId }),
+    report: ({ nodeId }) => ({ type: 'completeCanvasPreviewNode', nodeId }),
   },
 };

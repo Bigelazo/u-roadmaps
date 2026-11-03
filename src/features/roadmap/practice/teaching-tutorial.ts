@@ -218,7 +218,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       prepare: () => clickElement('button[aria-label="Centrar mapa"]'),
       description: 'Abre Introducción y presiona "Completar", como lo haría un estudiante.',
       advanceWhen: (action) =>
-        action.type === 'completeSimulatedNode' && action.nodeId === practiceNodeIds.a,
+        action.type === 'completeCanvasPreviewNode' && action.nodeId === practiceNodeIds.a,
     },
     {
       element: canvas,

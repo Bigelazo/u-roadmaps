@@ -743,15 +743,15 @@ describe('canvas commands', () => {
     expect(canvas.onCommandApplied).not.toHaveBeenCalled();
   });
 
-  test('resetting the Canvas preview asks first, then clears simulated Completions and reloads the preview', async () => {
+  test('resetting the Canvas preview asks first, then clears Canvas preview progress and reloads the preview', async () => {
     const canvas = await openCanvas();
     await act(async () => {
-      await canvas.session().loadSimulation();
-      await canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' });
+      await canvas.session().loadCanvasPreview();
+      await canvas.commands().request({ kind: 'complete-canvas-preview-node', nodeId: 'limits' });
     });
-    const simulatedCompletion = () =>
-      canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits');
-    expect(simulatedCompletion()).toMatchObject({ isCompleted: true });
+    const canvasPreviewCompletion = () =>
+      canvas.session().canvasPreviewRoadmap?.nodes.find(({ id }) => id === 'limits');
+    expect(canvasPreviewCompletion()).toMatchObject({ isCompleted: true });
 
     await act(() => canvas.commands().request({ kind: 'reset-canvas-preview' }));
     expect(await canvas.awaiting()).toEqual({
@@ -760,12 +760,12 @@ describe('canvas commands', () => {
       impact: null,
       phase: 'awaiting',
     });
-    expect(simulatedCompletion()).toMatchObject({ isCompleted: true });
+    expect(canvasPreviewCompletion()).toMatchObject({ isCompleted: true });
 
     await canvas.confirm('reset-canvas-preview');
 
     expect(canvas.commands().pending).toBeNull();
-    expect(simulatedCompletion()).toMatchObject({ isCompleted: false });
+    expect(canvasPreviewCompletion()).toMatchObject({ isCompleted: false });
     expect((await canvas.persistence.loadCanvasPreview()).nodes[0]).toMatchObject({
       isCompleted: false,
     });
@@ -1248,19 +1248,19 @@ describe('canvas commands', () => {
     test('completing a Node in the Canvas preview reloads only the preview, shows the student toast and reports it', async () => {
       const canvas = await openCanvas();
       await act(async () => {
-        await canvas.session().loadSimulation();
+        await canvas.session().loadCanvasPreview();
       });
 
       await act(() =>
-        canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' }),
+        canvas.commands().request({ kind: 'complete-canvas-preview-node', nodeId: 'limits' }),
       );
 
       expect(
-        canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits'),
+        canvas.session().canvasPreviewRoadmap?.nodes.find(({ id }) => id === 'limits'),
       ).toMatchObject({ isCompleted: true });
       expect(await nodeOf(canvas.persistence, 'limits')).not.toHaveProperty('isCompleted');
       expect(successToasts()).toEqual(['Nodo completado.']);
-      expect(canvas.reported()).toEqual([{ type: 'completeSimulatedNode', nodeId: 'limits' }]);
+      expect(canvas.reported()).toEqual([{ type: 'completeCanvasPreviewNode', nodeId: 'limits' }]);
     });
   });
 
@@ -1309,7 +1309,7 @@ describe('canvas commands', () => {
       ]);
     });
 
-    test('reports a simulated Completion whose preview reload a newer one superseded', async () => {
+    test('reports a Canvas preview Completion whose preview reload a newer one superseded', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
       let holdNextPreviewLoad = false;
       let releasePreviewLoad: (() => void) | undefined;
@@ -1324,20 +1324,20 @@ describe('canvas commands', () => {
         },
       });
       await act(async () => {
-        await canvas.session().loadSimulation();
+        await canvas.session().loadCanvasPreview();
       });
 
       holdNextPreviewLoad = true;
       let completion: Promise<boolean> | undefined;
       act(() => {
         completion = canvas.commands().request({
-          kind: 'complete-simulated-node',
+          kind: 'complete-canvas-preview-node',
           nodeId: 'limits',
         });
       });
       await waitFor(() => expect(releasePreviewLoad).toBeDefined());
       await act(async () => {
-        await canvas.session().loadSimulation();
+        await canvas.session().loadCanvasPreview();
       });
       let applied: boolean | undefined;
       await act(async () => {
@@ -1348,9 +1348,9 @@ describe('canvas commands', () => {
       expect(applied).toBe(true);
       expect(canvas.session().error).toBeNull();
       expect(
-        canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits'),
+        canvas.session().canvasPreviewRoadmap?.nodes.find(({ id }) => id === 'limits'),
       ).toMatchObject({ isCompleted: true });
-      expect(canvas.reported()).toEqual([{ type: 'completeSimulatedNode', nodeId: 'limits' }]);
+      expect(canvas.reported()).toEqual([{ type: 'completeCanvasPreviewNode', nodeId: 'limits' }]);
     });
 
     test('a confirmed write whose Roadmap reload fails still took effect: it is reported and the reload failure shown', async () => {
@@ -1391,7 +1391,7 @@ describe('canvas commands', () => {
 
       await enter();
       await act(() =>
-        canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' }),
+        canvas.commands().request({ kind: 'complete-canvas-preview-node', nodeId: 'limits' }),
       );
       await act(() =>
         canvas.commands().request({
@@ -1404,7 +1404,7 @@ describe('canvas commands', () => {
 
       expect(canvas.reported()).toEqual([
         { type: 'enterCanvasPreview' },
-        { type: 'completeSimulatedNode', nodeId: 'limits' },
+        { type: 'completeCanvasPreviewNode', nodeId: 'limits' },
         { type: 'enterCanvasPreview' },
       ]);
     });

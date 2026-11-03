@@ -274,7 +274,7 @@ const executions: Record<string, Execution> = {
     requests: [['/node-types/type-1', { method: 'DELETE' }]],
   },
   'complete a Node in the Canvas preview': {
-    command: { kind: 'complete-simulated-node', nodeId: 'node-1' },
+    command: { kind: 'complete-canvas-preview-node', nodeId: 'node-1' },
     requests: [['/simulation/nodes/node-1/completion', { method: 'POST' }]],
   },
   'reset the Canvas preview': {

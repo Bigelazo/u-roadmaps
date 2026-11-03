@@ -224,7 +224,7 @@ export function createInMemoryRoadmapSessionPersistence(
   const studentCompletions = options.studentProgress
     ? new Set(options.studentProgress.completedNodeIds)
     : null;
-  let simulatedCompletions = new Set<string>();
+  let canvasPreviewCompletions = new Set<string>();
 
   const mutateNode = (nodeId: string, update: (node: AnyRoadmapNode) => AnyRoadmapNode) => {
     roadmap = replaceRoadmapNode(roadmap, nodeId, update);
@@ -428,7 +428,7 @@ export function createInMemoryRoadmapSessionPersistence(
     },
 
     async loadCanvasPreview() {
-      return asStudentRoadmap(roadmap, simulatedCompletions);
+      return asStudentRoadmap(roadmap, canvasPreviewCompletions);
     },
 
     async preview(command) {
@@ -503,11 +503,11 @@ export function createInMemoryRoadmapSessionPersistence(
           return updateNodeType(command.nodeTypeId, command.nodeType);
         case 'delete-node-type':
           return deleteNodeType(command.nodeTypeId);
-        case 'complete-simulated-node':
-          simulatedCompletions = new Set([...simulatedCompletions, command.nodeId]);
+        case 'complete-canvas-preview-node':
+          canvasPreviewCompletions = new Set([...canvasPreviewCompletions, command.nodeId]);
           return;
         case 'reset-canvas-preview':
-          simulatedCompletions = new Set();
+          canvasPreviewCompletions = new Set();
           return;
       }
     },

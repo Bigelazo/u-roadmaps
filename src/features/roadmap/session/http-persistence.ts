@@ -168,7 +168,7 @@ const routes: { readonly [Kind in CanvasCommand['kind']]: Route<Kind> } = {
     requests: ({ nodeId }) => ({ method: 'POST', path: `/nodes/${nodeId}/completion` }),
     failure: 'No se pudo completar el nodo.',
   },
-  'complete-simulated-node': {
+  'complete-canvas-preview-node': {
     requests: ({ nodeId }) => ({ method: 'POST', path: `/simulation/nodes/${nodeId}/completion` }),
     failure: 'No se pudo completar el nodo en la previsualización.',
   },

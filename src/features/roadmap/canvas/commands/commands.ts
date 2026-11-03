@@ -65,7 +65,7 @@ export type CanvasCommand =
       readonly nodeType: RoadmapNodeTypeInput;
     }
   | { readonly kind: 'complete-node'; readonly nodeId: string }
-  | { readonly kind: 'complete-simulated-node'; readonly nodeId: string };
+  | { readonly kind: 'complete-canvas-preview-node'; readonly nodeId: string };
 
 export type CanvasCommandOf<Kind extends CanvasCommand['kind']> = Extract<
   CanvasCommand,
