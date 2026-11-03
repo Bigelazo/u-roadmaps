@@ -75,20 +75,6 @@ export function visibleRoadmapGraph<
   };
 }
 
-export function dependencyTeacherBlockImpact(
-  nodes: readonly { id: string; title: string; isVisible: boolean; isTeacherBlocked: boolean }[],
-  dependencies: readonly RoadmapGraphDependency[],
-  targetNodeId: string,
-) {
-  const affectedNodeIds = new Set([
-    targetNodeId,
-    ...transitiveDependentNodeIds(dependencies, targetNodeId),
-  ]);
-  return nodes
-    .filter((node) => node.isVisible && !node.isTeacherBlocked && affectedNodeIds.has(node.id))
-    .map(({ id, title }) => ({ id, title }));
-}
-
 export function wouldCreateDependencyCycle(
   dependencies: readonly RoadmapGraphDependency[],
   sourceNodeId: string,

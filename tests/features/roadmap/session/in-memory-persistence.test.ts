@@ -259,6 +259,34 @@ test('rejects confirming a hide, a Dependency, a deletion or a Teacher block who
   expect((await persistence.load()).nodes.map(({ id }) => id)).not.toContain('prerequisite');
 });
 
+test('a confirmed Dependency from a Teacher-blocked Node blocks the Nodes its Change impact lists', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence({
+    ...roadmap,
+    nodes: [...roadmap.nodes, independent],
+  });
+  const connect = {
+    kind: 'create-dependency',
+    sourceNodeId: 'dependent',
+    targetNodeId: 'independent',
+    sourceHandle: 'right',
+    targetHandle: 'left',
+  } as const;
+
+  expect(await persistence.readChangeImpact(connect)).toMatchObject({
+    nodes: [{ id: 'independent', title: 'Independiente' }],
+  });
+  await executeWithChangeImpact(persistence, connect);
+
+  expect(await persistence.load()).toMatchObject({
+    nodes: expect.arrayContaining([
+      expect.objectContaining({ id: 'independent', isTeacherBlocked: true }),
+    ]),
+    dependencies: expect.arrayContaining([
+      expect.objectContaining({ sourceNodeId: 'dependent', targetNodeId: 'independent' }),
+    ]),
+  });
+});
+
 test('follows the Node type rules with the messages of production', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
   const workshop = { name: 'Taller', icon: 'Shapes', color: '#024AD8' } as const;

@@ -2,11 +2,15 @@ import { resourceEditError } from '@/features/roadmap/domain/resource';
 import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
+  confirmChange,
   decideChangeImpactVersion,
+  planChange,
+  versionChangeImpact,
+  type ChangeConsequences,
   type ChangeWithImpact,
+  type RoadmapSnapshot,
 } from '@/features/roadmap/domain/change-impact';
 import { studentRoadmapNodes } from '@/features/roadmap/domain/participant-view';
-import { decideDependency } from '@/features/roadmap/domain/dependency';
 import { decideNodeTypeChange, type NodeTypeChange } from '@/features/roadmap/domain/node-type';
 import { decideVisibilityChange } from '@/features/roadmap/domain/node-visibility';
 import {
@@ -17,7 +21,6 @@ import { decideTeacherBlock } from '@/features/roadmap/domain/teacher-block';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
   AnyRoadmapDto,
-  DependencyImpact,
   NodeDeletionImpact,
   NodeHidingImpact,
   Resource,
@@ -108,10 +111,6 @@ function resourceUpdate(
   } as AnyRoadmapDto;
 }
 
-function versioned<Impact extends object>(impact: Impact) {
-  return { ...impact, version: JSON.stringify(impact) };
-}
-
 function rejectStalePreview(
   change: ChangeWithImpact,
   sentVersion: string | undefined,
@@ -125,22 +124,18 @@ function teachingNodes(roadmap: AnyRoadmapDto) {
   return roadmap.nodes.filter((node): node is RoadmapNode => 'isTeacherBlocked' in node);
 }
 
-function dependencyImpact(
-  roadmap: AnyRoadmapDto,
-  { sourceNodeId, targetNodeId }: RoadmapDependencyRequest,
-): DependencyImpact {
-  const decision = decideDependency({
-    nodes: teachingNodes(roadmap),
-    dependencies: roadmap.dependencies,
-    sourceNodeId,
-    targetNodeId,
-  });
-  if (decision.kind === 'REJECTED') throw new Error(decision.message);
-  return versioned({ nodes: decision.teacherBlockedNodes });
+function snapshotOf(roadmap: AnyRoadmapDto): RoadmapSnapshot {
+  return { ...roadmap, nodes: teachingNodes(roadmap), today: chileCalendarDay() };
+}
+
+function dependencyImpact(roadmap: AnyRoadmapDto, request: RoadmapDependencyRequest) {
+  const plan = planChange(snapshotOf(roadmap), { kind: 'create-dependency', ...request });
+  if (plan.kind === 'REJECTED') throw new Error(plan.message);
+  return plan.impact;
 }
 
 function hidingImpact(roadmap: AnyRoadmapDto, nodeId: string): NodeHidingImpact {
-  return versioned({
+  return versionChangeImpact({
     dependencies: decideVisibilityChange({
       nodeId,
       isVisible: false,
@@ -164,7 +159,7 @@ function deletionImpact(roadmap: AnyRoadmapDto, nodeId: string): NodeDeletionImp
   const { name, icon, color } = nodeTypeFor(roadmap, nodeId);
   const titleOf = (id: string) =>
     roadmap.nodes.find((candidate) => candidate.id === id)?.title ?? '';
-  return versioned({
+  return versionChangeImpact({
     node: { title: node?.title ?? '', nodeType: { name, icon, color } },
     dependencies: incidentDependencies(roadmap, nodeId).map(
       ({ id, sourceNodeId, targetNodeId }) => ({
@@ -200,7 +195,7 @@ function teacherBlockPreview(
 ): TeacherBlockPreview {
   const decision = teacherBlockDecision(roadmap, nodeId, operation);
   if (decision.kind === 'REJECTED') throw new Error(decision.message);
-  return versioned({ mode: decision.mode, nodes: decision.nodes });
+  return versionChangeImpact({ mode: decision.mode, nodes: decision.nodes });
 }
 
 /** Applies every Node move of a batch, then rethrows the first failure, as the HTTP adapter does. */
@@ -313,9 +308,27 @@ export function createInMemoryRoadmapSessionPersistence(
     return id;
   };
 
+  const applyConsequences = (consequences: ChangeConsequences) => {
+    const blocked = new Set(consequences.blockedNodeIds);
+    const unblocked = new Set(consequences.unblockedNodeIds);
+    const removed = new Set(consequences.removedDependencyIds);
+    roadmap = {
+      ...roadmap,
+      nodes: roadmap.nodes.map((node) => {
+        if (!('isTeacherBlocked' in node)) return node;
+        if (blocked.has(node.id)) return { ...node, isTeacherBlocked: true };
+        if (unblocked.has(node.id))
+          return { ...node, isTeacherBlocked: false, teacherUnlockOn: undefined };
+        return node;
+      }),
+      dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
+    } as AnyRoadmapDto;
+  };
+
   const connectNodes = (request: RoadmapDependencyRequest, previewVersion?: string) => {
-    const impact = dependencyImpact(roadmap, request);
-    rejectStalePreview('dependency', previewVersion, impact);
+    const change = { kind: 'create-dependency', ...request } as const;
+    const plan = confirmChange(snapshotOf(roadmap), change, previewVersion);
+    if (plan.kind === 'REJECTED') throw new Error(plan.message);
     const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = request;
     const dependency: RoadmapDependency = {
       id: crypto.randomUUID(),
@@ -324,15 +337,8 @@ export function createInMemoryRoadmapSessionPersistence(
       sourceHandle,
       targetHandle,
     };
-    roadmap = {
-      ...roadmap,
-      dependencies: [...roadmap.dependencies, dependency],
-      nodes: roadmap.nodes.map((node) =>
-        impact.nodes.some(({ id }) => id === node.id) && 'isTeacherBlocked' in node
-          ? { ...node, isTeacherBlocked: true }
-          : node,
-      ),
-    } as AnyRoadmapDto;
+    roadmap = { ...roadmap, dependencies: [...roadmap.dependencies, dependency] };
+    applyConsequences(plan.consequences);
   };
 
   const changeTeacherBlock = (
