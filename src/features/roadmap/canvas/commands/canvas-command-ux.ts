@@ -3,64 +3,71 @@ import {
   type CanvasCommand,
   type CanvasCommandOf,
   type CanvasConfirmationChoice,
+  type ChangeImpactCommand,
   type ChangeImpactOf,
   type ConfirmedActionKind,
+  type PersistedCommand,
+  type ReadChangeImpactOf,
   type TeacherBlockChangeImpact,
 } from '@/features/roadmap/canvas/commands/commands';
-import type {
-  PracticeCanvasAction,
-  PreviewImpactOf,
-  PreviewedCommand,
-} from '@/features/roadmap/session/types';
+import type { ExecutionResult, PracticeCanvasAction } from '@/features/roadmap/session/types';
 import type { TeacherBlockOperation } from '@/features/roadmap/types';
 
 /** The two guarded session operations the command engine runs commands through. */
 export type CanvasCommandSession = {
   /** Resolves with nothing once the failure is reported or the Course offering changed. */
-  preview: <Command extends PreviewedCommand>(
+  readChangeImpact: <Command extends ChangeImpactCommand>(
     command: Command,
-  ) => Promise<PreviewImpactOf[Command['kind']] | null>;
+  ) => Promise<ReadChangeImpactOf<Command['kind']> | null>;
   execute: (
-    command: CanvasCommand,
+    command: PersistedCommand,
     previewVersion?: string,
-  ) => Promise<{ readonly applied: boolean; readonly createdNodeId?: string }>;
+  ) => Promise<{ readonly applied: boolean } & ExecutionResult>;
 };
 
-export type CommandOutcome<Kind extends CanvasCommand['kind']> = {
+export type CommandOutcome<Kind extends CanvasCommand['kind']> = ExecutionResult & {
   readonly choice?: CanvasConfirmationChoice;
-  readonly createdNodeId?: string;
   /** The part of a Dependency deletion left pending for retry. */
   readonly remaining?: CanvasCommandOf<Kind>;
 };
 
-/**
- * How a Confirmed action asks first. By default it asks without a Change impact; with
- * `impact: 'preview'` it reads its Change impact with `preview(command)`. It applies with
- * `execute(command, impact.version)` unless `apply` overrides it.
- */
-export type Confirmation<Kind extends ConfirmedActionKind> = {
-  impact?:
-    | 'preview'
-    | ((
-        session: CanvasCommandSession,
-        command: CanvasCommandOf<Kind>,
-      ) => Promise<ChangeImpactOf[Kind] | null>);
-  needsConfirmation?: (impact: ChangeImpactOf[Kind]) => boolean;
-  apply?: (
+// The members below are methods, so that one kind's entry reads as an entry for any kind.
+
+/** How a Confirmed action reads its Change impact, if it has one, and applies once confirmed. */
+export type ConfirmedAction<Kind extends ConfirmedActionKind> = {
+  impact?(
+    session: CanvasCommandSession,
+    command: CanvasCommandOf<Kind>,
+  ): Promise<ChangeImpactOf[Kind] | null>;
+  needsConfirmation?(impact: ChangeImpactOf[Kind]): boolean;
+  apply(
     session: CanvasCommandSession,
     command: CanvasCommandOf<Kind>,
     impact: ChangeImpactOf[Kind],
     choice: CanvasConfirmationChoice | undefined,
-  ) => Promise<boolean | { retry: CanvasCommandOf<Kind> }>;
+  ): Promise<boolean | { retry: CanvasCommandOf<Kind> }>;
 };
 
-export type CommandDeclaration<Kind extends CanvasCommand['kind']> = {
-  success?: (command: CanvasCommandOf<Kind>, outcome: CommandOutcome<Kind>) => string;
-  report?: (
+/** What the user sees of a command: its success message, Practice report and Confirmed action. */
+export type CanvasCommandUx<Kind extends CanvasCommand['kind']> = {
+  success?(command: CanvasCommandOf<Kind>, outcome: CommandOutcome<Kind>): string;
+  report?(
     command: CanvasCommandOf<Kind>,
     outcome: CommandOutcome<Kind>,
-  ) => PracticeCanvasAction | null;
-} & (Kind extends ConfirmedActionKind ? { confirmation: Confirmation<Kind> } : unknown);
+  ): PracticeCanvasAction | null;
+} & (Kind extends ConfirmedActionKind ? { confirmedAction: ConfirmedAction<Kind> } : unknown);
+
+const readChangeImpact = <Command extends ChangeImpactCommand>(
+  session: CanvasCommandSession,
+  command: Command,
+) => session.readChangeImpact(command);
+
+/** Applies a Confirmed action as requested, with the version of the Change impact it showed. */
+const executeAsRequested = async (
+  session: CanvasCommandSession,
+  command: PersistedCommand,
+  impact: { readonly version: string } | null,
+) => (await session.execute(command, impact?.version)).applied;
 
 const teacherBlockImpactOperations = (operation: TeacherBlockOperation) =>
   operation === 'BLOCK' ? (['BLOCK'] as const) : (['UNBLOCK', 'BRANCH_UNLOCK'] as const);
@@ -86,30 +93,30 @@ const teacherBlockSuccess: Readonly<Record<TeacherBlockOperation, string>> = {
 
 const completionSuccess = () => 'Nodo completado.';
 
-export const commandDeclarations: {
-  readonly [Kind in CanvasCommand['kind']]: CommandDeclaration<Kind>;
+export const canvasCommandUx: {
+  readonly [Kind in CanvasCommand['kind']]: CanvasCommandUx<Kind>;
 } = {
   'hide-node': {
-    confirmation: { impact: 'preview' },
+    confirmedAction: { impact: readChangeImpact, apply: executeAsRequested },
     success: () => 'Nodo ocultado exitosamente.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: false }),
   },
   'show-node': {
-    confirmation: {},
+    confirmedAction: { apply: executeAsRequested },
     success: () => 'Nodo visible para estudiantes.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: true }),
   },
   'delete-node': {
-    confirmation: { impact: 'preview' },
+    confirmedAction: { impact: readChangeImpact, apply: executeAsRequested },
     success: () => 'Nodo eliminado exitosamente.',
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   },
   'change-teacher-block': {
-    confirmation: {
+    confirmedAction: {
       impact: async (session, command) => {
         const operations = teacherBlockImpactOperations(command.operation);
         const impacts = await Promise.all(
-          operations.map((operation) => session.preview({ ...command, operation })),
+          operations.map((operation) => session.readChangeImpact({ ...command, operation })),
         );
         const impact: TeacherBlockChangeImpact = Object.fromEntries(
           operations.flatMap((operation, index) =>
@@ -135,7 +142,11 @@ export const commandDeclarations: {
     }),
   },
   'create-dependency': {
-    confirmation: { impact: 'preview', needsConfirmation: (impact) => impact.nodes.length > 0 },
+    confirmedAction: {
+      impact: readChangeImpact,
+      needsConfirmation: (impact) => impact.nodes.length > 0,
+      apply: executeAsRequested,
+    },
     success: () => 'Dependencia creada exitosamente.',
     report: ({ sourceNodeId, targetNodeId }) => ({
       type: 'connectNodes',
@@ -144,18 +155,13 @@ export const commandDeclarations: {
     }),
   },
   'delete-dependencies': {
-    confirmation: {
+    confirmedAction: {
       // One deletion per Dependency, so that only the failed ones stay pending for retry.
       apply: async (session, command) => {
         const deleted = await Promise.all(
           command.dependencyIds.map(
             async (dependencyId) =>
-              (
-                await session.execute({
-                  kind: 'delete-dependencies',
-                  dependencyIds: [dependencyId],
-                })
-              ).applied,
+              (await session.execute({ kind: 'delete-dependency', dependencyId })).applied,
           ),
         );
         const failed = command.dependencyIds.filter((_, index) => !deleted[index]);
@@ -170,15 +176,15 @@ export const commandDeclarations: {
         : 'Dependencias eliminadas exitosamente.',
   },
   'apply-automatic-layout': {
-    confirmation: {},
+    confirmedAction: { apply: executeAsRequested },
     success: () => 'Nodos ordenados exitosamente.',
   },
   'delete-node-type': {
-    confirmation: {},
+    confirmedAction: { apply: executeAsRequested },
     success: () => 'Tipo de nodo eliminado exitosamente.',
   },
   'reset-canvas-preview': {
-    confirmation: {},
+    confirmedAction: { apply: executeAsRequested },
     success: () => 'Progreso de previsualización reiniciado.',
   },
   'add-node': {

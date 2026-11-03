@@ -1,14 +1,14 @@
-import type { CanvasCommand, CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type {
+  ChangeImpactCommand,
+  PersistedCommand,
+  ReadChangeImpactOf,
+} from '@/features/roadmap/canvas/commands/commands';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import type {
   AnyRoadmapDto,
   CourseOfferingIdentifier,
-  DependencyImpact,
-  NodeDeletionImpact,
-  NodeHidingImpact,
   StudentRoadmapDto,
   TeacherBlockOperation,
-  TeacherBlockPreview,
 } from '@/features/roadmap/types';
 import type { ResourceInput } from '@/features/roadmap/editor/types';
 
@@ -26,24 +26,17 @@ export type RoadmapNodeTypeInput = {
   color: NodeTypeColor;
 };
 
-export type PreviewImpactOf = {
-  'hide-node': NodeHidingImpact;
-  'delete-node': NodeDeletionImpact;
-  'change-teacher-block': TeacherBlockPreview;
-  'create-dependency': DependencyImpact;
-};
-
-export type PreviewedCommand = CanvasCommandOf<keyof PreviewImpactOf>;
+/** What executing a command resolves with: Node creation reports the created Node. */
+export type ExecutionResult = { readonly createdNodeId?: string };
 
 /** Persistence bound to one Course offering when it is created. */
 export type RoadmapCanvasSessionPersistence = {
   load(): Promise<AnyRoadmapDto>;
   loadCanvasPreview(): Promise<StudentRoadmapDto>;
-  preview<Command extends PreviewedCommand>(
+  readChangeImpact<Command extends ChangeImpactCommand>(
     command: Command,
-  ): Promise<PreviewImpactOf[Command['kind']]>;
-  /** Resolves with the created Node's identifier for Node creation. */
-  execute(command: CanvasCommand, previewVersion?: string): Promise<string | void>;
+  ): Promise<ReadChangeImpactOf<Command['kind']>>;
+  execute(command: PersistedCommand, previewVersion?: string): Promise<ExecutionResult | void>;
 };
 
 export type RoadmapCanvasExperience =

@@ -1,46 +1,53 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { roadmapUrl } from '@/features/roadmap/client';
-import type { CanvasCommand, CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 import type {
-  AnyRoadmapDto,
-  CourseOfferingIdentifier,
-  StudentRoadmapDto,
-} from '@/features/roadmap/types';
-import type {
-  PreviewImpactOf,
-  RoadmapCanvasSessionPersistence,
-} from '@/features/roadmap/session/types';
+  CanvasCommandOf,
+  ChangeImpactCommand,
+  PersistedCommand,
+} from '@/features/roadmap/canvas/commands/commands';
+import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
+import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
 type RouteRequest = {
-  readonly method: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  readonly method?: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   readonly path: string;
   readonly body?: object;
 };
 
-type Route<Kind extends CanvasCommand['kind']> = {
-  /** One request, or one per item for a batch. */
-  readonly requests: (command: CanvasCommandOf<Kind>) => RouteRequest | readonly RouteRequest[];
+type RequestOptions = {
+  readonly previewHeader?: string;
+  readonly previewVersion?: string;
+  readonly load?: 'roadmap' | 'canvas-preview';
+};
+
+// Routes declare methods, so that one kind's route reads as a route for any command.
+
+type Route<Kind extends PersistedCommand['kind']> = {
+  /** One request, or one per Node for a batch of Node moves. */
+  requests(command: CanvasCommandOf<Kind>): RouteRequest | readonly RouteRequest[];
   readonly previewHeader?: string;
   readonly failure: string;
 };
 
-type PreviewRoute<Kind extends keyof PreviewImpactOf> = {
-  readonly path: (command: CanvasCommandOf<Kind>) => string;
+type ChangeImpactRoute<Kind extends ChangeImpactCommand['kind']> = {
+  path(command: CanvasCommandOf<Kind>): string;
   readonly failure: string;
 };
 
-const nodeMove = ({ nodeId, position }: { nodeId: string; position: { x: number; y: number } }) =>
-  ({
-    method: 'PATCH',
-    path: `/nodes/${nodeId}`,
-    body: { positionX: position.x, positionY: position.y },
-  }) as const;
+const nodeMoves: Route<'move-nodes' | 'apply-automatic-layout'> = {
+  requests: ({ positions }) =>
+    positions.map(({ nodeId, position }) => ({
+      method: 'PATCH',
+      path: `/nodes/${nodeId}`,
+      body: { positionX: position.x, positionY: position.y },
+    })),
+  failure: 'No se pudo guardar la posición.',
+};
 
-const positionFailure = 'No se pudo guardar la posición.';
 const visibilityFailure = 'No se pudo cambiar la visibilidad.';
 const visibilityHeader = 'x-node-visibility-preview';
 
-const routes: { readonly [Kind in CanvasCommand['kind']]: Route<Kind> } = {
+const routes: { readonly [Kind in PersistedCommand['kind']]: Route<Kind> } = {
   'add-node': {
     requests: ({ node, position }) => ({
       method: 'POST',
@@ -62,11 +69,8 @@ const routes: { readonly [Kind in CanvasCommand['kind']]: Route<Kind> } = {
     }),
     failure: 'No se pudo guardar el nodo.',
   },
-  'move-nodes': { requests: ({ positions }) => positions.map(nodeMove), failure: positionFailure },
-  'apply-automatic-layout': {
-    requests: ({ positions }) => positions.map(nodeMove),
-    failure: positionFailure,
-  },
+  'move-nodes': nodeMoves,
+  'apply-automatic-layout': nodeMoves,
   'create-dependency': {
     requests: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) => ({
       method: 'POST',
@@ -76,9 +80,8 @@ const routes: { readonly [Kind in CanvasCommand['kind']]: Route<Kind> } = {
     previewHeader: 'x-dependency-preview',
     failure: 'No se pudo crear la dependencia.',
   },
-  'delete-dependencies': {
-    requests: ({ dependencyIds }) =>
-      dependencyIds.map((id) => ({ method: 'DELETE', path: `/dependencies/${id}` }) as const),
+  'delete-dependency': {
+    requests: ({ dependencyId }) => ({ method: 'DELETE', path: `/dependencies/${dependencyId}` }),
     failure: 'No se pudo eliminar la dependencia.',
   },
   'change-teacher-block': {
@@ -178,7 +181,9 @@ const routes: { readonly [Kind in CanvasCommand['kind']]: Route<Kind> } = {
   },
 };
 
-const previewRoutes: { readonly [Kind in keyof PreviewImpactOf]: PreviewRoute<Kind> } = {
+const changeImpactRoutes: {
+  readonly [Kind in ChangeImpactCommand['kind']]: ChangeImpactRoute<Kind>;
+} = {
   'hide-node': {
     path: ({ nodeId }) => `/nodes/${nodeId}?operation=HIDE`,
     failure: 'No se pudo calcular el impacto de ocultar el nodo.',
@@ -220,67 +225,64 @@ async function failureError(response: Response, failure: string) {
   return new Error(failure);
 }
 
-function requestInit({ method, body }: RouteRequest, previewHeaders: Record<string, string>) {
-  if (body instanceof FormData) return { method, body };
-  if (body === undefined)
-    return Object.keys(previewHeaders).length ? { method, headers: previewHeaders } : { method };
-  return {
-    method,
-    headers: { 'Content-Type': 'application/json', ...previewHeaders },
-    body: JSON.stringify(body),
-  };
-}
-
 export function createHttpRoadmapCanvasSessionPersistence(
   identifier: CourseOfferingIdentifier,
 ): RoadmapCanvasSessionPersistence {
+  /** Sends one request; a denied Roadmap load means the access was lost. */
   async function request(
-    path: string,
-    init: RequestInit,
+    { method, path, body }: RouteRequest,
     failure: string,
-    isLoad = false,
-  ): Promise<unknown> {
-    const response = await fetch(roadmapUrl(identifier, path), init);
+    { previewHeader, previewVersion, load }: RequestOptions = {},
+  ) {
+    const json = body !== undefined && !(body instanceof FormData);
+    const headers = {
+      ...(json && { 'Content-Type': 'application/json' }),
+      ...(previewHeader && previewVersion ? { [previewHeader]: previewVersion } : {}),
+    };
+    const response = await fetch(roadmapUrl(identifier, path), {
+      ...(method && { method }),
+      ...(load && { cache: 'no-store' }),
+      ...(Object.keys(headers).length > 0 && { headers }),
+      ...(body && { body: json ? JSON.stringify(body) : body }),
+    });
     if (!response.ok) {
       const error = await failureError(response, failure);
-      if (isLoad && [401, 403, 404].includes(response.status))
+      if (load === 'roadmap' && [401, 403, 404].includes(response.status))
         throw new RoadmapAccessLostError(error.message);
       throw error;
     }
-    return response.status === 204 ? undefined : response.json();
+    return response;
   }
 
-  const load = { cache: 'no-store' } as const;
-
   return {
-    load: () => request('', load, 'No se pudo cargar el roadmap.', true) as Promise<AnyRoadmapDto>,
+    load: async () =>
+      (await request({ path: '' }, 'No se pudo cargar el roadmap.', { load: 'roadmap' })).json(),
 
-    loadCanvasPreview: () =>
-      request(
-        '/simulation',
-        load,
-        'No se pudo cargar la previsualización.',
-      ) as Promise<StudentRoadmapDto>,
+    loadCanvasPreview: async () =>
+      (
+        await request({ path: '/simulation' }, 'No se pudo cargar la previsualización.', {
+          load: 'canvas-preview',
+        })
+      ).json(),
 
-    preview(command) {
-      const route = previewRoutes[command.kind] as PreviewRoute<typeof command.kind>;
-      return request(route.path(command as never), {}, route.failure) as never;
+    async readChangeImpact(command) {
+      const route: ChangeImpactRoute<ChangeImpactCommand['kind']> =
+        changeImpactRoutes[command.kind];
+      return (await request({ path: route.path(command) }, route.failure)).json();
     },
 
     async execute(command, previewVersion) {
-      const route = routes[command.kind] as Route<typeof command.kind>;
-      const previewHeaders =
-        route.previewHeader && previewVersion ? { [route.previewHeader]: previewVersion } : {};
-      const requests = route.requests(command as never);
+      const route: Route<PersistedCommand['kind']> = routes[command.kind];
+      const options = { previewHeader: route.previewHeader, previewVersion };
       const sent = await Promise.allSettled(
-        [requests]
-          .flat()
-          .map((item) => request(item.path, requestInit(item, previewHeaders), route.failure)),
+        [route.requests(command)].flat().map((item) => request(item, route.failure, options)),
       );
-      const failed = sent.find((result) => result.status === 'rejected');
-      if (failed) throw failed.reason;
+      const responses = sent.map((result) => {
+        if (result.status === 'rejected') throw result.reason;
+        return result.value;
+      });
       if (command.kind === 'add-node')
-        return (sent[0] as PromiseFulfilledResult<{ node: { id: string } }>).value.node.id;
+        return { createdNodeId: (await responses[0].json()).node.id };
     },
   };
 }

@@ -30,11 +30,13 @@ import type {
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
 import type { ResourceInput } from '@/features/roadmap/editor/types';
-import type { RoadmapNodePlacement } from '@/features/roadmap/canvas/commands/commands';
+import type {
+  ChangeImpactCommand,
+  ReadChangeImpactOf,
+  RoadmapNodePlacement,
+} from '@/features/roadmap/canvas/commands/commands';
 import type {
   NewRoadmapNode,
-  PreviewedCommand,
-  PreviewImpactOf,
   RoadmapCanvasSessionPersistence,
   RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
@@ -201,7 +203,7 @@ function teacherBlockPreview(
   return versioned({ mode: decision.mode, nodes: decision.nodes });
 }
 
-/** Applies every item of a batch, then rethrows the first failure, as the HTTP adapter does. */
+/** Applies every Node move of a batch, then rethrows the first failure, as the HTTP adapter does. */
 function settleEach<Item>(items: readonly Item[], apply: (item: Item) => void) {
   const failures: unknown[] = [];
   for (const item of items) {
@@ -431,8 +433,8 @@ export function createInMemoryRoadmapSessionPersistence(
       return asStudentRoadmap(roadmap, canvasPreviewCompletions);
     },
 
-    async preview(command) {
-      const impact = (): PreviewImpactOf[PreviewedCommand['kind']] => {
+    async readChangeImpact<Command extends ChangeImpactCommand>(command: Command) {
+      const impact = (): ReadChangeImpactOf<ChangeImpactCommand['kind']> => {
         switch (command.kind) {
           case 'hide-node':
             return hidingImpact(roadmap, command.nodeId);
@@ -444,7 +446,8 @@ export function createInMemoryRoadmapSessionPersistence(
             return dependencyImpact(roadmap, command);
         }
       };
-      return impact() as never;
+      // TypeScript cannot narrow the generic result per case; each case reads its kind's impact.
+      return impact() as ReadChangeImpactOf<Command['kind']>;
     },
 
     async execute(command, previewVersion) {
@@ -452,7 +455,7 @@ export function createInMemoryRoadmapSessionPersistence(
         case 'complete-node':
           return complete(command.nodeId);
         case 'add-node':
-          return addNode(command.node, command.position);
+          return { createdNodeId: addNode(command.node, command.position) };
         case 'update-node':
           return mutateNode(
             command.nodeId,
@@ -469,8 +472,8 @@ export function createInMemoryRoadmapSessionPersistence(
           return moveNodes(command.positions);
         case 'create-dependency':
           return connectNodes(command, previewVersion);
-        case 'delete-dependencies':
-          return settleEach(command.dependencyIds, deleteDependency);
+        case 'delete-dependency':
+          return deleteDependency(command.dependencyId);
         case 'change-teacher-block':
           return changeTeacherBlock(command.nodeId, command.operation, previewVersion);
         case 'schedule-teacher-unlock':

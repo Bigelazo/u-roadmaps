@@ -1,8 +1,10 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import type {
+  ChangeImpactCommand,
+  PersistedCommand,
+} from '@/features/roadmap/canvas/commands/commands';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import { RoadmapAccessLostError, RoadmapClosedError } from '@/features/roadmap/session/access-lost';
-import type { PreviewedCommand } from '@/features/roadmap/session/types';
 
 const http = createHttpRoadmapCanvasSessionPersistence({
   courseCode: 'CC1001',
@@ -46,7 +48,7 @@ const api = (suffix: string) => `/api/CC1001/2026/2/roadmap${suffix}`;
 type Request = readonly [path: string, init: RequestInit];
 
 type Execution = {
-  command: CanvasCommand;
+  command: PersistedCommand;
   previewVersion?: string;
   requests: readonly Request[];
   response?: unknown;
@@ -82,7 +84,7 @@ const executions: Record<string, Execution> = {
       ],
     ],
     response: { node: { id: 'node-9' } },
-    resolves: 'node-9',
+    resolves: { createdNodeId: 'node-9' },
   },
   'update a Node': {
     command: { kind: 'update-node', nodeId: 'node-1', value: nodeUpdate },
@@ -143,12 +145,9 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'delete Dependencies, one change per Dependency': {
-    command: { kind: 'delete-dependencies', dependencyIds: ['dependency-1', 'dependency-2'] },
-    requests: [
-      ['/dependencies/dependency-1', { method: 'DELETE' }],
-      ['/dependencies/dependency-2', { method: 'DELETE' }],
-    ],
+  'delete a Dependency': {
+    command: { kind: 'delete-dependency', dependencyId: 'dependency-1' },
+    requests: [['/dependencies/dependency-1', { method: 'DELETE' }]],
   },
   'place a Teacher block with its preview version': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BLOCK' },
@@ -283,28 +282,31 @@ const executions: Record<string, Execution> = {
   },
 };
 
-const previews: Record<string, { command: PreviewedCommand; path: string; response: unknown }> = {
-  'preview a Dependency': {
+const changeImpacts: Record<
+  string,
+  { command: ChangeImpactCommand; path: string; response: unknown }
+> = {
+  'read the Change impact of a Dependency': {
     command: { kind: 'create-dependency', ...dependency },
     path: '/dependencies?sourceNodeId=node-1&targetNodeId=node-2&sourceHandle=bottom&targetHandle=top',
     response: { nodes: [{ id: 'node-3', title: 'Derivadas' }], version: 'dependency-version' },
   },
-  'preview a Teacher block': {
+  'read the Change impact of a Teacher block': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BLOCK' },
     path: '/nodes/node-1/teacher-block?operation=BLOCK',
     response: { mode: 'BLOCK', nodes: [], version: 'block-version' },
   },
-  'preview a Branch unlock': {
+  'read the Change impact of a Branch unlock': {
     command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BRANCH_UNLOCK' },
     path: '/nodes/node-1/teacher-block?operation=BRANCH_UNLOCK',
     response: { mode: 'BRANCH', nodes: [], version: 'branch-version' },
   },
-  'preview hiding a Node': {
+  'read the Change impact of hiding a Node': {
     command: { kind: 'hide-node', nodeId: 'node-1' },
     path: '/nodes/node-1?operation=HIDE',
     response: hidingImpact,
   },
-  'preview deleting a Node': {
+  'read the Change impact of deleting a Node': {
     command: { kind: 'delete-node', nodeId: 'node-1' },
     path: '/nodes/node-1?operation=DELETE',
     response: deletionImpact,
@@ -352,15 +354,15 @@ test.each(Object.entries(executions))(
   },
 );
 
-test.each(Object.entries(previews))('%s', async (_name, { command, path, response }) => {
+test.each(Object.entries(changeImpacts))('%s', async (_name, { command, path, response }) => {
   const fetchMock = respondWith(response);
 
-  await expect(http.preview(command)).resolves.toEqual(response);
+  await expect(http.readChangeImpact(command)).resolves.toEqual(response);
 
   expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api(path), {});
 });
 
-test('omits the preview header when a previewed change sends no version', async () => {
+test('omits the preview header when a change sends no Change impact version', async () => {
   const fetchMock = respondWith();
 
   await http.execute({ kind: 'hide-node', nodeId: 'node-1' });
@@ -406,8 +408,8 @@ test.each([
     'No se pudo completar el nodo.',
   ],
   [
-    'a preview',
-    () => http.preview({ kind: 'hide-node', nodeId: 'n' }),
+    'a Change impact read',
+    () => http.readChangeImpact({ kind: 'hide-node', nodeId: 'n' }),
     'No se pudo calcular el impacto de ocultar el nodo.',
   ],
   [
@@ -448,7 +450,7 @@ test('a denied change is not an access loss', async () => {
 
 test.each([
   ['a change', () => http.execute({ kind: 'complete-node', nodeId: 'node-1' })],
-  ['a preview', () => http.preview({ kind: 'delete-node', nodeId: 'node-1' })],
+  ['a Change impact read', () => http.readChangeImpact({ kind: 'delete-node', nodeId: 'node-1' })],
   ['a load', () => http.load()],
 ] as const)('refuses %s on a closed Roadmap with the closed error', async (_name, call) => {
   refuseWith(409, { message: 'El roadmap está cerrado.', code: 'ROADMAP_CLOSED' });

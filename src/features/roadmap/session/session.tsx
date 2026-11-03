@@ -11,8 +11,8 @@ import {
   type ReactNode,
 } from 'react';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
-import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
-import type { CanvasCommandSession } from '@/features/roadmap/canvas/commands/declarations';
+import type { PersistedCommand } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommandSession } from '@/features/roadmap/canvas/commands/canvas-command-ux';
 import {
   useCanvasCommands,
   type CanvasCommands,
@@ -21,6 +21,7 @@ import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/se
 import type { AnyRoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type {
+  ExecutionResult,
   RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
@@ -42,10 +43,10 @@ const refreshFailure = 'No se pudo actualizar el roadmap. Puedes reintentar.';
 /** For a failure that carries no message at all; the adapters always give one. */
 const genericFailure = 'No se pudo completar la acción.';
 /** Commands whose effect shows in the Canvas preview, which reloads instead of the Roadmap. */
-const canvasPreviewCommandKinds: ReadonlySet<CanvasCommand['kind']> = new Set([
-  'complete-canvas-preview-node',
-  'reset-canvas-preview',
-]);
+const canvasPreviewCommandKinds = {
+  'complete-canvas-preview-node': true,
+  'reset-canvas-preview': true,
+} satisfies Partial<Record<PersistedCommand['kind'], true>>;
 const loadFailure = 'No se pudo cargar el roadmap.';
 
 function matchesExperience(
@@ -314,11 +315,11 @@ function useInjectedSession(
     }
   }, [persistence, stableInput]);
 
-  const preview = useCallback<CanvasCommandSession['preview']>(
+  const readChangeImpact = useCallback<CanvasCommandSession['readChangeImpact']>(
     async (command) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
       try {
-        const impact = await persistence.preview(command);
+        const impact = await persistence.readChangeImpact(command);
         return activeKeyRef.current === requestKey ? impact : null;
       } catch (cause) {
         await reportFailure(cause, requestKey);
@@ -331,14 +332,14 @@ function useInjectedSession(
   const execute = useCallback<CanvasCommandSession['execute']>(
     async (command, previewVersion) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
-      let createdNodeId: string | void;
+      let result: ExecutionResult | void;
       try {
-        createdNodeId = await persistence.execute(command, previewVersion);
+        result = await persistence.execute(command, previewVersion);
       } catch (cause) {
         await reportFailure(cause, requestKey);
         return { applied: false };
       }
-      const changesCanvasPreview = canvasPreviewCommandKinds.has(command.kind);
+      const changesCanvasPreview = command.kind in canvasPreviewCommandKinds;
       try {
         if (!changesCanvasPreview) await refresh();
         if (activeKeyRef.current === requestKey) setError(null);
@@ -349,12 +350,15 @@ function useInjectedSession(
       }
       const applied = activeKeyRef.current === requestKey;
       if (applied && changesCanvasPreview) await loadCanvasPreview();
-      return { applied, createdNodeId: createdNodeId || undefined };
+      return { applied, ...result };
     },
     [loadCanvasPreview, persistence, refresh, reportFailure, stableInput],
   );
 
-  const commandSession = useMemo(() => ({ preview, execute }), [execute, preview]);
+  const commandSession = useMemo(
+    () => ({ readChangeImpact, execute }),
+    [execute, readChangeImpact],
+  );
 
   return {
     state: {

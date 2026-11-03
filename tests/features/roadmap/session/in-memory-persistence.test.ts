@@ -3,7 +3,7 @@ import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/sess
 import type { RoadmapDto } from '@/features/roadmap/types';
 import type { ResourceInput } from '@/features/roadmap/editor/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
-import { previewThenExecute } from '../support/preview-then-execute';
+import { executeWithChangeImpact } from '../support/execute-with-change-impact';
 
 const roadmap = {
   course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
@@ -68,8 +68,8 @@ const roadmap = {
 test('sets a Node to the target visibility, as production does', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
-  await previewThenExecute(persistence, { kind: 'hide-node', nodeId: 'selected' });
-  await previewThenExecute(persistence, { kind: 'hide-node', nodeId: 'selected' });
+  await executeWithChangeImpact(persistence, { kind: 'hide-node', nodeId: 'selected' });
+  await executeWithChangeImpact(persistence, { kind: 'hide-node', nodeId: 'selected' });
   const hidden = await persistence.load();
   expect(hidden.nodes).toContainEqual(
     expect.objectContaining({ id: 'selected', isVisible: false, isTeacherBlocked: false }),
@@ -90,14 +90,14 @@ test('models upstream Node unlock through the same Teacher block policy as produ
     nodeId: 'selected',
     operation: 'UNBLOCK',
   } as const;
-  await expect(persistence.preview(unlock)).resolves.toMatchObject({
+  await expect(persistence.readChangeImpact(unlock)).resolves.toMatchObject({
     mode: 'UPSTREAM',
     nodes: [
       { id: 'prerequisite', relation: 'PREREQUISITE' },
       { id: 'selected', relation: 'SELECTED_NODE' },
     ],
   });
-  await previewThenExecute(persistence, unlock);
+  await executeWithChangeImpact(persistence, unlock);
 
   expect((await persistence.load()).nodes).toEqual(
     expect.arrayContaining([
@@ -121,7 +121,7 @@ test('models Branch unlock through the same Teacher block policy as production',
     nodeId: 'selected',
     operation: 'BRANCH_UNLOCK',
   } as const;
-  await expect(persistence.preview(branchUnlock)).resolves.toMatchObject({
+  await expect(persistence.readChangeImpact(branchUnlock)).resolves.toMatchObject({
     mode: 'BRANCH',
     nodes: [
       { id: 'selected', relation: 'SELECTED_NODE' },
@@ -129,7 +129,7 @@ test('models Branch unlock through the same Teacher block policy as production',
     ],
   });
 
-  await previewThenExecute(persistence, branchUnlock);
+  await executeWithChangeImpact(persistence, branchUnlock);
   expect((await persistence.load()).nodes).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ id: 'prerequisite', isTeacherBlocked: false }),
@@ -189,12 +189,12 @@ test('versions each Change impact by its content, as production does', async () 
     ...roadmap,
     nodes: [...roadmap.nodes, independent],
   });
-  const hide = (nodeId: string) => persistence.preview({ kind: 'hide-node', nodeId });
+  const hide = (nodeId: string) => persistence.readChangeImpact({ kind: 'hide-node', nodeId });
   const first = await hide('selected');
 
   expect(await hide('selected')).toEqual(first);
   expect((await hide('prerequisite')).version).not.toBe(first.version);
-  await previewThenExecute(persistence, {
+  await executeWithChangeImpact(persistence, {
     kind: 'create-dependency',
     sourceNodeId: 'independent',
     targetNodeId: 'selected',
@@ -225,16 +225,14 @@ test('rejects confirming a hide, a Dependency, a deletion or a Teacher block who
     nodeId: 'dependent',
     operation: 'UNBLOCK',
   } as const;
-  const hiding = await persistence.preview(hide);
-  const dependency = await persistence.preview(connect);
-  const deletion = await persistence.preview(remove);
-  const unlocking = await persistence.preview(unlock);
+  const hiding = await persistence.readChangeImpact(hide);
+  const dependency = await persistence.readChangeImpact(connect);
+  const deletion = await persistence.readChangeImpact(remove);
+  const unlocking = await persistence.readChangeImpact(unlock);
 
-  await previewThenExecute(persistence, link('independent', 'later'));
-  await persistence.execute({
-    kind: 'delete-dependencies',
-    dependencyIds: ['prerequisite-selected', 'selected-dependent'],
-  });
+  await executeWithChangeImpact(persistence, link('independent', 'later'));
+  await persistence.execute({ kind: 'delete-dependency', dependencyId: 'prerequisite-selected' });
+  await persistence.execute({ kind: 'delete-dependency', dependencyId: 'selected-dependent' });
 
   await expect(persistence.execute(hide, hiding.version)).rejects.toThrow(
     staleMessage('de ocultar el nodo'),
@@ -257,7 +255,7 @@ test('rejects confirming a hide, a Dependency, a deletion or a Teacher block who
     dependencies: [expect.objectContaining({ sourceNodeId: 'independent', targetNodeId: 'later' })],
   });
 
-  await previewThenExecute(persistence, remove);
+  await executeWithChangeImpact(persistence, remove);
   expect((await persistence.load()).nodes.map(({ id }) => id)).not.toContain('prerequisite');
 });
 
@@ -324,7 +322,7 @@ test('never reuses an identifier after a deletion', async () => {
   };
   const createAll = async () => {
     await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 } });
-    await previewThenExecute(persistence, {
+    await executeWithChangeImpact(persistence, {
       kind: 'create-dependency',
       sourceNodeId: 'prerequisite',
       targetNodeId: 'dependent',
@@ -336,8 +334,8 @@ test('never reuses an identifier after a deletion', async () => {
     return created();
   };
   const deleteAll = async (ids: Awaited<ReturnType<typeof created>>) => {
-    await previewThenExecute(persistence, { kind: 'delete-node', nodeId: ids.node! });
-    await persistence.execute({ kind: 'delete-dependencies', dependencyIds: [ids.dependency!] });
+    await executeWithChangeImpact(persistence, { kind: 'delete-node', nodeId: ids.node! });
+    await persistence.execute({ kind: 'delete-dependency', dependencyId: ids.dependency! });
     await persistence.execute({ kind: 'delete-node-type', nodeTypeId: ids.nodeType! });
     await persistence.execute({ kind: 'delete-resource', resourceId: ids.resource! });
   };
@@ -358,11 +356,11 @@ test('places a created Node at its created-node position and resolves with its i
   });
   const node = { title: 'Nuevo', description: '', nodeTypeId: 'content', isVisible: true };
 
-  const nodeId = await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 } });
+  const created = await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 } });
 
-  expect(nodeId).toEqual(expect.any(String));
+  expect(created).toEqual({ createdNodeId: expect.any(String) });
   expect((await persistence.load()).nodes).toContainEqual(
-    expect.objectContaining({ id: nodeId, positionX: 960, positionY: 360 }),
+    expect.objectContaining({ id: created?.createdNodeId, positionX: 960, positionY: 360 }),
   );
 });
 
@@ -370,7 +368,7 @@ test('presents a Node whose Node type is missing with the shared unknown Node ty
   const persistence = createInMemoryRoadmapSessionPersistence({ ...roadmap, nodeTypes: [] });
 
   expect(
-    (await persistence.preview({ kind: 'delete-node', nodeId: 'selected' })).node.nodeType,
+    (await persistence.readChangeImpact({ kind: 'delete-node', nodeId: 'selected' })).node.nodeType,
   ).toEqual(unknownNodeType);
 });
 
@@ -416,17 +414,15 @@ test('Practice resources preserve File ownership and permit Link edits', async (
   });
 });
 
-test('deletes every Dependency of a batch it can and rethrows the failure', async () => {
+test('refuses to delete a Dependency that is not in the Roadmap', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
   await expect(
-    persistence.execute({
-      kind: 'delete-dependencies',
-      dependencyIds: ['missing', 'selected-dependent'],
-    }),
+    persistence.execute({ kind: 'delete-dependency', dependencyId: 'missing' }),
   ).rejects.toThrow('La dependencia no existe en este roadmap.');
 
   expect((await persistence.load()).dependencies.map(({ id }) => id)).toEqual([
     'prerequisite-selected',
+    'selected-dependent',
   ]);
 });

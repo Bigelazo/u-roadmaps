@@ -12,15 +12,15 @@ import type {
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
 import type {
-  CanvasCommand,
   CanvasCommandOf,
   CanvasConfirmationChoice,
   ConfirmedActionKind,
+  PersistedCommand,
   UnconfirmedCommand,
 } from '@/features/roadmap/canvas/commands/commands';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
-import { previewThenExecute } from '../support/preview-then-execute';
+import { executeWithChangeImpact } from '../support/execute-with-change-impact';
 
 const teachingInput = {
   courseOffering: {
@@ -99,14 +99,13 @@ async function openCanvas(
   };
 }
 
+type Execution = ReturnType<RoadmapCanvasSessionPersistence['execute']>;
+
 /** Wraps an adapter so that executing a command of one kind goes through `intercept`. */
-function intercepting<Kind extends CanvasCommand['kind']>(
+function intercepting<Kind extends PersistedCommand['kind']>(
   adapter: RoadmapCanvasSessionPersistence,
   kind: Kind,
-  intercept: (
-    command: CanvasCommandOf<Kind>,
-    forward: () => Promise<string | void>,
-  ) => Promise<string | void>,
+  intercept: (command: CanvasCommandOf<Kind>, forward: () => Execution) => Execution,
 ): RoadmapCanvasSessionPersistence {
   return {
     ...adapter,
@@ -122,7 +121,7 @@ function intercepting<Kind extends CanvasCommand['kind']>(
 /** Lets `race` change the Roadmap once, right before the first command of this kind applies. */
 function racingOnce(
   adapter: RoadmapCanvasSessionPersistence,
-  kind: CanvasCommand['kind'],
+  kind: PersistedCommand['kind'],
   race: () => Promise<unknown>,
 ) {
   let raceOnce = true;
@@ -218,10 +217,10 @@ describe('canvas commands', () => {
 
     expect(canvas.commands().pending).toBeNull();
     expect(await nodeOf(canvas.persistence, 'limits')).toBeUndefined();
-    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith({
-      kind: 'delete-node',
-      nodeId: 'limits',
-    });
+    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'delete-node', nodeId: 'limits' },
+      undefined,
+    );
   });
 
   test('cancelling an awaiting confirmation changes nothing and frees the slot', async () => {
@@ -249,7 +248,7 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request({ kind, nodeId: 'limits' }));
       await canvas.awaiting();
 
-      await previewThenExecute(canvas.persistence, {
+      await executeWithChangeImpact(canvas.persistence, {
         kind: 'create-dependency',
         sourceNodeId: 'limits',
         targetNodeId: 'integrals',
@@ -284,7 +283,7 @@ describe('canvas commands', () => {
     async (kind, impactName, latestDependencies) => {
       const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
       const persistence = racingOnce(adapter, kind, () =>
-        previewThenExecute(adapter, {
+        executeWithChangeImpact(adapter, {
           kind: 'create-dependency',
           sourceNodeId: 'integrals',
           targetNodeId: 'limits',
@@ -455,7 +454,7 @@ describe('canvas commands', () => {
     });
 
     const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
-      previewThenExecute(persistence, {
+      executeWithChangeImpact(persistence, {
         kind: 'create-dependency',
         sourceNodeId: 'derivatives',
         targetNodeId: 'integrals',
@@ -599,7 +598,7 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
       await canvas.awaiting();
 
-      await previewThenExecute(canvas.persistence, {
+      await executeWithChangeImpact(canvas.persistence, {
         kind: 'create-dependency',
         sourceNodeId: 'integrals',
         targetNodeId: 'derivatives',
@@ -630,7 +629,7 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
       await canvas.awaiting();
 
-      await previewThenExecute(canvas.persistence, {
+      await executeWithChangeImpact(canvas.persistence, {
         kind: 'change-teacher-block',
         nodeId: 'integrals',
         operation: 'BLOCK',
@@ -645,7 +644,7 @@ describe('canvas commands', () => {
     test('shows the latest Change impact when the creation is refused as stale, and confirms it again', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits'));
       const persistence = racingOnce(adapter, 'create-dependency', () =>
-        previewThenExecute(adapter, {
+        executeWithChangeImpact(adapter, {
           kind: 'create-dependency',
           sourceNodeId: 'integrals',
           targetNodeId: 'derivatives',
@@ -705,7 +704,7 @@ describe('canvas commands', () => {
       positionX: 300,
       positionY: 200,
     });
-    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout);
+    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout, undefined);
   });
 
   test('an automatic layout with a failed move keeps the moved Nodes and stays open to retry', async () => {
@@ -855,9 +854,9 @@ describe('canvas commands', () => {
     let failOnce = true;
     const persistence = intercepting(
       adapter,
-      'delete-dependencies',
-      async ({ dependencyIds }, forward) => {
-        if (dependencyIds.includes('limits-integrals') && failOnce) {
+      'delete-dependency',
+      async ({ dependencyId }, forward) => {
+        if (dependencyId === 'limits-integrals' && failOnce) {
           failOnce = false;
           throw new Error('No se pudo eliminar la dependencia.');
         }
@@ -1374,10 +1373,10 @@ describe('canvas commands', () => {
       expect(canvas.reported()).toEqual([
         { type: 'changeVisibility', nodeId: 'integrals', isVisible: false },
       ]);
-      expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith({
-        kind: 'hide-node',
-        nodeId: 'integrals',
-      });
+      expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(
+        { kind: 'hide-node', nodeId: 'integrals' },
+        undefined,
+      );
       expect(canvas.session().error).toBe('No se pudo actualizar el roadmap. Puedes reintentar.');
     });
 
