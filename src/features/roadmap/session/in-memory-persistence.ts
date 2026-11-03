@@ -56,10 +56,6 @@ function replaceRoadmapNode(
   } as AnyRoadmapDto;
 }
 
-function nodeResources(node: AnyRoadmapNode): Resource[] {
-  return 'resources' in node ? node.resources : [];
-}
-
 function asStudentRoadmap(
   roadmap: AnyRoadmapDto,
   completedNodeIds: ReadonlySet<string>,
