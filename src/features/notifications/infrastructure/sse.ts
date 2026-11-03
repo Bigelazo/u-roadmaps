@@ -64,10 +64,9 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
         });
       },
     });
-    if (signal.aborted || stopped) {
-      unsubscribe();
-      throw new Error('Stream disconnected');
-    }
+    // A disconnect during subscription setup is a normal stream closure.
+    if (stopped) unsubscribe();
+    else if (signal.aborted) stop();
   } catch (error) {
     stop();
     throw error;
