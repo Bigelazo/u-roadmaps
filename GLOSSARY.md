@@ -240,7 +240,7 @@ A teaching-staff change to the Roadmap that takes effect only after explicit con
 _Avoid_: Dialog, workflow, confirmation flow
 
 **Change impact (Impacto del cambio)**:
-What a Confirmed action would remove, block or release, such as Dependencies, Resources or Teacher blocks. It is recomputed on confirmation; if it changed, the new impact is shown instead of the change taking effect.
+What a Confirmed action would remove, block or release, such as Dependencies, Resources or Teacher blocks. It is recomputed on confirmation; if it changed, the new impact is shown instead of the change taking effect. Scheduled unlocks released because a Node unlock removed the Teacher blocks they waited on are a consequence of that unlock, not part of its Change impact.
 _Avoid_: Preview, impact preview
 
 **Node information preview (Previsualización de información del nodo)**:
