@@ -60,24 +60,23 @@ type JsonObject = Record<string, unknown>;
 
 export const SCHEDULED_UNLOCK_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
 
-/** A Dependency's Roadmap notice fact, with its Nodes as they are once `hiddenNodeId` is hidden. */
+/** A created or removed Dependency's Roadmap notice fact, with its Nodes as `nodes` has them. */
 function dependencyFact(
-  snapshot: RoadmapSnapshot,
+  nodes: readonly { id: string; title: string; isVisible: boolean }[],
   { id, sourceNodeId, targetNodeId }: { id: string; sourceNodeId: string; targetNodeId: string },
-  current: boolean,
-  hiddenNodeId?: string,
+  change: 'created' | 'removed',
 ): RoadmapChangeFact {
   const nodeFacts = (nodeId: string) => {
-    const { title, isVisible } = snapshot.nodes.find((node) => node.id === nodeId)!;
-    return { title, isVisible: isVisible && nodeId !== hiddenNodeId };
+    const { title, isVisible } = nodes.find((node) => node.id === nodeId)!;
+    return { title, isVisible };
   };
   return {
     kind: 'dependency',
     dependencyId: id,
     sourceNodeId,
     targetNodeId,
-    previous: !current,
-    current,
+    previous: change === 'removed',
+    current: change === 'created',
     sourceNode: nodeFacts(sourceNodeId),
     targetNode: nodeFacts(targetNodeId),
   };
@@ -321,11 +320,11 @@ export const updateRoadmapNode = roadmapCommand({
             requireType(tx, changes.nodeTypeId, roadmap.id),
           ])
         : [null, null];
-    const facts = hiding
-      ? removedDependencies.map((dependency) =>
-          dependencyFact(hiding.snapshot, dependency, false, node.id),
-        )
-      : [];
+    const nodes =
+      hiding?.snapshot.nodes.map((current) => (current.id === node.id ? updated : current)) ?? [];
+    const facts = removedDependencies.map((dependency) =>
+      dependencyFact(nodes, dependency, 'removed'),
+    );
     if (changes.title !== undefined && changes.title !== node.title)
       facts.push({
         kind: 'node-title',
@@ -519,7 +518,7 @@ export const createRoadmapDependency = roadmapCommand({
     const dependency = await tx.dependency.create({ data: input });
     return {
       result: { dependency: { id: dependency.id, ...input }, nodes: impact.nodes },
-      facts: [dependencyFact(snapshot, { ...input, id: dependency.id }, true)],
+      facts: [dependencyFact(snapshot.nodes, { ...input, id: dependency.id }, 'created')],
     };
   },
 });

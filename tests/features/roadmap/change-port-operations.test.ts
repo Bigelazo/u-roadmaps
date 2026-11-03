@@ -167,7 +167,7 @@ test('visibility and deletion report their facts and recipient access transition
   ]);
 });
 
-test('Dependencies removed by hiding a Node are reported as removed, with the Node hidden', async ({
+test('Dependencies removed by hiding a Node are reported as removed, with the Node hidden and renamed', async ({
   course,
 }) => {
   const recording = recordingChangePort();
@@ -175,7 +175,10 @@ test('Dependencies removed by hiding a Node are reported as removed, with the No
   const dependency = await prisma.dependency.create({
     data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
   });
-  await teacherEdits(course, recording.port).update(target.id, { isVisible: false });
+  await teacherEdits(course, recording.port).update(target.id, {
+    title: 'Bicolas',
+    isVisible: false,
+  });
   expect(await prisma.dependency.count({ where: { targetNodeId: target.id } })).toBe(0);
   expect(recording.facts().filter(({ kind }) => kind === 'dependency')).toEqual([
     {
@@ -186,7 +189,7 @@ test('Dependencies removed by hiding a Node are reported as removed, with the No
       previous: true,
       current: false,
       sourceNode: { title: expect.any(String), isVisible: true },
-      targetNode: { title: 'Colas', isVisible: false },
+      targetNode: { title: 'Bicolas', isVisible: false },
     },
   ]);
 });
