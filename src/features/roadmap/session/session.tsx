@@ -16,7 +16,7 @@ import {
   type CanvasCommandSession,
   type CanvasCommands,
 } from '@/features/roadmap/canvas/commands/use-canvas-commands';
-import { httpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
+import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type { AnyRoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type {
@@ -31,9 +31,7 @@ import {
 
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 
-const persistenceContext = createContext<RoadmapCanvasSessionPersistence>(
-  httpRoadmapCanvasSessionPersistence,
-);
+const persistenceContext = createContext<RoadmapCanvasSessionPersistence | null>(null);
 
 function messageFor(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback;
@@ -134,7 +132,7 @@ function useInjectedSession(
   );
 
   const loadRoadmap = useCallback(async () => {
-    const loadedRoadmap = await persistence.load(stableInput);
+    const loadedRoadmap = await persistence.load();
     if (!matchesExperience(loadedRoadmap, stableInput.experience.kind)) {
       throw new Error(loadFailure);
     }
@@ -323,7 +321,7 @@ function useInjectedSession(
     const requestKey = roadmapCanvasSessionKey(stableInput);
     const requestVersion = ++simulationVersionRef.current;
     try {
-      const loadedSimulation = await persistence.loadSimulation(stableInput);
+      const loadedSimulation = await persistence.loadCanvasPreview();
       if (requestVersion !== simulationVersionRef.current || activeKeyRef.current !== requestKey) {
         return false;
       }
@@ -356,7 +354,7 @@ function useInjectedSession(
         (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
       loadSimulation,
     },
-    commandSession: { persistence, stableInput, read, mutate, loadSimulation },
+    commandSession: { persistence, read, mutate, loadSimulation },
   };
 }
 
@@ -364,7 +362,14 @@ export function useRoadmapCanvasSession(
   input: RoadmapCanvasSessionInput,
   options: RoadmapCanvasSessionOptions = {},
 ): RoadmapCanvasSession {
-  const persistence = useContext(persistenceContext);
+  const providedPersistence = useContext(persistenceContext);
+  const { courseCode, year, semester } = input.courseOffering.identifier;
+  const persistence = useMemo(
+    () =>
+      providedPersistence ??
+      createHttpRoadmapCanvasSessionPersistence({ courseCode, year, semester }),
+    [courseCode, providedPersistence, semester, year],
+  );
   const { state: active, commandSession } = useInjectedSession(input, persistence);
   const guardDraft = options.guardDraft ?? allowAnyDraft;
   const report = input.practice?.onAction;

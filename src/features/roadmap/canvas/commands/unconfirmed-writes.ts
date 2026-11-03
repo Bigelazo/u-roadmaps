@@ -1,17 +1,16 @@
 import type {
   CanvasCommandOf,
+  UnconfirmedCommand,
   UnconfirmedCommandKind,
 } from '@/features/roadmap/canvas/commands/commands';
 import type {
   PracticeCanvasAction,
-  RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
 
 export type UnconfirmedWrite<Kind extends UnconfirmedCommandKind> = {
   write: (
     persistence: RoadmapCanvasSessionPersistence,
-    input: RoadmapCanvasSessionInput,
     command: CanvasCommandOf<Kind>,
   ) => Promise<string | void>;
   fallback: string;
@@ -24,79 +23,70 @@ export type UnconfirmedWrite<Kind extends UnconfirmedCommandKind> = {
 };
 
 const completionSuccess = () => 'Nodo completado.';
+const execute = (persistence: RoadmapCanvasSessionPersistence, command: UnconfirmedCommand) =>
+  persistence.execute(command);
 
 export const unconfirmedWrites: { [Kind in UnconfirmedCommandKind]: UnconfirmedWrite<Kind> } = {
   'add-node': {
-    write: (persistence, input, { node, position }) => persistence.addNode(input, node, position),
+    write: execute,
     fallback: 'No se pudo crear el nodo.',
     success: () => 'Nodo creado exitosamente.',
     report: (_, nodeId) => (nodeId ? { type: 'addNode', nodeId } : null),
   },
   'update-node': {
-    write: (persistence, input, { nodeId, value }) => persistence.updateNode(input, nodeId, value),
+    write: execute,
     fallback: 'No se pudo guardar el nodo.',
     success: () => 'Cambios guardados exitosamente.',
   },
   'move-nodes': {
-    write: async (persistence, input, { positions }) => {
-      const moves = await Promise.allSettled(
-        positions.map(({ nodeId, position }) => persistence.moveNode(input, nodeId, position)),
-      );
-      const failed = moves.find((move) => move.status === 'rejected');
-      if (failed) throw failed.reason;
-    },
+    write: execute,
     fallback: 'No se pudo guardar la posición.',
   },
   'schedule-teacher-unlock': {
-    write: (persistence, input, { nodeId, unlockOn }) =>
-      persistence.scheduleTeacherUnlock(input, nodeId, unlockOn),
+    write: execute,
     fallback: 'No se pudo programar el desbloqueo.',
     success: ({ unlockOn }) =>
       unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
   },
   'add-resource': {
-    write: (persistence, input, { nodeId, resource }) =>
-      persistence.addResource(input, nodeId, resource),
+    write: execute,
     fallback: 'No se pudo agregar el recurso.',
     success: () => 'Enlace guardado exitosamente.',
     report: ({ nodeId }) => ({ type: 'addResource', nodeId }),
   },
   'upload-resource': {
-    write: (persistence, input, { nodeId, file }) =>
-      persistence.uploadResource(input, nodeId, file),
+    write: execute,
     fallback: 'No se pudo subir el archivo.',
     success: () => 'Recurso guardado exitosamente.',
   },
   'update-resource': {
-    write: (persistence, input, { resourceId, resource }) =>
-      persistence.updateResource(input, resourceId, resource),
+    write: execute,
     fallback: 'No se pudo guardar el recurso.',
     success: ({ resource }) =>
       resource.type === 'LINK' ? 'Enlace guardado exitosamente.' : 'Recurso guardado exitosamente.',
   },
   'delete-resource': {
-    write: (persistence, input, { resourceId }) => persistence.deleteResource(input, resourceId),
+    write: execute,
     fallback: 'No se pudo eliminar el recurso.',
     success: () => 'Recurso eliminado exitosamente.',
   },
   'add-node-type': {
-    write: (persistence, input, { nodeType }) => persistence.addNodeType(input, nodeType),
+    write: execute,
     fallback: 'No se pudo crear el tipo de nodo.',
     success: () => 'Tipo de nodo creado exitosamente.',
   },
   'update-node-type': {
-    write: (persistence, input, { nodeTypeId, nodeType }) =>
-      persistence.updateNodeType(input, nodeTypeId, nodeType),
+    write: execute,
     fallback: 'No se pudo guardar el tipo de nodo.',
     success: () => 'Tipo de nodo guardado exitosamente.',
   },
   'complete-node': {
-    write: (persistence, input, { nodeId }) => persistence.complete(input, nodeId),
+    write: execute,
     fallback: 'No se pudo completar el nodo.',
     success: completionSuccess,
   },
   'complete-simulated-node': {
-    write: (persistence, input, { nodeId }) => persistence.completeSimulatedNode(input, nodeId),
+    write: execute,
     fallback: 'No se pudo completar el nodo en la previsualización.',
     success: completionSuccess,
     report: ({ nodeId }) => ({ type: 'completeSimulatedNode', nodeId }),

@@ -8,16 +8,11 @@ import {
 } from '@/features/roadmap/canvas/commands/commands';
 import type {
   PracticeCanvasAction,
-  RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
 import type { TeacherBlockOperation } from '@/features/roadmap/types';
-import { unconfirmedWrites } from '@/features/roadmap/canvas/commands/unconfirmed-writes';
 
-type Operation<T> = (
-  persistence: RoadmapCanvasSessionPersistence,
-  input: RoadmapCanvasSessionInput,
-) => Promise<T>;
+type Operation<T> = (persistence: RoadmapCanvasSessionPersistence) => Promise<T>;
 
 export type ConfirmedActionContext = {
   read: <T>(operation: Operation<T>, fallback: string) => Promise<T | null>;
@@ -74,49 +69,43 @@ const visibilityFailure = 'No se pudo cambiar la visibilidad.';
 
 export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<Kind> } = {
   'hide-node': {
-    readImpact: ({ read }, { nodeId }) =>
+    readImpact: ({ read }, request) =>
       read(
-        (persistence, input) => persistence.previewNodeHiding(input, nodeId),
+        (persistence) => persistence.preview(request),
         'No se pudo calcular el impacto de ocultar el nodo.',
       ),
-    run: ({ mutate }, { nodeId }, impact) =>
-      mutate(
-        (persistence, input) => persistence.setVisibility(input, nodeId, false, impact.version),
-        visibilityFailure,
-      ),
+    run: ({ mutate }, request, impact) =>
+      mutate((persistence) => persistence.execute(request, impact.version), visibilityFailure),
     success: () => 'Nodo ocultado exitosamente.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: false }),
   },
   'show-node': {
-    run: ({ mutate }, { nodeId }) =>
-      mutate(
-        (persistence, input) => persistence.setVisibility(input, nodeId, true),
-        visibilityFailure,
-      ),
+    run: ({ mutate }, request) =>
+      mutate((persistence) => persistence.execute(request), visibilityFailure),
     success: () => 'Nodo visible para estudiantes.',
     report: ({ nodeId }) => ({ type: 'changeVisibility', nodeId, isVisible: true }),
   },
   'delete-node': {
-    readImpact: ({ read }, { nodeId }) =>
+    readImpact: ({ read }, request) =>
       read(
-        (persistence, input) => persistence.previewNodeDeletion(input, nodeId),
+        (persistence) => persistence.preview(request),
         'No se pudo calcular el impacto de eliminar el nodo.',
       ),
-    run: ({ mutate }, { nodeId }, impact) =>
+    run: ({ mutate }, request, impact) =>
       mutate(
-        (persistence, input) => persistence.deleteNode(input, nodeId, impact.version),
+        (persistence) => persistence.execute(request, impact.version),
         'No se pudo eliminar el nodo.',
       ),
     success: () => 'Nodo eliminado exitosamente.',
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   },
   'change-teacher-block': {
-    readImpact: async ({ read }, { nodeId, operation }) => {
-      const operations = teacherBlockImpactOperations(operation);
+    readImpact: async ({ read }, request) => {
+      const operations = teacherBlockImpactOperations(request.operation);
       const impacts = await Promise.all(
         operations.map((scope) =>
           read(
-            (persistence, input) => persistence.previewTeacherBlock(input, nodeId, scope),
+            (persistence) => persistence.preview({ ...request, operation: scope }),
             'No se pudo calcular el impacto del bloqueo docente.',
           ),
         ),
@@ -124,13 +113,13 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
       const impact: TeacherBlockChangeImpact = Object.fromEntries(
         operations.flatMap((scope, index) => (impacts[index] ? [[scope, impacts[index]]] : [])),
       );
-      return impact[operation] ? impact : null;
+      return impact[request.operation] ? impact : null;
     },
-    run: ({ mutate }, { nodeId, operation }, impact, choice) => {
-      const chosen = chosenTeacherBlockOperation(operation, choice);
+    run: ({ mutate }, request, impact, choice) => {
+      const chosen = chosenTeacherBlockOperation(request.operation, choice);
       return mutate(
-        (persistence, input) =>
-          persistence.changeTeacherBlock(input, nodeId, chosen, impact[chosen]?.version),
+        (persistence) =>
+          persistence.execute({ ...request, operation: chosen }, impact[chosen]?.version),
         'No se pudo cambiar el bloqueo docente.',
       );
     },
@@ -147,13 +136,13 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
   'create-dependency': {
     readImpact: ({ read }, dependency) =>
       read(
-        (persistence, input) => persistence.previewRoadmapDependency(input, dependency),
+        (persistence) => persistence.preview(dependency),
         'No se pudo calcular el impacto de la dependencia.',
       ),
     needsConfirmation: (impact) => impact.nodes.length > 0,
     run: ({ mutate }, dependency, impact) =>
       mutate(
-        (persistence, input) => persistence.connectNodes(input, dependency, impact.version),
+        (persistence) => persistence.execute(dependency, impact.version),
         'No se pudo crear la dependencia.',
       ),
     success: () => 'Dependencia creada exitosamente.',
@@ -168,7 +157,8 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
       const deleted = await Promise.all(
         request.dependencyIds.map((dependencyId) =>
           mutate(
-            (persistence, input) => persistence.deleteDependency(input, dependencyId),
+            (persistence) =>
+              persistence.execute({ kind: 'delete-dependencies', dependencyIds: [dependencyId] }),
             'No se pudo eliminar la dependencia.',
           ),
         ),
@@ -184,27 +174,19 @@ export const confirmedActions: { [Kind in ConfirmedActionKind]: ConfirmedAction<
         : 'Dependencias eliminadas exitosamente.',
   },
   'apply-automatic-layout': {
-    run: ({ mutate }, { positions }) => {
-      const { write, fallback } = unconfirmedWrites['move-nodes'];
-      return mutate(
-        (persistence, input) => write(persistence, input, { kind: 'move-nodes', positions }),
-        fallback,
-      );
-    },
+    run: ({ mutate }, request) =>
+      mutate((persistence) => persistence.execute(request), 'No se pudo guardar la posición.'),
     success: () => 'Nodos ordenados exitosamente.',
   },
   'delete-node-type': {
-    run: ({ mutate }, { nodeTypeId }) =>
-      mutate(
-        (persistence, input) => persistence.deleteNodeType(input, nodeTypeId),
-        'No se pudo eliminar el tipo de nodo.',
-      ),
+    run: ({ mutate }, request) =>
+      mutate((persistence) => persistence.execute(request), 'No se pudo eliminar el tipo de nodo.'),
     success: () => 'Tipo de nodo eliminado exitosamente.',
   },
   'reset-canvas-preview': {
-    run: ({ mutateCanvasPreview }) =>
+    run: ({ mutateCanvasPreview }, request) =>
       mutateCanvasPreview(
-        (persistence, input) => persistence.resetSimulation(input),
+        (persistence) => persistence.execute(request),
         'No se pudo reiniciar el progreso de previsualización.',
       ),
     success: () => 'Progreso de previsualización reiniciado.',

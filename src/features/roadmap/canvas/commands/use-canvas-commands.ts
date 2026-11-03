@@ -22,14 +22,12 @@ import {
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type {
   PracticeCanvasAction,
-  RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
 import { notify } from '@/shared/ui/notify';
 
 export type CanvasCommandSession = {
   persistence: RoadmapCanvasSessionPersistence;
-  stableInput: RoadmapCanvasSessionInput;
   read: <T>(operation: () => Promise<T>, fallback: string) => Promise<T | null>;
   mutate: <T>(
     operation: () => Promise<T>,
@@ -97,7 +95,7 @@ export function useCanvasCommands({
 }: CanvasCommandsOptions): CanvasCommands {
   const [pending, setPendingState] = useState<PendingConfirmation | null>(null);
   const pendingRef = useRef<PendingConfirmation | null>(null);
-  const { persistence, stableInput, read, mutate, loadSimulation } = session;
+  const { persistence, read, mutate, loadSimulation } = session;
 
   const commands = useMemo(() => {
     const setPending = (next: PendingConfirmation | null) => {
@@ -114,19 +112,18 @@ export function useCanvasCommands({
       return written;
     }
     const context: ConfirmedActionContext = {
-      read: (operation, fallback) => read(() => operation(persistence, stableInput), fallback),
+      read: (operation, fallback) => read(() => operation(persistence), fallback),
       mutate: async (operation, fallback) =>
-        (await write(() => operation(persistence, stableInput), fallback)).success,
+        (await write(() => operation(persistence), fallback)).success,
       mutateCanvasPreview: async (operation, fallback) =>
-        (await write(() => operation(persistence, stableInput), fallback, 'canvas-preview'))
-          .success,
+        (await write(() => operation(persistence), fallback, 'canvas-preview')).success,
     };
     const isSlotFree = () => pendingRef.current === null;
 
     async function perform(command: UnconfirmedCommand) {
       const declaration = unconfirmedWriteOf(command.kind);
       const { success, result } = await write(
-        () => declaration.write(persistence, stableInput, command),
+        () => declaration.write(persistence, command),
         declaration.fallback,
         declaration.reloads,
       );
@@ -214,16 +211,7 @@ export function useCanvasCommands({
     };
 
     return { request, confirm, cancel };
-  }, [
-    guardDraft,
-    loadSimulation,
-    mutate,
-    onCommandApplied,
-    persistence,
-    read,
-    report,
-    stableInput,
-  ]);
+  }, [guardDraft, loadSimulation, mutate, onCommandApplied, persistence, read, report]);
 
   return { pending, ...commands };
 }
