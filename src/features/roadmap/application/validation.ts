@@ -6,6 +6,7 @@ import {
   type NodeTypeColor,
   type NodeTypeIconId,
 } from '@/features/roadmap/node-type-appearance';
+import { linkResourceOnlyError } from '@/features/roadmap/domain/resource';
 import { ApplicationError } from '@/shared/errors/server';
 
 export function requireString(value: unknown, field: string, maxLength?: number): string {
@@ -93,11 +94,7 @@ export function requireUrl(value: unknown): string {
 }
 
 export function requireLinkResourceType(value: unknown): 'LINK' {
-  if (value !== 'LINK')
-    throw new ApplicationError(
-      400,
-      'INVALID_RESOURCE_TYPE',
-      'Los recursos externos deben ser Enlaces. Para un Archivo, sube sus bytes.',
-    );
-  return value;
+  const error = linkResourceOnlyError(value);
+  if (error !== null) throw new ApplicationError(400, 'INVALID_RESOURCE_TYPE', error);
+  return 'LINK';
 }

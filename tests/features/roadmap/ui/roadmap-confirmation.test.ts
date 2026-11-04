@@ -8,7 +8,7 @@ import {
   roadmapTeacherBlockConfirmation,
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
-import type { NodeType, TeacherBlockPreview } from '@/features/roadmap/types';
+import type { NodeType, TeacherBlockOperationImpact } from '@/features/roadmap/types';
 
 const continueText = 'Puedes seguir editando o descartarlo para continuar.';
 
@@ -56,7 +56,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
     nodeTypes: [],
   };
   const preview = (
-    mode: TeacherBlockPreview['mode'],
+    mode: TeacherBlockOperationImpact['mode'],
     titles: readonly string[],
     relation: 'DEPENDENT' | 'PREREQUISITE' = 'DEPENDENT',
   ) =>
@@ -67,7 +67,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
         { id: 'n0', title: 'Funciones', relation: 'SELECTED_NODE' },
         ...titles.map((title, index) => ({ id: `n${index + 1}`, title, relation })),
       ],
-    }) as unknown as TeacherBlockPreview;
+    }) as unknown as TeacherBlockOperationImpact;
 
   it.each([
     [

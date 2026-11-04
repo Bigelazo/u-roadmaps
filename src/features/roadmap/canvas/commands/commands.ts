@@ -1,3 +1,4 @@
+import type { ChangeImpactOf as PlannedChangeImpactOf } from '@/features/roadmap/domain/change-impact';
 import type { NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type { NewRoadmapNode, RoadmapNodeTypeInput } from '@/features/roadmap/session/types';
@@ -7,7 +8,7 @@ import type {
   NodeHidingImpact,
   RoadmapDependencyRequest,
   TeacherBlockOperation,
-  TeacherBlockPreview,
+  TeacherBlockOperationImpact,
 } from '@/features/roadmap/types';
 
 export type RoadmapNodePosition = {
@@ -96,7 +97,7 @@ export type CanvasConfirmationChoice =
   (typeof canvasConfirmationChoices)[keyof typeof canvasConfirmationChoices];
 
 export type TeacherBlockChangeImpact = {
-  readonly [Operation in TeacherBlockOperation]?: TeacherBlockPreview;
+  readonly [Operation in TeacherBlockOperation]?: TeacherBlockOperationImpact;
 };
 
 export type ChangeImpactOf = {
@@ -120,7 +121,7 @@ export type ChangeImpactCommand = CanvasCommandOf<
 
 /** The Change impact persistence reads for a command: a Teacher block change reads one operation's. */
 export type ReadChangeImpactOf<Kind extends ChangeImpactCommand['kind']> =
-  Kind extends 'change-teacher-block' ? TeacherBlockPreview : ChangeImpactOf[Kind];
+  PlannedChangeImpactOf[Kind];
 
 export type UnconfirmedCommandKind = Exclude<CanvasCommand['kind'], ConfirmedActionKind>;
 
