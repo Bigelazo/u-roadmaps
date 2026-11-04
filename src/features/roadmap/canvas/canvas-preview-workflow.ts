@@ -21,8 +21,8 @@ type CanvasPreviewWorkflowOptions = {
   currentView: Omit<CanvasPreviewReturnState, 'viewport'>;
   isHistorical: boolean;
   guardDraft: () => Promise<boolean>;
-  loadSimulation: () => Promise<boolean>;
-  completeSimulatedNode: (nodeId: string) => Promise<boolean>;
+  loadCanvasPreview: () => Promise<boolean>;
+  completeCanvasPreviewNode: (nodeId: string) => Promise<boolean>;
   onEnter: () => void;
   onExit: (returnState: Omit<CanvasPreviewReturnState, 'viewport'>) => void;
 };
@@ -31,8 +31,8 @@ export function useCanvasPreviewWorkflow({
   currentView,
   isHistorical,
   guardDraft,
-  loadSimulation,
-  completeSimulatedNode,
+  loadCanvasPreview,
+  completeCanvasPreviewNode,
   onEnter,
   onExit,
 }: CanvasPreviewWorkflowOptions) {
@@ -60,7 +60,7 @@ export function useCanvasPreviewWorkflow({
     if (isEntryPendingRef.current || sessionRef.current.kind === 'active') return;
     isEntryPendingRef.current = true;
     try {
-      const loaded = await loadSimulation();
+      const loaded = await loadCanvasPreview();
       if (!loaded) return;
 
       const returnState = {
@@ -74,7 +74,7 @@ export function useCanvasPreviewWorkflow({
     } finally {
       isEntryPendingRef.current = false;
     }
-  }, [loadSimulation, onEnter, transitionSession]);
+  }, [loadCanvasPreview, onEnter, transitionSession]);
 
   const requestEntry = useCallback(() => {
     void guardDraft().then((proceed) => {
@@ -108,10 +108,10 @@ export function useCanvasPreviewWorkflow({
   const completeNode = useCallback(
     (nodeId: string) => {
       if (sessionRef.current.kind !== 'active') return false;
-      if (!isHistorical) void completeSimulatedNode(nodeId);
+      if (!isHistorical) void completeCanvasPreviewNode(nodeId);
       return true;
     },
-    [completeSimulatedNode, isHistorical],
+    [completeCanvasPreviewNode, isHistorical],
   );
 
   return {

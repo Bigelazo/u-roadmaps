@@ -29,10 +29,14 @@ import type {
   TeacherBlockOperation,
   TeacherBlockPreview,
 } from '@/features/roadmap/types';
-import type { NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
+import type { ResourceInput } from '@/features/roadmap/editor/types';
+import type {
+  ChangeImpactCommand,
+  ReadChangeImpactOf,
+  RoadmapNodePlacement,
+} from '@/features/roadmap/canvas/commands/commands';
 import type {
   NewRoadmapNode,
-  RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
   RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
@@ -199,6 +203,19 @@ function teacherBlockPreview(
   return versioned({ mode: decision.mode, nodes: decision.nodes });
 }
 
+/** Applies every Node move of a batch, then rethrows the first failure, as the HTTP adapter does. */
+function settleEach<Item>(items: readonly Item[], apply: (item: Item) => void) {
+  const failures: unknown[] = [];
+  for (const item of items) {
+    try {
+      apply(item);
+    } catch (cause) {
+      failures.push(cause);
+    }
+  }
+  if (failures.length > 0) throw failures[0];
+}
+
 export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
 
 export function createInMemoryRoadmapSessionPersistence(
@@ -209,7 +226,7 @@ export function createInMemoryRoadmapSessionPersistence(
   const studentCompletions = options.studentProgress
     ? new Set(options.studentProgress.completedNodeIds)
     : null;
-  let simulatedCompletions = new Set<string>();
+  let canvasPreviewCompletions = new Set<string>();
 
   const mutateNode = (nodeId: string, update: (node: AnyRoadmapNode) => AnyRoadmapNode) => {
     roadmap = replaceRoadmapNode(roadmap, nodeId, update);
@@ -231,275 +248,271 @@ export function createInMemoryRoadmapSessionPersistence(
         : node,
     );
 
+  const moveNodes = (positions: readonly RoadmapNodePlacement[]) =>
+    settleEach(positions, ({ nodeId, position }) =>
+      mutateNode(
+        nodeId,
+        (node) => ({ ...node, positionX: position.x, positionY: position.y }) as AnyRoadmapNode,
+      ),
+    );
+
+  const setVisibility = (nodeId: string, visible: boolean, previewVersion?: string) => {
+    if (!visible) rejectStalePreview('hide', previewVersion, hidingImpact(roadmap, nodeId));
+    const change = decideVisibilityChange({
+      nodeId,
+      isVisible: visible,
+      dependencies: roadmap.dependencies,
+    });
+    mutateNode(nodeId, (node) =>
+      'isVisible' in node
+        ? ({
+            ...node,
+            isVisible: visible,
+            ...(change.clearsTeacherBlock
+              ? { isTeacherBlocked: false, teacherUnlockOn: undefined }
+              : {}),
+          } as AnyRoadmapNode)
+        : node,
+    );
+    const removed = new Set(change.removedDependencies.map(({ id }) => id));
+    roadmap = {
+      ...roadmap,
+      dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
+    };
+  };
+
+  const complete = (nodeId: string) => {
+    if (studentCompletions) {
+      const access = asStudentRoadmap(roadmap, studentCompletions).nodes.find(
+        ({ id }) => id === nodeId,
+      )?.access;
+      if (access?.status === 'BLOCKED') throw new Error(blockedNodeAccessMessage(access));
+      studentCompletions.add(nodeId);
+      return;
+    }
+    mutateNode(nodeId, (node) =>
+      'isCompleted' in node ? { ...node, isCompleted: true, canComplete: false } : node,
+    );
+  };
+
+  const addNode = (node: NewRoadmapNode, requested: Point) => {
+    const id = crypto.randomUUID();
+    const position = options.createdNodePosition ?? requested;
+    const created: RoadmapNode = {
+      id,
+      title: node.title,
+      description: node.description || null,
+      nodeTypeId: node.nodeTypeId,
+      positionX: position.x,
+      positionY: position.y,
+      isVisible: node.isVisible,
+      isTeacherBlocked: false,
+      resources: [],
+    };
+    roadmap = { ...roadmap, nodes: [...roadmap.nodes, created] } as AnyRoadmapDto;
+    return id;
+  };
+
+  const connectNodes = (request: RoadmapDependencyRequest, previewVersion?: string) => {
+    const impact = dependencyImpact(roadmap, request);
+    rejectStalePreview('dependency', previewVersion, impact);
+    const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = request;
+    const dependency: RoadmapDependency = {
+      id: crypto.randomUUID(),
+      sourceNodeId,
+      targetNodeId,
+      sourceHandle,
+      targetHandle,
+    };
+    roadmap = {
+      ...roadmap,
+      dependencies: [...roadmap.dependencies, dependency],
+      nodes: roadmap.nodes.map((node) =>
+        impact.nodes.some(({ id }) => id === node.id) && 'isTeacherBlocked' in node
+          ? { ...node, isTeacherBlocked: true }
+          : node,
+      ),
+    } as AnyRoadmapDto;
+  };
+
+  const changeTeacherBlock = (
+    nodeId: string,
+    operation: TeacherBlockOperation,
+    previewVersion?: string,
+  ) => {
+    const preview = teacherBlockPreview(roadmap, nodeId, operation);
+    rejectStalePreview(operation === 'BLOCK' ? 'block' : 'unlock', previewVersion, preview);
+    const changedNodeIds = new Set(preview.nodes.map((node) => node.id));
+    roadmap = {
+      ...roadmap,
+      nodes: roadmap.nodes.map((node) =>
+        changedNodeIds.has(node.id) && 'isTeacherBlocked' in node
+          ? ({
+              ...node,
+              isTeacherBlocked: operation === 'BLOCK',
+              ...(operation === 'BLOCK' ? {} : { teacherUnlockOn: undefined }),
+            } as AnyRoadmapNode)
+          : node,
+      ),
+    } as AnyRoadmapDto;
+  };
+
+  const scheduleTeacherUnlock = (nodeId: string, unlockOn: string | null) =>
+    mutateNode(nodeId, (node) => {
+      if (!('isTeacherBlocked' in node)) return node;
+      const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
+      if (decision.kind === 'REJECTED') throw new Error(decision.message);
+      return { ...node, teacherUnlockOn: decision.day ?? undefined } as AnyRoadmapNode;
+    });
+
+  const deleteDependency = (dependencyId: string) => {
+    if (!roadmap.dependencies.some(({ id }) => id === dependencyId))
+      throw new Error('La dependencia no existe en este roadmap.');
+    roadmap = {
+      ...roadmap,
+      dependencies: roadmap.dependencies.filter(({ id }) => id !== dependencyId),
+    };
+  };
+
+  const deleteNode = (nodeId: string, previewVersion?: string) => {
+    rejectStalePreview('delete', previewVersion, deletionImpact(roadmap, nodeId));
+    roadmap = {
+      ...roadmap,
+      nodes: roadmap.nodes.filter(({ id }) => id !== nodeId),
+      dependencies: roadmap.dependencies.filter(
+        ({ sourceNodeId, targetNodeId }) => sourceNodeId !== nodeId && targetNodeId !== nodeId,
+      ),
+    } as AnyRoadmapDto;
+  };
+
+  const updateResource = (resourceId: string, resource: ResourceInput) => {
+    roadmap = resourceUpdate(roadmap, resourceId, (current) => {
+      const changes =
+        current.type === 'FILE' && resource.type === 'FILE' && resource.url === current.url
+          ? { title: resource.title }
+          : resource;
+      const error = resourceEditError(current.type, changes);
+      if (error) throw new Error(error);
+      return { ...current, ...changes };
+    });
+  };
+
+  const addNodeType = (nodeType: RoadmapNodeTypeInput) => {
+    decideNodeType({ kind: 'create', name: nodeType.name });
+    const id = crypto.randomUUID();
+    roadmap = {
+      ...roadmap,
+      nodeTypes: [...roadmap.nodeTypes, { ...nodeType, id, isPredefined: false }],
+    } as AnyRoadmapDto;
+  };
+
+  const updateNodeType = (nodeTypeId: string, nodeType: RoadmapNodeTypeInput) => {
+    decideNodeType({ kind: 'update', nodeTypeId, name: nodeType.name });
+    roadmap = {
+      ...roadmap,
+      nodeTypes: roadmap.nodeTypes.map((current) =>
+        current.id === nodeTypeId ? { ...current, ...nodeType } : current,
+      ),
+    };
+  };
+
+  const deleteNodeType = (nodeTypeId: string) => {
+    decideNodeType({ kind: 'delete', nodeTypeId });
+    roadmap = {
+      ...roadmap,
+      nodeTypes: roadmap.nodeTypes.filter(({ id }) => id !== nodeTypeId),
+    } as AnyRoadmapDto;
+  };
+
   return {
     async load() {
       return studentCompletions ? asStudentRoadmap(roadmap, studentCompletions) : copy(roadmap);
     },
 
-    async complete(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      if (studentCompletions) {
-        const access = asStudentRoadmap(roadmap, studentCompletions).nodes.find(
-          ({ id }) => id === nodeId,
-        )?.access;
-        if (access?.status === 'BLOCKED') throw new Error(blockedNodeAccessMessage(access));
-        studentCompletions.add(nodeId);
-        return;
-      }
-      mutateNode(nodeId, (node) =>
-        'isCompleted' in node ? { ...node, isCompleted: true, canComplete: false } : node,
-      );
+    async loadCanvasPreview() {
+      return asStudentRoadmap(roadmap, canvasPreviewCompletions);
     },
 
-    async loadSimulation() {
-      return asStudentRoadmap(roadmap, simulatedCompletions);
-    },
-
-    async addNode(_input: RoadmapCanvasSessionInput, node: NewRoadmapNode, requested: Point) {
-      const id = crypto.randomUUID();
-      const position = options.createdNodePosition ?? requested;
-      const created: RoadmapNode = {
-        id,
-        title: node.title,
-        description: node.description || null,
-        nodeTypeId: node.nodeTypeId,
-        positionX: position.x,
-        positionY: position.y,
-        isVisible: node.isVisible,
-        isTeacherBlocked: false,
-        resources: [],
+    async readChangeImpact<Command extends ChangeImpactCommand>(command: Command) {
+      const impact = (): ReadChangeImpactOf<ChangeImpactCommand['kind']> => {
+        switch (command.kind) {
+          case 'hide-node':
+            return hidingImpact(roadmap, command.nodeId);
+          case 'delete-node':
+            return deletionImpact(roadmap, command.nodeId);
+          case 'change-teacher-block':
+            return teacherBlockPreview(roadmap, command.nodeId, command.operation);
+          case 'create-dependency':
+            return dependencyImpact(roadmap, command);
+        }
       };
-      roadmap = { ...roadmap, nodes: [...roadmap.nodes, created] } as AnyRoadmapDto;
-      return id;
+      // TypeScript cannot narrow the generic result per case; each case reads its kind's impact.
+      return impact() as ReadChangeImpactOf<Command['kind']>;
     },
 
-    async updateNode(_input: RoadmapCanvasSessionInput, nodeId: string, update: NodeUpdate) {
-      mutateNode(
-        nodeId,
-        (node) =>
-          ({
-            ...node,
-            title: update.title,
-            description: update.description || null,
-            nodeTypeId: update.nodeTypeId,
-          }) as AnyRoadmapNode,
-      );
-    },
-
-    async moveNode(_input: RoadmapCanvasSessionInput, nodeId: string, position: Point) {
-      mutateNode(
-        nodeId,
-        (node) =>
-          ({
-            ...node,
-            positionX: position.x,
-            positionY: position.y,
-          }) as AnyRoadmapNode,
-      );
-    },
-
-    async previewRoadmapDependency(_input, request) {
-      return dependencyImpact(roadmap, request);
-    },
-
-    async connectNodes(
-      _input: RoadmapCanvasSessionInput,
-      request: RoadmapDependencyRequest,
-      previewVersion: string,
-    ) {
-      const impact = dependencyImpact(roadmap, request);
-      rejectStalePreview('dependency', previewVersion, impact);
-      const { sourceNodeId, targetNodeId, sourceHandle, targetHandle } = request;
-      const dependency: RoadmapDependency = {
-        id: crypto.randomUUID(),
-        sourceNodeId,
-        targetNodeId,
-        sourceHandle,
-        targetHandle,
-      };
-      roadmap = {
-        ...roadmap,
-        dependencies: [...roadmap.dependencies, dependency],
-        nodes: roadmap.nodes.map((node) =>
-          impact.nodes.some(({ id }) => id === node.id) && 'isTeacherBlocked' in node
-            ? { ...node, isTeacherBlocked: true }
-            : node,
-        ),
-      } as AnyRoadmapDto;
-    },
-
-    async previewTeacherBlock(
-      _input: RoadmapCanvasSessionInput,
-      nodeId: string,
-      operation: TeacherBlockOperation,
-    ) {
-      return teacherBlockPreview(roadmap, nodeId, operation);
-    },
-
-    async changeTeacherBlock(
-      _input: RoadmapCanvasSessionInput,
-      nodeId: string,
-      operation: TeacherBlockOperation,
-      previewVersion?: string,
-    ) {
-      const preview = teacherBlockPreview(roadmap, nodeId, operation);
-      rejectStalePreview(operation === 'BLOCK' ? 'block' : 'unlock', previewVersion, preview);
-      const changedNodeIds = new Set(preview.nodes.map((node) => node.id));
-      roadmap = {
-        ...roadmap,
-        nodes: roadmap.nodes.map((node) =>
-          changedNodeIds.has(node.id) && 'isTeacherBlocked' in node
-            ? ({
+    async execute(command, previewVersion) {
+      switch (command.kind) {
+        case 'complete-node':
+          return complete(command.nodeId);
+        case 'add-node':
+          return { createdNodeId: addNode(command.node, command.position) };
+        case 'update-node':
+          return mutateNode(
+            command.nodeId,
+            (node) =>
+              ({
                 ...node,
-                isTeacherBlocked: operation === 'BLOCK',
-                ...(operation === 'BLOCK' ? {} : { teacherUnlockOn: undefined }),
-              } as AnyRoadmapNode)
-            : node,
-        ),
-      } as AnyRoadmapDto;
-    },
-
-    async scheduleTeacherUnlock(
-      _input: RoadmapCanvasSessionInput,
-      nodeId: string,
-      unlockOn: string | null,
-    ) {
-      mutateNode(nodeId, (node) => {
-        if (!('isTeacherBlocked' in node)) return node;
-        const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
-        if (decision.kind === 'REJECTED') throw new Error(decision.message);
-        return { ...node, teacherUnlockOn: decision.day ?? undefined } as AnyRoadmapNode;
-      });
-    },
-
-    async deleteDependency(_input: RoadmapCanvasSessionInput, dependencyIdToDelete: string) {
-      if (!roadmap.dependencies.some(({ id }) => id === dependencyIdToDelete))
-        throw new Error('La dependencia no existe en este roadmap.');
-      roadmap = {
-        ...roadmap,
-        dependencies: roadmap.dependencies.filter(({ id }) => id !== dependencyIdToDelete),
-      };
-    },
-
-    async previewNodeHiding(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      return hidingImpact(roadmap, nodeId);
-    },
-
-    async setVisibility(
-      _input: RoadmapCanvasSessionInput,
-      nodeId: string,
-      visible: boolean,
-      previewVersion?: string,
-    ) {
-      if (!visible) rejectStalePreview('hide', previewVersion, hidingImpact(roadmap, nodeId));
-      const change = decideVisibilityChange({
-        nodeId,
-        isVisible: visible,
-        dependencies: roadmap.dependencies,
-      });
-      mutateNode(nodeId, (node) =>
-        'isVisible' in node
-          ? ({
-              ...node,
-              isVisible: visible,
-              ...(change.clearsTeacherBlock
-                ? { isTeacherBlocked: false, teacherUnlockOn: undefined }
-                : {}),
-            } as AnyRoadmapNode)
-          : node,
-      );
-      const removed = new Set(change.removedDependencies.map(({ id }) => id));
-      roadmap = {
-        ...roadmap,
-        dependencies: roadmap.dependencies.filter(({ id }) => !removed.has(id)),
-      };
-    },
-
-    async previewNodeDeletion(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      return deletionImpact(roadmap, nodeId);
-    },
-
-    async deleteNode(_input: RoadmapCanvasSessionInput, nodeId: string, previewVersion: string) {
-      rejectStalePreview('delete', previewVersion, deletionImpact(roadmap, nodeId));
-      roadmap = {
-        ...roadmap,
-        nodes: roadmap.nodes.filter(({ id }) => id !== nodeId),
-        dependencies: roadmap.dependencies.filter(
-          ({ sourceNodeId, targetNodeId }) => sourceNodeId !== nodeId && targetNodeId !== nodeId,
-        ),
-      } as AnyRoadmapDto;
-    },
-
-    async addResource(_input: RoadmapCanvasSessionInput, nodeId: string, resource: ResourceInput) {
-      if (resource.type !== 'LINK') throw new Error('Los recursos externos deben ser Enlaces.');
-      appendResource(nodeId, { ...resource, id: crypto.randomUUID() });
-    },
-
-    async uploadResource(_input: RoadmapCanvasSessionInput, nodeId: string, file: File) {
-      appendResource(nodeId, {
-        id: crypto.randomUUID(),
-        title: file.name,
-        url: file.name,
-        type: 'FILE',
-      });
-    },
-
-    async updateResource(
-      _input: RoadmapCanvasSessionInput,
-      resourceId: string,
-      resource: ResourceInput,
-    ) {
-      roadmap = resourceUpdate(roadmap, resourceId, (current) => {
-        const changes =
-          current.type === 'FILE' && resource.type === 'FILE' && resource.url === current.url
-            ? { title: resource.title }
-            : resource;
-        const error = resourceEditError(current.type, changes);
-        if (error) throw new Error(error);
-        return { ...current, ...changes };
-      });
-    },
-
-    async deleteResource(_input: RoadmapCanvasSessionInput, resourceId: string) {
-      roadmap = resourceUpdate(roadmap, resourceId, () => null);
-    },
-
-    async addNodeType(_input: RoadmapCanvasSessionInput, nodeType: RoadmapNodeTypeInput) {
-      decideNodeType({ kind: 'create', name: nodeType.name });
-      const id = crypto.randomUUID();
-      roadmap = {
-        ...roadmap,
-        nodeTypes: [...roadmap.nodeTypes, { ...nodeType, id, isPredefined: false }],
-      } as AnyRoadmapDto;
-    },
-
-    async updateNodeType(
-      _input: RoadmapCanvasSessionInput,
-      nodeTypeId: string,
-      nodeType: RoadmapNodeTypeInput,
-    ) {
-      decideNodeType({ kind: 'update', nodeTypeId, name: nodeType.name });
-      roadmap = {
-        ...roadmap,
-        nodeTypes: roadmap.nodeTypes.map((current) =>
-          current.id === nodeTypeId ? { ...current, ...nodeType } : current,
-        ),
-      };
-    },
-
-    async deleteNodeType(_input: RoadmapCanvasSessionInput, nodeTypeId: string) {
-      decideNodeType({ kind: 'delete', nodeTypeId });
-      roadmap = {
-        ...roadmap,
-        nodeTypes: roadmap.nodeTypes.filter(({ id }) => id !== nodeTypeId),
-      } as AnyRoadmapDto;
-    },
-
-    async completeSimulatedNode(_input: RoadmapCanvasSessionInput, nodeId: string) {
-      simulatedCompletions = new Set([...simulatedCompletions, nodeId]);
-    },
-
-    async resetSimulation() {
-      simulatedCompletions = new Set();
+                title: command.value.title,
+                description: command.value.description || null,
+                nodeTypeId: command.value.nodeTypeId,
+              }) as AnyRoadmapNode,
+          );
+        case 'move-nodes':
+        case 'apply-automatic-layout':
+          return moveNodes(command.positions);
+        case 'create-dependency':
+          return connectNodes(command, previewVersion);
+        case 'delete-dependency':
+          return deleteDependency(command.dependencyId);
+        case 'change-teacher-block':
+          return changeTeacherBlock(command.nodeId, command.operation, previewVersion);
+        case 'schedule-teacher-unlock':
+          return scheduleTeacherUnlock(command.nodeId, command.unlockOn);
+        case 'hide-node':
+          return setVisibility(command.nodeId, false, previewVersion);
+        case 'show-node':
+          return setVisibility(command.nodeId, true);
+        case 'delete-node':
+          return deleteNode(command.nodeId, previewVersion);
+        case 'add-resource':
+          if (command.resource.type !== 'LINK')
+            throw new Error('Los recursos externos deben ser Enlaces.');
+          return appendResource(command.nodeId, { ...command.resource, id: crypto.randomUUID() });
+        case 'upload-resource':
+          return appendResource(command.nodeId, {
+            id: crypto.randomUUID(),
+            title: command.file.name,
+            url: command.file.name,
+            type: 'FILE',
+          });
+        case 'update-resource':
+          return updateResource(command.resourceId, command.resource);
+        case 'delete-resource':
+          roadmap = resourceUpdate(roadmap, command.resourceId, () => null);
+          return;
+        case 'add-node-type':
+          return addNodeType(command.nodeType);
+        case 'update-node-type':
+          return updateNodeType(command.nodeTypeId, command.nodeType);
+        case 'delete-node-type':
+          return deleteNodeType(command.nodeTypeId);
+        case 'complete-canvas-preview-node':
+          canvasPreviewCompletions = new Set([...canvasPreviewCompletions, command.nodeId]);
+          return;
+        case 'reset-canvas-preview':
+          canvasPreviewCompletions = new Set();
+          return;
+      }
     },
   };
 }

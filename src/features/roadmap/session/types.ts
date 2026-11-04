@@ -1,17 +1,16 @@
-import type { Point } from '@/features/roadmap/graph/geometry';
+import type {
+  ChangeImpactCommand,
+  PersistedCommand,
+  ReadChangeImpactOf,
+} from '@/features/roadmap/canvas/commands/commands';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
 import type {
   AnyRoadmapDto,
   CourseOfferingIdentifier,
-  DependencyImpact,
-  NodeDeletionImpact,
-  NodeHidingImpact,
-  RoadmapDependencyRequest,
   StudentRoadmapDto,
   TeacherBlockOperation,
-  TeacherBlockPreview,
 } from '@/features/roadmap/types';
-import type { NodeUpdate, ResourceInput } from '@/features/roadmap/editor/types';
+import type { ResourceInput } from '@/features/roadmap/editor/types';
 
 export type NewRoadmapNode = {
   title: string;
@@ -27,80 +26,17 @@ export type RoadmapNodeTypeInput = {
   color: NodeTypeColor;
 };
 
+/** What executing a command resolves with: Node creation reports the created Node. */
+export type ExecutionResult = { readonly createdNodeId?: string };
+
+/** Persistence bound to one Course offering when it is created. */
 export type RoadmapCanvasSessionPersistence = {
-  load(input: RoadmapCanvasSessionInput): Promise<AnyRoadmapDto>;
-  complete(input: RoadmapCanvasSessionInput, nodeId: string): Promise<void>;
-  loadSimulation(input: RoadmapCanvasSessionInput): Promise<StudentRoadmapDto>;
-  addNode(
-    input: RoadmapCanvasSessionInput,
-    node: NewRoadmapNode,
-    position: Point,
-  ): Promise<string | void>;
-  updateNode(input: RoadmapCanvasSessionInput, nodeId: string, node: NodeUpdate): Promise<void>;
-  moveNode(input: RoadmapCanvasSessionInput, nodeId: string, position: Point): Promise<void>;
-  previewRoadmapDependency(
-    input: RoadmapCanvasSessionInput,
-    dependency: RoadmapDependencyRequest,
-  ): Promise<DependencyImpact>;
-  connectNodes(
-    input: RoadmapCanvasSessionInput,
-    dependency: RoadmapDependencyRequest,
-    previewVersion: string,
-  ): Promise<void>;
-  deleteDependency(input: RoadmapCanvasSessionInput, dependencyId: string): Promise<void>;
-  previewTeacherBlock(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-    operation: TeacherBlockOperation,
-  ): Promise<TeacherBlockPreview>;
-  changeTeacherBlock(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-    operation: TeacherBlockOperation,
-    previewVersion?: string,
-  ): Promise<void>;
-  scheduleTeacherUnlock(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-    unlockOn: string | null,
-  ): Promise<void>;
-  previewNodeHiding(input: RoadmapCanvasSessionInput, nodeId: string): Promise<NodeHidingImpact>;
-  setVisibility(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-    visible: boolean,
-    previewVersion?: string,
-  ): Promise<void>;
-  previewNodeDeletion(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-  ): Promise<NodeDeletionImpact>;
-  deleteNode(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-    previewVersion: string,
-  ): Promise<void>;
-  addResource(
-    input: RoadmapCanvasSessionInput,
-    nodeId: string,
-    resource: NewRoadmapResource,
-  ): Promise<void>;
-  uploadResource(input: RoadmapCanvasSessionInput, nodeId: string, file: File): Promise<void>;
-  updateResource(
-    input: RoadmapCanvasSessionInput,
-    resourceId: string,
-    resource: NewRoadmapResource,
-  ): Promise<void>;
-  deleteResource(input: RoadmapCanvasSessionInput, resourceId: string): Promise<void>;
-  addNodeType(input: RoadmapCanvasSessionInput, nodeType: RoadmapNodeTypeInput): Promise<void>;
-  updateNodeType(
-    input: RoadmapCanvasSessionInput,
-    nodeTypeId: string,
-    nodeType: RoadmapNodeTypeInput,
-  ): Promise<void>;
-  deleteNodeType(input: RoadmapCanvasSessionInput, nodeTypeId: string): Promise<void>;
-  completeSimulatedNode(input: RoadmapCanvasSessionInput, nodeId: string): Promise<void>;
-  resetSimulation(input: RoadmapCanvasSessionInput): Promise<void>;
+  load(): Promise<AnyRoadmapDto>;
+  loadCanvasPreview(): Promise<StudentRoadmapDto>;
+  readChangeImpact<Command extends ChangeImpactCommand>(
+    command: Command,
+  ): Promise<ReadChangeImpactOf<Command['kind']>>;
+  execute(command: PersistedCommand, previewVersion?: string): Promise<ExecutionResult | void>;
 };
 
 export type RoadmapCanvasExperience =
@@ -137,5 +73,5 @@ export type PracticeCanvasAction =
   | { readonly type: 'addResource'; readonly nodeId: string }
   | { readonly type: 'deleteNode'; readonly nodeId: string }
   | { readonly type: 'enterCanvasPreview' }
-  | { readonly type: 'completeSimulatedNode'; readonly nodeId: string }
+  | { readonly type: 'completeCanvasPreviewNode'; readonly nodeId: string }
   | { readonly type: 'exitCanvasPreview' };

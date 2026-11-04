@@ -161,7 +161,7 @@ test.each([false, true])(
     await user.click(screen.getByRole('button', { name: 'Límites' }));
     await user.click(screen.getByRole('button', { name: 'Completar Límites' }));
     await waitFor(async () =>
-      expect((await persistence.loadSimulation(teachingInput)).nodes[1]).toMatchObject({
+      expect((await persistence.loadCanvasPreview()).nodes[1]).toMatchObject({
         access: { status: 'ACCESSIBLE' },
       }),
     );
@@ -170,7 +170,7 @@ test.each([false, true])(
       await user.click(screen.getByRole('button', { name: 'Completar Derivadas' }));
     }
     await waitFor(async () =>
-      expect((await persistence.loadSimulation(teachingInput)).nodes[1]).toMatchObject({
+      expect((await persistence.loadCanvasPreview()).nodes[1]).toMatchObject({
         isCompleted: completeDependent,
       }),
     );
@@ -182,7 +182,7 @@ test.each([false, true])(
     await user.click(within(dialog).getByRole('button', { name: 'Reiniciar progreso' }));
     expect(await findToast('Progreso de previsualización reiniciado.')).toBeTruthy();
     expect(screen.queryByLabelText('Editor de nodo')).toBeNull();
-    const reset = await persistence.loadSimulation(teachingInput);
+    const reset = await persistence.loadCanvasPreview();
     expect(reset.nodes[1]).toMatchObject({ access: { status: 'BLOCKED' } });
     expect(reset.nodes[1]).not.toHaveProperty('resources');
     expect(screen.queryByRole('button', { name: 'Completar Derivadas' })).toBeNull();
@@ -190,6 +190,6 @@ test.each([false, true])(
     await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
     await user.click(screen.getByRole('button', { name: 'Derivadas' }));
     expect(await screen.findByRole('heading', { name: 'Recursos (0)' })).toBeTruthy();
-    expect((await persistence.load(teachingInput)).nodes).toEqual([limitsNode, dependent]);
+    expect((await persistence.load()).nodes).toEqual([limitsNode, dependent]);
   },
 );

@@ -15,11 +15,12 @@ import type {
   CanvasCommandOf,
   CanvasConfirmationChoice,
   ConfirmedActionKind,
+  PersistedCommand,
   UnconfirmedCommand,
 } from '@/features/roadmap/canvas/commands/commands';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
-import { confirmedWrites } from '../support/confirmed-writes';
+import { executeWithChangeImpact } from '../support/execute-with-change-impact';
 
 const teachingInput = {
   courseOffering: {
@@ -98,6 +99,41 @@ async function openCanvas(
   };
 }
 
+type Execution = ReturnType<RoadmapCanvasSessionPersistence['execute']>;
+
+/** Wraps an adapter so that executing a command of one kind goes through `intercept`. */
+function intercepting<Kind extends PersistedCommand['kind']>(
+  adapter: RoadmapCanvasSessionPersistence,
+  kind: Kind,
+  intercept: (command: CanvasCommandOf<Kind>, forward: () => Execution) => Execution,
+): RoadmapCanvasSessionPersistence {
+  return {
+    ...adapter,
+    execute(command, previewVersion) {
+      const forward = () => adapter.execute(command, previewVersion);
+      return command.kind === kind
+        ? intercept(command as CanvasCommandOf<Kind>, forward)
+        : forward();
+    },
+  };
+}
+
+/** Lets `race` change the Roadmap once, right before the first command of this kind applies. */
+function racingOnce(
+  adapter: RoadmapCanvasSessionPersistence,
+  kind: PersistedCommand['kind'],
+  race: () => Promise<unknown>,
+) {
+  let raceOnce = true;
+  return intercepting(adapter, kind, async (_, forward) => {
+    if (raceOnce) {
+      raceOnce = false;
+      await race();
+    }
+    return forward();
+  });
+}
+
 function withTeacherBlocks(...nodeIds: string[]): RoadmapDto {
   return {
     ...roadmap,
@@ -118,7 +154,7 @@ const laboratory: NodeType = {
 const withLaboratory: RoadmapDto = { ...roadmap, nodeTypes: [...roadmap.nodeTypes, laboratory] };
 
 async function teacherBlockedNodeIds(persistence: RoadmapCanvasSessionPersistence) {
-  return (await persistence.load(teachingInput)).nodes.flatMap((node) =>
+  return (await persistence.load()).nodes.flatMap((node) =>
     'isTeacherBlocked' in node && node.isTeacherBlocked ? [node.id] : [],
   );
 }
@@ -126,7 +162,7 @@ async function teacherBlockedNodeIds(persistence: RoadmapCanvasSessionPersistenc
 const successToasts = () => vi.mocked(notify.success).mock.calls.map(([message]) => message);
 
 async function nodeOf(persistence: RoadmapCanvasSessionPersistence, nodeId: string) {
-  return (await persistence.load(teachingInput)).nodes.find(({ id }) => id === nodeId);
+  return (await persistence.load()).nodes.find(({ id }) => id === nodeId);
 }
 
 describe('canvas commands', () => {
@@ -145,7 +181,7 @@ describe('canvas commands', () => {
 
     expect(canvas.commands().pending).toBeNull();
     expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ isVisible: false });
-    expect((await canvas.persistence.load(teachingInput)).dependencies).toEqual([]);
+    expect((await canvas.persistence.load()).dependencies).toEqual([]);
   });
 
   test('showing a hidden Node asks for confirmation without a Change impact', async () => {
@@ -181,10 +217,10 @@ describe('canvas commands', () => {
 
     expect(canvas.commands().pending).toBeNull();
     expect(await nodeOf(canvas.persistence, 'limits')).toBeUndefined();
-    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith({
-      kind: 'delete-node',
-      nodeId: 'limits',
-    });
+    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'delete-node', nodeId: 'limits' },
+      undefined,
+    );
   });
 
   test('cancelling an awaiting confirmation changes nothing and frees the slot', async () => {
@@ -212,7 +248,8 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request({ kind, nodeId: 'limits' }));
       await canvas.awaiting();
 
-      await confirmedWrites(canvas.persistence, teachingInput).connect({
+      await executeWithChangeImpact(canvas.persistence, {
+        kind: 'create-dependency',
         sourceNodeId: 'limits',
         targetNodeId: 'integrals',
         sourceHandle: 'right',
@@ -230,38 +267,30 @@ describe('canvas commands', () => {
 
       await canvas.confirm(kind);
       expect(canvas.commands().pending).toBeNull();
-      expect((await canvas.persistence.load(teachingInput)).dependencies).toEqual([]);
+      expect((await canvas.persistence.load()).dependencies).toEqual([]);
     },
   );
 
   test.each([
-    ['hide-node', 'setVisibility', 'de ocultar el nodo', [{ id: 'limits-derivatives' }, {}]],
+    ['hide-node', 'de ocultar el nodo', [{ id: 'limits-derivatives' }, {}]],
     [
       'delete-node',
-      'deleteNode',
       'de la eliminación',
       [{ targetTitle: 'Derivadas' }, { sourceTitle: 'Integrales' }],
     ],
   ] as const)(
     'shows the latest Change impact when the %s write is refused as stale, and confirms it again',
-    async (kind, write, impactName, latestDependencies) => {
+    async (kind, impactName, latestDependencies) => {
       const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
-      let raceOnce = true;
-      const persistence: RoadmapCanvasSessionPersistence = {
-        ...adapter,
-        async [write](...args: Parameters<RoadmapCanvasSessionPersistence[typeof write]>) {
-          if (raceOnce) {
-            raceOnce = false;
-            await confirmedWrites(adapter, teachingInput).connect({
-              sourceNodeId: 'integrals',
-              targetNodeId: 'limits',
-              sourceHandle: 'right',
-              targetHandle: 'left',
-            });
-          }
-          return (adapter[write] as (...forwarded: typeof args) => Promise<void>)(...args);
-        },
-      };
+      const persistence = racingOnce(adapter, kind, () =>
+        executeWithChangeImpact(adapter, {
+          kind: 'create-dependency',
+          sourceNodeId: 'integrals',
+          targetNodeId: 'limits',
+          sourceHandle: 'right',
+          targetHandle: 'left',
+        }),
+      );
       const canvas = await openCanvas(persistence);
       await act(() => canvas.commands().request({ kind, nodeId: 'limits' }));
       await canvas.awaiting();
@@ -275,12 +304,12 @@ describe('canvas commands', () => {
         phase: 'awaiting',
         impact: { dependencies: latestDependencies.map((item) => expect.objectContaining(item)) },
       });
-      expect((await persistence.load(teachingInput)).dependencies).toHaveLength(2);
+      expect((await persistence.load()).dependencies).toHaveLength(2);
       expect(successToasts()).toEqual([]);
 
       await canvas.confirm(kind);
       expect(canvas.commands().pending).toBeNull();
-      expect((await persistence.load(teachingInput)).dependencies).toEqual([]);
+      expect((await persistence.load()).dependencies).toEqual([]);
     },
   );
 
@@ -425,7 +454,8 @@ describe('canvas commands', () => {
     });
 
     const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
-      confirmedWrites(persistence, teachingInput).connect({
+      executeWithChangeImpact(persistence, {
+        kind: 'create-dependency',
         sourceNodeId: 'derivatives',
         targetNodeId: 'integrals',
         sourceHandle: 'right',
@@ -469,17 +499,9 @@ describe('canvas commands', () => {
       const adapter = createInMemoryRoadmapSessionPersistence(
         withTeacherBlocks('limits', 'derivatives'),
       );
-      let raceOnce = true;
-      const persistence: RoadmapCanvasSessionPersistence = {
-        ...adapter,
-        async changeTeacherBlock(...args) {
-          if (raceOnce) {
-            raceOnce = false;
-            await blockIntegralsBehindDerivatives(adapter);
-          }
-          return adapter.changeTeacherBlock(...args);
-        },
-      };
+      const persistence = racingOnce(adapter, 'change-teacher-block', () =>
+        blockIntegralsBehindDerivatives(adapter),
+      );
       const canvas = await openCanvas(persistence);
       await act(() =>
         canvas
@@ -515,7 +537,7 @@ describe('canvas commands', () => {
     } as const;
 
     async function dependencyPairs(persistence: RoadmapCanvasSessionPersistence) {
-      return (await persistence.load(teachingInput)).dependencies.map(
+      return (await persistence.load()).dependencies.map(
         ({ sourceNodeId, targetNodeId }) => `${sourceNodeId}→${targetNodeId}`,
       );
     }
@@ -535,12 +557,11 @@ describe('canvas commands', () => {
 
     test('frees the slot without asking when a creation without Change impact fails', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
-      const canvas = await openCanvas({
-        ...adapter,
-        connectNodes: async () => {
+      const canvas = await openCanvas(
+        intercepting(adapter, 'create-dependency', async () => {
           throw new Error('No se pudo crear la dependencia.');
-        },
-      });
+        }),
+      );
 
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
 
@@ -577,7 +598,8 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
       await canvas.awaiting();
 
-      await confirmedWrites(canvas.persistence, teachingInput).connect({
+      await executeWithChangeImpact(canvas.persistence, {
+        kind: 'create-dependency',
         sourceNodeId: 'integrals',
         targetNodeId: 'derivatives',
         sourceHandle: 'right',
@@ -607,7 +629,11 @@ describe('canvas commands', () => {
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
       await canvas.awaiting();
 
-      await confirmedWrites(canvas.persistence, teachingInput).block('integrals');
+      await executeWithChangeImpact(canvas.persistence, {
+        kind: 'change-teacher-block',
+        nodeId: 'integrals',
+        operation: 'BLOCK',
+      });
       await canvas.confirm('create-dependency');
 
       expect(canvas.commands().pending).toBeNull();
@@ -617,22 +643,15 @@ describe('canvas commands', () => {
 
     test('shows the latest Change impact when the creation is refused as stale, and confirms it again', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits'));
-      let raceOnce = true;
-      const persistence: RoadmapCanvasSessionPersistence = {
-        ...adapter,
-        async connectNodes(...args) {
-          if (raceOnce) {
-            raceOnce = false;
-            await confirmedWrites(adapter, teachingInput).connect({
-              sourceNodeId: 'integrals',
-              targetNodeId: 'derivatives',
-              sourceHandle: 'right',
-              targetHandle: 'left',
-            });
-          }
-          return adapter.connectNodes(...args);
-        },
-      };
+      const persistence = racingOnce(adapter, 'create-dependency', () =>
+        executeWithChangeImpact(adapter, {
+          kind: 'create-dependency',
+          sourceNodeId: 'integrals',
+          targetNodeId: 'derivatives',
+          sourceHandle: 'right',
+          targetHandle: 'left',
+        }),
+      );
       const canvas = await openCanvas(persistence);
       await act(() => canvas.commands().request(connectLimitsToIntegrals));
       await canvas.awaiting();
@@ -685,18 +704,20 @@ describe('canvas commands', () => {
       positionX: 300,
       positionY: 200,
     });
-    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout);
+    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout, undefined);
   });
 
   test('an automatic layout with a failed move keeps the moved Nodes and stays open to retry', async () => {
     const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
-    const canvas = await openCanvas({
-      ...adapter,
-      async moveNode(input, nodeId, position) {
-        if (nodeId === 'derivatives') throw new Error();
-        return adapter.moveNode(input, nodeId, position);
-      },
-    });
+    const canvas = await openCanvas(
+      intercepting(adapter, 'apply-automatic-layout', async (layout) => {
+        await adapter.execute({
+          ...layout,
+          positions: layout.positions.filter(({ nodeId }) => nodeId !== 'derivatives'),
+        });
+        throw new Error('No se pudo guardar la posición.');
+      }),
+    );
 
     await act(() =>
       canvas.commands().request({
@@ -721,15 +742,15 @@ describe('canvas commands', () => {
     expect(canvas.onCommandApplied).not.toHaveBeenCalled();
   });
 
-  test('resetting the Canvas preview asks first, then clears simulated Completions and reloads the preview', async () => {
+  test('resetting the Canvas preview asks first, then clears Canvas preview progress and reloads the preview', async () => {
     const canvas = await openCanvas();
     await act(async () => {
-      await canvas.session().loadSimulation();
-      await canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' });
+      await canvas.session().loadCanvasPreview();
+      await canvas.commands().request({ kind: 'complete-canvas-preview-node', nodeId: 'limits' });
     });
-    const simulatedCompletion = () =>
-      canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits');
-    expect(simulatedCompletion()).toMatchObject({ isCompleted: true });
+    const canvasPreviewCompletion = () =>
+      canvas.session().canvasPreviewRoadmap?.nodes.find(({ id }) => id === 'limits');
+    expect(canvasPreviewCompletion()).toMatchObject({ isCompleted: true });
 
     await act(() => canvas.commands().request({ kind: 'reset-canvas-preview' }));
     expect(await canvas.awaiting()).toEqual({
@@ -738,13 +759,13 @@ describe('canvas commands', () => {
       impact: null,
       phase: 'awaiting',
     });
-    expect(simulatedCompletion()).toMatchObject({ isCompleted: true });
+    expect(canvasPreviewCompletion()).toMatchObject({ isCompleted: true });
 
     await canvas.confirm('reset-canvas-preview');
 
     expect(canvas.commands().pending).toBeNull();
-    expect(simulatedCompletion()).toMatchObject({ isCompleted: false });
-    expect((await canvas.persistence.loadSimulation(teachingInput)).nodes[0]).toMatchObject({
+    expect(canvasPreviewCompletion()).toMatchObject({ isCompleted: false });
+    expect((await canvas.persistence.loadCanvasPreview()).nodes[0]).toMatchObject({
       isCompleted: false,
     });
   });
@@ -766,18 +787,15 @@ describe('canvas commands', () => {
     });
     const deleteWorkshop = { kind: 'delete-node-type', nodeTypeId: workshop.id } as const;
     const nodeTypeIds = async (persistence: RoadmapCanvasSessionPersistence) =>
-      (await persistence.load(teachingInput)).nodeTypes.map(({ id }) => id);
+      (await persistence.load()).nodeTypes.map(({ id }) => id);
 
     test('asks first and keeps the choice pending while the Node type is deleted', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(withWorkshop());
       let finishDeletion: () => void = () => undefined;
-      const persistence: RoadmapCanvasSessionPersistence = {
-        ...adapter,
-        async deleteNodeType(...args) {
-          await new Promise<void>((resolve) => (finishDeletion = resolve));
-          return adapter.deleteNodeType(...args);
-        },
-      };
+      const persistence = intercepting(adapter, 'delete-node-type', async (_, forward) => {
+        await new Promise<void>((resolve) => (finishDeletion = resolve));
+        return forward();
+      });
       const canvas = await openCanvas(persistence);
 
       await act(() => canvas.commands().request(deleteWorkshop));
@@ -834,19 +852,19 @@ describe('canvas commands', () => {
       ],
     });
     let failOnce = true;
-    const persistence: RoadmapCanvasSessionPersistence = {
-      ...adapter,
-      async deleteDependency(input, dependencyId) {
+    const persistence = intercepting(
+      adapter,
+      'delete-dependency',
+      async ({ dependencyId }, forward) => {
         if (dependencyId === 'limits-integrals' && failOnce) {
           failOnce = false;
           throw new Error('No se pudo eliminar la dependencia.');
         }
-        return adapter.deleteDependency(input, dependencyId);
+        return forward();
       },
-    };
+    );
     const canvas = await openCanvas(persistence);
-    const dependencyIds = async () =>
-      (await persistence.load(teachingInput)).dependencies.map(({ id }) => id);
+    const dependencyIds = async () => (await persistence.load()).dependencies.map(({ id }) => id);
 
     await act(() =>
       canvas.commands().request({
@@ -1071,7 +1089,7 @@ describe('canvas commands', () => {
         },
         null,
         async (persistence) =>
-          (await persistence.load(teachingInput)).nodes
+          (await persistence.load()).nodes
             .slice(0, 2)
             .map(({ positionX, positionY }) => [positionX, positionY]),
         [
@@ -1087,23 +1105,21 @@ describe('canvas commands', () => {
           position: { x: 480, y: 240 },
         },
         'Nodo creado exitosamente.',
-        async (persistence) => (await persistence.load(teachingInput)).nodes.at(-1)?.title,
+        async (persistence) => (await persistence.load()).nodes.at(-1)?.title,
         'Sucesiones',
       ],
       [
         'creating a Node type',
         { kind: 'add-node-type', nodeType: workshop },
         'Tipo de nodo creado exitosamente.',
-        async (persistence) =>
-          (await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name),
+        async (persistence) => (await persistence.load()).nodeTypes.map(({ name }) => name),
         ['Contenido', 'Laboratorio', 'Taller'],
       ],
       [
         'saving a Custom node type',
         { kind: 'update-node-type', nodeTypeId: laboratory.id, nodeType: workshop },
         'Tipo de nodo guardado exitosamente.',
-        async (persistence) =>
-          (await persistence.load(teachingInput)).nodeTypes.map(({ name }) => name),
+        async (persistence) => (await persistence.load()).nodeTypes.map(({ name }) => name),
         ['Contenido', 'Taller'],
       ],
       [
@@ -1165,20 +1181,19 @@ describe('canvas commands', () => {
 
       expect(applied).toBe(false);
       expect(canvas.session().error).toBe('Los tipos predefinidos son inmutables.');
-      expect((await canvas.persistence.load(teachingInput)).nodeTypes[0].name).toBe('Contenido');
+      expect((await canvas.persistence.load()).nodeTypes[0].name).toBe('Contenido');
       expect(successToasts()).toEqual([]);
       expect(canvas.reported()).toEqual([]);
       expect(canvas.onCommandApplied).not.toHaveBeenCalled();
     });
 
-    test('a failed write without a message shows its fallback as the session error', async () => {
+    test('a failed write without any message shows the generic failure as the session error', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(editable);
-      const canvas = await openCanvas({
-        ...adapter,
-        addResource: async () => {
+      const canvas = await openCanvas(
+        intercepting(adapter, 'add-resource', async () => {
           throw new Error();
-        },
-      });
+        }),
+      );
 
       let applied: boolean | undefined;
       await act(async () => {
@@ -1190,7 +1205,7 @@ describe('canvas commands', () => {
       });
 
       expect(applied).toBe(false);
-      expect(canvas.session().error).toBe('No se pudo agregar el recurso.');
+      expect(canvas.session().error).toBe('No se pudo completar la acción.');
       expect(successToasts()).toEqual([]);
       expect(canvas.reported()).toEqual([]);
     });
@@ -1212,35 +1227,6 @@ describe('canvas commands', () => {
       });
     });
 
-    test('moves each Node on its own: a failed move keeps the others and shows its failure', async () => {
-      const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
-      const canvas = await openCanvas({
-        ...adapter,
-        async moveNode(input, nodeId, position) {
-          if (nodeId === 'derivatives') throw new Error();
-          await new Promise((resolve) => setTimeout(resolve, 20));
-          return adapter.moveNode(input, nodeId, position);
-        },
-      });
-
-      let applied: boolean | undefined;
-      await act(async () => {
-        applied = await canvas.commands().request({
-          kind: 'move-nodes',
-          positions: [
-            { nodeId: 'limits', position: { x: 40, y: 80 } },
-            { nodeId: 'derivatives', position: { x: 300, y: 80 } },
-          ],
-        });
-      });
-
-      expect(applied).toBe(false);
-      expect(await nodeOf(adapter, 'limits')).toMatchObject({ positionX: 40, positionY: 80 });
-      expect(await nodeOf(adapter, 'derivatives')).toMatchObject({ positionX: 0, positionY: 0 });
-      expect(canvas.session().error).toBe('No se pudo guardar la posición.');
-      expect(canvas.onCommandApplied).not.toHaveBeenCalled();
-    });
-
     test('creating a Node tells the view and the Practice roadmap which Node it created', async () => {
       const canvas = await openCanvas();
       const command = {
@@ -1251,7 +1237,7 @@ describe('canvas commands', () => {
 
       await act(() => canvas.commands().request(command));
 
-      const created = (await canvas.persistence.load(teachingInput)).nodes.at(-1)!;
+      const created = (await canvas.persistence.load()).nodes.at(-1)!;
       expect(created).toMatchObject({ title: 'Sucesiones', positionX: 480, positionY: 240 });
       expect(canvas.session().roadmap?.nodes.at(-1)?.id).toBe(created.id);
       expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(command, created.id);
@@ -1261,19 +1247,19 @@ describe('canvas commands', () => {
     test('completing a Node in the Canvas preview reloads only the preview, shows the student toast and reports it', async () => {
       const canvas = await openCanvas();
       await act(async () => {
-        await canvas.session().loadSimulation();
+        await canvas.session().loadCanvasPreview();
       });
 
       await act(() =>
-        canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' }),
+        canvas.commands().request({ kind: 'complete-canvas-preview-node', nodeId: 'limits' }),
       );
 
       expect(
-        canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits'),
+        canvas.session().canvasPreviewRoadmap?.nodes.find(({ id }) => id === 'limits'),
       ).toMatchObject({ isCompleted: true });
       expect(await nodeOf(canvas.persistence, 'limits')).not.toHaveProperty('isCompleted');
       expect(successToasts()).toEqual(['Nodo completado.']);
-      expect(canvas.reported()).toEqual([{ type: 'completeSimulatedNode', nodeId: 'limits' }]);
+      expect(canvas.reported()).toEqual([{ type: 'completeCanvasPreviewNode', nodeId: 'limits' }]);
     });
   });
 
@@ -1322,35 +1308,35 @@ describe('canvas commands', () => {
       ]);
     });
 
-    test('reports a simulated Completion whose preview reload a newer one superseded', async () => {
+    test('reports a Canvas preview Completion whose preview reload a newer one superseded', async () => {
       const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
       let holdNextPreviewLoad = false;
       let releasePreviewLoad: (() => void) | undefined;
       const canvas = await openCanvas({
         ...adapter,
-        async loadSimulation(input) {
+        async loadCanvasPreview() {
           if (holdNextPreviewLoad) {
             holdNextPreviewLoad = false;
             await new Promise<void>((resolve) => (releasePreviewLoad = resolve));
           }
-          return adapter.loadSimulation(input);
+          return adapter.loadCanvasPreview();
         },
       });
       await act(async () => {
-        await canvas.session().loadSimulation();
+        await canvas.session().loadCanvasPreview();
       });
 
       holdNextPreviewLoad = true;
       let completion: Promise<boolean> | undefined;
       act(() => {
         completion = canvas.commands().request({
-          kind: 'complete-simulated-node',
+          kind: 'complete-canvas-preview-node',
           nodeId: 'limits',
         });
       });
       await waitFor(() => expect(releasePreviewLoad).toBeDefined());
       await act(async () => {
-        await canvas.session().loadSimulation();
+        await canvas.session().loadCanvasPreview();
       });
       let applied: boolean | undefined;
       await act(async () => {
@@ -1361,9 +1347,9 @@ describe('canvas commands', () => {
       expect(applied).toBe(true);
       expect(canvas.session().error).toBeNull();
       expect(
-        canvas.session().simulationRoadmap?.nodes.find(({ id }) => id === 'limits'),
+        canvas.session().canvasPreviewRoadmap?.nodes.find(({ id }) => id === 'limits'),
       ).toMatchObject({ isCompleted: true });
-      expect(canvas.reported()).toEqual([{ type: 'completeSimulatedNode', nodeId: 'limits' }]);
+      expect(canvas.reported()).toEqual([{ type: 'completeCanvasPreviewNode', nodeId: 'limits' }]);
     });
 
     test('a confirmed write whose Roadmap reload fails still took effect: it is reported and the reload failure shown', async () => {
@@ -1371,9 +1357,9 @@ describe('canvas commands', () => {
       let failLoads = false;
       const canvas = await openCanvas({
         ...adapter,
-        async load(input) {
+        async load() {
           if (failLoads) throw new Error();
-          return adapter.load(input);
+          return adapter.load();
         },
       });
 
@@ -1387,10 +1373,10 @@ describe('canvas commands', () => {
       expect(canvas.reported()).toEqual([
         { type: 'changeVisibility', nodeId: 'integrals', isVisible: false },
       ]);
-      expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith({
-        kind: 'hide-node',
-        nodeId: 'integrals',
-      });
+      expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(
+        { kind: 'hide-node', nodeId: 'integrals' },
+        undefined,
+      );
       expect(canvas.session().error).toBe('No se pudo actualizar el roadmap. Puedes reintentar.');
     });
 
@@ -1404,7 +1390,7 @@ describe('canvas commands', () => {
 
       await enter();
       await act(() =>
-        canvas.commands().request({ kind: 'complete-simulated-node', nodeId: 'limits' }),
+        canvas.commands().request({ kind: 'complete-canvas-preview-node', nodeId: 'limits' }),
       );
       await act(() =>
         canvas.commands().request({
@@ -1417,7 +1403,7 @@ describe('canvas commands', () => {
 
       expect(canvas.reported()).toEqual([
         { type: 'enterCanvasPreview' },
-        { type: 'completeSimulatedNode', nodeId: 'limits' },
+        { type: 'completeCanvasPreviewNode', nodeId: 'limits' },
         { type: 'enterCanvasPreview' },
       ]);
     });

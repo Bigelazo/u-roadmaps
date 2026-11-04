@@ -1,19 +1,16 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { httpRoadmapCanvasSessionPersistence as http } from '@/features/roadmap/session/http-persistence';
-import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
+import type {
+  ChangeImpactCommand,
+  PersistedCommand,
+} from '@/features/roadmap/canvas/commands/commands';
+import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
+import { RoadmapAccessLostError, RoadmapClosedError } from '@/features/roadmap/session/access-lost';
 
-const input = {
-  courseOffering: {
-    identifier: { courseCode: 'CC1001', year: 2026, semester: 2 },
-    title: 'Programación I',
-  },
-  experience: { kind: 'teaching' as const, term: 'current' as const },
-} satisfies RoadmapCanvasSessionInput;
-
-const studentInput = {
-  ...input,
-  experience: { kind: 'student' as const, term: 'current' as const },
-} satisfies RoadmapCanvasSessionInput;
+const http = createHttpRoadmapCanvasSessionPersistence({
+  courseCode: 'CC1001',
+  year: 2026,
+  semester: 2,
+});
 
 const roadmap = {
   course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
@@ -41,298 +38,447 @@ const deletionImpact = {
   resources: [],
   version: 'deletion-version',
 };
-
-type Mapping = {
-  call: () => Promise<unknown>;
-  path: string;
-  init: RequestInit;
-  response?: unknown;
-  resolves?: unknown;
+const hidingImpact = {
+  dependencies: [{ id: 'dependency-1', sourceNodeId: 'node-1', targetNodeId: 'node-2' }],
+  version: 'hide-version',
 };
 
 const api = (suffix: string) => `/api/CC1001/2026/2/roadmap${suffix}`;
 
-const mappings: Record<string, Mapping> = {
-  'load a teaching Roadmap': {
-    call: () => http.load(input),
-    path: '',
-    init: { cache: 'no-store' },
-    response: roadmap,
-    resolves: roadmap,
-  },
-  'load a student Roadmap': {
-    call: () => http.load(studentInput),
-    path: '',
-    init: { cache: 'no-store' },
-    response: roadmap,
-    resolves: roadmap,
-  },
-  'load the Canvas preview': {
-    call: () => http.loadSimulation(input),
-    path: '/simulation',
-    init: { cache: 'no-store' },
-    response: roadmap,
-    resolves: roadmap,
-  },
+type Request = readonly [path: string, init: RequestInit];
+
+type Execution = {
+  command: PersistedCommand;
+  previewVersion?: string;
+  requests: readonly Request[];
+  response?: unknown;
+  resolves?: unknown;
+};
+
+const executions: Record<string, Execution> = {
   'complete a Node': {
-    call: () => http.complete(studentInput, 'node-1'),
-    path: '/nodes/node-1/completion',
-    init: { method: 'POST' },
+    command: { kind: 'complete-node', nodeId: 'node-1' },
+    requests: [['/nodes/node-1/completion', { method: 'POST' }]],
   },
-  'add a Node': {
-    call: () =>
-      http.addNode(
-        input,
-        { title: 'Límites', description: '', nodeTypeId: 'content', isVisible: true },
-        { x: 10, y: 20 },
-      ),
-    path: '/nodes',
-    init: {
-      method: 'POST',
-      headers: json,
-      body: JSON.stringify({
-        title: 'Límites',
-        description: null,
-        nodeTypeId: 'content',
-        isVisible: true,
-        positionX: 10,
-        positionY: 20,
-      }),
+  'add a Node and resolve with its identifier': {
+    command: {
+      kind: 'add-node',
+      node: { title: 'Límites', description: '', nodeTypeId: 'content', isVisible: true },
+      position: { x: 10, y: 20 },
     },
+    requests: [
+      [
+        '/nodes',
+        {
+          method: 'POST',
+          headers: json,
+          body: JSON.stringify({
+            title: 'Límites',
+            description: null,
+            nodeTypeId: 'content',
+            isVisible: true,
+            positionX: 10,
+            positionY: 20,
+          }),
+        },
+      ],
+    ],
     response: { node: { id: 'node-9' } },
-    resolves: 'node-9',
+    resolves: { createdNodeId: 'node-9' },
   },
   'update a Node': {
-    call: () => http.updateNode(input, 'node-1', nodeUpdate),
-    path: '/nodes/node-1',
-    init: {
-      method: 'PATCH',
-      headers: json,
-      body: JSON.stringify({ ...nodeUpdate, description: null }),
-    },
+    command: { kind: 'update-node', nodeId: 'node-1', value: nodeUpdate },
+    requests: [
+      [
+        '/nodes/node-1',
+        {
+          method: 'PATCH',
+          headers: json,
+          body: JSON.stringify({ ...nodeUpdate, description: null }),
+        },
+      ],
+    ],
   },
-  'move a Node': {
-    call: () => http.moveNode(input, 'node-1', { x: 30, y: 40 }),
-    path: '/nodes/node-1',
-    init: {
-      method: 'PATCH',
-      headers: json,
-      body: JSON.stringify({ positionX: 30, positionY: 40 }),
+  'move Nodes, one change per Node': {
+    command: {
+      kind: 'move-nodes',
+      positions: [
+        { nodeId: 'node-1', position: { x: 30, y: 40 } },
+        { nodeId: 'node-2', position: { x: 50, y: 60 } },
+      ],
     },
+    requests: [
+      [
+        '/nodes/node-1',
+        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 30, positionY: 40 }) },
+      ],
+      [
+        '/nodes/node-2',
+        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 50, positionY: 60 }) },
+      ],
+    ],
   },
-  'preview a Dependency': {
-    call: () => http.previewRoadmapDependency(input, dependency),
-    path: '/dependencies?sourceNodeId=node-1&targetNodeId=node-2&sourceHandle=bottom&targetHandle=top',
-    init: {},
-    response: { nodes: [{ id: 'node-3', title: 'Derivadas' }], version: 'dependency-version' },
-    resolves: { nodes: [{ id: 'node-3', title: 'Derivadas' }], version: 'dependency-version' },
+  'apply an automatic layout as Node moves': {
+    command: {
+      kind: 'apply-automatic-layout',
+      positions: [{ nodeId: 'node-1', position: { x: 0, y: 200 } }],
+      direction: 'LR',
+    },
+    requests: [
+      [
+        '/nodes/node-1',
+        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 0, positionY: 200 }) },
+      ],
+    ],
   },
   'create a Dependency with its preview version': {
-    call: () => http.connectNodes(input, dependency, 'dependency-version'),
-    path: '/dependencies',
-    init: {
-      method: 'POST',
-      headers: { ...json, 'x-dependency-preview': 'dependency-version' },
-      body: JSON.stringify(dependency),
-    },
+    command: { kind: 'create-dependency', ...dependency },
+    previewVersion: 'dependency-version',
+    requests: [
+      [
+        '/dependencies',
+        {
+          method: 'POST',
+          headers: { ...json, 'x-dependency-preview': 'dependency-version' },
+          body: JSON.stringify(dependency),
+        },
+      ],
+    ],
   },
   'delete a Dependency': {
-    call: () => http.deleteDependency(input, 'dependency-1'),
-    path: '/dependencies/dependency-1',
-    init: { method: 'DELETE' },
-  },
-  'preview a Teacher block': {
-    call: () => http.previewTeacherBlock(input, 'node-1', 'BLOCK'),
-    path: '/nodes/node-1/teacher-block?operation=BLOCK',
-    init: {},
-    response: { mode: 'BLOCK', nodes: [], version: 'block-version' },
-    resolves: { mode: 'BLOCK', nodes: [], version: 'block-version' },
+    command: { kind: 'delete-dependency', dependencyId: 'dependency-1' },
+    requests: [['/dependencies/dependency-1', { method: 'DELETE' }]],
   },
   'place a Teacher block with its preview version': {
-    call: () => http.changeTeacherBlock(input, 'node-1', 'BLOCK', 'block-version'),
-    path: '/nodes/node-1/teacher-block',
-    init: { method: 'POST', headers: { 'x-teacher-block-preview': 'block-version' } },
+    command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BLOCK' },
+    previewVersion: 'block-version',
+    requests: [
+      [
+        '/nodes/node-1/teacher-block',
+        { method: 'POST', headers: { 'x-teacher-block-preview': 'block-version' } },
+      ],
+    ],
   },
   'unlock a Node with its preview version': {
-    call: () => http.changeTeacherBlock(input, 'node-1', 'UNBLOCK', 'unlock-version'),
-    path: '/nodes/node-1/teacher-block',
-    init: { method: 'DELETE', headers: { 'x-teacher-block-preview': 'unlock-version' } },
+    command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'UNBLOCK' },
+    previewVersion: 'unlock-version',
+    requests: [
+      [
+        '/nodes/node-1/teacher-block',
+        { method: 'DELETE', headers: { 'x-teacher-block-preview': 'unlock-version' } },
+      ],
+    ],
   },
   'unlock a branch with its preview version': {
-    call: () => http.changeTeacherBlock(input, 'node-1', 'BRANCH_UNLOCK', 'branch-version'),
-    path: '/nodes/node-1/teacher-block',
-    init: { method: 'PATCH', headers: { 'x-teacher-block-preview': 'branch-version' } },
+    command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BRANCH_UNLOCK' },
+    previewVersion: 'branch-version',
+    requests: [
+      [
+        '/nodes/node-1/teacher-block',
+        { method: 'PATCH', headers: { 'x-teacher-block-preview': 'branch-version' } },
+      ],
+    ],
   },
   'schedule an unlock': {
-    call: () => http.scheduleTeacherUnlock(input, 'node-1', '2026-11-01'),
-    path: '/nodes/node-1/teacher-block/schedule',
-    init: { method: 'PUT', headers: json, body: JSON.stringify({ unlockOn: '2026-11-01' }) },
+    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockOn: '2026-11-01' },
+    requests: [
+      [
+        '/nodes/node-1/teacher-block/schedule',
+        { method: 'PUT', headers: json, body: JSON.stringify({ unlockOn: '2026-11-01' }) },
+      ],
+    ],
   },
   'cancel a Scheduled unlock': {
-    call: () => http.scheduleTeacherUnlock(input, 'node-1', null),
-    path: '/nodes/node-1/teacher-block/schedule',
-    init: { method: 'DELETE' },
-  },
-  'preview hiding a Node': {
-    call: () => http.previewNodeHiding(input, 'node-1'),
-    path: '/nodes/node-1?operation=HIDE',
-    init: {},
-    response: {
-      dependencies: [{ id: 'dependency-1', sourceNodeId: 'node-1', targetNodeId: 'node-2' }],
-      version: 'hide-version',
-    },
-    resolves: {
-      dependencies: [{ id: 'dependency-1', sourceNodeId: 'node-1', targetNodeId: 'node-2' }],
-      version: 'hide-version',
-    },
+    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockOn: null },
+    requests: [['/nodes/node-1/teacher-block/schedule', { method: 'DELETE' }]],
   },
   'hide a Node with its preview version': {
-    call: () => http.setVisibility(input, 'node-1', false, 'hide-version'),
-    path: '/nodes/node-1',
-    init: {
-      method: 'PATCH',
-      headers: { ...json, 'x-node-visibility-preview': 'hide-version' },
-      body: JSON.stringify({ isVisible: false }),
-    },
+    command: { kind: 'hide-node', nodeId: 'node-1' },
+    previewVersion: 'hide-version',
+    requests: [
+      [
+        '/nodes/node-1',
+        {
+          method: 'PATCH',
+          headers: { ...json, 'x-node-visibility-preview': 'hide-version' },
+          body: JSON.stringify({ isVisible: false }),
+        },
+      ],
+    ],
   },
   'show a Node': {
-    call: () => http.setVisibility(input, 'node-1', true),
-    path: '/nodes/node-1',
-    init: { method: 'PATCH', headers: json, body: JSON.stringify({ isVisible: true }) },
-  },
-  'preview deleting a Node': {
-    call: () => http.previewNodeDeletion(input, 'node-1'),
-    path: '/nodes/node-1?operation=DELETE',
-    init: {},
-    response: deletionImpact,
-    resolves: deletionImpact,
+    command: { kind: 'show-node', nodeId: 'node-1' },
+    requests: [
+      [
+        '/nodes/node-1',
+        { method: 'PATCH', headers: json, body: JSON.stringify({ isVisible: true }) },
+      ],
+    ],
   },
   'delete a Node with its preview version': {
-    call: () => http.deleteNode(input, 'node-1', 'deletion-version'),
-    path: '/nodes/node-1',
-    init: { method: 'DELETE', headers: { 'x-node-delete-preview': 'deletion-version' } },
+    command: { kind: 'delete-node', nodeId: 'node-1' },
+    previewVersion: 'deletion-version',
+    requests: [
+      [
+        '/nodes/node-1',
+        { method: 'DELETE', headers: { 'x-node-delete-preview': 'deletion-version' } },
+      ],
+    ],
   },
   'add a link Resource': {
-    call: () => http.addResource(input, 'node-1', link),
-    path: '/nodes/node-1/resources',
-    init: { method: 'POST', headers: json, body: JSON.stringify(link) },
+    command: { kind: 'add-resource', nodeId: 'node-1', resource: link },
+    requests: [
+      ['/nodes/node-1/resources', { method: 'POST', headers: json, body: JSON.stringify(link) }],
+    ],
   },
   'update a link Resource': {
-    call: () => http.updateResource(input, 'resource-1', link),
-    path: '/resources/resource-1',
-    init: { method: 'PATCH', headers: json, body: JSON.stringify(link) },
+    command: { kind: 'update-resource', resourceId: 'resource-1', resource: link },
+    requests: [
+      ['/resources/resource-1', { method: 'PATCH', headers: json, body: JSON.stringify(link) }],
+    ],
   },
   'rename a file Resource without resubmitting its protected download URL': {
-    call: () =>
-      http.updateResource(input, 'resource-1', {
+    command: {
+      kind: 'update-resource',
+      resourceId: 'resource-1',
+      resource: {
         title: 'Guía.docx',
         url: '/api/CC1001/2026/2/roadmap/resources/resource-1/file',
         type: 'FILE',
-      }),
-    path: '/resources/resource-1',
-    init: { method: 'PATCH', headers: json, body: JSON.stringify({ title: 'Guía.docx' }) },
+      },
+    },
+    requests: [
+      [
+        '/resources/resource-1',
+        { method: 'PATCH', headers: json, body: JSON.stringify({ title: 'Guía.docx' }) },
+      ],
+    ],
   },
   'delete a Resource': {
-    call: () => http.deleteResource(input, 'resource-1'),
-    path: '/resources/resource-1',
-    init: { method: 'DELETE' },
+    command: { kind: 'delete-resource', resourceId: 'resource-1' },
+    requests: [['/resources/resource-1', { method: 'DELETE' }]],
   },
   'add a Node type': {
-    call: () => http.addNodeType(input, nodeType),
-    path: '/node-types',
-    init: { method: 'POST', headers: json, body: JSON.stringify(nodeType) },
+    command: { kind: 'add-node-type', nodeType },
+    requests: [['/node-types', { method: 'POST', headers: json, body: JSON.stringify(nodeType) }]],
   },
   'update a Node type': {
-    call: () => http.updateNodeType(input, 'type-1', nodeType),
-    path: '/node-types/type-1',
-    init: { method: 'PATCH', headers: json, body: JSON.stringify(nodeType) },
+    command: { kind: 'update-node-type', nodeTypeId: 'type-1', nodeType },
+    requests: [
+      ['/node-types/type-1', { method: 'PATCH', headers: json, body: JSON.stringify(nodeType) }],
+    ],
   },
   'delete a Node type': {
-    call: () => http.deleteNodeType(input, 'type-1'),
-    path: '/node-types/type-1',
-    init: { method: 'DELETE' },
+    command: { kind: 'delete-node-type', nodeTypeId: 'type-1' },
+    requests: [['/node-types/type-1', { method: 'DELETE' }]],
   },
   'complete a Node in the Canvas preview': {
-    call: () => http.completeSimulatedNode(input, 'node-1'),
-    path: '/simulation/nodes/node-1/completion',
-    init: { method: 'POST' },
+    command: { kind: 'complete-canvas-preview-node', nodeId: 'node-1' },
+    requests: [['/simulation/nodes/node-1/completion', { method: 'POST' }]],
   },
   'reset the Canvas preview': {
-    call: () => http.resetSimulation(input),
-    path: '/simulation',
-    init: { method: 'DELETE' },
+    command: { kind: 'reset-canvas-preview' },
+    requests: [['/simulation', { method: 'DELETE' }]],
   },
 };
 
+const changeImpacts: Record<
+  string,
+  { command: ChangeImpactCommand; path: string; response: unknown }
+> = {
+  'read the Change impact of a Dependency': {
+    command: { kind: 'create-dependency', ...dependency },
+    path: '/dependencies?sourceNodeId=node-1&targetNodeId=node-2&sourceHandle=bottom&targetHandle=top',
+    response: { nodes: [{ id: 'node-3', title: 'Derivadas' }], version: 'dependency-version' },
+  },
+  'read the Change impact of a Teacher block': {
+    command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BLOCK' },
+    path: '/nodes/node-1/teacher-block?operation=BLOCK',
+    response: { mode: 'BLOCK', nodes: [], version: 'block-version' },
+  },
+  'read the Change impact of a Branch unlock': {
+    command: { kind: 'change-teacher-block', nodeId: 'node-1', operation: 'BRANCH_UNLOCK' },
+    path: '/nodes/node-1/teacher-block?operation=BRANCH_UNLOCK',
+    response: { mode: 'BRANCH', nodes: [], version: 'branch-version' },
+  },
+  'read the Change impact of hiding a Node': {
+    command: { kind: 'hide-node', nodeId: 'node-1' },
+    path: '/nodes/node-1?operation=HIDE',
+    response: hidingImpact,
+  },
+  'read the Change impact of deleting a Node': {
+    command: { kind: 'delete-node', nodeId: 'node-1' },
+    path: '/nodes/node-1?operation=DELETE',
+    response: deletionImpact,
+  },
+};
+
+function respondWith(response?: unknown) {
+  const fetchMock = vi.fn(async () =>
+    response === undefined ? new Response(null, { status: 204 }) : Response.json(response),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+function refuseWith(status: number, error?: { message: string; code?: string }) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      error ? Response.json({ error }, { status }) : new Response(null, { status }),
+    ),
+  );
+}
+
 afterEach(() => vi.unstubAllGlobals());
 
-test.each(Object.entries(mappings))(
+test.each([
+  ['load the Roadmap', () => http.load(), ''],
+  ['load the Canvas preview', () => http.loadCanvasPreview(), '/simulation'],
+] as const)('%s', async (_name, call, path) => {
+  const fetchMock = respondWith(roadmap);
+
+  await expect(call()).resolves.toEqual(roadmap);
+
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api(path), { cache: 'no-store' });
+});
+
+test.each(Object.entries(executions))(
   '%s',
-  async (_name, { call, path, init, response, resolves }) => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        response === undefined ? new Response(null, { status: 204 }) : Response.json(response),
-      );
-    vi.stubGlobal('fetch', fetchMock);
+  async (_name, { command, previewVersion, requests, response, resolves }) => {
+    const fetchMock = respondWith(response);
 
-    await expect(call()).resolves.toEqual(resolves);
+    await expect(http.execute(command, previewVersion)).resolves.toEqual(resolves);
 
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api(path), init);
+    expect(fetchMock.mock.calls).toEqual(requests.map(([path, init]) => [api(path), init]));
   },
 );
 
-test('omits the preview header when a previewed change sends no version', async () => {
-  const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-  vi.stubGlobal('fetch', fetchMock);
+test.each(Object.entries(changeImpacts))('%s', async (_name, { command, path, response }) => {
+  const fetchMock = respondWith(response);
 
-  await http.setVisibility(input, 'node-1', false);
+  await expect(http.readChangeImpact(command)).resolves.toEqual(response);
 
-  for (const [, init] of fetchMock.mock.calls) {
-    expect(Object.keys((init as RequestInit).headers ?? {})).not.toContainEqual(
-      expect.stringMatching(/^x-/),
-    );
-  }
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api(path), {});
+});
+
+test('omits the preview header when a change sends no Change impact version', async () => {
+  const fetchMock = respondWith();
+
+  await http.execute({ kind: 'hide-node', nodeId: 'node-1' });
+
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api('/nodes/node-1'), {
+    method: 'PATCH',
+    headers: json,
+    body: JSON.stringify({ isVisible: false }),
+  });
 });
 
 test('uploads a file Resource as multipart form data without setting its boundary header', async () => {
-  const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-  vi.stubGlobal('fetch', fetchMock);
+  const fetchMock = respondWith();
 
-  await http.uploadResource(input, 'node-1', file);
+  await http.execute({ kind: 'upload-resource', nodeId: 'node-1', file });
 
-  expect(fetchMock).toHaveBeenCalledWith(
-    api('/nodes/node-1/resources'),
-    expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
-  );
-  expect((fetchMock.mock.calls[0]?.[1] as RequestInit).body).toSatisfy(
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api('/nodes/node-1/resources'), {
+    method: 'POST',
+    body: expect.any(FormData),
+  });
+  expect((fetchMock.mock.calls[0] as unknown as Request)[1].body).toSatisfy(
     (body: FormData) => body.get('file') === file,
   );
-  expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty('headers');
 });
 
-test('rejects a preview without a version, which the confirmation could not send back', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ dependencies: [] })));
+test('passes the server refusal message through', async () => {
+  refuseWith(404, { message: 'El recurso no pertenece al roadmap.' });
 
-  await expect(http.previewNodeHiding(input, 'node-1')).rejects.toThrow(
+  await expect(http.execute({ kind: 'delete-resource', resourceId: 'resource-1' })).rejects.toThrow(
+    new Error('El recurso no pertenece al roadmap.'),
+  );
+});
+
+test.each([
+  [
+    'a change',
+    () => http.execute({ kind: 'delete-resource', resourceId: 'r' }),
+    'No se pudo eliminar el recurso.',
+  ],
+  [
+    'a Completion',
+    () => http.execute({ kind: 'complete-node', nodeId: 'n' }),
+    'No se pudo completar el nodo.',
+  ],
+  [
+    'a Change impact read',
+    () => http.readChangeImpact({ kind: 'hide-node', nodeId: 'n' }),
     'No se pudo calcular el impacto de ocultar el nodo.',
-  );
+  ],
+  [
+    'the Canvas preview load',
+    () => http.loadCanvasPreview(),
+    'No se pudo cargar la previsualización.',
+  ],
+  ['the Roadmap load', () => http.load(), 'No se pudo cargar el roadmap.'],
+] as const)(
+  'uses the failure message of %s when the server sends no error message',
+  async (_name, call, message) => {
+    refuseWith(500);
+
+    await expect(call()).rejects.toThrow(new Error(message));
+  },
+);
+
+test.each([401, 403, 404])(
+  'a load denied with %i means the Roadmap access was lost',
+  async (status) => {
+    refuseWith(status, { message: 'No tienes acceso a este roadmap.' });
+
+    await expect(http.load()).rejects.toThrow(
+      new RoadmapAccessLostError('No tienes acceso a este roadmap.'),
+    );
+    await expect(http.load()).rejects.toBeInstanceOf(RoadmapAccessLostError);
+  },
+);
+
+test('a denied change is not an access loss', async () => {
+  refuseWith(403, { message: 'No puedes editar este roadmap.' });
+
+  const failure = http.execute({ kind: 'complete-node', nodeId: 'node-1' });
+
+  await expect(failure).rejects.toThrow('No puedes editar este roadmap.');
+  await expect(failure).rejects.not.toBeInstanceOf(RoadmapAccessLostError);
 });
 
-test('translates a server Resource failure into the existing user-facing message', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi
-      .fn()
-      .mockResolvedValue(
-        Response.json(
-          { error: { message: 'El recurso no pertenece al roadmap.' } },
-          { status: 404 },
-        ),
-      ),
-  );
+test.each([
+  ['a change', () => http.execute({ kind: 'complete-node', nodeId: 'node-1' })],
+  ['a Change impact read', () => http.readChangeImpact({ kind: 'delete-node', nodeId: 'node-1' })],
+  ['a load', () => http.load()],
+] as const)('refuses %s on a closed Roadmap with the closed error', async (_name, call) => {
+  refuseWith(409, { message: 'El roadmap está cerrado.', code: 'ROADMAP_CLOSED' });
 
-  await expect(http.deleteResource(input, 'resource-1')).rejects.toThrow(
-    'El recurso no pertenece al roadmap.',
+  await expect(call()).rejects.toBeInstanceOf(RoadmapClosedError);
+  await expect(call()).rejects.toThrow('El roadmap está cerrado.');
+});
+
+test('a batch with one failing item still sends the others and rethrows the failure', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url.endsWith('/node-1')
+      ? Response.json({ error: { message: 'El nodo no existe.' } }, { status: 404 })
+      : new Response(null, { status: 204 }),
   );
+  vi.stubGlobal('fetch', fetchMock);
+
+  await expect(
+    http.execute({
+      kind: 'move-nodes',
+      positions: [
+        { nodeId: 'node-1', position: { x: 0, y: 0 } },
+        { nodeId: 'node-2', position: { x: 10, y: 10 } },
+      ],
+    }),
+  ).rejects.toThrow('El nodo no existe.');
+
+  expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    api('/nodes/node-1'),
+    api('/nodes/node-2'),
+  ]);
 });

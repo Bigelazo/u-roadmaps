@@ -65,12 +65,17 @@ export type CanvasCommand =
       readonly nodeType: RoadmapNodeTypeInput;
     }
   | { readonly kind: 'complete-node'; readonly nodeId: string }
-  | { readonly kind: 'complete-simulated-node'; readonly nodeId: string };
+  | { readonly kind: 'complete-canvas-preview-node'; readonly nodeId: string };
 
-export type CanvasCommandOf<Kind extends CanvasCommand['kind']> = Extract<
-  CanvasCommand,
-  { kind: Kind }
->;
+/** What persistence executes: a Dependency deletion deletes each Dependency on its own. */
+export type PersistedCommand =
+  | Exclude<CanvasCommand, { kind: 'delete-dependencies' }>
+  | { readonly kind: 'delete-dependency'; readonly dependencyId: string };
+
+/** Indexed by kind rather than extracted, so that TypeScript relates a kind to its command. */
+type CommandByKind = { [Command in CanvasCommand | PersistedCommand as Command['kind']]: Command };
+
+export type CanvasCommandOf<Kind extends keyof CommandByKind> = CommandByKind[Kind];
 
 export const canvasConfirmationChoices = {
   autoLayout: 'auto-layout',
@@ -107,6 +112,15 @@ export type ChangeImpactOf = {
 };
 
 export type ConfirmedActionKind = keyof ChangeImpactOf;
+
+/** A command whose Change impact persistence reads. */
+export type ChangeImpactCommand = CanvasCommandOf<
+  'hide-node' | 'delete-node' | 'change-teacher-block' | 'create-dependency'
+>;
+
+/** The Change impact persistence reads for a command: a Teacher block change reads one operation's. */
+export type ReadChangeImpactOf<Kind extends ChangeImpactCommand['kind']> =
+  Kind extends 'change-teacher-block' ? TeacherBlockPreview : ChangeImpactOf[Kind];
 
 export type UnconfirmedCommandKind = Exclude<CanvasCommand['kind'], ConfirmedActionKind>;
 

@@ -1,26 +1,208 @@
 import { RoadmapAccessLostError, RoadmapClosedError } from './access-lost';
 import { roadmapUrl } from '@/features/roadmap/client';
-import type { Point } from '@/features/roadmap/graph/geometry';
-import type { NodeUpdate } from '@/features/roadmap/editor/types';
 import type {
-  AnyRoadmapDto,
-  DependencyImpact,
-  NodeDeletionImpact,
-  NodeHidingImpact,
-  RoadmapDto,
-  StudentRoadmapDto,
-  TeacherBlockImpact,
-  TeacherBlockOperation,
-  TeacherBlockPreview,
-} from '@/features/roadmap/types';
-import type {
-  NewRoadmapNode,
-  RoadmapCanvasSessionInput,
-  RoadmapCanvasSessionPersistence,
-  RoadmapNodeTypeInput,
-} from '@/features/roadmap/session/types';
+  CanvasCommandOf,
+  ChangeImpactCommand,
+  PersistedCommand,
+} from '@/features/roadmap/canvas/commands/commands';
+import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
+import type { RoadmapCanvasSessionPersistence } from '@/features/roadmap/session/types';
 
-async function failureError(response: Response, fallback: string) {
+type RouteRequest = {
+  readonly method?: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  readonly path: string;
+  readonly body?: object;
+};
+
+type RequestOptions = {
+  readonly previewHeader?: string;
+  readonly previewVersion?: string;
+  readonly load?: 'roadmap' | 'canvas-preview';
+};
+
+// Routes declare methods, so that one kind's route reads as a route for any command.
+type Route<Kind extends PersistedCommand['kind']> = {
+  /** One request, or one per Node for a batch of Node moves. */
+  requests(command: CanvasCommandOf<Kind>): RouteRequest | readonly RouteRequest[];
+  readonly previewHeader?: string;
+  readonly failure: string;
+};
+
+type ChangeImpactRoute<Kind extends ChangeImpactCommand['kind']> = {
+  path(command: CanvasCommandOf<Kind>): string;
+  readonly failure: string;
+};
+
+const nodeMoves: Route<'move-nodes' | 'apply-automatic-layout'> = {
+  requests: ({ positions }) =>
+    positions.map(({ nodeId, position }) => ({
+      method: 'PATCH',
+      path: `/nodes/${nodeId}`,
+      body: { positionX: position.x, positionY: position.y },
+    })),
+  failure: 'No se pudo guardar la posición.',
+};
+
+const visibilityFailure = 'No se pudo cambiar la visibilidad.';
+const visibilityHeader = 'x-node-visibility-preview';
+
+const routes: { readonly [Kind in PersistedCommand['kind']]: Route<Kind> } = {
+  'add-node': {
+    requests: ({ node, position }) => ({
+      method: 'POST',
+      path: '/nodes',
+      body: {
+        ...node,
+        description: node.description || null,
+        positionX: position.x,
+        positionY: position.y,
+      },
+    }),
+    failure: 'No se pudo crear el nodo.',
+  },
+  'update-node': {
+    requests: ({ nodeId, value }) => ({
+      method: 'PATCH',
+      path: `/nodes/${nodeId}`,
+      body: { ...value, description: value.description || null },
+    }),
+    failure: 'No se pudo guardar el nodo.',
+  },
+  'move-nodes': nodeMoves,
+  'apply-automatic-layout': nodeMoves,
+  'create-dependency': {
+    requests: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) => ({
+      method: 'POST',
+      path: '/dependencies',
+      body: { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
+    }),
+    previewHeader: 'x-dependency-preview',
+    failure: 'No se pudo crear la dependencia.',
+  },
+  'delete-dependency': {
+    requests: ({ dependencyId }) => ({ method: 'DELETE', path: `/dependencies/${dependencyId}` }),
+    failure: 'No se pudo eliminar la dependencia.',
+  },
+  'change-teacher-block': {
+    requests: ({ nodeId, operation }) => ({
+      method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
+      path: `/nodes/${nodeId}/teacher-block`,
+    }),
+    previewHeader: 'x-teacher-block-preview',
+    failure: 'No se pudo cambiar el bloqueo docente.',
+  },
+  'schedule-teacher-unlock': {
+    requests: ({ nodeId, unlockOn }) => ({
+      path: `/nodes/${nodeId}/teacher-block/schedule`,
+      ...(unlockOn ? { method: 'PUT', body: { unlockOn } } : { method: 'DELETE' }),
+    }),
+    failure: 'No se pudo programar el desbloqueo.',
+  },
+  'hide-node': {
+    requests: ({ nodeId }) => ({
+      method: 'PATCH',
+      path: `/nodes/${nodeId}`,
+      body: { isVisible: false },
+    }),
+    previewHeader: visibilityHeader,
+    failure: visibilityFailure,
+  },
+  'show-node': {
+    requests: ({ nodeId }) => ({
+      method: 'PATCH',
+      path: `/nodes/${nodeId}`,
+      body: { isVisible: true },
+    }),
+    previewHeader: visibilityHeader,
+    failure: visibilityFailure,
+  },
+  'delete-node': {
+    requests: ({ nodeId }) => ({ method: 'DELETE', path: `/nodes/${nodeId}` }),
+    previewHeader: 'x-node-delete-preview',
+    failure: 'No se pudo eliminar el nodo.',
+  },
+  'add-resource': {
+    requests: ({ nodeId, resource }) => ({
+      method: 'POST',
+      path: `/nodes/${nodeId}/resources`,
+      body: resource,
+    }),
+    failure: 'No se pudo agregar el recurso.',
+  },
+  'upload-resource': {
+    requests: ({ nodeId, file }) => {
+      const body = new FormData();
+      body.append('file', file);
+      return { method: 'POST', path: `/nodes/${nodeId}/resources`, body };
+    },
+    failure: 'No se pudo subir el archivo.',
+  },
+  'update-resource': {
+    requests: ({ resourceId, resource }) => ({
+      method: 'PATCH',
+      path: `/resources/${resourceId}`,
+      // A File resource keeps its protected download address: only its title is renamed.
+      body: resource.type === 'FILE' ? { title: resource.title } : resource,
+    }),
+    failure: 'No se pudo guardar el recurso.',
+  },
+  'delete-resource': {
+    requests: ({ resourceId }) => ({ method: 'DELETE', path: `/resources/${resourceId}` }),
+    failure: 'No se pudo eliminar el recurso.',
+  },
+  'add-node-type': {
+    requests: ({ nodeType }) => ({ method: 'POST', path: '/node-types', body: nodeType }),
+    failure: 'No se pudo crear el tipo de nodo.',
+  },
+  'update-node-type': {
+    requests: ({ nodeTypeId, nodeType }) => ({
+      method: 'PATCH',
+      path: `/node-types/${nodeTypeId}`,
+      body: nodeType,
+    }),
+    failure: 'No se pudo guardar el tipo de nodo.',
+  },
+  'delete-node-type': {
+    requests: ({ nodeTypeId }) => ({ method: 'DELETE', path: `/node-types/${nodeTypeId}` }),
+    failure: 'No se pudo eliminar el tipo de nodo.',
+  },
+  'complete-node': {
+    requests: ({ nodeId }) => ({ method: 'POST', path: `/nodes/${nodeId}/completion` }),
+    failure: 'No se pudo completar el nodo.',
+  },
+  'complete-canvas-preview-node': {
+    requests: ({ nodeId }) => ({ method: 'POST', path: `/simulation/nodes/${nodeId}/completion` }),
+    failure: 'No se pudo completar el nodo en la previsualización.',
+  },
+  'reset-canvas-preview': {
+    requests: () => ({ method: 'DELETE', path: '/simulation' }),
+    failure: 'No se pudo reiniciar el progreso de previsualización.',
+  },
+};
+
+const changeImpactRoutes: {
+  readonly [Kind in ChangeImpactCommand['kind']]: ChangeImpactRoute<Kind>;
+} = {
+  'hide-node': {
+    path: ({ nodeId }) => `/nodes/${nodeId}?operation=HIDE`,
+    failure: 'No se pudo calcular el impacto de ocultar el nodo.',
+  },
+  'delete-node': {
+    path: ({ nodeId }) => `/nodes/${nodeId}?operation=DELETE`,
+    failure: 'No se pudo calcular el impacto de eliminar el nodo.',
+  },
+  'change-teacher-block': {
+    path: ({ nodeId, operation }) => `/nodes/${nodeId}/teacher-block?operation=${operation}`,
+    failure: 'No se pudo calcular el impacto del bloqueo docente.',
+  },
+  'create-dependency': {
+    path: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) =>
+      `/dependencies?${new URLSearchParams({ sourceNodeId, targetNodeId, sourceHandle, targetHandle })}`,
+    failure: 'No se pudo calcular el impacto de la dependencia.',
+  },
+};
+
+async function failureError(response: Response, failure: string) {
   try {
     const body: unknown = await response.json();
     if (
@@ -37,410 +219,69 @@ async function failureError(response: Response, fallback: string) {
         : new Error(body.error.message);
     }
   } catch {
-    // Keep the user-facing fallback when an existing route has no JSON error body.
+    // Keep the user-facing failure message when a route has no JSON error body.
   }
-  return new Error(fallback);
+  return new Error(failure);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isRoadmap(value: unknown): value is AnyRoadmapDto {
-  return (
-    isRecord(value) &&
-    Array.isArray(value.nodes) &&
-    Array.isArray(value.nodeTypes) &&
-    value.nodes.every(
-      (node) =>
-        isRecord(node) && ('access' in node || ('isVisible' in node && 'isTeacherBlocked' in node)),
-    )
-  );
-}
-
-function isStudentRoadmap(value: unknown): value is StudentRoadmapDto {
-  return isRoadmap(value) && value.nodes.every((node) => isRecord(node) && 'access' in node);
-}
-
-function isTeachingRoadmap(value: unknown): value is RoadmapDto {
-  return (
-    isRoadmap(value) &&
-    value.nodes.every(
-      (node) =>
-        isRecord(node) &&
-        'isVisible' in node &&
-        typeof node.isVisible === 'boolean' &&
-        'isTeacherBlocked' in node &&
-        typeof node.isTeacherBlocked === 'boolean',
-    )
-  );
-}
-
-function isTitledRecord(value: unknown): value is TeacherBlockImpact {
-  return isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string';
-}
-
-function isDeletionDependency(value: unknown) {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.sourceTitle === 'string' &&
-    typeof value.targetTitle === 'string'
-  );
-}
-
-function isTeacherBlockPreview(value: unknown): value is TeacherBlockPreview {
-  return (
-    isRecord(value) &&
-    typeof value.version === 'string' &&
-    Array.isArray(value.nodes) &&
-    value.nodes.every(isTitledRecord)
-  );
-}
-
-function isNodeDeletionImpact(value: unknown): value is NodeDeletionImpact {
-  if (!isRecord(value) || typeof value.version !== 'string') return false;
-  const node = value.node;
-  return (
-    isRecord(node) &&
-    typeof node.title === 'string' &&
-    isRecord(node.nodeType) &&
-    typeof node.nodeType.name === 'string' &&
-    typeof node.nodeType.icon === 'string' &&
-    typeof node.nodeType.color === 'string' &&
-    Array.isArray(value.dependencies) &&
-    value.dependencies.every(isDeletionDependency) &&
-    Array.isArray(value.resources) &&
-    value.resources.every(isTitledRecord)
-  );
-}
-
-function isDependencyImpact(value: unknown): value is DependencyImpact {
-  return (
-    isRecord(value) &&
-    typeof value.version === 'string' &&
-    Array.isArray(value.nodes) &&
-    value.nodes.every(isTitledRecord)
-  );
-}
-
-function isNodeHidingImpact(value: unknown): value is NodeHidingImpact {
-  return (
-    isRecord(value) &&
-    typeof value.version === 'string' &&
-    Array.isArray(value.dependencies) &&
-    value.dependencies.every(
-      (dependency) =>
-        isRecord(dependency) &&
-        typeof dependency.id === 'string' &&
-        typeof dependency.sourceNodeId === 'string' &&
-        typeof dependency.targetNodeId === 'string',
-    )
-  );
-}
-
-function previewHeader(name: string, previewVersion: string | undefined) {
-  return previewVersion ? { headers: { [name]: previewVersion } } : {};
-}
-
-async function request(
-  input: RoadmapCanvasSessionInput,
-  suffix: string,
-  init: RequestInit,
-  fallback: string,
-) {
-  const headers =
-    init.body instanceof FormData || init.body === undefined
-      ? init.headers
-      : { 'Content-Type': 'application/json', ...(init.headers ?? {}) };
-  const response = await fetch(
-    roadmapUrl(input.courseOffering.identifier, suffix),
-    headers === undefined ? init : { ...init, headers },
-  );
-  if (!response.ok) {
-    const error = await failureError(response, fallback);
-    if (!suffix && [401, 403, 404].includes(response.status))
-      throw new RoadmapAccessLostError(error.message);
-    throw error;
-  }
-  if (response.status === 204) return undefined;
-  return response.json();
-}
-
-async function fetchValid<T>(
-  input: RoadmapCanvasSessionInput,
-  suffix: string,
-  init: RequestInit,
-  isValid: (body: unknown) => body is T,
-  fallback: string,
-) {
-  const body: unknown = await request(input, suffix, init, fallback);
-  if (!isValid(body)) throw new Error(fallback);
-  return body;
-}
-
-export const httpRoadmapCanvasSessionPersistence: RoadmapCanvasSessionPersistence = {
-  load: (input) =>
-    fetchValid<AnyRoadmapDto>(
-      input,
-      '',
-      { cache: 'no-store' },
-      input.experience.kind === 'teaching' ? isTeachingRoadmap : isStudentRoadmap,
-      'No se pudo cargar el roadmap.',
-    ),
-
-  loadSimulation: (input) =>
-    fetchValid(
-      input,
-      '/simulation',
-      { cache: 'no-store' },
-      isStudentRoadmap,
-      'No se pudo cargar la previsualización.',
-    ),
-
-  async addNode(input, node: NewRoadmapNode, position: Point) {
-    const body = await request(
-      input,
-      '/nodes',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          ...node,
-          description: node.description || null,
-          positionX: position.x,
-          positionY: position.y,
-        }),
-      },
-      'No se pudo crear el nodo.',
-    );
-    return isRecord(body) && isRecord(body.node) && typeof body.node.id === 'string'
-      ? body.node.id
-      : undefined;
-  },
-
-  async updateNode(input, nodeId: string, node: NodeUpdate) {
-    await request(
-      input,
-      `/nodes/${nodeId}`,
-      { method: 'PATCH', body: JSON.stringify({ ...node, description: node.description || null }) },
-      'No se pudo guardar el nodo.',
-    );
-  },
-
-  async moveNode(input, nodeId: string, position: Point) {
-    await request(
-      input,
-      `/nodes/${nodeId}`,
-      { method: 'PATCH', body: JSON.stringify({ positionX: position.x, positionY: position.y }) },
-      'No se pudo guardar la posición.',
-    );
-  },
-
-  previewRoadmapDependency: (input, { sourceNodeId, targetNodeId, sourceHandle, targetHandle }) =>
-    fetchValid(
-      input,
-      `/dependencies?${new URLSearchParams({ sourceNodeId, targetNodeId, sourceHandle, targetHandle })}`,
-      {},
-      isDependencyImpact,
-      'No se pudo calcular el impacto de la dependencia.',
-    ),
-
-  async connectNodes(
-    input,
-    { sourceNodeId, targetNodeId, sourceHandle, targetHandle },
-    previewVersion,
+export function createHttpRoadmapCanvasSessionPersistence(
+  identifier: CourseOfferingIdentifier,
+): RoadmapCanvasSessionPersistence {
+  /** Sends one request; a denied Roadmap load means the access was lost. */
+  async function request(
+    { method, path, body }: RouteRequest,
+    failure: string,
+    { previewHeader, previewVersion, load }: RequestOptions = {},
   ) {
-    await request(
-      input,
-      '/dependencies',
-      {
-        method: 'POST',
-        body: JSON.stringify({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }),
-        ...previewHeader('x-dependency-preview', previewVersion),
-      },
-      'No se pudo crear la dependencia.',
-    );
-  },
+    const json = body !== undefined && !(body instanceof FormData);
+    const headers = {
+      ...(json && { 'Content-Type': 'application/json' }),
+      ...(previewHeader && previewVersion ? { [previewHeader]: previewVersion } : {}),
+    };
+    const response = await fetch(roadmapUrl(identifier, path), {
+      ...(method && { method }),
+      ...(load && { cache: 'no-store' }),
+      ...(Object.keys(headers).length > 0 && { headers }),
+      ...(body && { body: json ? JSON.stringify(body) : body }),
+    });
+    if (!response.ok) {
+      const error = await failureError(response, failure);
+      if (load === 'roadmap' && [401, 403, 404].includes(response.status))
+        throw new RoadmapAccessLostError(error.message);
+      throw error;
+    }
+    return response;
+  }
 
-  previewTeacherBlock: (input, nodeId, operation: TeacherBlockOperation) =>
-    fetchValid(
-      input,
-      `/nodes/${nodeId}/teacher-block?operation=${operation}`,
-      {},
-      isTeacherBlockPreview,
-      'No se pudo calcular el impacto del bloqueo docente.',
-    ),
+  return {
+    load: async () =>
+      (await request({ path: '' }, 'No se pudo cargar el roadmap.', { load: 'roadmap' })).json(),
 
-  async changeTeacherBlock(input, nodeId, operation, previewVersion) {
-    await request(
-      input,
-      `/nodes/${nodeId}/teacher-block`,
-      {
-        method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
-        ...previewHeader('x-teacher-block-preview', previewVersion),
-      },
-      'No se pudo cambiar el bloqueo docente.',
-    );
-  },
+    loadCanvasPreview: async () =>
+      (
+        await request({ path: '/simulation' }, 'No se pudo cargar la previsualización.', {
+          load: 'canvas-preview',
+        })
+      ).json(),
 
-  async scheduleTeacherUnlock(input, nodeId, unlockOn) {
-    await request(
-      input,
-      `/nodes/${nodeId}/teacher-block/schedule`,
-      unlockOn
-        ? {
-            method: 'PUT',
-            body: JSON.stringify({ unlockOn }),
-          }
-        : { method: 'DELETE' },
-      'No se pudo programar el desbloqueo.',
-    );
-  },
+    async readChangeImpact(command) {
+      const route: ChangeImpactRoute<ChangeImpactCommand['kind']> =
+        changeImpactRoutes[command.kind];
+      return (await request({ path: route.path(command) }, route.failure)).json();
+    },
 
-  async deleteDependency(input, dependencyId) {
-    await request(
-      input,
-      `/dependencies/${dependencyId}`,
-      { method: 'DELETE' },
-      'No se pudo eliminar la dependencia.',
-    );
-  },
-
-  previewNodeHiding: (input, nodeId) =>
-    fetchValid(
-      input,
-      `/nodes/${nodeId}?operation=HIDE`,
-      {},
-      isNodeHidingImpact,
-      'No se pudo calcular el impacto de ocultar el nodo.',
-    ),
-
-  async setVisibility(input, nodeId, visible, previewVersion) {
-    await request(
-      input,
-      `/nodes/${nodeId}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ isVisible: visible }),
-        ...previewHeader('x-node-visibility-preview', previewVersion),
-      },
-      'No se pudo cambiar la visibilidad.',
-    );
-  },
-
-  previewNodeDeletion: (input, nodeId) =>
-    fetchValid(
-      input,
-      `/nodes/${nodeId}?operation=DELETE`,
-      {},
-      isNodeDeletionImpact,
-      'No se pudo calcular el impacto de eliminar el nodo.',
-    ),
-
-  async deleteNode(input, nodeId, previewVersion) {
-    await request(
-      input,
-      `/nodes/${nodeId}`,
-      {
-        method: 'DELETE',
-        ...previewHeader('x-node-delete-preview', previewVersion),
-      },
-      'No se pudo eliminar el nodo.',
-    );
-  },
-
-  async addResource(input, nodeId, resource) {
-    await request(
-      input,
-      `/nodes/${nodeId}/resources`,
-      { method: 'POST', body: JSON.stringify(resource) },
-      'No se pudo agregar el recurso.',
-    );
-  },
-
-  async uploadResource(input, nodeId, file) {
-    const body = new FormData();
-    body.append('file', file);
-    await request(
-      input,
-      `/nodes/${nodeId}/resources`,
-      { method: 'POST', body },
-      'No se pudo subir el archivo.',
-    );
-  },
-
-  async updateResource(input, resourceId, resource) {
-    await request(
-      input,
-      `/resources/${resourceId}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(resource.type === 'FILE' ? { title: resource.title } : resource),
-      },
-      'No se pudo guardar el recurso.',
-    );
-  },
-
-  async deleteResource(input, resourceId) {
-    await request(
-      input,
-      `/resources/${resourceId}`,
-      { method: 'DELETE' },
-      'No se pudo eliminar el recurso.',
-    );
-  },
-
-  async addNodeType(input, nodeType: RoadmapNodeTypeInput) {
-    await request(
-      input,
-      '/node-types',
-      { method: 'POST', body: JSON.stringify(nodeType) },
-      'No se pudo crear el tipo de nodo.',
-    );
-  },
-
-  async updateNodeType(input, nodeTypeId, nodeType) {
-    await request(
-      input,
-      `/node-types/${nodeTypeId}`,
-      { method: 'PATCH', body: JSON.stringify(nodeType) },
-      'No se pudo guardar el tipo de nodo.',
-    );
-  },
-
-  async deleteNodeType(input, nodeTypeId) {
-    await request(
-      input,
-      `/node-types/${nodeTypeId}`,
-      { method: 'DELETE' },
-      'No se pudo eliminar el tipo de nodo.',
-    );
-  },
-
-  async complete(input, nodeId) {
-    await request(
-      input,
-      `/nodes/${nodeId}/completion`,
-      { method: 'POST' },
-      'No se pudo completar el nodo.',
-    );
-  },
-
-  async completeSimulatedNode(input, nodeId) {
-    await request(
-      input,
-      `/simulation/nodes/${nodeId}/completion`,
-      { method: 'POST' },
-      'No se pudo completar el nodo en la previsualización.',
-    );
-  },
-
-  async resetSimulation(input) {
-    await request(
-      input,
-      '/simulation',
-      { method: 'DELETE' },
-      'No se pudo reiniciar el progreso de previsualización.',
-    );
-  },
-};
+    async execute(command, previewVersion) {
+      const route: Route<PersistedCommand['kind']> = routes[command.kind];
+      const options = { previewHeader: route.previewHeader, previewVersion };
+      const sent = await Promise.allSettled(
+        [route.requests(command)].flat().map((item) => request(item, route.failure, options)),
+      );
+      const responses = sent.map((result) => {
+        if (result.status === 'rejected') throw result.reason;
+        return result.value;
+      });
+      if (command.kind === 'add-node')
+        return { createdNodeId: (await responses[0].json()).node.id };
+    },
+  };
+}
