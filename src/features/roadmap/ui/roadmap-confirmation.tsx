@@ -1,7 +1,3 @@
-import {
-  canvasConfirmationChoices,
-  type PendingConfirmation,
-} from '@/features/roadmap/canvas/commands/commands';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
@@ -12,6 +8,24 @@ import type {
 } from '@/features/roadmap/types';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
+
+export const canvasConfirmationChoices = {
+  autoLayout: 'auto-layout',
+  hideNode: 'hide-node',
+  showNode: 'show-node',
+  deleteNode: 'delete-node',
+  deleteNodeType: 'delete-node-type',
+  resetCanvasPreview: 'reset-canvas-preview',
+  createDependency: 'create-dependency',
+  deleteDependencies: 'delete-dependencies',
+  blockTeacher: 'block-teacher',
+  unlockNode: 'unlock-node',
+  unlockBranch: 'unlock-branch',
+  unlockPrerequisites: 'unlock-prerequisites',
+} as const;
+
+export type CanvasConfirmationChoice =
+  (typeof canvasConfirmationChoices)[keyof typeof canvasConfirmationChoices];
 
 type NodeTypePresentation = {
   name: string;
@@ -33,7 +47,7 @@ function uniqueTitles(titles: readonly string[]) {
   return [...new Set(titles)];
 }
 
-type RoadmapConfirmationRoadmap = {
+export type RoadmapConfirmationRoadmap = {
   nodes: readonly RoadmapNodeIdentity[];
   nodeTypes: RoadmapDto['nodeTypes'];
 };
@@ -51,14 +65,14 @@ type RoadmapNodeIdentity = {
   isTeacherBlocked?: boolean;
 };
 
-const roadmapAutoLayoutConfirmation = {
+export const roadmapAutoLayoutConfirmation = {
   title: 'Confirmar ordenamiento',
   description: 'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
   intent: 'warning',
   actions: [{ id: canvasConfirmationChoices.autoLayout, label: 'Ordenar nodos' }],
 } as const satisfies ConfirmationPresentation;
 
-const canvasPreviewResetConfirmation = {
+export const canvasPreviewResetConfirmation = {
   title: 'Reiniciar progreso de previsualización',
   description:
     'Eliminarás las completaciones simuladas de este Canvas preview. No se eliminarán las Completions estudiantiles. Esta acción no se puede deshacer.',
@@ -467,61 +481,6 @@ export function roadmapNodeVisibilityConfirmation(
   };
 }
 
-export function canvasConfirmation(
-  pending: PendingConfirmation,
-  roadmap: RoadmapConfirmationRoadmap,
-): ConfirmationPresentation | null {
-  if (pending.phase === 'reading-impact') return null;
-  switch (pending.kind) {
-    case 'hide-node':
-    case 'show-node': {
-      const node = roadmap.nodes.find(({ id }) => id === pending.request.nodeId);
-      if (!node) return null;
-      const dependencies = pending.kind === 'hide-node' ? (pending.impact?.dependencies ?? []) : [];
-      return roadmapNodeVisibilityConfirmation(
-        roadmap,
-        node,
-        pending.kind === 'hide-node',
-        dependencies,
-      );
-    }
-    case 'delete-node':
-      return pending.impact ? nodeDeletionConfirmation(pending.impact) : null;
-    case 'change-teacher-block': {
-      const { request, impact } = pending;
-      const preview = impact?.[request.operation];
-      return preview
-        ? roadmapTeacherBlockConfirmation({
-            roadmap,
-            nodeId: request.nodeId,
-            preview,
-            individualPreview: impact?.UNBLOCK,
-            branchPreview: impact?.BRANCH_UNLOCK,
-          })
-        : null;
-    }
-    case 'create-dependency':
-      return pending.impact?.nodes.length
-        ? roadmapDependencyConfirmation({
-            roadmap,
-            sourceNodeId: pending.request.sourceNodeId,
-            targetNodeId: pending.request.targetNodeId,
-            nodes: pending.impact.nodes,
-          })
-        : null;
-    case 'delete-dependencies':
-      return roadmapDependencyDeletionConfirmation(pending.request.dependencyIds);
-    case 'apply-automatic-layout':
-      return roadmapAutoLayoutConfirmation;
-    case 'delete-node-type': {
-      const nodeType = roadmap.nodeTypes.find(({ id }) => id === pending.request.nodeTypeId);
-      return nodeType ? nodeTypeDeletionConfirmation(nodeType) : null;
-    }
-    case 'reset-canvas-preview':
-      return canvasPreviewResetConfirmation;
-  }
-}
-
 export function resourceDeletionConfirmation(resource: Resource): ConfirmationPresentation {
   return {
     title: 'Confirmar eliminación',
@@ -544,7 +503,7 @@ export function resourceDeletionConfirmation(resource: Resource): ConfirmationPr
   };
 }
 
-function nodeTypeDeletionConfirmation(
+export function nodeTypeDeletionConfirmation(
   nodeType: NodeTypePresentation & { id: string },
 ): ConfirmationPresentation {
   return {

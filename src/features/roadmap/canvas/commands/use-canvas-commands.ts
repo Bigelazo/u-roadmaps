@@ -1,25 +1,34 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import type {
-  CanvasCommand,
-  CanvasCommandOf,
-  CanvasConfirmationChoice,
-  ChangeImpactOf,
-  ConfirmedActionKind,
-  PendingConfirmation,
-  UnconfirmedCommand,
-} from '@/features/roadmap/canvas/commands/commands';
 import {
-  canvasCommandUx,
-  type CanvasCommandSession,
-  type CanvasCommandUx,
+  canvasCommandCatalog,
+  type AnyCommandEntry,
+  type CanvasCommand,
+  type ChangeImpactCommand,
   type CommandOutcome,
-  type ConfirmedAction,
-} from '@/features/roadmap/canvas/commands/canvas-command-ux';
+  type PendingConfirmation,
+  type ReadChangeImpactOf,
+} from '@/features/roadmap/canvas/commands/commands';
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
-import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
+import type {
+  CanvasConfirmationChoice,
+  RoadmapConfirmationRoadmap,
+} from '@/features/roadmap/ui/roadmap-confirmation';
+import type { ExecutionResult, PracticeCanvasAction } from '@/features/roadmap/session/types';
 import { notify } from '@/shared/ui/notify';
+
+/** The two guarded session operations the command engine runs commands through. */
+export type CanvasCommandSession = {
+  /** Resolves with nothing once the failure is reported or the Course offering changed. */
+  readChangeImpact<Command extends ChangeImpactCommand>(
+    command: Command,
+  ): Promise<ReadChangeImpactOf<Command['kind']> | null>;
+  execute(
+    command: CanvasCommand,
+    previewVersion?: string,
+  ): Promise<{ readonly applied: boolean } & ExecutionResult>;
+};
 
 type CanvasCommandsOptions = {
   session: CanvasCommandSession;
@@ -35,14 +44,26 @@ export type CanvasCommands = {
   cancel: () => void;
 };
 
-type ChangeImpact = ChangeImpactOf[ConfirmedActionKind];
+type ConfirmedAction = NonNullable<AnyCommandEntry['confirmedAction']>;
+type ChangeImpact = PendingConfirmation['impact'];
 
-function confirmedActionOf(kind: ConfirmedActionKind): ConfirmedAction<ConfirmedActionKind> {
-  return canvasCommandUx[kind].confirmedAction;
+function entryOf(command: CanvasCommand): AnyCommandEntry {
+  return canvasCommandCatalog[command.kind];
 }
 
-function isConfirmed(command: CanvasCommand): command is CanvasCommandOf<ConfirmedActionKind> {
-  return 'confirmedAction' in canvasCommandUx[command.kind];
+/** What the confirmation dialog asks for a pending Confirmed action, once its impact is read. */
+export function canvasConfirmation(
+  pending: PendingConfirmation,
+  roadmap: RoadmapConfirmationRoadmap,
+) {
+  if (pending.phase === 'reading-impact') return null;
+  return (
+    entryOf(pending.request).confirmedAction?.confirmation(
+      pending.request,
+      pending.impact,
+      roadmap,
+    ) ?? null
+  );
 }
 
 function sameChangeImpact(first: ChangeImpact, second: ChangeImpact) {
@@ -50,22 +71,28 @@ function sameChangeImpact(first: ChangeImpact, second: ChangeImpact) {
 }
 
 type OpenedRequest = {
-  readonly kind: ConfirmedActionKind;
-  readonly request: CanvasCommandOf<ConfirmedActionKind>;
+  readonly request: CanvasCommand;
+  readonly confirmedAction: ConfirmedAction;
 };
 
 /** TypeScript cannot tie a request and impact read for any kind back to their kind; they match. */
 function pendingConfirmation(
-  { kind, request }: OpenedRequest,
+  { request }: OpenedRequest,
   impact: ChangeImpact,
   phase: PendingConfirmation['phase'],
   choice?: CanvasConfirmationChoice,
 ) {
-  return { kind, request, impact, phase, ...(choice ? { choice } : {}) } as PendingConfirmation;
+  return {
+    kind: request.kind,
+    request,
+    impact,
+    phase,
+    ...(choice ? { choice } : {}),
+  } as PendingConfirmation;
 }
 
-function needsConfirmation(kind: ConfirmedActionKind, impact: ChangeImpact) {
-  return impact === null || (confirmedActionOf(kind).needsConfirmation?.(impact) ?? true);
+function needsConfirmation({ confirmedAction }: OpenedRequest, impact: ChangeImpact) {
+  return impact === null || (confirmedAction.needsConfirmation?.(impact) ?? true);
 }
 
 export function useCanvasCommands({
@@ -84,24 +111,21 @@ export function useCanvasCommands({
     };
     const isSlotFree = () => pendingRef.current === null;
 
-    function announceApplied(
-      command: CanvasCommand,
-      outcome: CommandOutcome<CanvasCommand['kind']>,
-    ) {
-      const ux: CanvasCommandUx<CanvasCommand['kind']> = canvasCommandUx[command.kind];
-      const message = ux.success?.(command, outcome);
+    function announceApplied(command: CanvasCommand, outcome: CommandOutcome<CanvasCommand>) {
+      const entry = entryOf(command);
+      const message = entry.success?.(command, outcome);
       if (message) notify.success(message);
       if (outcome.remaining) return;
-      const action = ux.report?.(command, outcome);
+      const action = entry.report?.(command, outcome);
       if (action) report?.(action);
       onCommandApplied(command, outcome.createdNodeId);
     }
 
-    async function readImpact({ kind, request }: OpenedRequest) {
-      return (await confirmedActionOf(kind).impact?.(session, request)) ?? null;
+    async function readImpact({ request, confirmedAction }: OpenedRequest) {
+      return (await confirmedAction.impact?.(session, request)) ?? null;
     }
 
-    async function perform(command: UnconfirmedCommand) {
+    async function perform(command: CanvasCommand) {
       const { applied, ...result } = await session.execute(command);
       if (applied) announceApplied(command, result);
       return applied;
@@ -112,32 +136,29 @@ export function useCanvasCommands({
       impact: ChangeImpact,
       choice?: CanvasConfirmationChoice,
     ): Promise<boolean> {
-      const confirmedAction = confirmedActionOf(opened.kind);
       setPending(pendingConfirmation(opened, impact, 'confirming', choice));
-      const result = await confirmedAction.apply(session, opened.request, impact, choice);
+      const result = await opened.confirmedAction.apply(session, opened.request, impact, choice);
       if (result) {
         const remaining = result === true ? undefined : result.retry;
         if (!remaining) setPending(null);
         announceApplied(opened.request, { choice, remaining });
-        return remaining ? open({ kind: opened.kind, request: remaining }) : true;
+        return remaining ? open({ ...opened, request: remaining }) : true;
       }
       const latest = (await readImpact(opened)) ?? impact;
       setPending(
-        needsConfirmation(opened.kind, latest)
-          ? pendingConfirmation(opened, latest, 'awaiting')
-          : null,
+        needsConfirmation(opened, latest) ? pendingConfirmation(opened, latest, 'awaiting') : null,
       );
       return false;
     }
 
     async function present(opened: OpenedRequest, impact: ChangeImpact) {
-      if (!needsConfirmation(opened.kind, impact)) return applyConfirmed(opened, impact);
+      if (!needsConfirmation(opened, impact)) return applyConfirmed(opened, impact);
       setPending(pendingConfirmation(opened, impact, 'awaiting'));
       return false;
     }
 
     async function open(opened: OpenedRequest) {
-      if (!confirmedActionOf(opened.kind).impact) return present(opened, null);
+      if (!opened.confirmedAction.impact) return present(opened, null);
       setPending(pendingConfirmation(opened, null, 'reading-impact'));
       const impact = await readImpact(opened);
       if (impact) return present(opened, impact);
@@ -146,27 +167,28 @@ export function useCanvasCommands({
     }
 
     async function request(command: CanvasCommand) {
-      if (!isConfirmed(command)) return perform(command);
+      const { confirmedAction } = entryOf(command);
+      if (!confirmedAction) return perform(command);
       if (!isSlotFree()) return false;
-      if (command.kind === 'delete-node') {
-        const proceed = await guardDraft({ kind: 'delete-node', nodeId: command.nodeId });
-        if (!proceed || !isSlotFree()) return false;
-      }
-      return open({ kind: command.kind, request: command });
+      const draft = confirmedAction.draftGuard?.(command);
+      if (draft && (!(await guardDraft(draft)) || !isSlotFree())) return false;
+      return open({ request: command, confirmedAction });
     }
 
     async function confirm(choice: CanvasConfirmationChoice) {
       const awaiting = pendingRef.current;
-      if (awaiting?.phase !== 'awaiting') return;
-      if (!confirmedActionOf(awaiting.kind).impact) {
-        await applyConfirmed(awaiting, awaiting.impact, choice);
+      const confirmedAction = awaiting && entryOf(awaiting.request).confirmedAction;
+      if (awaiting?.phase !== 'awaiting' || !confirmedAction) return;
+      const opened = { request: awaiting.request, confirmedAction };
+      if (!confirmedAction.impact) {
+        await applyConfirmed(opened, awaiting.impact, choice);
         return;
       }
-      setPending(pendingConfirmation(awaiting, awaiting.impact, 'confirming', choice));
-      const latest = await readImpact(awaiting);
+      setPending(pendingConfirmation(opened, awaiting.impact, 'confirming', choice));
+      const latest = await readImpact(opened);
       if (!latest) setPending(awaiting);
-      else if (!sameChangeImpact(latest, awaiting.impact)) await present(awaiting, latest);
-      else await applyConfirmed(awaiting, latest, choice);
+      else if (!sameChangeImpact(latest, awaiting.impact)) await present(opened, latest);
+      else await applyConfirmed(opened, latest, choice);
     }
 
     const cancel = () => {

@@ -153,7 +153,10 @@ test('refuses to confirm a Change impact that changed since its preview, as prod
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
   const remove = { kind: 'delete-node', nodeId: 'prerequisite' } as const;
   const { version } = await persistence.readChangeImpact(remove);
-  await persistence.execute({ kind: 'delete-dependency', dependencyId: 'prerequisite-selected' });
+  await persistence.execute({
+    kind: 'delete-dependencies',
+    dependencyIds: ['prerequisite-selected'],
+  });
 
   await expect(persistence.execute(remove, version)).rejects.toThrow(
     'El impacto de la eliminación cambió. Revisa y confirma la previsualización actualizada.',
@@ -291,7 +294,7 @@ test('never reuses an identifier after a deletion', async () => {
   };
   const deleteAll = async (ids: Awaited<ReturnType<typeof created>>) => {
     await executeWithChangeImpact(persistence, { kind: 'delete-node', nodeId: ids.node! });
-    await persistence.execute({ kind: 'delete-dependency', dependencyId: ids.dependency! });
+    await persistence.execute({ kind: 'delete-dependencies', dependencyIds: [ids.dependency!] });
     await persistence.execute({ kind: 'delete-node-type', nodeTypeId: ids.nodeType! });
     await persistence.execute({ kind: 'delete-resource', resourceId: ids.resource! });
   };
@@ -400,7 +403,7 @@ test('refuses to delete a Dependency that is not in the Roadmap', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
   await expect(
-    persistence.execute({ kind: 'delete-dependency', dependencyId: 'missing' }),
+    persistence.execute({ kind: 'delete-dependencies', dependencyIds: ['missing'] }),
   ).rejects.toThrow('La dependencia no existe en este roadmap.');
 
   expect((await persistence.load()).dependencies.map(({ id }) => id)).toEqual([

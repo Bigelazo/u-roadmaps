@@ -11,11 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { useCanvasPreviewWorkflow } from '@/features/roadmap/canvas/canvas-preview-workflow';
-import type { PersistedCommand } from '@/features/roadmap/canvas/commands/commands';
-import type { CanvasCommandSession } from '@/features/roadmap/canvas/commands/canvas-command-ux';
+import { canvasCommandCatalog } from '@/features/roadmap/canvas/commands/commands';
 import {
   useCanvasCommands,
   type CanvasCommands,
+  type CanvasCommandSession,
 } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import type { AnyRoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
@@ -42,11 +42,6 @@ function messageFor(cause: unknown, fallback: string) {
 const refreshFailure = 'No se pudo actualizar el roadmap. Puedes reintentar.';
 /** For a failure that carries no message at all; the adapters always give one. */
 const genericFailure = 'No se pudo completar la acción.';
-/** Commands whose effect shows in the Canvas preview, which reloads instead of the Roadmap. */
-const canvasPreviewCommandKinds = {
-  'complete-canvas-preview-node': true,
-  'reset-canvas-preview': true,
-} satisfies Partial<Record<PersistedCommand['kind'], true>>;
 const loadFailure = 'No se pudo cargar el roadmap.';
 
 function matchesExperience(
@@ -339,7 +334,7 @@ function useInjectedSession(
         await reportFailure(cause, requestKey);
         return { applied: false };
       }
-      const changesCanvasPreview = command.kind in canvasPreviewCommandKinds;
+      const { changesCanvasPreview } = canvasCommandCatalog[command.kind];
       try {
         if (!changesCanvasPreview) await refresh();
         if (activeKeyRef.current === requestKey) setError(null);

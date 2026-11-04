@@ -40,10 +40,8 @@ import { StudentNodeDetail } from '@/features/roadmap/student/NodeDetail';
 import { isStudentBlockedNode, studentNodeStatus } from '@/features/roadmap/student/node-status';
 import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
-import type {
-  CanvasCommand,
-  CanvasConfirmationChoice,
-} from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
+import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type {
   RoadmapDto,
@@ -70,7 +68,7 @@ import {
 import { TutorialClosingPopover } from '@/shared/client/tutorial/tutorial';
 import { useNotificationAcknowledgement } from '@/features/notifications/client';
 import { termLabel } from '@/shared/course-offering';
-import { canvasConfirmation } from '@/features/roadmap/ui/roadmap-confirmation';
+import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 
 const NodeEditor = dynamic(
   () => import('@/features/roadmap/editor/NodeEditor').then(({ NodeEditor }) => NodeEditor),

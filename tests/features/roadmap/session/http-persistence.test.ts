@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type {
+  CanvasCommand,
   ChangeImpactCommand,
-  PersistedCommand,
 } from '@/features/roadmap/canvas/commands/commands';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
 import { RoadmapAccessLostError, RoadmapClosedError } from '@/features/roadmap/session/access-lost';
@@ -48,7 +48,7 @@ const api = (suffix: string) => `/api/CC1001/2026/2/roadmap${suffix}`;
 type Request = readonly [path: string, init: RequestInit];
 
 type Execution = {
-  command: PersistedCommand;
+  command: CanvasCommand;
   previewVersion?: string;
   requests: readonly Request[];
   response?: unknown;
@@ -146,7 +146,7 @@ const executions: Record<string, Execution> = {
     ],
   },
   'delete a Dependency': {
-    command: { kind: 'delete-dependency', dependencyId: 'dependency-1' },
+    command: { kind: 'delete-dependencies', dependencyIds: ['dependency-1'] },
     requests: [['/dependencies/dependency-1', { method: 'DELETE' }]],
   },
   'place a Teacher block with its preview version': {

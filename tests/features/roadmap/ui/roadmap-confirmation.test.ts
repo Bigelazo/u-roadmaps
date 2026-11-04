@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import {
-  canvasConfirmation,
   editorDraftDiscardConfirmation,
   nodeDeletionConfirmation,
   roadmapNodeVisibilityConfirmation,
