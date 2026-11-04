@@ -124,7 +124,6 @@ function useNodeEditorController(
   const { node, nodeTypes, isVisibilityPending } = session;
   const [state, dispatch] = useReducer(nodeEditorReducer, node, createNodeEditorState);
   const stateRef = useRef(state);
-  const mountedRef = useRef(true);
   const guardResolverRef = useRef<((proceed: boolean) => void) | null>(null);
   const effectIdRef = useRef(0);
   const handledCommandIdRef = useRef<string | null>(null);
@@ -142,7 +141,6 @@ function useNodeEditorController(
 
   useEffect(() => {
     return () => {
-      mountedRef.current = false;
       settleGuard(false);
     };
   }, [settleGuard]);
@@ -199,7 +197,6 @@ function useNodeEditorController(
       void Promise.resolve()
         .then(() => perform(effect))
         .then((result) => {
-          if (!mountedRef.current) return;
           transition({
             type: 'resolve-effect',
             effectId: pending.id,
@@ -208,7 +205,6 @@ function useNodeEditorController(
           });
         })
         .catch(() => {
-          if (!mountedRef.current) return;
           transition({
             type: 'resolve-effect',
             effectId: pending.id,

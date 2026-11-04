@@ -636,7 +636,6 @@ function RoadmapCanvasPanels({
   roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
 }) {
   const {
-    canEditRoadmap,
     canvasMode,
     isEditorOpen,
     editorPanel,
@@ -648,7 +647,7 @@ function RoadmapCanvasPanels({
   } = model;
   return (
     <>
-      {canEditRoadmap && (
+      {canvasMode.isEditing && (
         <NodeEditorPanel
           isOpen={canvasMode.isEditing && isEditorOpen}
           panelWidth={editorPanel.width}
@@ -658,7 +657,7 @@ function RoadmapCanvasPanels({
           <NodeEditor
             ref={nodeEditorRef}
             session={{
-              node: selectedNode as RoadmapNode | undefined,
+              node: selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined,
               nodeTypes: roadmap.nodeTypes,
               isVisibilityPending:
                 (pending?.kind === 'hide-node' || pending?.kind === 'show-node') &&
