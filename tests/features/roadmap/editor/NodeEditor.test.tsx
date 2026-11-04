@@ -1,5 +1,5 @@
-import { createRef } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { Activity, createRef } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { NodeEditor } from '@/features/roadmap/editor/NodeEditor';
@@ -108,6 +108,7 @@ type User = ReturnType<typeof userEvent.setup>;
 function renderEditor(
   overrides: Partial<NodeEditorProps> = {},
   ref = createRef<NodeEditorHandle>(),
+  strictMode = false,
 ) {
   const perform = vi
     .fn<
@@ -123,16 +124,19 @@ function renderEditor(
     onIntent,
     ...overrides,
   };
-  const ui = (current: NodeEditorProps) => (
-    <SidebarProvider>
-      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
-        <NodeEditor {...current} ref={ref} />
-      </NodeEditorPanel>
-    </SidebarProvider>
+  const ui = (current: NodeEditorProps, mode: 'visible' | 'hidden' = 'visible') => (
+    <Activity mode={mode}>
+      <SidebarProvider>
+        <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+          <NodeEditor {...current} ref={ref} />
+        </NodeEditorPanel>
+      </SidebarProvider>
+    </Activity>
   );
-  const view = render(ui(props));
+  const view = render(ui(props), { reactStrictMode: strictMode });
   const rerenderWith = (next: Partial<NodeEditorProps>) => view.rerender(ui({ ...props, ...next }));
-  return { ...view, props, perform, onIntent, ref, rerenderWith };
+  const setVisibility = (mode: 'visible' | 'hidden') => view.rerender(ui(props, mode));
+  return { ...view, props, perform, onIntent, ref, rerenderWith, setVisibility };
 }
 
 function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'session'> {
@@ -158,13 +162,15 @@ function deferredPerform() {
 
 async function retitle(user: User, title: string) {
   await user.clear(screen.getByLabelText('Título'));
-  await user.type(screen.getByLabelText('Título'), title);
+  await user.paste(title);
 }
 
 async function fillLink(user: User, title: string, url: string) {
   await user.click(screen.getByRole('tab', { name: 'Enlace' }));
-  await user.type(screen.getByPlaceholderText('Ej. Guía de ejercicios'), title);
-  await user.type(screen.getByLabelText('Enlace', { selector: 'input' }), url);
+  await user.click(screen.getByPlaceholderText('Ej. Guía de ejercicios'));
+  await user.paste(title);
+  await user.click(screen.getByLabelText('Enlace', { selector: 'input' }));
+  await user.paste(url);
 }
 
 const saveButton = () =>
@@ -766,4 +772,111 @@ test('a confirmed save arriving after a second local edit does not become a remo
   await waitFor(() => expect(saveButton().disabled).toBe(false));
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Segunda edición');
   expect(screen.queryByText(/cambió mientras editabas/)).toBeNull();
+});
+
+test('saves consecutive Node edits, links and a file in the same mounted editor', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor({}, undefined, true);
+
+  for (const title of ['Primera edición', 'Segunda edición']) {
+    await retitle(user, title);
+    expect(saveButton().disabled).toBe(false);
+    await user.click(saveButton());
+    await waitFor(() => expect(saveButton().disabled).toBe(true));
+  }
+  expect(perform).toHaveBeenCalledTimes(2);
+
+  for (const title of ['Primer enlace', 'Segundo enlace']) {
+    await user.click(screen.getByRole('button', { name: 'Recurso' }));
+    await fillLink(user, title, 'https://example.test/material');
+    await user.click(screen.getByRole('button', { name: 'Agregar enlace' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('form', { name: 'Editor de recurso' })).toBeNull(),
+    );
+    expect(perform).toHaveBeenLastCalledWith({
+      kind: 'add-resource',
+      nodeId: node.id,
+      resource: { title, url: 'https://example.test/material', type: 'LINK' },
+    });
+  }
+
+  await user.click(screen.getByRole('button', { name: 'Recurso' }));
+  const file = new File(['guía'], 'guia.pdf', { type: 'application/pdf' });
+  await user.upload(screen.getByLabelText('Archivo', { selector: 'input' }), file);
+  await user.click(screen.getByRole('button', { name: 'Subir archivo' }));
+  await waitFor(() => expect(screen.queryByRole('form', { name: 'Editor de recurso' })).toBeNull());
+  expect(perform).toHaveBeenLastCalledWith({ kind: 'upload-resource', nodeId: node.id, file });
+
+  await retitle(user, 'Edición después de publicar');
+  expect(saveButton().disabled).toBe(false);
+  await user.click(saveButton());
+  await waitFor(() => expect(perform).toHaveBeenCalledTimes(6));
+});
+
+test.each(['committed', 'rejected'] as const)(
+  'settles a %s Node save while Effects are disconnected and preserves newer input',
+  async (status) => {
+    const user = userEvent.setup();
+    const { perform, resolve } = deferredPerform();
+    const { setVisibility } = renderEditor({ perform }, undefined, true);
+    await retitle(user, 'Primer cambio');
+    await user.click(saveButton());
+    await waitFor(() => expect(perform).toHaveBeenCalledOnce());
+    await retitle(user, 'Cambio más reciente');
+    setVisibility('hidden');
+    await act(async () => resolve({ status }));
+    setVisibility('visible');
+    await waitFor(() => expect(saveButton().disabled).toBe(false));
+    expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Cambio más reciente');
+    await user.click(saveButton());
+    await waitFor(() => expect(perform).toHaveBeenCalledTimes(2));
+    await act(async () => resolve({ status: 'rejected' }));
+  },
+);
+
+test('ignores a late save after replacing the selected Node', async () => {
+  const user = userEvent.setup();
+  const { perform, resolve } = deferredPerform();
+  const view = renderEditor({ perform }, undefined, true);
+  await retitle(user, 'Guardado del primer nodo');
+  await user.click(saveButton());
+  await waitFor(() => expect(perform).toHaveBeenCalledOnce());
+  view.rerenderWith(withNode({ id: 'node-2', title: 'Otro nodo' }));
+  await act(async () => resolve({ status: 'committed' }));
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Otro nodo');
+  await retitle(user, 'Edición del segundo nodo');
+  expect(saveButton().disabled).toBe(false);
+});
+
+test('a save from an unmounted editor cannot modify a new editor instance', async () => {
+  const user = userEvent.setup();
+  const { perform, resolve } = deferredPerform();
+  const view = renderEditor({ perform }, undefined, true);
+  await retitle(user, 'Guardado de la instancia anterior');
+  await user.click(saveButton());
+  await waitFor(() => expect(perform).toHaveBeenCalledOnce());
+  view.unmount();
+  renderEditor(withNode({ id: 'node-2', title: 'Nueva instancia' }), undefined, true);
+  await retitle(user, 'Borrador de la nueva instancia');
+  await act(async () => resolve({ status: 'committed' }));
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe(
+    'Borrador de la nueva instancia',
+  );
+  expect(saveButton().disabled).toBe(false);
+});
+
+test('retries a thrown save failure in Strict Mode without leaving the editor pending', async () => {
+  const user = userEvent.setup();
+  const perform = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('Connection lost'))
+    .mockResolvedValue({ status: 'committed' });
+  renderEditor({ perform }, undefined, true);
+  await retitle(user, 'Borrador recuperable');
+  await user.click(saveButton());
+  await waitFor(() => expect(saveButton().disabled).toBe(false));
+  expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador recuperable');
+  await user.click(saveButton());
+  await waitFor(() => expect(perform).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(saveButton().disabled).toBe(true));
 });
