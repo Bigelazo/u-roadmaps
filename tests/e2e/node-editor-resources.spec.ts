@@ -76,3 +76,97 @@ for (const width of [1440, 390]) {
     );
   });
 }
+
+test('teacher saves consecutive Node edits and publishes links without reloading', async ({
+  page,
+  course,
+  teacherApi: api,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+  const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
+  const title = editor.getByRole('textbox', { name: 'Título', exact: true });
+  const save = editor.getByRole('button', { name: 'Guardar cambios', exact: true });
+  const nodePath = course.apiPath(`/nodes/${course.nodes.first}`);
+
+  for (const value of ['Primera edición consecutiva', 'Segunda edición consecutiva']) {
+    await title.fill(value);
+    await expect(save).toBeEnabled();
+    const saved = page.waitForResponse(
+      (response) => response.request().method() === 'PATCH' && response.url().endsWith(nodePath),
+    );
+    await save.click();
+    expect((await saved).status()).toBe(200);
+    await expect(editor.getByRole('heading', { name: value, exact: true })).toBeVisible();
+    await expect(save).toBeDisabled();
+  }
+
+  for (const resourceTitle of ['Primer enlace consecutivo', 'Segundo enlace consecutivo']) {
+    await editor.getByRole('button', { name: 'Recurso', exact: true }).click();
+    const form = editor.getByRole('form', { name: 'Editor de recurso' });
+    await form.getByRole('tab', { name: 'Enlace', exact: true }).click();
+    await form.getByRole('textbox', { name: 'Título', exact: true }).fill(resourceTitle);
+    await form
+      .getByRole('textbox', { name: 'Enlace', exact: true })
+      .fill('https://example.test/material');
+    const publish = form.getByRole('button', { name: 'Agregar enlace', exact: true });
+    await expect(publish).toBeEnabled();
+    const published = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' && response.url().endsWith(`${nodePath}/resources`),
+    );
+    await publish.click();
+    expect((await published).status()).toBe(201);
+    await expect(form).toHaveCount(0);
+    await expect(
+      editor.getByRole('link', { name: `Abrir recurso ${resourceTitle}`, exact: true }),
+    ).toBeVisible();
+  }
+
+  await editor.getByRole('button', { name: 'Recurso', exact: true }).click();
+  const fileForm = editor.getByRole('form', { name: 'Editor de recurso' });
+  await fileForm.locator('input[type="file"]').setInputFiles({
+    name: 'archivo-consecutivo.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Consecutive upload regression'),
+  });
+  await fileForm.getByRole('button', { name: 'Subir archivo', exact: true }).click();
+  await expect(fileForm).toHaveCount(0);
+  await expect(
+    editor.getByRole('link', { name: 'Abrir recurso archivo-consecutivo.txt', exact: true }),
+  ).toBeVisible();
+
+  const finalTitle = 'Edición después de publicar recursos';
+  await title.fill(finalTitle);
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(editor.getByRole('heading', { name: finalTitle, exact: true })).toBeVisible();
+  await expect(save).toBeDisabled();
+
+  const roadmapResponse = await api.get(course.apiPath());
+  await ok(roadmapResponse);
+  const savedNode = (await roadmapResponse.json()).nodes.find(
+    (item: { id: string }) => item.id === course.nodes.first,
+  );
+  expect(savedNode.title).toBe(finalTitle);
+  expect(savedNode.resources).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        title: 'Primer enlace consecutivo',
+        url: 'https://example.test/material',
+        type: 'LINK',
+      }),
+      expect.objectContaining({
+        title: 'Segundo enlace consecutivo',
+        url: 'https://example.test/material',
+        type: 'LINK',
+      }),
+      expect.objectContaining({ title: 'archivo-consecutivo.txt', type: 'FILE' }),
+    ]),
+  );
+  await title.fill('Siguiente edición disponible');
+  await expect(save).toBeEnabled();
+  await editor.screenshot({ path: testInfo.outputPath('consecutive-edits-and-resources.png') });
+});
