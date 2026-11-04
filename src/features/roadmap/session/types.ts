@@ -1,6 +1,6 @@
 import type {
   ChangeImpactCommand,
-  PersistedCommand,
+  CanvasCommand,
   ReadChangeImpactOf,
 } from '@/features/roadmap/canvas/commands/commands';
 import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type-appearance';
@@ -36,7 +36,7 @@ export type RoadmapCanvasSessionPersistence = {
   readChangeImpact<Command extends ChangeImpactCommand>(
     command: Command,
   ): Promise<ReadChangeImpactOf<Command['kind']>>;
-  execute(command: PersistedCommand, previewVersion?: string): Promise<ExecutionResult | void>;
+  execute(command: CanvasCommand, previewVersion?: string): Promise<ExecutionResult | void>;
 };
 
 export type RoadmapCanvasExperience =

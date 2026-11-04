@@ -11,13 +11,8 @@ import type {
   PracticeCanvasAction,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
-import type {
-  CanvasCommandOf,
-  CanvasConfirmationChoice,
-  ConfirmedActionKind,
-  PersistedCommand,
-  UnconfirmedCommand,
-} from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasCommand, CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
 import { executeWithChangeImpact } from '../support/execute-with-change-impact';
@@ -102,7 +97,7 @@ async function openCanvas(
 type Execution = ReturnType<RoadmapCanvasSessionPersistence['execute']>;
 
 /** Wraps an adapter so that executing a command of one kind goes through `intercept`. */
-function intercepting<Kind extends PersistedCommand['kind']>(
+function intercepting<Kind extends CanvasCommand['kind']>(
   adapter: RoadmapCanvasSessionPersistence,
   kind: Kind,
   intercept: (command: CanvasCommandOf<Kind>, forward: () => Execution) => Execution,
@@ -121,7 +116,7 @@ function intercepting<Kind extends PersistedCommand['kind']>(
 /** Lets `race` change the Roadmap once, right before the first command of this kind applies. */
 function racingOnce(
   adapter: RoadmapCanvasSessionPersistence,
-  kind: PersistedCommand['kind'],
+  kind: CanvasCommand['kind'],
   race: () => Promise<unknown>,
 ) {
   let raceOnce = true;
@@ -858,8 +853,8 @@ describe('canvas commands', () => {
     let failOnce = true;
     const persistence = intercepting(
       adapter,
-      'delete-dependency',
-      async ({ dependencyId }, forward) => {
+      'delete-dependencies',
+      async ({ dependencyIds: [dependencyId] }, forward) => {
         if (dependencyId === 'limits-integrals' && failOnce) {
           failOnce = false;
           throw new Error('No se pudo eliminar la dependencia.');
@@ -900,9 +895,7 @@ describe('canvas commands', () => {
   });
 
   describe('Confirmed action toasts', () => {
-    test.each<
-      [string, RoadmapDto, CanvasCommandOf<ConfirmedActionKind>, CanvasConfirmationChoice, string]
-    >([
+    test.each<[string, RoadmapDto, CanvasCommand, CanvasConfirmationChoice, string]>([
       [
         'hiding a Node',
         roadmap,
@@ -1011,7 +1004,7 @@ describe('canvas commands', () => {
     test.each<
       [
         string,
-        UnconfirmedCommand,
+        CanvasCommand,
         string | null,
         (persistence: RoadmapCanvasSessionPersistence) => Promise<unknown>,
         unknown,
@@ -1272,10 +1265,7 @@ describe('canvas commands', () => {
       const canvas = await openCanvas(
         createInMemoryRoadmapSessionPersistence(withTeacherBlocks('derivatives')),
       );
-      const confirmed = async (
-        command: CanvasCommandOf<ConfirmedActionKind>,
-        choice: CanvasConfirmationChoice,
-      ) => {
+      const confirmed = async (command: CanvasCommand, choice: CanvasConfirmationChoice) => {
         await act(() => canvas.commands().request(command));
         await canvas.awaiting();
         await canvas.confirm(choice);
