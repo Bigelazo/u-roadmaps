@@ -1,5 +1,5 @@
 import { StrictMode, type ComponentProps } from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { RoadmapGraphProps } from '@/features/roadmap/graph/RoadmapGraph';
@@ -196,3 +196,152 @@ test.each([false, true])(
     expect((await persistence.load()).nodes).toEqual([limitsNode, dependent]);
   },
 );
+
+// Hold only the next save of this Node; all reads, other commands and later saves stay real.
+function pauseNextNodeSave(base: SessionPersistence) {
+  const received = Promise.withResolvers<void>();
+  const decision = Promise.withResolvers<boolean>();
+  const settled = Promise.withResolvers<void>();
+  let intercepted = false;
+  return {
+    persistence: {
+      ...base,
+      async execute(...args: Parameters<SessionPersistence['execute']>) {
+        if (intercepted || args[0].kind !== 'update-node' || args[0].nodeId !== limitsNode.id)
+          return base.execute(...args);
+        intercepted = true;
+        received.resolve();
+        try {
+          if (!(await decision.promise)) throw new Error('Fallo simulado antes de escribir.');
+          return await base.execute(...args);
+        } finally {
+          settled.resolve();
+        }
+      },
+    },
+    received: received.promise,
+    settled: settled.promise,
+    release: () => decision.resolve(true),
+    reject: () => decision.resolve(false),
+    async finish() {
+      decision.resolve(true);
+      if (intercepted) await settled.promise;
+    },
+  };
+}
+
+test('persists successive Node titles and Link resources in one mounted canvas session', async () => {
+  const user = userEvent.setup();
+  const base = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+  const controlled = pauseNextNodeSave(base);
+  renderSession(controlled.persistence);
+  try {
+    await user.click(await screen.findByRole('button', { name: 'Límites' }));
+    const editor = screen.getByLabelText('Panel de edición del roadmap');
+    const title = await within(editor).findByRole('textbox', { name: 'Título' });
+    const save = within(editor).getByRole('button', {
+      name: 'Guardar cambios',
+    }) as HTMLButtonElement;
+    await user.clear(title);
+    await user.type(title, 'Límites y continuidad');
+    await user.click(save);
+    await controlled.received;
+    expect(save.disabled).toBe(true);
+    expect((await base.load()).nodes[0].title).toBe('Límites');
+    await act(async () => {
+      controlled.release();
+      await controlled.settled;
+    });
+    expect(
+      await within(editor).findByRole('heading', { name: 'Límites y continuidad' }),
+    ).toBeTruthy();
+    expect((await base.load()).nodes[0].title).toBe('Límites y continuidad');
+
+    await user.clear(title);
+    await user.type(title, 'Límites y sucesiones');
+    await waitFor(() => expect(save.disabled).toBe(false));
+    await user.click(save);
+    expect(
+      await within(editor).findByRole('heading', { name: 'Límites y sucesiones' }),
+    ).toBeTruthy();
+    expect((await base.load()).nodes[0].title).toBe('Límites y sucesiones');
+
+    for (const [resourceTitle, url, count] of [
+      ['Guía de límites', 'https://example.edu/limites', 1],
+      ['Guía de sucesiones', 'https://example.edu/sucesiones', 2],
+    ] as const) {
+      await user.click(within(editor).getByRole('button', { name: 'Recurso' }));
+      const composer = within(editor).getByRole('form', { name: 'Editor de recurso' });
+      await user.click(within(composer).getByRole('tab', { name: 'Enlace' }));
+      await user.type(within(composer).getByRole('textbox', { name: 'Título' }), resourceTitle);
+      await user.type(within(composer).getByRole('textbox', { name: 'Enlace' }), url);
+      await user.click(within(composer).getByRole('button', { name: 'Agregar enlace' }));
+      await waitFor(() =>
+        expect(within(editor).queryByRole('form', { name: 'Editor de recurso' })).toBeNull(),
+      );
+      expect(
+        within(editor)
+          .getByRole('link', { name: `Abrir recurso ${resourceTitle}` })
+          .getAttribute('href'),
+      ).toBe(url);
+      const node = (await base.load()).nodes[0];
+      expect(node).toHaveProperty('resources.length', count);
+      expect(node).toMatchObject({
+        resources: expect.arrayContaining([
+          expect.objectContaining({ title: resourceTitle, url, type: 'LINK' }),
+        ]),
+      });
+    }
+
+    await user.clear(title);
+    await user.type(title, 'Otra edición disponible');
+    await waitFor(() => expect(save.disabled).toBe(false));
+  } finally {
+    await act(async () => controlled.finish());
+  }
+});
+
+test('retains a failed Node draft and retries through real persistence before another edit', async () => {
+  const user = userEvent.setup();
+  const base = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
+  const controlled = pauseNextNodeSave(base);
+  renderSession(controlled.persistence);
+  try {
+    await user.click(await screen.findByRole('button', { name: 'Límites' }));
+    const editor = screen.getByLabelText('Panel de edición del roadmap');
+    const title = (await within(editor).findByRole('textbox', {
+      name: 'Título',
+    })) as HTMLInputElement;
+    const save = within(editor).getByRole('button', {
+      name: 'Guardar cambios',
+    }) as HTMLButtonElement;
+    await user.clear(title);
+    await user.type(title, 'Borrador recuperable');
+    await user.click(save);
+    await controlled.received;
+    await act(async () => {
+      controlled.reject();
+      await controlled.settled;
+    });
+    expect(await findToast('Fallo simulado antes de escribir.')).toBeTruthy();
+    expect(title.value).toBe('Borrador recuperable');
+    await waitFor(() => expect(save.disabled).toBe(false));
+    expect(await base.load()).toEqual(teachingRoadmap);
+    expect(within(editor).getByRole('heading', { name: 'Límites' })).toBeTruthy();
+
+    await user.click(save);
+    expect(
+      await within(editor).findByRole('heading', { name: 'Borrador recuperable' }),
+    ).toBeTruthy();
+    expect((await base.load()).nodes[0]).toMatchObject({
+      title: 'Borrador recuperable',
+      description: 'Información guardada',
+      resources: [],
+    });
+    await user.clear(title);
+    await user.type(title, 'Edición después de recuperar');
+    await waitFor(() => expect(save.disabled).toBe(false));
+  } finally {
+    await act(async () => controlled.finish());
+  }
+});
