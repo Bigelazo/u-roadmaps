@@ -77,6 +77,26 @@ suite completa. Un fallo, timeout o caso sin ejecutar no cuenta como aprobación
 Esta guía conserva la preparación y las convenciones de ejecución; la
 configuración conserva sus valores vigentes.
 
+## Fidelidad de los tests
+
+Para cada regresión, identificar el riesgo, la interfaz pública de entrada,
+la implementación real que debe recorrer, el doble exterior controlado y el
+resultado observable. Reutilizar una garantía existente antes de duplicarla.
+Demostrar sensibilidad: partir de un caso verde, introducir un defecto semántico
+válido, observar la aserción relevante fallar, restaurar y volver a verde.
+Un error de importación, SQL inválido o timeout global no demuestra esa garantía.
+
+Los contratos HTTP conservan wrappers, parsers, normalización y serialización
+reales. Pueden controlar autenticación y resultados de operaciones públicas.
+Si aíslan la inicialización de Prisma, exponen su constructor de errores real.
+Las llamadas directas a handlers no prueban cookies, routing, proxy ni `after`.
+
+ESLint rechaza `vi.mock` y `vi.doMock` directos, incluso de solo espionaje, sobre
+`@/shared/errors/server` y `@/app/_adapters/http` en los contratos de
+`tests/app/api` y `tests/app/_adapters`. Cubre argumentos literales e
+`import(...)`; no resuelve bindings renombrados, rutas relativas equivalentes ni
+reemplazos indirectos. Esos casos requieren revisión.
+
 ## Preparación y aislamiento E2E
 
 Playwright carga `.env` y aplica el entorno de pruebas al runner y sus procesos
