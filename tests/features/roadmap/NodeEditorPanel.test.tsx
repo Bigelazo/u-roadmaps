@@ -61,13 +61,15 @@ test('keeps the editor DOM and draft field mounted while the panel is hidden', a
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Límites y continuidad');
 });
 
-test('keeps mobile disclosure state in the panel shell', async () => {
+test('presents the editor as a non-modal bottom sheet in the compact layout', () => {
   mockViewport(640);
-  const user = userEvent.setup();
   renderPanel();
 
-  const details = screen.getByRole('group', { name: 'Editor de nodo' }) as HTMLDetailsElement;
-  await user.click(screen.getByText('Editor de nodo'));
-
-  expect(details.open).toBe(true);
+  const panel = screen.getByRole('dialog', { name: 'Panel de edición del roadmap' });
+  expect(panel.getAttribute('data-side')).toBe('bottom');
+  expect(panel.id).toBe('roadmap-editor-panel');
+  expect(screen.getByRole('group', { name: 'Editor de nodo' })).toBeTruthy();
+  expect(screen.getByLabelText('Título')).toBeTruthy();
+  // eslint-disable-next-line testing-library/no-node-access -- the overlay has no role or name.
+  expect(document.querySelector('[data-slot="sheet-overlay"]')).toBeNull();
 });

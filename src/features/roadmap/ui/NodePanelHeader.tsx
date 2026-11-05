@@ -33,16 +33,16 @@ export function NodePanelHeader({
   return (
     <Header
       className={cn(
-        'border-b border-border px-6 pt-4 pb-6',
+        'shrink-0 border-b border-border px-6 pt-4 pb-6',
         isSidebar && 'shrink-0 p-0 px-6 pt-4 pb-6',
       )}
     >
-      <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <p className="text-xs font-bold tracking-[1.2px] whitespace-nowrap text-primary uppercase">
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-xs font-bold tracking-[1.2px] text-primary uppercase max-sm:sr-only">
           Nodo seleccionado
         </p>
         <div
-          className="ml-auto flex items-center justify-end gap-1"
+          className="ml-auto flex shrink-0 items-center justify-end gap-1"
           role="group"
           aria-label="Acciones del nodo"
         >
@@ -60,7 +60,10 @@ export function NodePanelHeader({
           />
         ) : null}
         {isModal ? (
-          <SheetTitle className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word">
+          <SheetTitle
+            id={headingId}
+            className="min-w-0 font-heading text-2xl font-semibold tracking-[-0.035em] wrap-break-word"
+          >
             {title}
           </SheetTitle>
         ) : (

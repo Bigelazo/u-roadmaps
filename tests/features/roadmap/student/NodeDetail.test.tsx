@@ -73,6 +73,7 @@ function renderDetail(props: Partial<ComponentProps<typeof StudentNodeDetail>> =
 }
 
 test('fullscreen shows node content and Escape returns to the selected node', async () => {
+  mockViewport(1280);
   const user = userEvent.setup();
   const onClose = vi.fn();
   renderDetail({ onClose });
@@ -86,7 +87,17 @@ test('fullscreen shows node content and Escape returns to the selected node', as
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('button', { name: 'Cerrar pantalla completa' })).toBeNull();
   expect(onClose).not.toHaveBeenCalled();
-  expect(screen.getByRole('dialog', { name: node.title })).toBeTruthy();
+  expect(screen.getByLabelText(node.title).id).toBe('student-node-detail-panel');
+});
+
+test('compact node detail is the tutorial target sheet without a second fullscreen dialog', () => {
+  renderDetail();
+
+  const sheet = screen.getByRole('dialog', { name: node.title });
+  expect(sheet.id).toBe('student-node-detail-panel');
+  // eslint-disable-next-line testing-library/no-node-access -- the tutorial targets this id.
+  expect(document.querySelectorAll('#student-node-detail-panel')).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: 'Ver nodo en pantalla completa' })).toBeNull();
 });
 
 test('restricted student nodes do not offer fullscreen content', () => {

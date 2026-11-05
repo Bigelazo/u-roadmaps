@@ -130,7 +130,7 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
 test('touch actions reuse visibility, Resource editing, draft guards, and deletion', async ({
   page,
   course,
-  touchRoadmap: { offering, first, second },
+  touchRoadmap: { offering, first },
 }) => {
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(offering.pagePath());
@@ -167,16 +167,11 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
     .toBe(true);
   await composer.getByRole('tab', { name: 'Enlace', exact: true }).tap();
   await composer.getByLabel('Título', { exact: true }).fill('Touch Resource draft');
-  await page.getByRole('group', { name: 'Editor de nodo', exact: true }).locator('summary').tap();
 
-  const secondTrigger = page
-    .locator(`.react-flow__node[data-id="${second.id}"]`)
-    .getByRole('button', { name: 'Abrir menú de acciones del nodo' });
-  await secondTrigger.tap();
-  await sheet.getByRole('button', { name: 'Agregar recurso' }).tap();
+  // The compact editor is a sheet: leaving it through the canvas still guards the draft.
+  await page.getByRole('button', { name: 'Deseleccionar nodo' }).tap();
   await expect(confirmation).toContainText('Descartar cambios sin guardar');
   await confirmation.getByRole('button', { name: 'Seguir editando' }).tap();
-  await page.getByRole('group', { name: 'Editor de nodo', exact: true }).locator('summary').tap();
   await expect(composer.getByLabel('Título', { exact: true })).toHaveValue('Touch Resource draft');
   await composer
     .getByRole('textbox', { name: 'Enlace', exact: true })
@@ -184,7 +179,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   await composer.getByRole('button', { name: 'Agregar enlace' }).tap();
   await expect(composer).toBeHidden();
   await expect(node.getByRole('img', { name: '1 enlace', exact: true })).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Deseleccionar nodo' }).tap();
 
   await trigger.tap();
   await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();

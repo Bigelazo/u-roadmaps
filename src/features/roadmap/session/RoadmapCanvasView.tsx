@@ -672,7 +672,6 @@ function RoadmapCanvasPanels({
           isOpen={canvasMode.isEditing && isEditorOpen}
           panelWidth={editorPanel.width}
           onPanelWidthChange={editorPanel.setWidth}
-          expandRequest={resourceComposerCommand?.id}
         >
           <NodeEditor
             ref={nodeEditorRef}

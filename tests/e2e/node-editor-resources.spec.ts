@@ -29,9 +29,6 @@ for (const width of [1440, 390]) {
     await page.goto(course.pagePath());
     await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
     await page.setViewportSize({ width, height: 900 });
-    if (width < 1024) {
-      await page.locator('#roadmap-editor-panel summary').click();
-    }
     const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
     await expect(
       editor
