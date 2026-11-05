@@ -15,7 +15,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, CircleHelp, Eye, History, LogOut, Users } from 'lucide-react';
+import { ArrowLeft, CircleAlert, CircleHelp, Eye, History, LogOut, Users } from 'lucide-react';
 import { courseParticipantsUrl, versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -50,7 +50,7 @@ import type {
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
-import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
+import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
@@ -204,7 +204,6 @@ function useRoadmapCanvasController({ input }: Props) {
     roadmap,
     error,
     dismissError,
-    retryRefresh,
     accessLost,
     canvasCommands,
     canvasPreviewRoadmap,
@@ -437,7 +436,6 @@ function useRoadmapCanvasController({ input }: Props) {
     guardEditorDraft,
     roadmap,
     error,
-    retryRefresh,
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
@@ -474,7 +472,6 @@ export function RoadmapCanvasView({ input }: Props) {
     selectedNodeId,
     roadmap,
     error,
-    retryRefresh,
     accessLost,
     canvasCommands,
     displayedRoadmap,
@@ -486,16 +483,46 @@ export function RoadmapCanvasView({ input }: Props) {
   }
   if (error && !roadmap) {
     return (
-      <Alert variant="destructive" className="m-4 max-w-2xl">
-        <CircleAlert aria-hidden="true" />
-        <AlertTitle>Error al cargar el roadmap</AlertTitle>
-        <AlertDescription>
-          {error}
-          <Button type="button" onClick={retryRefresh}>
-            Reintentar actualización
-          </Button>
-        </AlertDescription>
-      </Alert>
+      <section
+        data-page-width="full"
+        aria-labelledby="roadmap-load-error-title"
+        className="flex min-h-[calc(100dvh-7rem)] w-full bg-cloud text-foreground lg:h-full lg:min-h-0"
+      >
+        <Empty className="gap-6 rounded-none px-6 py-16">
+          <EmptyHeader className="max-w-lg gap-4">
+            <EmptyMedia className="text-destructive">
+              <CircleAlert aria-hidden="true" className="size-10" />
+            </EmptyMedia>
+            <h1
+              id="roadmap-load-error-title"
+              className="font-heading text-2xl font-semibold tracking-tight text-balance sm:text-3xl"
+            >
+              No pudimos abrir el roadmap
+            </h1>
+            <p className="max-w-full text-base font-medium wrap-anywhere">
+              {input.courseOffering.title}
+            </p>
+            <div
+              role="alert"
+              className="flex max-w-full flex-col gap-2 text-base text-muted-foreground"
+            >
+              <p className="wrap-anywhere">{error}</p>
+              <p>
+                {input.practice?.exitHref
+                  ? 'Vuelve a la práctica para continuar.'
+                  : 'Vuelve a tus cursos para abrir el roadmap nuevamente.'}
+              </p>
+            </div>
+          </EmptyHeader>
+          <Link
+            href={input.practice?.exitHref ?? '/academic-overview'}
+            className={buttonVariants()}
+          >
+            <ArrowLeft data-icon="inline-start" />
+            {input.practice?.exitHref ? 'Volver a la práctica' : 'Volver a mis cursos'}
+          </Link>
+        </Empty>
+      </section>
     );
   }
   if (!roadmap) {
@@ -565,11 +592,6 @@ export function RoadmapCanvasView({ input }: Props) {
               graphProjection={graphProjection}
             />
           </NodeChangeCountsProvider>
-          {error ? (
-            <Button className="absolute top-24 right-5" type="button" onClick={retryRefresh}>
-              Reintentar actualización
-            </Button>
-          ) : null}
         </div>
         <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
       </section>

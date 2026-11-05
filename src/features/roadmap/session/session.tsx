@@ -39,7 +39,7 @@ function messageFor(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
-const refreshFailure = 'No se pudo actualizar el roadmap. Puedes reintentar.';
+const refreshFailure = 'No se pudo actualizar el roadmap.';
 /** For a failure that carries no message at all; the adapters always give one. */
 const genericFailure = 'No se pudo completar la acción.';
 const loadFailure = 'No se pudo cargar el roadmap.';
@@ -92,7 +92,6 @@ type RoadmapCanvasSessionState = {
   canvasPreviewRoadmap: StudentRoadmapDto | null;
   error: string | null;
   dismissError: () => void;
-  retryRefresh: () => void;
   accessLost: boolean;
   isClosed: boolean;
   loadCanvasPreview: () => Promise<boolean>;
@@ -254,22 +253,6 @@ function useInjectedSession(
     };
   }, [key, loadRoadmap]);
 
-  const retryRefresh = useCallback(() => {
-    void refresh().then(
-      (loaded) => {
-        if (!loaded) return;
-        setError(null);
-      },
-      (cause: unknown) => {
-        if (activeKeyRef.current !== key) return;
-        setError({
-          message: messageFor(cause, refreshFailure),
-          key,
-        });
-      },
-    );
-  }, [key, refresh]);
-
   const dismissError = useCallback(() => {
     setError(null);
   }, []);
@@ -361,7 +344,6 @@ function useInjectedSession(
       canvasPreviewRoadmap: canvasPreviewKey === key ? canvasPreviewRoadmap : null,
       error: error?.key === key ? error.message : null,
       dismissError,
-      retryRefresh,
       accessLost,
       isClosed:
         input.experience.term === 'historical' ||
