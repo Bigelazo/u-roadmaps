@@ -2,58 +2,27 @@
 
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 
-import { memo, useCallback } from 'react';
+import { memo } from 'react';
 import { X } from 'lucide-react';
-import {
-  BaseEdge,
-  EdgeLabelRenderer,
-  getSmoothStepPath,
-  useStore,
-  type EdgeProps,
-  type ReactFlowState,
-} from '@xyflow/react';
-import { floatingEdgeGeometry, type NodeRect } from '@/features/roadmap/graph/geometry';
+import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
+import { useDependencyRoute } from '@/features/roadmap/graph/routing/DependencyRouting';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { Button } from '@/shared/ui/button';
 
-function nodeRect(state: ReactFlowState, nodeId: string): NodeRect | null {
-  const node = state.nodeLookup.get(nodeId);
-  const { width, height } = node?.measured ?? {};
-  if (!node || !width || !height) return null;
-  const { x, y } = node.internals.positionAbsolute;
-  return { x, y, width, height };
-}
-
-function sameRect(a: NodeRect | null, b: NodeRect | null) {
-  if (!a || !b) return a === b;
-  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
-}
-
 export const FloatingEdge = memo(function FloatingEdge({
   id,
-  source,
-  target,
   markerEnd,
   selected,
   style,
   interactionWidth,
   data,
 }: EdgeProps<RoadmapFlowEdge>) {
-  const sourceRect = useStore(
-    useCallback((state: ReactFlowState) => nodeRect(state, source), [source]),
-    sameRect,
-  );
-  const targetRect = useStore(
-    useCallback((state: ReactFlowState) => nodeRect(state, target), [target]),
-    sameRect,
-  );
-
-  if (!sourceRect || !targetRect) return null;
-
-  const [path, labelX, labelY] = getSmoothStepPath({
-    ...floatingEdgeGeometry(sourceRect, targetRect),
-    borderRadius: 8,
-  });
+  const route = useDependencyRoute(id);
+  if (!route) return null;
+  const {
+    path,
+    label: { x: labelX, y: labelY },
+  } = route;
 
   const onDelete = data?.onDelete;
 

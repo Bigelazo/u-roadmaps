@@ -38,6 +38,11 @@ function nodeProps(node: RoadmapFlowNode): NodeProps<RoadmapFlowNode> {
   };
 }
 
+vi.mock('@/features/roadmap/graph/routing/DependencyRouting', () => ({
+  DependencyRouting: ({ children }: { children: ReactNode }) => children,
+  useDependencyRoute: () => undefined,
+}));
+
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
   BackgroundVariant: { Lines: 'lines' },
