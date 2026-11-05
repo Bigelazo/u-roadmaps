@@ -60,6 +60,7 @@ import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
+import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import {
   TUTORIAL_EXIT_ATTRIBUTE,
   TUTORIAL_TRIGGER_ATTRIBUTE,
@@ -84,7 +85,7 @@ function RoadmapCanvasLoading({ isCanvasPreview = false }: { isCanvasPreview?: b
     <section
       data-page-width="full"
       aria-busy="true"
-      className="roadmap-canvas-loading flex min-h-0 w-full flex-1 bg-background lg:h-full"
+      className="roadmap-canvas-loading flex min-h-0 w-full flex-1 bg-background"
     >
       <Empty role="status" aria-label={title} className="rounded-none">
         <EmptyHeader>
@@ -486,7 +487,7 @@ export function RoadmapCanvasView({ input }: Props) {
       <section
         data-page-width="full"
         aria-labelledby="roadmap-load-error-title"
-        className="flex min-h-[calc(100dvh-7rem)] w-full bg-cloud text-foreground lg:h-full lg:min-h-0"
+        className="flex min-h-full w-full flex-1 bg-cloud text-foreground"
       >
         <Empty className="gap-6 rounded-none px-6 py-16">
           <EmptyHeader className="max-w-lg gap-4">
@@ -543,7 +544,7 @@ export function RoadmapCanvasView({ input }: Props) {
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
     <SidebarProvider
-      className="min-h-0 lg:h-full"
+      className="min-h-0 flex-1"
       style={
         {
           '--sidebar-width': `${activePanelWidth}px`,
@@ -553,7 +554,7 @@ export function RoadmapCanvasView({ input }: Props) {
       <section
         data-page-width="full"
         className={cn(
-          'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
+          'relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)]',
           isSidePanelOpen ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]' : 'lg:grid-cols-1',
         )}
       >
@@ -561,14 +562,19 @@ export function RoadmapCanvasView({ input }: Props) {
           ref={canvasFocusRef}
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
-          className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
+          className="relative min-h-0 bg-background"
         >
           {input.practice?.exitHref ? (
             <Link
               {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
               className={buttonVariants({
                 variant: 'outline',
-                className: 'absolute top-4 right-4 z-20 sm:top-6 sm:right-6',
+                className: cn(
+                  'absolute top-4 right-4 z-10 sm:top-6 sm:right-6',
+                  // The compact preview toolbar spans the top edge; that corner is free below.
+                  model.isCanvasPreview &&
+                    'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
+                ),
               })}
               href={input.practice.exitHref}
               onClick={markTutorialClosingPopover}
@@ -840,22 +846,38 @@ function RoadmapCanvasGraph({
           ? () => (
               <>
                 {canPreviewCanvas && !input.practice ? (
-                  <Link
-                    className={cn(buttonVariants({ variant: 'outline' }))}
-                    href={versionHistoryUrl(courseCode)}
-                  >
-                    <History data-icon="inline-start" />
-                    Historial de versiones
-                  </Link>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Link
+                          aria-label="Historial de versiones"
+                          className={cn(buttonVariants({ variant: 'outline' }))}
+                          href={versionHistoryUrl(courseCode)}
+                        >
+                          <History data-icon="inline-start" />
+                          Historial de versiones
+                        </Link>
+                      }
+                    />
+                    <TooltipContent>Historial de versiones</TooltipContent>
+                  </Tooltip>
                 ) : null}
                 {canPreviewCanvas && !input.practice ? (
-                  <Link
-                    className={cn(buttonVariants({ variant: 'outline' }))}
-                    href={courseParticipantsUrl({ courseCode, year, semester })}
-                  >
-                    <Users data-icon="inline-start" />
-                    Integrantes
-                  </Link>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Link
+                          aria-label="Integrantes"
+                          className={cn(buttonVariants({ variant: 'outline' }))}
+                          href={courseParticipantsUrl({ courseCode, year, semester })}
+                        >
+                          <Users data-icon="inline-start" />
+                          Integrantes
+                        </Link>
+                      }
+                    />
+                    <TooltipContent>Integrantes</TooltipContent>
+                  </Tooltip>
                 ) : null}
                 {canEnterCanvasPreview ? (
                   <Tooltip>
@@ -983,9 +1005,13 @@ function RoadmapCanvasHeader({
   ReturnType<typeof useRoadmapCanvasController>,
   'title' | 'courseCode' | 'year' | 'semester' | 'isCanvasPreview'
 > & { isEditing: boolean }) {
+  // In the compact layout the preview toolbar already names the preview mode, so the
+  // header drops its badge row to keep the stacked overlays short.
+  const isCompact = useCompactCanvasLayout();
+  const hidesBadgeRow = isCanvasPreview && isCompact;
   return (
     <header>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
         {isCanvasPreview ? (
           <Badge
             className="border-orange-300 text-secondary-foreground"
@@ -999,7 +1025,12 @@ function RoadmapCanvasHeader({
           <Badge variant="secondary">Modo edición</Badge>
         ) : null}
       </div>
-      <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
+      <h1
+        className={cn(
+          'font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]',
+          !hidesBadgeRow && 'mt-2',
+        )}
+      >
         {title}
       </h1>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">

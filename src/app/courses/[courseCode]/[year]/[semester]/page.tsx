@@ -84,7 +84,7 @@ export default async function CoursePage(
   });
 
   return (
-    <main className="bg-cloud lg:fixed lg:inset-x-0 lg:top-16 lg:bottom-0">
+    <main data-viewport-page className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-cloud">
       <RoadmapEntryNotifications key={roadmapEntryKey}>
         <RoadmapCanvasSession
           notificationsEnabled={Boolean(inboxIdentity)}

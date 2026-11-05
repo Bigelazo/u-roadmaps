@@ -10,7 +10,6 @@ import { originLabel } from '@/features/roadmap/ui/version-labels';
 import { VersionAuthorshipList } from '@/features/roadmap/ui/VersionAuthorshipList';
 import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
-import { Card, CardContent, CardHeader } from '@/shared/ui/card';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import type { RoadmapVersion } from '@/features/roadmap/version-types';
 
@@ -23,7 +22,7 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
   const selectedNode = version.nodes.find(({ id }) => id === selectedNodeId);
 
   return (
-    <main className="flex h-[calc(100dvh-4rem)] min-h-[32rem] flex-col bg-cloud text-foreground">
+    <main data-viewport-page className="flex min-h-0 flex-1 flex-col bg-cloud text-foreground">
       <div className="relative flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">
           <RoadmapGraph
@@ -100,51 +99,46 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
 function VersionInformation({ version }: Readonly<{ version: RoadmapVersion }>) {
   const { version: authorship } = version;
   return (
-    <Card
-      className="pointer-events-auto max-h-[calc(100dvh-12rem)] w-80 max-w-full gap-3 overflow-y-auto"
-      size="sm"
-    >
-      <CardHeader className="gap-2">
-        <Link
-          className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'w-fit' })}
-          href={versionHistoryUrl(version.course.code)}
-        >
-          <ArrowLeft data-icon="inline-start" />
-          Historial de versiones
-        </Link>
-        <p className="text-sm text-muted-foreground">
-          {version.course.code} · {version.course.name}
-        </p>
-        <h1 className="font-heading text-xl font-semibold text-ink">{authorship.edition}</h1>
-        <p className="text-xs text-muted-foreground">Versión cerrada · solo lectura</p>
-      </CardHeader>
-      <CardContent>
-        <details className="group/version">
-          <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 rounded-sm text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-            Información de la versión
-            <ChevronDown
-              aria-hidden="true"
-              className="size-4 shrink-0 group-open/version:rotate-180"
-            />
-          </summary>
-          <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm [&_dd]:min-w-0 [&_dd]:wrap-break-word">
-            <dt className="font-semibold">Origen</dt>
-            <dd>{originLabel(authorship.origin)}</dd>
-            <VersionAuthorshipList {...authorship} />
-            <dt className="font-semibold">Linaje</dt>
-            <dd>
-              <ol aria-label="Linaje" className="flex flex-wrap gap-x-2">
-                {authorship.lineage.map((ancestor, index) => (
-                  <li key={ancestor.edition}>
-                    {index > 0 ? '→ ' : ''}
-                    {ancestor.edition}
-                  </li>
-                ))}
-              </ol>
-            </dd>
-          </dl>
-        </details>
-      </CardContent>
-    </Card>
+    <div className="pointer-events-auto flex max-h-[calc(100dvh-12rem)] w-80 max-w-full flex-col gap-2 overflow-y-auto [@media(max-height:500px)]:w-md [@media(max-height:500px)]:flex-row [@media(max-height:500px)]:flex-wrap [@media(max-height:500px)]:items-center [@media(max-height:500px)]:gap-x-3 [@media(max-height:500px)]:gap-y-0">
+      <Link
+        className={buttonVariants({ variant: 'ghost', size: 'sm', className: '-ml-2 w-fit' })}
+        href={versionHistoryUrl(version.course.code)}
+      >
+        <ArrowLeft data-icon="inline-start" />
+        Historial de versiones
+      </Link>
+      <p className="text-sm text-muted-foreground">
+        {version.course.code} · {version.course.name}
+      </p>
+      <h1 className="font-heading text-xl font-semibold text-ink [@media(max-height:500px)]:text-base">
+        {authorship.edition}
+      </h1>
+      <p className="text-xs text-muted-foreground">Versión cerrada · solo lectura</p>
+      <details className="group/version [@media(max-height:500px)]:basis-full">
+        <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-2 rounded-sm text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+          Información de la versión
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 shrink-0 group-open/version:rotate-180"
+          />
+        </summary>
+        <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm [&_dd]:min-w-0 [&_dd]:wrap-break-word">
+          <dt className="font-semibold">Origen</dt>
+          <dd>{originLabel(authorship.origin)}</dd>
+          <VersionAuthorshipList {...authorship} />
+          <dt className="font-semibold">Linaje</dt>
+          <dd>
+            <ol aria-label="Linaje" className="flex flex-wrap gap-x-2">
+              {authorship.lineage.map((ancestor, index) => (
+                <li key={ancestor.edition}>
+                  {index > 0 ? '→ ' : ''}
+                  {ancestor.edition}
+                </li>
+              ))}
+            </ol>
+          </dd>
+        </dl>
+      </details>
+    </div>
   );
 }
