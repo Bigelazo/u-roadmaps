@@ -139,4 +139,6 @@ test('counts, the Node change mark and the Grouped roadmap notice count title ta
     new URLSearchParams({ roadmapId: course.roadmapId, groupBy: 'roadmapId' }),
   );
   expect(grouped.notifications).toMatchObject([{ data: { targetCount: 3 } }]);
+  await edits.update(nodeId, { description: 'Una descripción independiente del título.' });
+  expect((await countOwnNodeChangeTargets(course.studentId, params)).byNode[nodeId]).toBe(2);
 });

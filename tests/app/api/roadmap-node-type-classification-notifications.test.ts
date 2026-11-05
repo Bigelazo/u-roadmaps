@@ -1,5 +1,7 @@
+// @vitest-environment node
 vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
-import { beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { ApplicationError } from '@/shared/errors/types';
 
 const { createRoadmapNodeType, updateRoadmapNodeType, deleteRoadmapNodeType, calls } = vi.hoisted(
   () => ({
@@ -10,18 +12,12 @@ const { createRoadmapNodeType, updateRoadmapNodeType, deleteRoadmapNodeType, cal
   }),
 );
 
-vi.mock('@/shared/server/db', () => ({ Prisma: {} }));
-vi.mock('@/shared/errors/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/errors/server')>()),
-  applicationResult: (operation: () => Promise<Response>) => ({
-    match: (onSuccess: (response: Response) => Response) => operation().then(onSuccess),
-  }),
-}));
+vi.mock('@/shared/server/db', async () => {
+  const { PrismaClientKnownRequestError } = await import('@prisma/client/runtime/client');
+  return { Prisma: { PrismaClientKnownRequestError } };
+});
 vi.mock('@/app/_adapters/auth', () => ({
   requireAuthenticatedUser: async () => ({ id: 'teacher-id' }),
-}));
-vi.mock('@/app/_adapters/roadmap', () => ({
-  requireCourseOfferingIdentifier: () => ({ courseCode: 'CC3002', year: 2026, semester: 2 }),
 }));
 vi.mock('@/features/roadmap/server', () => ({
   createRoadmapNodeType,
@@ -48,6 +44,8 @@ const context = {
     typeId: nodeType.id,
   }),
 };
+
+afterEach(() => vi.restoreAllMocks());
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -104,7 +102,9 @@ test('creating and deleting an unused type keep their status codes', async () =>
   );
 
   expect(created.status).toBe(201);
+  await expect(created.json()).resolves.toEqual({ nodeType });
   expect(deleted.status).toBe(204);
+  await expect(deleted.text()).resolves.toBe('');
 });
 
 test('a confirmed type update returns HTTP 200', async () => {
@@ -119,4 +119,36 @@ test('a confirmed type update returns HTTP 200', async () => {
 
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ nodeType });
+});
+
+test.each([
+  {
+    name: 'typed name conflict',
+    failure: new ApplicationError(
+      409,
+      'NODE_TYPE_NAME_CONFLICT',
+      'Ya existe un tipo con ese nombre.',
+    ),
+    status: 409,
+    error: { code: 'NODE_TYPE_NAME_CONFLICT', message: 'Ya existe un tipo con ese nombre.' },
+  },
+  {
+    name: 'unexpected type failure',
+    failure: new Error('SECRET SQL'),
+    status: 500,
+    error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error inesperado.' },
+  },
+])('serializes a $name', async ({ failure, status, error }) => {
+  if (!(failure instanceof ApplicationError))
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  updateRoadmapNodeType.mockRejectedValue(failure);
+  const response = await PATCH(
+    new Request('http://localhost/node-types/type-id', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: nodeType.name }),
+    }),
+    context,
+  );
+  expect(response.status).toBe(status);
+  await expect(response.json()).resolves.toEqual({ error });
 });
