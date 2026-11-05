@@ -9,8 +9,10 @@ import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import {
   closingPopoverKey,
   resolveElement,
+  revealTutorialTarget,
   TUTORIAL_TRIGGER_ATTRIBUTE,
   waitForElement,
+  waitForStableElement,
   type TutorialActions,
   type TutorialStep,
 } from './tutorial-support';
@@ -56,6 +58,7 @@ export function RoadmapTutorial<Action = never>({
     let cancelled = false;
     let moving = false;
     let following = false;
+    let highlighting = false;
     const groupHighlight = document.createElement('div');
     groupHighlight.setAttribute('aria-hidden', 'true');
     groupHighlight.setAttribute('data-tutorial-highlight-group', '');
@@ -80,6 +83,15 @@ export function RoadmapTutorial<Action = never>({
       if (confirmingRef.current) return;
       confirmingRef.current = true;
       setIsConfirmingExit(true);
+    };
+    // Brings the step's target into view (panning the canvas when it lives there) and
+    // waits until it settles, so the highlight is drawn where the target ends up.
+    const prepareTarget = async (step: TutorialStep<Action>) => {
+      await waitForElement(step.element);
+      await waitForStableElement(step.element);
+      const elements = step.highlightElements?.() ?? [];
+      const target = elements.length ? elements : [resolveElement(step.element)];
+      await revealTutorialTarget(target.filter((element): element is Element => Boolean(element)));
     };
     const isActionStep = (index: number | undefined): index is number =>
       index !== undefined && steps[index]?.advanceWhen !== undefined;
@@ -107,7 +119,8 @@ export function RoadmapTutorial<Action = never>({
       following = false;
       try {
         await steps[index].prepare?.();
-        await waitForElement(steps[index].element);
+        await prepareTarget(steps[index]);
+        if (cancelled) return;
         document.body.classList.toggle(actingClass, isActionStep(index));
         tour.moveTo(index);
       } finally {
@@ -142,6 +155,12 @@ export function RoadmapTutorial<Action = never>({
       onPrevClick: () => void move(tour, -1),
       onDoneClick: () => void move(tour, 1),
       onCloseClick: askExit,
+      onHighlightStarted: () => {
+        highlighting = true;
+      },
+      onHighlighted: () => {
+        highlighting = false;
+      },
       onPopoverRender: () => {
         if (!following) return;
         following = false;
@@ -169,7 +188,8 @@ export function RoadmapTutorial<Action = never>({
     const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
       document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
-      if (confirmingRef.current || index === undefined || !tour.isActive()) return;
+      // Refresh snaps the stage to its target, interrupting Driver's animation.
+      if (confirmingRef.current || highlighting || index === undefined || !tour.isActive()) return;
       restoreHighlight(index);
       if (steps[index].highlightElements) {
         resolveHighlight(steps[index]);
@@ -203,7 +223,7 @@ export function RoadmapTutorial<Action = never>({
 
     void (async () => {
       await steps[0]?.prepare?.();
-      if (steps[0]) await waitForElement(steps[0].element);
+      if (steps[0]) await prepareTarget(steps[0]);
       if (!cancelled) tour.drive();
     })();
     return () => {

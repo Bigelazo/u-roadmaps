@@ -76,6 +76,8 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   page,
   createUser,
 }) => {
+  // 22 steps, each waiting for its target to settle before it is highlighted.
+  test.setTimeout(60_000);
   const user = await createUser();
   await authenticateAs(page.context(), user.id);
   await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
@@ -375,8 +377,10 @@ test('the highlighted creation menu stays behind its floating button', async ({
   await authenticateAs(page.context(), user.id);
   await page.goto('/practice-roadmap/teaching');
   await page.getByRole('button', { name: 'Centrar mapa' }).click();
-  for (let i = 0; i < 3; i++)
-    await tourPopover(page).getByRole('button', { name: 'Siguiente' }).click();
+  await expectStep(page, 'Nodos');
+  await next(page, 'Nodo oculto');
+  await next(page, 'Nodo bloqueado');
+  await next(page, 'Crea un nodo');
   const creator = page.getByRole('button', { name: 'Crear en el mapa' });
   await creator.click();
   await expect(page.getByRole('menu')).toHaveClass(/driver-active-element/);

@@ -85,6 +85,24 @@
   margin-left: 6px;
 }
 
+@media (pointer: coarse) {
+  .u-roadmaps-tour .driver-popover-title {
+    padding-right: 36px;
+  }
+
+  .u-roadmaps-tour .driver-popover-close-btn {
+    top: 2px;
+    right: 2px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .u-roadmaps-tour .driver-popover-footer-btn {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+}
+
 .u-roadmaps-tour .driver-popover-arrow-side-left {
   border-left-color: var(--popover);
 }
@@ -116,12 +134,29 @@
   pointer-events: auto;
 }
 
+/* A modal sheet makes the page behind it inert: the exit stays under it, not over its header. */
+.driver-active:has([data-slot='sheet-overlay']) [data-tutorial-exit] {
+  z-index: 10;
+}
+
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) > * {
   z-index: var(--tutorial-z-acting-layer) !important;
 }
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)),
 .driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) * {
   pointer-events: auto;
+}
+
+/* On compact screens the popover has no free side beside a dialog and would cover its
+   actions. The step was already read before acting; the popover returns when it closes. */
+@media (max-width: 1023px) {
+  .driver-active.u-roadmaps-tour-acting:has(
+      [role='dialog'].driver-active-element,
+      [role='alertdialog'].driver-active-element
+    )
+    .driver-popover.u-roadmaps-tour {
+    visibility: hidden;
+  }
 }
 
 .driver-active button[aria-label='Crear en el mapa'] {
