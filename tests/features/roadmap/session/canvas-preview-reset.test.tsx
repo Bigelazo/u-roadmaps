@@ -230,6 +230,7 @@ function pauseNextNodeSave(base: SessionPersistence) {
   };
 }
 
+// These cases observe save composition; paste whole fields to avoid per-key scheduling cost.
 test('persists successive Node titles and Link resources in one mounted canvas session', async () => {
   const user = userEvent.setup();
   const base = createInMemoryRoadmapSessionPersistence(teachingRoadmap);
@@ -243,7 +244,7 @@ test('persists successive Node titles and Link resources in one mounted canvas s
       name: 'Guardar cambios',
     }) as HTMLButtonElement;
     await user.clear(title);
-    await user.type(title, 'Límites y continuidad');
+    await user.paste('Límites y continuidad');
     await user.click(save);
     await controlled.received;
     expect(save.disabled).toBe(true);
@@ -258,7 +259,7 @@ test('persists successive Node titles and Link resources in one mounted canvas s
     expect((await base.load()).nodes[0].title).toBe('Límites y continuidad');
 
     await user.clear(title);
-    await user.type(title, 'Límites y sucesiones');
+    await user.paste('Límites y sucesiones');
     await waitFor(() => expect(save.disabled).toBe(false));
     await user.click(save);
     expect(
@@ -273,8 +274,10 @@ test('persists successive Node titles and Link resources in one mounted canvas s
       await user.click(within(editor).getByRole('button', { name: 'Recurso' }));
       const composer = within(editor).getByRole('form', { name: 'Editor de recurso' });
       await user.click(within(composer).getByRole('tab', { name: 'Enlace' }));
-      await user.type(within(composer).getByRole('textbox', { name: 'Título' }), resourceTitle);
-      await user.type(within(composer).getByRole('textbox', { name: 'Enlace' }), url);
+      await user.click(within(composer).getByRole('textbox', { name: 'Título' }));
+      await user.paste(resourceTitle);
+      await user.click(within(composer).getByRole('textbox', { name: 'Enlace' }));
+      await user.paste(url);
       await user.click(within(composer).getByRole('button', { name: 'Agregar enlace' }));
       await waitFor(() =>
         expect(within(editor).queryByRole('form', { name: 'Editor de recurso' })).toBeNull(),
@@ -294,7 +297,7 @@ test('persists successive Node titles and Link resources in one mounted canvas s
     }
 
     await user.clear(title);
-    await user.type(title, 'Otra edición disponible');
+    await user.paste('Otra edición disponible');
     await waitFor(() => expect(save.disabled).toBe(false));
   } finally {
     await act(async () => controlled.finish());
@@ -316,7 +319,7 @@ test('retains a failed Node draft and retries through real persistence before an
       name: 'Guardar cambios',
     }) as HTMLButtonElement;
     await user.clear(title);
-    await user.type(title, 'Borrador recuperable');
+    await user.paste('Borrador recuperable');
     await user.click(save);
     await controlled.received;
     await act(async () => {
@@ -339,7 +342,7 @@ test('retains a failed Node draft and retries through real persistence before an
       resources: [],
     });
     await user.clear(title);
-    await user.type(title, 'Edición después de recuperar');
+    await user.paste('Edición después de recuperar');
     await waitFor(() => expect(save.disabled).toBe(false));
   } finally {
     await act(async () => controlled.finish());
