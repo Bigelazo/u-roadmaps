@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import {
   AlertTriangle,
-  Archive,
   BookOpen,
   ChevronDown,
   History,
@@ -120,36 +119,6 @@ type RoadmapCreationAction = (props: {
 
 type CourseHeadingLevel = 'h3' | 'h4';
 
-function CourseRoadmapStatus({
-  hasRoadmap,
-  isPastOffering,
-}: Readonly<{ hasRoadmap: boolean; isPastOffering: boolean }>) {
-  if (hasRoadmap && isPastOffering) {
-    return (
-      <p className="flex items-center gap-2 text-sm font-medium text-graphite">
-        <Archive aria-hidden="true" size={17} />
-        Cerrado · solo lectura
-      </p>
-    );
-  }
-  return (
-    <p
-      className={
-        hasRoadmap
-          ? 'flex items-center gap-2 text-sm font-medium text-progress-deep'
-          : 'flex items-center gap-2 text-sm text-muted-foreground'
-      }
-    >
-      {hasRoadmap ? (
-        <Route aria-hidden="true" size={17} />
-      ) : (
-        <BookOpen aria-hidden="true" size={17} />
-      )}
-      {hasRoadmap ? 'Roadmap disponible' : 'Sin roadmap'}
-    </p>
-  );
-}
-
 function CourseRoadmapAction({
   course,
   isPastOffering,
@@ -190,6 +159,7 @@ function CourseRoadmapAction({
             className={buttonVariants()}
             href={roadmapUrl(course)}
           >
+            <Route aria-hidden="true" data-icon="inline-start" />
             Abrir roadmap
           </Link>
         )}
@@ -243,7 +213,12 @@ function CourseActions({
 
   return (
     <>
-      <CourseRoadmapStatus hasRoadmap={course.hasRoadmap} isPastOffering={isPastOffering} />
+      {!course.hasRoadmap ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <BookOpen aria-hidden="true" size={17} />
+          Sin roadmap
+        </p>
+      ) : null}
       <CourseRoadmapAction
         course={course}
         isPastOffering={isPastOffering}
@@ -293,6 +268,8 @@ function CourseRow({
       course.institutionalPosition ?? (course.role === 'TEACHER' ? 'TEACHING_STAFF' : 'STUDENT')
     ];
 
+  const isPastOffering = isPastTerm || course.isPastClosure;
+
   return (
     <li className="min-w-0 sm:col-span-2 sm:grid sm:grid-cols-subgrid">
       <div className="grid gap-4 px-5 py-5 sm:col-span-2 sm:grid-cols-subgrid sm:items-center sm:px-6">
@@ -303,6 +280,12 @@ function CourseRow({
               <>
                 <span aria-hidden="true">·</span>
                 <span>Sección {course.section}</span>
+              </>
+            ) : null}
+            {course.hasRoadmap && isPastOffering ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>Solo lectura</span>
               </>
             ) : null}
           </div>
@@ -318,7 +301,7 @@ function CourseRow({
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3 sm:justify-end">
           <CourseActions
             course={course}
-            isPastOffering={isPastTerm || course.isPastClosure}
+            isPastOffering={isPastOffering}
             renderRoadmapCreation={renderRoadmapCreation}
             notificationsEnabled={notificationsEnabled}
           />
