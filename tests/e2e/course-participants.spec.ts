@@ -69,9 +69,7 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
   await page.goto('/academic-overview');
   await page.getByRole('link', { name: `Integrantes de ${course.courseName}` }).click();
   await expect(page).toHaveURL(participantsPath(course));
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Integrantes del curso' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: course.courseName })).toBeVisible();
   await expect(page.getByText('No pudimos obtener el listado completo')).toHaveCount(0);
 
   const average = (withProgress + complete + withoutProgress + 0) / visibleNodes / 4;
@@ -84,27 +82,27 @@ test('teaching staff follow every U-Campus student’s Roadmap completion from b
   ).toHaveAttribute('aria-valuenow', String(Math.round(average * 100)));
 
   const students = page.getByRole('region', { name: 'Estudiantes' });
-  const row = (person: string) => students.getByRole('listitem', { name: person });
-  await expect(students.getByRole('listitem')).toHaveCount(5);
-  await expect(row(`Valentina Prueba ${teacher.rut}`)).toContainText(percent(withProgress));
-  await expect(row(`Valentina Prueba ${teacher.rut}`)).toContainText(
+  const row = (person: string) => students.getByRole('row', { name: person });
+  await expect(students.locator('tbody').getByRole('row')).toHaveCount(5);
+  await expect(row(`Prueba ${teacher.rut}, Valentina`)).toContainText(percent(withProgress));
+  await expect(row(`Prueba ${teacher.rut}, Valentina`)).toContainText(
     `${withProgress} de ${visibleNodes} nodos`,
   );
-  await expect(row(`Valentina Prueba ${teacher.rut}`)).toContainText('Sección 1');
-  await expect(row(`Ignacio Prueba ${teacher.rut}`)).toContainText(percent(complete));
+  await expect(row(`Prueba ${teacher.rut}, Valentina`)).toContainText('Sección 1');
+  await expect(row(`Prueba ${teacher.rut}, Ignacio`)).toContainText(percent(complete));
   await expect(row(studentWithoutProgress.name)).toContainText(percent(withoutProgress));
-  await expect(row(`Josefa Prueba ${teacher.rut}`)).toContainText('Sin ingreso');
-  await expect(row(`Josefa Prueba ${teacher.rut}`)).toContainText('0%');
-  await expect(row(`Matías Prueba ${teacher.rut}`)).toContainText('Oyente · fuera del promedio');
-  await expect(students).not.toContainText(`Antonia Prueba ${teacher.rut}`);
+  await expect(row(`Prueba ${teacher.rut}, Josefa`)).toContainText('Sin ingreso');
+  await expect(row(`Prueba ${teacher.rut}, Josefa`)).toContainText('0%');
+  await expect(row(`Prueba ${teacher.rut}, Matías`)).toContainText('Oyente · fuera del promedio');
+  await expect(students).not.toContainText(`Prueba ${teacher.rut}, Antonia`);
   await expect(students).not.toContainText(withdrawnStudent.name);
 
   const staff = page.getByRole('region', { name: 'Equipo docente' });
   await expect(staff.getByRole('listitem')).toHaveCount(2);
   await expect(
-    staff.getByRole('listitem', { name: `Carolina Prueba ${teacher.rut}` }),
+    staff.getByRole('listitem', { name: `Prueba ${teacher.rut}, Carolina` }),
   ).toContainText('Profesor de cátedra · Sección 1');
-  await expect(staff.getByRole('listitem', { name: `Tomás Prueba ${teacher.rut}` })).toContainText(
+  await expect(staff.getByRole('listitem', { name: `Prueba ${teacher.rut}, Tomás` })).toContainText(
     'Ayudante · Sección 2',
   );
 
@@ -127,7 +125,7 @@ test('without U-Campus the page lists only local participants and warns it is in
   ).toBeVisible();
   const students = page.getByRole('region', { name: 'Estudiantes' });
   await expect(
-    students.getByRole('listitem', { name: course.users.studentWithProgress.name }),
+    students.getByRole('row', { name: course.users.studentWithProgress.name }),
   ).toContainText(percent(withProgress));
   await expect(students).not.toContainText(course.users.withdrawnStudent.name);
   await expect(

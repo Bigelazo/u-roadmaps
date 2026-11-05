@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { rosterPersonName } from '@/shared/person-name';
+
 import {
   positionCapabilities,
   type InstitutionalCoursePosition,
@@ -246,13 +248,12 @@ export async function getMufasaCourseMembers(
 }
 
 function personName(record: Record<string, unknown>) {
-  const name = [
-    readString(record, ['nombre1']),
-    readString(record, ['apellido1']),
-    readString(record, ['apellido2']),
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const name = rosterPersonName({
+    firstName: readString(record, ['nombre1']),
+    secondName: readString(record, ['nombre2']),
+    firstSurname: readString(record, ['apellido1']),
+    secondSurname: readString(record, ['apellido2']),
+  });
   return name || readString(record, ['alias']);
 }
 

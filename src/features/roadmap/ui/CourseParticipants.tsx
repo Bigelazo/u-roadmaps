@@ -1,16 +1,19 @@
 import Link from 'next/link';
-import { ArrowLeft, Route, Users } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { cn } from 'cn';
+import { ArrowLeft, Route } from 'lucide-react';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
-import { Badge } from '@/shared/ui/badge';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
-import { dividedListClassName, PageEyebrow, PageShell, PageTitle } from '@/shared/ui/page-layout';
+import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { termLabel } from '@/shared/course-offering';
 import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
 import type {
   CourseMember,
   CourseParticipants as Participants,
 } from '@/features/roadmap/course-participants-types';
+
+import { StudentRoster } from './StudentRoster';
 
 const positionLabels: Record<InstitutionalCoursePosition, string> = {
   COURSE_PROFESSOR: 'Profesor de cátedra',
@@ -20,6 +23,37 @@ const positionLabels: Record<InstitutionalCoursePosition, string> = {
   STUDENT: 'Estudiante',
   OBSERVER: 'Oyente',
 };
+
+const positionColors: Record<InstitutionalCoursePosition, string> = {
+  COURSE_PROFESSOR: 'var(--position-course-professor)',
+  COORDINATING_PROFESSOR: 'var(--position-coordinating-professor)',
+  AUXILIARY_PROFESSOR: 'var(--position-auxiliary-professor)',
+  TEACHING_ASSISTANT: 'var(--position-teaching-assistant)',
+  STUDENT: 'var(--position-student)',
+  OBSERVER: 'var(--position-observer)',
+};
+
+function PositionPlate({ position }: Readonly<{ position: InstitutionalCoursePosition | null }>) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-sm bg-[color-mix(in_srgb,var(--position-color)_16%,var(--card))] px-2 py-0.5 text-xs font-bold text-ink"
+      style={
+        {
+          '--position-color': position ? positionColors[position] : 'var(--steel)',
+        } as CSSProperties
+      }
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          'size-2 shrink-0 rounded-full',
+          position ? 'bg-(--position-color)' : 'border border-graphite',
+        )}
+      />
+      {position ? positionLabels[position] : 'Equipo docente'}
+    </span>
+  );
+}
 
 function percent(ratio: number) {
   return `${Math.round(ratio * 100)}%`;
@@ -56,84 +90,41 @@ function AverageCompletion({ participants }: Readonly<{ participants: Participan
     (member) => member.institutionalPosition === 'STUDENT' && member.hasEntered,
   ).length;
   return (
-    <section
-      aria-labelledby="average-completion"
-      className="grid gap-5 rounded-xl border border-fog bg-card px-5 py-6 sm:px-6"
-    >
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+    <section aria-labelledby="average-completion" className="grid gap-4 border-y border-fog py-5">
+      <div className="grid gap-5 sm:grid-cols-[1.2fr_1fr_1fr] sm:items-center">
         <div>
-          <h2 className="text-sm font-bold text-muted-foreground" id="average-completion">
+          <h4 className="text-sm text-muted-foreground" id="average-completion">
             Completación promedio del roadmap
-          </h2>
-          <p className="mt-1 font-heading text-5xl font-semibold tracking-[-0.04em] text-ink">
-            {average === null ? '—' : percent(average)}
-          </p>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Solo estudiantes · {plural(studentCount, 'estudiante', 'estudiantes')}
-        </p>
-      </div>
-      {average !== null ? (
-        <ProgressTrack label="Completación promedio de estudiantes" ratio={average} />
-      ) : null}
-      <dl className="grid gap-3 text-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-muted-foreground">Nodos visibles</dt>
-          <dd className="mt-0.5 font-semibold">{visibleNodes}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Estudiantes que han ingresado</dt>
-          <dd className="mt-0.5 font-semibold">
-            {entered} de {studentCount}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Cómo se calcula</dt>
-          <dd className="mt-0.5">
-            Nodos visibles completados sobre el total; quien no ha ingresado cuenta con 0%.
-          </dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
-function StudentRow({
-  member,
-  visibleNodes,
-}: Readonly<{ member: CourseMember; visibleNodes: number }>) {
-  const sections = sectionsLabel(member.sections);
-  return (
-    <li
-      aria-label={member.name}
-      className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center sm:gap-6 sm:px-6"
-    >
-      <div className="min-w-0">
-        <p className="font-semibold break-words">{member.name}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          {sections ? <span>{sections}</span> : null}
-          {member.institutionalPosition === 'OBSERVER' ? (
-            <Badge variant="outline">Oyente · fuera del promedio</Badge>
-          ) : null}
-          {!member.hasEntered ? <Badge variant="secondary">Sin ingreso</Badge> : null}
-        </div>
-      </div>
-      {member.completion !== null ? (
-        <div className="grid gap-1.5">
-          <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="font-heading text-lg font-semibold text-ink">
-              {percent(member.completion)}
+          </h4>
+          <div className="mt-2 flex items-center gap-3">
+            <span className="font-heading text-2xl font-semibold tabular-nums">
+              {average === null ? '—' : percent(average)}
             </span>
-            <span className="text-muted-foreground">
-              {member.completedNodes} de {visibleNodes} nodos
-            </span>
+            {average !== null ? (
+              <ProgressTrack label="Completación promedio de estudiantes" ratio={average} />
+            ) : null}
           </div>
-          <ProgressTrack label={`Completación de ${member.name}`} ratio={member.completion} />
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Sin nodos visibles</p>
-      )}
-    </li>
+        <dl className="grid grid-cols-2 gap-x-5 sm:col-span-2">
+          <div className="row-span-2 grid grid-rows-subgrid gap-y-1">
+            <dt className="self-end text-sm text-muted-foreground">
+              Estudiantes que han ingresado
+            </dt>
+            <dd className="font-semibold tabular-nums">
+              {entered} de {studentCount}
+            </dd>
+          </div>
+          <div className="row-span-2 grid grid-rows-subgrid gap-y-1">
+            <dt className="self-end text-sm text-muted-foreground">Nodos visibles</dt>
+            <dd className="font-semibold tabular-nums">{visibleNodes}</dd>
+          </div>
+        </dl>
+      </div>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Solo estudiantes · {plural(studentCount, 'estudiante', 'estudiantes')}. Nodos visibles
+        completados sobre el total; quien no ha ingresado cuenta con 0%.
+      </p>
+    </section>
   );
 }
 
@@ -142,15 +133,13 @@ function StaffRow({ member }: Readonly<{ member: CourseMember }>) {
   return (
     <li
       aria-label={member.name}
-      className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-5 py-4 sm:px-6"
+      className="flex flex-col gap-y-2 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-6 sm:px-5"
     >
-      <p className="font-semibold break-words">{member.name}</p>
-      <p className="text-sm text-muted-foreground">
-        {member.institutionalPosition
-          ? positionLabels[member.institutionalPosition]
-          : 'Equipo docente'}
-        {sections ? ` · ${sections}` : ''}
-      </p>
+      <p className="font-medium break-words">{member.name}</p>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <PositionPlate position={member.institutionalPosition} />
+        {sections ? <span> · {sections}</span> : null}
+      </div>
     </li>
   );
 }
@@ -172,13 +161,16 @@ export function CourseParticipants({ participants }: Readonly<{ participants: Pa
           {participants.hasRoadmap ? 'Volver al roadmap' : 'Volver al resumen académico'}
         </Link>
         <div>
-          <PageEyebrow>
+          <PageTitle className="text-balance md:text-4xl">{course.name}</PageTitle>
+          <p className="mt-2 text-muted-foreground">
             {course.courseCode} · {termLabel(course)}
-          </PageEyebrow>
-          <PageTitle className="mt-2 md:text-5xl">Integrantes del curso</PageTitle>
-          <p className="mt-2 text-muted-foreground">{course.name}</p>
+          </p>
         </div>
       </header>
+
+      <h2 className="font-heading text-2xl font-semibold tracking-[-0.02em]">
+        Integrantes del curso
+      </h2>
 
       {participants.source === 'LOCAL' ? (
         <Alert>
@@ -189,66 +181,11 @@ export function CourseParticipants({ participants }: Readonly<{ participants: Pa
         </Alert>
       ) : null}
 
-      {participants.hasRoadmap ? (
-        <AverageCompletion participants={participants} />
-      ) : (
-        <Empty className="border bg-card py-10">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Route aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>Este curso todavía no tiene roadmap</EmptyTitle>
-            <EmptyDescription>
-              El avance de los estudiantes aparece aquí cuando el profesor de cátedra crea el
-              roadmap.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      )}
-
-      <section aria-labelledby="students" className="grid gap-4">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="font-heading text-2xl font-semibold tracking-[-0.02em]" id="students">
-            Estudiantes
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            {plural(students.length, 'persona', 'personas')}
-          </p>
-        </div>
-        {students.length > 0 ? (
-          <ul className={dividedListClassName}>
-            {students.map((member) =>
-              participants.hasRoadmap ? (
-                <StudentRow
-                  key={member.key}
-                  member={member}
-                  visibleNodes={participants.visibleNodes}
-                />
-              ) : (
-                <StaffRow key={member.key} member={member} />
-              ),
-            )}
-          </ul>
-        ) : (
-          <Empty className="border bg-card py-10">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Users aria-hidden="true" />
-              </EmptyMedia>
-              <EmptyTitle>No hay estudiantes para mostrar</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        )}
-      </section>
-
       <section aria-labelledby="teaching-staff" className="grid gap-4">
         <div className="flex items-baseline justify-between gap-4">
-          <h2
-            className="font-heading text-2xl font-semibold tracking-[-0.02em]"
-            id="teaching-staff"
-          >
+          <h3 className="font-heading text-xl font-semibold tracking-[-0.02em]" id="teaching-staff">
             Equipo docente
-          </h2>
+          </h3>
           <p className="text-sm text-muted-foreground">
             {plural(teachingStaff.length, 'persona', 'personas')}
           </p>
@@ -258,6 +195,36 @@ export function CourseParticipants({ participants }: Readonly<{ participants: Pa
             <StaffRow key={member.key} member={member} />
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="students" className="grid gap-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <h3 className="font-heading text-xl font-semibold tracking-[-0.02em]" id="students">
+            Estudiantes
+          </h3>
+        </div>
+        {participants.hasRoadmap ? (
+          <AverageCompletion participants={participants} />
+        ) : (
+          <Empty className="border bg-card py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Route aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>Este curso todavía no tiene roadmap</EmptyTitle>
+              <EmptyDescription>
+                El avance de los estudiantes aparece aquí cuando el profesor de cátedra crea el
+                roadmap.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
+
+        <StudentRoster
+          students={students}
+          hasRoadmap={participants.hasRoadmap}
+          visibleNodes={participants.visibleNodes}
+        />
       </section>
     </PageShell>
   );

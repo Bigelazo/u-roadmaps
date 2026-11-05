@@ -344,6 +344,6 @@ it('reads person names in batches and tolerates a failed batch', async () => {
 
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(names.size).toBe(50);
-  expect(names.get('10000000')).toBe('Ana Pérez Soto');
+  expect(names.get('10000000')).toBe('Pérez Soto, Ana María');
   expect(names.has('10000050')).toBe(false);
 });

@@ -5,6 +5,7 @@ import { getApplicationSession } from '@/shared/server/session';
 import { prisma } from '@/shared/server/db';
 import { isUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
+import { readFixtureParticipantNames } from '@/development/server';
 import { createMufasaUCampus, localFixtureUCampus } from '@/integrations/ucampus/server';
 
 export async function resolveSessionUser(session: Session | null) {
@@ -15,7 +16,9 @@ export async function resolveSessionUser(session: Session | null) {
     user && {
       ...user,
       ucampus:
-        session?.user?.useLocalFixtureData === true ? localFixtureUCampus : createMufasaUCampus(),
+        session?.user?.useLocalFixtureData === true
+          ? { ...localFixtureUCampus, getPersonNames: readFixtureParticipantNames }
+          : createMufasaUCampus(),
     }
   );
 }

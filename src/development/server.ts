@@ -1,5 +1,7 @@
 import 'server-only';
 
+export { readFixtureParticipantNames } from './server/participant-names';
+
 export { isDevelopmentPersona } from './server/personas';
 
 export async function assertFixtureEnvironment() {

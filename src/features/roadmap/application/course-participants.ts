@@ -99,18 +99,24 @@ async function readInstitutionalRoster(
   });
 }
 
-async function readLocalRoster(courseOfferingId: string): Promise<RosterEntry[]> {
+async function readLocalRoster(
+  actor: RoadmapActor,
+  courseOfferingId: string,
+): Promise<RosterEntry[]> {
   const participations = await prisma.participation.findMany({
     where: { courseOfferingId, isActive: true },
     select: {
       role: true,
       institutionalPosition: true,
-      user: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, rut: true } },
     },
   });
+  const names = await actor.ucampus.getPersonNames(
+    participations.flatMap(({ user }) => (user.rut ? [user.rut] : [])),
+  );
   return participations.map(({ role, institutionalPosition, user }) => ({
     key: user.id,
-    name: user.name,
+    name: (user.rut ? names.get(user.rut) : null) ?? user.name,
     userId: user.id,
     sections: [],
     institutionalPosition: institutionalPosition ?? (role === 'STUDENT' ? 'STUDENT' : null),
@@ -145,7 +151,7 @@ export async function readCourseParticipants(
         })
       : 0,
   ]);
-  const roster = institutionalRoster ?? (await readLocalRoster(courseOffering.id));
+  const roster = institutionalRoster ?? (await readLocalRoster(actor, courseOffering.id));
   const learnerIds = roster.flatMap(({ userId, isTeachingStaff }) =>
     userId && !isTeachingStaff ? [userId] : [],
   );

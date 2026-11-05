@@ -107,9 +107,7 @@ const entries: {
     enter: async (page, _api, course, userId) => {
       await authenticateAs(page.context(), userId);
       await page.goto(`${course.pagePath()}/participants`);
-      await expect(
-        page.getByRole('heading', { level: 1, name: 'Integrantes del curso' }),
-      ).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: course.courseName })).toBeVisible();
     },
   },
 ];
