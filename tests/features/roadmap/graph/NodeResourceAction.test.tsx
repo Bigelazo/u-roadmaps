@@ -1,8 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
-import { expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
+import { mockViewport } from '../../../support/viewport';
 import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
+
+beforeEach(() => mockViewport(1280));
 
 test('keeps Add resource at 60° for hidden nodes and delegates to the selected node', async () => {
   const user = userEvent.setup();

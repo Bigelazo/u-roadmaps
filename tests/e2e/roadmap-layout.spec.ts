@@ -196,10 +196,9 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   await firstNode.click();
   await expect(page.locator('#roadmap-editor-panel')).toBeVisible();
 
-  const [canvasBox, metadataBox] = await Promise.all([
-    bounds(canvas),
-    bounds(canvas.locator('header')),
-  ]);
+  // The metadata sits on a plate inset from the canvas edge.
+  const metadataPlate = canvas.locator('.react-flow__panel.top.left');
+  const [canvasBox, metadataBox] = await Promise.all([bounds(canvas), bounds(metadataPlate)]);
   expect(metadataBox.x - canvasBox.x).toBeCloseTo(24, 0);
   expect(metadataBox.y - canvasBox.y).toBeCloseTo(24, 0);
   await expect(canvas.locator('header')).toHaveCSS('pointer-events', 'none');
@@ -224,11 +223,13 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   await page.setViewportSize({ width: 375, height: 812 });
   const [mobileCanvasBox, mobileMetadataBox] = await Promise.all([
     bounds(canvas),
-    bounds(canvas.locator('header')),
+    bounds(metadataPlate),
   ]);
   expect(mobileMetadataBox.x - mobileCanvasBox.x).toBeCloseTo(16, 0);
   expect(mobileMetadataBox.y - mobileCanvasBox.y).toBeCloseTo(16, 0);
   expect(mobileMetadataBox.width).toBeLessThanOrEqual(mobileCanvasBox.width - 32);
+  // The compact editor is a sheet over the toolbar: it closes through the selection.
+  await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
   const mobilePreviewBox = await bounds(previewToolbar);
   expect(mobilePreviewBox.width).toBeCloseTo(mobileCanvasBox.width - 32, 0);

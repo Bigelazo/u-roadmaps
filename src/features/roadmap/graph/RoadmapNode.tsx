@@ -20,6 +20,7 @@ import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
 import { formatBadgeCount } from '@/shared/badge-count';
 import { useNodeChangeCount } from '@/features/notifications/client';
+import { useCoarsePointer } from '@/features/roadmap/ui/compact-canvas-layout';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> &
@@ -267,7 +268,7 @@ function NodeActionTrigger({
       aria-expanded={isOpen}
       aria-haspopup={useActionSheet ? 'dialog' : undefined}
       aria-controls={`node-actions-${nodeId}`}
-      className={cn('nodrag nopan', styles.actionTrigger, useActionSheet && styles.touchTrigger)}
+      className={cn('nodrag nopan', styles.actionTrigger)}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
@@ -306,13 +307,12 @@ function NodeActionMenu({
   onAction,
 }: NodeActionCallbacks & NodeActionTriggerProps) {
   const actions = nodeMenuActions(nodeId, hidden, teacherBlocked, onAction);
+  // Visible at every width; coarse pointers get 44px controls whichever menu opens.
+  const coarsePointer = useCoarsePointer();
 
   return (
     <div
-      className={cn(
-        'absolute right-[-10px] bottom-[-10px] z-10',
-        !useActionSheet && 'hidden lg:block',
-      )}
+      className={cn('absolute right-[-10px] bottom-[-10px] z-10', coarsePointer && styles.coarse)}
     >
       {isOpen && !useActionSheet ? (
         <div
@@ -443,6 +443,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
   const teacherBlocked = editing && data.isTeacherBlocked;
   const blocked = locked || teacherBlocked;
   const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
+  const coarsePointer = useCoarsePointer();
   return (
     <div
       data-slot="roadmap-card"
@@ -507,6 +508,12 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
               type="source"
               position={position}
               isConnectable={canConnect}
+              // A wider invisible grab area for fingers; the dot keeps its size.
+              className={cn(
+                coarsePointer &&
+                  canConnect &&
+                  "before:absolute before:-inset-4 before:rounded-full before:content-['']",
+              )}
               style={{
                 width: 12,
                 height: 12,
