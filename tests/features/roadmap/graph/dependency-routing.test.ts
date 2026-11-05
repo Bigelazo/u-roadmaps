@@ -158,6 +158,9 @@ test('includes persistent ornaments, ignores hidden nodes and keeps selection ou
     [],
   );
   expect(twoResourceGroups.obstacles.find((o) => o.id === 'a:resources')!.width).toBe(52);
+  expect(input.obstacles.find((o) => o.id === 'a:status')!.width).toBe(32);
+  const coarse = roadmapRoutingScene([node], [], { coarsePointer: true });
+  expect(coarse.obstacles.find((o) => o.id === 'a:status')!.width).toBe(44);
   expect(
     roadmapRoutingScene(
       [{ ...node, selected: true, data: { ...node.data, isActionMenuOpen: true } }],
