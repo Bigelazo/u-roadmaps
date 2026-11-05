@@ -1,52 +1,52 @@
-import type { ComponentProps, ReactNode } from 'react';
+import { StrictMode, type ComponentProps } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterAll, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import type { RoadmapGraphProps } from '@/features/roadmap/graph/RoadmapGraph';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
-import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import type { RoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
 import { findToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
 
-beforeEach(() => mockViewport(640));
-afterAll(() => vi.unstubAllGlobals());
+beforeEach(() => mockViewport(1280));
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
+// Vitest resolves Next's loader to a wrapper whose ref exposes retry/loading. Execute
+// the supplied loader while retaining React 19 ref/props; chunk loading stays an E2E concern.
 vi.mock('next/dynamic', async () => {
-  const { NodeEditor } = await import('@/features/roadmap/editor/NodeEditor');
-  return { default: () => NodeEditor };
+  const { lazy, Suspense } = await import('react');
+  return {
+    default: <Props extends object>(loader: () => Promise<React.ComponentType<Props>>) => {
+      const Component = lazy(async () => ({ default: await loader() }));
+      return function DynamicComponent(props: Props) {
+        return (
+          <Suspense fallback={null}>
+            <Component {...props} />
+          </Suspense>
+        );
+      };
+    },
+  };
 });
 
 vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   RoadmapGraph: ({
     projection,
     onSelectNode,
-    selectedNodeId,
     bottomLeftActions,
     bottomRightActions,
     overlaySlots,
-  }: {
-    projection: {
-      roadmap: { nodes: Array<{ id: string; title: string }> };
-      editing?: unknown;
-    };
-    onSelectNode: (nodeId: string) => void;
-    selectedNodeId?: string | null;
-    bottomLeftActions?: (
-      findOpenPosition: (title: string) => { x: number; y: number } | null,
-    ) => ReactNode;
-    bottomRightActions?: (
-      findOpenPosition: (title: string) => { x: number; y: number } | null,
-    ) => ReactNode;
-    overlaySlots?: { topCenter?: ReactNode };
-  }) => (
+  }: RoadmapGraphProps) => (
     <>
       {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
       {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
-      <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
-      <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
-      <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
+      {overlaySlots?.topCenter}
       {projection.roadmap.nodes.map((node) => (
         <button key={node.id} type="button" onClick={() => onSelectNode(node.id)}>
           {node.title}
@@ -56,52 +56,10 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
   ),
 }));
 
-vi.mock('@/features/roadmap/student/NodeDetail', () => ({
-  StudentNodeDetail: ({
-    node,
-    onComplete,
-    isReadOnly,
-  }: {
-    node?: { id: string; title: string };
-    onComplete: (node: { id: string }) => void;
-    isReadOnly?: boolean;
-  }) =>
-    node ? (
-      <button type="button" disabled={isReadOnly} onClick={() => onComplete(node)}>
-        Completar {node.title}
-      </button>
-    ) : null,
-}));
-
 type SessionInput = ComponentProps<typeof RoadmapCanvasSession>;
 type SessionPersistence = ComponentProps<
   typeof RoadmapCanvasSessionPersistenceProvider
 >['persistence'];
-
-const roadmap: StudentRoadmapDto = {
-  course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
-  roadmap: { id: 'roadmap-1' },
-  nodeTypes: [
-    { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
-  ],
-  nodes: [
-    {
-      id: 'node-1',
-      title: 'Límites',
-      nodeTypeId: 'content',
-      positionX: 0,
-      positionY: 0,
-      isVisible: true as const,
-      access: { status: 'ACCESSIBLE' as const },
-      description: null,
-      isCompleted: false,
-      canComplete: true,
-      resources: [],
-    },
-  ],
-  dependencies: [],
-};
 
 const limitsNode: RoadmapDto['nodes'][number] = {
   id: 'node-1',
@@ -115,7 +73,16 @@ const limitsNode: RoadmapDto['nodes'][number] = {
   resources: [],
 };
 
-const teachingRoadmap: RoadmapDto = { ...roadmap, nodes: [limitsNode] };
+const teachingRoadmap: RoadmapDto = {
+  course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
+  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
+  roadmap: { id: 'roadmap-1' },
+  nodeTypes: [
+    { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
+  ],
+  nodes: [limitsNode],
+  dependencies: [],
+};
 
 function courseInput(courseCode = 'CC1001', title = 'Programación I') {
   return { identifier: { courseCode, year: 2026, semester: 2 }, title };
@@ -127,21 +94,34 @@ const teachingInput = {
 };
 
 function renderSession(persistence: SessionPersistence, input: SessionInput = teachingInput) {
-  const view = (next: SessionInput) => (
-    <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
-      <RoadmapCanvasSession {...next} />
-      <Toaster />
-    </RoadmapCanvasSessionPersistenceProvider>
+  return render(
+    <StrictMode>
+      <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
+        <RoadmapCanvasSession {...input} />
+        <Toaster />
+      </RoadmapCanvasSessionPersistenceProvider>
+    </StrictMode>,
   );
-  const utils = render(view(input));
-  return { ...utils, rerenderSession: (next: SessionInput) => utils.rerender(view(next)) };
 }
 
 test.each([false, true])(
   'resets preview progress with a selected dependent node (completed: %s)',
   async (completeDependent) => {
     const user = userEvent.setup();
-    const dependent = { ...limitsNode, id: 'node-2', title: 'Derivadas' };
+    const dependent = {
+      ...limitsNode,
+      id: 'node-2',
+      title: 'Derivadas',
+      description: 'La derivada mide la variación instantánea.',
+      resources: [
+        {
+          id: 'derivatives-guide',
+          title: 'Guía exclusiva de derivadas',
+          type: 'LINK' as const,
+          url: 'https://example.edu/derivadas',
+        },
+      ],
+    };
     const persistence = createInMemoryRoadmapSessionPersistence({
       ...teachingRoadmap,
       nodes: [limitsNode, dependent],
@@ -157,17 +137,28 @@ test.each([false, true])(
     });
     renderSession(persistence);
 
-    await user.click(await screen.findByRole('button', { name: 'Vista estudiante' }));
+    await user.click(await screen.findByRole('button', { name: 'Derivadas' }));
+    const initialEditor = screen.getByLabelText('Panel de edición del roadmap');
+    expect(await within(initialEditor).findByRole('heading', { name: 'Derivadas' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Vista estudiante' }));
     await user.click(screen.getByRole('button', { name: 'Límites' }));
-    await user.click(screen.getByRole('button', { name: 'Completar Límites' }));
+    const prerequisitePanel = await screen.findByLabelText('Límites');
+    await user.click(within(prerequisitePanel).getByRole('button', { name: 'Completar' }));
     await waitFor(async () =>
       expect((await persistence.loadCanvasPreview()).nodes[1]).toMatchObject({
         access: { status: 'ACCESSIBLE' },
       }),
     );
     await user.click(screen.getByRole('button', { name: 'Derivadas' }));
+    const detail = await screen.findByLabelText('Derivadas');
+    expect(within(detail).getByText(dependent.description)).toBeTruthy();
+    expect(
+      within(detail)
+        .getByRole('link', { name: 'Guía exclusiva de derivadas' })
+        .getAttribute('href'),
+    ).toBe('https://example.edu/derivadas');
     if (completeDependent) {
-      await user.click(screen.getByRole('button', { name: 'Completar Derivadas' }));
+      await user.click(within(detail).getByRole('button', { name: 'Completar' }));
     }
     await waitFor(async () =>
       expect((await persistence.loadCanvasPreview()).nodes[1]).toMatchObject({
@@ -184,12 +175,24 @@ test.each([false, true])(
     expect(screen.queryByLabelText('Editor de nodo')).toBeNull();
     const reset = await persistence.loadCanvasPreview();
     expect(reset.nodes[1]).toMatchObject({ access: { status: 'BLOCKED' } });
+    expect(reset.nodes[1]).not.toHaveProperty('description');
     expect(reset.nodes[1]).not.toHaveProperty('resources');
-    expect(screen.queryByRole('button', { name: 'Completar Derivadas' })).toBeNull();
+    expect(screen.queryByText(dependent.description)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Guía exclusiva de derivadas' })).toBeNull();
+    expect(screen.queryByLabelText('Derivadas')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
     await user.click(screen.getByRole('button', { name: 'Derivadas' }));
-    expect(await screen.findByRole('heading', { name: 'Recursos (0)' })).toBeTruthy();
+    const editor = await screen.findByLabelText('Panel de edición del roadmap');
+    expect(await within(editor).findByRole('heading', { name: 'Recursos (1)' })).toBeTruthy();
+    expect(
+      (within(editor).getByRole('textbox', { name: /Descripción/ }) as HTMLTextAreaElement).value,
+    ).toBe(dependent.description);
+    expect(
+      within(editor)
+        .getByRole('link', { name: 'Abrir recurso Guía exclusiva de derivadas' })
+        .getAttribute('href'),
+    ).toBe('https://example.edu/derivadas');
     expect((await persistence.load()).nodes).toEqual([limitsNode, dependent]);
   },
 );
