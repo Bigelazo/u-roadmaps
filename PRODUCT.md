@@ -41,7 +41,7 @@ U-Roadmaps aims to replace course pages as the main place where a course's conte
 - Node-type colors (20-color palette, 80-icon catalog) are user-defined pedagogical data, distinct from platform progress colors.
 - File resources up to 25 MB, stored on local disk (`uploads/`); links and videos as external URLs.
 - Single persistent Node process (SSE notices, scheduled unlocks, roadmap closure); PostgreSQL; Next.js 16 App Router, Tailwind 4, shadcn/ui on Base UI.
-- `prefers-reduced-motion` is deliberately ignored (ADR-0022); animations stay on.
+- `prefers-reduced-motion` is deliberately ignored; animations stay on.
 - Undecided / incomplete: coordinated sections, full roster reconciliation, teaching-assistant edit permissions, roadmap copy across versions, complete closure enforcement on every server mutation.
 
 ## Brand Commitments
@@ -67,4 +67,4 @@ U-Roadmaps aims to replace course pages as the main place where a course's conte
 
 ## Accessibility & Inclusion
 
-WCAG AA contrast for text and interactive states, visible keyboard focus, semantic headings, accessible names, browser zoom, 44px touch targets, and never color, opacity or motion alone to convey state (see `DESIGN.md`). Motion is not reduced for `prefers-reduced-motion` (ADR-0022).
+WCAG AA contrast for text and interactive states, visible keyboard focus, semantic headings, accessible names, browser zoom, 44px touch targets, and never color, opacity or motion alone to convey state (see `DESIGN.md`). Motion is not reduced for `prefers-reduced-motion`.

@@ -289,7 +289,7 @@ model NoticeAcknowledgement {
   operationId     String    @db.Uuid
   roadmapId       String    @db.Uuid
   openedAt        DateTime  @db.Timestamptz(3)
-  // ADR-0024: pending notices of every moved Notice target kind captured on entry.
+  // Pending notices of every Notice target kind moved to the notice lifecycle module, captured on entry.
   snapshots       Json      @default("[]")
   summary         Json      @default("null")
   recognizedAt    DateTime? @db.Timestamptz(3)
@@ -308,7 +308,7 @@ model NoticeDeliveryEffect {
   @@id([eventId, recipientId])
 }
 
-// ADR-0024: the single Known value store of the notice lifecycle module. One row per
+// The single Known value store of the notice lifecycle module. One row per
 // recipient, Roadmap and Notice target key; values are encoded by the target descriptor.
 // nodeId places the target in the hierarchy; it has no FK so the module can clean it up.
 // Partial expression indexes in raw migration SQL only (Prisma cannot express them):
