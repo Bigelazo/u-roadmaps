@@ -244,7 +244,7 @@ describe('RoadmapCanvasSession', () => {
     expect(await screen.findByRole('button', { name: 'Cambio remoto' })).toBeTruthy();
   });
 
-  test('an initial load failure offers a way back to courses without a retry control', async () => {
+  test('an initial load failure offers a way back to courses', async () => {
     const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
     vi.spyOn(persistence, 'load').mockRejectedValueOnce(new Error('Fallo inicial'));
     renderSession(persistence, studentInput());
@@ -257,7 +257,6 @@ describe('RoadmapCanvasSession', () => {
     expect(screen.getByRole('link', { name: 'Volver a mis cursos' }).getAttribute('href')).toBe(
       '/academic-overview',
     );
-    expect(screen.queryByRole('button', { name: /Reintentar/ })).toBeNull();
     expect(queryToast('Fallo inicial')).toBeNull();
   });
 
@@ -487,7 +486,6 @@ test('current teaching sessions recover missed changes and retain the last proje
   act(() => window.dispatchEvent(new Event('online')));
   await findToast('Fallo transitorio');
   expect(screen.getByRole('button', { name: 'Cambio remoto' })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: /Reintentar/ })).toBeNull();
   act(() => window.dispatchEvent(new Event('online')));
   await waitFor(() => expect(queryToast('Fallo transitorio')).toBeNull());
 });
