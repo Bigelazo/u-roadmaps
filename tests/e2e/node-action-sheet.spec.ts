@@ -179,7 +179,8 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   await composer.getByRole('button', { name: 'Agregar enlace' }).tap();
   await expect(composer).toBeHidden();
   await expect(node.getByRole('img', { name: '1 enlace', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Deseleccionar nodo' }).tap();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
 
   await trigger.tap();
   await sheet.getByRole('button', { name: 'Eliminar nodo' }).tap();
@@ -266,4 +267,48 @@ test('touch actions stay unreachable to students, Canvas preview, and frozen Roa
   const closedBlock = await teacher.post(offering.apiPath(`/nodes/${first.id}/teacher-block`));
   expect(closedBlock.status()).toBe(409);
   expect((await closedBlock.json()).error.code).toBe('ROADMAP_CLOSED');
+});
+
+for (const [name, from, to] of [
+  ['tablet rotated to portrait', { width: 1180, height: 820 }, { width: 820, height: 1180 }],
+  ['tablet rotated to landscape', { width: 820, height: 1180 }, { width: 1180, height: 820 }],
+] as const) {
+  test(`a Node draft survives a ${name}`, async ({
+    page,
+    course,
+    touchRoadmap: { offering, first },
+  }) => {
+    await authenticateAs(page.context(), course.users.teacher.id);
+    await page.setViewportSize(from);
+    await page.goto(offering.pagePath());
+    await page.locator(`.react-flow__node[data-id="${first.id}"]`).getByText(first.title).tap();
+    const title = page
+      .getByRole('group', { name: 'Editor de nodo', exact: true })
+      .getByLabel(/^Título/);
+    await title.fill('Unsaved title draft');
+
+    await page.setViewportSize(to);
+    await expect(title).toBeVisible();
+    await expect(title).toHaveValue('Unsaved title draft');
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+
+    await page.setViewportSize(from);
+    await expect(title).toHaveValue('Unsaved title draft');
+  });
+}
+
+test('Escape closes the compact editor while focus is inside it', async ({
+  page,
+  course,
+  touchRoadmap: { offering, first },
+}) => {
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(offering.pagePath());
+  await page.locator(`.react-flow__node[data-id="${first.id}"]`).getByText(first.title).tap();
+  const title = page
+    .getByRole('group', { name: 'Editor de nodo', exact: true })
+    .getByLabel(/^Título/);
+  await title.focus();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#roadmap-editor-panel')).toBeHidden();
 });

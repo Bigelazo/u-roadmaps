@@ -61,15 +61,29 @@ test('keeps the editor DOM and draft field mounted while the panel is hidden', a
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Límites y continuidad');
 });
 
-test('presents the editor as a non-modal bottom sheet in the compact layout', () => {
-  mockViewport(640);
-  renderPanel();
+test('keeps the draft mounted as the same panel when the viewport crosses the compact breakpoint', async () => {
+  const user = userEvent.setup();
+  const { rerender } = renderPanel();
+  const input = screen.getByLabelText('Título');
+  const panel = screen.getByRole('region', { name: 'Panel de edición del roadmap' });
+  await user.clear(input);
+  await user.type(input, 'Borrador sin guardar');
 
-  const panel = screen.getByRole('dialog', { name: 'Panel de edición del roadmap' });
-  expect(panel.getAttribute('data-side')).toBe('bottom');
+  mockViewport(820);
+  rerender(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <label>
+          Título
+          <input defaultValue="Límites" />
+        </label>
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
+
+  expect(screen.getByRole('region', { name: 'Panel de edición del roadmap' })).toBe(panel);
   expect(panel.id).toBe('roadmap-editor-panel');
   expect(screen.getByRole('group', { name: 'Editor de nodo' })).toBeTruthy();
-  expect(screen.getByLabelText('Título')).toBeTruthy();
-  // eslint-disable-next-line testing-library/no-node-access -- the overlay has no role or name.
-  expect(document.querySelector('[data-slot="sheet-overlay"]')).toBeNull();
+  expect(screen.getByLabelText('Título')).toBe(input);
+  expect((input as HTMLInputElement).value).toBe('Borrador sin guardar');
 });

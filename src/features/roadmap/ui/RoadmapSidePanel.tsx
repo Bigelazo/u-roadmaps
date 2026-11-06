@@ -24,7 +24,7 @@ export function RoadmapSidePanel({
       {...props}
       side="right"
       id={id}
-      className="order-2 w-full! min-w-0 border-t border-border bg-card focus-within:ring-0 lg:order-0 lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-t-0 lg:border-l lg:shadow-(--shadow-roadmap-panel)"
+      className="w-full! min-w-0 border-border bg-card focus-within:ring-0 max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-50 max-lg:h-auto max-lg:max-h-[70dvh] max-lg:overflow-hidden max-lg:rounded-t-xl max-lg:border-t max-lg:pb-[env(safe-area-inset-bottom)] max-lg:shadow-lg motion-safe:max-lg:animate-in motion-safe:max-lg:duration-200 motion-safe:max-lg:slide-in-from-bottom-10 motion-safe:max-lg:fade-in lg:box-border lg:min-h-0 lg:w-(--sidebar-width)! lg:overflow-hidden lg:border-l lg:shadow-(--shadow-roadmap-panel)"
     >
       {onPanelWidthChange ? (
         <SidebarRail
