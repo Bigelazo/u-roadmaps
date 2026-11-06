@@ -3,7 +3,6 @@
 import { useLayoutEffect, useRef, type CSSProperties } from 'react';
 import type { MotionValue } from 'motion/react';
 
-/** Stroke and open arrowhead share the exact same SVG geometry and progress. */
 export function DependencyPath({
   path,
   style,

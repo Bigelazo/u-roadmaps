@@ -29,7 +29,6 @@ type CourseAccess = Readonly<{
   positions: readonly MufasaInstitutionalCoursePosition[];
 }>;
 
-/** What callers read of the active Participation: its role, its position, and that it is active. */
 type ActiveParticipation = Readonly<{
   role: ReturnType<typeof positionCapabilities>['role'];
   institutionalPosition: InstitutionalCoursePosition | null;
@@ -47,7 +46,6 @@ export type CourseOfferingSynchronization =
 const offeringKey = ({ courseCode, year, semester }: CourseOfferingIdentifier) =>
   `${courseCode}:${year}:${semester}`;
 
-/** Groups the reported section rows into Course offerings, keyed by `offeringKey`. */
 function reportedOfferings(courses: readonly MufasaEnrolledCourse[]) {
   const offerings = new Map<string, CourseAccess>();
   for (const course of courses) {
@@ -172,11 +170,6 @@ async function deactivateParticipations(
   }
 }
 
-/**
- * Synchronizes the user's Participation in one Course offering and returns the resulting active
- * one. Only a complete history changes it: a listed offering with a recognized position is
- * materialized, an omitted one is deactivated. Otherwise the stored active Participation stands.
- */
 export async function synchronizeCourseOffering(
   user: AcademicUser,
   identifier: CourseOfferingIdentifier,
@@ -200,11 +193,6 @@ export async function synchronizeCourseOffering(
   return { status: 'complete', position: effectivePosition(access.positions), participation };
 }
 
-/**
- * Synchronizes the user's whole Academic history and returns it. Only a complete history changes
- * Participations: every reported Course offering is materialized and every omitted active
- * Participation is deactivated. A partial or unavailable history leaves them unchanged.
- */
 export async function synchronizeAcademicHistory(
   user: AcademicUser,
   changePort: RoadmapChangePort,

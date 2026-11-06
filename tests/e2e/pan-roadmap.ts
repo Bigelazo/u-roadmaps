@@ -16,8 +16,6 @@ export async function panRoadmapNodeIntoView(page: Page, nodeId: string) {
     const offsetY = paneCenter.y - nodeCenter.y;
     if (Math.abs(offsetX) < 1 && Math.abs(offsetY) < 1) break;
 
-    // Enlarged handle hit areas extend outside the card. Start on actual empty
-    // canvas so a pan cannot accidentally begin a Dependency gesture.
     const panStart = await pane.evaluate((element) => {
       const box = element.getBoundingClientRect();
       for (const row of [0.3, 0.5, 0.7, 0.2, 0.8]) {

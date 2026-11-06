@@ -48,9 +48,8 @@ export function usePersistentPanelWidth({
     }
     try {
       window.localStorage?.setItem(storageKey, String(width));
-    } catch {
-      // Browser privacy settings can make storage unavailable; resizing still works for this visit.
-    }
+      // eslint-disable-next-line no-empty -- Browser privacy settings can make storage unavailable; resizing still works for this visit.
+    } catch {}
   }, [storageKey, width]);
 
   return { width, setWidth: (value: number) => setWidth(clampPanelWidth(value, limits)) };

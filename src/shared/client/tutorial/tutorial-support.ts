@@ -48,9 +48,8 @@ export function clickElement(selector: string) {
 export function markTutorialClosingPopover() {
   try {
     sessionStorage.setItem(closingPopoverKey, '1');
-  } catch {
-    // Without storage the origin simply shows no closing popover.
-  }
+    // eslint-disable-next-line no-empty -- Without storage the origin simply shows no closing popover.
+  } catch {}
 }
 
 export const TUTORIAL_REVEAL_EVENT = 'u-roadmaps:tutorial-reveal';

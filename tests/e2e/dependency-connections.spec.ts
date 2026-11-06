@@ -34,7 +34,6 @@ async function dragToNodeBody(page: Page, source: Locator, target: Locator) {
   );
   const bounds = await source.getByTestId('roadmap-card').boundingBox();
   if (!bounds) throw new Error('Source perimeter is not visible.');
-  // Start outside the card and away from the former handle at the side midpoint.
   const start = { x: bounds.x + bounds.width + 3, y: bounds.y + bounds.height / 4 };
   const end = await center(target.locator('p'));
   await page.mouse.move(start.x, start.y);
@@ -81,8 +80,6 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
   await page.mouse.move(idleBounds.x + idleBounds.width + 3, idleBounds.y + idleBounds.height / 4);
   await expect(handle).toHaveCSS('pointer-events', 'none');
   await expect(card).not.toHaveAttribute('data-connection-hovered', 'true');
-  // Approaching the idle exterior directly must pan the pane rather than launch
-  // a Dependency or move a Node. No body hover has armed this surface yet.
   await page.mouse.down();
   await page.mouse.move(
     idleBounds.x + idleBounds.width + 75,
@@ -104,7 +101,6 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
   await expect
     .poll(() => card.evaluate((element) => getComputedStyle(element).boxShadow))
     .not.toBe(normalShadow);
-  // Wait for the actual CSS transition, rather than capturing its first changed frame.
   await card.evaluate(async (element) => {
     await Promise.all(element.getAnimations().map((animation) => animation.finished));
   });
@@ -129,7 +125,6 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
   await expect(card).not.toHaveAttribute('data-connection-hovered', 'true');
 
   await dragToNodeBody(page, source, target);
-  // A straight SVG path has zero bounding-box height despite its visible stroke.
   await expect(page.locator('.react-flow__connection-path')).toHaveAttribute('d', /^M/);
   await expect(target).toHaveClass(/roadmap-node--connection-target/);
   await page.screenshot({ path: testInfo.outputPath('connection-preview-desktop.png') });
@@ -159,7 +154,6 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
     const arrow = element as SVGPathElement;
     const matrix = arrow.getScreenCTM();
     if (!matrix) throw new Error('Arrowhead has no screen transform.');
-    // The midpoint of this symmetric open chevron is its visible apex.
     const apex = arrow.getPointAtLength(arrow.getTotalLength() / 2).matrixTransform(matrix);
     const bounds = arrow.getBBox();
     return { x: apex.x, y: apex.y, width: bounds.width, height: bounds.height };
@@ -182,7 +176,6 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
   expect(tip.width).toBeGreaterThan(7);
   expect(tip.height).toBeGreaterThan(8);
 
-  // Reversing the relationship would create a cycle and must not create an edge.
   await dragToNodeBody(page, target, source);
   await page.mouse.up();
   await expect(page.locator('.react-flow__connection-path')).toHaveCount(0);

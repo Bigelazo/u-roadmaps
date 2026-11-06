@@ -51,25 +51,20 @@ export type TeacherBlockChangeImpact = {
   readonly [Operation in TeacherBlockOperation]?: TeacherBlockOperationImpact;
 };
 
-/** The Change impact persistence reads for a command: a Teacher block change reads one operation's. */
 export type ReadChangeImpactOf<Kind extends keyof PlannedChangeImpactOf> =
   PlannedChangeImpactOf[Kind];
 
-/** The Change impact a command of this kind reads, if the domain plans one. */
 type ImpactRead<Kind> = Kind extends keyof PlannedChangeImpactOf
   ? PlannedChangeImpactOf[Kind]
   : never;
 
-/** An HTTP request of a command, relative to the Course offering's Roadmap. */
 export type RouteRequest = {
   readonly method?: 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   readonly path: string;
   readonly body?: object;
 };
 
-/** The guarded session operations a command's Confirmed action runs, typed for that command. */
 type CommandSession<Command extends { kind: string }> = {
-  /** Resolves with nothing once the failure is reported or the Course offering changed. */
   readChangeImpact(command: Command): Promise<ImpactRead<Command['kind']> | null>;
   execute(
     command: Command,
@@ -79,13 +74,10 @@ type CommandSession<Command extends { kind: string }> = {
 
 export type CommandOutcome<Command> = ExecutionResult & {
   readonly choice?: CanvasConfirmationChoice;
-  /** The part of a Dependency deletion left pending for retry. */
   readonly remaining?: Command;
 };
 
-/** How a Confirmed action reads its Change impact, if it has one, and applies once confirmed. */
 type ConfirmedAction<Command extends { kind: string }, Impact> = {
-  /** The Node editor draft to guard before asking. */
   draftGuard?(command: Command): NodeEditorGuardReason;
   impact?(session: CommandSession<Command>, command: Command): Promise<Impact | null>;
   needsConfirmation?(impact: Impact): boolean;
@@ -95,7 +87,6 @@ type ConfirmedAction<Command extends { kind: string }, Impact> = {
     impact: Impact,
     choice: CanvasConfirmationChoice | undefined,
   ): Promise<boolean | { retry: Command }>;
-  /** What the confirmation dialog asks, once the Change impact, if any, is read. */
   confirmation(
     command: Command,
     impact: Impact | null,
@@ -103,25 +94,16 @@ type ConfirmedAction<Command extends { kind: string }, Impact> = {
   ): ConfirmationPresentation | null;
 };
 
-/**
- * Everything about one command: how each adapter persists it and what the user sees of it.
- * Members are methods, so that one command's entry reads as an entry for any command.
- */
 export type CommandEntry<Command extends { kind: string }, Impact> = {
-  /** The HTTP adapter's requests: one, or one per item of a batch. */
   requests(command: Command): RouteRequest | readonly RouteRequest[];
-  /** The header that carries the version of the confirmed Change impact. */
   readonly previewHeader?: string;
   readonly failure: string;
-  /** What the HTTP adapter resolves with, read from the responses. */
   result?(responses: readonly Response[]): Promise<ExecutionResult>;
-  /** How the in-memory adapter applies the command to the Practice roadmap. */
   practice(
     roadmap: PracticeRoadmap,
     command: Command,
     previewVersion?: string,
   ): ExecutionResult | void;
-  /** Its effect shows in the Canvas preview, which reloads instead of the Roadmap. */
   readonly changesCanvasPreview?: true;
   success?(command: Command, outcome: CommandOutcome<Command>): string;
   report?(command: Command, outcome: CommandOutcome<Command>): PracticeCanvasAction | null;
@@ -130,7 +112,6 @@ export type CommandEntry<Command extends { kind: string }, Impact> = {
   ? { readonly changeImpact: { path(command: Command): string; readonly failure: string } }
   : unknown);
 
-/** Declares one command's entry: its payload is the type argument, and its Change impact the domain's. */
 const command = <Command extends { kind: string }, Impact = ImpactRead<Command['kind']>>(
   entry: CommandEntry<Command, Impact>,
 ) => entry;
@@ -140,7 +121,6 @@ const readChangeImpact = <Command extends { kind: string }>(
   command: Command,
 ) => session.readChangeImpact(command);
 
-/** Applies a Confirmed action as requested, with the version of the Change impact it showed. */
 const executeAsRequested = async <Command extends { kind: string }>(
   session: CommandSession<Command>,
   command: Command,
@@ -220,7 +200,6 @@ const visibilityConfirmation = (
 const setVisibility = (practice: PracticeRoadmap, nodeId: string, isVisible: boolean) =>
   practice.mutateNode(nodeId, (node) => ('isVisible' in node ? { ...node, isVisible } : node));
 
-/** Every Roadmap canvas session command: one entry per command kind. */
 export const canvasCommandCatalog = {
   'hide-node': command<{ kind: 'hide-node'; nodeId: string }>({
     ...visibility(false),
@@ -411,7 +390,6 @@ export const canvasCommandCatalog = {
         };
       }),
     confirmedAction: {
-      // One deletion per Dependency, so that only the failed ones stay pending for retry.
       apply: async (session, command) => {
         const deleted = await Promise.all(
           command.dependencyIds.map(
@@ -540,7 +518,6 @@ export const canvasCommandCatalog = {
     requests: ({ resourceId, resource }) => ({
       method: 'PATCH',
       path: `/resources/${resourceId}`,
-      // A File resource keeps its protected download address: only its title is renamed.
       body: resource.type === 'FILE' ? { title: resource.title } : resource,
     }),
     failure: 'No se pudo guardar el recurso.',
@@ -651,7 +628,6 @@ export const canvasCommandCatalog = {
 
 type CanvasCommandKind = keyof typeof canvasCommandCatalog;
 
-/** Each entry's command and the Change impact its Confirmed action shows, read from the entry. */
 type EntryTypes = {
   [Kind in CanvasCommandKind]: (typeof canvasCommandCatalog)[Kind] extends CommandEntry<
     infer Command,
@@ -665,13 +641,10 @@ export type CanvasCommandOf<Kind extends CanvasCommandKind> = EntryTypes[Kind]['
 
 export type CanvasCommand = CanvasCommandOf<CanvasCommandKind>;
 
-/** A command whose Change impact persistence reads. */
 export type ChangeImpactCommand = CanvasCommandOf<keyof PlannedChangeImpactOf>;
 
-/** The Change impact a Confirmed action shows: a Teacher block change shows each operation's. */
 export type ChangeImpactOf<Kind extends CanvasCommandKind> = EntryTypes[Kind]['impact'];
 
-/** Any entry of the catalog, read for whichever command it is given. */
 export type AnyCommandEntry = CommandEntry<CanvasCommand, ChangeImpactOf<CanvasCommandKind> | null>;
 
 export type PendingConfirmation = {

@@ -18,9 +18,8 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
     signal.removeEventListener('abort', stop);
     try {
       controller?.close();
-    } catch {
-      /* Already cancelled by the browser. */
-    }
+      // eslint-disable-next-line no-empty -- Already cancelled by the browser.
+    } catch {}
     unsubscribe?.();
   };
   const enqueue = (frame: string) => {
@@ -64,7 +63,6 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
         });
       },
     });
-    // A disconnect during subscription setup is a normal stream closure.
     if (stopped) unsubscribe();
     else if (signal.aborted) stop();
   } catch (error) {

@@ -146,7 +146,6 @@ body:has([data-viewport-page]) [data-global-navigation] {
   border-radius: 8px;
 }
 
-/* Tutorial portal rules must not turn a decorative preview into a drop target. */
 .react-flow__connectionline,
 .react-flow__connectionline *,
 .roadmap-connection-preview,

@@ -86,7 +86,6 @@ function createPlayback(edges: readonly RoadmapFlowEdge[], nodeIds: readonly str
     paint(clock.get());
     entryAnimation = animate(clock, total, {
       duration: Math.max(0, total - clock.get()),
-      // Ease the complete sequence so speed does not reset at each Node.
       ease: dependencyDrawingEase,
       onUpdate: paint,
       onComplete: () => {
@@ -141,7 +140,6 @@ function createPlayback(edges: readonly RoadmapFlowEdge[], nodeIds: readonly str
     };
   };
   const nodeProgressFor = (id: string) => {
-    // Nodes added after opening should reveal when mounted, rather than wait for the entry clock.
     let record = nodeRecords.get(id);
     if (!record) {
       record = { progress: motionValue(0) };
@@ -163,7 +161,6 @@ function createPlayback(edges: readonly RoadmapFlowEdge[], nodeIds: readonly str
 
 const DependencyAnimationContext = createContext<ReturnType<typeof createPlayback> | null>(null);
 
-/** One playback owner per mounted Roadmap visit; changing edge props does not reset it. */
 export function DependencyAnimationProvider({
   edges,
   nodeIds,
@@ -186,7 +183,6 @@ export function DependencyAnimationProvider({
   return <DependencyAnimationContext value={playback}>{children}</DependencyAnimationContext>;
 }
 
-/** Render inside ReactFlow so paths are mounted and Nodes measured before entry playback. */
 export function DependencyAnimationReady() {
   const ready = useNodesInitialized();
   const engine = useRoutingEngineStatus();
@@ -205,7 +201,6 @@ export function useDependencyProgress(id: string) {
   return playback?.progressFor(id) ?? complete;
 }
 
-/** Shared entry timing keeps the Node reveal attached to its incoming Dependencies. */
 export function useNodeEntryProgress(id: string) {
   const playback = useContext(DependencyAnimationContext);
   const complete = useMotionValue(1);

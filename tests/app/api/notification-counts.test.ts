@@ -49,8 +49,6 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-// Actual SQL/access/validation guarantees live in node-change-counts.test.ts (#330).
-// These operation outcomes establish HTTP wiring and serialization only.
 test.each([
   {
     name: 'pending counts',

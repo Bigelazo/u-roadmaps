@@ -2,7 +2,6 @@ export function fileResourceUrl(fileKey: string) {
   return `https://files.u-roadmaps.invalid/${fileKey}`;
 }
 
-/** A Resource created from a request is a Link resource; a File resource is created by uploading its bytes. */
 export function linkResourceOnlyError(type: unknown): string | null {
   return type === 'LINK'
     ? null

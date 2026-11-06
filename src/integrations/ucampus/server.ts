@@ -26,10 +26,6 @@ export type MufasaEnrolledCourse = Readonly<{
   institutionalPosition: MufasaInstitutionalCoursePosition | null;
 }>;
 
-/**
- * The Academic history verdict. Only a complete history may deactivate Participations;
- * a partial one reports some rows but omits or drops others; an unavailable one reports none.
- */
 export type AcademicHistory =
   | Readonly<{ status: 'complete' | 'partial'; courses: readonly MufasaEnrolledCourse[] }>
   | Readonly<{ status: 'unavailable' }>;
@@ -152,7 +148,6 @@ async function requestMufasa(endpoint: string, params: Record<string, string>): 
   return response.json();
 }
 
-/** One MUFASA course list as a verdict of its own: complete when every course could be read. */
 async function getMufasaCourseList(
   rut: string,
   endpoint: 'cursos_dictados' | 'cursos_inscritos',
@@ -179,7 +174,6 @@ async function getMufasaCourseList(
   }
 }
 
-/** Reads both MUFASA course lists and classifies them into an Academic history verdict. */
 export async function getMufasaAcademicHistory(rut: string | null): Promise<AcademicHistory> {
   if (!rut) return { status: 'unavailable' };
   const [enrolled, taught] = await Promise.all([
@@ -275,15 +269,13 @@ export async function getMufasaPersonNames(ruts: readonly string[]): Promise<Map
           const name = personName(record);
           if (rut && name) names.set(String(rut), name);
         }
-      } catch {
-        // Unnamed members are still listed by the caller.
-      }
+        // eslint-disable-next-line no-empty -- Unnamed members are still listed by the caller.
+      } catch {}
     }),
   );
   return names;
 }
 
-/** The U-Campus seam. It never rejects: failures become an unavailable Academic history. */
 export type UCampus = Readonly<{
   getAcademicHistory(rut: string | null): Promise<AcademicHistory>;
   getCourseMembers(
@@ -293,10 +285,6 @@ export type UCampus = Readonly<{
   getPersonNames(ruts: readonly string[]): Promise<Map<string, string>>;
 }>;
 
-/**
- * A U-Campus adapter for one request. It remembers the in-flight Academic history per RUT,
- * so every caller in the request shares one pair of MUFASA requests; nothing outlives it.
- */
 export function createMufasaUCampus(): UCampus {
   const histories = new Map<string, Promise<AcademicHistory>>();
   return {
@@ -304,7 +292,6 @@ export function createMufasaUCampus(): UCampus {
       if (!rut) return getMufasaAcademicHistory(rut);
       let history = histories.get(rut);
       if (!history) {
-        // Never remember a rejection: an unexpected failure is an unavailable history too.
         history = getMufasaAcademicHistory(rut).catch((): AcademicHistory => ({
           status: 'unavailable',
         }));

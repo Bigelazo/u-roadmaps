@@ -38,9 +38,8 @@ async function creationError(response: Response) {
       typeof body.error.message === 'string'
     )
       return body.error.message;
-  } catch {
-    // La respuesta sin cuerpo JSON cae al mensaje genérico.
-  }
+    // eslint-disable-next-line no-empty -- La respuesta sin cuerpo JSON cae al mensaje genérico.
+  } catch {}
   return 'No se pudo crear el roadmap.';
 }
 

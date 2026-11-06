@@ -17,7 +17,6 @@ import { notify } from '@/shared/ui/notify';
 
 type RenameNode = { kind: 'rename-node'; nodeId: string; title: string };
 
-// A command that exists only as this catalog entry: no adapter, session or engine names it.
 vi.mock('@/features/roadmap/canvas/commands/commands', async (importOriginal) => {
   const commands =
     await importOriginal<typeof import('@/features/roadmap/canvas/commands/commands')>();

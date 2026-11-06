@@ -6,7 +6,6 @@ config({ path: '.env', quiet: true });
 const baseURL = 'http://localhost:3200';
 const connection = e2eDatabaseUrl();
 
-// One environment for the runner, preparation, build and application server.
 Object.assign(process.env, {
   DATABASE_URL: connection,
   NEXTAUTH_URL: baseURL,
@@ -21,27 +20,21 @@ Object.assign(process.env, {
   MUFASA_BASE_URL: 'http://127.0.0.1:3201',
   PGCONNECT_TIMEOUT: '5',
   PGOPTIONS: '-c statement_timeout=10000 -c lock_timeout=5000',
-  // Scheduled unlock specs wait for the in-process release instead of the default 5 minutes.
   SCHEDULED_UNLOCK_INTERVAL_MS: '1000',
   ROADMAP_CLOSURE_INTERVAL_MS: '1000',
 });
 export default defineConfig({
   testDir: './tests/e2e',
-  // Removes test-owned data left by interrupted runs.
   globalSetup: './tests/e2e/global-setup.ts',
-  // Per-test data isolation; worker count measured in issue #168.
   fullyParallel: true,
   workers: 2,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  // Stop repeated infrastructure failures; use --max-failures=0 for a full audit.
   maxFailures: 3,
-  // Bounds preparation and the complete suite in both browsers.
   globalTimeout: 25 * 60_000,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: baseURL,
-    // Browser startup is a worker fixture, outside the normal test/action timeout.
     launchOptions: { timeout: 10_000 },
     actionTimeout: 10_000,
     navigationTimeout: 15_000,
@@ -56,7 +49,6 @@ export default defineConfig({
     ].join(' && '),
     url: baseURL,
     reuseExistingServer: false,
-    // Keep test results clear; DEBUG=pw:webserver restores server output.
     stdout: 'ignore',
     stderr: 'pipe',
     timeout: 180_000,

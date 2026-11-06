@@ -18,9 +18,7 @@ import type {
 import type { ExecutionResult, PracticeCanvasAction } from '@/features/roadmap/session/types';
 import { notify } from '@/shared/ui/notify';
 
-/** The two guarded session operations the command engine runs commands through. */
 export type CanvasCommandSession = {
-  /** Resolves with nothing once the failure is reported or the Course offering changed. */
   readChangeImpact<Command extends ChangeImpactCommand>(
     command: Command,
   ): Promise<ReadChangeImpactOf<Command['kind']> | null>;
@@ -51,7 +49,6 @@ function entryOf(command: CanvasCommand): AnyCommandEntry {
   return canvasCommandCatalog[command.kind];
 }
 
-/** What the confirmation dialog asks for a pending Confirmed action, once its impact is read. */
 export function canvasConfirmation(
   pending: PendingConfirmation,
   roadmap: RoadmapConfirmationRoadmap,
@@ -75,7 +72,6 @@ type OpenedRequest = {
   readonly confirmedAction: ConfirmedAction;
 };
 
-/** TypeScript cannot tie a request and impact read for any kind back to their kind; they match. */
 function pendingConfirmation(
   { request }: OpenedRequest,
   impact: ChangeImpact,

@@ -31,7 +31,6 @@ const engineRetryDelayMs = 1000;
 const emptyRoutes: RoutingResult = { routes: new Map(), blocked: 0 };
 const PreviewRoutingContext = createContext<{ module: AvoidModule; sceneKey: string } | null>(null);
 
-/** Speculation owns a native router: it never edits saved routes or their transaction history. */
 export function useConnectionPreviewRoute(source: string | null, target: string | null) {
   const context = useContext(PreviewRoutingContext);
   const [preview, setPreview] = useState<{ key: string; path: string } | null>(null);

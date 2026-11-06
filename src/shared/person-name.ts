@@ -1,4 +1,3 @@
-/** Formats known name parts without guessing surname boundaries from a full name. */
 export function rosterPersonName(parts: {
   firstName?: string | null;
   secondName?: string | null;

@@ -506,7 +506,6 @@ test('keeps the dimensions React Flow measured when refreshed roadmap data arriv
 
   rerender(<GraphHarness roadmapData={updatedRoadmap} />);
 
-  // React Flow hides a Node without dimensions and does not always measure it again.
   expect(screen.getByTestId('node-measured-node-1').textContent).toBe('180x80');
   expect(screen.getByTestId('node-measured-node-2').textContent).toBe('180x80');
 });
@@ -524,7 +523,6 @@ test('asks React Flow to measure again a shown Node it left without handle bound
 test('leaves measured Nodes and student-hidden Nodes to React Flow', () => {
   const hiddenNodeRoadmap: StudentRoadmapDto = {
     ...studentRoadmap,
-    // The student DTO type never carries a hidden Node; the graph still hides one defensively.
     nodes: studentRoadmap.nodes.map((node) =>
       node.id === 'node-2' ? ({ ...node, isVisible: false } as unknown as typeof node) : node,
     ),

@@ -1,6 +1,4 @@
 #!/bin/sh
-# Prepares a fresh git worktree: `.env` from the main checkout, dependencies,
-# the Prisma client and the Next.js route types that `pnpm typecheck` reads.
 set -eu
 
 root=$(git rev-parse --show-toplevel)

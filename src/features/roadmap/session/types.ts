@@ -26,10 +26,8 @@ export type RoadmapNodeTypeInput = {
   color: NodeTypeColor;
 };
 
-/** What executing a command resolves with: Node creation reports the created Node. */
 export type ExecutionResult = { readonly createdNodeId?: string };
 
-/** Persistence bound to one Course offering when it is created. */
 export type RoadmapCanvasSessionPersistence = {
   load(): Promise<AnyRoadmapDto>;
   loadCanvasPreview(): Promise<StudentRoadmapDto>;

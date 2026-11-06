@@ -147,7 +147,6 @@ export function floatingEdgeGeometry(source: NodeRect, target: NodeRect) {
   };
 }
 
-/** Both ends meet the Node border; shadows and invisible hit areas do not move the anchors. */
 export function dependencyArrowGeometry(source: NodeRect, target: NodeRect) {
   return floatingEdgeGeometry(source, target);
 }

@@ -55,7 +55,6 @@ it('waits for geometry, survives StrictMode cleanup, and preserves completed pro
   readiness.ready = false;
   const controlsRef = createRef<DependencyAnimationControls>();
   const view = render(<Fixture edges={[edge]} controlsRef={controlsRef} />);
-  // SVG drawing geometry has no accessible role; inspect the rendered path's native attributes.
   // eslint-disable-next-line testing-library/no-node-access
   const stroke = () => document.getElementById('a-b')!;
   try {

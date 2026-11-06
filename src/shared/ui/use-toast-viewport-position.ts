@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 
-/** Keep global feedback beside the canvas controls, including resized side panels. */
 export function useToastViewportPosition() {
   const [viewport, setViewport] = useState<HTMLElement | null>(null);
 
@@ -49,8 +48,6 @@ export function useToastViewportPosition() {
           ? bounds
           : null;
       const visible = rect && rect.bottom > 0 && rect.top < window.innerHeight;
-      // Preserve useful text width on phones: stay left of the trigger and move
-      // above its open menu instead of squeezing feedback beside that wider menu.
       const sidebar = document.querySelector<HTMLElement>(
         '[data-slot="sidebar"][data-side="right"]',
       );

@@ -12,7 +12,6 @@ describe('Dependency entry animation', () => {
     const positions = Array.from({ length: 21 }, (_, index) => dependencyDrawingEase(index / 20));
     expect(positions[0]).toBe(0);
     expect(positions[positions.length - 1]).toBe(1);
-    // At the midpoint the sequence should still be gathering speed, not look nearly linear.
     expect(dependencyDrawingEase(0.5)).toBeLessThan(0.4);
     const advances = positions.slice(1).map((position, index) => position - positions[index]);
     for (const advance of advances) expect(advance).toBeGreaterThan(0);
@@ -25,7 +24,6 @@ describe('Dependency entry animation', () => {
     const step = 0.0001;
     const velocityAt = (time: number) =>
       (dependencyDrawingEase(time + step) - dependencyDrawingEase(time - step)) / (2 * step);
-    // Normalization changes the magnitude of speed, but preserves its profile.
     const referenceSpeed = velocityAt(0.75);
     for (const time of [0.1, 0.25, 0.5, 0.9]) {
       expect(velocityAt(time) / referenceSpeed).toBeCloseTo(

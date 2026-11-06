@@ -50,7 +50,6 @@ type PendingTouch = {
   armed: boolean;
 };
 
-/** Extends a handle-started gesture to the whole target Node, without changing Node dragging. */
 export function useWholeNodeConnection({
   nodes,
   edges,
@@ -191,7 +190,6 @@ export function useWholeNodeConnection({
       )
         cancelPendingTouch();
       if (mobileSource.current) {
-        // React delegates touchmove passively; the pane's touch-action already blocks browser panning.
         if (!('changedTouches' in event)) event.preventDefault();
         event.stopPropagation();
         const point = touch ?? ('clientX' in event ? event : null);
@@ -226,7 +224,6 @@ export function useWholeNodeConnection({
       }
       source.current = null;
       setTargetId(null);
-      // A drop over a title, type icon, or action button must not also open it.
       suppressDropClick();
     },
     [completeConnection, suppressDropClick],
@@ -235,7 +232,6 @@ export function useWholeNodeConnection({
   const onTouchStartCapture = useCallback(
     (event: ReactTouchEvent) => {
       if (isArrowModeControl(event.target)) return;
-      // A fresh touch is intentional input, distinct from the previous touch's compatibility click.
       suppressClick.current = false;
       if (clickResetTimer.current) clearTimeout(clickResetTimer.current);
       if (event.touches.length !== 1) {
@@ -285,7 +281,6 @@ export function useWholeNodeConnection({
       cancelPendingTouch();
       if (!mobileSource.current) return;
       event.preventDefault();
-      // Let the native drag listener clean up its original touch, while preventing its click.
       suppressDropClick(500);
       const candidate = nodeUnderPointer(event);
       setArrowPointer(null);

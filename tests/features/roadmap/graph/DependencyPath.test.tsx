@@ -26,7 +26,6 @@ it('reveals the stroke and moves its open tip from the same progress without ano
       <DependencyPath id="dependency" path="M 0 20 L 100 20" progress={progress} />
     </svg>,
   );
-  // SVG drawing geometry has no accessible role; inspect the rendered path's native attributes.
   // eslint-disable-next-line testing-library/no-node-access
   const stroke = document.getElementById('dependency')!;
   const tip = screen.getByTestId('dependency-arrowhead');

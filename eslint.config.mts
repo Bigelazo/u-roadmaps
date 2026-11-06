@@ -22,7 +22,6 @@ const architecturalFiles = [
   'prisma/seed.ts',
 ];
 
-// Every module that starts with 'use client', so the client import guard cannot drift.
 const clientComponentFiles = globSync('src/**/*.{ts,tsx}').filter((file) =>
   /^['"]use client['"]/.test(readFileSync(file, 'utf8')),
 );
@@ -40,7 +39,6 @@ const restrictedPrismaImports = [
 
 export default defineConfig([
   globalIgnores([
-    // Vendored agent skills, maintained upstream.
     '.agents/**',
     '.claude/**',
     '.next/**',
@@ -52,7 +50,6 @@ export default defineConfig([
     'playwright-report/**',
     'src/generated/prisma/**',
     'test-results/**',
-    // Uploaded resource files stored on local disk.
     'uploads/**',
     'uploads-e2e/**',
   ]),
@@ -64,11 +61,6 @@ export default defineConfig([
     },
   },
   {
-    // Every manually maintained program file belongs to exactly one architecture
-    // zone. Generated Prisma is described so imports can be checked, but is not
-    // linted as handwritten source. Schema, migrations, root configuration and
-    // E2E browser infrastructure are deliberate tooling exclusions, as is the
-    // Next.js startup hook, which only wires app adapters into the server process.
     files: architecturalFiles,
     ignores: ['src/instrumentation.ts'],
     plugins: { boundaries },
@@ -140,7 +132,6 @@ export default defineConfig([
               ],
             },
             {
-              // Participant-facing features consume only the notification client API.
               from: {
                 element: {
                   type: 'feature',
@@ -208,8 +199,6 @@ export default defineConfig([
               from: { element: { type: 'entrypoint' } },
               allow: [
                 { to: { element: { type: ['development', 'shared'] } } },
-                // Scheduled scripts are the process boundary for integrations
-                // that have no HTTP route, such as the academic-calendar sync.
                 { to: { element: integrationEntrypoint } },
                 { to: { element: featureEntrypoints } },
               ],
@@ -230,9 +219,6 @@ export default defineConfig([
     },
   },
   {
-    // Public callers must use feature/integration Interfaces, never implementation
-    // paths. Boundaries still resolves and enforces the equivalent rule for aliases
-    // and relative imports.
     files: [
       'src/app/**/*.{ts,tsx}',
       'src/development/**/*.{ts,tsx}',
@@ -259,7 +245,6 @@ export default defineConfig([
     },
   },
   {
-    // The shared database adapter is the sole permitted generated-Prisma seam.
     files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}', 'scripts/**/*.ts', 'prisma/seed.ts'],
     ignores: ['src/shared/server/db/**/*.{ts,tsx}'],
     rules: {
@@ -267,8 +252,6 @@ export default defineConfig([
     },
   },
   {
-    // Keep the client graph from reaching server-only Interfaces, Prisma, or
-    // development-only server code. Server Components may still render clients.
     files: clientComponentFiles,
     rules: {
       'no-restricted-imports': [
@@ -325,8 +308,6 @@ export default defineConfig([
   {
     files: ['tests/app/{api,_adapters}/**/*.test.{ts,tsx}'],
     rules: {
-      // Deliberately narrow: direct vi.mock/doMock, including spy-only mocks.
-      // Renamed bindings, relative aliases and indirect replacements need review.
       'no-restricted-syntax': [
         'error',
         ...['@/shared/errors/server', '@/app/_adapters/http'].flatMap((module) => {

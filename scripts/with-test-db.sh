@@ -1,11 +1,4 @@
 #!/bin/sh
-# Runs a command while holding a test database lock shared by every worktree
-# of this repository, so parallel agents take turns on the same database.
-#
-#   scripts/with-test-db.sh <notifications|e2e> <command> [args...]
-#
-# `notifications` guards roadmap_notifications_test_db (test:unit and
-# test:integration); `e2e` guards roadmap_e2e_db and ports 3200/3201.
 set -eu
 
 name=${1:?usage: with-test-db.sh <notifications|e2e> <command> [args...]}
@@ -22,7 +15,6 @@ mkdir -p "$locks"
 waiting=
 until mkdir "$lock" 2>/dev/null; do
   holder=$(cat "$lock/pid" 2>/dev/null || true)
-  # A holder that exited without cleanup leaves a stale lock behind.
   if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
     rm -rf "$lock"
     continue

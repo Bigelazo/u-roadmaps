@@ -17,8 +17,6 @@ for (const width of [1440, 1024, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     await authenticateAs(page.context(), course.users.teacher.id);
     await page.goto(course.pagePath());
-    // Nodes are positioned in graph coordinates; document scrolling cannot
-    // reveal one outside React Flow's transformed canvas at narrow widths.
     await panRoadmapNodeIntoView(page, course.nodes.first);
     const selectedNode = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
     await selectedNode.click();
@@ -57,8 +55,6 @@ for (const width of [1440, 1024, 390, 320]) {
             clearOfSidebar:
               !panel || notice.x + notice.width <= panel.x || notice.y + notice.height <= panel.y,
             aboveMenu: !menu || notice.y + notice.height <= menu.y - 8,
-            // The entry/exit can extend below its resting rectangle. Verify the
-            // painted clip edge also clears the stacked sidebar during motion.
             entryClearOfSidebar:
               entryClip.clipsVerticalMotion &&
               (!panel || entryClip.right <= panel.x || entryClip.bottom <= panel.y),

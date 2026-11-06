@@ -448,7 +448,6 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
   useEffect(() => {
     const wrapper = cardRef.current?.closest<HTMLElement>('.react-flow__node');
     if (!wrapper) return;
-    // Keep geometry measurable while waiting, but exclude invisible Nodes from input and focus.
     const update = (progress: number) => {
       wrapper.inert = progress === 0;
       wrapper.style.visibility = progress === 0 ? 'hidden' : '';
@@ -497,7 +496,6 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       return;
     }
     if (!connectionHovered) return;
-    // A launch band must yield to an adjacent Node's body or visible controls.
     const coversAnotherNode = document
       .elementsFromPoint?.(event.clientX, event.clientY)
       .some((element) => {
