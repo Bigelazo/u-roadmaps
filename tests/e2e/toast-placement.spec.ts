@@ -24,16 +24,10 @@ for (const width of [1440, 1024, 390, 320]) {
     await selectedNode.click();
     const sidebar = page.locator('#roadmap-editor-panel');
     await expect(sidebar).toBeVisible();
-    if (width < 1024) {
-      await sidebar.getByText('Editor de nodo', { exact: true }).click();
-    }
     await page.getByLabel('Título', { exact: true }).fill('Variables revisadas');
     await page.getByRole('button', { name: 'Guardar cambios' }).click();
     const feedback = toast(page, 'Cambios guardados exitosamente.');
     const trigger = page.getByRole('button', { name: 'Crear en el mapa' });
-    // Mobile editors stack below the canvas; return to the canvas to inspect
-    // both controls in the same visible coordinate space after saving.
-    await trigger.scrollIntoViewIfNeeded();
     await feedback.hover();
 
     async function expectPlacement(menuOpen: boolean) {
@@ -42,7 +36,7 @@ for (const width of [1440, 1024, 390, 320]) {
           const [notice, anchor, panel] = await Promise.all([
             box(feedback),
             box(trigger),
-            box(sidebar),
+            sidebar.boundingBox(),
           ]);
           const menu = menuOpen ? await box(page.locator('[data-toast-obstacle]')) : null;
           const entryClip = await page
@@ -61,13 +55,13 @@ for (const width of [1440, 1024, 390, 320]) {
             readableWidth: notice.width >= 200,
             insideViewport: notice.x >= 16 && notice.y >= 0 && notice.y + notice.height <= 900,
             clearOfSidebar:
-              notice.x + notice.width <= panel.x || notice.y + notice.height <= panel.y,
+              !panel || notice.x + notice.width <= panel.x || notice.y + notice.height <= panel.y,
             aboveMenu: !menu || notice.y + notice.height <= menu.y - 8,
             // The entry/exit can extend below its resting rectangle. Verify the
             // painted clip edge also clears the stacked sidebar during motion.
             entryClearOfSidebar:
               entryClip.clipsVerticalMotion &&
-              (entryClip.right <= panel.x || entryClip.bottom <= panel.y),
+              (!panel || entryClip.right <= panel.x || entryClip.bottom <= panel.y),
           };
         })
         .toEqual({
@@ -82,6 +76,12 @@ for (const width of [1440, 1024, 390, 320]) {
 
     await expectPlacement(false);
     await page.screenshot({ path: testInfo.outputPath(`toast-sidebar-${width}.png`) });
+    if (width < 1024) {
+      // The compact editor sheet covers the floating control until it closes.
+      await page.keyboard.press('Escape');
+      await expect(sidebar).toBeHidden();
+      await expectPlacement(false);
+    }
     await trigger.click();
     await expect(page.getByRole('menuitem', { name: 'Crear nodo', exact: true })).toBeVisible();
     await expect(page.getByRole('menuitem').last()).toHaveCSS('opacity', '1');

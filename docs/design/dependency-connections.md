@@ -135,10 +135,11 @@ continuous drag, followed by successful Dependency creation.
 - Feedback enters upward from the lower-right canvas area, in a column to the
   left of the floating creation button. It follows the actual button as a
   desktop sidebar resizes the canvas.
-- On phones the editor stacks below the canvas. Align feedback with the
-  button's baseline to avoid covering that editor, preserve a readable column,
-  and account for viewport safe areas. When the creation menu opens, lift the
-  feedback above the menu while keeping its right edge left of the button.
+- On compact canvases the editor is a bottom sheet over the canvas. Stack feedback
+  above that sheet, preserve a readable column, and account for viewport safe
+  areas. With the sheet closed, align feedback with the button's baseline. When
+  the creation menu opens, lift the feedback above the menu while keeping its
+  right edge left of the button.
 - Without a visible floating control, use the viewport's lower-right safe area.
   Stack additional notifications upward and retain accessible dismissal. Empty
   space in the notification column must never intercept canvas input, including
