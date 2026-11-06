@@ -61,6 +61,7 @@ export function NodeCreator({
           <TooltipTrigger
             render={
               <Menu.Trigger
+                data-toast-anchor=""
                 aria-label="Crear en el mapa"
                 render={
                   <Button
@@ -84,7 +85,13 @@ export function NodeCreator({
           <TooltipContent>Crear en el mapa</TooltipContent>
         </Tooltip>
         <Menu.Portal container={menuLayerRef}>
-          <Menu.Positioner align="end" side="top" sideOffset={-34} className={styles.positioner}>
+          <Menu.Positioner
+            data-toast-obstacle=""
+            align="end"
+            side="top"
+            sideOffset={-34}
+            className={styles.positioner}
+          >
             <Menu.Popup className={styles.menu}>
               <Menu.Item
                 className={styles.menuItem}
