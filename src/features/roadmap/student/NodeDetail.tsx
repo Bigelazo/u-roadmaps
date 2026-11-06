@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 import {
   Check,
   CircleCheckBig,
@@ -34,6 +34,7 @@ import { Sheet, SheetContent } from '@/shared/ui/sheet';
 import { SidebarContent, SidebarProvider } from '@/shared/ui/sidebar';
 import { RoadmapSidePanel } from '@/features/roadmap/ui/RoadmapSidePanel';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
+import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
 import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
@@ -122,7 +123,7 @@ function StudentNodeDetailContent({
                 {status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
               </Button>
             )}
-            {!blocked ? (
+            {!blocked && !isModal ? (
               <NodeFullscreenDialog
                 key={node.id}
                 title={node.title}
@@ -205,7 +206,7 @@ function DetailBody({ children, isSidebar }: { children: ReactNode; isSidebar: b
     return <SidebarContent className="px-6 py-6">{children}</SidebarContent>;
   }
 
-  return <div className="overflow-y-auto px-6 py-6">{children}</div>;
+  return <div className="min-h-0 overflow-y-auto px-6 py-6">{children}</div>;
 }
 
 type Props = Omit<ContentProps, 'node' | 'status'> & {
@@ -215,22 +216,6 @@ type Props = Omit<ContentProps, 'node' | 'status'> & {
   panelWidth?: number;
   onPanelWidthChange?: (width: number) => void;
 };
-
-const mobileLayoutQuery = '(max-width: 767px)';
-
-function subscribeToMobileLayout(onStoreChange: () => void) {
-  const media = window.matchMedia(mobileLayoutQuery);
-  media.addEventListener('change', onStoreChange);
-  return () => media.removeEventListener('change', onStoreChange);
-}
-
-function getMobileLayoutSnapshot() {
-  return window.matchMedia(mobileLayoutQuery).matches;
-}
-
-function useMobileLayout() {
-  return useSyncExternalStore(subscribeToMobileLayout, getMobileLayoutSnapshot, () => false);
-}
 
 export function StudentNodeDetail({
   node,
@@ -243,7 +228,7 @@ export function StudentNodeDetail({
   panelWidth = 426,
   onPanelWidthChange,
 }: Props) {
-  const isMobile = useMobileLayout();
+  const isCompact = useCompactCanvasLayout();
   if (!node || !status || isStudentBlockedNode(node)) return null;
   const contentProps = {
     node,
@@ -254,14 +239,15 @@ export function StudentNodeDetail({
     isTeacherPreview,
     nodeType: nodeTypes?.find((type) => type.id === node.nodeTypeId),
   };
-  if (isMobile) {
+  if (isCompact) {
     return (
       <Sheet open onOpenChange={(open) => !open && onClose()}>
         <SheetContent
+          id="student-node-detail-panel"
           side="bottom"
           showCloseButton={false}
           aria-modal="true"
-          className="gap-0 overflow-y-auto border-0 bg-card shadow-none data-[side=bottom]:h-dvh! data-[side=bottom]:max-h-dvh!"
+          className="max-h-[85dvh] gap-0 overflow-hidden rounded-t-xl bg-card pb-[env(safe-area-inset-bottom)]"
         >
           <StudentNodeDetailContent {...contentProps} isModal />
         </SheetContent>

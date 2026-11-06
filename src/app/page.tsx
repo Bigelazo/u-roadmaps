@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { CourseRouteComparison } from '@/app/_components/landing/CourseRouteComparison';
 import { InstitutionalLoginForm } from '@/app/_components/InstitutionalLoginForm';
+import { ThirdPartyLicensesLink } from '@/app/_components/ThirdPartyLicensesLink';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 
@@ -170,6 +171,7 @@ export default async function Home() {
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-2 px-4 py-6 text-sm text-graphite sm:px-6 lg:px-12">
           <span>Universidad de Chile</span>
           <span>U-Roadmaps · Cada curso, una ruta clara.</span>
+          <ThirdPartyLicensesLink />
         </div>
       </footer>
     </>

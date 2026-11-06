@@ -1,10 +1,12 @@
 import {
   clickElement,
+  revealTutorialTarget,
   waitForElement,
   type TutorialStep,
 } from '@/shared/client/tutorial/tutorial-support';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
 import { NODE_TYPES_MENU_ITEM_LABEL } from '@/features/roadmap/editor/types';
+import { compactCanvasLayoutQuery } from '@/features/roadmap/ui/compact-canvas-layout';
 import { practiceNodeIds } from './practice-roadmap';
 import { canvas, nodeSelector, nodeTypeAndResourcesStep } from './student-tutorial';
 
@@ -19,6 +21,7 @@ function nodeCreator() {
 function confirmationOrCanvas() {
   return (
     document.querySelector('[role="alertdialog"]:not(.u-roadmaps-tour-exit)') ??
+    document.querySelector('[id^="node-actions-"]') ??
     document.querySelector(canvas)
   );
 }
@@ -55,6 +58,15 @@ function nodeDetailOr(nodeId: string) {
     document.querySelector(nodeSelector(nodeId));
 }
 
+function revealNodes(...nodeIds: readonly (string | null)[]) {
+  return revealTutorialTarget(
+    nodeIds.flatMap((nodeId) => {
+      const node = nodeId ? document.querySelector(nodeSelector(nodeId)) : null;
+      return node ? [node] : [];
+    }),
+  );
+}
+
 export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAction>[] {
   let createdNodeId: string | null = null;
   return [
@@ -62,7 +74,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       element: 'button[aria-label="Centrar mapa"]',
       title: 'Centrar roadmap',
       description:
-        'Puedes arrastrar el fondo para desplazarte, y usar la rueda del mouse para acercar o alejar. Presiona este botón para centrar la vista en el roadmap completo',
+        'Arrastra el fondo para desplazarte; para acercar o alejar, pellizca la pantalla o usa la rueda del mouse. Presiona este botón para centrar la vista en el roadmap completo.',
       advanceWhen: (action) => action.type === 'fitView',
       allowManualAdvance: true,
     },
@@ -103,8 +115,9 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: canvas,
       title: 'Conecta tu nodo',
+      prepare: () => revealNodes(createdNodeId, practiceNodeIds.e),
       description:
-        'Arrastra desde el borde de tu nuevo nodo hasta el nodo "Control 1" para crear una dependencia.',
+        'Arrastra desde el borde de tu nuevo nodo hasta el nodo "Control 1" para crear una dependencia. En una pantalla táctil, mantén presionado tu nodo y luego toca "Control 1".',
       advanceWhen: (action) =>
         action.type === 'connectNodes' &&
         action.sourceNodeId === createdNodeId &&
@@ -134,7 +147,8 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: canvas,
       title: 'Selecciona tu nodo',
-      description: 'Haz clic en el nodo que creaste para editarlo.',
+      prepare: () => revealNodes(createdNodeId),
+      description: 'Selecciona el nodo que creaste para editarlo.',
       advanceWhen: (action) => action.type === 'selectNode' && action.nodeId === createdNodeId,
     },
     {
@@ -148,7 +162,14 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: branchBlockControl,
       title: 'Bloquea un nodo',
-      prepare: () => clickElement(nodeSelector(practiceNodeIds.b)),
+      prepare: async () => {
+        if (!window.matchMedia(compactCanvasLayoutQuery).matches) {
+          clickElement(nodeSelector(practiceNodeIds.b));
+          return;
+        }
+        clickElement('#roadmap-editor-panel button[aria-label="Deseleccionar nodo"]');
+        await waitForElement('#roadmap-editor-panel[hidden]');
+      },
       description:
         'En el nodo "Conceptos básicos" abre su menú de acciones y elige "Bloquear nodo". El bloqueo también se propagará a todos los nodos dependientes del seleccionado.',
       advanceWhen: (action) =>
@@ -202,6 +223,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: confirmationOrCanvas,
       title: 'Elimina tu nodo',
+      prepare: () => revealNodes(createdNodeId),
       description:
         'Abre el menú de tu nodo y elige "Eliminar nodo". Antes de eliminar verás qué recursos y dependencias se pierden.',
       advanceWhen: (action) => action.type === 'deleteNode' && action.nodeId === createdNodeId,
@@ -223,6 +245,10 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: canvas,
       title: 'Nodos liberados',
+      prepare: () => {
+        if (window.matchMedia(compactCanvasLayoutQuery).matches)
+          clickElement('button[aria-label="Cerrar detalle"]');
+      },
       description:
         'Al completar Introducción se liberan Conceptos básicos y Lectura complementaria, que dependían de ella.',
     },

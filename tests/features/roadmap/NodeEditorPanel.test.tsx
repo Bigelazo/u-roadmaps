@@ -61,13 +61,29 @@ test('keeps the editor DOM and draft field mounted while the panel is hidden', a
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Límites y continuidad');
 });
 
-test('keeps mobile disclosure state in the panel shell', async () => {
-  mockViewport(640);
+test('keeps the draft mounted as the same panel when the viewport crosses the compact breakpoint', async () => {
   const user = userEvent.setup();
-  renderPanel();
+  const { rerender } = renderPanel();
+  const input = screen.getByLabelText('Título');
+  const panel = screen.getByRole('region', { name: 'Panel de edición del roadmap' });
+  await user.clear(input);
+  await user.type(input, 'Borrador sin guardar');
 
-  const details = screen.getByRole('group', { name: 'Editor de nodo' }) as HTMLDetailsElement;
-  await user.click(screen.getByText('Editor de nodo'));
+  mockViewport(820);
+  rerender(
+    <SidebarProvider>
+      <NodeEditorPanel isOpen panelWidth={360} onPanelWidthChange={vi.fn()}>
+        <label>
+          Título
+          <input defaultValue="Límites" />
+        </label>
+      </NodeEditorPanel>
+    </SidebarProvider>,
+  );
 
-  expect(details.open).toBe(true);
+  expect(screen.getByRole('region', { name: 'Panel de edición del roadmap' })).toBe(panel);
+  expect(panel.id).toBe('roadmap-editor-panel');
+  expect(screen.getByRole('group', { name: 'Editor de nodo' })).toBeTruthy();
+  expect(screen.getByLabelText('Título')).toBe(input);
+  expect((input as HTMLInputElement).value).toBe('Borrador sin guardar');
 });

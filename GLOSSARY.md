@@ -2,7 +2,7 @@
 
 This context describes the learning paths of university course offerings and their participants' progress.
 
-The notice definitions below describe the accepted target in ADR-0014. Its
+The notice definitions below describe the accepted target. Its
 implementation is incremental: #177 and #179 group Node title, description and
 type changes durably by independent Notice targets and withdraw returns to the
 known values. Title and type reach recipients who see a blocked Node; description

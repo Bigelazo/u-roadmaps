@@ -29,7 +29,7 @@ export default function GlobalNavigation({
       data-global-navigation
       className="sticky top-0 z-20 box-border min-h-16 border-b bg-background"
     >
-      <div className="mx-auto flex min-h-16 max-w-360 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6 [body:has([data-page-width=full])_&]:max-w-none">
+      <div className="mx-auto flex min-h-[calc(4rem-1px)] max-w-360 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:px-6 [body:has([data-page-width=full])_&]:max-w-none">
         <nav aria-label="Principal">
           <Link
             href="/"
@@ -46,7 +46,7 @@ export default function GlobalNavigation({
           ) : null}
           {userName ? (
             <span
-              className="max-w-44 truncate text-sm font-medium text-foreground sm:max-w-72"
+              className="max-w-44 truncate text-sm font-medium text-foreground max-sm:sr-only sm:max-w-72"
               title={userName}
             >
               {navbarUserName(userName)}

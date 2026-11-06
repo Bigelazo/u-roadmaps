@@ -8,18 +8,15 @@ body {
   overflow-x: hidden;
 }
 
-@media (width < 64rem) {
-  body:has(.roadmap-canvas-loading) {
-    display: flex;
-    min-height: 100dvh;
-    flex-direction: column;
-  }
+body:has([data-viewport-page]) {
+  display: flex;
+  height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-  body main:has(.roadmap-canvas-loading) {
-    display: flex;
-    min-height: 0;
-    flex: 1;
-  }
+body:has([data-viewport-page]) [data-global-navigation] {
+  flex-shrink: 0;
 }
 
 .markdown-editor {

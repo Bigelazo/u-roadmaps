@@ -187,8 +187,22 @@
   outline-offset: 2px;
 }
 
-.touchTrigger {
+.coarse {
   --action-size: 2.75rem;
+}
+
+.coarse .menuRing {
+  --radius: 5.25rem;
+  --action-size: 2.75rem;
+  width: 15rem;
+  height: 15rem;
+}
+
+.coarse .actionTrigger::before {
+  position: absolute;
+  inset: -0.5rem;
+  border-radius: 999px;
+  content: '';
 }
 
 @media (prefers-reduced-motion: reduce) {

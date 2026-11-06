@@ -216,7 +216,7 @@ function ConfirmationDialog({
       {confirmation ? (
         <AlertDialogContent
           data-intent={confirmation.intent}
-          className={cn('max-h-[calc(100vh-2rem)] gap-5 overflow-y-auto sm:max-w-xl', className)}
+          className={cn('max-h-[calc(100dvh-2rem)] gap-5 overflow-y-auto sm:max-w-xl', className)}
           initialFocus={cancelRef}
           finalFocus={finalFocusRef}
         >

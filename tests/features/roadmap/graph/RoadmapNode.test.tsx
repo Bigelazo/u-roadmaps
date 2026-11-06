@@ -1,12 +1,14 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { mockViewport } from '../../../support/viewport';
 import { RoadmapNode, type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { NodeChangeCountsProvider } from '@/features/notifications/components/inbox-driver';
 
+beforeEach(() => mockViewport(1280));
 const originalElementsFromPoint = document.elementsFromPoint;
 
 afterEach(() => {

@@ -34,6 +34,15 @@ function isArrowModeControl(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('[data-arrow-mode-controls]'));
 }
 
+function isOverArrowModeControl(event: ConnectionPointerEvent) {
+  const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+  return (
+    typeof document.elementFromPoint === 'function' &&
+    Boolean(point) &&
+    isArrowModeControl(document.elementFromPoint(point.clientX, point.clientY))
+  );
+}
+
 type PendingTouch = {
   nodeId: string | null;
   x: number;
@@ -280,7 +289,8 @@ export function useWholeNodeConnection({
       suppressDropClick(500);
       const candidate = nodeUnderPointer(event);
       setArrowPointer(null);
-      if (gesture?.armed && candidate === mobileSource.current) return;
+      if (gesture?.armed && (candidate === mobileSource.current || isOverArrowModeControl(event)))
+        return;
       chooseMobileTarget(candidate);
     },
     [cancelPendingTouch, chooseMobileTarget, suppressDropClick],

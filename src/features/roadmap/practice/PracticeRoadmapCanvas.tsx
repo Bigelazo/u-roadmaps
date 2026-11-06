@@ -47,8 +47,8 @@ export function PracticeRoadmapCanvas({
     ),
   );
   return (
-    <div data-practice-roadmap className="flex flex-col lg:h-[calc(100dvh-4rem)]">
-      <main className="min-h-0 flex-1 bg-cloud">
+    <div data-practice-roadmap data-viewport-page className="flex min-h-0 flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-cloud">
         <RoadmapCanvasSessionPersistenceProvider persistence={persistence}>
           <RoadmapCanvasSession
             courseOffering={{

@@ -162,7 +162,7 @@ huérfanos y nunca toca el catálogo sembrado.
 Las consultas SQL usan el único helper `psql` de
 [tests/e2e/database.ts](../../tests/e2e/database.ts), con la misma validación de
 base local. El cliente Prisma generado no carga dentro de Playwright (issue #164),
-por lo que se aplicó el plan B del ADR. Todos los specs acceden a SQL mediante
+por lo que se usa ese helper en lugar del cliente. Todos los specs acceden a SQL mediante
 el helper compartido; no quedan copias locales de `psql`.
 
 ## Harness de notificaciones con PostgreSQL real

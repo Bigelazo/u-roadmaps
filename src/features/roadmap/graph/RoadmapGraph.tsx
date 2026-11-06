@@ -23,10 +23,13 @@ import {
   type Connection,
   type EdgeChange,
   type NodeChange,
+  useNodesInitialized,
   useReactFlow,
   useUpdateNodeInternals,
+  type FitViewOptions,
 } from '@xyflow/react';
-import { LayoutTemplate, Maximize } from 'lucide-react';
+import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
+import { LayoutTemplate, LockKeyhole, Maximize } from 'lucide-react';
 import {
   findOpenRoadmapPosition,
   roadmapGridSize,
@@ -62,7 +65,17 @@ import {
 } from '@/features/roadmap/graph/ConnectionPreview';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
-import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
+import {
+  studentNodeBlockMessages,
+  studentNodeBlockReason,
+  studentNodeStatus,
+} from '@/features/roadmap/student/node-status';
+import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
+import {
+  TUTORIAL_REVEAL_EVENT,
+  type TutorialRevealDetail,
+} from '@/shared/client/tutorial/tutorial-support';
+import { cn } from 'cn';
 import {
   layoutRoadmapGraph,
   type RoadmapLayoutDirection,
@@ -81,11 +94,117 @@ export type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 
 const selectedEdgeColor = 'var(--primary)';
-const roadmapFitViewOptions = { padding: 0.28 };
+const roadmapFitViewOptions = { padding: 0.28, minZoom: 0.5 };
+const roadmapMinZoom = 0.2;
+const roadmapMaxZoom = 2;
+const studentReadableZoom = 0.8;
+const staffReadableZoom = 0.7;
+const tutorialLegibleZoom = 0.5;
+const overlayGap = 12;
+const sideInset = 16;
 const roadmapDependencyHandles = ['top', 'right', 'bottom', 'left'] as const;
 const dependencyStroke = 'var(--ink)';
 const bottomRightPanelClassName =
   'pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1';
+
+type CanvasInsets = { top: number; right: number; bottom: number; left: number };
+
+function canvasOverlayInsets(container: HTMLElement | null): CanvasInsets {
+  const insets = { top: sideInset, right: sideInset, bottom: sideInset, left: sideInset };
+  if (!container) return insets;
+  const canvas = container.getBoundingClientRect();
+  container.querySelectorAll<HTMLElement>('[data-canvas-overlay]').forEach((overlay) => {
+    const rect = overlay.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    if (overlay.dataset.canvasOverlay === 'top')
+      insets.top = Math.max(insets.top, rect.bottom - canvas.top + overlayGap);
+    else insets.bottom = Math.max(insets.bottom, canvas.bottom - rect.top + overlayGap);
+  });
+  const vertical = insets.top + insets.bottom;
+  const maxVertical = canvas.height - 96;
+  if (maxVertical > 0 && vertical > maxVertical) {
+    insets.top *= maxVertical / vertical;
+    insets.bottom *= maxVertical / vertical;
+  }
+  return insets;
+}
+
+function insetPadding(insets: CanvasInsets): NonNullable<FitViewOptions['padding']> {
+  const px = (value: number) => `${Math.round(value)}px` as const;
+  return {
+    top: px(insets.top),
+    right: px(insets.right),
+    bottom: px(insets.bottom),
+    left: px(insets.left),
+  };
+}
+
+function fitAllOptions(compact: boolean, container: HTMLElement | null): FitViewOptions {
+  return compact
+    ? { padding: insetPadding(canvasOverlayInsets(container)), minZoom: roadmapMinZoom, maxZoom: 1 }
+    : { ...roadmapFitViewOptions, minZoom: roadmapMinZoom };
+}
+
+function readingOrder(nodes: readonly RoadmapFlowNode[]) {
+  return [...nodes]
+    .filter((node) => !node.hidden)
+    .sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
+}
+
+function nodeRect(node: RoadmapFlowNode) {
+  return { ...node.position, ...roadmapNodeSizeForTitle(node.data.title) };
+}
+
+function compactInitialViewport(
+  nodes: readonly RoadmapFlowNode[],
+  isStudent: boolean,
+  canvas: { width: number; height: number },
+  insets: CanvasInsets,
+) {
+  const ordered = readingOrder(nodes);
+  if (!ordered.length) return null;
+  const rects = ordered.map(nodeRect);
+  const bounds = {
+    x: Math.min(...rects.map((rect) => rect.x)),
+    y: Math.min(...rects.map((rect) => rect.y)),
+    right: Math.max(...rects.map((rect) => rect.x + rect.width)),
+    bottom: Math.max(...rects.map((rect) => rect.y + rect.height)),
+  };
+  const width = Math.max(1, canvas.width - insets.left - insets.right);
+  const height = Math.max(1, canvas.height - insets.top - insets.bottom);
+  const fitZoom = Math.min(
+    1,
+    width / Math.max(1, bounds.right - bounds.x),
+    height / Math.max(1, bounds.bottom - bounds.y),
+  );
+  const readableZoom = isStudent ? studentReadableZoom : staffReadableZoom;
+  if (fitZoom >= readableZoom) {
+    return {
+      zoom: fitZoom,
+      x: insets.left + (width - (bounds.right - bounds.x) * fitZoom) / 2 - bounds.x * fitZoom,
+      y: insets.top + (height - (bounds.bottom - bounds.y) * fitZoom) / 2 - bounds.y * fitZoom,
+    };
+  }
+  if (isStudent) {
+    const focus =
+      ordered.find((node) => node.data.status === 'available' && !node.data.blockReason) ??
+      ordered[0];
+    const rect = nodeRect(focus);
+    const zoom = Math.min(1, Math.max(readableZoom, width / (rect.width + 2 * sideInset)));
+    return {
+      zoom,
+      x: insets.left + width / 2 - (rect.x + rect.width / 2) * zoom,
+      y: insets.top + height * 0.4 - (rect.y + rect.height / 2) * zoom,
+    };
+  }
+  const first = nodeRect(ordered[0]);
+  const zoom = readableZoom;
+  return {
+    zoom,
+    x: insets.left + width / 2 - (first.x + first.width / 2) * zoom,
+    y: insets.top + overlayGap - first.y * zoom,
+  };
+}
 
 type RoadmapGraphActionMenu = NodeActionCallbacks & {
   useActionSheet: boolean;
@@ -303,10 +422,27 @@ function RoadmapGraphToolbar({
     [getViewport, nodes],
   );
 
+  const compact = useCompactCanvasLayout();
+  const sortLabel = `Ordenar ${layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}`;
+
   return (
     <>
-      <Panel position="bottom-left" className="m-4! max-w-[calc(100%-2rem)] sm:m-6!">
-        <div className="flex flex-col items-stretch gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm sm:flex-row sm:flex-wrap sm:items-center">
+      <Panel
+        position="bottom-left"
+        data-canvas-overlay="bottom"
+        className={cn(
+          'm-4! sm:m-6!',
+          bottomRightActions
+            ? 'max-w-[calc(100%-2rem-4.75rem)] sm:max-w-[calc(100%-3rem-5.25rem)]'
+            : 'max-w-[calc(100%-2rem)] sm:max-w-[calc(100%-3rem)]',
+        )}
+      >
+        <div
+          className={cn(
+            'flex items-center gap-1.5 rounded-lg border border-border bg-card/95 p-1.5 shadow-sm',
+            compact ? 'flex-nowrap overflow-x-auto overscroll-x-contain' : 'flex-wrap',
+          )}
+        >
           <Tooltip>
             <TooltipTrigger
               render={
@@ -315,8 +451,11 @@ function RoadmapGraphToolbar({
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="self-start sm:self-auto"
-                  onClick={() => void fitView(roadmapFitViewOptions).then(() => onFitView?.())}
+                  onClick={() =>
+                    void fitView(fitAllOptions(compact, containerRef.current)).then(() =>
+                      onFitView?.(),
+                    )
+                  }
                 >
                   <Maximize aria-hidden="true" />
                 </Button>
@@ -325,25 +464,57 @@ function RoadmapGraphToolbar({
             <TooltipContent>Centrar mapa</TooltipContent>
           </Tooltip>
           {showAutoLayout ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="justify-start sm:justify-center"
-              disabled={!canAutoLayout}
-              onClick={onAutoLayout}
-            >
-              <LayoutTemplate data-icon="inline-start" />
-              Ordenar {layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}
-            </Button>
+            compact ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label={sortLabel}
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      disabled={!canAutoLayout}
+                      onClick={onAutoLayout}
+                    >
+                      <LayoutTemplate aria-hidden="true" />
+                    </Button>
+                  }
+                />
+                <TooltipContent>{sortLabel}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canAutoLayout}
+                onClick={onAutoLayout}
+              >
+                <LayoutTemplate data-icon="inline-start" />
+                {sortLabel}
+              </Button>
+            )
           ) : null}
           {bottomLeftActions ? (
-            <div className="flex flex-wrap gap-1.5">{bottomLeftActions(findOpenPosition)}</div>
+            <div
+              className={cn(
+                'flex gap-1.5',
+                compact
+                  ? 'flex-nowrap *:w-11! *:shrink-0 *:gap-0! *:p-0! *:text-[0px]!'
+                  : 'flex-wrap',
+              )}
+            >
+              {bottomLeftActions(findOpenPosition)}
+            </div>
           ) : null}
         </div>
       </Panel>
       {bottomRightActions ? (
-        <Panel position="bottom-right" className={bottomRightPanelClassName}>
+        <Panel
+          position="bottom-right"
+          data-canvas-overlay="bottom"
+          className={bottomRightPanelClassName}
+        >
           <div className="pointer-events-auto">{bottomRightActions(findOpenPosition)}</div>
         </Panel>
       ) : null}
@@ -460,20 +631,50 @@ export type RoadmapGraphOverlaySlots = {
   bottomRight?: ReactNode;
 };
 
+const titlePlateClassName = cn(
+  'pointer-events-none rounded-lg border border-border/70 bg-card/90 px-3 py-2 shadow-sm backdrop-blur-sm',
+  '[@media(max-height:500px)]:py-1.5 [@media(max-height:500px)]:[&_h1]:mt-1 [@media(max-height:500px)]:[&_h1]:text-xl',
+);
+
 function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
+  const compact = useCompactCanvasLayout();
+  const stackTitleUnderToolbar = compact && Boolean(slots?.topCenter && slots.topLeft);
   return (
     <>
-      {slots?.topLeft ? (
+      {slots?.topLeft && !stackTitleUnderToolbar ? (
         <Panel
           position="top-left"
-          className="pointer-events-none z-4! m-4! max-w-[calc(100%-2rem)] sm:m-6! sm:max-w-md"
+          data-canvas-overlay="top"
+          className={cn(
+            'z-4! m-4! sm:m-6!',
+            titlePlateClassName,
+            slots.topRight
+              ? 'max-w-[calc(100%-2rem-3.5rem)] sm:max-w-[min(28rem,calc(100%-3rem-3.5rem))]'
+              : 'max-w-[calc(100%-2rem)] sm:max-w-md',
+          )}
         >
           {slots.topLeft}
         </Panel>
       ) : null}
       {slots?.topCenter ? (
-        <Panel position="top-center" className="mt-3! w-[calc(100%-2rem)] max-w-xl sm:w-auto">
+        <Panel
+          position="top-center"
+          data-canvas-overlay="top"
+          className={cn(
+            'mt-3! w-[calc(100%-2rem)] max-w-xl',
+            stackTitleUnderToolbar
+              ? 'pointer-events-none flex flex-col items-start gap-2'
+              : 'sm:w-auto',
+          )}
+        >
           {slots.topCenter}
+          {stackTitleUnderToolbar ? (
+            <div
+              className={cn(titlePlateClassName, 'max-w-full [@media(max-height:500px)]:hidden')}
+            >
+              {slots.topLeft}
+            </div>
+          ) : null}
         </Panel>
       ) : null}
       {slots?.topRight ? (
@@ -482,7 +683,11 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
         </Panel>
       ) : null}
       {slots?.bottomRight ? (
-        <Panel position="bottom-right" className={bottomRightPanelClassName}>
+        <Panel
+          position="bottom-right"
+          data-canvas-overlay="bottom"
+          className={bottomRightPanelClassName}
+        >
           {slots.bottomRight}
         </Panel>
       ) : null}
@@ -770,6 +975,8 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     containerRef,
   } = model;
 
+  const compact = useCompactCanvasLayout();
+  const [blockedNoticeNodeId, setBlockedNoticeNodeId] = useState<string | null>(null);
   const isActionMenuActive = Boolean(openActionMenuNodeId || closingActionMenuNodeId);
   const isNavigationEnabled = !isActionMenuActive;
   const canInteract = canEdit && isNavigationEnabled;
@@ -922,11 +1129,20 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                   }))
                 }
                 onNodeClick={(_event, node) => {
-                  if (node.data.blockReason) return;
+                  if (node.data.blockReason) {
+                    setBlockedNoticeNodeId((current) => (current === node.id ? null : node.id));
+                    return;
+                  }
+                  setBlockedNoticeNodeId(null);
                   onSelectNode(node.id);
                 }}
                 onPaneClick={() => {
+                  setBlockedNoticeNodeId(null);
                   if (isActionMenuActive) closeActionMenu(false);
+                  if (compact && props.selectedNodeId) onClearSelectedNode?.();
+                }}
+                onMoveStart={(event) => {
+                  if (event) setBlockedNoticeNodeId(null);
                 }}
                 onEdgeMouseEnter={
                   canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined
@@ -954,8 +1170,10 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                   if (!event) return;
                   onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
                 }}
-                fitView
+                fitView={!compact}
                 fitViewOptions={roadmapFitViewOptions}
+                minZoom={roadmapMinZoom}
+                maxZoom={roadmapMaxZoom}
                 proOptions={{ hideAttribution: true }}
               >
                 <RoadmapGraphContents
@@ -967,6 +1185,12 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                   }}
                 />
                 <DependencyAnimationReady />
+                <BlockedNodeNotice
+                  nodeId={blockedNoticeNodeId}
+                  roadmap={props.projection.roadmap}
+                  containerRef={containerRef}
+                  onClose={() => setBlockedNoticeNodeId(null)}
+                />
                 {arrowSourceRect ? (
                   <TouchConnectionPreview
                     source={arrowSourceRect}
@@ -983,12 +1207,12 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         {connection.arrowSourceId ? (
           <div
             data-arrow-mode-controls
-            className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center"
+            className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center [@media(max-height:500px)]:top-2"
           >
             <div
               role="status"
               aria-live="polite"
-              className="pointer-events-auto flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
+              className="flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
             >
               <span>{connection.arrowMessage}</span>
               <Button
@@ -996,6 +1220,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 variant="outline"
                 size="sm"
                 aria-label="Cancelar modo flecha"
+                className="pointer-events-auto"
                 onClick={connection.cancelArrowMode}
               >
                 Cancelar
@@ -1033,6 +1258,13 @@ function RoadmapGraphContents({
       {' '}
       <RoadmapGraphOverlays slots={overlaySlots} />
       <RoadmapViewportRestorer restoration={viewportRestoration} />
+      <CompactInitialViewport
+        nodes={flow.nodes}
+        isStudent={props.projection.kind === 'student'}
+        skip={Boolean(viewportRestoration)}
+        containerRef={containerRef}
+      />
+      <TutorialRevealTarget containerRef={containerRef} />
       <NodeMeasurementRecovery nodes={flow.nodes} />
       <ActionMenuViewportAdjustment
         nodeId={canEdit && !model.useActionSheet ? openActionMenuNodeId : null}
@@ -1056,5 +1288,173 @@ function RoadmapGraphContents({
         gap={roadmapGridSize}
       />
     </>
+  );
+}
+
+function CompactInitialViewport({
+  nodes,
+  isStudent,
+  skip,
+  containerRef,
+}: {
+  nodes: readonly RoadmapFlowNode[];
+  isStudent: boolean;
+  skip: boolean;
+  containerRef: RefObject<HTMLDivElement | null>;
+}) {
+  const compact = useCompactCanvasLayout();
+  const initialized = useNodesInitialized();
+  const { setViewport } = useReactFlow();
+  const appliedRef = useRef(false);
+  useEffect(() => {
+    if (!compact || skip || appliedRef.current || !initialized) return;
+    const frame = requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (!container || appliedRef.current) return;
+      const viewport = compactInitialViewport(
+        nodes,
+        isStudent,
+        { width: container.clientWidth, height: container.clientHeight },
+        canvasOverlayInsets(container),
+      );
+      if (!viewport) return;
+      appliedRef.current = true;
+      void setViewport(viewport);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [compact, containerRef, initialized, isStudent, nodes, setViewport, skip]);
+  return null;
+}
+
+function TutorialRevealTarget({
+  containerRef,
+}: {
+  containerRef: RefObject<HTMLDivElement | null>;
+}) {
+  const { fitView, getZoom } = useReactFlow();
+  const compact = useCompactCanvasLayout();
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const reveal = (event: Event) => {
+      const detail = (event as CustomEvent<TutorialRevealDetail>).detail;
+      const nodeElements = detail.elements.flatMap((element) => {
+        const node = element.closest<HTMLElement>('.react-flow__node');
+        return node && container.contains(node) ? [node] : [];
+      });
+      if (!nodeElements.length) return;
+      const insets = canvasOverlayInsets(container);
+      const canvas = container.getBoundingClientRect();
+      const visible = nodeElements.every((node) => {
+        const rect = node.getBoundingClientRect();
+        return (
+          rect.left - 10 >= canvas.left + insets.left &&
+          rect.right + 10 <= canvas.right - insets.right &&
+          rect.top - 10 >= canvas.top + insets.top &&
+          rect.bottom + 10 <= canvas.bottom - insets.bottom
+        );
+      });
+      const zoom = getZoom();
+      if (visible && (!compact || zoom >= tutorialLegibleZoom)) return;
+      detail.waitUntil(
+        fitView({
+          nodes: nodeElements.map((node) => ({ id: node.dataset.id ?? '' })),
+          padding: insetPadding({
+            top: insets.top + 12,
+            right: insets.right + 12,
+            bottom: insets.bottom + 12,
+            left: insets.left + 12,
+          }),
+          minZoom: roadmapMinZoom,
+          maxZoom: Math.max(zoom, compact ? studentReadableZoom : 0.5),
+          duration: 300,
+        }).then(() => undefined),
+      );
+    };
+    container.addEventListener(TUTORIAL_REVEAL_EVENT, reveal);
+    return () => container.removeEventListener(TUTORIAL_REVEAL_EVENT, reveal);
+  }, [compact, containerRef, fitView, getZoom]);
+  return null;
+}
+
+function blockedNodeExplanation(
+  roadmap: RoadmapGraphProjection['roadmap'],
+  nodeId: string,
+): { title: string; description: string } | null {
+  const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
+  const reason = node ? studentNodeBlockReason(node) : undefined;
+  if (!node || !reason) return null;
+  if (reason === 'TEACHER_BLOCK')
+    return {
+      title: studentNodeBlockMessages.TEACHER_BLOCK,
+      description: 'El equipo docente lo liberará cuando lo decida.',
+    };
+  const pending = roadmap.dependencies.flatMap((dependency) => {
+    if (dependency.targetNodeId !== nodeId) return [];
+    const source = roadmap.nodes.find((candidate) => candidate.id === dependency.sourceNodeId);
+    return source && studentNodeStatus(source) !== 'completed' ? [source.title] : [];
+  });
+  return {
+    title: studentNodeBlockMessages.PREREQUISITE_BLOCK,
+    description: pending.length
+      ? `Para abrirlo, completa antes: ${pending.map((title) => `"${title}"`).join(', ')}.`
+      : 'Este nodo se desbloquea cuando completes sus prerrequisitos.',
+  };
+}
+
+function BlockedNodeNotice({
+  nodeId,
+  roadmap,
+  containerRef,
+  onClose,
+}: {
+  nodeId: string | null;
+  roadmap: RoadmapGraphProjection['roadmap'];
+  containerRef: RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+}) {
+  const [shown, setShown] = useState(nodeId);
+  if (nodeId && nodeId !== shown) setShown(nodeId);
+  const explanation = shown ? blockedNodeExplanation(roadmap, shown) : null;
+  const nodeTitle = roadmap.nodes.find((node) => node.id === shown)?.title;
+  return (
+    <PopoverPrimitive.Root
+      open={Boolean(nodeId && explanation)}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Positioner
+          anchor={() =>
+            shown
+              ? (containerRef.current?.querySelector(`.react-flow__node[data-id="${shown}"]`) ??
+                null)
+              : null
+          }
+          side="bottom"
+          sideOffset={14}
+          collisionPadding={16}
+          className="isolate z-50"
+        >
+          <PopoverPrimitive.Popup
+            initialFocus={false}
+            finalFocus={false}
+            className="flex w-72 max-w-[calc(100vw-2rem)] origin-(--transform-origin) gap-3 rounded-lg bg-popover p-3 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+          >
+            <LockKeyhole className="mt-0.5 size-5 shrink-0 text-graphite" aria-hidden="true" />
+            <div className="flex min-w-0 flex-col gap-1">
+              <PopoverPrimitive.Title className="font-semibold text-ink">
+                {explanation?.title}
+              </PopoverPrimitive.Title>
+              <PopoverPrimitive.Description className="text-muted-foreground">
+                {nodeTitle ? <span className="sr-only">{nodeTitle}: </span> : null}
+                {explanation?.description}
+              </PopoverPrimitive.Description>
+            </div>
+          </PopoverPrimitive.Popup>
+        </PopoverPrimitive.Positioner>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
   );
 }

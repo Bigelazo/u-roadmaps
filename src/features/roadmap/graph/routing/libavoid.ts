@@ -1,3 +1,4 @@
+import { preload } from 'react-dom';
 import type {
   AvoidConnector,
   AvoidModule,
@@ -18,6 +19,7 @@ export type RoutingResult = { routes: ReadonlyMap<string, DependencyRoute>; bloc
 export function roadmapRoutingScene(
   nodes: readonly RoadmapFlowNode[],
   edges: readonly RoadmapFlowEdge[],
+  { coarsePointer = false }: { coarsePointer?: boolean } = {},
 ): RoutingScene {
   const obstacles: RoutingObstacle[] = [];
   const visible = new Set<string>();
@@ -33,7 +35,7 @@ export function roadmapRoutingScene(
     ) => obstacles.push({ id: `${node.id}:${suffix}`, nodeId: node.id, body, ...rect });
     add('body', { x, y, width, height }, true);
     // Stable footprints include persistent corner controls, never transient menus.
-    const actionSize = node.data.canManageActions && node.data.useActionSheet ? 44 : 32;
+    const actionSize = node.data.canManageActions && coarsePointer ? 44 : 32;
     add('status', {
       x: x + width - actionSize + 10,
       y: y + height - actionSize + 10,
@@ -61,18 +63,25 @@ export function roadmapRoutingScene(
   };
 }
 
+const routingWasmUrl = '/vendor/libavoid/0.4.5/libavoid.wasm';
+
 // The module is shared, native scenes are not. A rejected load can be retried.
 let modulePromise: Promise<AvoidModule> | undefined;
 export function loadRoutingModule(): Promise<AvoidModule> {
   return (modulePromise ??= import('libavoid-js')
     .then(async ({ AvoidLib }) => {
-      await AvoidLib.load('/vendor/libavoid/0.4.5/libavoid.wasm');
+      await AvoidLib.load(routingWasmUrl);
       return AvoidLib.getInstance();
     })
     .catch((error: unknown) => {
       modulePromise = undefined;
       throw error;
     }));
+}
+
+export function prepareRoutingEngine() {
+  preload(routingWasmUrl, { as: 'fetch', crossOrigin: 'anonymous' });
+  if (typeof window !== 'undefined') loadRoutingModule().catch(() => {});
 }
 
 function compareDependencies(a: RoutingDependency, b: RoutingDependency) {

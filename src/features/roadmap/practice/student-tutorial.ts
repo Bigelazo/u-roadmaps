@@ -1,4 +1,5 @@
 import { clickElement, type TutorialStep } from '@/shared/client/tutorial/tutorial-support';
+import { compactCanvasLayoutQuery } from '@/features/roadmap/ui/compact-canvas-layout';
 import { practiceNodeIds } from './practice-roadmap';
 
 export const canvas = '.react-flow';
@@ -16,7 +17,7 @@ export const studentTutorialSteps: readonly TutorialStep[] = [
     element: canvas,
     title: 'Muévete por el mapa',
     description:
-      'Arrastra el fondo para desplazarte y usa la rueda del mouse o el gesto de pellizcar para acercar o alejar el mapa.',
+      'Arrastra el fondo para desplazarte. Para acercar o alejar el mapa, pellizca la pantalla o usa la rueda del mouse.',
   },
   {
     element: 'button[aria-label="Centrar mapa"]',
@@ -73,5 +74,9 @@ export const studentTutorialSteps: readonly TutorialStep[] = [
     description:
       'Cuando el equipo docente cambia tu roadmap, recibes avisos aquí. Al entrar a tu roadmap, un resumen de cambios te muestra lo nuevo.',
     side: 'bottom',
+    prepare: () => {
+      if (window.matchMedia(compactCanvasLayoutQuery).matches)
+        clickElement('button[aria-label="Cerrar detalle"]');
+    },
   },
 ];

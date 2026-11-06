@@ -1371,7 +1371,7 @@ describe('canvas commands', () => {
         { kind: 'hide-node', nodeId: 'integrals' },
         undefined,
       );
-      expect(canvas.session().error).toBe('No se pudo actualizar el roadmap. Puedes reintentar.');
+      expect(canvas.session().error).toBe('No se pudo actualizar el roadmap.');
     });
 
     test('reports entering the Canvas preview once per entry, not on every preview reload', async () => {

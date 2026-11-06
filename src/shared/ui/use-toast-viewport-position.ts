@@ -61,6 +61,9 @@ export function useToastViewportPosition() {
           ? Math.max(20, window.innerWidth - sidebarRect.left + 20)
           : 20;
       let bottom = visible ? Math.max(20, window.innerHeight - rect.bottom) : 20;
+      if (sidebar && sidebarRect && sidebarRect.left <= 1 && sidebarRect.height > 0) {
+        bottom = Math.max(bottom, sidebar.offsetHeight + 12);
+      }
       if (visible && obstacle && !obstacle.hidden) {
         const menu = obstacle.getBoundingClientRect();
         if (menu.width && menu.height) {

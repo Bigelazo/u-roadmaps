@@ -31,6 +31,8 @@ const {
 
 vi.mock('@/features/roadmap/graph/routing/DependencyRouting', () => ({
   DependencyRouting: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useDependencyRoute: () => undefined,
+  useRoutingEngineStatus: () => 'routed',
 }));
 
 vi.mock('@xyflow/react', () => ({
@@ -596,7 +598,7 @@ test('centers the roadmap from the canvas control', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Centrar mapa' }));
 
-  expect(fitViewMock).toHaveBeenCalledWith({ padding: 0.28 });
+  expect(fitViewMock).toHaveBeenCalledWith({ padding: 0.28, minZoom: 0.2 });
 });
 
 test('offers toolbar content a snapped open position without exposing viewport geometry', async () => {
@@ -927,3 +929,71 @@ test('disables automatic ordering until the Roadmap has enough Nodes', async () 
 
 beforeEach(() => mockViewport(1280));
 afterEach(() => vi.unstubAllGlobals());
+
+function mockCompactTouchViewport() {
+  vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
+    matches: query === '(max-width: 1023px)' || query === '(pointer: coarse)',
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: () => false,
+  }));
+}
+
+test('explains a blocked Node on tap with its pending prerequisites instead of selecting it', async () => {
+  const user = userEvent.setup();
+  const onSelectNode = vi.fn();
+  const blockedRoadmap: StudentRoadmapDto = {
+    ...studentRoadmap,
+    nodes: [
+      {
+        id: 'node-1',
+        title: 'Límites',
+        positionX: 0,
+        positionY: 0,
+        nodeTypeId: 'content',
+        access: { status: 'BLOCKED', reason: 'PREREQUISITE_BLOCK' },
+      },
+      studentRoadmap.nodes[1],
+    ],
+    dependencies: [
+      {
+        id: 'dependency-1',
+        sourceNodeId: 'node-2',
+        targetNodeId: 'node-1',
+        sourceHandle: 'bottom',
+        targetHandle: 'top',
+      },
+    ],
+  };
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'student', roadmap: blockedRoadmap }}
+      onSelectNode={onSelectNode}
+    />,
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Seleccionar nodo' }));
+
+  expect(onSelectNode).not.toHaveBeenCalled();
+  const notice = await screen.findByRole('dialog', { name: 'Completa los prerrequisitos' });
+  expect(notice.textContent).toContain('Para abrirlo, completa antes: "Derivadas".');
+});
+
+test('keeps compact canvas controls in one row and centers the map clear of the overlays', async () => {
+  mockCompactTouchViewport();
+  const user = userEvent.setup();
+  renderGraph({ editing: {} });
+
+  expect(screen.getByRole('button', { name: 'Ordenar horizontalmente' }).textContent).toBe('');
+  await user.click(screen.getByRole('button', { name: 'Centrar mapa' }));
+
+  expect(fitViewMock).toHaveBeenCalledWith({
+    padding: { top: '16px', right: '16px', bottom: '16px', left: '16px' },
+    minZoom: 0.2,
+    maxZoom: 1,
+  });
+});

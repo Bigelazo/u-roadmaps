@@ -27,9 +27,9 @@ Object.assign(process.env, {
 });
 export default defineConfig({
   testDir: './tests/e2e',
-  // Removes test-owned data left by interrupted runs (ADR-0013).
+  // Removes test-owned data left by interrupted runs.
   globalSetup: './tests/e2e/global-setup.ts',
-  // Per-test data isolation (ADR-0013); worker count measured in issue #168.
+  // Per-test data isolation; worker count measured in issue #168.
   fullyParallel: true,
   workers: 2,
   forbidOnly: Boolean(process.env.CI),

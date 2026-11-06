@@ -15,7 +15,7 @@ import {
 } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { CircleAlert, CircleHelp, Eye, History, LogOut, Users } from 'lucide-react';
+import { ArrowLeft, CircleAlert, CircleHelp, Eye, History, LogOut, Users } from 'lucide-react';
 import { courseParticipantsUrl, versionHistoryUrl } from '@/features/roadmap/client';
 import { CanvasPreviewToolbar } from '@/features/roadmap/canvas/CanvasPreviewToolbar';
 import { deriveCanvasMode } from '@/features/roadmap/canvas/mode';
@@ -50,7 +50,7 @@ import type {
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
-import { Alert, AlertDescription, AlertTitle } from '@/shared/ui/alert';
+import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { Spinner } from '@/shared/ui/spinner';
@@ -60,6 +60,7 @@ import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
+import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import {
   TUTORIAL_EXIT_ATTRIBUTE,
   TUTORIAL_TRIGGER_ATTRIBUTE,
@@ -84,7 +85,7 @@ function RoadmapCanvasLoading({ isCanvasPreview = false }: { isCanvasPreview?: b
     <section
       data-page-width="full"
       aria-busy="true"
-      className="roadmap-canvas-loading flex min-h-0 w-full flex-1 bg-background lg:h-full"
+      className="roadmap-canvas-loading flex min-h-0 w-full flex-1 bg-background"
     >
       <Empty role="status" aria-label={title} className="rounded-none">
         <EmptyHeader>
@@ -204,7 +205,6 @@ function useRoadmapCanvasController({ input }: Props) {
     roadmap,
     error,
     dismissError,
-    retryRefresh,
     accessLost,
     canvasCommands,
     canvasPreviewRoadmap,
@@ -437,7 +437,6 @@ function useRoadmapCanvasController({ input }: Props) {
     guardEditorDraft,
     roadmap,
     error,
-    retryRefresh,
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
@@ -474,7 +473,6 @@ export function RoadmapCanvasView({ input }: Props) {
     selectedNodeId,
     roadmap,
     error,
-    retryRefresh,
     accessLost,
     canvasCommands,
     displayedRoadmap,
@@ -486,16 +484,46 @@ export function RoadmapCanvasView({ input }: Props) {
   }
   if (error && !roadmap) {
     return (
-      <Alert variant="destructive" className="m-4 max-w-2xl">
-        <CircleAlert aria-hidden="true" />
-        <AlertTitle>Error al cargar el roadmap</AlertTitle>
-        <AlertDescription>
-          {error}
-          <Button type="button" onClick={retryRefresh}>
-            Reintentar actualización
-          </Button>
-        </AlertDescription>
-      </Alert>
+      <section
+        data-page-width="full"
+        aria-labelledby="roadmap-load-error-title"
+        className="flex min-h-full w-full flex-1 bg-cloud text-foreground"
+      >
+        <Empty className="gap-6 rounded-none px-6 py-16">
+          <EmptyHeader className="max-w-lg gap-4">
+            <EmptyMedia className="text-destructive">
+              <CircleAlert aria-hidden="true" className="size-10" />
+            </EmptyMedia>
+            <h1
+              id="roadmap-load-error-title"
+              className="font-heading text-2xl font-semibold tracking-tight text-balance sm:text-3xl"
+            >
+              No pudimos abrir el roadmap
+            </h1>
+            <p className="max-w-full text-base font-medium wrap-anywhere">
+              {input.courseOffering.title}
+            </p>
+            <div
+              role="alert"
+              className="flex max-w-full flex-col gap-2 text-base text-muted-foreground"
+            >
+              <p className="wrap-anywhere">{error}</p>
+              <p>
+                {input.practice?.exitHref
+                  ? 'Vuelve a la práctica para continuar.'
+                  : 'Vuelve a tus cursos para abrir el roadmap nuevamente.'}
+              </p>
+            </div>
+          </EmptyHeader>
+          <Link
+            href={input.practice?.exitHref ?? '/academic-overview'}
+            className={buttonVariants()}
+          >
+            <ArrowLeft data-icon="inline-start" />
+            {input.practice?.exitHref ? 'Volver a la práctica' : 'Volver a mis cursos'}
+          </Link>
+        </Empty>
+      </section>
     );
   }
   if (!roadmap) {
@@ -516,7 +544,7 @@ export function RoadmapCanvasView({ input }: Props) {
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
     <SidebarProvider
-      className="min-h-0 lg:h-full"
+      className="min-h-0 flex-1"
       style={
         {
           '--sidebar-width': `${activePanelWidth}px`,
@@ -526,7 +554,7 @@ export function RoadmapCanvasView({ input }: Props) {
       <section
         data-page-width="full"
         className={cn(
-          'relative box-border grid min-h-[calc(100dvh-4rem)] min-w-0 flex-1 overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:h-full lg:min-h-0 lg:grid-rows-[minmax(0,1fr)]',
+          'relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)]',
           isSidePanelOpen ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]' : 'lg:grid-cols-1',
         )}
       >
@@ -534,14 +562,18 @@ export function RoadmapCanvasView({ input }: Props) {
           ref={canvasFocusRef}
           tabIndex={-1}
           aria-label="Lienzo del roadmap"
-          className="relative min-h-[min(540px,calc(100dvh-4rem-2px))] bg-background lg:min-h-0"
+          className="relative min-h-0 bg-background"
         >
           {input.practice?.exitHref ? (
             <Link
               {...{ [TUTORIAL_EXIT_ATTRIBUTE]: '' }}
               className={buttonVariants({
                 variant: 'outline',
-                className: 'absolute top-4 right-4 z-20 sm:top-6 sm:right-6',
+                className: cn(
+                  'absolute top-4 right-4 z-10 sm:top-6 sm:right-6',
+                  model.isCanvasPreview &&
+                    'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
+                ),
               })}
               href={input.practice.exitHref}
               onClick={markTutorialClosingPopover}
@@ -565,11 +597,6 @@ export function RoadmapCanvasView({ input }: Props) {
               graphProjection={graphProjection}
             />
           </NodeChangeCountsProvider>
-          {error ? (
-            <Button className="absolute top-24 right-5" type="button" onClick={retryRefresh}>
-              Reintentar actualización
-            </Button>
-          ) : null}
         </div>
         <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
       </section>
@@ -650,7 +677,6 @@ function RoadmapCanvasPanels({
           isOpen={canvasMode.isEditing && isEditorOpen}
           panelWidth={editorPanel.width}
           onPanelWidthChange={editorPanel.setWidth}
-          expandRequest={resourceComposerCommand?.id}
         >
           <NodeEditor
             ref={nodeEditorRef}
@@ -819,22 +845,38 @@ function RoadmapCanvasGraph({
           ? () => (
               <>
                 {canPreviewCanvas && !input.practice ? (
-                  <Link
-                    className={cn(buttonVariants({ variant: 'outline' }))}
-                    href={versionHistoryUrl(courseCode)}
-                  >
-                    <History data-icon="inline-start" />
-                    Historial de versiones
-                  </Link>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Link
+                          aria-label="Historial de versiones"
+                          className={cn(buttonVariants({ variant: 'outline' }))}
+                          href={versionHistoryUrl(courseCode)}
+                        >
+                          <History data-icon="inline-start" />
+                          Historial de versiones
+                        </Link>
+                      }
+                    />
+                    <TooltipContent>Historial de versiones</TooltipContent>
+                  </Tooltip>
                 ) : null}
                 {canPreviewCanvas && !input.practice ? (
-                  <Link
-                    className={cn(buttonVariants({ variant: 'outline' }))}
-                    href={courseParticipantsUrl({ courseCode, year, semester })}
-                  >
-                    <Users data-icon="inline-start" />
-                    Integrantes
-                  </Link>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Link
+                          aria-label="Integrantes"
+                          className={cn(buttonVariants({ variant: 'outline' }))}
+                          href={courseParticipantsUrl({ courseCode, year, semester })}
+                        >
+                          <Users data-icon="inline-start" />
+                          Integrantes
+                        </Link>
+                      }
+                    />
+                    <TooltipContent>Integrantes</TooltipContent>
+                  </Tooltip>
                 ) : null}
                 {canEnterCanvasPreview ? (
                   <Tooltip>
@@ -962,9 +1004,11 @@ function RoadmapCanvasHeader({
   ReturnType<typeof useRoadmapCanvasController>,
   'title' | 'courseCode' | 'year' | 'semester' | 'isCanvasPreview'
 > & { isEditing: boolean }) {
+  const isCompact = useCompactCanvasLayout();
+  const hidesBadgeRow = isCanvasPreview && isCompact;
   return (
     <header>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
         {isCanvasPreview ? (
           <Badge
             className="border-orange-300 text-secondary-foreground"
@@ -978,7 +1022,12 @@ function RoadmapCanvasHeader({
           <Badge variant="secondary">Modo edición</Badge>
         ) : null}
       </div>
-      <h1 className="mt-2 font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]">
+      <h1
+        className={cn(
+          'font-heading text-[23px] leading-none font-semibold tracking-[-0.045em] text-balance sm:text-[30px]',
+          !hidesBadgeRow && 'mt-2',
+        )}
+      >
         {title}
       </h1>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">

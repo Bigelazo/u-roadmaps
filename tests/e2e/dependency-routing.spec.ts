@@ -110,18 +110,23 @@ test('dependencies avoid a third Node throughout dragging, persist after reload,
   await page.screenshot({ path: testInfo.outputPath('routing-mobile.png') });
 });
 
-test('a failed WASM load offers retry without drawing an unsafe native dependency', async ({
+test('a failed WASM load retries once, then offers retry without drawing an unsafe native dependency', async ({
   page,
   course,
   teacherApi: api,
 }) => {
   const roadmap = await (await api.get(course.apiPath())).json();
   await authenticateAs(page.context(), course.users.teacher.id);
-  await page.route('**/vendor/libavoid/0.4.5/libavoid.wasm', (route) => route.abort());
+  let blockedRequests = 0;
+  await page.route('**/vendor/libavoid/0.4.5/libavoid.wasm', (route) => {
+    blockedRequests += 1;
+    return route.abort();
+  });
   await page.goto(course.pagePath());
   await expect(
-    page.getByRole('alert').filter({ hasText: 'No pudimos preparar el mapa.' }),
+    page.getByRole('alert').filter({ hasText: 'No pudimos trazar las dependencias.' }),
   ).toBeVisible();
+  expect(blockedRequests).toBeGreaterThanOrEqual(2);
   await expect(page.locator('.react-flow__edge-path')).toHaveCount(0);
   await page.unroute('**/vendor/libavoid/0.4.5/libavoid.wasm');
   await page.getByRole('button', { name: 'Reintentar', exact: true }).click();

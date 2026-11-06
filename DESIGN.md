@@ -194,7 +194,7 @@ Route traces may simplify or disappear on mobile when they stop communicating us
 
 Meet WCAG AA contrast for text and interactive states. Preserve visible keyboard focus, semantic heading order, accessible names, and browser zoom. Never rely on color, opacity, or motion alone to communicate state.
 
-Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Choreographed motion outside shadcn primitives uses Motion (`motion/react`, ADR-0027); motion is never reduced for `prefers-reduced-motion` (ADR-0022). Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation.
+Motion may reinforce feedback, spatial continuity, entry hierarchy, state transitions, and occasional moments of delight. Choreographed motion outside shadcn primitives uses Motion (`motion/react`); motion is never reduced for `prefers-reduced-motion`. Keep it purposeful and restrained: do not animate every element by default, add continuous ambient loops, or delay frequent tasks for presentation.
 
 ## Reference Implementation
 

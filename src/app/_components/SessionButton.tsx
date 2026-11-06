@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { InstitutionalLoginForm } from './InstitutionalLoginForm';
 import { ConfirmationDialog, type ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
@@ -26,12 +27,14 @@ export default function SessionButton({ isAuthenticated }: { isAuthenticated: bo
       <Button
         type="button"
         variant="outline"
+        className="max-sm:w-11 max-sm:px-0"
         onClick={() => {
           setPendingActionId(undefined);
           setConfirmation(logoutConfirmation);
         }}
       >
-        Cerrar sesión
+        <LogOut aria-hidden="true" className="sm:hidden" />
+        <span className="max-sm:sr-only">Cerrar sesión</span>
       </Button>
       <form ref={logoutFormRef} action="/api/logout" method="post" className="hidden" />
       <ConfirmationDialog

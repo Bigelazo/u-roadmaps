@@ -723,7 +723,6 @@ test('keeps the two-scope unlock confirmation within the dialog at every viewpor
 
   const editor = page.locator('#roadmap-editor-panel');
   await expect(editor).toBeVisible();
-  await editor.locator('summary').click();
   await editor.getByRole('button', { name: 'Desbloquear', exact: true }).click();
 
   const dialog = page.getByRole('alertdialog', { name: /^¿Desbloquear “/ });

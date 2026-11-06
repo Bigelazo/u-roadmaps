@@ -29,6 +29,7 @@ import styles from './NodeActionMenu.module.css';
 import { cn } from 'cn';
 import { formatBadgeCount } from '@/shared/badge-count';
 import { useNodeChangeCount } from '@/features/notifications/client';
+import { useCoarsePointer } from '@/features/roadmap/ui/compact-canvas-layout';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> &
@@ -276,7 +277,7 @@ function NodeActionTrigger({
       aria-expanded={isOpen}
       aria-haspopup={useActionSheet ? 'dialog' : undefined}
       aria-controls={`node-actions-${nodeId}`}
-      className={cn('nodrag nopan', styles.actionTrigger, useActionSheet && styles.touchTrigger)}
+      className={cn('nodrag nopan', styles.actionTrigger)}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
@@ -315,13 +316,11 @@ function NodeActionMenu({
   onAction,
 }: NodeActionCallbacks & NodeActionTriggerProps) {
   const actions = nodeMenuActions(nodeId, hidden, teacherBlocked, onAction);
+  const coarsePointer = useCoarsePointer();
 
   return (
     <div
-      className={cn(
-        'absolute right-[-10px] bottom-[-10px] z-10',
-        !useActionSheet && 'hidden lg:block',
-      )}
+      className={cn('absolute right-[-10px] bottom-[-10px] z-10', coarsePointer && styles.coarse)}
     >
       {isOpen && !useActionSheet ? (
         <div

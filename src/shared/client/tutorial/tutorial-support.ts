@@ -52,3 +52,35 @@ export function markTutorialClosingPopover() {
     // Without storage the origin simply shows no closing popover.
   }
 }
+
+export const TUTORIAL_REVEAL_EVENT = 'u-roadmaps:tutorial-reveal';
+
+export type TutorialRevealDetail = Readonly<{
+  elements: readonly Element[];
+  waitUntil: (movement: Promise<void>) => void;
+}>;
+
+export async function revealTutorialTarget(elements: readonly Element[]) {
+  const movements: Promise<void>[] = [];
+  const origin = elements[0];
+  if (!origin) return;
+  origin.dispatchEvent(
+    new CustomEvent<TutorialRevealDetail>(TUTORIAL_REVEAL_EVENT, {
+      bubbles: true,
+      detail: { elements, waitUntil: (movement) => movements.push(movement) },
+    }),
+  );
+  await Promise.all(movements.map((movement) => movement.catch(() => undefined)));
+}
+
+export async function waitForStableElement(element: TutorialStep['element'], timeoutMs = 800) {
+  const start = performance.now();
+  let previous = '';
+  while (performance.now() - start < timeoutMs) {
+    const rect = resolveElement(element)?.getBoundingClientRect();
+    const current = rect ? `${rect.left},${rect.top},${rect.width},${rect.height}` : '';
+    if (current && current === previous) return;
+    previous = current;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}

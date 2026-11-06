@@ -17,6 +17,7 @@ import {
 } from '@/features/roadmap/graph/dependency-animation-schedule';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { DependencyPath } from '@/features/roadmap/graph/DependencyPath';
+import { useRoutingEngineStatus } from '@/features/roadmap/graph/routing/DependencyRouting';
 
 export type DependencyAnimationControls = { finish: () => void };
 
@@ -188,10 +189,12 @@ export function DependencyAnimationProvider({
 /** Render inside ReactFlow so paths are mounted and Nodes measured before entry playback. */
 export function DependencyAnimationReady() {
   const ready = useNodesInitialized();
+  const engine = useRoutingEngineStatus();
   const playback = useContext(DependencyAnimationContext);
   useEffect(() => {
-    if (ready) playback?.start();
-  }, [playback, ready]);
+    if (engine === 'unavailable') playback?.finish();
+    else if (ready && engine === 'routed') playback?.start();
+  }, [engine, playback, ready]);
   return null;
 }
 

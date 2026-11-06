@@ -1,8 +1,9 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { nodeMenuActions } from '@/features/roadmap/graph/node-menu-actions';
 import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
+import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import { Button } from '@/shared/ui/button';
 import {
   Sheet,
@@ -13,20 +14,8 @@ import {
   SheetTitle,
 } from '@/shared/ui/sheet';
 
-const smallTouchQuery = '(max-width: 1023px) and (pointer: coarse)';
-
-function subscribe(onChange: () => void) {
-  const media = window.matchMedia(smallTouchQuery);
-  media.addEventListener('change', onChange);
-  return () => media.removeEventListener('change', onChange);
-}
-
-function getSnapshot() {
-  return window.matchMedia(smallTouchQuery).matches;
-}
-
 export function useNodeActionSheet() {
-  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+  return useCompactCanvasLayout();
 }
 
 export function NodeActionSheet({

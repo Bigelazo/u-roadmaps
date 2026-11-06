@@ -244,14 +244,20 @@ describe('RoadmapCanvasSession', () => {
     expect(await screen.findByRole('button', { name: 'Cambio remoto' })).toBeTruthy();
   });
 
-  test('students can retry an initial HTTP failure without enabling live reloads', async () => {
-    const user = userEvent.setup();
+  test('an initial load failure offers a way back to courses', async () => {
     const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
     vi.spyOn(persistence, 'load').mockRejectedValueOnce(new Error('Fallo inicial'));
     renderSession(persistence, studentInput());
-    await screen.findByText('Fallo inicial');
-    await user.click(screen.getByRole('button', { name: 'Reintentar actualización' }));
-    expect(await screen.findByRole('button', { name: 'Límites' })).toBeTruthy();
+
+    expect(
+      await screen.findByRole('heading', { name: 'No pudimos abrir el roadmap' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Fallo inicial');
+    expect(screen.getByText('Programación I')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Volver a mis cursos' }).getAttribute('href')).toBe(
+      '/academic-overview',
+    );
+    expect(queryToast('Fallo inicial')).toBeNull();
   });
 
   test.each([
@@ -480,6 +486,6 @@ test('current teaching sessions recover missed changes and retain the last proje
   act(() => window.dispatchEvent(new Event('online')));
   await findToast('Fallo transitorio');
   expect(screen.getByRole('button', { name: 'Cambio remoto' })).toBeTruthy();
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar actualización' }));
+  act(() => window.dispatchEvent(new Event('online')));
   await waitFor(() => expect(queryToast('Fallo transitorio')).toBeNull());
 });

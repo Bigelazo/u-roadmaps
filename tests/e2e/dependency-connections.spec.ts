@@ -9,6 +9,18 @@ async function bounds(locator: Locator) {
   return box;
 }
 
+async function expectSettled(locator: Locator) {
+  let previous: Awaited<ReturnType<typeof bounds>> | undefined;
+  await expect
+    .poll(async () => {
+      const current = await bounds(locator);
+      const settled = previous?.width === current.width && previous.height === current.height;
+      previous = current;
+      return settled;
+    })
+    .toBe(true);
+}
+
 async function center(locator: Locator) {
   const box = await bounds(locator);
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -55,6 +67,7 @@ test('the exterior perimeter creates a saved Dependency by dropping on the targe
   await expect(page.locator('.react-flow__edge')).toHaveCount(0);
 
   const card = source.getByTestId('roadmap-card');
+  await expectSettled(card);
   const handle = source.locator('.react-flow__handle-right');
   await expect(handle).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(handle).toHaveCSS('opacity', '0');
