@@ -149,17 +149,88 @@ body {
   border-radius: 8px;
 }
 
-.react-flow__handle {
-  width: 8px;
-  height: 8px;
-  background-color: var(--primary) !important;
-  border: 2px solid var(--card) !important;
+/* Tutorial portal rules must not turn a decorative preview into a drop target. */
+.react-flow__connectionline,
+.react-flow__connectionline *,
+.roadmap-connection-preview,
+.roadmap-connection-preview * {
+  pointer-events: none !important;
+}
+
+.react-flow__handle.roadmap-node-handle {
+  --roadmap-connection-depth: 18px;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none !important;
+  cursor: crosshair;
+}
+
+.roadmap-node-handle.react-flow__handle-top,
+.roadmap-node-handle.react-flow__handle-bottom {
+  left: 50%;
+  width: calc(100% + var(--roadmap-connection-depth) * 2 + 4px);
+  height: var(--roadmap-connection-depth);
+}
+
+.roadmap-node-handle.react-flow__handle-left,
+.roadmap-node-handle.react-flow__handle-right {
+  top: 50%;
+  width: var(--roadmap-connection-depth);
+  height: calc(100% + 4px);
+}
+
+.roadmap-node-handle.react-flow__handle-top {
+  top: -2px;
+  transform: translate(-50%, -100%);
+}
+
+.roadmap-node-handle.react-flow__handle-bottom {
+  bottom: -2px;
+  transform: translate(-50%, 100%);
+}
+
+.roadmap-node-handle.react-flow__handle-left {
+  left: -2px;
+  transform: translate(-100%, -50%);
+}
+
+.roadmap-node-handle.react-flow__handle-right {
+  right: -2px;
+  transform: translate(100%, -50%);
+}
+
+.react-flow__node.roadmap-node--connection-target > [data-slot='roadmap-card'] {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
 }
 
 [data-slot='roadmap-card'] {
   --shadow-roadmap-node-hover:
     0 0 0 4px color-mix(in srgb, var(--roadmap-node-color, var(--primary)) 16%, transparent),
     0 9px 18px color-mix(in srgb, var(--roadmap-node-color, var(--primary)) 18%, transparent);
+  --shadow-roadmap-node-connection:
+    0 3px 22px 6px color-mix(in srgb, var(--roadmap-node-color, var(--primary)) 18%, transparent),
+    0 10px 28px color-mix(in srgb, var(--roadmap-node-color, var(--primary)) 14%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-slot='roadmap-card'][data-connection-enabled='true'][data-connection-hovered='true']
+    > .react-flow__handle.roadmap-node-handle {
+    pointer-events: auto !important;
+  }
+
+  [data-slot='roadmap-card'][data-connection-enabled='true'][data-connection-hovered='true'] {
+    box-shadow: var(--shadow-roadmap-node-connection);
+  }
+}
+
+.react-flow__node.roadmap-node--arrow-source > [data-slot='roadmap-card'] {
+  box-shadow: var(--shadow-roadmap-node-connection);
 }
 
 .react-flow__node-roadmap:focus-visible > [data-slot='roadmap-card'] {

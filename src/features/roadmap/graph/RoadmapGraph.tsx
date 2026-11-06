@@ -54,6 +54,12 @@ import {
   DependencyAnimationReady,
   type DependencyAnimationControls,
 } from '@/features/roadmap/graph/DependencyAnimation';
+import { useWholeNodeConnection } from '@/features/roadmap/graph/use-whole-node-connection';
+import {
+  ConnectionPreview,
+  ConnectionTargetContext,
+  TouchConnectionPreview,
+} from '@/features/roadmap/graph/ConnectionPreview';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
@@ -768,8 +774,45 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
   const isNavigationEnabled = !isActionMenuActive;
   const canInteract = canEdit && isNavigationEnabled;
   const dependencyAnimationRef = useRef<DependencyAnimationControls | null>(null);
+  const connection = useWholeNodeConnection({
+    nodes: flow.nodes,
+    edges: flow.edges,
+    enabled: canInteract,
+    onConnect: connectNodes,
+  });
+  const connectionNodes = useMemo(
+    () =>
+      flow.nodes.map((node) => ({
+        ...node,
+        className:
+          node.id === connection.arrowSourceId
+            ? 'roadmap-node--arrow-source'
+            : node.id === connection.targetId
+              ? 'roadmap-node--connection-target'
+              : undefined,
+      })),
+    [flow.nodes, connection.targetId, connection.arrowSourceId],
+  );
+  const targetNode = flow.nodes.find((node) => node.id === connection.targetId);
+  const targetRect = targetNode
+    ? {
+        id: targetNode.id,
+        ...targetNode.position,
+        ...roadmapNodeSizeForTitle(targetNode.data.title),
+      }
+    : null;
+  const arrowSourceNode = flow.nodes.find((node) => node.id === connection.arrowSourceId);
+  const arrowSourceRect = arrowSourceNode
+    ? { ...arrowSourceNode.position, ...roadmapNodeSizeForTitle(arrowSourceNode.data.title) }
+    : null;
 
   const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' && connection.arrowSourceId) {
+      event.preventDefault();
+      event.stopPropagation();
+      connection.cancelArrowMode();
+      return;
+    }
     if (event.key === 'Escape' && isActionMenuActive) {
       event.preventDefault();
       event.stopPropagation();
@@ -827,87 +870,139 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
 
   return (
     <>
-      <div ref={containerRef} className="relative h-full" onKeyDownCapture={handleKeyDownCapture}>
+      <div
+        ref={containerRef}
+        className="relative h-full"
+        onKeyDownCapture={handleKeyDownCapture}
+        onMouseMoveCapture={connection.onPointerMove}
+        onTouchStartCapture={connection.onTouchStartCapture}
+        onTouchMoveCapture={connection.onPointerMove}
+        onTouchEndCapture={connection.onTouchEndCapture}
+        onTouchCancelCapture={connection.onTouchCancelCapture}
+        onContextMenuCapture={connection.onContextMenuCapture}
+        onClickCapture={connection.onClickCapture}
+      >
         <DependencyAnimationProvider
           edges={flow.edges}
           nodeIds={flow.nodes.map((node) => node.id)}
           controlsRef={dependencyAnimationRef}
         >
           <DependencyRouting nodes={flow.nodes} edges={flow.edges}>
-            <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
-              className="h-full"
-              nodes={flow.nodes}
-              edges={flow.edges}
-              nodeTypes={roadmapNodeTypes}
-              edgeTypes={roadmapEdgeTypes}
-              nodesDraggable={canInteract}
-              nodesConnectable={canInteract}
-              snapToGrid
-              snapGrid={[roadmapGridSize, roadmapGridSize]}
-              connectionMode={ConnectionMode.Loose}
-              nodesFocusable
-              nodeDragThreshold={5}
-              nodeClickDistance={6}
-              elementsSelectable={isNavigationEnabled}
-              panOnDrag={isNavigationEnabled}
-              zoomOnScroll={isNavigationEnabled}
-              zoomOnPinch={isNavigationEnabled}
-              zoomOnDoubleClick={isNavigationEnabled}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
-                setFlow((current) => ({
-                  ...current,
-                  edges: applyEdgeChanges(
-                    changes.filter((change) => change.type !== 'remove'),
-                    current.edges,
-                  ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
-                }))
-              }
-              onNodeClick={(_event, node) => {
-                if (node.data.blockReason) return;
-                onSelectNode(node.id);
-              }}
-              onPaneClick={() => {
-                if (isActionMenuActive) closeActionMenu(false);
-              }}
-              onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
-              onEdgeMouseLeave={
-                canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
-              }
-              onNodeDragStop={
-                canInteract
-                  ? (_event, node) => {
-                      applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
-                    }
-                  : undefined
-              }
-              onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
-              onConnect={canInteract ? connectNodes : undefined}
-              onEdgesDelete={
-                canInteract
-                  ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
-                  : undefined
-              }
-              onMoveEnd={(event, viewport) => {
-                if (!event) return;
-                onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-              }}
-              fitView
-              fitViewOptions={roadmapFitViewOptions}
-              proOptions={{ hideAttribution: true }}
-            >
-              <RoadmapGraphContents
-                props={props}
-                model={model}
-                onAutoLayout={() => {
-                  dependencyAnimationRef.current?.finish();
-                  model.proposeAutoLayout();
+            <ConnectionTargetContext value={targetRect}>
+              <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
+                className="h-full"
+                nodes={connectionNodes}
+                edges={flow.edges}
+                nodeTypes={roadmapNodeTypes}
+                edgeTypes={roadmapEdgeTypes}
+                nodesDraggable={canInteract && !connection.arrowSourceId}
+                nodesConnectable={canInteract}
+                snapToGrid
+                snapGrid={[roadmapGridSize, roadmapGridSize]}
+                connectionMode={ConnectionMode.Loose}
+                connectOnClick={false}
+                connectionLineComponent={ConnectionPreview}
+                isValidConnection={connection.isValidConnection}
+                nodesFocusable
+                nodeDragThreshold={5}
+                nodeClickDistance={6}
+                elementsSelectable={isNavigationEnabled}
+                panOnDrag={isNavigationEnabled && !connection.arrowSourceId}
+                zoomOnScroll={isNavigationEnabled}
+                zoomOnPinch={isNavigationEnabled}
+                zoomOnDoubleClick={isNavigationEnabled}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
+                  setFlow((current) => ({
+                    ...current,
+                    edges: applyEdgeChanges(
+                      changes.filter((change) => change.type !== 'remove'),
+                      current.edges,
+                    ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
+                  }))
+                }
+                onNodeClick={(_event, node) => {
+                  if (node.data.blockReason) return;
+                  onSelectNode(node.id);
                 }}
-              />
-              <DependencyAnimationReady />
-            </ReactFlow>
+                onPaneClick={() => {
+                  if (isActionMenuActive) closeActionMenu(false);
+                }}
+                onEdgeMouseEnter={
+                  canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined
+                }
+                onEdgeMouseLeave={
+                  canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
+                }
+                onNodeDragStop={
+                  canInteract
+                    ? (_event, node) => {
+                        applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
+                      }
+                    : undefined
+                }
+                onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
+                onConnectStart={canInteract ? connection.onConnectStart : undefined}
+                onConnectEnd={canInteract ? connection.onConnectEnd : undefined}
+                onConnect={canInteract ? connection.onConnect : undefined}
+                onEdgesDelete={
+                  canInteract
+                    ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
+                    : undefined
+                }
+                onMoveEnd={(event, viewport) => {
+                  if (!event) return;
+                  onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+                }}
+                fitView
+                fitViewOptions={roadmapFitViewOptions}
+                proOptions={{ hideAttribution: true }}
+              >
+                <RoadmapGraphContents
+                  props={props}
+                  model={model}
+                  onAutoLayout={() => {
+                    dependencyAnimationRef.current?.finish();
+                    model.proposeAutoLayout();
+                  }}
+                />
+                <DependencyAnimationReady />
+                {arrowSourceRect ? (
+                  <TouchConnectionPreview
+                    source={arrowSourceRect}
+                    sourceId={connection.arrowSourceId!}
+                    targetId={connection.targetId}
+                    target={targetRect}
+                    pointer={connection.arrowPointer}
+                  />
+                ) : null}
+              </ReactFlow>
+            </ConnectionTargetContext>
           </DependencyRouting>
         </DependencyAnimationProvider>
+        {connection.arrowSourceId ? (
+          <div
+            data-arrow-mode-controls
+            className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center"
+          >
+            <div
+              role="status"
+              aria-live="polite"
+              className="pointer-events-auto flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
+            >
+              <span>{connection.arrowMessage}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-label="Cancelar modo flecha"
+                onClick={connection.cancelArrowMode}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
       {model.useActionSheet ? (
         <NodeActionSheet

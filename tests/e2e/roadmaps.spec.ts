@@ -4,37 +4,10 @@ import { expect, test, type E2EUser } from './fixtures';
 import { authenticateAs, ok } from './helpers';
 import { createDependency } from './create-node';
 import { changeTeacherBlock, connectNodes } from './previewed-writes';
+import { panRoadmapNodeIntoView } from './pan-roadmap';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
-}
-
-async function panRoadmapNodeIntoView(page: Page, nodeId: string) {
-  const pane = page.locator('.react-flow__pane');
-  const node = page.locator(`.react-flow__node[data-id="${nodeId}"]`);
-
-  await expect(node).toBeAttached();
-  await expect(pane).toBeVisible();
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const [nodeBox, paneBox] = await Promise.all([node.boundingBox(), pane.boundingBox()]);
-    if (!nodeBox || !paneBox) throw new Error('No se pudo ubicar el nodo dentro del lienzo.');
-
-    const paneCenter = { x: paneBox.x + paneBox.width / 2, y: paneBox.y + paneBox.height / 2 };
-    const nodeCenter = { x: nodeBox.x + nodeBox.width / 2, y: nodeBox.y + nodeBox.height / 2 };
-    const offsetX = paneCenter.x - nodeCenter.x;
-    const offsetY = paneCenter.y - nodeCenter.y;
-    if (Math.abs(offsetX) < 1 && Math.abs(offsetY) < 1) break;
-
-    await page.mouse.move(paneCenter.x, paneCenter.y);
-    await page.mouse.down();
-    await page.mouse.move(
-      paneCenter.x + Math.max(-100, Math.min(100, offsetX)),
-      paneCenter.y + Math.max(-100, Math.min(100, offsetY)),
-      { steps: 4 },
-    );
-    await page.mouse.up();
-  }
-  await expect(node).toBeInViewport();
 }
 
 async function createNodeFromCanvas(page: Page, title: string) {

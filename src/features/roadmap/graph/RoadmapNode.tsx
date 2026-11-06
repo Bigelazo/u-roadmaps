@@ -10,7 +10,14 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
@@ -455,11 +462,51 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       wrapper.style.visibility = '';
     };
   }, [entryProgress]);
+  const [connectionHovered, setConnectionHovered] = useState(false);
   const size = roadmapNodeSizeForTitle(data.title);
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
-  const canConnect = editing && Boolean(data.canManageActions);
+  const canConnect =
+    editing &&
+    Boolean(data.canManageActions) &&
+    !hidden &&
+    !data.isActionMenuOpen &&
+    !data.isActionMenuClosing;
+  const connectionHoverActive = canConnect && connectionHovered;
+  useEffect(() => {
+    if (!canConnect) setConnectionHovered(false);
+  }, [canConnect]);
+  const trackConnectionHover = (event: PointerEvent<HTMLDivElement>) => {
+    if (
+      !canConnect ||
+      !['mouse', 'pen'].includes(event.pointerType) ||
+      !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
+    )
+      return;
+    const card = event.currentTarget;
+    const bounds = card.getBoundingClientRect();
+    const overBody =
+      bounds.width > 0 &&
+      bounds.height > 0 &&
+      event.clientX >= bounds.left &&
+      event.clientX <= bounds.right &&
+      event.clientY >= bounds.top &&
+      event.clientY <= bounds.bottom;
+    if (overBody) {
+      if (!connectionHovered) setConnectionHovered(true);
+      return;
+    }
+    if (!connectionHovered) return;
+    // A launch band must yield to an adjacent Node's body or visible controls.
+    const coversAnotherNode = document
+      .elementsFromPoint?.(event.clientX, event.clientY)
+      .some((element) => {
+        const otherCard = element.closest('[data-slot="roadmap-card"]');
+        return otherCard && otherCard !== card && !element.closest('.react-flow__handle');
+      });
+    if (coversAnotherNode) setConnectionHovered(false);
+  };
   const teacherBlocked = editing && data.isTeacherBlocked;
   const blocked = locked || teacherBlocked;
   const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
@@ -469,6 +516,11 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       data-slot="roadmap-card"
       data-testid="roadmap-card"
       data-hidden={hidden || undefined}
+      data-connection-enabled={canConnect || undefined}
+      data-connection-hovered={connectionHoverActive || undefined}
+      onPointerEnter={trackConnectionHover}
+      onPointerMove={trackConnectionHover}
+      onPointerLeave={() => setConnectionHovered(false)}
       data-block-reason={data.blockReason}
       aria-label={hidden ? `${data.title}: oculto para estudiantes` : undefined}
       aria-disabled={locked ? true : undefined}
@@ -527,16 +579,14 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
               key={id}
               id={id}
               data-testid="roadmap-node-handle"
+              className="roadmap-node-handle"
               type="source"
               position={position}
               isConnectable={canConnect}
+              onTouchStartCapture={(event) => event.stopPropagation()}
               style={{
-                width: 12,
-                height: 12,
-                background: 'var(--primary)',
-                border: '2px solid var(--card)',
                 visibility: canConnect ? 'visible' : 'hidden',
-                pointerEvents: canConnect ? 'auto' : 'none',
+                pointerEvents: canConnect ? undefined : 'none',
               }}
             />
           ))

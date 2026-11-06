@@ -104,7 +104,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       element: canvas,
       title: 'Conecta tu nodo',
       description:
-        'Arrastra desde uno de los 4 puntos de tu nuevo nodo hasta uno de los 4 puntos del nodo "Control 1" para crear una dependencia.',
+        'Arrastra desde el borde de tu nuevo nodo hasta el nodo "Control 1" para crear una dependencia.',
       advanceWhen: (action) =>
         action.type === 'connectNodes' &&
         action.sourceNodeId === createdNodeId &&
