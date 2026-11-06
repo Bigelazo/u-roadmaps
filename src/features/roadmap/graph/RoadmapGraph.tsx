@@ -49,6 +49,11 @@ import type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { DependencyRouting } from '@/features/roadmap/graph/routing/DependencyRouting';
+import {
+  DependencyAnimationProvider,
+  DependencyAnimationReady,
+  type DependencyAnimationControls,
+} from '@/features/roadmap/graph/DependencyAnimation';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
@@ -762,6 +767,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
   const isActionMenuActive = Boolean(openActionMenuNodeId || closingActionMenuNodeId);
   const isNavigationEnabled = !isActionMenuActive;
   const canInteract = canEdit && isNavigationEnabled;
+  const dependencyAnimationRef = useRef<DependencyAnimationControls | null>(null);
 
   const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && isActionMenuActive) {
@@ -792,6 +798,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         ? [{ nodeId: change.id, position: change.position }]
         : [],
     );
+    if (positions.length > 0) dependencyAnimationRef.current?.finish();
     const normalizedChanges = changes.map((change) =>
       change.type === 'position' && change.position
         ? { ...change, position: snapToRoadmapGrid(change.position) }
@@ -821,67 +828,86 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
   return (
     <>
       <div ref={containerRef} className="relative h-full" onKeyDownCapture={handleKeyDownCapture}>
-        <DependencyRouting nodes={flow.nodes} edges={flow.edges}>
-          <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
-            className="h-full"
-            nodes={flow.nodes}
-            edges={flow.edges}
-            nodeTypes={roadmapNodeTypes}
-            edgeTypes={roadmapEdgeTypes}
-            nodesDraggable={canInteract}
-            nodesConnectable={canInteract}
-            snapToGrid
-            snapGrid={[roadmapGridSize, roadmapGridSize]}
-            connectionMode={ConnectionMode.Loose}
-            nodesFocusable
-            nodeDragThreshold={5}
-            nodeClickDistance={6}
-            elementsSelectable={isNavigationEnabled}
-            panOnDrag={isNavigationEnabled}
-            zoomOnScroll={isNavigationEnabled}
-            zoomOnPinch={isNavigationEnabled}
-            zoomOnDoubleClick={isNavigationEnabled}
-            onNodesChange={handleNodesChange}
-            onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
-              setFlow((current) => ({
-                ...current,
-                edges: applyEdgeChanges(
-                  changes.filter((change) => change.type !== 'remove'),
-                  current.edges,
-                ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
-              }))
-            }
-            onNodeClick={(_event, node) => {
-              if (node.data.blockReason) return;
-              onSelectNode(node.id);
-            }}
-            onPaneClick={() => {
-              if (isActionMenuActive) closeActionMenu(false);
-            }}
-            onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
-            onEdgeMouseLeave={canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined}
-            onNodeDragStop={
-              canInteract
-                ? (_event, node) => {
-                    applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
-                  }
-                : undefined
-            }
-            onConnect={canInteract ? connectNodes : undefined}
-            onEdgesDelete={
-              canInteract ? (edges) => deleteDependencies(edges.map((edge) => edge.id)) : undefined
-            }
-            onMoveEnd={(event, viewport) => {
-              if (!event) return;
-              onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-            }}
-            fitView
-            fitViewOptions={roadmapFitViewOptions}
-            proOptions={{ hideAttribution: true }}
-          >
-            <RoadmapGraphContents props={props} model={model} />
-          </ReactFlow>
-        </DependencyRouting>
+        <DependencyAnimationProvider
+          edges={flow.edges}
+          nodeIds={flow.nodes.map((node) => node.id)}
+          controlsRef={dependencyAnimationRef}
+        >
+          <DependencyRouting nodes={flow.nodes} edges={flow.edges}>
+            <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
+              className="h-full"
+              nodes={flow.nodes}
+              edges={flow.edges}
+              nodeTypes={roadmapNodeTypes}
+              edgeTypes={roadmapEdgeTypes}
+              nodesDraggable={canInteract}
+              nodesConnectable={canInteract}
+              snapToGrid
+              snapGrid={[roadmapGridSize, roadmapGridSize]}
+              connectionMode={ConnectionMode.Loose}
+              nodesFocusable
+              nodeDragThreshold={5}
+              nodeClickDistance={6}
+              elementsSelectable={isNavigationEnabled}
+              panOnDrag={isNavigationEnabled}
+              zoomOnScroll={isNavigationEnabled}
+              zoomOnPinch={isNavigationEnabled}
+              zoomOnDoubleClick={isNavigationEnabled}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
+                setFlow((current) => ({
+                  ...current,
+                  edges: applyEdgeChanges(
+                    changes.filter((change) => change.type !== 'remove'),
+                    current.edges,
+                  ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
+                }))
+              }
+              onNodeClick={(_event, node) => {
+                if (node.data.blockReason) return;
+                onSelectNode(node.id);
+              }}
+              onPaneClick={() => {
+                if (isActionMenuActive) closeActionMenu(false);
+              }}
+              onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
+              onEdgeMouseLeave={
+                canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
+              }
+              onNodeDragStop={
+                canInteract
+                  ? (_event, node) => {
+                      applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
+                    }
+                  : undefined
+              }
+              onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
+              onConnect={canInteract ? connectNodes : undefined}
+              onEdgesDelete={
+                canInteract
+                  ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
+                  : undefined
+              }
+              onMoveEnd={(event, viewport) => {
+                if (!event) return;
+                onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+              }}
+              fitView
+              fitViewOptions={roadmapFitViewOptions}
+              proOptions={{ hideAttribution: true }}
+            >
+              <RoadmapGraphContents
+                props={props}
+                model={model}
+                onAutoLayout={() => {
+                  dependencyAnimationRef.current?.finish();
+                  model.proposeAutoLayout();
+                }}
+              />
+              <DependencyAnimationReady />
+            </ReactFlow>
+          </DependencyRouting>
+        </DependencyAnimationProvider>
       </div>
       {model.useActionSheet ? (
         <NodeActionSheet
@@ -898,14 +924,15 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
 function RoadmapGraphContents({
   props,
   model,
+  onAutoLayout,
 }: {
   props: RoadmapGraphProps;
   model: ReturnType<typeof useRoadmapGraphController>;
+  onAutoLayout: () => void;
 }) {
   const { overlaySlots, viewportRestoration, bottomLeftActions, bottomRightActions, onFitView } =
     props;
-  const { canEdit, openActionMenuNodeId, containerRef, layoutDirection, flow, proposeAutoLayout } =
-    model;
+  const { canEdit, openActionMenuNodeId, containerRef, layoutDirection, flow } = model;
   return (
     <>
       {' '}
@@ -921,7 +948,7 @@ function RoadmapGraphContents({
         layoutDirection={layoutDirection}
         showAutoLayout={canEdit}
         canAutoLayout={canEdit && flow.nodes.length >= 2}
-        onAutoLayout={proposeAutoLayout}
+        onAutoLayout={onAutoLayout}
         onFitView={onFitView}
         bottomLeftActions={bottomLeftActions}
         bottomRightActions={bottomRightActions}

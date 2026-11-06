@@ -8,7 +8,7 @@ import { EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
 import { useDependencyRoute } from '@/features/roadmap/graph/routing/DependencyRouting';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { Button } from '@/shared/ui/button';
-import { DependencyPath } from '@/features/roadmap/graph/DependencyPath';
+import { AnimatedDependencyPath } from '@/features/roadmap/graph/DependencyAnimation';
 
 export const FloatingEdge = memo(function FloatingEdge({
   id,
@@ -28,7 +28,7 @@ export const FloatingEdge = memo(function FloatingEdge({
 
   return (
     <>
-      <DependencyPath id={id} path={path} style={style} />
+      <AnimatedDependencyPath id={id} path={path} style={style} />
       {interactionWidth !== 0 ? (
         <path
           d={path}

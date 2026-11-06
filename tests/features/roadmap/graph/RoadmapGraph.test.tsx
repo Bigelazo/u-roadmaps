@@ -89,6 +89,7 @@ vi.mock('@xyflow/react', () => ({
     setViewport: vi.fn(),
     getInternalNode: () => undefined,
   }),
+  useNodesInitialized: () => true,
   useUpdateNodeInternals: () => () => undefined,
 }));
 
