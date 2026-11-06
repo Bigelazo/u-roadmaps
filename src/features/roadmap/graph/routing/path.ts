@@ -95,7 +95,6 @@ export function dependencyRoute(
   for (let i = 1; i < points.length; i++) {
     if (points[i].x !== points[i - 1].x && points[i].y !== points[i - 1].y) return null;
     for (const obstacle of obstacles) {
-      // Only terminal segments may touch their own node's boundary.
       if (
         obstacle.body &&
         ((i === 1 && obstacle.nodeId === source) ||
@@ -105,7 +104,6 @@ export function dependencyRoute(
       if (intersectsRect(points[i - 1], points[i], obstacle, strokeClearance)) return null;
     }
   }
-  // The arrowhead fits in a conservative envelope behind the destination.
   const end = points[points.length - 1];
   const previous = points[points.length - 2];
   const arrow = pointBefore(

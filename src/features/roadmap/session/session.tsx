@@ -40,7 +40,6 @@ function messageFor(cause: unknown, fallback: string) {
 }
 
 const refreshFailure = 'No se pudo actualizar el roadmap.';
-/** For a failure that carries no message at all; the adapters always give one. */
 const genericFailure = 'No se pudo completar la acción.';
 const loadFailure = 'No se pudo cargar el roadmap.';
 

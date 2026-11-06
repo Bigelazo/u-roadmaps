@@ -66,24 +66,18 @@ function snapshotOf(roadmap: AnyRoadmapDto): RoadmapSnapshot {
 
 export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
 
-/** The in-memory Roadmap that a command's catalog entry applies itself to. */
 export type PracticeRoadmap = {
   roadmap: AnyRoadmapDto;
   readonly canvasPreviewCompletions: Set<string>;
-  /** Where a created Node goes, instead of where it was requested. */
   readonly createdNodePosition?: Point;
-  /** Completes a Node as its student, or on a student Roadmap given as is. */
   complete(nodeId: string): void;
-  /** Updates return Nodes as drafts: only the adapter keeps a Roadmap's Node shapes consistent. */
   updateNodes(update: (nodes: AnyRoadmapNode[]) => readonly NodeDraft[]): void;
   mutateNode(nodeId: string, update: (node: AnyRoadmapNode) => NodeDraft): void;
   mutateResource(resourceId: string, update: (resource: Resource) => Resource | null): void;
   appendResource(nodeId: string, resource: Resource): void;
-  /** Confirms a change against its Change impact version and applies its consequences. */
   confirm(change: ChangeWithImpact, previewVersion?: string): void;
   requireAvailableNodeType(nodeTypeId: string): void;
   decideNodeType(change: NodeTypeChange): void;
-  /** Applies every item of a batch, then rethrows the first failure, as the HTTP adapter does. */
   settleEach<Item>(items: readonly Item[], apply: (item: Item) => void): void;
 };
 

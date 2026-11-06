@@ -15,7 +15,6 @@ const before = new Date('2026-11-05T11:59:59.999Z');
 const after = new Date('2026-11-05T12:00:00.001Z');
 const params = (course: IntegrationCourse) => new URLSearchParams({ roadmapId: course.roadmapId });
 
-// Fixture rows select legal, visible targets; all observations use public operations.
 async function seedTargets(
   course: IntegrationCourse,
   recipientId: string,
@@ -164,8 +163,6 @@ test('defensive inactive snapshot rejects post-reset notices independently of tr
     where: { id: course.participationId },
     data: { isActive: false },
   });
-  // Seed after the real deactivation trigger, with a reset earlier than this notice.
-  // This is a defensive stored-data snapshot, not a normal producer flow.
   await prisma.participation.update({
     where: { id: course.participationId },
     data: { noticeResetAt: t },
@@ -177,7 +174,6 @@ test('defensive inactive snapshot rejects post-reset notices independently of tr
     where: { id: course.participationId },
     data: { isActive: true },
   });
-  // The same target satisfies visibility/reset filters once access returns.
   expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 1 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({
     byNode: { [course.change.nodeId]: 1 },

@@ -38,7 +38,6 @@ export function ConnectionPreview({
   const routedPath = useConnectionPreviewRoute(fromNode.id, target?.id ?? null);
   const { getViewport } = useReactFlow();
   const viewport = getViewport();
-  // React Flow converts `to` to flow coordinates, but leaves `pointer` canvas-local.
   const point = {
     x: (pointer.x - viewport.x) / viewport.zoom,
     y: (pointer.y - viewport.y) / viewport.zoom,
@@ -67,7 +66,6 @@ export function ConnectionPreview({
   );
 }
 
-/** Touch arrow mode shares the route geometry without starting a native handle drag. */
 export function TouchConnectionPreview({
   source,
   sourceId,

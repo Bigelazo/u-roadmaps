@@ -23,7 +23,6 @@ import type {
   RoadmapClosureCalendar,
 } from '../types';
 
-/** The public `source` field: any U-Campus answer, complete or partial, reads as MUFASA. */
 function overviewSource(history: AcademicHistory): AcademicOverviewSource {
   return history.status === 'unavailable' ? 'LOCAL' : 'MUFASA';
 }
@@ -99,7 +98,6 @@ function apiOffering(course: AcademicOverviewCourse): AcademicOverviewApiOfferin
   };
 }
 
-/** Reads the local overview and projects the Academic history over it, for both entry points. */
 async function readAcademicOverview(
   actor: AcademicOverviewActor,
   { history, isPastClosure }: AcademicOverviewSources,

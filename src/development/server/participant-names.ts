@@ -7,7 +7,6 @@ export async function readFixtureParticipantNames(ruts: readonly string[]) {
     fixtureUsers
       .filter((user) => requested.has(user.rut))
       .map((user) => {
-        // These fictional fixtures have one given name and two surnames, except María José.
         const parts = user.name.split(' ');
         const compoundGivenName = user.name === 'María José Cifuentes';
         return [

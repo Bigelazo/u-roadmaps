@@ -24,7 +24,6 @@ export function nodeTypeNotFound() {
   );
 }
 
-/** A Node may only take a Node type available in its Roadmap: a predefined one or one of the Roadmap. */
 export function decideNodeTypeAssignment({
   nodeTypes,
   nodeTypeId,

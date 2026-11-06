@@ -57,7 +57,6 @@ test('a valid-target preview matches its persisted obstacle route with source fa
       .locator('.react-flow__edge-path')
       .evaluateAll((paths) => paths.map((path) => path.getAttribute('d'))),
   ).toEqual(originalPaths);
-  // Moving within the same target must preserve the routed preview, not follow the pointer.
   await page.mouse.move(to.x + to.width / 2 + 2, to.y + to.height / 2 + 2);
   await expect(preview).toHaveAttribute('d', previewPath!);
   await page.mouse.up();
@@ -81,9 +80,6 @@ test('a valid-target preview matches its persisted obstacle route with source fa
     .locator('.react-flow')
     .screenshot({ path: testInfo.outputPath('dependency-around-node.png') });
 
-  // The native smooth-step route from a to d crosses b in this fixed practice
-  // layout. Sample the real rendered path and body in the same screen coordinates;
-  // this assertion fails on that unsafe path even if all endpoints look correct.
   await expect
     .poll(
       () =>

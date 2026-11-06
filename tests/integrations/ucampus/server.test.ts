@@ -21,7 +21,6 @@ afterEach(() => {
 
 type MufasaList = unknown[] | Response;
 
-/** Answers each MUFASA course list; a list left out answers with no course. */
 function stubCourseLists(lists: { enrolled?: MufasaList; taught?: MufasaList }) {
   const answer = (list: MufasaList = []) =>
     list instanceof Response ? list.clone() : new Response(JSON.stringify(list));

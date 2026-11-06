@@ -8,7 +8,6 @@ export type DependencyAnimationSlot = {
   duration: number;
 };
 
-/** Orders prerequisites before dependents, including joins between independent branches. */
 export function dependencyAnimationSchedule(
   dependencies: readonly DependencyRoute[],
 ): DependencyAnimationSlot[] {
@@ -34,7 +33,6 @@ export function dependencyAnimationSchedule(
       if (remaining === 0) ready.push(edge.target);
     }
   }
-  // The domain prohibits cycles; keep any malformed legacy graph visible nonetheless.
   const orderedIds = new Set(ordered.map((edge) => edge.id));
   ordered.push(...edges.filter((edge) => !orderedIds.has(edge.id)));
 
@@ -51,11 +49,8 @@ export function dependencyAnimationSchedule(
   });
 }
 
-/** The curve describes speed over time, not displacement (Motion's usual easing input). */
 export const dependencyDrawingVelocity = cubicBezier(0.42, 0, 1, 1);
 
-// Integrate speed once, then normalize distance so the whole sequence still ends on time.
-// A bounded lookup avoids numerical integration on every animation frame.
 const velocitySamples = 256;
 const distances = [0];
 for (let index = 1; index <= velocitySamples; index++) {

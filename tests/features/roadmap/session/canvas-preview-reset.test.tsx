@@ -17,8 +17,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// Vitest resolves Next's loader to a wrapper whose ref exposes retry/loading. Execute
-// the supplied loader while retaining React 19 ref/props; chunk loading stays an E2E concern.
 vi.mock('next/dynamic', async () => {
   const { lazy, Suspense } = await import('react');
   return {
@@ -197,7 +195,6 @@ test.each([false, true])(
   },
 );
 
-// Hold only the next save of this Node; all reads, other commands and later saves stay real.
 function pauseNextNodeSave(base: SessionPersistence) {
   const received = Promise.withResolvers<void>();
   const decision = Promise.withResolvers<boolean>();
@@ -230,7 +227,6 @@ function pauseNextNodeSave(base: SessionPersistence) {
   };
 }
 
-// These cases observe save composition; paste whole fields to avoid per-key scheduling cost.
 test('persists successive Node titles and Link resources in one mounted canvas session', async () => {
   const user = userEvent.setup();
   const base = createInMemoryRoadmapSessionPersistence(teachingRoadmap);

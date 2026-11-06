@@ -96,7 +96,6 @@ async function openCanvas(
 
 type Execution = ReturnType<RoadmapCanvasSessionPersistence['execute']>;
 
-/** Wraps an adapter so that executing a command of one kind goes through `intercept`. */
 function intercepting<Kind extends CanvasCommand['kind']>(
   adapter: RoadmapCanvasSessionPersistence,
   kind: Kind,
@@ -113,7 +112,6 @@ function intercepting<Kind extends CanvasCommand['kind']>(
   };
 }
 
-/** Lets `race` change the Roadmap once, right before the first command of this kind applies. */
 function racingOnce(
   adapter: RoadmapCanvasSessionPersistence,
   kind: CanvasCommand['kind'],

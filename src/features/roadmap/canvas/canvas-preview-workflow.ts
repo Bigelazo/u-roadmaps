@@ -69,8 +69,8 @@ export function useCanvasPreviewWorkflow({
       };
       transitionSession({ kind: 'active', returnState });
       onEnter();
+      // eslint-disable-next-line no-empty -- The session reports the failure; leaving it inactive makes retrying possible.
     } catch {
-      // The session reports the failure; leaving it inactive makes retrying possible.
     } finally {
       isEntryPendingRef.current = false;
     }

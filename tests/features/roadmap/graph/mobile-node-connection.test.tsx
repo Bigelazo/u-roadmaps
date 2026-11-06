@@ -123,7 +123,6 @@ test('a continuous long press followed by a drag can connect using the touched c
   render(<Harness onConnect={onConnect} onOpen={vi.fn()} onPan={onPan} />);
   const source = beginLongPress();
   hitTarget = screen.getByText('Cuerpo de destino');
-  // Native touch event.target stays on the source even after the finger moves over the destination.
   fireEvent.touchMove(source, touch(250));
   expect(screen.getByLabelText('Destino resaltado').textContent).toBe('target');
   expect(onPan).not.toHaveBeenCalled();
@@ -205,7 +204,6 @@ test('Escape cancels touch arrow mode even when keyboard focus stays outside the
   const source = beginLongPress();
   fireEvent.touchEnd(source, ended());
   expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('source');
-  // Long presses do not necessarily focus a Node; key input can originate on document.body.
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('');
   expect(onConnect).not.toHaveBeenCalled();

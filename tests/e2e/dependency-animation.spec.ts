@@ -53,7 +53,6 @@ async function observeDrawing(page: Page) {
           },
         );
         window.dependencyAnimationFrames.push({ time: performance.now(), edges, nodes });
-        // Keep this diagnostic bounded even if an assertion times out.
         if (window.dependencyAnimationFrames.length > 1500)
           window.dependencyAnimationFrames.shift();
       }
@@ -117,7 +116,6 @@ async function assertEntryDrawing(page: Page) {
   expect(frames.some((frame) => frame.nodes.some((node) => node.scale > 0 && node.scale < 1))).toBe(
     true,
   );
-  // Nodes appear as their final incoming arrow arrives, rather than appearing all at once.
   for (const [dependency, target] of [
     [1, 'b'],
     [2, 'c'],
@@ -132,11 +130,9 @@ async function assertEntryDrawing(page: Page) {
       firstCompleted.get(`practice-dependency-${dependency}`)!,
     );
   }
-  // Every real rendered edge reveals progressively and moves its tip, not just its opacity.
   for (let id = 1; id <= 8; id++) {
     expect(tips.get(`practice-dependency-${id}`)?.size ?? 0).toBeGreaterThan(1);
   }
-  // At joins, all incoming Dependencies finish before an outgoing one starts.
   for (const [before, after] of [
     [1, 3],
     [1, 4],
@@ -155,7 +151,6 @@ async function assertEntryDrawing(page: Page) {
   }
   const startedAt = Math.min(...firstStarted.values());
   const completedAt = Math.max(...firstCompleted.values());
-  // Playback has a two-second budget; allow browser frame/CI scheduling overhead.
   expect(completedAt - startedAt).toBeLessThan(2300);
 }
 
@@ -173,7 +168,6 @@ test('Dependencies draw sequentially with moving tips on entry and reload, prese
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  // Product policy keeps authored motion available under this preference (ADR-0022).
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await observeDrawing(page);
   await ok(
@@ -205,7 +199,6 @@ test('Dependencies draw sequentially with moving tips on entry and reload, prese
   await expect(editor).toBeVisible();
   await editor.getByLabel('Título', { exact: true }).fill('Conceptos actualizados');
   await editor.getByRole('button', { name: 'Guardar cambios' }).click();
-  // This command refreshes the in-memory canonical Roadmap through the real session.
   await expect(node.locator('p')).toHaveText('Conceptos actualizados');
   await expect
     .poll(() => page.evaluate(() => window.dependencyAnimationFrames.length))

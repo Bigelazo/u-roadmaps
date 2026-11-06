@@ -36,7 +36,6 @@ async function openPractice(page: Page) {
 }
 
 async function panCanvas(page: Page, client: CDPSession, delta: { x: number; y: number }) {
-  // Use an empty part of the real pane; no React Flow internals or DOM event doubles.
   const start = await page.locator('.react-flow').evaluate((element) => {
     const box = element.getBoundingClientRect();
     for (let y = box.y + 40; y < box.bottom - 80; y += 30) {
@@ -87,7 +86,6 @@ const modeMessage = (page: Page) =>
 async function armArrowMode(page: Page, client: CDPSession, source: Locator) {
   await touch(client, 'touchStart', await center(source.locator('p')));
   try {
-    // Waiting for the real dwell feedback also proves native touch reached the hook.
     await expect(modeMessage(page)).toBeVisible();
   } finally {
     await touch(client, 'touchEnd');
@@ -144,7 +142,6 @@ for (const width of [390, 360]) {
       );
       await touch(client, 'touchStart', heldFrom);
       await expect(modeMessage(page)).toBeVisible();
-      // Keep the same native finger down through the entire connection gesture.
       for (let step = 1; step <= 6; step++) {
         await touch(client, 'touchMove', {
           x: heldFrom.x + ((heldTo.x - heldFrom.x) * step) / 6,
@@ -178,13 +175,9 @@ for (const width of [390, 360]) {
       );
       const start = await center(reset.source.locator('p'));
       await touch(client, 'touchStart', start);
-      // XYFlow's first threshold-crossing move starts the drag at that pointer;
-      // subsequent native movement is what changes the Node's actual position.
       await touch(client, 'touchMove', { x: start.x + 12, y: start.y + 10 });
       await touch(client, 'touchMove', { x: start.x + 35, y: start.y + 30 });
       await touch(client, 'touchMove', { x: start.x + 50, y: start.y + 40 });
-      // This is a deliberate native gesture dwell beyond the 450ms threshold,
-      // not a wait for application stabilization: movement must cancel the timer.
       // eslint-disable-next-line playwright/no-wait-for-timeout -- Native hold duration is the behavior under test.
       await page.waitForTimeout(600);
       await expect(modeMessage(page)).toHaveCount(0);
@@ -209,8 +202,6 @@ for (const width of [390, 360]) {
       await touch(client, 'touchEnd');
       const actions = page.getByRole('dialog', { name: 'Menú de acciones del nodo' });
       await expect(modeMessage(page)).toHaveCount(0);
-      // Escape normalizes native long-press/context-menu dismissal before checking
-      // that the button's ordinary tap interaction still works.
       await page.keyboard.press('Escape');
       await expect(actions).toBeHidden();
       await trigger.tap();
@@ -218,7 +209,6 @@ for (const width of [390, 360]) {
       await actions.getByRole('button', { name: 'Cerrar acciones' }).tap();
       expect(passiveTouchErrors).toEqual([]);
     } finally {
-      // The gesture may already have ended; cleanup must also release a held finger on failure.
       await touch(client, 'touchEnd').catch(() => undefined);
       await client.detach();
     }

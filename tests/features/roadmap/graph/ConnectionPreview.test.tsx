@@ -64,7 +64,6 @@ function desktopProps(point: { x: number; y: number }): ConnectionLineComponentP
 }
 
 function strokeCoordinates() {
-  // SVG geometry has no accessible text; inspect the actual stroke next to its open arrowhead.
   // eslint-disable-next-line testing-library/no-node-access
   const path = screen.getByTestId('dependency-arrowhead').previousElementSibling!;
   const numbers = path
@@ -96,7 +95,6 @@ test('hovering a valid target uses the saved-router path instead of cursor-drive
       </ConnectionTargetContext>
     </svg>,
   );
-  // The native route's source anchor wins over the pointer-driven top anchor.
   expect(strokeCoordinates()).toEqual({ start: [220, 140], end: [230, 70] });
 });
 

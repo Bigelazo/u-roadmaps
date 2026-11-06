@@ -32,16 +32,14 @@ async function failureError(response: Response, failure: string) {
         ? new RoadmapClosedError(body.error.message)
         : new Error(body.error.message);
     }
-  } catch {
-    // Keep the user-facing failure message when a route has no JSON error body.
-  }
+    // eslint-disable-next-line no-empty -- Keep the user-facing failure message when a route has no JSON error body.
+  } catch {}
   return new Error(failure);
 }
 
 export function createHttpRoadmapCanvasSessionPersistence(
   identifier: CourseOfferingIdentifier,
 ): RoadmapCanvasSessionPersistence {
-  /** Sends one request; a denied Roadmap load means the access was lost. */
   async function request(
     { method, path, body }: RouteRequest,
     failure: string,

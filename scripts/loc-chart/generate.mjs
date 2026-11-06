@@ -1,5 +1,3 @@
-// Regenera el gráfico de líneas de código por módulo a partir del historial de git.
-// Uso: pnpm loc:chart [salida.html] [rama]   (por defecto: loc-chart.html, main)
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -10,7 +8,6 @@ const GROUPS = ['roadmap', 'notif', 'shared', 'app', 'otras', 'dev', 'infra', 'd
 const CODE_EXT = new Set(['ts', 'tsx', 'js', 'mjs', 'mts', 'css', 'sql']);
 const IGNORED = ['graphify-out/', '.agents/', '.claude/', '.next/', 'node_modules/'];
 
-// Devuelve [grupo, esTest] o null si el archivo no se cuenta.
 function classify(p) {
   if (/(lock\.(yaml|json)|\.lock)$/.test(p) || IGNORED.some((d) => p.startsWith(d))) return null;
   const ext = p.split('.').pop();
@@ -32,7 +29,6 @@ function classify(p) {
   return ['infra', t];
 }
 
-// --no-renames: un archivo movido resta en su carpeta vieja y suma en la nueva.
 const log = execFileSync(
   'git',
   [
@@ -66,7 +62,7 @@ for (const line of log.split('\n')) {
     meta = [hash, date, subject.join('|').slice(0, 90)];
   } else if (line.trim()) {
     const [added, deleted, path] = line.split('\t');
-    if (added === '-') continue; // binario
+    if (added === '-') continue;
     const c = classify(path);
     if (c) totals.set(c.join(''), (totals.get(c.join('')) ?? 0) + Number(added) - Number(deleted));
   }

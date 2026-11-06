@@ -60,7 +60,6 @@ type JsonObject = Record<string, unknown>;
 
 export const SCHEDULED_UNLOCK_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
 
-/** A created or removed Dependency's Roadmap notice fact, with its Nodes as `nodes` has them. */
 function dependencyFact(
   nodes: readonly { id: string; title: string; isVisible: boolean }[],
   { id, sourceNodeId, targetNodeId }: { id: string; sourceNodeId: string; targetNodeId: string },
@@ -172,7 +171,6 @@ function readChangeImpact<Change extends ChangeWithImpact>(
   });
 }
 
-/** Confirms a change over the Roadmap snapshot, against its read Change impact, and persists its consequences. */
 async function persistConfirmedChange<Change extends ChangeWithImpact>(
   transaction: Prisma.TransactionClient,
   roadmapId: string,

@@ -1,5 +1,3 @@
-// libavoid-js 0.4.5 points its exports at a missing declaration file. Keep the
-// small, audited binding surface here instead of letting `any` escape the adapter.
 declare module 'libavoid-js' {
   export interface NativeObject {
     readonly __class__: NativeClass;

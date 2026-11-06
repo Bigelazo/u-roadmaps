@@ -21,7 +21,6 @@ import type {
   TeacherBlockUnlockMode,
 } from '@/features/roadmap/types';
 
-/** The part of a teaching Roadmap that the Change impact rules read. */
 export type RoadmapSnapshot = {
   nodes: readonly {
     id: string;
@@ -37,7 +36,6 @@ export type RoadmapSnapshot = {
   today: CalendarDay;
 };
 
-/** A Confirmed action that has a Change impact. */
 export type ChangeWithImpact =
   | { kind: 'create-dependency'; sourceNodeId: string; targetNodeId: string }
   | { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation }
@@ -50,11 +48,8 @@ export type ChangeImpactOf = {
   'delete-node': NodeDeletionImpact;
 };
 
-/** What a change does besides its primary change, for each adapter to persist in its storage. */
 export type ChangeConsequences = {
-  /** Nodes that receive a Teacher block. */
   blockedNodeIds: string[];
-  /** Nodes whose Teacher block is removed, which also discards their Scheduled unlock. */
   unblockedNodeIds: string[];
   removedDependencyIds: string[];
 };
@@ -78,17 +73,14 @@ export type ChangePlan<Kind extends ChangeWithImpact['kind'] = ChangeWithImpact[
       kind: 'ALLOWED';
       impact: ChangeImpactOf[Kind];
       consequences: ChangeConsequences;
-      /** The rule rejection confirming the change gets once this Change impact is stale. */
       stale: RuleRejection<StaleChangeImpactReason>;
     }
   | RuleRejection<ChangeRuleFailure>;
 
-/** Plans a change: its rule rejection, or its versioned Change impact and consequences. */
 export function planChange<Change extends ChangeWithImpact>(
   snapshot: RoadmapSnapshot,
   change: Change,
 ): ChangePlan<Change['kind']> {
-  // TypeScript cannot narrow the generic result per kind; each kind plans its own Change impact.
   return planAnyChange(snapshot, change) as ChangePlan<Change['kind']>;
 }
 
@@ -105,7 +97,6 @@ function planAnyChange(snapshot: RoadmapSnapshot, change: ChangeWithImpact): Cha
   }
 }
 
-/** Plans a change for its confirmation, refusing it as stale unless `previewVersion` is still current. */
 export function confirmChange<Change extends ChangeWithImpact>(
   snapshot: RoadmapSnapshot,
   change: Change,
@@ -254,7 +245,6 @@ function planTeacherBlock(
   };
 }
 
-/** The Nodes whose due Scheduled unlock no Teacher-blocked prerequisite holds once `unlockedNodeIds` are unlocked. */
 function releasedScheduledUnlocks(snapshot: RoadmapSnapshot, unlockedNodeIds: ReadonlySet<string>) {
   return dueScheduledUnlockNodeIds({
     ...snapshot,
@@ -306,11 +296,6 @@ function nodeTypeOf(snapshot: RoadmapSnapshot, nodeTypeId: string) {
   return { name, icon, color };
 }
 
-/**
- * Versions a Change impact by its content with a short, deterministic, non-cryptographic hash
- * (cyrb53), so the version fits an HTTP header whatever the Node titles are. The server always
- * recomputes the Change impact, so a forged version gains nothing beyond a fresh Change impact.
- */
 function versionChangeImpact<Impact extends object>(impact: Impact) {
   const content = JSON.stringify(impact);
   let first = 0xdeadbeef;
@@ -338,7 +323,6 @@ function byId(left: { id: string }, right: { id: string }) {
   return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
 }
 
-/** The visible Nodes without a Teacher block from `nodeId` onwards, which a blocked prerequisite would block. */
 function cascadingTeacherBlock(snapshot: RoadmapSnapshot, nodeId: string) {
   const { nodes, dependencies } = visibleRoadmapGraph(snapshot.nodes, snapshot.dependencies);
   const reachedNodeIds = new Set([nodeId, ...transitiveDependentNodeIds(dependencies, nodeId)]);

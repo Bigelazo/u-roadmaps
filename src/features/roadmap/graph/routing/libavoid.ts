@@ -34,7 +34,6 @@ export function roadmapRoutingScene(
       body = false,
     ) => obstacles.push({ id: `${node.id}:${suffix}`, nodeId: node.id, body, ...rect });
     add('body', { x, y, width, height }, true);
-    // Stable footprints include persistent corner controls, never transient menus.
     const actionSize = node.data.canManageActions && coarsePointer ? 44 : 32;
     add('status', {
       x: x + width - actionSize + 10,
@@ -65,7 +64,6 @@ export function roadmapRoutingScene(
 
 const routingWasmUrl = '/vendor/libavoid/0.4.5/libavoid.wasm';
 
-// The module is shared, native scenes are not. A rejected load can be retried.
 let modulePromise: Promise<AvoidModule> | undefined;
 export function loadRoutingModule(): Promise<AvoidModule> {
   return (modulePromise ??= import('libavoid-js')
@@ -118,8 +116,6 @@ export class DependencyRouter {
   }
 
   private forget(object: NativeObject) {
-    // Router owns shapes/pins/connectors; borrowed route points must not be freed.
-    // Remove only their WebIDL wrapper cache entries after native ownership ends.
     delete this.avoid.getCache(object.__class__)[this.avoid.getPointer(object)];
   }
 
@@ -134,8 +130,6 @@ export class DependencyRouter {
 
   route(input: RoutingScene): RoutingResult {
     if (this.disposed) throw new Error('Dependency router has been disposed');
-    // Preview and saved routes must depend only on the scene. Native incremental
-    // history and transient edge IDs otherwise alter equally valid side choices.
     this.releaseScene();
     const router = this.createRouter();
     this.router = router;
@@ -196,7 +190,6 @@ export class DependencyRouter {
   }
 
   private routePorts(scene: RoutingScene, ports: readonly Port[]): Map<string, Point[]> {
-    // Pins must exist before their ShapeRef is first processed in libavoid 0.4.5.
     const router = this.createRouter();
     const owned: NativeObject[] = [];
     const shapes = new Map<string, AvoidShape>();
@@ -264,8 +257,6 @@ export class DependencyRouter {
           actual &&
           Math.abs(actual.x - expected.x) < 1e-6 &&
           Math.abs(actual.y - expected.y) < 1e-6;
-        // An unroutable native connector can return shape centers. Such a path
-        // must never bypass the boundary-pin contract or terminal clearance.
         if (matches(points[0], pair.source!.point) && matches(points.at(-1), pair.target!.point))
           routes.set(id, points);
       }
@@ -339,9 +330,6 @@ export class DependencyRouter {
         port.groupSize = group.length;
       });
     }
-    // Move a lone outgoing port onto the fixed incoming midpoint when the
-    // difference is tiny. Incoming arrows always retain their side midpoint;
-    // multiple outgoing ports retain their assigned spacing.
     for (const [start, end] of pairs) {
       if ((start.side + 2) % 4 !== end.side || start.groupSize !== 1) continue;
       const axis = start.side % 2 === 1 ? 'y' : 'x';
