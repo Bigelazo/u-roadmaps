@@ -35,6 +35,9 @@ importers:
       jose:
         specifier: ^6.2.8
         version: 6.2.10
+      libavoid-js:
+        specifier: 0.4.5
+        version: 0.4.5
       lucide-react:
         specifier: ^1.31.0
         version: 1.33.0(react@19.2.8)
@@ -3466,6 +3469,9 @@ packages:
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
+
+  libavoid-js@0.4.5:
+    resolution: {integrity: sha512-9BrYRXAQ+nmLuHZSqf4z52YN8TroBPxyqo6A6h6Pj03j5UYNx/Hhnd/rg+kiLVrE76wzBeBVO3OW7kaEpzYC9Q==}
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -8498,6 +8504,8 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
+
+  libavoid-js@0.4.5: {}
 
   lightningcss-android-arm64@1.32.0:
     optional: true

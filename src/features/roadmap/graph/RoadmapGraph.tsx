@@ -16,7 +16,6 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
-  MarkerType,
   Panel,
   ReactFlow,
   applyEdgeChanges,
@@ -49,6 +48,7 @@ import type {
   RoadmapViewportRestoration,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
+import { DependencyRouting } from '@/features/roadmap/graph/routing/DependencyRouting';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import { studentNodeBlockReason, studentNodeStatus } from '@/features/roadmap/student/node-status';
@@ -72,7 +72,7 @@ export type {
 const selectedEdgeColor = 'var(--primary)';
 const roadmapFitViewOptions = { padding: 0.28 };
 const roadmapDependencyHandles = ['top', 'right', 'bottom', 'left'] as const;
-const studentEdgeStroke = 'var(--ink)';
+const dependencyStroke = 'var(--ink)';
 const bottomRightPanelClassName =
   'pointer-events-none mr-4! mb-[18px]! grid w-[min(23rem,calc(100%-2.5rem))] items-end justify-items-end sm:mr-6! [&>*]:col-start-1 [&>*]:row-start-1';
 
@@ -94,7 +94,6 @@ function mapProjectionToFlow(
   const isTeacherView = projection.kind === 'teaching';
   const canEdit = isTeacherView && Boolean(projection.editing);
   const nodeTypesById = new Map(roadmap.nodeTypes.map((type) => [type.id, type]));
-  const nodesById = new Map(roadmap.nodes.map((node) => [node.id, node]));
   const nodes: RoadmapFlowNode[] = roadmap.nodes.map((node) => {
     const isHidden = 'isVisible' in node && !node.isVisible;
     const blockReason = isTeacherView ? undefined : studentNodeBlockReason(node);
@@ -138,17 +137,7 @@ function mapProjectionToFlow(
     };
   });
   const edges: RoadmapFlowEdge[] = roadmap.dependencies.map((dependency) => {
-    const defaultStroke =
-      isTeacherView && !canEdit
-        ? '#000'
-        : isTeacherView
-          ? (() => {
-              const sourceNode = nodesById.get(dependency.sourceNodeId);
-              return sourceNode && 'isCompleted' in sourceNode && sourceNode.isCompleted;
-            })()
-            ? 'var(--ink)'
-            : 'var(--steel)'
-          : studentEdgeStroke;
+    const defaultStroke = isTeacherView && !canEdit ? '#000' : dependencyStroke;
     return {
       id: dependency.id,
       source: dependency.sourceNodeId,
@@ -164,7 +153,6 @@ function mapProjectionToFlow(
       className: canEdit ? 'roadmap-edge--editable' : 'roadmap-edge--student',
       data: { defaultStroke, onDelete: canEdit ? onDeleteDependency : undefined },
       style: { stroke: defaultStroke, strokeWidth: 1.5 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: defaultStroke, width: 18, height: 18 },
     };
   });
   return { nodes, edges };
@@ -426,12 +414,11 @@ function ActionMenuViewportAdjustment({
 }
 
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
-  const defaultStroke = edge.data?.defaultStroke ?? 'var(--steel)';
+  const defaultStroke = edge.data?.defaultStroke ?? dependencyStroke;
   const stroke = edge.selected || isHovered ? selectedEdgeColor : defaultStroke;
   return {
     ...edge,
     style: { ...edge.style, stroke, strokeWidth: 1.5 },
-    markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 18, height: 18 },
   };
 }
 
@@ -834,65 +821,67 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
   return (
     <>
       <div ref={containerRef} className="relative h-full" onKeyDownCapture={handleKeyDownCapture}>
-        <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
-          className="h-full"
-          nodes={flow.nodes}
-          edges={flow.edges}
-          nodeTypes={roadmapNodeTypes}
-          edgeTypes={roadmapEdgeTypes}
-          nodesDraggable={canInteract}
-          nodesConnectable={canInteract}
-          snapToGrid
-          snapGrid={[roadmapGridSize, roadmapGridSize]}
-          connectionMode={ConnectionMode.Loose}
-          nodesFocusable
-          nodeDragThreshold={5}
-          nodeClickDistance={6}
-          elementsSelectable={isNavigationEnabled}
-          panOnDrag={isNavigationEnabled}
-          zoomOnScroll={isNavigationEnabled}
-          zoomOnPinch={isNavigationEnabled}
-          zoomOnDoubleClick={isNavigationEnabled}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
-            setFlow((current) => ({
-              ...current,
-              edges: applyEdgeChanges(
-                changes.filter((change) => change.type !== 'remove'),
-                current.edges,
-              ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
-            }))
-          }
-          onNodeClick={(_event, node) => {
-            if (node.data.blockReason) return;
-            onSelectNode(node.id);
-          }}
-          onPaneClick={() => {
-            if (isActionMenuActive) closeActionMenu(false);
-          }}
-          onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
-          onEdgeMouseLeave={canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined}
-          onNodeDragStop={
-            canInteract
-              ? (_event, node) => {
-                  applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
-                }
-              : undefined
-          }
-          onConnect={canInteract ? connectNodes : undefined}
-          onEdgesDelete={
-            canInteract ? (edges) => deleteDependencies(edges.map((edge) => edge.id)) : undefined
-          }
-          onMoveEnd={(event, viewport) => {
-            if (!event) return;
-            onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-          }}
-          fitView
-          fitViewOptions={roadmapFitViewOptions}
-          proOptions={{ hideAttribution: true }}
-        >
-          <RoadmapGraphContents props={props} model={model} />
-        </ReactFlow>
+        <DependencyRouting nodes={flow.nodes} edges={flow.edges}>
+          <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
+            className="h-full"
+            nodes={flow.nodes}
+            edges={flow.edges}
+            nodeTypes={roadmapNodeTypes}
+            edgeTypes={roadmapEdgeTypes}
+            nodesDraggable={canInteract}
+            nodesConnectable={canInteract}
+            snapToGrid
+            snapGrid={[roadmapGridSize, roadmapGridSize]}
+            connectionMode={ConnectionMode.Loose}
+            nodesFocusable
+            nodeDragThreshold={5}
+            nodeClickDistance={6}
+            elementsSelectable={isNavigationEnabled}
+            panOnDrag={isNavigationEnabled}
+            zoomOnScroll={isNavigationEnabled}
+            zoomOnPinch={isNavigationEnabled}
+            zoomOnDoubleClick={isNavigationEnabled}
+            onNodesChange={handleNodesChange}
+            onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
+              setFlow((current) => ({
+                ...current,
+                edges: applyEdgeChanges(
+                  changes.filter((change) => change.type !== 'remove'),
+                  current.edges,
+                ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
+              }))
+            }
+            onNodeClick={(_event, node) => {
+              if (node.data.blockReason) return;
+              onSelectNode(node.id);
+            }}
+            onPaneClick={() => {
+              if (isActionMenuActive) closeActionMenu(false);
+            }}
+            onEdgeMouseEnter={canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined}
+            onEdgeMouseLeave={canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined}
+            onNodeDragStop={
+              canInteract
+                ? (_event, node) => {
+                    applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
+                  }
+                : undefined
+            }
+            onConnect={canInteract ? connectNodes : undefined}
+            onEdgesDelete={
+              canInteract ? (edges) => deleteDependencies(edges.map((edge) => edge.id)) : undefined
+            }
+            onMoveEnd={(event, viewport) => {
+              if (!event) return;
+              onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+            }}
+            fitView
+            fitViewOptions={roadmapFitViewOptions}
+            proOptions={{ hideAttribution: true }}
+          >
+            <RoadmapGraphContents props={props} model={model} />
+          </ReactFlow>
+        </DependencyRouting>
       </div>
       {model.useActionSheet ? (
         <NodeActionSheet

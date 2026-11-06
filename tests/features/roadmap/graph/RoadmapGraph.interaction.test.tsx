@@ -29,6 +29,10 @@ const {
   },
 }));
 
+vi.mock('@/features/roadmap/graph/routing/DependencyRouting', () => ({
+  DependencyRouting: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('@xyflow/react', () => ({
   Background: () => null,
   BackgroundVariant: { Dots: 'dots' },
