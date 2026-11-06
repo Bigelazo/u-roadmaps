@@ -1234,12 +1234,12 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         {connection.arrowSourceId ? (
           <div
             data-arrow-mode-controls
-            className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center"
+            className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center [@media(max-height:500px)]:top-2"
           >
             <div
               role="status"
               aria-live="polite"
-              className="pointer-events-auto flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
+              className="flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
             >
               <span>{connection.arrowMessage}</span>
               <Button
@@ -1247,6 +1247,8 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 variant="outline"
                 size="sm"
                 aria-label="Cancelar modo flecha"
+                // Only this control takes touches: the banner can appear over any Node.
+                className="pointer-events-auto"
                 onClick={connection.cancelArrowMode}
               >
                 Cancelar

@@ -35,19 +35,7 @@ async function openPractice(page: Page) {
   await expect(page.locator('.react-flow__edge')).toHaveCount(8);
 }
 
-async function centerPracticePair(page: Page, client: CDPSession) {
-  const source = page.locator('.react-flow__node[data-id="practice-node-a"]');
-  const target = page.locator('.react-flow__node[data-id="practice-node-d"]');
-  const canvas = await page.locator('.react-flow').boundingBox();
-  if (!canvas) throw new Error('Practice canvas is not visible.');
-  // A phone opens on a readable zoom, where this pair does not fit at once.
-  await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
-  const from = await center(source.locator('p'));
-  const to = await center(target.locator('p'));
-  const delta = {
-    x: canvas.x + canvas.width / 2 - (from.x + to.x) / 2,
-    y: canvas.y + canvas.height / 2 - (from.y + to.y) / 2,
-  };
+async function panCanvas(page: Page, client: CDPSession, delta: { x: number; y: number }) {
   // Use an empty part of the real pane; no React Flow internals or DOM event doubles.
   const start = await page.locator('.react-flow').evaluate((element) => {
     const box = element.getBoundingClientRect();
@@ -67,6 +55,22 @@ async function centerPracticePair(page: Page, client: CDPSession) {
     });
   }
   await touch(client, 'touchEnd');
+}
+
+async function centerPracticePair(page: Page, client: CDPSession) {
+  const source = page.locator('.react-flow__node[data-id="practice-node-a"]');
+  const target = page.locator('.react-flow__node[data-id="practice-node-d"]');
+  const canvas = await page.locator('.react-flow').boundingBox();
+  if (!canvas) throw new Error('Practice canvas is not visible.');
+  // A phone opens on a readable zoom, where this pair does not fit at once.
+  await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+  const from = await center(source.locator('p'));
+  const to = await center(target.locator('p'));
+  const delta = {
+    x: canvas.x + canvas.width / 2 - (from.x + to.x) / 2,
+    y: canvas.y + canvas.height / 2 - (from.y + to.y) / 2,
+  };
+  await panCanvas(page, client, delta);
   const sourcePoint = await center(source.locator('p'));
   const targetPoint = await center(target.locator('p'));
   for (const point of [sourcePoint, targetPoint]) {
@@ -222,3 +226,67 @@ for (const width of [390, 360]) {
     }
   });
 }
+
+test('touch Arrow mode reaches Nodes under its banner on a landscape phone', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await ok(
+    await page.request.post('/api/development/session', {
+      data: { userId: '10000000-0000-4000-8000-000000000001' },
+    }),
+  );
+  const client = await page.context().newCDPSession(page);
+  try {
+    await openPractice(page);
+    const source = page.locator('.react-flow__node[data-id="practice-node-a"]');
+    const target = page.locator('.react-flow__node[data-id="practice-node-d"]');
+
+    const canvas = await page.locator('.react-flow').boundingBox();
+    if (!canvas) throw new Error('Practice canvas is not visible.');
+    const start = await center(source.locator('p'));
+    await panCanvas(page, client, {
+      x: canvas.x + canvas.width / 2 - start.x,
+      y: canvas.y + canvas.height * 0.75 - start.y,
+    });
+
+    // Learn where the banner's message sits, then bring each Node under it with a native pan.
+    await armArrowMode(page, client, source);
+    const underMessage = await center(modeMessage(page));
+    await page.getByRole('button', { name: 'Cancelar modo flecha', exact: true }).tap();
+
+    async function panUnderMessage(node: Locator) {
+      const point = await center(node.locator('p'));
+      await panCanvas(page, client, {
+        x: underMessage.x - point.x,
+        y: underMessage.y - point.y,
+      });
+      await expect
+        .poll(async () => {
+          const moved = await center(node.locator('p'));
+          return Math.hypot(moved.x - underMessage.x, moved.y - underMessage.y) < 8;
+        })
+        .toBe(true);
+    }
+
+    await panUnderMessage(source);
+    await armArrowMode(page, client, source);
+    await expect(modeMessage(page)).toBeVisible();
+    await page.getByRole('button', { name: 'Cancelar modo flecha', exact: true }).tap();
+
+    // At a readable zoom the source would leave the canvas with the target under the banner.
+    const viewport = page.locator('.react-flow__viewport');
+    const readable = await viewport.evaluate((element) => element.style.transform);
+    await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+    await expect
+      .poll(() => viewport.evaluate((element) => element.style.transform))
+      .not.toBe(readable);
+    await panUnderMessage(target);
+    await armArrowMode(page, client, source);
+    await touch(client, 'touchStart', underMessage);
+    await touch(client, 'touchEnd');
+    await expect(page.locator('.react-flow__edge')).toHaveCount(9);
+    await expect(modeMessage(page)).toHaveCount(0);
+  } finally {
+    await touch(client, 'touchEnd').catch(() => undefined);
+    await client.detach();
+  }
+});
