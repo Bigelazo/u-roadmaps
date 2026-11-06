@@ -14,6 +14,10 @@ Single-context layout — one `GLOSSARY.md` + `docs/adr/` at the repo root. See 
 
 Set up a worktree, run any test suite (locked against parallel sessions), and take UI screenshots. See `docs/agents/testing.md`.
 
+### Code comments
+
+Do not add comments to code or tests; express intent through names and structure. Tool directives such as `eslint-disable` are the only exception.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
