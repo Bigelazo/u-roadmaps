@@ -571,7 +571,6 @@ export function RoadmapCanvasView({ input }: Props) {
                 variant: 'outline',
                 className: cn(
                   'absolute top-4 right-4 z-10 sm:top-6 sm:right-6',
-                  // The compact preview toolbar spans the top edge; that corner is free below.
                   model.isCanvasPreview &&
                     'max-lg:top-auto max-lg:bottom-[18px] sm:max-lg:bottom-6',
                 ),
@@ -1005,8 +1004,6 @@ function RoadmapCanvasHeader({
   ReturnType<typeof useRoadmapCanvasController>,
   'title' | 'courseCode' | 'year' | 'semester' | 'isCanvasPreview'
 > & { isEditing: boolean }) {
-  // In the compact layout the preview toolbar already names the preview mode, so the
-  // header drops its badge row to keep the stacked overlays short.
   const isCompact = useCompactCanvasLayout();
   const hidesBadgeRow = isCanvasPreview && isCompact;
   return (

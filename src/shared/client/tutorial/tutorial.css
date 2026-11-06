@@ -134,7 +134,6 @@
   pointer-events: auto;
 }
 
-/* A modal sheet makes the page behind it inert: the exit stays under it, not over its header. */
 .driver-active:has([data-slot='sheet-overlay']) [data-tutorial-exit] {
   z-index: 10;
 }
@@ -147,8 +146,6 @@
   pointer-events: auto;
 }
 
-/* On compact screens the popover has no free side beside a dialog and would cover its
-   actions. The step was already read before acting; the popover returns when it closes. */
 @media (max-width: 1023px) {
   .driver-active.u-roadmaps-tour-acting:has(
       [role='dialog'].driver-active-element,

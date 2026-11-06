@@ -289,7 +289,6 @@ export function useWholeNodeConnection({
       suppressDropClick(500);
       const candidate = nodeUnderPointer(event);
       setArrowPointer(null);
-      // The controls can appear under the finger that armed the mode: lifting it is no choice.
       if (gesture?.armed && (candidate === mobileSource.current || isOverArrowModeControl(event)))
         return;
       chooseMobileTarget(candidate);

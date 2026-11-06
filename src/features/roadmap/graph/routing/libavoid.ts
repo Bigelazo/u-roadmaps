@@ -35,7 +35,6 @@ export function roadmapRoutingScene(
     ) => obstacles.push({ id: `${node.id}:${suffix}`, nodeId: node.id, body, ...rect });
     add('body', { x, y, width, height }, true);
     // Stable footprints include persistent corner controls, never transient menus.
-    // The action trigger grows to 44px on coarse pointers, like RoadmapNode's trigger.
     const actionSize = node.data.canManageActions && coarsePointer ? 44 : 32;
     add('status', {
       x: x + width - actionSize + 10,
@@ -80,10 +79,6 @@ export function loadRoutingModule(): Promise<AvoidModule> {
     }));
 }
 
-// Call during the first render: on the server it puts the WASM preload in the initial HTML, and in
-// the browser it requests the engine's chunk before hydration finishes rather than after.
-// `as`/`crossOrigin` match libavoid's same-origin `fetch`, so that fetch reuses the preload
-// instead of downloading the file twice. Failures surface through `loadRoutingModule`.
 export function prepareRoutingEngine() {
   preload(routingWasmUrl, { as: 'fetch', crossOrigin: 'anonymous' });
   if (typeof window !== 'undefined') loadRoutingModule().catch(() => {});

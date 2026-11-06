@@ -53,11 +53,6 @@ export function markTutorialClosingPopover() {
   }
 }
 
-/**
- * Dispatched (bubbling) from a step's target before it is highlighted. A surface that can
- * scroll or pan its own content, such as the roadmap canvas, brings the target into view
- * and passes the promise of that movement to `waitUntil`.
- */
 export const TUTORIAL_REVEAL_EVENT = 'u-roadmaps:tutorial-reveal';
 
 export type TutorialRevealDetail = Readonly<{
@@ -78,7 +73,6 @@ export async function revealTutorialTarget(elements: readonly Element[]) {
   await Promise.all(movements.map((movement) => movement.catch(() => undefined)));
 }
 
-/** Waits until an element stops moving, e.g. a sheet or panel that slides in. */
 export async function waitForStableElement(element: TutorialStep['element'], timeoutMs = 800) {
   const start = performance.now();
   let previous = '';

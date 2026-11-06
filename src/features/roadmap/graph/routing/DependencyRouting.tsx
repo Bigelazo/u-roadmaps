@@ -25,7 +25,6 @@ import {
   type RoutingScene,
 } from './libavoid';
 
-// Fast loads finish inside this budget and never show the status.
 const engineStatusDelayMs = 400;
 const engineRetryDelayMs = 1000;
 
@@ -66,11 +65,6 @@ export function useDependencyRoute(id: string) {
   return useContext(RoutingContext).get(id);
 }
 
-/**
- * `waiting`: too early to tell whether the engine makes the entry sequence.
- * `routed`: routes exist, so the sequence can play over them.
- * `unavailable`: slow or failed, so the map must not keep Nodes hidden for it.
- */
 export type RoutingEngineStatus = 'waiting' | 'routed' | 'unavailable';
 const RoutingEngineStatusContext = createContext<RoutingEngineStatus>('routed');
 
@@ -87,7 +81,6 @@ export function DependencyRouting({
   edges: readonly RoadmapFlowEdge[];
   children: ReactNode;
 }) {
-  // Once per mount: a failed load must not restart on every later render of the canvas.
   useState(prepareRoutingEngine);
   const coarsePointer = useCoarsePointer();
   const [module, setModule] = useState<AvoidModule | null>(null);
@@ -98,7 +91,6 @@ export function DependencyRouting({
     let active = true;
     let retry: ReturnType<typeof setTimeout> | undefined;
     const status = setTimeout(() => setSlow(true), engineStatusDelayMs);
-    // Only the initial load retries by itself; "Reintentar" answers with its own attempt.
     const load = (retries: number) => {
       loadRoutingModule()
         .then((loaded) => {
@@ -124,9 +116,6 @@ export function DependencyRouting({
     };
   }, [attempt]);
 
-  // The canvas, its nodes and overlays render at once and stay mounted; only dependencies
-  // wait for the engine. Unrouted dependencies stay absent rather than drawn as unsafe
-  // native paths.
   const status: RoutingEngineStatus = module ? 'routed' : slow || error ? 'unavailable' : 'waiting';
   return (
     <RoutingEngineStatusContext value={status}>

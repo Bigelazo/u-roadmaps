@@ -11,12 +11,6 @@ type Props = {
   children: ReactNode;
 };
 
-/**
- * A resizable column next to a wide canvas and a non-modal bottom sheet over a
- * compact one, so the canvas stays pannable above the editor. The layouts differ
- * only in CSS: one element keeps an unsaved draft mounted while the panel is
- * closed and when the viewport crosses the breakpoint, as rotating a tablet does.
- */
 export function NodeEditorPanel({ isOpen, panelWidth, onPanelWidthChange, children }: Props) {
   return (
     <RoadmapSidePanel

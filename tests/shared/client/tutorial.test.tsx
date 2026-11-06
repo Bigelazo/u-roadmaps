@@ -48,7 +48,6 @@ it('lets the step 4 to 5 animation finish before refreshing an action target', a
   );
   await act(async () => {
     mock.config.onNextClick?.(document.body, {}, {} as never);
-    // The next target is highlighted once it holds still between two samples.
     await vi.advanceTimersByTimeAsync(100);
   });
   act(() => vi.advanceTimersByTime(450));

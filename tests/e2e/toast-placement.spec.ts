@@ -77,7 +77,6 @@ for (const width of [1440, 1024, 390, 320]) {
     await expectPlacement(false);
     await page.screenshot({ path: testInfo.outputPath(`toast-sidebar-${width}.png`) });
     if (width < 1024) {
-      // The compact editor sheet covers the floating control until it closes.
       await page.keyboard.press('Escape');
       await expect(sidebar).toBeHidden();
       await expectPlacement(false);

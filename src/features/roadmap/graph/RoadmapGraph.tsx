@@ -94,16 +94,11 @@ export type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 
 const selectedEdgeColor = 'var(--primary)';
-/** Desktop initial fit: unchanged from before the compact layout existed. */
 const roadmapFitViewOptions = { padding: 0.28, minZoom: 0.5 };
-/** Lowest zoom a person or "Centrar mapa" may reach, so a whole map fits a phone. */
 const roadmapMinZoom = 0.2;
 const roadmapMaxZoom = 2;
-/** Students read node titles at this zoom or more when the compact canvas opens. */
 const studentReadableZoom = 0.8;
-/** Staff open on the whole map unless that would shrink titles below this zoom. */
 const staffReadableZoom = 0.7;
-/** Below this zoom a Node's title and badges can't be read during a tutorial step. */
 const tutorialLegibleZoom = 0.5;
 const overlayGap = 12;
 const sideInset = 16;
@@ -114,11 +109,6 @@ const bottomRightPanelClassName =
 
 type CanvasInsets = { top: number; right: number; bottom: number; left: number };
 
-/**
- * The room the canvas overlays (title, preview toolbar, bottom toolbars) take from each edge
- * of the canvas, so a fitted map is never drawn under them. Overlays mark themselves with
- * `data-canvas-overlay="top" | "bottom"`.
- */
 function canvasOverlayInsets(container: HTMLElement | null): CanvasInsets {
   const insets = { top: sideInset, right: sideInset, bottom: sideInset, left: sideInset };
   if (!container) return insets;
@@ -130,7 +120,6 @@ function canvasOverlayInsets(container: HTMLElement | null): CanvasInsets {
       insets.top = Math.max(insets.top, rect.bottom - canvas.top + overlayGap);
     else insets.bottom = Math.max(insets.bottom, canvas.bottom - rect.top + overlayGap);
   });
-  // On a short landscape phone the overlays could swallow the map: keep room for a node row.
   const vertical = insets.top + insets.bottom;
   const maxVertical = canvas.height - 96;
   if (maxVertical > 0 && vertical > maxVertical) {
@@ -150,7 +139,6 @@ function insetPadding(insets: CanvasInsets): NonNullable<FitViewOptions['padding
   };
 }
 
-/** Options for "Centrar mapa": the whole map, clear of the overlays on compact canvases. */
 function fitAllOptions(compact: boolean, container: HTMLElement | null): FitViewOptions {
   return compact
     ? { padding: insetPadding(canvasOverlayInsets(container)), minZoom: roadmapMinZoom, maxZoom: 1 }
@@ -167,12 +155,6 @@ function nodeRect(node: RoadmapFlowNode) {
   return { ...node.position, ...roadmapNodeSizeForTitle(node.data.title) };
 }
 
-/**
- * The first viewport of a compact canvas. A map that fits at a readable zoom is shown whole.
- * Otherwise students start on their first actionable (pending, unlocked) node, or the first
- * node, at natural size; staff start at the lowest readable zoom with the first node in
- * reading order at the top of the free area, so the map keeps legible titles.
- */
 function compactInitialViewport(
   nodes: readonly RoadmapFlowNode[],
   isStudent: boolean,
@@ -450,7 +432,6 @@ function RoadmapGraphToolbar({
         data-canvas-overlay="bottom"
         className={cn(
           'm-4! sm:m-6!',
-          // Leave the bottom-right corner to "Crear en el mapa" so hit areas never overlap.
           bottomRightActions
             ? 'max-w-[calc(100%-2rem-4.75rem)] sm:max-w-[calc(100%-3rem-5.25rem)]'
             : 'max-w-[calc(100%-2rem)] sm:max-w-[calc(100%-3rem)]',
@@ -518,8 +499,6 @@ function RoadmapGraphToolbar({
             <div
               className={cn(
                 'flex gap-1.5',
-                // Compact canvases keep one row: the actions show their icon only and keep
-                // their visible text as the accessible name.
                 compact
                   ? 'flex-nowrap *:w-11! *:shrink-0 *:gap-0! *:p-0! *:text-[0px]!'
                   : 'flex-wrap',
@@ -654,13 +633,11 @@ export type RoadmapGraphOverlaySlots = {
 
 const titlePlateClassName = cn(
   'pointer-events-none rounded-lg border border-border/70 bg-card/90 px-3 py-2 shadow-sm backdrop-blur-sm',
-  // Short landscape phones: a smaller title leaves the map most of the height.
   '[@media(max-height:500px)]:py-1.5 [@media(max-height:500px)]:[&_h1]:mt-1 [@media(max-height:500px)]:[&_h1]:text-xl',
 );
 
 function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
   const compact = useCompactCanvasLayout();
-  // On compact canvases the preview toolbar spans the top edge: the title goes under it.
   const stackTitleUnderToolbar = compact && Boolean(slots?.topCenter && slots.topLeft);
   return (
     <>
@@ -671,7 +648,6 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
           className={cn(
             'z-4! m-4! sm:m-6!',
             titlePlateClassName,
-            // Never run under the top-right control (44px button plus a 12px gap).
             slots.topRight
               ? 'max-w-[calc(100%-2rem-3.5rem)] sm:max-w-[min(28rem,calc(100%-3rem-3.5rem))]'
               : 'max-w-[calc(100%-2rem)] sm:max-w-md',
@@ -693,7 +669,6 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
         >
           {slots.topCenter}
           {stackTitleUnderToolbar ? (
-            // Short landscape phones: the toolbar already names the preview, the map needs the room.
             <div
               className={cn(titlePlateClassName, 'max-w-full [@media(max-height:500px)]:hidden')}
             >
@@ -1155,7 +1130,6 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 }
                 onNodeClick={(_event, node) => {
                   if (node.data.blockReason) {
-                    // Touch has no hover tooltip: a tap explains the block instead.
                     setBlockedNoticeNodeId((current) => (current === node.id ? null : node.id));
                     return;
                   }
@@ -1165,7 +1139,6 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 onPaneClick={() => {
                   setBlockedNoticeNodeId(null);
                   if (isActionMenuActive) closeActionMenu(false);
-                  // The compact editor sheet is non-modal: tapping the canvas above it dismisses it.
                   if (compact && props.selectedNodeId) onClearSelectedNode?.();
                 }}
                 onMoveStart={(event) => {
@@ -1247,7 +1220,6 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 variant="outline"
                 size="sm"
                 aria-label="Cancelar modo flecha"
-                // Only this control takes touches: the banner can appear over any Node.
                 className="pointer-events-auto"
                 onClick={connection.cancelArrowMode}
               >
@@ -1336,7 +1308,6 @@ function CompactInitialViewport({
   const appliedRef = useRef(false);
   useEffect(() => {
     if (!compact || skip || appliedRef.current || !initialized) return;
-    // Wait one frame so the overlays this viewport keeps clear of are laid out.
     const frame = requestAnimationFrame(() => {
       const container = containerRef.current;
       if (!container || appliedRef.current) return;
@@ -1355,11 +1326,6 @@ function CompactInitialViewport({
   return null;
 }
 
-/**
- * Tutorials cannot pan the canvas themselves: before highlighting a Node they dispatch
- * `TUTORIAL_REVEAL_EVENT` from it, and the canvas brings that Node (or group of Nodes)
- * fully into the free area, at a readable zoom, before the highlight is drawn.
- */
 function TutorialRevealTarget({
   containerRef,
 }: {
@@ -1379,7 +1345,6 @@ function TutorialRevealTarget({
       if (!nodeElements.length) return;
       const insets = canvasOverlayInsets(container);
       const canvas = container.getBoundingClientRect();
-      // Corner badges overhang the card by 10px.
       const visible = nodeElements.every((node) => {
         const rect = node.getBoundingClientRect();
         return (
@@ -1390,7 +1355,6 @@ function TutorialRevealTarget({
         );
       });
       const zoom = getZoom();
-      // A fitted phone map can be on screen yet too small to read what the step explains.
       if (visible && (!compact || zoom >= tutorialLegibleZoom)) return;
       detail.waitUntil(
         fitView({

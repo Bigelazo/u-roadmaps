@@ -9,7 +9,6 @@ async function bounds(locator: Locator) {
   return box;
 }
 
-/** Nodes scale in on entry, so geometry measured before they settle misses their final border. */
 async function expectSettled(locator: Locator) {
   let previous: Awaited<ReturnType<typeof bounds>> | undefined;
   await expect

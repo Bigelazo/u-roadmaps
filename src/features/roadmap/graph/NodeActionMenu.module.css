@@ -198,7 +198,6 @@
   height: 15rem;
 }
 
-/* Fingers get a 60px grab area, still about 44px on screen at the compact staff zoom. */
 .coarse .actionTrigger::before {
   position: absolute;
   inset: -0.5rem;

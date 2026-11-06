@@ -2,15 +2,8 @@
 
 import { useSyncExternalStore } from 'react';
 
-/**
- * The Roadmap canvas switches to its compact layout below Tailwind's `lg`
- * breakpoint: the canvas fills the viewport and side content (node detail,
- * node editor, node actions) is presented as sheets instead of a side column.
- * Every compact/wide decision on the Roadmap screen reads this one query.
- */
 export const compactCanvasLayoutQuery = '(max-width: 1023px)';
 
-/** Coarse pointers need 44px targets regardless of layout width. */
 export const coarsePointerQuery = '(pointer: coarse)';
 
 function subscribeTo(query: string) {

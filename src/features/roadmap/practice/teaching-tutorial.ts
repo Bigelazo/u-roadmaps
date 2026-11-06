@@ -58,7 +58,6 @@ function nodeDetailOr(nodeId: string) {
     document.querySelector(nodeSelector(nodeId));
 }
 
-/** For a step that highlights the whole canvas but asks to act on specific nodes. */
 function revealNodes(...nodeIds: readonly (string | null)[]) {
   return revealTutorialTarget(
     nodeIds.flatMap((nodeId) => {
@@ -168,7 +167,6 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
           clickElement(nodeSelector(practiceNodeIds.b));
           return;
         }
-        // The compact editor sheet would cover the Node whose menu this step points to.
         clickElement('#roadmap-editor-panel button[aria-label="Deseleccionar nodo"]');
         await waitForElement('#roadmap-editor-panel[hidden]');
       },
@@ -248,7 +246,6 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       element: canvas,
       title: 'Nodos liberados',
       prepare: () => {
-        // The compact detail sheet is modal: it would hide the map and "Ir al editor".
         if (window.matchMedia(compactCanvasLayoutQuery).matches)
           clickElement('button[aria-label="Cerrar detalle"]');
       },

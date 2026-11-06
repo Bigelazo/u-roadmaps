@@ -75,7 +75,6 @@ export const studentTutorialSteps: readonly TutorialStep[] = [
       'Cuando el equipo docente cambia tu roadmap, recibes avisos aquí. Al entrar a tu roadmap, un resumen de cambios te muestra lo nuevo.',
     side: 'bottom',
     prepare: () => {
-      // The compact detail sheet is modal: its backdrop would blur the highlighted bell.
       if (window.matchMedia(compactCanvasLayoutQuery).matches)
         clickElement('button[aria-label="Cerrar detalle"]');
     },

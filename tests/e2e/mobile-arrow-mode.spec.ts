@@ -62,7 +62,6 @@ async function centerPracticePair(page: Page, client: CDPSession) {
   const target = page.locator('.react-flow__node[data-id="practice-node-d"]');
   const canvas = await page.locator('.react-flow').boundingBox();
   if (!canvas) throw new Error('Practice canvas is not visible.');
-  // A phone opens on a readable zoom, where this pair does not fit at once.
   await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
   const from = await center(source.locator('p'));
   const to = await center(target.locator('p'));
@@ -200,7 +199,6 @@ for (const width of [390, 360]) {
         .toBe(true);
       await expect(page.locator('.react-flow__edge')).toHaveCount(8);
 
-      // The drag above can leave the source under a neighbor on a fitted map: start clean.
       await openPractice(page);
       const fresh = await centerPracticePair(page, client);
       const trigger = fresh.source.getByRole('button', { name: 'Abrir menú de acciones del nodo' });
@@ -248,7 +246,6 @@ test('touch Arrow mode reaches Nodes under its banner on a landscape phone', asy
       y: canvas.y + canvas.height * 0.75 - start.y,
     });
 
-    // Learn where the banner's message sits, then bring each Node under it with a native pan.
     await armArrowMode(page, client, source);
     const underMessage = await center(modeMessage(page));
     await page.getByRole('button', { name: 'Cancelar modo flecha', exact: true }).tap();
@@ -272,7 +269,6 @@ test('touch Arrow mode reaches Nodes under its banner on a landscape phone', asy
     await expect(modeMessage(page)).toBeVisible();
     await page.getByRole('button', { name: 'Cancelar modo flecha', exact: true }).tap();
 
-    // At a readable zoom the source would leave the canvas with the target under the banner.
     const viewport = page.locator('.react-flow__viewport');
     const readable = await viewport.evaluate((element) => element.style.transform);
     await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();

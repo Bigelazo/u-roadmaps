@@ -192,7 +192,6 @@ export function DependencyAnimationReady() {
   const engine = useRoutingEngineStatus();
   const playback = useContext(DependencyAnimationContext);
   useEffect(() => {
-    // Waiting Nodes stay hidden during entry: a slow engine must not keep them out of reach.
     if (engine === 'unavailable') playback?.finish();
     else if (ready && engine === 'routed') playback?.start();
   }, [engine, playback, ready]);

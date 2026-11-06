@@ -252,7 +252,6 @@ test('student roadmap shows effective block reasons and restores a completed nod
   await page.keyboard.press('Enter');
   await page.keyboard.press('Space');
   await expect(page.getByRole('heading', { name: completedTarget.title })).toHaveCount(0);
-  // A blocked Node explains itself instead of opening its detail.
   await expect(page.getByRole('dialog')).toContainText('Bloqueado por el equipo docente');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);

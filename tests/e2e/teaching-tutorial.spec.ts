@@ -77,7 +77,6 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   page,
   createUser,
 }) => {
-  // 22 steps, each waiting for its target to settle before it is highlighted.
   test.setTimeout(60_000);
   const user = await createUser();
   await authenticateAs(page.context(), user.id);

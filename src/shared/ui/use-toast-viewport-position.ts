@@ -61,8 +61,6 @@ export function useToastViewportPosition() {
           ? Math.max(20, window.innerWidth - sidebarRect.left + 20)
           : 20;
       let bottom = visible ? Math.max(20, window.innerHeight - rect.bottom) : 20;
-      // A compact editor is a bottom sheet over the canvas and its controls. Its height ignores
-      // the entry transform, which never triggers another measurement.
       if (sidebar && sidebarRect && sidebarRect.left <= 1 && sidebarRect.height > 0) {
         bottom = Math.max(bottom, sidebar.offsetHeight + 12);
       }

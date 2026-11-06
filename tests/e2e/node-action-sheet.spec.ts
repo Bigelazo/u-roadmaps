@@ -168,7 +168,6 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   await composer.getByRole('tab', { name: 'Enlace', exact: true }).tap();
   await composer.getByLabel('Título', { exact: true }).fill('Touch Resource draft');
 
-  // The compact editor is a sheet: leaving it through the canvas still guards the draft.
   await page.getByRole('button', { name: 'Deseleccionar nodo' }).tap();
   await expect(confirmation).toContainText('Descartar cambios sin guardar');
   await confirmation.getByRole('button', { name: 'Seguir editando' }).tap();

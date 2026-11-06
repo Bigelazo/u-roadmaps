@@ -316,7 +316,6 @@ function NodeActionMenu({
   onAction,
 }: NodeActionCallbacks & NodeActionTriggerProps) {
   const actions = nodeMenuActions(nodeId, hidden, teacherBlocked, onAction);
-  // Visible at every width; coarse pointers get 44px controls whichever menu opens.
   const coarsePointer = useCoarsePointer();
 
   return (

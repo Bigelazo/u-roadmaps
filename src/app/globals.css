@@ -8,12 +8,6 @@ body {
   overflow-x: hidden;
 }
 
-/*
- * Viewport pages (the Roadmap canvas, the version viewer and the practice
- * canvas) fill exactly one viewport at every width: the body becomes a column
- * whose global navigation keeps its natural height (one or two rows) and whose
- * route root takes the remaining space. Nothing hard-codes the header height.
- */
 body:has([data-viewport-page]) {
   display: flex;
   height: 100dvh;

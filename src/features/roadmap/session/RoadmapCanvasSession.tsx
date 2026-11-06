@@ -7,7 +7,6 @@ import { roadmapCanvasSessionKey } from '@/features/roadmap/session/key';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
 
 export function RoadmapCanvasSession(input: RoadmapCanvasSessionInput) {
-  // The graph itself mounts only after the Roadmap is fetched; this runs in the initial HTML.
   useState(prepareRoutingEngine);
   return (
     <RoadmapCanvasView

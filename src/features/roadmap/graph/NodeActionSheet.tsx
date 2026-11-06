@@ -14,10 +14,6 @@ import {
   SheetTitle,
 } from '@/shared/ui/sheet';
 
-/**
- * Node actions open as a bottom sheet in the compact canvas layout (below
- * `lg`, whatever the pointer) and as the radial menu otherwise.
- */
 export function useNodeActionSheet() {
   return useCompactCanvasLayout();
 }

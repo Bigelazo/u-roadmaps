@@ -84,8 +84,6 @@ export function RoadmapTutorial<Action = never>({
       confirmingRef.current = true;
       setIsConfirmingExit(true);
     };
-    // Brings the step's target into view (panning the canvas when it lives there) and
-    // waits until it settles, so the highlight is drawn where the target ends up.
     const prepareTarget = async (step: TutorialStep<Action>) => {
       await waitForElement(step.element);
       await waitForStableElement(step.element);
@@ -188,7 +186,6 @@ export function RoadmapTutorial<Action = never>({
     const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
       document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
-      // Refresh snaps the stage to its target, interrupting Driver's animation.
       if (confirmingRef.current || highlighting || index === undefined || !tour.isActive()) return;
       restoreHighlight(index);
       if (steps[index].highlightElements) {

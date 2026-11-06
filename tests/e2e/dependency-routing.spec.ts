@@ -126,7 +126,6 @@ test('a failed WASM load retries once, then offers retry without drawing an unsa
   await expect(
     page.getByRole('alert').filter({ hasText: 'No pudimos trazar las dependencias.' }),
   ).toBeVisible();
-  // The first load and its automatic retry, at least: the preload may add its own request.
   expect(blockedRequests).toBeGreaterThanOrEqual(2);
   await expect(page.locator('.react-flow__edge-path')).toHaveCount(0);
   await page.unroute('**/vendor/libavoid/0.4.5/libavoid.wasm');
