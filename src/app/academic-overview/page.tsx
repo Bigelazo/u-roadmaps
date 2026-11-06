@@ -8,6 +8,7 @@ import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 import { getInboxIdentity } from '@/features/notifications/server';
 import { UnavailableNoticeFallback } from '@/features/notifications';
+import { ThirdPartyLicensesLink } from '@/app/_components/ThirdPartyLicensesLink';
 
 export default async function AcademicOverviewPage(props: PageProps<'/academic-overview'>) {
   const searchParams = await props.searchParams;
@@ -22,23 +23,29 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
   if (!user) redirect('/api/plogin/start');
 
   return (
-    <AcademicOverview
-      overview={await getAcademicOverviewPage(user)}
-      notificationsEnabled={Boolean(getInboxIdentity(user.id))}
-      notice={
-        searchParams.accessLost === '1' ? (
-          <Alert role="status">
-            <AlertTitle>Ya no tienes acceso a ese roadmap</AlertTitle>
-            <AlertDescription>
-              Tu participación en el curso cambió. Aquí están los cursos en los que participas hoy.
-            </AlertDescription>
-          </Alert>
-        ) : noticeId && reason ? (
-          <UnavailableNoticeFallback reason={reason} />
-        ) : null
-      }
-      renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}
-      tutorialInvitation={await isFirstVisitInvitationDue(user.id)}
-    />
+    <>
+      <AcademicOverview
+        overview={await getAcademicOverviewPage(user)}
+        notificationsEnabled={Boolean(getInboxIdentity(user.id))}
+        notice={
+          searchParams.accessLost === '1' ? (
+            <Alert role="status">
+              <AlertTitle>Ya no tienes acceso a ese roadmap</AlertTitle>
+              <AlertDescription>
+                Tu participación en el curso cambió. Aquí están los cursos en los que participas
+                hoy.
+              </AlertDescription>
+            </Alert>
+          ) : noticeId && reason ? (
+            <UnavailableNoticeFallback reason={reason} />
+          ) : null
+        }
+        renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}
+        tutorialInvitation={await isFirstVisitInvitationDue(user.id)}
+      />
+      <footer className="flex justify-end border-t border-fog px-4 py-2 text-sm text-graphite sm:px-6">
+        <ThirdPartyLicensesLink />
+      </footer>
+    </>
   );
 }
