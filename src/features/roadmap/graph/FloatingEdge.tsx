@@ -4,14 +4,14 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 
 import { memo } from 'react';
 import { X } from 'lucide-react';
-import { BaseEdge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
+import { EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
 import { useDependencyRoute } from '@/features/roadmap/graph/routing/DependencyRouting';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { Button } from '@/shared/ui/button';
+import { AnimatedDependencyPath } from '@/features/roadmap/graph/DependencyAnimation';
 
 export const FloatingEdge = memo(function FloatingEdge({
   id,
-  markerEnd,
   selected,
   style,
   interactionWidth,
@@ -28,13 +28,16 @@ export const FloatingEdge = memo(function FloatingEdge({
 
   return (
     <>
-      <BaseEdge
-        id={id}
-        path={path}
-        markerEnd={markerEnd}
-        style={style}
-        interactionWidth={interactionWidth}
-      />
+      <AnimatedDependencyPath id={id} path={path} style={style} />
+      {interactionWidth !== 0 ? (
+        <path
+          d={path}
+          className="react-flow__edge-interaction"
+          fill="none"
+          strokeOpacity={0}
+          strokeWidth={interactionWidth ?? 20}
+        />
+      ) : null}
       {selected && onDelete ? (
         <EdgeLabelRenderer>
           <div

@@ -1,23 +1,19 @@
+// @vitest-environment node
 vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
-import { beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { ApplicationError } from '@/shared/errors/types';
 
 const { changeTeacherBlock, previewTeacherBlock } = vi.hoisted(() => ({
   changeTeacherBlock: vi.fn(),
   previewTeacherBlock: vi.fn(),
 }));
 
-vi.mock('@/shared/server/db', () => ({ Prisma: {} }));
-vi.mock('@/shared/errors/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/errors/server')>()),
-  applicationResult: (operation: () => Promise<Response>) => ({
-    match: (onSuccess: (response: Response) => Response) => operation().then(onSuccess),
-  }),
-}));
+vi.mock('@/shared/server/db', async () => {
+  const { PrismaClientKnownRequestError } = await import('@prisma/client/runtime/client');
+  return { Prisma: { PrismaClientKnownRequestError } };
+});
 vi.mock('@/app/_adapters/auth', () => ({
   requireAuthenticatedUser: async () => ({ id: 'teacher-id' }),
-}));
-vi.mock('@/app/_adapters/roadmap', () => ({
-  requireCourseOfferingIdentifier: () => ({ courseCode: 'CC3002', year: 2026, semester: 2 }),
 }));
 vi.mock('@/features/roadmap/server', () => ({ changeTeacherBlock, previewTeacherBlock }));
 
@@ -38,6 +34,8 @@ const context = {
 };
 
 const preview = { mode: 'BRANCH', nodes: [], version: 'preview-version' };
+
+afterEach(() => vi.restoreAllMocks());
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -84,17 +82,34 @@ test('a preview returns its result without a mutation', async () => {
   expect(changeTeacherBlock).not.toHaveBeenCalled();
 });
 
-test('a failed confirmed action returns its error', async () => {
-  const error = new Error('TEACHER_BLOCK_PREVIEW_STALE');
-  changeTeacherBlock.mockRejectedValue(error);
-
-  await expect(
-    DELETE(
-      new Request('http://localhost/teacher-block', {
-        method: 'DELETE',
-        headers: { 'x-teacher-block-preview': 'stale-version' },
-      }),
-      context as never,
+test.each([
+  {
+    name: 'stale confirmed action',
+    failure: new ApplicationError(
+      409,
+      'TEACHER_BLOCK_PREVIEW_STALE',
+      'La previsualización cambió.',
     ),
-  ).rejects.toThrow('TEACHER_BLOCK_PREVIEW_STALE');
+    status: 409,
+    error: { code: 'TEACHER_BLOCK_PREVIEW_STALE', message: 'La previsualización cambió.' },
+  },
+  {
+    name: 'unexpected mutation failure',
+    failure: new Error('SECRET SQL'),
+    status: 500,
+    error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error inesperado.' },
+  },
+])('serializes a $name', async ({ failure, status, error }) => {
+  if (!(failure instanceof ApplicationError))
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  changeTeacherBlock.mockRejectedValue(failure);
+  const response = await DELETE(
+    new Request('http://localhost/teacher-block', {
+      method: 'DELETE',
+      headers: { 'x-teacher-block-preview': 'stale-version' },
+    }),
+    context,
+  );
+  expect(response.status).toBe(status);
+  await expect(response.json()).resolves.toEqual({ error });
 });

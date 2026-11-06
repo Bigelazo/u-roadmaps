@@ -30,8 +30,9 @@ const {
 }));
 
 vi.mock('@/features/roadmap/graph/routing/DependencyRouting', () => ({
-  DependencyRouting: ({ children }: { children: ReactNode }) => children,
+  DependencyRouting: ({ children }: { children: ReactNode }) => <>{children}</>,
   useDependencyRoute: () => undefined,
+  useRoutingEngineStatus: () => 'routed',
 }));
 
 vi.mock('@xyflow/react', () => ({

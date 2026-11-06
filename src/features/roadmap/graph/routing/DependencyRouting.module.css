@@ -1,9 +1,0 @@
-.reveal :global(.react-flow__edge-path) {
-  animation: reveal 180ms ease-out;
-}
-
-@keyframes reveal {
-  from {
-    opacity: 0;
-  }
-}

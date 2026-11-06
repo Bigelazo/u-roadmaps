@@ -61,8 +61,9 @@ function blockedByTeacher(page: Page, title: string) {
 }
 
 async function connect(page: Page, sourceTitle: string, targetTitle: string) {
+  await practiceNode(page, sourceTitle).getByTestId('roadmap-card').hover();
   const source = practiceNode(page, sourceTitle).locator('.react-flow__handle-right');
-  const target = practiceNode(page, targetTitle).locator('.react-flow__handle-left');
+  const target = practiceNode(page, targetTitle).getByTestId('roadmap-card');
   const from = await source.boundingBox();
   const to = await target.boundingBox();
   if (!from || !to) throw new Error('No se pudieron medir las conexiones.');
@@ -376,6 +377,7 @@ test('the highlighted creation menu stays behind its floating button', async ({
   const user = await createUser();
   await authenticateAs(page.context(), user.id);
   await page.goto('/practice-roadmap/teaching');
+  await expectStep(page, 'Centrar roadmap');
   await page.getByRole('button', { name: 'Centrar mapa' }).click();
   await expectStep(page, 'Nodos');
   await next(page, 'Nodo oculto');

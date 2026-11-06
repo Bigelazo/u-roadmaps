@@ -39,8 +39,9 @@ function nodeProps(node: RoadmapFlowNode): NodeProps<RoadmapFlowNode> {
 }
 
 vi.mock('@/features/roadmap/graph/routing/DependencyRouting', () => ({
-  DependencyRouting: ({ children }: { children: ReactNode }) => children,
+  DependencyRouting: ({ children }: { children: ReactNode }) => <>{children}</>,
   useDependencyRoute: () => undefined,
+  useRoutingEngineStatus: () => 'routed',
 }));
 
 vi.mock('@xyflow/react', () => ({
@@ -212,6 +213,7 @@ test('enables the complete editing capability only for an editable teaching proj
   );
 
   expect(screen.getByRole('button', { name: 'Ordenar horizontalmente' })).toBeTruthy();
+  expect(screen.getByTestId('dependency-dependency-1').style.stroke).toBe('var(--ink)');
   expect(screen.getAllByRole('button', { name: 'Abrir menú de acciones del nodo' })).toHaveLength(
     2,
   );

@@ -323,6 +323,27 @@ export default defineConfig([
     },
   },
   {
+    files: ['tests/app/{api,_adapters}/**/*.test.{ts,tsx}'],
+    rules: {
+      // Deliberately narrow: direct vi.mock/doMock, including spy-only mocks.
+      // Renamed bindings, relative aliases and indirect replacements need review.
+      'no-restricted-syntax': [
+        'error',
+        ...['@/shared/errors/server', '@/app/_adapters/http'].flatMap((module) => {
+          const call =
+            "CallExpression[callee.object.name='vi'][callee.property.name=/^(mock|doMock)$/]";
+          return [
+            `${call}[arguments.0.value='${module}']`,
+            `${call}[arguments.0.type='ImportExpression'][arguments.0.source.value='${module}']`,
+          ].map((selector) => ({
+            selector,
+            message: 'HTTP contracts must retain real error normalization and HTTP serialization.',
+          }));
+        }),
+      ],
+    },
+  },
+  {
     files: ['tests/notifications-integration/**/*.test.ts'],
     settings: { vitest: { vitestImports: ['./fixtures'] } },
   },

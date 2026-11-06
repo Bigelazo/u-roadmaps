@@ -1,3 +1,5 @@
+import { motion, type MotionStyle } from 'motion/react';
+import { useNodeEntryProgress } from '@/features/roadmap/graph/DependencyAnimation';
 import {
   CircleCheckBig,
   CircleEllipsis,
@@ -8,7 +10,14 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
@@ -435,25 +444,88 @@ function NodeNotificationBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'i
 }
 
 export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) {
+  const entryProgress = useNodeEntryProgress(id);
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const wrapper = cardRef.current?.closest<HTMLElement>('.react-flow__node');
+    if (!wrapper) return;
+    // Keep geometry measurable while waiting, but exclude invisible Nodes from input and focus.
+    const update = (progress: number) => {
+      wrapper.inert = progress === 0;
+      wrapper.style.visibility = progress === 0 ? 'hidden' : '';
+    };
+    update(entryProgress.get());
+    const unsubscribe = entryProgress.on('change', update);
+    return () => {
+      unsubscribe();
+      wrapper.inert = false;
+      wrapper.style.visibility = '';
+    };
+  }, [entryProgress]);
+  const [connectionHovered, setConnectionHovered] = useState(false);
   const size = roadmapNodeSizeForTitle(data.title);
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
-  const canConnect = editing && Boolean(data.canManageActions);
+  const canConnect =
+    editing &&
+    Boolean(data.canManageActions) &&
+    !hidden &&
+    !data.isActionMenuOpen &&
+    !data.isActionMenuClosing;
+  const connectionHoverActive = canConnect && connectionHovered;
+  useEffect(() => {
+    if (!canConnect) setConnectionHovered(false);
+  }, [canConnect]);
+  const trackConnectionHover = (event: PointerEvent<HTMLDivElement>) => {
+    if (
+      !canConnect ||
+      !['mouse', 'pen'].includes(event.pointerType) ||
+      !window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
+    )
+      return;
+    const card = event.currentTarget;
+    const bounds = card.getBoundingClientRect();
+    const overBody =
+      bounds.width > 0 &&
+      bounds.height > 0 &&
+      event.clientX >= bounds.left &&
+      event.clientX <= bounds.right &&
+      event.clientY >= bounds.top &&
+      event.clientY <= bounds.bottom;
+    if (overBody) {
+      if (!connectionHovered) setConnectionHovered(true);
+      return;
+    }
+    if (!connectionHovered) return;
+    // A launch band must yield to an adjacent Node's body or visible controls.
+    const coversAnotherNode = document
+      .elementsFromPoint?.(event.clientX, event.clientY)
+      .some((element) => {
+        const otherCard = element.closest('[data-slot="roadmap-card"]');
+        return otherCard && otherCard !== card && !element.closest('.react-flow__handle');
+      });
+    if (coversAnotherNode) setConnectionHovered(false);
+  };
   const teacherBlocked = editing && data.isTeacherBlocked;
   const blocked = locked || teacherBlocked;
   const nodeColor = blocked ? 'var(--blocked)' : data.typeColor;
-  const coarsePointer = useCoarsePointer();
   return (
-    <div
+    <motion.div
+      ref={cardRef}
       data-slot="roadmap-card"
       data-testid="roadmap-card"
       data-hidden={hidden || undefined}
+      data-connection-enabled={canConnect || undefined}
+      data-connection-hovered={connectionHoverActive || undefined}
+      onPointerEnter={trackConnectionHover}
+      onPointerMove={trackConnectionHover}
+      onPointerLeave={() => setConnectionHovered(false)}
       data-block-reason={data.blockReason}
       aria-label={hidden ? `${data.title}: oculto para estudiantes` : undefined}
       aria-disabled={locked ? true : undefined}
       className={cn(
-        'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transform-none motion-reduce:transition-none',
+        'relative box-border rounded-lg border-2 px-4 py-3 motion-reduce:transition-none',
         selected && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
         hidden && 'border-dashed',
         locked
@@ -466,6 +538,8 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       style={
         {
           '--roadmap-node-color': nodeColor,
+          scale: entryProgress,
+          transformOrigin: 'center center',
           width: size.width,
           height: size.height,
           backgroundColor: blocked
@@ -475,7 +549,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
             ? `repeating-linear-gradient(-45deg, transparent 0, transparent 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 9px, color-mix(in srgb, ${nodeColor} 11%, transparent) 11px)`
             : undefined,
           borderColor: nodeColor,
-        } as CSSProperties
+        } as MotionStyle
       }
     >
       <div
@@ -505,27 +579,19 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
               key={id}
               id={id}
               data-testid="roadmap-node-handle"
+              className="roadmap-node-handle"
               type="source"
               position={position}
               isConnectable={canConnect}
-              // A wider invisible grab area for fingers; the dot keeps its size.
-              className={cn(
-                coarsePointer &&
-                  canConnect &&
-                  "before:absolute before:-inset-4 before:rounded-full before:content-['']",
-              )}
+              onTouchStartCapture={(event) => event.stopPropagation()}
               style={{
-                width: 12,
-                height: 12,
-                background: 'var(--primary)',
-                border: '2px solid var(--card)',
                 visibility: canConnect ? 'visible' : 'hidden',
-                pointerEvents: canConnect ? 'auto' : 'none',
+                pointerEvents: canConnect ? undefined : 'none',
               }}
             />
           ))
         : null}
       <NodeNotificationBadge id={id} data={data} />
-    </div>
+    </motion.div>
   );
 }

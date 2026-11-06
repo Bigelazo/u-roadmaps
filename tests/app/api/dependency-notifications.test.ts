@@ -1,5 +1,7 @@
+// @vitest-environment node
 vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
-import { beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { ApplicationError } from '@/shared/errors/types';
 
 const {
   createRoadmapDependency,
@@ -25,18 +27,12 @@ vi.mock('next/server', async (importOriginal) => ({
   after,
 }));
 
-vi.mock('@/shared/server/db', () => ({ Prisma: {} }));
-vi.mock('@/shared/errors/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/errors/server')>()),
-  applicationResult: (operation: () => Promise<Response>) => ({
-    match: (onSuccess: (response: Response) => Response) => operation().then(onSuccess),
-  }),
-}));
+vi.mock('@/shared/server/db', async () => {
+  const { PrismaClientKnownRequestError } = await import('@prisma/client/runtime/client');
+  return { Prisma: { PrismaClientKnownRequestError } };
+});
 vi.mock('@/app/_adapters/auth', () => ({
   requireAuthenticatedUser: async () => ({ id: 'teacher-id' }),
-}));
-vi.mock('@/app/_adapters/roadmap', () => ({
-  requireCourseOfferingIdentifier: () => ({ courseCode: 'CC3002', year: 2026, semester: 2 }),
 }));
 vi.mock('@/features/roadmap/server', () => ({
   createRoadmapDependency,
@@ -63,6 +59,8 @@ const context = {
     dependencyId: 'dependency-id',
   }),
 };
+
+afterEach(() => vi.restoreAllMocks());
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -92,20 +90,33 @@ test('POST returns the plain confirmed mutation', async () => {
   expect(sequence).toEqual(['mutation-committed']);
 });
 
-test('POST returns a failed Dependency action', async () => {
-  const error = new Error('DEPENDENCY_CYCLE');
-  createRoadmapDependency.mockRejectedValue(error);
-
-  await expect(
-    POST(
-      new Request('http://localhost/dependencies', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sourceNodeId: 'source-id', targetNodeId: 'target-id' }),
-      }),
-      context as never,
-    ),
-  ).rejects.toThrow('DEPENDENCY_CYCLE');
+test.each([
+  {
+    name: 'typed cycle refusal',
+    failure: new ApplicationError(409, 'DEPENDENCY_CYCLE', 'La dependencia forma un ciclo.'),
+    status: 409,
+    error: { code: 'DEPENDENCY_CYCLE', message: 'La dependencia forma un ciclo.' },
+  },
+  {
+    name: 'unexpected database failure',
+    failure: new Error('SECRET SQL'),
+    status: 500,
+    error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error inesperado.' },
+  },
+])('POST serializes a $name', async ({ failure, status, error }) => {
+  if (!(failure instanceof ApplicationError))
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  createRoadmapDependency.mockRejectedValue(failure);
+  const response = await POST(
+    new Request('http://localhost/dependencies', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sourceNodeId: 'source-id', targetNodeId: 'target-id' }),
+    }),
+    context,
+  );
+  expect(response.status).toBe(status);
+  await expect(response.json()).resolves.toEqual({ error });
   expect(after).not.toHaveBeenCalled();
 });
 

@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { Position } from '@xyflow/react';
 import {
+  dependencyArrowGeometry,
   floatingEdgeGeometry,
   findOpenRoadmapPosition,
   nearestSide,
@@ -12,6 +13,40 @@ import {
 } from '@/features/roadmap/graph/geometry';
 
 const card = (x: number, y: number) => ({ x, y, width: 190, height: 120 });
+
+it.each([
+  {
+    direction: 'right',
+    target: card(400, 0),
+    sourceAnchor: { x: 190, y: 60 },
+    targetAnchor: { x: 400, y: 60 },
+  },
+  {
+    direction: 'left',
+    target: card(-400, 0),
+    sourceAnchor: { x: 0, y: 60 },
+    targetAnchor: { x: -210, y: 60 },
+  },
+  {
+    direction: 'down',
+    target: card(0, 400),
+    sourceAnchor: { x: 95, y: 120 },
+    targetAnchor: { x: 95, y: 400 },
+  },
+  {
+    direction: 'up',
+    target: card(0, -400),
+    sourceAnchor: { x: 95, y: 0 },
+    targetAnchor: { x: 95, y: -280 },
+  },
+])(
+  'connects both arrow ends to the actual Node border when facing $direction',
+  ({ target, sourceAnchor, targetAnchor }) => {
+    const geometry = dependencyArrowGeometry(card(0, 0), target);
+    expect({ x: geometry.sourceX, y: geometry.sourceY }).toEqual(sourceAnchor);
+    expect({ x: geometry.targetX, y: geometry.targetY }).toEqual(targetAnchor);
+  },
+);
 
 it('leaves through the side that faces the other node', () => {
   const row = floatingEdgeGeometry(card(480, 0), card(720, 0));

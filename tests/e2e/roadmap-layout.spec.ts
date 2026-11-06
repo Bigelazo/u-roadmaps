@@ -36,18 +36,19 @@ async function bounds(locator: Locator) {
   return box;
 }
 
-async function expectTopRightToast(page: Page, toast: Locator) {
-  const navigation = await bounds(page.getByRole('banner'));
+async function expectBottomRightToast(page: Page, toast: Locator) {
+  const trigger = page.getByRole('button', { name: 'Crear en el mapa' });
   const viewport = page.viewportSize()!;
   await expect
     .poll(async () => {
       const box = await bounds(toast);
+      const anchor = await bounds(trigger);
       return {
-        belowNavigation: box.y >= navigation.y + navigation.height,
-        rightInset: Math.round(viewport.width - box.x - box.width),
+        leftOfTrigger: box.x + box.width <= anchor.x - 12,
+        insideViewport: box.x >= 16 && box.y >= 0 && box.y + box.height <= viewport.height,
       };
     })
-    .toEqual({ belowNavigation: true, rightInset: 20 });
+    .toEqual({ leftOfTrigger: true, insideViewport: true });
 }
 
 test('student Node detail actions do not overlap its heading on mobile', async ({
@@ -253,7 +254,7 @@ test('keeps feedback visible beside an open editor', async ({ page, course }) =>
   await page.getByRole('button', { name: 'Guardar cambios' }).click();
   const success = toast(page, 'Cambios guardados exitosamente.');
   await expect(success).toBeVisible();
-  await expectTopRightToast(page, success);
+  await expectBottomRightToast(page, success);
 
   await page.route(`**${course.apiPath(`/nodes/${course.nodes.first}`)}`, async (route) => {
     await route.fulfill({ status: 409, json: { error: 'No se pudo guardar el nodo.' } });
@@ -264,10 +265,14 @@ test('keeps feedback visible beside an open editor', async ({ page, course }) =>
   await expect(error).toBeVisible();
   await error.hover();
   await expect(success).toBeVisible();
-  await expectTopRightToast(page, error);
-  await expectTopRightToast(page, success);
-  const [errorBox, successBox] = await Promise.all([bounds(error), bounds(success)]);
-  expect(successBox.y).toBeGreaterThanOrEqual(errorBox.y + errorBox.height);
+  await expectBottomRightToast(page, error);
+  await expectBottomRightToast(page, success);
+  await expect
+    .poll(async () => {
+      const [errorBox, successBox] = await Promise.all([bounds(error), bounds(success)]);
+      return successBox.y + successBox.height <= errorBox.y;
+    })
+    .toBe(true);
   await success.locator('[data-slot="toast-close"]').click();
   await expect(success).toHaveCount(0);
   await error.hover();

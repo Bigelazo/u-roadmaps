@@ -1,5 +1,5 @@
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mockViewport } from '../../../support/viewport';
@@ -9,11 +9,42 @@ import type { StudentNodeBlockReason } from '@/features/roadmap/types';
 import { NodeChangeCountsProvider } from '@/features/notifications/components/inbox-driver';
 
 beforeEach(() => mockViewport(1280));
+const originalElementsFromPoint = document.elementsFromPoint;
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  if (originalElementsFromPoint) document.elementsFromPoint = originalElementsFromPoint;
+  else Reflect.deleteProperty(document, 'elementsFromPoint');
 });
+
+function enableHoverPointer(fine = true) {
+  vi.stubGlobal(
+    'PointerEvent',
+    class extends MouseEvent {
+      readonly pointerType: string;
+      constructor(type: string, options: PointerEventInit = {}) {
+        super(type, options);
+        this.pointerType = options.pointerType ?? 'mouse';
+      }
+    },
+  );
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: fine && query === '(hover: hover) and (pointer: fine)',
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+function measureCard(card: HTMLElement, x = 100) {
+  vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(new DOMRect(x, 100, 200, 80));
+}
 
 type NodePropsOverrides = Partial<Omit<NodeProps<RoadmapFlowNode>, 'data'>> & {
   data?: Partial<RoadmapFlowNode['data']>;
@@ -223,6 +254,92 @@ test('keeps dependency handles mounted, but inert, for student nodes', () => {
     expect(handle.style.visibility).toBe('hidden');
     expect(handle.style.pointerEvents).toBe('none');
   }
+});
+
+test('keeps the connection surface inert while the Node action menu is open', () => {
+  renderNode(
+    nodeProps({
+      data: { status: 'editing', canManageActions: true, isActionMenuOpen: true },
+    }),
+  );
+
+  expect(screen.getByTestId('roadmap-card').dataset.connectionEnabled).toBeUndefined();
+  for (const handle of screen.getAllByTestId('roadmap-node-handle')) {
+    expect(handle.style.pointerEvents).toBe('none');
+  }
+  expect(screen.getByRole('button', { name: 'Cerrar menú de acciones del nodo' })).toBeTruthy();
+});
+
+test('arms the exterior launch zone only after body hover and retains it through a move into the band', () => {
+  enableHoverPointer();
+  renderNode(nodeProps({ data: { status: 'editing', canManageActions: true } }));
+  const card = screen.getByTestId('roadmap-card');
+  measureCard(card);
+  const band = screen.getAllByTestId('roadmap-node-handle')[1];
+  fireEvent.pointerOver(band, { pointerType: 'mouse', clientX: 305, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBeUndefined();
+
+  fireEvent.pointerMove(card, { pointerType: 'mouse', clientX: 200, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBe('true');
+  fireEvent.pointerOut(card, { relatedTarget: band, pointerType: 'mouse' });
+  fireEvent.pointerMove(band, { pointerType: 'mouse', clientX: 305, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBe('true');
+  fireEvent.pointerOut(band, { relatedTarget: document.body, pointerType: 'mouse' });
+  expect(card.dataset.connectionHovered).toBeUndefined();
+});
+
+test('an exterior band yields to an adjacent Node action control instead of intercepting it', () => {
+  enableHoverPointer();
+  render(
+    <ReactFlowProvider>
+      <RoadmapNode
+        {...nodeProps({ id: 'source', data: { status: 'editing', canManageActions: true } })}
+      />
+      <RoadmapNode
+        {...nodeProps({ id: 'neighbor', data: { status: 'editing', canManageActions: true } })}
+      />
+    </ReactFlowProvider>,
+  );
+  const [card, neighbor] = screen.getAllByTestId('roadmap-card');
+  measureCard(card);
+  const band = screen.getAllByTestId('roadmap-node-handle')[3];
+  const action = within(neighbor).getByRole('button', { name: 'Abrir menú de acciones del nodo' });
+  document.elementsFromPoint = vi.fn(() => [band, action]);
+  fireEvent.pointerMove(card, { pointerType: 'mouse', clientX: 200, clientY: 130 });
+  expect(card.dataset.connectionHovered).toBe('true');
+  fireEvent.pointerMove(band, { pointerType: 'mouse', clientX: 95, clientY: 175 });
+  expect(card.dataset.connectionHovered).toBeUndefined();
+});
+
+test.each([
+  { pointerType: 'touch', fine: true },
+  { pointerType: 'mouse', fine: false },
+])(
+  'does not arm the exterior zone for a $pointerType pointer with fine hover=$fine',
+  ({ pointerType, fine }) => {
+    enableHoverPointer(fine);
+    renderNode(nodeProps({ data: { status: 'editing', canManageActions: true } }));
+    const card = screen.getByTestId('roadmap-card');
+    measureCard(card);
+    fireEvent.pointerMove(card, { pointerType, clientX: 200, clientY: 130 });
+    expect(card.dataset.connectionHovered).toBeUndefined();
+  },
+);
+
+test('allows the graph to observe touch starts without letting native handles start an immediate connection', () => {
+  const observeTouch = vi.fn();
+  const bubbleTouch = vi.fn();
+  render(
+    <div onTouchStartCapture={observeTouch} onTouchStart={bubbleTouch}>
+      <ReactFlowProvider>
+        <RoadmapNode {...nodeProps({ data: { status: 'editing', canManageActions: true } })} />
+      </ReactFlowProvider>
+    </div>,
+  );
+
+  fireEvent.touchStart(screen.getAllByTestId('roadmap-node-handle')[0]);
+  expect(observeTouch).toHaveBeenCalledTimes(1);
+  expect(bubbleTouch).not.toHaveBeenCalled();
 });
 
 test('shows the node-type icon with an accessible label, rather than persistent status text', () => {

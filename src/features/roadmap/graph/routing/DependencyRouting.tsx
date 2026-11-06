@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from 'react';
@@ -23,17 +24,58 @@ import {
   type RoutingResult,
   type RoutingScene,
 } from './libavoid';
-import styles from './DependencyRouting.module.css';
 
 // Fast loads finish inside this budget and never show the status.
 const engineStatusDelayMs = 400;
 const engineRetryDelayMs = 1000;
 
 const emptyRoutes: RoutingResult = { routes: new Map(), blocked: 0 };
+const PreviewRoutingContext = createContext<{ module: AvoidModule; sceneKey: string } | null>(null);
+
+/** Speculation owns a native router: it never edits saved routes or their transaction history. */
+export function useConnectionPreviewRoute(source: string | null, target: string | null) {
+  const context = useContext(PreviewRoutingContext);
+  const [preview, setPreview] = useState<{ key: string; path: string } | null>(null);
+  const key =
+    context && source && target ? JSON.stringify([context.sceneKey, source, target]) : null;
+  useLayoutEffect(() => {
+    if (!context || !source || !target || !key) return;
+    const router = new DependencyRouter(context.module);
+    try {
+      const scene = JSON.parse(context.sceneKey) as RoutingScene;
+      let id = '__connection-preview__';
+      while (scene.dependencies.some((dependency) => dependency.id === id)) id += '_';
+      const result = router.route({
+        ...scene,
+        dependencies: [...scene.dependencies, { id, source, target }],
+      });
+      const route = result.routes.get(id);
+      setPreview(route ? { key, path: route.path } : null);
+    } catch {
+      setPreview(null);
+    } finally {
+      router.dispose();
+    }
+  }, [context, key, source, target]);
+  return preview?.key === key ? preview.path : null;
+}
+
 const RoutingContext = createContext(emptyRoutes.routes);
 
 export function useDependencyRoute(id: string) {
   return useContext(RoutingContext).get(id);
+}
+
+/**
+ * `waiting`: too early to tell whether the engine makes the entry sequence.
+ * `routed`: routes exist, so the sequence can play over them.
+ * `unavailable`: slow or failed, so the map must not keep Nodes hidden for it.
+ */
+export type RoutingEngineStatus = 'waiting' | 'routed' | 'unavailable';
+const RoutingEngineStatusContext = createContext<RoutingEngineStatus>('routed');
+
+export function useRoutingEngineStatus() {
+  return useContext(RoutingEngineStatusContext);
 }
 
 export function DependencyRouting({
@@ -85,45 +127,48 @@ export function DependencyRouting({
   // The canvas, its nodes and overlays render at once and stay mounted; only dependencies
   // wait for the engine. Unrouted dependencies stay absent rather than drawn as unsafe
   // native paths.
+  const status: RoutingEngineStatus = module ? 'routed' : slow || error ? 'unavailable' : 'waiting';
   return (
-    <RoutedCanvas
-      module={module}
-      sceneKey={JSON.stringify(roadmapRoutingScene(nodes, edges, { coarsePointer }))}
-    >
-      {children}
-      {module || !(slow || error) ? null : (
-        <div
-          className={cn(
-            'absolute bottom-24 left-1/2 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2',
-            error ? 'pointer-events-auto' : 'pointer-events-none',
-          )}
-        >
+    <RoutingEngineStatusContext value={status}>
+      <RoutedCanvas
+        module={module}
+        sceneKey={JSON.stringify(roadmapRoutingScene(nodes, edges, { coarsePointer }))}
+      >
+        {children}
+        {module || !(slow || error) ? null : (
           <div
-            className="flex items-center gap-3 rounded-lg border border-border bg-card/95 px-3 py-2 text-sm text-ink shadow-sm"
-            role={error ? 'alert' : 'status'}
+            className={cn(
+              'absolute bottom-24 left-1/2 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2',
+              error ? 'pointer-events-auto' : 'pointer-events-none',
+            )}
           >
-            <p>
-              {error
-                ? 'No pudimos trazar las dependencias. Vuelve a intentarlo.'
-                : 'Preparando dependencias…'}
-            </p>
-            {error ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setError(false);
-                  setSlow(false);
-                  setAttempt((n) => n + 1);
-                }}
-              >
-                Reintentar
-              </Button>
-            ) : null}
+            <div
+              className="flex items-center gap-3 rounded-lg border border-border bg-card/95 px-3 py-2 text-sm text-ink shadow-sm"
+              role={error ? 'alert' : 'status'}
+            >
+              <p>
+                {error
+                  ? 'No pudimos trazar las dependencias. Vuelve a intentarlo.'
+                  : 'Preparando dependencias…'}
+              </p>
+              {error ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setError(false);
+                    setSlow(false);
+                    setAttempt((n) => n + 1);
+                  }}
+                >
+                  Reintentar
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </div>
-      )}
-    </RoutedCanvas>
+        )}
+      </RoutedCanvas>
+    </RoutingEngineStatusContext>
   );
 }
 
@@ -136,10 +181,10 @@ function RoutedCanvas({
   sceneKey: string;
   children: ReactNode;
 }) {
+  const previewContext = useMemo(() => (module ? { module, sceneKey } : null), [module, sceneKey]);
   const [router, setRouter] = useState<DependencyRouter | null>(null);
   const [result, setResult] = useState(emptyRoutes);
   const [failed, setFailed] = useState(false);
-  const [revealed, setRevealed] = useState(false);
   useLayoutEffect(() => {
     if (!module) return;
     const instance = new DependencyRouter(module);
@@ -149,8 +194,6 @@ function RoutedCanvas({
   useLayoutEffect(() => {
     if (!router) return;
     try {
-      // A synchronous transaction before paint keeps routes on the same geometry
-      // revision as the controlled nodes, including intermediate drag positions.
       setResult(router.route(JSON.parse(sceneKey) as RoutingScene));
       setFailed(false);
     } catch {
@@ -159,28 +202,21 @@ function RoutedCanvas({
     }
   }, [router, sceneKey]);
   return (
-    <RoutingContext value={result.routes}>
-      {/* The fade rule only applies while this class is set, so it plays once: dependencies
-          inserted later and re-routes during drags appear without it. */}
-      <div
-        className={revealed ? 'contents' : cn('contents', styles.reveal)}
-        onAnimationEnd={(event) => {
-          if ((event.target as Element).matches('.react-flow__edge-path')) setRevealed(true);
-        }}
-      >
+    <PreviewRoutingContext value={previewContext}>
+      <RoutingContext value={result.routes}>
         {children}
-      </div>
-      {failed || result.blocked ? (
-        <div className="pointer-events-none absolute top-3 left-1/2 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2">
-          <Alert role="status">
-            <AlertDescription>
-              {failed
-                ? 'No pudimos trazar las dependencias. Vuelve a abrir el mapa.'
-                : 'Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.'}
-            </AlertDescription>
-          </Alert>
-        </div>
-      ) : null}
-    </RoutingContext>
+        {failed || result.blocked ? (
+          <div className="pointer-events-none absolute top-3 left-1/2 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2">
+            <Alert role="status">
+              <AlertDescription>
+                {failed
+                  ? 'No pudimos trazar las dependencias. Vuelve a abrir el mapa.'
+                  : 'Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.'}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
+      </RoutingContext>
+    </PreviewRoutingContext>
   );
 }

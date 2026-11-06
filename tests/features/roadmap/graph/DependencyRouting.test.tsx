@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import {
   DependencyRouting,
   useDependencyRoute,
+  useConnectionPreviewRoute,
+  useRoutingEngineStatus,
 } from '@/features/roadmap/graph/routing/DependencyRouting';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
@@ -25,7 +27,7 @@ vi.mock('@/features/roadmap/graph/routing/libavoid', async (original) => {
       disposed = false;
       route(scene: unknown) {
         if (this.disposed) throw new Error('Disposed scene reused');
-        return mocks.route(scene);
+        return mocks.route(scene, this);
       }
       dispose() {
         this.disposed = true;
@@ -209,30 +211,6 @@ test('ignores completion and pending retries after unmount', async () => {
   expect(mocks.route).toHaveBeenCalledTimes(calls);
 });
 
-test('the reveal class lasts until the first dependency has faded in', async () => {
-  const { container } = render(
-    <DependencyRouting nodes={nodes} edges={edges}>
-      <Edge />
-      <svg>
-        <path className="react-flow__edge-path" data-testid="edge-path" />
-      </svg>
-      <div data-testid="other" />
-    </DependencyRouting>,
-  );
-  await waitFor(() => expect(screen.getByTestId('route').textContent).toBe('M0,0L100,0'));
-  // eslint-disable-next-line testing-library/no-node-access -- the class is the only observable.
-  const wrapper = container.firstElementChild!;
-  const initial = wrapper.className;
-  expect(initial).toContain('contents');
-  // jsdom has no AnimationEvent, so React listens for the prefixed name it resolves there.
-  const animationEnd = (element: Element) =>
-    fireEvent(element, new Event('webkitAnimationEnd', { bubbles: true }));
-  animationEnd(screen.getByTestId('other'));
-  expect(wrapper.className).toBe(initial);
-  animationEnd(screen.getByTestId('edge-path'));
-  expect(wrapper.className).toBe('contents');
-});
-
 test('reports an impossible route without substituting a native crossing path', async () => {
   mocks.route.mockReturnValue({ routes: new Map(), blocked: 1 });
   render(
@@ -244,4 +222,100 @@ test('reports an impossible route without substituting a native crossing path', 
     'Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.',
   );
   expect(screen.getByTestId('route').textContent).toBe('unrouted');
+});
+
+function Preview({ target, pointer }: { target: string; pointer: number }) {
+  const path = useConnectionPreviewRoute('a', target);
+  return (
+    <output data-testid="preview" data-pointer={pointer}>
+      {path ?? 'unrouted'}
+    </output>
+  );
+}
+
+test('speculates in a separate router only when target or routing scene changes', async () => {
+  mocks.route.mockImplementation((scene: { dependencies: { id: string; target: string }[] }) => ({
+    routes: new Map(scene.dependencies.map(({ id, target }) => [id, { path: target }])),
+    blocked: 0,
+  }));
+  const view = (target: string, pointer: number, currentNodes = nodes) => (
+    <DependencyRouting nodes={currentNodes} edges={edges}>
+      <Edge />
+      <Preview target={target} pointer={pointer} />
+    </DependencyRouting>
+  );
+  const { rerender } = render(view('b', 1));
+  await waitFor(() => expect(screen.getByTestId('preview').textContent).toBe('b'));
+  const savedCalls = () =>
+    mocks.route.mock.calls.filter(([scene]) => scene.dependencies.length === 1);
+  const previewCalls = () =>
+    mocks.route.mock.calls.filter(([scene]) => scene.dependencies.length === 2);
+  expect(savedCalls()).toHaveLength(1);
+  expect(previewCalls()).toHaveLength(1);
+  expect(previewCalls()[0][1]).not.toBe(savedCalls()[0][1]);
+  expect(previewCalls()[0][1].disposed).toBe(true);
+  expect(savedCalls()[0][1].disposed).toBe(false);
+
+  rerender(view('b', 2, [{ ...nodes[0], selected: true }]));
+  expect(previewCalls()).toHaveLength(1);
+  expect(savedCalls()).toHaveLength(1);
+  rerender(view('c', 3));
+  expect(screen.getByTestId('preview').textContent).toBe('c');
+  expect(previewCalls()).toHaveLength(2);
+  expect(savedCalls()).toHaveLength(1);
+  rerender(view('c', 4, [{ ...nodes[0], position: { x: 10, y: 0 } }]));
+  expect(previewCalls()).toHaveLength(3);
+  expect(savedCalls()).toHaveLength(2);
+});
+
+function EngineStatus() {
+  return <output data-testid="engine">{useRoutingEngineStatus()}</output>;
+}
+const engineCanvas = () => (
+  <DependencyRouting nodes={nodes} edges={edges}>
+    <EngineStatus />
+  </DependencyRouting>
+);
+const engine = () => screen.getByTestId('engine').textContent;
+
+test('lets the entry sequence wait for a fast engine and start once it is routed', async () => {
+  vi.useFakeTimers();
+  let finish!: (module: object) => void;
+  mocks.load.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  render(engineCanvas());
+  await advance(399);
+  expect(engine()).toBe('waiting');
+  await act(async () => finish({}));
+  expect(engine()).toBe('routed');
+  await advance(5000);
+  expect(engine()).toBe('routed');
+});
+
+test('gives up on the entry sequence when the engine is slow, until it arrives', async () => {
+  vi.useFakeTimers();
+  let finish!: (module: object) => void;
+  mocks.load.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  render(engineCanvas());
+  await advance(400);
+  expect(engine()).toBe('unavailable');
+  await act(async () => finish({}));
+  expect(engine()).toBe('routed');
+});
+
+test('reports the engine unavailable when the load fails before the status budget', async () => {
+  vi.useFakeTimers();
+  mocks.load.mockRejectedValue(new Error('offline'));
+  render(engineCanvas());
+  await advance(399);
+  expect(engine()).toBe('waiting');
+  await advance(1000);
+  expect(engine()).toBe('unavailable');
 });

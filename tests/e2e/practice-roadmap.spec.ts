@@ -185,6 +185,7 @@ async function expectNodeAction(page: Page, title: string, action: string) {
 }
 
 async function connect(page: Page, sourceTitle: string, targetTitle: string) {
+  await practiceNode(page, sourceTitle).getByTestId('roadmap-card').hover();
   const source = practiceNode(page, sourceTitle).locator('.react-flow__handle-right');
   const target = practiceNode(page, targetTitle).locator('.react-flow__handle-left');
   const from = await source.boundingBox();
