@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CalendarDays, ChevronDown, Clock } from 'lucide-react';
 import { es } from 'react-day-picker/locale';
 import { cn } from 'cn';
+import { formatCalendarDay, formatMonthCaption } from '@/shared/calendar-day-format';
 import { zonedInstant, zonedWallClock, type ZonedWallClock } from '@/shared/zoned-time';
 import { Button } from '@/shared/ui/button';
 import { Calendar } from '@/shared/ui/calendar';
@@ -31,36 +32,6 @@ export type DateTimePickerProps = {
   disabled?: boolean;
   className?: string;
 };
-
-const dayFormatter = new Intl.DateTimeFormat('es-CL', {
-  timeZone: 'UTC',
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-});
-
-const monthFormatter = new Intl.DateTimeFormat('es-CL', { month: 'long' });
-
-const capitalizedParts = new Set<Intl.DateTimeFormatPartTypes>(['weekday', 'month']);
-
-function capitalize(text: string) {
-  return text.charAt(0).toLocaleUpperCase('es-CL') + text.slice(1);
-}
-
-function formatCapitalized(formatter: Intl.DateTimeFormat, date: Date) {
-  return formatter
-    .formatToParts(date)
-    .map(({ type, value }) => (capitalizedParts.has(type) ? capitalize(value) : value))
-    .join('');
-}
-
-function formatMonthCaption(month: Date) {
-  return `${formatCapitalized(monthFormatter, month)} ${month.getFullYear()}`;
-}
-
-function formatDay(day: string) {
-  return formatCapitalized(dayFormatter, new Date(`${day}T12:00:00.000Z`));
-}
 
 function dayOfDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -135,7 +106,7 @@ export function DateTimePicker({
               type="button"
               variant="outline"
               disabled={disabled}
-              aria-label={selected ? `${dayLabel}: ${formatDay(selected.day)}` : dayLabel}
+              aria-label={selected ? `${dayLabel}: ${formatCalendarDay(selected.day)}` : dayLabel}
               className={cn(
                 'min-w-fit flex-1 justify-start font-normal tabular-nums',
                 !selected && 'text-muted-foreground',
@@ -148,7 +119,7 @@ export function DateTimePicker({
             className="text-muted-foreground"
             aria-hidden="true"
           />
-          {selected ? formatDay(selected.day) : dayPlaceholder}
+          {selected ? formatCalendarDay(selected.day) : dayPlaceholder}
           <ChevronDown data-icon="inline-end" className="ml-auto" aria-hidden="true" />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">

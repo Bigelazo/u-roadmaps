@@ -115,7 +115,7 @@ test('touch Node actions are labeled, modal, contextual, and hand focus to confi
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toBeVisible();
   await expect(sheet).toBeHidden();
-  await expect(confirmation).toContainText('El nodo “Touch dependent” también será bloqueado.');
+  await expect(confirmation).toContainText('También se bloqueará el nodo que depende de él.');
   await expect
     .poll(() => confirmation.evaluate((element) => element.contains(document.activeElement)))
     .toBe(true);
@@ -140,8 +140,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   const confirmation = page.getByRole('alertdialog');
   await trigger.tap();
   await sheet.getByRole('button', { name: 'Ocultar para estudiantes' }).tap();
-  await expect(confirmation).toContainText('Touch prerequisite');
-  await expect(confirmation).toContainText('Touch dependent');
+  await expect(confirmation).toContainText('se eliminará su conexión');
   await confirmation.getByRole('button', { name: 'Ocultar', exact: true }).tap();
   await expect(confirmation).toBeHidden();
   await trigger.tap();
@@ -169,7 +168,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   await composer.getByLabel('Título', { exact: true }).fill('Touch Resource draft');
 
   await page.getByRole('button', { name: 'Deseleccionar nodo' }).tap();
-  await expect(confirmation).toContainText('Descartar cambios sin guardar');
+  await expect(confirmation).toContainText('¿Descartar los cambios sin guardar?');
   await confirmation.getByRole('button', { name: 'Seguir editando' }).tap();
   await expect(composer.getByLabel('Título', { exact: true })).toHaveValue('Touch Resource draft');
   await composer

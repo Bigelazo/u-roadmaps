@@ -403,7 +403,7 @@ describe('RoadmapCanvasSession', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reiniciar progreso' }));
     const dialog = await screen.findByRole('alertdialog', {
-      name: 'Reiniciar progreso de previsualización',
+      name: '¿Reiniciar el progreso simulado?',
     });
     await user.click(within(dialog).getByRole('button', { name: 'Reiniciar progreso' }));
     await waitFor(async () =>
@@ -457,7 +457,7 @@ describe('RoadmapCanvasSession', () => {
     await user.click(screen.getByRole('button', { name: 'Crear en el mapa' }));
     await user.click(await screen.findByText('Tipos de nodo'));
     await user.click(await screen.findByRole('button', { name: 'Eliminar tipo Taller' }));
-    const dialog = await screen.findByRole('alertdialog', { name: 'Confirmar eliminación' });
+    const dialog = await screen.findByRole('alertdialog', { name: '¿Eliminar el tipo Taller?' });
     await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
 
     await waitFor(async () =>

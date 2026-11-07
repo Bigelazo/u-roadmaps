@@ -291,7 +291,7 @@ test('keeps the radial node actions above their canvas focus treatment', async (
 
   await page.getByRole('button', { name: 'Ocultar para estudiantes' }).click();
 
-  await expect(page.getByRole('alertdialog', { name: /^¿Ocultar “/ })).toBeVisible();
+  await expect(page.getByRole('alertdialog', { name: /^¿Ocultar / })).toBeVisible();
   await page.getByRole('button', { name: 'Cancelar' }).click();
 });
 

@@ -376,7 +376,7 @@ test('teacher deletes a Canvas node with a concise confirmation and revalidated 
   const initialPreview = await initialPreviewPromise;
   expect(initialPreview.status()).toBe(200);
 
-  const dialog = page.getByRole('alertdialog', { name: `¿Eliminar “${sourceTitle}”?` });
+  const dialog = page.getByRole('alertdialog', { name: `¿Eliminar ${sourceTitle}?` });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Esta acción no se puede deshacer.');
   await expect(dialog.getByRole('list')).toHaveCount(0);
@@ -725,7 +725,7 @@ test('keeps the two-scope unlock confirmation within the dialog at every viewpor
   await expect(editor).toBeVisible();
   await editor.getByRole('button', { name: 'Desbloquear', exact: true }).click();
 
-  const dialog = page.getByRole('alertdialog', { name: /^¿Desbloquear “/ });
+  const dialog = page.getByRole('alertdialog', { name: /^¿Desbloquear / });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Cancelar' })).toBeFocused();
 
@@ -751,6 +751,12 @@ test('keeps the two-scope unlock confirmation within the dialog at every viewpor
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width);
       expect(box.y + box.height).toBeLessThanOrEqual(812);
+    }
+    if (width >= 640) {
+      const rows = await Promise.all(
+        controls.map(async (control) => Math.round((await control.boundingBox())!.y)),
+      );
+      expect(new Set(rows).size).toBe(1);
     }
   }
 
@@ -919,7 +925,7 @@ test('guards Node replacement and deselection without losing the editor session'
   await secondNode.click();
 
   const replacementDialog = page.getByRole('alertdialog', {
-    name: 'Descartar cambios sin guardar',
+    name: '¿Descartar los cambios sin guardar?',
   });
   await expect(replacementDialog).toBeVisible();
   await expect(replacementDialog).toContainText(
@@ -937,7 +943,7 @@ test('guards Node replacement and deselection without losing the editor session'
   await page.getByRole('button', { name: 'Deseleccionar nodo', exact: true }).click();
 
   const deselectionDialog = page.getByRole('alertdialog', {
-    name: 'Descartar cambios sin guardar',
+    name: '¿Descartar los cambios sin guardar?',
   });
   await expect(deselectionDialog).toContainText('Cerrar este Nodo descartará el borrador actual.');
   await deselectionDialog.getByRole('button', { name: 'Seguir editando' }).click();
@@ -945,7 +951,7 @@ test('guards Node replacement and deselection without losing the editor session'
 
   await page.getByRole('button', { name: 'Deseleccionar nodo', exact: true }).click();
   await page
-    .getByRole('alertdialog', { name: 'Descartar cambios sin guardar' })
+    .getByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' })
     .getByRole('button', { name: 'Descartar y continuar' })
     .click();
   await expect(page.locator('#roadmap-editor-panel')).toBeHidden();

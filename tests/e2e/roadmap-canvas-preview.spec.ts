@@ -32,7 +32,7 @@ test('a teacher previews, completes, resets, and exits the persistent student ca
 
   await page.getByRole('button', { name: 'Reiniciar progreso' }).click();
   await page
-    .getByRole('alertdialog', { name: 'Reiniciar progreso de previsualización' })
+    .getByRole('alertdialog', { name: '¿Reiniciar el progreso simulado?' })
     .getByRole('button', { name: 'Reiniciar progreso' })
     .click();
   await expect

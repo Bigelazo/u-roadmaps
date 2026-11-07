@@ -9,39 +9,47 @@ import {
 } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import type { NodeType, TeacherBlockOperationImpact } from '@/features/roadmap/types';
+import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 
-const continueText = 'Puedes seguir editando o descartarlo para continuar.';
+function text(value: ConfirmationPresentation['title'] | undefined) {
+  return renderToStaticMarkup(value)
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function plain(confirmation: ConfirmationPresentation | null) {
+  return confirmation
+    ? {
+        ...confirmation,
+        title: text(confirmation.title),
+        description: text(confirmation.description),
+      }
+    : null;
+}
 
 describe('editorDraftDiscardConfirmation', () => {
   it.each([
     [
       'replace-node',
-      `Seleccionar otro Nodo descartará el borrador actual. ${continueText}`,
+      'Seleccionar otro nodo descartará el borrador actual.',
       'Descartar y continuar',
     ],
     [
       'open-resource',
-      `Agregar un recurso a otro nodo reemplazará el borrador actual. ${continueText}`,
+      'Agregar un recurso a otro nodo descartará el borrador actual.',
       'Descartar y continuar',
     ],
-    [
-      'deselect-node',
-      `Cerrar este Nodo descartará el borrador actual. ${continueText}`,
-      'Descartar y continuar',
-    ],
-    [
-      'delete-node',
-      `Eliminar este Nodo descartará el borrador actual. ${continueText}`,
-      'Descartar y continuar',
-    ],
+    ['deselect-node', 'Cerrar este nodo descartará el borrador actual.', 'Descartar y continuar'],
+    ['delete-node', 'Eliminar este nodo descartará el borrador actual.', 'Descartar y continuar'],
     [
       'enter-canvas-preview',
-      'La previsualización muestra únicamente el último estado guardado. Puedes seguir editando o descartar este borrador para continuar.',
+      'La previsualización muestra solo lo guardado, así que se descartará el borrador actual.',
       'Descartar y previsualizar',
     ],
   ])('presents the %s guard', (kind, description, label) => {
     expect(editorDraftDiscardConfirmation({ kind } as NodeEditorGuardReason)).toEqual({
-      title: 'Descartar cambios sin guardar',
+      title: '¿Descartar los cambios sin guardar?',
       description,
       intent: 'destructive',
       cancelLabel: 'Seguir editando',
@@ -53,7 +61,15 @@ describe('editorDraftDiscardConfirmation', () => {
 describe('roadmapTeacherBlockConfirmation', () => {
   const roadmap = {
     nodes: [{ id: 'n0', title: 'Funciones', nodeTypeId: 't' }],
-    nodeTypes: [],
+    nodeTypes: [
+      {
+        id: 't',
+        name: 'Clase',
+        icon: 'BookOpen',
+        color: '#024AD8',
+        isPredefined: true,
+      } as NodeType,
+    ],
   };
   const preview = (
     mode: TeacherBlockOperationImpact['mode'],
@@ -68,100 +84,174 @@ describe('roadmapTeacherBlockConfirmation', () => {
         ...titles.map((title, index) => ({ id: `n${index + 1}`, title, relation })),
       ],
     }) as unknown as TeacherBlockOperationImpact;
+  const schedule = (isScheduling: boolean, unlockAt: Date | null = null) => ({
+    isScheduling,
+    unlockAt,
+    onSchedulingChange: () => {},
+    onUnlockAtChange: () => {},
+  });
 
   it.each([
     [
       'blocks a Node without dependents',
       preview('BLOCK', []),
-      '¿Bloquear “Funciones”?',
-      'Los estudiantes no podrán acceder a él hasta su desbloqueo.',
-      'block-teacher',
-      'Bloquear nodo',
+      'Los estudiantes no podrán abrirlo hasta que lo desbloquees.',
     ],
     [
-      'names one dependent that is blocked along',
+      'stresses the one dependent blocked along',
       preview('BLOCK', ['Gráficas']),
-      '¿Bloquear “Funciones”?',
-      'Los estudiantes no podrán acceder a él hasta su desbloqueo. El nodo “Gráficas” también será bloqueado.',
-      'block-teacher',
-      'Bloquear nodo',
+      'Los estudiantes no podrán abrirlo hasta que lo desbloquees. También se bloqueará el nodo que depende de él.',
     ],
     [
-      'names every dependent, including lists longer than three',
+      'counts the dependents blocked along instead of listing them',
       preview('BLOCK', ['A', 'B', 'C', 'D']),
-      '¿Bloquear “Funciones”?',
-      'Los estudiantes no podrán acceder a él hasta su desbloqueo. Los nodos “A”, “B”, “C” y “D” también serán bloqueados.',
-      'block-teacher',
-      'Bloquear nodo',
+      'Los estudiantes no podrán abrirlo hasta que lo desbloquees. También se bloquearán los 4 nodos que dependen de él.',
     ],
-    [
-      'names the blocked prerequisites an upstream unlock carries',
-      preview('UPSTREAM', ['Conjuntos', 'Números'], 'PREREQUISITE'),
-      '¿Desbloquear “Funciones”?',
-      'Para que los estudiantes puedan abrirlo, también se desbloquearán sus prerrequisitos bloqueados: “Conjuntos” y “Números”.',
-      'unlock-prerequisites',
-      'Desbloquear 3 nodos',
-    ],
-    [
-      'unlocks a single Node',
-      preview('SINGLE', []),
-      '¿Desbloquear “Funciones”?',
-      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.',
-      'unlock-node',
-      'Desbloquear nodo',
-    ],
-    [
-      'unlocks a Node with its dependents',
-      preview('BRANCH', ['Gráficas', 'Límites']),
-      '¿Desbloquear “Funciones”?',
-      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. “Gráficas” y “Límites”, que dependen de él, también quedarán desbloqueados.',
-      'unlock-branch',
-      'Desbloquear nodo',
-    ],
-  ] as const)('%s', (_, nodePreview, title, description, id, label) => {
+  ] as const)('%s as a danger action', (_, nodePreview, description) => {
     const confirmation = roadmapTeacherBlockConfirmation({
       roadmap,
       nodeId: 'n0',
       preview: nodePreview,
     });
-    const text = (value: typeof confirmation.title) =>
-      renderToStaticMarkup(value)
-        .replace(/<[^>]*>/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    expect(text(confirmation.title)).toBe(title);
-    expect(text(confirmation.description)).toBe(description);
-    expect(confirmation).toMatchObject({
-      intent: 'warning',
-      actions: [{ id, label }],
+    expect(plain(confirmation)).toEqual({
+      title: '¿Bloquear Funciones?',
+      description,
+      intent: 'destructive',
+      actions: [{ id: 'block-teacher', label: 'Bloquear nodo' }],
     });
   });
 
-  it('offers both unlock scopes when the pair is complete', () => {
+  it('names the selected Node with its type icon and color, never in quotes', () => {
     const confirmation = roadmapTeacherBlockConfirmation({
+      roadmap,
+      nodeId: 'n0',
+      preview: preview('BLOCK', []),
+    });
+    const markup = renderToStaticMarkup(confirmation.title);
+    expect(markup).toContain('data-slot="node-name"');
+    expect(markup).toContain('color:#024AD8');
+    expect(markup).not.toMatch(/[“”«»"]Funciones/);
+  });
+
+  it.each([
+    [
+      'counts the blocked prerequisites an upstream unlock carries',
+      { preview: preview('UPSTREAM', ['Conjuntos', 'Números'], 'PREREQUISITE') },
+      'Para que los estudiantes puedan abrirlo, también se desbloquearán sus 2 prerrequisitos bloqueados.',
+      [{ id: 'unlock-prerequisites', label: 'Desbloquear 3 nodos', emphasis: 'primary' }],
+    ],
+    [
+      'names the one blocked prerequisite an upstream unlock carries',
+      { preview: preview('UPSTREAM', ['Conjuntos'], 'PREREQUISITE') },
+      'Para que los estudiantes puedan abrirlo, también se desbloqueará su prerrequisito bloqueado.',
+      [{ id: 'unlock-prerequisites', label: 'Desbloquear 2 nodos', emphasis: 'primary' }],
+    ],
+    [
+      'offers a single verb when no dependent would be released',
+      {
+        preview: preview('SINGLE', []),
+        individualPreview: preview('SINGLE', []),
+        branchPreview: preview('BRANCH', []),
+      },
+      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.',
+      [{ id: 'unlock-node', label: 'Desbloquear', emphasis: 'primary' }],
+    ],
+    [
+      'offers both scopes with equal emphasis when dependents would be released',
+      {
+        preview: preview('SINGLE', []),
+        individualPreview: preview('SINGLE', []),
+        branchPreview: preview('BRANCH', ['Gráficas', 'Límites']),
+      },
+      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. 2 nodos que dependen de él siguen bloqueados.',
+      [
+        { id: 'unlock-node', label: 'Solo este nodo', emphasis: 'primary' },
+        { id: 'unlock-branch', label: 'Incluir dependientes', emphasis: 'primary' },
+      ],
+    ],
+    [
+      'counts one releasable dependent',
+      {
+        preview: preview('SINGLE', []),
+        individualPreview: preview('SINGLE', []),
+        branchPreview: preview('BRANCH', ['Gráficas']),
+      },
+      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. 1 nodo que depende de él sigue bloqueado.',
+      [
+        { id: 'unlock-node', label: 'Solo este nodo', emphasis: 'primary' },
+        { id: 'unlock-branch', label: 'Incluir dependientes', emphasis: 'primary' },
+      ],
+    ],
+    [
+      'unlocks a branch requested on its own',
+      { preview: preview('BRANCH', ['Gráficas', 'Límites']) },
+      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. También se desbloquearán 2 nodos que dependen de él.',
+      [{ id: 'unlock-branch', label: 'Desbloquear', emphasis: 'primary' }],
+    ],
+  ] as const)('%s', (_, previews, description, actions) => {
+    const confirmation = roadmapTeacherBlockConfirmation({ roadmap, nodeId: 'n0', ...previews });
+    expect(plain(confirmation)).toEqual({
+      title: '¿Desbloquear Funciones?',
+      description,
+      intent: 'default',
+      actions,
+    });
+  });
+
+  it('offers scheduling inside every unlock and relabels the actions while scheduling', () => {
+    const pair = {
       roadmap,
       nodeId: 'n0',
       preview: preview('SINGLE', []),
       individualPreview: preview('SINGLE', []),
       branchPreview: preview('BRANCH', ['Gráficas']),
+    };
+    const idle = roadmapTeacherBlockConfirmation({ ...pair, schedule: schedule(false) });
+    expect(renderToStaticMarkup(idle.content)).toContain('Programar desbloqueo');
+
+    const withoutDate = roadmapTeacherBlockConfirmation({ ...pair, schedule: schedule(true) });
+    expect(withoutDate.actions).toEqual([
+      { id: 'unlock-node', label: 'Programar este nodo', emphasis: 'primary', disabled: true },
+      {
+        id: 'unlock-branch',
+        label: 'Programar con dependientes',
+        emphasis: 'primary',
+        disabled: true,
+      },
+    ]);
+
+    const withDate = roadmapTeacherBlockConfirmation({
+      ...pair,
+      schedule: schedule(true, new Date('2026-11-08T19:30:00.000Z')),
     });
-    expect(confirmation).toEqual({
-      title: '¿Desbloquear “Funciones”?',
-      description:
-        'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. “Gráficas”, que depende de él, sigue bloqueado: puedes desbloquear solo este nodo o también sus dependientes.',
-      intent: 'warning',
-      actions: [
-        { id: 'unlock-node', label: 'Solo este nodo' },
-        { id: 'unlock-branch', label: 'Incluir dependientes' },
-      ],
-    });
+    expect(withDate.actions.map(({ disabled }) => disabled)).toEqual([undefined, undefined]);
+
+    expect(
+      roadmapTeacherBlockConfirmation({
+        roadmap,
+        nodeId: 'n0',
+        preview: preview('UPSTREAM', ['Conjuntos'], 'PREREQUISITE'),
+        schedule: schedule(true, new Date('2026-11-08T19:30:00.000Z')),
+      }).actions,
+    ).toEqual([{ id: 'unlock-prerequisites', label: 'Programar 2 nodos', emphasis: 'primary' }]);
+  });
+
+  it('keeps scheduling out of a block', () => {
+    expect(
+      roadmapTeacherBlockConfirmation({
+        roadmap,
+        nodeId: 'n0',
+        preview: preview('BLOCK', []),
+        schedule: schedule(true),
+      }).content,
+    ).toBeUndefined();
   });
 });
 
 describe('nodeDeletionConfirmation', () => {
   const node = { title: 'Funciones', nodeType: { name: 'Clase', icon: 'Book', color: '#000' } };
 
-  it('states the resources and connections it deletes', () => {
+  it('counts the resources and connections it deletes', () => {
     const confirmation = nodeDeletionConfirmation({
       node,
       resources: [{ id: 'r1' }, { id: 'r2' }],
@@ -170,10 +260,13 @@ describe('nodeDeletionConfirmation', () => {
         { sourceTitle: 'Funciones', targetTitle: 'Gráficas' },
       ],
     });
-    expect(confirmation.description).toBe(
-      'También se eliminarán sus 2 recursos y sus conexiones con “Conjuntos” y “Gráficas”. Esta acción no se puede deshacer.',
-    );
-    expect(confirmation.actions).toEqual([{ id: 'delete-node', label: 'Eliminar nodo' }]);
+    expect(plain(confirmation)).toEqual({
+      title: '¿Eliminar Funciones?',
+      description:
+        'También se eliminarán sus 2 recursos y sus 2 conexiones. Esta acción no se puede deshacer.',
+      intent: 'destructive',
+      actions: [{ id: 'delete-node', label: 'Eliminar nodo' }],
+    });
   });
 
   it('keeps only the irreversibility warning for an isolated Node', () => {
@@ -193,23 +286,23 @@ describe('roadmapNodeVisibilityConfirmation', () => {
     nodeTypes: [],
   };
 
-  it('names the connections hiding removes', () => {
+  it('counts the connections hiding removes', () => {
     const confirmation = roadmapNodeVisibilityConfirmation(roadmap, roadmap.nodes[1], true, [
       { id: 'd1', sourceNodeId: 'a', targetNodeId: 'b' },
       { id: 'd2', sourceNodeId: 'b', targetNodeId: 'c' },
     ]);
-    expect(confirmation).toEqual({
-      title: '¿Ocultar “Funciones”?',
+    expect(plain(confirmation)).toEqual({
+      title: '¿Ocultar Funciones?',
       description:
-        'Dejará de aparecer en el roadmap de los estudiantes. Además, se quitará su bloqueo docente y se eliminarán sus conexiones con “Conjuntos” y “Gráficas”; al volver a mostrarlo, tendrás que conectarlo de nuevo.',
+        'Dejará de aparecer en el roadmap de los estudiantes. Además, se quitará su bloqueo docente y se eliminarán sus 2 conexiones; al volver a mostrarlo, tendrás que conectarlo de nuevo.',
       intent: 'destructive',
       actions: [{ id: 'hide-node', label: 'Ocultar' }],
     });
   });
 
   it('explains how a hidden Node returns', () => {
-    expect(roadmapNodeVisibilityConfirmation(roadmap, roadmap.nodes[0], false, [])).toEqual({
-      title: '¿Mostrar “Conjuntos”?',
+    expect(plain(roadmapNodeVisibilityConfirmation(roadmap, roadmap.nodes[0], false, []))).toEqual({
+      title: '¿Mostrar Conjuntos?',
       description:
         'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
       intent: 'default',
@@ -257,21 +350,23 @@ describe('canvasConfirmation', () => {
 
   it('presents hiding with the connections its Change impact removes', () => {
     expect(
-      canvasConfirmation(
-        {
-          kind: 'hide-node',
-          request: { kind: 'hide-node', nodeId: 'b' },
-          impact: {
-            dependencies: [{ id: 'd1', sourceNodeId: 'a', targetNodeId: 'b' }],
-            version: 'v1',
+      plain(
+        canvasConfirmation(
+          {
+            kind: 'hide-node',
+            request: { kind: 'hide-node', nodeId: 'b' },
+            impact: {
+              dependencies: [{ id: 'd1', sourceNodeId: 'a', targetNodeId: 'b' }],
+              version: 'v1',
+            },
+            phase: 'awaiting',
           },
-          phase: 'awaiting',
-        },
-        roadmap,
+          roadmap,
+        ),
       ),
     ).toMatchObject({
-      title: '¿Ocultar “Funciones”?',
-      description: expect.stringContaining('sus conexiones con “Conjuntos”'),
+      title: '¿Ocultar Funciones?',
+      description: expect.stringContaining('se eliminará su conexión'),
       actions: [{ id: 'hide-node', label: 'Ocultar' }],
     });
   });
@@ -288,7 +383,7 @@ describe('canvasConfirmation', () => {
         },
         roadmap,
       ),
-    ).toMatchObject({ title: '¿Mostrar “Conjuntos”?', actions: [{ id: 'show-node' }] });
+    ).toMatchObject({ actions: [{ id: 'show-node' }] });
   });
 
   it('presents a Node deletion from its Change impact', () => {
@@ -301,9 +396,9 @@ describe('canvasConfirmation', () => {
       },
       roadmap,
     );
-    expect(renderToStaticMarkup(confirmation?.title)).toContain('¿Eliminar “Funciones”?');
+    expect(text(confirmation?.title)).toBe('¿Eliminar Funciones?');
     expect(confirmation?.description).toBe(
-      'También se eliminarán sus conexiones con “Conjuntos”. Esta acción no se puede deshacer.',
+      'También se eliminará su conexión. Esta acción no se puede deshacer.',
     );
   });
 
@@ -342,7 +437,6 @@ describe('canvasConfirmation', () => {
         roadmap,
       ),
     ).toMatchObject({
-      title: '¿Desbloquear “Conjuntos”?',
       actions: [{ id: 'unlock-node' }, { id: 'unlock-branch' }],
     });
   });
@@ -357,18 +451,21 @@ describe('canvasConfirmation', () => {
 
   it('presents a Dependency creation with the Nodes it Teacher-blocks', () => {
     expect(
-      canvasConfirmation(
-        {
-          kind: 'create-dependency',
-          request: creation,
-          impact: { nodes: [{ id: 'b', title: 'Funciones' }], version: 'v1' },
-          phase: 'awaiting',
-        },
-        roadmap,
+      plain(
+        canvasConfirmation(
+          {
+            kind: 'create-dependency',
+            request: creation,
+            impact: { nodes: [{ id: 'b', title: 'Funciones' }], version: 'v1' },
+            phase: 'awaiting',
+          },
+          roadmap,
+        ),
       ),
-    ).toMatchObject({
-      title: 'Confirmar bloqueo',
-      description: expect.stringContaining('bloqueará persistentemente 1 nodo.'),
+    ).toEqual({
+      title: '¿Conectar Conjuntos con Funciones?',
+      description: 'Como Conjuntos tiene bloqueo docente, la conexión también bloqueará 1 nodo.',
+      intent: 'warning',
       actions: [{ id: 'create-dependency', label: 'Conectar y bloquear' }],
     });
   });
@@ -399,7 +496,8 @@ describe('canvasConfirmation', () => {
         roadmap,
       ),
     ).toMatchObject({
-      description: 'Eliminarás esta dependencia. Esta acción no se puede deshacer.',
+      title: '¿Eliminar la dependencia?',
+      description: 'Los nodos dejarán de estar conectados. Esta acción no se puede deshacer.',
       actions: [{ id: 'delete-dependencies', label: 'Eliminar' }],
     });
   });
@@ -416,7 +514,7 @@ describe('canvasConfirmation', () => {
         roadmap,
       ),
     ).toMatchObject({
-      title: 'Confirmar ordenamiento',
+      title: '¿Ordenar los nodos automáticamente?',
       actions: [{ id: 'auto-layout', label: 'Ordenar nodos' }],
     });
   });
@@ -433,8 +531,9 @@ describe('canvasConfirmation', () => {
         },
         roadmap,
       );
-    expect(deletion('t')).toMatchObject({
-      description: 'Eliminarás el Tipo de nodo Taller. Esta acción no se puede deshacer.',
+    expect(plain(deletion('t'))).toMatchObject({
+      title: '¿Eliminar el tipo Taller?',
+      description: 'Esta acción no se puede deshacer.',
       actions: [{ id: 'delete-node-type', label: 'Eliminar' }],
     });
     expect(deletion('missing')).toBeNull();
@@ -452,7 +551,7 @@ describe('canvasConfirmation', () => {
         roadmap,
       ),
     ).toMatchObject({
-      title: 'Reiniciar progreso de previsualización',
+      title: '¿Reiniciar el progreso simulado?',
       intent: 'destructive',
       actions: [{ id: 'reset-canvas-preview', label: 'Reiniciar progreso' }],
     });

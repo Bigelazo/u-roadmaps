@@ -516,14 +516,17 @@ test('edits an existing Resource and retries a failed deletion through the same 
   });
 
   await user.click(screen.getByRole('button', { name: 'Eliminar recurso Guía de ejercicios' }));
-  const dialog = screen.getByRole('alertdialog', { name: 'Confirmar eliminación' });
+  const dialog = screen.getByRole('alertdialog', { name: '¿Eliminar Guía de ejercicios?' });
   await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(2));
-  expect(screen.getByRole('alertdialog', { name: 'Confirmar eliminación' })).toBeTruthy();
+  expect(screen.getByRole('alertdialog', { name: '¿Eliminar Guía de ejercicios?' })).toBeTruthy();
   await user.click(
-    within(screen.getByRole('alertdialog', { name: 'Confirmar eliminación' })).getByRole('button', {
-      name: 'Eliminar',
-    }),
+    within(screen.getByRole('alertdialog', { name: '¿Eliminar Guía de ejercicios?' })).getByRole(
+      'button',
+      {
+        name: 'Eliminar',
+      },
+    ),
   );
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(3));
   await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
@@ -536,13 +539,13 @@ test('guards a dirty transition and resets only after confirmed discard', async 
   await retitle(user, 'Borrador');
 
   const decision = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
   await expect(decision).resolves.toBe(false);
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador');
 
   const confirmed = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
   await expect(confirmed).resolves.toBe(true);
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe(node.title);
@@ -558,7 +561,7 @@ test('keeps the complete Node and Resource session unchanged when a guard is can
   await fillLink(user, 'Borrador del recurso', 'https://example.test/borrador');
 
   const decision = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
 
   await expect(decision).resolves.toBe(false);
@@ -595,7 +598,7 @@ test('resets the complete editing session before a guarded caller resumes', asyn
       expect(screen.queryByText('Nuevo recurso')).toBeNull();
       onIntent({ kind: 'close', nodeId: node.id });
     });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
 
   await resumed;
@@ -611,7 +614,9 @@ test('leaves the draft question of a Node deletion to the canvas, which asks it 
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
 
   expect(onIntent).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: node.id });
-  expect(screen.queryByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeNull();
+  expect(
+    screen.queryByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' }),
+  ).toBeNull();
   const decision = ref.current!.guardDraft({ kind: 'delete-node', nodeId: node.id });
   await user.click(await screen.findByRole('button', { name: 'Descartar y continuar' }));
   await expect(decision).resolves.toBe(true);
