@@ -12,7 +12,6 @@ import {
   decideNodeTypeChange,
   type NodeTypeChange,
 } from '@/features/roadmap/domain/node-type';
-import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import type {
   AnyRoadmapDto,
   Resource,
@@ -59,11 +58,11 @@ function teachingNodes(roadmap: AnyRoadmapDto) {
 function snapshotOf(roadmap: AnyRoadmapDto): RoadmapSnapshot {
   const nodes = teachingNodes(roadmap).map((node) => ({
     ...node,
-    teacherUnlockOn: (node.isVisible && node.teacherUnlockOn) || null,
+    teacherUnlockAt: (node.isVisible && node.teacherUnlockAt) || null,
     teacherUnlockIncludesDependents:
       node.isVisible && Boolean(node.teacherUnlockIncludesDependents),
   }));
-  return { ...roadmap, nodes, today: chileCalendarDay() };
+  return { ...roadmap, nodes, now: new Date() };
 }
 
 export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
@@ -157,7 +156,7 @@ export function createInMemoryRoadmapSessionPersistence(
             return {
               ...node,
               isTeacherBlocked: false,
-              teacherUnlockOn: undefined,
+              teacherUnlockAt: undefined,
               teacherUnlockIncludesDependents: undefined,
             };
           return node;

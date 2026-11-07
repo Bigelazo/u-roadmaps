@@ -320,8 +320,8 @@ function useNodeEditorController(
       requestTeacherBlock: withCurrentNode((currentNode, operation: TeacherBlockOperation) =>
         onIntent({ kind: 'change-teacher-block', nodeId: currentNode.id, operation }),
       ),
-      scheduleTeacherUnlock: withCurrentNode((currentNode, unlockOn: string | null) =>
-        onIntent({ kind: 'schedule-teacher-unlock', nodeId: currentNode.id, unlockOn }),
+      scheduleTeacherUnlock: withCurrentNode((currentNode, unlockAt: string | null) =>
+        onIntent({ kind: 'schedule-teacher-unlock', nodeId: currentNode.id, unlockAt }),
       ),
       closeNode: withCurrentNode((currentNode) => {
         void guardDraft({ kind: 'deselect-node', nodeId: currentNode.id }).then((proceed) => {

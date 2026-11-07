@@ -109,7 +109,7 @@ model RoadmapNode {
   positionY                       Float
   isVisible                       Boolean               @default(true)
   isTeacherBlocked                Boolean               @default(false)
-  teacherUnlockOn                 DateTime?             @db.Date
+  teacherUnlockAt                 DateTime?             @db.Timestamptz(3)
   teacherUnlockIncludesDependents Boolean               @default(false)
   roadmap                         Roadmap               @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   nodeType                        NodeType              @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
@@ -123,7 +123,7 @@ model RoadmapNode {
   @@unique([id, roadmapId])
   @@index([roadmapId])
   @@index([nodeTypeId])
-  @@index([teacherUnlockOn])
+  @@index([teacherUnlockAt])
 }
 
 model Dependency {

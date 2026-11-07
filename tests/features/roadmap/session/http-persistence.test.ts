@@ -180,11 +180,19 @@ const executions: Record<string, Execution> = {
     ],
   },
   'schedule an unlock': {
-    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockOn: '2026-11-01' },
+    command: {
+      kind: 'schedule-teacher-unlock',
+      nodeId: 'node-1',
+      unlockAt: '2026-11-01T12:00:00.000Z',
+    },
     requests: [
       [
         '/nodes/node-1/teacher-block/schedule',
-        { method: 'PUT', headers: json, body: JSON.stringify({ unlockOn: '2026-11-01' }) },
+        {
+          method: 'PUT',
+          headers: json,
+          body: JSON.stringify({ unlockAt: '2026-11-01T12:00:00.000Z' }),
+        },
       ],
     ],
   },
@@ -192,7 +200,7 @@ const executions: Record<string, Execution> = {
     command: {
       kind: 'schedule-teacher-unlock',
       nodeId: 'node-1',
-      unlockOn: '2026-11-01',
+      unlockAt: '2026-11-01T12:00:00.000Z',
       includeDependents: true,
     },
     requests: [
@@ -201,13 +209,13 @@ const executions: Record<string, Execution> = {
         {
           method: 'PUT',
           headers: json,
-          body: JSON.stringify({ unlockOn: '2026-11-01', includeDependents: true }),
+          body: JSON.stringify({ unlockAt: '2026-11-01T12:00:00.000Z', includeDependents: true }),
         },
       ],
     ],
   },
   'cancel a Scheduled unlock': {
-    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockOn: null },
+    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockAt: null },
     requests: [['/nodes/node-1/teacher-block/schedule', { method: 'DELETE' }]],
   },
   'hide a Node with its preview version': {

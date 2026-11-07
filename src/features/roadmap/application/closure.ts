@@ -53,7 +53,7 @@ export async function closeDueRoadmaps(now = new Date()) {
             where: { roadmapId: id },
             data: {
               isTeacherBlocked: false,
-              teacherUnlockOn: null,
+              teacherUnlockAt: null,
               teacherUnlockIncludesDependents: false,
             },
           });

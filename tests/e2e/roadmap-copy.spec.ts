@@ -24,7 +24,7 @@ type RoadmapBody = {
     nodeTypeId: string;
     isVisible: boolean;
     isTeacherBlocked: boolean;
-    teacherUnlockOn?: string;
+    teacherUnlockAt?: string;
     resources: { id: string; title: string; url: string; type: string }[];
   }[];
   dependencies: {
@@ -96,7 +96,7 @@ const copyScenario = test.extend<{
     const before: RoadmapBody = await (await api.get(closed.apiPath())).json();
     const scheduledNodeId = before.nodes.find(({ isVisible }) => isVisible)!.id;
     await sql(
-      `UPDATE "RoadmapNode" SET "isTeacherBlocked" = true, "teacherUnlockOn" = '2099-01-01' WHERE "id" = ${literal(scheduledNodeId)};`,
+      `UPDATE "RoadmapNode" SET "isTeacherBlocked" = true, "teacherUnlockAt" = '2099-01-01T12:00:00Z' WHERE "id" = ${literal(scheduledNodeId)};`,
     );
     const fileContent = `contenido ${closed.courseCode}`;
     const upload = await api.post(closed.apiPath(`/nodes/${scheduledNodeId}/resources`), {
@@ -153,7 +153,7 @@ copyScenario(
         isVisible: original.isVisible,
         isTeacherBlocked: original.isVisible,
       });
-      expect(copied.teacherUnlockOn).toBeUndefined();
+      expect(copied.teacherUnlockAt).toBeUndefined();
       expect(typeName(copy, copied.nodeTypeId)).toBe(typeName(source, original.nodeTypeId));
       expect(copied.nodeTypeId === original.nodeTypeId).toBe(
         predefined(source, original.nodeTypeId),

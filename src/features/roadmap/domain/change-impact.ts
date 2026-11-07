@@ -9,7 +9,7 @@ import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rul
 import {
   dueScheduledUnlockNodeIds,
   pendingScheduledUnlockNodeIds,
-  type CalendarDay,
+  type UnlockInstant,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
@@ -29,13 +29,13 @@ export type RoadmapSnapshot = {
     nodeTypeId: string;
     isVisible: boolean;
     isTeacherBlocked: boolean;
-    teacherUnlockOn: CalendarDay | null;
+    teacherUnlockAt: UnlockInstant | null;
     teacherUnlockIncludesDependents: boolean;
     resources: readonly { id: string; title: string }[];
   }[];
   dependencies: readonly { id: string; sourceNodeId: string; targetNodeId: string }[];
   nodeTypes: readonly { id: string; name: string; icon: string; color: string }[];
-  today: CalendarDay;
+  now: Date;
 };
 
 export type ChangeWithImpact =

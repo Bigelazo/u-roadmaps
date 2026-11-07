@@ -1,9 +1,6 @@
 import type { ChangeImpactOf as PlannedChangeImpactOf } from '@/features/roadmap/domain/change-impact';
 import { linkResourceOnlyError, resourceEditError } from '@/features/roadmap/domain/resource';
-import {
-  chileCalendarDay,
-  decideScheduledUnlock,
-} from '@/features/roadmap/domain/scheduled-unlock';
+import { decideScheduledUnlock } from '@/features/roadmap/domain/scheduled-unlock';
 import type {
   NodeEditorGuardReason,
   NodeUpdate,
@@ -308,37 +305,37 @@ export const canvasCommandCatalog = {
   'schedule-teacher-unlock': command<{
     kind: 'schedule-teacher-unlock';
     nodeId: string;
-    unlockOn: string | null;
+    unlockAt: string | null;
     includeDependents?: boolean;
   }>({
-    requests: ({ nodeId, unlockOn, includeDependents }) => ({
+    requests: ({ nodeId, unlockAt, includeDependents }) => ({
       path: `/nodes/${nodeId}/teacher-block/schedule`,
-      ...(unlockOn
+      ...(unlockAt
         ? {
             method: 'PUT',
-            body: includeDependents ? { unlockOn, includeDependents } : { unlockOn },
+            body: includeDependents ? { unlockAt, includeDependents } : { unlockAt },
           }
         : { method: 'DELETE' }),
     }),
     failure: 'No se pudo programar el desbloqueo.',
-    practice: (practice, { nodeId, unlockOn, includeDependents }) =>
+    practice: (practice, { nodeId, unlockAt, includeDependents }) =>
       practice.mutateNode(nodeId, (node) => {
         if (!('isTeacherBlocked' in node)) return node;
         const decision = decideScheduledUnlock({
           node,
-          unlockOn,
+          unlockAt,
           includeDependents,
-          today: chileCalendarDay(),
+          now: new Date(),
         });
         if (decision.kind === 'REJECTED') throw new Error(decision.message);
         return {
           ...node,
-          teacherUnlockOn: decision.day ?? undefined,
+          teacherUnlockAt: decision.unlockAt ?? undefined,
           teacherUnlockIncludesDependents: decision.includesDependents || undefined,
         };
       }),
-    success: ({ unlockOn }) =>
-      unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
+    success: ({ unlockAt }) =>
+      unlockAt ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
   }),
   'create-dependency': command<{ kind: 'create-dependency' } & RoadmapDependencyRequest>({
     requests: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) => ({

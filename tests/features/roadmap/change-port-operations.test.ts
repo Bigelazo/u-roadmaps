@@ -296,10 +296,10 @@ test('scheduled releases report committed access transitions and are idempotent'
 }) => {
   await prisma.roadmapNode.update({
     where: { id: course.change.nodeId },
-    data: { isTeacherBlocked: true, teacherUnlockOn: new Date('2026-10-01T00:00:00Z') },
+    data: { isTeacherBlocked: true, teacherUnlockAt: new Date('2026-10-01T00:00:00Z') },
   });
   const recording = recordingChangePort();
-  await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
+  await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z'));
   expect(recording.facts()).toContainEqual(
     access({
       recipientId: course.studentId,
@@ -308,7 +308,7 @@ test('scheduled releases report committed access transitions and are idempotent'
     }),
   );
   recording.changes.length = 0;
-  await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
+  await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z'));
   expect(recording.facts()).toEqual([]);
 });
 
@@ -336,17 +336,17 @@ test('a Scheduled unlock with dependents releases its branch up to a dependent w
     {
       ...teacher(course),
       id: course.change.nodeId,
-      unlockOn: '2099-01-01',
+      unlockAt: '2099-01-01T12:00:00.000Z',
       includeDependents: true,
     },
     recording.port,
   );
   await scheduleTeacherUnlock(
-    { ...teacher(course), id: c.id, unlockOn: '2099-02-01' },
+    { ...teacher(course), id: c.id, unlockAt: '2099-02-01T12:00:00.000Z' },
     recording.port,
   );
 
-  await releaseScheduledTeacherUnlocks(recording.port, '2099-01-01');
+  await releaseScheduledTeacherUnlocks(recording.port, new Date('2099-01-01T12:00:00.000Z'));
 
   const nodes = await prisma.roadmapNode.findMany({
     where: { id: { in: chain } },
@@ -363,7 +363,7 @@ test('a conflicting scheduled release allows other due Roadmaps to release and r
 }) => {
   await prisma.roadmapNode.updateMany({
     where: { id: { in: [course.change.nodeId, otherCourse.change.nodeId] } },
-    data: { isTeacherBlocked: true, teacherUnlockOn: new Date('2026-10-01T00:00:00Z') },
+    data: { isTeacherBlocked: true, teacherUnlockAt: new Date('2026-10-01T00:00:00Z') },
   });
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   const recording = recordingChangePort();
@@ -381,7 +381,7 @@ test('a conflicting scheduled release allows other due Roadmaps to release and r
           return recording.port.report(transaction, changes);
         },
       },
-      '2026-10-08',
+      new Date('2026-10-08T12:00:00.000Z'),
     );
     const failed = [course, otherCourse].find(({ roadmapId }) => roadmapId === failedRoadmapId)!;
     const successful = failed === course ? otherCourse : course;
@@ -395,11 +395,15 @@ test('a conflicting scheduled release allows other due Roadmaps to release and r
       identifier: failed.identifier,
       error: expect.objectContaining({ code: 'CONFLICT' }),
     });
-    expect(await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08')).toContainEqual({
+    expect(
+      await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z')),
+    ).toContainEqual({
       identifier: failed.identifier,
       releasedNodeIds: [failed.change.nodeId],
     });
-    expect(await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08')).toEqual([]);
+    expect(
+      await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z')),
+    ).toEqual([]);
   } finally {
     warning.mockRestore();
   }

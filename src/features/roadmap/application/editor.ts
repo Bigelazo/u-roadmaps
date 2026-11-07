@@ -47,11 +47,9 @@ import type { ApplicationErrorStatus } from '@/shared/errors/types';
 import type { TeacherBlockOperation } from '@/features/roadmap/types';
 import type { RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
-  chileCalendarDay,
   decideScheduledUnlock,
-  decideScheduledUnlockDay,
+  decideScheduledUnlockInstant,
   dueScheduledUnlockNodeIds,
-  type CalendarDay,
   type ScheduledUnlockRuleFailure,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { cleanupStoredFiles } from '@/features/roadmap/infrastructure/resources/lifecycle';
@@ -110,7 +108,7 @@ function ruleError({ reason, message }: RuleRejection<RoadmapRuleFailure>) {
 async function loadRoadmapSnapshot(
   transaction: Prisma.TransactionClient,
   roadmapId: string,
-  today = chileCalendarDay(),
+  now = new Date(),
 ): Promise<RoadmapSnapshot> {
   const [nodes, dependencies, nodeTypes] = await Promise.all([
     transaction.roadmapNode.findMany({
@@ -121,7 +119,7 @@ async function loadRoadmapSnapshot(
         nodeTypeId: true,
         isVisible: true,
         isTeacherBlocked: true,
-        teacherUnlockOn: true,
+        teacherUnlockAt: true,
         teacherUnlockIncludesDependents: true,
         resources: { select: { id: true, title: true } },
       },
@@ -133,13 +131,13 @@ async function loadRoadmapSnapshot(
     getAvailableTypes(roadmapId, transaction),
   ]);
   return {
-    nodes: nodes.map(({ teacherUnlockOn, ...node }) => ({
+    nodes: nodes.map(({ teacherUnlockAt, ...node }) => ({
       ...node,
-      teacherUnlockOn: teacherUnlockOn ? calendarDayOf(teacherUnlockOn) : null,
+      teacherUnlockAt: teacherUnlockAt?.toISOString() ?? null,
     })),
     dependencies,
     nodeTypes,
-    today,
+    now,
   };
 }
 
@@ -157,7 +155,7 @@ async function persistConsequences(
       where: { id: { in: unblockedNodeIds } },
       data: {
         isTeacherBlocked: false,
-        teacherUnlockOn: null,
+        teacherUnlockAt: null,
         teacherUnlockIncludesDependents: false,
       },
     });
@@ -605,51 +603,48 @@ export const changeTeacherBlock = roadmapCommand({
   },
 });
 
-function calendarDayOf(date: Date): CalendarDay {
-  return date.toISOString().slice(0, 10);
-}
-
-function calendarDayDate(day: CalendarDay) {
-  return new Date(`${day}T00:00:00.000Z`);
-}
-
 export const scheduleTeacherUnlock = roadmapCommand({
   capability: 'edit',
   parse: ({
     id,
-    unlockOn,
+    unlockAt,
     includeDependents,
   }: {
     id: string;
-    unlockOn: unknown;
+    unlockAt: unknown;
     includeDependents?: unknown;
   }) => {
     const nodeId = requireUuid(id, 'nodeId');
-    const today = chileCalendarDay();
-    const decision = decideScheduledUnlockDay({ unlockOn, includeDependents, today });
+    const now = new Date();
+    const decision = decideScheduledUnlockInstant({ unlockAt, includeDependents, now });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
-    return { nodeId, day: decision.day, includesDependents: decision.includesDependents, today };
+    return {
+      nodeId,
+      unlockAt: decision.unlockAt,
+      includesDependents: decision.includesDependents,
+      now,
+    };
   },
   access: 'none',
-  run: async ({ tx, roadmap, input: { nodeId, day, includesDependents, today } }) => {
+  run: async ({ tx, roadmap, input: { nodeId, unlockAt, includesDependents, now } }) => {
     const node = await requireNode(tx, nodeId, roadmap.id);
     const decision = decideScheduledUnlock({
       node,
-      unlockOn: day,
+      unlockAt,
       includeDependents: includesDependents,
-      today,
+      now,
     });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
     await tx.roadmapNode.update({
       where: { id: node.id },
       data: {
-        teacherUnlockOn: decision.day ? calendarDayDate(decision.day) : null,
+        teacherUnlockAt: decision.unlockAt ? new Date(decision.unlockAt) : null,
         teacherUnlockIncludesDependents: decision.includesDependents,
       },
     });
     return {
       result: {
-        teacherUnlockOn: decision.day,
+        teacherUnlockAt: decision.unlockAt,
         teacherUnlockIncludesDependents: decision.includesDependents,
       },
       facts: [],
@@ -665,13 +660,13 @@ function nothingReleasedOnClosure(error: unknown): string[] {
 
 export const releaseScheduledTeacherUnlocks = async (
   changePort: RoadmapChangePort,
-  today: CalendarDay = chileCalendarDay(),
+  now: Date = new Date(),
 ) => {
   const roadmaps = await prisma.roadmap.findMany({
     where: {
       closedAt: null,
       roadmapNodes: {
-        some: { isTeacherBlocked: true, teacherUnlockOn: { lte: calendarDayDate(today) } },
+        some: { isTeacherBlocked: true, teacherUnlockAt: { lte: now } },
       },
     },
     select: {
@@ -698,7 +693,7 @@ export const releaseScheduledTeacherUnlocks = async (
             async () => {
               const unblockedNodeIds = [
                 ...dueScheduledUnlockNodeIds(
-                  await loadRoadmapSnapshot(transaction, roadmap.id, today),
+                  await loadRoadmapSnapshot(transaction, roadmap.id, now),
                 ),
               ];
               await persistConsequences(transaction, {

@@ -8,25 +8,17 @@ function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
 }
 
-function chileDayOffset(days: number) {
-  const today = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Santiago',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
-  const date = new Date(`${today}T12:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+function instantFromNow(milliseconds: number) {
+  return new Date(Date.now() + milliseconds).toISOString();
 }
 
-async function moveScheduleToYesterday(nodeId: string) {
+async function moveScheduleToThePast(nodeId: string) {
   await sql(
-    `UPDATE "RoadmapNode" SET "teacherUnlockOn" = ${literal(chileDayOffset(-1))}::date WHERE id = ${literal(nodeId)};`,
+    `UPDATE "RoadmapNode" SET "teacherUnlockAt" = now() - interval '1 minute' WHERE id = ${literal(nodeId)};`,
   );
 }
 
-test('a scheduled unlock waits for blocked prerequisites and releases on its day', async ({
+test('a scheduled unlock waits for blocked prerequisites and releases at its time', async ({
   course,
   teacherApi: teacher,
   studentApi: student,
@@ -45,7 +37,7 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   await createDependency(teacher, course, prerequisite.id, scheduled.id);
 
   const unblocked = await teacher.put(schedulePath(standalone.id), {
-    data: { unlockOn: chileDayOffset(1) },
+    data: { unlockAt: instantFromNow(86_400_000) },
   });
   await ok(unblocked, 409);
   expect((await unblocked.json()).error.code).toBe('TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK');
@@ -55,22 +47,25 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   }
   await ok(
     await teacher.put(schedulePath(scheduled.id), {
-      data: { unlockOn: chileDayOffset(0) },
+      data: { unlockAt: instantFromNow(-60_000) },
     }),
     400,
   );
 
-  const tomorrow = chileDayOffset(1);
-  const saved = await teacher.put(schedulePath(scheduled.id), { data: { unlockOn: tomorrow } });
+  const tomorrow = instantFromNow(86_400_000);
+  const saved = await teacher.put(schedulePath(scheduled.id), { data: { unlockAt: tomorrow } });
   await ok(saved);
-  expect(await saved.json()).toEqual({ teacherUnlockOn: tomorrow });
+  expect(await saved.json()).toEqual({
+    teacherUnlockAt: tomorrow,
+    teacherUnlockIncludesDependents: false,
+  });
   const teacherView = await (await teacher.get(course.apiPath())).json();
   expect(teacherView.nodes.find((node: { id: string }) => node.id === scheduled.id)).toMatchObject({
     isTeacherBlocked: true,
-    teacherUnlockOn: tomorrow,
+    teacherUnlockAt: tomorrow,
   });
 
-  await ok(await teacher.put(schedulePath(standalone.id), { data: { unlockOn: tomorrow } }));
+  await ok(await teacher.put(schedulePath(standalone.id), { data: { unlockAt: tomorrow } }));
 
   const opening = { roadmapId: course.roadmapId, operationId: crypto.randomUUID() };
   await expect
@@ -86,8 +81,8 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
   await ok(await student.post('/api/notifications/openings', { data: opening }));
   await ok(await student.post('/api/notifications/acknowledge', { data: opening }));
 
-  await moveScheduleToYesterday(scheduled.id);
-  await moveScheduleToYesterday(standalone.id);
+  await moveScheduleToThePast(scheduled.id);
+  await moveScheduleToThePast(standalone.id);
   await expect
     .poll(() => studentAccess(standalone.id), { timeout: 15_000 })
     .toEqual({ status: 'ACCESSIBLE' });
@@ -122,5 +117,5 @@ test('a scheduled unlock waits for blocked prerequisites and releases on its day
     (node: { id: string }) => node.id === scheduled.id,
   );
   expect(released.isTeacherBlocked).toBe(false);
-  expect(released).not.toHaveProperty('teacherUnlockOn');
+  expect(released).not.toHaveProperty('teacherUnlockAt');
 });

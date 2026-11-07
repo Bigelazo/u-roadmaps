@@ -995,7 +995,7 @@ describe('canvas commands', () => {
       (await nodeOf(persistence, 'limits')) as RoadmapNode;
     const scheduledUnlock = async (persistence: RoadmapCanvasSessionPersistence) => {
       const node = await limits(persistence);
-      return 'teacherUnlockOn' in node ? node.teacherUnlockOn : undefined;
+      return 'teacherUnlockAt' in node ? node.teacherUnlockAt : undefined;
     };
     const workshop = { name: 'Taller', icon: 'Shapes', color: '#024AD8' } as const;
 
@@ -1061,14 +1061,14 @@ describe('canvas commands', () => {
       ],
       [
         'scheduling an unlock',
-        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockOn: '2099-03-01' },
+        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockAt: '2099-03-01T15:00:00.000Z' },
         'Desbloqueo programado.',
         scheduledUnlock,
-        '2099-03-01',
+        '2099-03-01T15:00:00.000Z',
       ],
       [
         'cancelling a Scheduled unlock',
-        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockOn: null },
+        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockAt: null },
         'Desbloqueo programado cancelado.',
         scheduledUnlock,
         undefined,

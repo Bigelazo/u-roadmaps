@@ -11,7 +11,7 @@ export const PUT = courseRoute(
           userId: user.id,
           identifier,
           id: params.nodeId,
-          unlockOn: body.unlockOn ?? null,
+          unlockAt: body.unlockAt ?? null,
           includeDependents: body.includeDependents,
         },
         roadmapChangePort,
@@ -24,7 +24,7 @@ export const DELETE = courseRoute(
   async ({ identifier, user, params }) =>
     NextResponse.json(
       await scheduleTeacherUnlock(
-        { userId: user.id, identifier, id: params.nodeId, unlockOn: null },
+        { userId: user.id, identifier, id: params.nodeId, unlockAt: null },
         roadmapChangePort,
       ),
     ),

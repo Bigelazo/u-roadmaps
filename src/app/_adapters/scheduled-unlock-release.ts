@@ -13,6 +13,7 @@ export function startScheduledUnlockRelease() {
   startPeriodicPass({
     run: releaseDueScheduledUnlocks,
     intervalMs: process.env.SCHEDULED_UNLOCK_INTERVAL_MS,
+    defaultIntervalMs: 60_000,
     onError: (error) => console.warn('Scheduled unlock release failed', { error }),
   });
 }

@@ -4,19 +4,24 @@ import {
   transitivePrerequisiteNodeIds,
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
+import { zonedInstant, zonedWallClock, type ZonedWallClock } from '@/shared/zoned-time';
 
 export type CalendarDay = string;
+
+export type UnlockInstant = string;
+
+export const CHILE_TIME_ZONE = 'America/Santiago';
 
 type ScheduledUnlockNode = {
   id: string;
   isVisible: boolean;
   isTeacherBlocked: boolean;
-  teacherUnlockOn: CalendarDay | null;
+  teacherUnlockAt: UnlockInstant | null;
   teacherUnlockIncludesDependents: boolean;
 };
 
 const chileCalendarDayFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'America/Santiago',
+  timeZone: CHILE_TIME_ZONE,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
@@ -32,83 +37,108 @@ export function addCalendarDays(day: CalendarDay, days: number): CalendarDay {
   return date.toISOString().slice(0, 10);
 }
 
-export function isCalendarDay(value: unknown): value is CalendarDay {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+export function chileWallClock(instant: Date): ZonedWallClock {
+  return zonedWallClock(instant, CHILE_TIME_ZONE);
+}
+
+export function chileInstant(wallClock: ZonedWallClock): Date {
+  return zonedInstant(wallClock, CHILE_TIME_ZONE);
+}
+
+const unlockInstantPattern =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+
+function parseUnlockInstant(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const match = unlockInstantPattern.exec(value);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const calendarDay = new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+  if (
+    Number.isNaN(calendarDay.getTime()) ||
+    calendarDay.toISOString().slice(0, 10) !== `${year}-${month}-${day}`
+  )
+    return null;
+  const instant = new Date(value);
+  return Number.isNaN(instant.getTime()) ? null : instant;
+}
+
+function isDue(teacherUnlockAt: UnlockInstant | null, now: Date) {
+  return teacherUnlockAt !== null && Date.parse(teacherUnlockAt) <= now.getTime();
 }
 
 export type ScheduledUnlockRuleFailure =
   'INVALID_TEACHER_UNLOCK_DATE' | 'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK';
 
 export type ScheduledUnlockDecision =
-  | { kind: 'ALLOWED'; day: CalendarDay | null; includesDependents: boolean }
+  | { kind: 'ALLOWED'; unlockAt: UnlockInstant | null; includesDependents: boolean }
   | RuleRejection<ScheduledUnlockRuleFailure>;
 
-export function decideScheduledUnlockDay({
-  unlockOn,
+export function decideScheduledUnlockInstant({
+  unlockAt,
   includeDependents,
-  today,
+  now,
 }: {
-  unlockOn: unknown;
+  unlockAt: unknown;
   includeDependents?: unknown;
-  today: CalendarDay;
+  now: Date;
 }): ScheduledUnlockDecision {
-  if (unlockOn === null) return { kind: 'ALLOWED', day: null, includesDependents: false };
-  if (!isCalendarDay(unlockOn))
+  if (unlockAt === null) return { kind: 'ALLOWED', unlockAt: null, includesDependents: false };
+  const instant = parseUnlockInstant(unlockAt);
+  if (!instant)
     return ruleRejection(
       'INVALID_TEACHER_UNLOCK_DATE',
-      'La fecha debe tener el formato AAAA-MM-DD.',
+      'La fecha y hora deben incluir su zona horaria (ISO 8601).',
     );
-  if (unlockOn <= today)
+  if (instant.getTime() <= now.getTime())
     return ruleRejection(
       'INVALID_TEACHER_UNLOCK_DATE',
-      'La fecha de desbloqueo debe ser posterior a hoy.',
+      'El desbloqueo programado debe quedar en el futuro.',
     );
-  return { kind: 'ALLOWED', day: unlockOn, includesDependents: includeDependents === true };
+  return {
+    kind: 'ALLOWED',
+    unlockAt: instant.toISOString(),
+    includesDependents: includeDependents === true,
+  };
 }
 
 export function decideScheduledUnlock({
   node,
-  unlockOn,
+  unlockAt,
   includeDependents,
-  today,
+  now,
 }: {
   node: { isVisible: boolean; isTeacherBlocked: boolean };
-  unlockOn: unknown;
+  unlockAt: unknown;
   includeDependents?: unknown;
-  today: CalendarDay;
+  now: Date;
 }): ScheduledUnlockDecision {
-  const day = decideScheduledUnlockDay({ unlockOn, includeDependents, today });
-  if (day.kind === 'REJECTED' || day.day === null) return day;
+  const decision = decideScheduledUnlockInstant({ unlockAt, includeDependents, now });
+  if (decision.kind === 'REJECTED' || decision.unlockAt === null) return decision;
   if (!node.isVisible || !node.isTeacherBlocked)
     return ruleRejection(
       'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK',
       'Solo se puede programar el desbloqueo de un nodo visible con bloqueo docente.',
     );
-  return day;
+  return decision;
 }
 
 export function dueScheduledUnlockNodeIds({
   nodes,
   dependencies,
-  today,
+  now,
 }: {
   nodes: readonly ScheduledUnlockNode[];
   dependencies: readonly RoadmapGraphDependency[];
-  today: CalendarDay;
+  now: Date;
 }) {
   const teacherBlockedNodeIds = new Set(
     nodes.filter((node) => node.isTeacherBlocked).map((node) => node.id),
   );
   const candidates = nodes.filter(
-    (node) =>
-      node.isVisible &&
-      node.isTeacherBlocked &&
-      node.teacherUnlockOn !== null &&
-      node.teacherUnlockOn <= today,
+    (node) => node.isVisible && node.isTeacherBlocked && isDue(node.teacherUnlockAt, now),
   );
-  const retainedNodeIds = pendingScheduledUnlockNodeIds({ nodes, today });
+  const retainedNodeIds = pendingScheduledUnlockNodeIds({ nodes, now });
   const released = new Set<string>();
   let changed = true;
   while (changed) {
@@ -139,10 +169,10 @@ export function dueScheduledUnlockNodeIds({
 
 export function pendingScheduledUnlockNodeIds({
   nodes,
-  today,
+  now,
 }: {
   nodes: readonly Omit<ScheduledUnlockNode, 'teacherUnlockIncludesDependents'>[];
-  today: CalendarDay;
+  now: Date;
 }) {
   return new Set(
     nodes
@@ -150,8 +180,8 @@ export function pendingScheduledUnlockNodeIds({
         (node) =>
           node.isVisible &&
           node.isTeacherBlocked &&
-          node.teacherUnlockOn !== null &&
-          node.teacherUnlockOn > today,
+          node.teacherUnlockAt !== null &&
+          !isDue(node.teacherUnlockAt, now),
       )
       .map(({ id }) => id),
   );
