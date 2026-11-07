@@ -995,9 +995,9 @@ test('teacher can save consecutive changes to the same Node', async ({
   await title.fill(firstTitle);
   await description.fill(firstDescription);
   const highlightedDescription = fullscreen.locator('.markdown-editor pre');
-  await expect(highlightedDescription.locator('.token.title')).toHaveText('# Objetivo');
-  await expect(highlightedDescription.locator('.token.bold')).toHaveText('**Conceptos**');
-  await expect(highlightedDescription.locator('.token.italic')).toHaveText('*ejercicios*');
+  await expect(highlightedDescription.locator('.token-title')).toHaveText('# Objetivo');
+  await expect(highlightedDescription.locator('.token-bold')).toHaveText('**Conceptos**');
+  await expect(highlightedDescription.locator('.token-italic')).toHaveText('*ejercicios*');
   await type.click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
   await expect(save).toBeEnabled();
@@ -1018,7 +1018,7 @@ test('teacher can save consecutive changes to the same Node', async ({
 
   await title.fill(secondTitle);
   await description.fill(secondDescription);
-  await expect(highlightedDescription.locator('.token.title')).toHaveText('## Repaso');
+  await expect(highlightedDescription.locator('.token-title')).toHaveText('## Repaso');
   await expect(description).toHaveValue(secondDescription);
   await type.click();
   await page.getByRole('option', { name: controlTypeName }).click();

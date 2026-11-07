@@ -40,6 +40,7 @@ body:has([data-viewport-page]) [data-global-navigation] {
   position: absolute;
   inset: 0;
   height: 100%;
+  overflow: hidden;
   resize: none;
   field-sizing: fixed;
   font: inherit;
@@ -53,15 +54,15 @@ body:has([data-viewport-page]) [data-global-navigation] {
   -webkit-text-fill-color: var(--muted-foreground);
 }
 
-.markdown-editor :is(.title, .bold, .url, .url-reference) {
+.markdown-editor :is(.token-title, .token-bold, .token-url, .token-url-reference) {
   color: var(--primary);
 }
 
-.markdown-editor :is(.italic, .code, .code-snippet, .code-block) {
+.markdown-editor :is(.token-italic, .token-code, .token-code-snippet, .token-code-block) {
   color: var(--progress-deep);
 }
 
-.markdown-editor :is(.punctuation, .list, .blockquote) {
+.markdown-editor :is(.token-punctuation, .token-list, .token-blockquote) {
   color: var(--muted-foreground);
 }
 
