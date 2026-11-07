@@ -3,6 +3,7 @@ import { ok } from './helpers';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { literal, sql } from './database';
 import { changeTeacherBlock } from './previewed-writes';
+import { releaseScheduledUnlocks } from './scheduled-unlocks';
 
 function uniqueName(prefix: string) {
   return `${prefix} ${crypto.randomUUID().slice(0, 8)}`;
@@ -83,9 +84,8 @@ test('a scheduled unlock waits for blocked prerequisites and releases at its tim
 
   await moveScheduleToThePast(scheduled.id);
   await moveScheduleToThePast(standalone.id);
-  await expect
-    .poll(() => studentAccess(standalone.id), { timeout: 15_000 })
-    .toEqual({ status: 'ACCESSIBLE' });
+  await releaseScheduledUnlocks();
+  expect(await studentAccess(standalone.id)).toEqual({ status: 'ACCESSIBLE' });
   expect(await studentAccess(scheduled.id)).toEqual({
     status: 'BLOCKED',
     reason: 'TEACHER_BLOCK',
