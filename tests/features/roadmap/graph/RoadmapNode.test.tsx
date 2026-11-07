@@ -160,18 +160,12 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
   });
   const visibilityAction = screen.getByRole('button', { name: 'Ocultar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
-  expect(screen.getByTestId('node-action-access-default-icon')).toBeTruthy();
-  expect(screen.getByTestId('node-action-access-hover-icon')).toBeTruthy();
-  expect(screen.getByTestId('node-action-visibility-default-icon')).toBeTruthy();
-  expect(screen.getByTestId('node-action-visibility-hover-icon')).toBeTruthy();
   expect(visibilityAction.parentElement?.style.getPropertyValue('--i')).toBe('1');
   expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('4');
   const resourceAction = screen.getByRole('button', { name: 'Agregar recurso' });
-  expect(resourceAction.parentElement?.style.getPropertyValue('--angle')).toBe('60deg');
   await user.click(resourceAction);
   expect(onAction).toHaveBeenCalledWith({ kind: 'add-resource', nodeId: 'teacher-node' });
   const deleteAction = screen.getByRole('button', { name: 'Eliminar nodo' });
-  expect(deleteAction.parentElement?.style.getPropertyValue('--angle')).toBe('90deg');
   await user.click(deleteAction);
   expect(onAction).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: 'teacher-node' });
   await user.click(visibilityAction);
@@ -207,15 +201,8 @@ test('offers showing a hidden node without an access action', async () => {
   expect(screen.queryByRole('button', { name: 'Desbloquear' })).toBeNull();
   const visibilityAction = screen.getByRole('button', { name: 'Mostrar para estudiantes' });
   expect(visibilityAction.getAttribute('data-slot')).toBe('node-action-visibility');
-  expect(screen.getByTestId('node-action-visibility-default-icon')).toBeTruthy();
-  expect(screen.getByTestId('node-action-visibility-hover-icon')).toBeTruthy();
   expect(visibilityAction.parentElement?.style.getPropertyValue('--i')).toBe('0');
   expect(visibilityAction.parentElement?.style.getPropertyValue('--total')).toBe('3');
-  expect(
-    screen
-      .getByRole('button', { name: 'Agregar recurso' })
-      .parentElement?.style.getPropertyValue('--angle'),
-  ).toBe('60deg');
   await user.click(visibilityAction);
   expect(onAction).toHaveBeenCalledWith({ kind: 'show-node', nodeId: 'hidden-teacher-node' });
   expect(screen.getByRole('button', { name: 'Eliminar nodo' })).toBeTruthy();
@@ -552,3 +539,74 @@ test('does not mark a Node its student cannot open', async () => {
   await waitFor(() => expect(fetch).toHaveBeenCalled());
   expect(screen.queryByRole('img', { name: /cambios? sin revisar/ })).toBeNull();
 });
+
+test.each([
+  {
+    hidden: false,
+    blocked: false,
+    label: 'Bloquear nodo',
+    current: 'lock-keyhole-open',
+    preview: 'lock-keyhole',
+  },
+  {
+    hidden: false,
+    blocked: true,
+    label: 'Desbloquear',
+    current: 'lock-keyhole',
+    preview: 'lock-keyhole-open',
+  },
+  {
+    hidden: false,
+    blocked: false,
+    label: 'Ocultar para estudiantes',
+    current: 'eye',
+    preview: 'eye-off',
+  },
+  {
+    hidden: true,
+    blocked: false,
+    label: 'Mostrar para estudiantes',
+    current: 'eye-off',
+    preview: 'eye',
+  },
+])(
+  'previews the result of $label on hover and keyboard focus',
+  async ({ hidden, blocked, label, current, preview }) => {
+    const user = userEvent.setup();
+    const onAction = vi.fn();
+    renderNode(
+      nodeProps({
+        data: {
+          status: 'editing',
+          canManageActions: true,
+          isActionMenuOpen: true,
+          isHidden: hidden,
+          isTeacherBlocked: blocked,
+          onAction,
+        },
+      }),
+    );
+
+    const trigger = screen.getByRole('button', { name: label });
+    const id = label === 'Bloquear nodo' || label === 'Desbloquear' ? 'access' : 'visibility';
+    const currentIcon = within(trigger).getByTestId(`node-action-${id}-current-icon`);
+    const previewIcon = within(trigger).getByTestId(`node-action-${id}-preview-icon`);
+    expect(currentIcon.innerHTML).toContain(`lucide-${current}"`);
+    expect(previewIcon.innerHTML).toContain(`lucide-${preview}"`);
+
+    await waitFor(() => expect(getComputedStyle(currentIcon).opacity).toBe('1'));
+    expect(getComputedStyle(previewIcon).opacity).toBe('0');
+    await user.hover(trigger);
+    await waitFor(() => expect(getComputedStyle(previewIcon).opacity).toBe('1'));
+    expect(getComputedStyle(currentIcon).opacity).toBe('0');
+    await user.unhover(trigger);
+    await waitFor(() => expect(getComputedStyle(currentIcon).opacity).toBe('1'));
+    expect(getComputedStyle(previewIcon).opacity).toBe('0');
+    for (let step = 0; step < 8 && !trigger.matches(':focus'); step += 1) {
+      await user.tab();
+    }
+    expect(trigger.matches(':focus')).toBe(true);
+    await waitFor(() => expect(getComputedStyle(previewIcon).opacity).toBe('1'));
+    expect(onAction).not.toHaveBeenCalled();
+  },
+);

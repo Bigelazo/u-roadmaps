@@ -4,6 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 
 import { useRef, useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
+import { AnimatePresence, motion } from 'motion/react';
 import { CirclePlus, Plus, Shapes } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
@@ -23,6 +24,8 @@ import { NodeContentFields } from './NodeContentFields';
 import styles from './NodeCreator.module.css';
 import { NodeTypesEditor } from './NodeTypesEditor';
 import { NODE_TYPES_MENU_ITEM_LABEL, type NodeInput, type NodeTypeInput } from './types';
+
+const MotionButton = motion.create(Button);
 
 type Props = {
   nodeTypes: RoadmapDto['nodeTypes'];
@@ -59,64 +62,114 @@ export function NodeCreator({
       <Menu.Root open={isMenuOpen} onOpenChange={setIsMenuOpen}>
         <Tooltip>
           <TooltipTrigger
+            delay={150}
             render={
               <Menu.Trigger
                 data-toast-anchor=""
                 aria-label="Crear en el mapa"
                 render={
-                  <Button
+                  <MotionButton
                     type="button"
                     size="icon-lg"
                     className={cn(styles.trigger, isMenuOpen && styles.triggerOpen)}
+                    whileHover={{ scale: 1.06, y: -2 }}
+                    whileTap={{ scale: 0.92, y: 0 }}
+                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                   />
                 }
               >
-                <span
+                <motion.span
                   aria-hidden="true"
-                  className={cn(styles.menuIcon, isMenuOpen && styles.menuIconOpen)}
+                  className={styles.menuIcon}
+                  initial={false}
+                  animate={{ rotate: isMenuOpen ? 135 : 0 }}
+                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <span className={styles.menuLine} />
-                  <span className={styles.menuLine} />
-                  <span className={styles.menuLine} />
-                </span>
+                  <Plus />
+                </motion.span>
               </Menu.Trigger>
             }
           />
           <TooltipContent>Crear en el mapa</TooltipContent>
         </Tooltip>
-        <Menu.Portal container={menuLayerRef}>
-          <Menu.Positioner
-            data-toast-obstacle=""
-            align="end"
-            side="top"
-            sideOffset={-34}
-            className={styles.positioner}
-          >
-            <Menu.Popup className={styles.menu}>
-              <Menu.Item
-                className={styles.menuItem}
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setIsNodeDialogOpen(true);
-                }}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <Menu.Portal container={menuLayerRef} keepMounted>
+              <Menu.Positioner
+                data-toast-obstacle=""
+                align="end"
+                side="top"
+                sideOffset={14}
+                className={styles.positioner}
               >
-                <CirclePlus aria-hidden="true" />
-                Crear nodo
-              </Menu.Item>
-              <Menu.Item
-                className={styles.menuItem}
-                aria-label={NODE_TYPES_MENU_ITEM_LABEL}
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setIsNodeTypesDialogOpen(true);
-                }}
-              >
-                <Shapes aria-hidden="true" />
-                Tipos de nodo
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
+                <Menu.Popup
+                  className={styles.menu}
+                  render={
+                    <motion.div
+                      initial={{ opacity: 1 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, transition: { duration: 0.14 } }}
+                    />
+                  }
+                >
+                  <Menu.Group className={styles.actions}>
+                    <Menu.Item
+                      className={styles.menuItem}
+                      aria-label={NODE_TYPES_MENU_ITEM_LABEL}
+                      render={
+                        <motion.div
+                          initial={{ opacity: 0, y: 124, scale: 0.72 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{
+                            opacity: 0,
+                            y: 124,
+                            scale: 0.72,
+                            transition: { duration: 0.14, delay: 0 },
+                          }}
+                          transition={{ duration: 0.24, delay: 0.035, ease: [0.16, 1, 0.3, 1] }}
+                        />
+                      }
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsNodeTypesDialogOpen(true);
+                      }}
+                    >
+                      <span className={styles.actionLabel}>Tipos de nodo</span>
+                      <span className={styles.actionIcon} aria-hidden="true">
+                        <Shapes />
+                      </span>
+                    </Menu.Item>
+                    <Menu.Item
+                      className={cn(styles.menuItem, styles.primaryAction)}
+                      render={
+                        <motion.div
+                          initial={{ opacity: 0, y: 64, scale: 0.72 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{
+                            opacity: 0,
+                            y: 64,
+                            scale: 0.72,
+                            transition: { duration: 0.12, delay: 0 },
+                          }}
+                          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                        />
+                      }
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsNodeDialogOpen(true);
+                      }}
+                    >
+                      <span className={styles.actionLabel}>Crear nodo</span>
+                      <span className={styles.actionIcon} aria-hidden="true">
+                        <CirclePlus />
+                      </span>
+                    </Menu.Item>
+                  </Menu.Group>
+                </Menu.Popup>
+              </Menu.Positioner>
+            </Menu.Portal>
+          )}
+        </AnimatePresence>
       </Menu.Root>
       <Dialog open={isNodeDialogOpen} onOpenChange={setIsNodeDialogOpen}>
         <DialogContent showCloseButton={false}>

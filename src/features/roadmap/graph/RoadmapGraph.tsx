@@ -37,6 +37,7 @@ import {
   snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
 import type { NodeActionCallbacks, NodeActionIntent } from '@/features/roadmap/graph/node-action';
+import { nodeActionMenuCloseDurationMs } from '@/features/roadmap/graph/node-menu-actions';
 import { Button } from '@/shared/ui/button';
 import { NodeActionSheet, useNodeActionSheet } from '@/features/roadmap/graph/NodeActionSheet';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
@@ -717,12 +718,18 @@ function useNodeActionMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusRef = useRef(true);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
   const beginClosing = useCallback(
     (nodeId: string) => {
       if (!editing || useActionSheet) return;
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       setClosingMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
-      closeTimerRef.current = setTimeout(() => setClosingMenu(null), 400);
+      closeTimerRef.current = setTimeout(() => setClosingMenu(null), nodeActionMenuCloseDurationMs);
     },
     [editing, selectedNodeIdRef, useActionSheet],
   );
@@ -743,11 +750,16 @@ function useNodeActionMenu({
         closeActionMenu();
         return;
       }
+      if (closingNodeId === nodeId) {
+        if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+        setClosingMenu(null);
+      }
       if (openNodeId) beginClosing(openNodeId);
       restoreFocusRef.current = true;
       setOpenMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
     },
-    [beginClosing, closeActionMenu, editing, openNodeId, selectedNodeIdRef],
+    [beginClosing, closeActionMenu, closingNodeId, editing, openNodeId, selectedNodeIdRef],
   );
   const onAction = useCallback(
     (intent: NodeActionIntent) => {

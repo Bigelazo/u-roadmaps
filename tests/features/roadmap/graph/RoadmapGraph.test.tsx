@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import type { NodeProps } from '@xyflow/react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { mockViewport } from '../../../support/viewport';
 import { RoadmapGraph, type RoadmapGraphEditing } from '@/features/roadmap/graph/RoadmapGraph';
@@ -91,6 +91,8 @@ vi.mock('@xyflow/react', () => ({
     setViewport: vi.fn(),
     getInternalNode: () => undefined,
   }),
+  useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
+    selector({ transform: [0, 0, 1] }),
   useNodesInitialized: () => true,
   useUpdateNodeInternals: () => () => undefined,
 }));
@@ -231,5 +233,34 @@ test('read-only teaching graphs hide connection handles and render black depende
   for (const handle of screen.getAllByTestId('flow-handle')) {
     expect(handle.style.visibility).toBe('hidden');
     expect(handle.style.pointerEvents).toBe('none');
+  }
+});
+
+test('reopening a radial menu during its exit makes its actions available immediately', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    const editing = editingCapability();
+    render(
+      <RoadmapGraph
+        projection={{ kind: 'teaching', roadmap: teacherRoadmap, editing }}
+        {...commonProps}
+      />,
+    );
+    const trigger = screen.getAllByRole('button', { name: 'Abrir menú de acciones del nodo' })[0];
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+
+    const menu = screen.getByRole('group', { name: 'Menú de acciones del nodo' });
+    expect(menu.hasAttribute('inert')).toBe(false);
+    const resource = screen.getByRole('button', { name: 'Agregar recurso' });
+    expect(resource.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(resource);
+    expect(editing.onEditingIntent).toHaveBeenCalledWith({
+      kind: 'add-resource',
+      nodeId: 'node-1',
+    });
+  } finally {
+    vi.useRealTimers();
   }
 });
