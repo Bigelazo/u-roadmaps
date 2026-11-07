@@ -235,7 +235,7 @@ test('rejects an incomplete link address in Spanish', async () => {
 });
 
 const prerequisiteHint =
-  'Si a esa hora algún prerrequisito sigue bloqueado, este nodo esperará a que lo desbloquees.';
+  'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
 
 test('schedules the unlock day and time of a teacher-blocked Node in Chilean time, and removes it', async () => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
@@ -245,7 +245,7 @@ test('schedules the unlock day and time of a teacher-blocked Node in Chilean tim
 
     const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
     expect(schedule.disabled).toBe(true);
-    expect(screen.queryByText(prerequisiteHint)).toBeNull();
+    expect(screen.getByText(prerequisiteHint)).toBeTruthy();
     await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
     expect(screen.getByText('Noviembre 2026')).toBeTruthy();
     const pastDay = screen.getByRole('button', { name: /, 6 de noviembre de 2026/ });

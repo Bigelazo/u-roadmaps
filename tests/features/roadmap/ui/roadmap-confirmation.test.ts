@@ -209,7 +209,12 @@ describe('roadmapTeacherBlockConfirmation', () => {
     const idle = roadmapTeacherBlockConfirmation({ ...pair, schedule: schedule(false) });
     expect(renderToStaticMarkup(idle.content)).toContain('Programar desbloqueo');
 
+    expect(renderToStaticMarkup(idle.content)).not.toContain('sigue bloqueado');
+
     const withoutDate = roadmapTeacherBlockConfirmation({ ...pair, schedule: schedule(true) });
+    expect(renderToStaticMarkup(withoutDate.content)).toContain(
+      'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.',
+    );
     expect(withoutDate.actions).toEqual([
       { id: 'unlock-node', label: 'Programar este nodo', emphasis: 'primary', disabled: true },
       {

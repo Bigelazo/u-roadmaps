@@ -22,6 +22,7 @@ import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
+import { scheduledUnlockPrerequisiteHint } from '@/features/roadmap/ui/UnlockScheduleField';
 
 function NodeHeader() {
   const { node, nodeTypes, closeNode } = useNodeEditorContext();
@@ -209,12 +210,7 @@ function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
           dayLabel="Día del desbloqueo"
           timeLabel="Hora del desbloqueo"
         />
-        {scheduledAt ? (
-          <FieldDescription>
-            Si a esa hora algún prerrequisito sigue bloqueado, este nodo esperará a que lo
-            desbloquees.
-          </FieldDescription>
-        ) : null}
+        <FieldDescription>{scheduledUnlockPrerequisiteHint}</FieldDescription>
         <div className="flex flex-wrap justify-end gap-2">
           {scheduledAt && (
             <Button

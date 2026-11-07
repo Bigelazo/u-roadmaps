@@ -12,6 +12,9 @@ const DateTimePicker = dynamic(
   { ssr: false, loading: () => <div className="h-11" aria-hidden="true" /> },
 );
 
+export const scheduledUnlockPrerequisiteHint =
+  'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
+
 export type UnlockScheduleDraft = {
   readonly isScheduling: boolean;
   readonly unlockAt: Date | null;
@@ -60,15 +63,17 @@ export function UnlockScheduleField({
         />
       </Field>
       {draft.isScheduling ? (
-        <DateTimePicker
-          value={draft.unlockAt}
-          onValueChange={draft.onUnlockAtChange}
-          timeZone={CHILE_TIME_ZONE}
-          disabled={disabled}
-          dayLabel="Día del desbloqueo"
-          timeLabel="Hora del desbloqueo"
-          className="animate-in duration-150 fade-in-0 slide-in-from-top-1"
-        />
+        <div className="flex animate-in flex-col gap-2 duration-150 fade-in-0 slide-in-from-top-1">
+          <DateTimePicker
+            value={draft.unlockAt}
+            onValueChange={draft.onUnlockAtChange}
+            timeZone={CHILE_TIME_ZONE}
+            disabled={disabled}
+            dayLabel="Día del desbloqueo"
+            timeLabel="Hora del desbloqueo"
+          />
+          <FieldDescription>{scheduledUnlockPrerequisiteHint}</FieldDescription>
+        </div>
       ) : null}
     </div>
   );
