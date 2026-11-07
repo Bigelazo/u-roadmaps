@@ -337,3 +337,77 @@ test('keeps radial node actions evenly sized and separated', async ({ page, cour
     }
   }
 });
+
+function recordColumnWidths(column: Locator) {
+  return column.evaluate(
+    (element) =>
+      new Promise<number[]>((resolve) => {
+        const widths: number[] = [];
+        const startedAt = performance.now();
+        const sample = () => {
+          widths.push(element.getBoundingClientRect().width);
+          if (performance.now() - startedAt < 800) requestAnimationFrame(sample);
+          else resolve(widths);
+        };
+        requestAnimationFrame(sample);
+      }),
+  );
+}
+
+function intermediateWidths(widths: number[], panelWidth: number) {
+  return widths.filter((width) => width > 1 && width < panelWidth - 1);
+}
+
+test('slides the side panel open and closed beside the canvas', async ({ page, course }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+
+  const column = page.locator('[data-slot="roadmap-panel-column"]');
+  const panel = page.locator('#roadmap-editor-panel');
+  const canvas = page.getByLabel('Lienzo del roadmap');
+  const closedCanvas = await bounds(canvas);
+
+  const opening = recordColumnWidths(column);
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+  const openingWidths = await opening;
+  const { width: panelWidth } = await bounds(panel);
+  expect(intermediateWidths(openingWidths, panelWidth).length).toBeGreaterThan(0);
+  expect((await bounds(column)).width).toBeCloseTo(panelWidth, 0);
+  expect((await bounds(canvas)).width).toBeCloseTo(closedCanvas.width - panelWidth, 0);
+
+  const closing = recordColumnWidths(column);
+  await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
+  await expect(column).toHaveAttribute('inert');
+  await expect(panel).toBeVisible();
+  const closingWidths = await closing;
+  expect(intermediateWidths(closingWidths, panelWidth).length).toBeGreaterThan(0);
+  await expect(panel).toBeHidden();
+  await expect(column).not.toHaveAttribute('inert');
+  expect((await bounds(canvas)).width).toBeCloseTo(closedCanvas.width, 0);
+});
+
+test('opens and closes the side panel without motion when reduced motion is requested', async ({
+  page,
+  course,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+
+  const column = page.locator('[data-slot="roadmap-panel-column"]');
+  const panel = page.locator('#roadmap-editor-panel');
+
+  const opening = recordColumnWidths(column);
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+  const openingWidths = await opening;
+  const { width: panelWidth } = await bounds(panel);
+  expect(intermediateWidths(openingWidths, panelWidth)).toEqual([]);
+
+  const closing = recordColumnWidths(column);
+  await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
+  const closingWidths = await closing;
+  expect(intermediateWidths(closingWidths, panelWidth)).toEqual([]);
+  await expect(panel).toBeHidden();
+});

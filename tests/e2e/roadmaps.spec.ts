@@ -1128,6 +1128,7 @@ test('keeps the teaching panel width across reloads without changing the student
   page,
   course,
 }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(course.pagePath());
