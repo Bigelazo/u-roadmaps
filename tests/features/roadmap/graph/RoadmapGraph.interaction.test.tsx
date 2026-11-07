@@ -90,6 +90,7 @@ vi.mock('@xyflow/react', () => ({
             className="react-flow__node"
             data-id={node.id}
             data-testid={`rendered-node-${node.id}`}
+            onClick={(event) => onNodeClick(event, node)}
           >
             Nodo renderizado {node.id}
           </button>
@@ -979,6 +980,79 @@ test('explains a blocked Node on tap with its pending prerequisites instead of s
   expect(onSelectNode).not.toHaveBeenCalled();
   const notice = await screen.findByRole('dialog', { name: 'Completa los prerrequisitos' });
   expect(notice.textContent).toContain('Para abrirlo, completa antes: "Derivadas".');
+});
+
+function noticePlacement(notice: HTMLElement) {
+  // eslint-disable-next-line testing-library/no-node-access -- Base UI positions the popup through its positioner.
+  const { style } = notice.parentElement!;
+  return style.transform || style.left;
+}
+
+test('moves the prerequisite notice to the most recently tapped blocked Node', async () => {
+  const user = userEvent.setup();
+  const blockedNode = (id: string, title: string, positionX: number) => ({
+    id,
+    title,
+    positionX,
+    positionY: 0,
+    nodeTypeId: 'content',
+    isVisible: true,
+    access: { status: 'BLOCKED' as const, reason: 'PREREQUISITE_BLOCK' as const },
+  });
+  const blockedRoadmap: StudentRoadmapDto = {
+    ...studentRoadmap,
+    nodes: [
+      { ...studentRoadmap.nodes[0], id: 'intro', title: 'Introducción' },
+      blockedNode('control', 'Control 1', 600),
+      blockedNode('exercises', 'Ejercicios guiados', 300),
+    ],
+    dependencies: [
+      {
+        id: 'dependency-1',
+        sourceNodeId: 'intro',
+        targetNodeId: 'control',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      },
+      {
+        id: 'dependency-2',
+        sourceNodeId: 'control',
+        targetNodeId: 'exercises',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      },
+    ],
+  };
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'student', roadmap: blockedRoadmap }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+  const placeNode = (id: string, left: number) => {
+    const rect = { x: left, y: 100, top: 100, left, right: left + 180, bottom: 160 };
+    vi.spyOn(screen.getByTestId(`rendered-node-${id}`), 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      width: 180,
+      height: 60,
+      toJSON: () => ({}),
+    });
+  };
+  placeNode('control', 600);
+  placeNode('exercises', 300);
+
+  await user.click(screen.getByTestId('rendered-node-control'));
+  const controlNotice = await screen.findByRole('dialog', { name: 'Completa los prerrequisitos' });
+  await waitFor(() => expect(controlNotice.textContent).toContain('"Introducción"'));
+  await waitFor(() => expect(noticePlacement(controlNotice)).toMatch(/600/));
+
+  await user.click(screen.getByTestId('rendered-node-exercises'));
+
+  const exercisesNotice = await screen.findByRole('dialog', {
+    name: 'Completa los prerrequisitos',
+  });
+  await waitFor(() => expect(exercisesNotice.textContent).toContain('"Control 1"'));
+  await waitFor(() => expect(noticePlacement(exercisesNotice)).toMatch(/300/));
 });
 
 test('keeps compact canvas controls in one row and centers the map clear of the overlays', async () => {

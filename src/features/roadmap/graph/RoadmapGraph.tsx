@@ -1422,6 +1422,7 @@ function BlockedNodeNotice({
     >
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Positioner
+          key={shown}
           anchor={() =>
             shown
               ? (containerRef.current?.querySelector(`.react-flow__node[data-id="${shown}"]`) ??
