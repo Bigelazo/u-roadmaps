@@ -332,7 +332,7 @@ test('the canvas question-mark icon opens the teaching tutorial and points back 
   const before = await roadmapShape(course.roadmapId);
   await enterRoadmap(page, course.pagePath(), course.users.teacher.id);
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
-  await expect(page.getByText('Previsualización del canvas')).toBeVisible();
+  await expect(page.getByText('Vista estudiantil')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Abrir tutorial' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Ir al editor' }).click();
 

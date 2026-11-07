@@ -18,7 +18,7 @@ test('a teacher previews, completes, resets, and exits the persistent student ca
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
 
-  await expect(page.getByText('Previsualización del canvas')).toBeVisible();
+  await expect(page.getByText('Vista estudiantil')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Crear en el mapa' })).toHaveCount(0);
   await page.locator(`.react-flow__node[data-id="${node.id}"]`).click();
   await page.getByRole('button', { name: 'Completar' }).click();

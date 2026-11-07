@@ -203,7 +203,7 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   expect(metadataBox.y - canvasBox.y).toBeCloseTo(24, 0);
   await expect(canvas.locator('header')).toHaveCSS('pointer-events', 'none');
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
-  await expect(page.getByText('Previsualización del canvas')).toBeVisible();
+  await expect(page.getByText('Vista estudiantil')).toBeVisible();
   const previewToolbar = canvas.locator('.react-flow__panel.top.center');
   const [previewCanvasBox, previewBox] = await Promise.all([
     bounds(canvas),

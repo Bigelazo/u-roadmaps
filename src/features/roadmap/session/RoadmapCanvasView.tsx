@@ -1001,7 +1001,7 @@ function RoadmapCanvasHeader({
       <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
         {isCanvasPreview ? (
           <Badge
-            className="border-orange-300 text-secondary-foreground"
+            className="text-secondary-foreground"
             style={{
               backgroundColor: 'color-mix(in srgb, var(--background) 78%, #f97316)',
             }}

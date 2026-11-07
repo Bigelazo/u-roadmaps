@@ -388,7 +388,7 @@ describe('RoadmapCanvasSession', () => {
     renderSession(persistence);
 
     await user.click(await screen.findByRole('button', { name: 'Vista estudiante' }));
-    expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
+    expect(await screen.findByText('Vista estudiantil')).toBeTruthy();
     expect(screen.getByTestId('roadmap-mode').textContent).toBe('student');
     expect(screen.getByTestId('selected-node-id').textContent).toBe('');
 
@@ -413,7 +413,7 @@ describe('RoadmapCanvasSession', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
-    expect(screen.queryByText('Previsualización del canvas')).toBeNull();
+    expect(screen.queryByText('Vista estudiantil')).toBeNull();
   });
 
   test('keeps historical teaching Canvas preview read-only through the session', async () => {
@@ -424,7 +424,7 @@ describe('RoadmapCanvasSession', () => {
     });
 
     await user.click(await screen.findByRole('button', { name: 'Vista estudiante' }));
-    expect(await screen.findByText('Previsualización del canvas')).toBeTruthy();
+    expect(await screen.findByText('Vista estudiantil')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Volver al roadmap' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Reiniciar progreso' })).toBeNull();
 
@@ -433,7 +433,7 @@ describe('RoadmapCanvasSession', () => {
       (screen.getByRole('button', { name: 'Completar Límites' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Volver al roadmap' }));
-    expect(screen.queryByText('Previsualización del canvas')).toBeNull();
+    expect(screen.queryByText('Vista estudiantil')).toBeNull();
   });
 
   test('routes the Node creator through the public session and selects the created Node', async () => {

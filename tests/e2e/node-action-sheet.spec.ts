@@ -254,7 +254,7 @@ test('touch actions stay unreachable to students, Canvas preview, and frozen Roa
   await page.goto(offering.pagePath());
   await expect(trigger).toHaveCount(2);
   await page.getByRole('button', { name: 'Vista estudiante' }).tap();
-  await expect(page.getByText('Previsualización del canvas', { exact: true })).toBeVisible();
+  await expect(page.getByText('Vista estudiantil', { exact: true })).toBeVisible();
   await expect(trigger).toHaveCount(0);
   await expect(sheet).toHaveCount(0);
 
