@@ -4,15 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 
 import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowLeft, CircleAlert, CircleHelp, Eye, History, LogOut, Users } from 'lucide-react';
@@ -58,6 +50,7 @@ import { notify } from '@/shared/ui/notify';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
+import { RoadmapPanelColumn } from '@/features/roadmap/ui/RoadmapPanelColumn';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
@@ -543,20 +536,10 @@ export function RoadmapCanvasView({ input }: Props) {
   };
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
-    <SidebarProvider
-      className="min-h-0 flex-1"
-      style={
-        {
-          '--sidebar-width': `${activePanelWidth}px`,
-        } as CSSProperties
-      }
-    >
+    <SidebarProvider className="min-h-0 flex-1">
       <section
         data-page-width="full"
-        className={cn(
-          'relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)]',
-          isSidePanelOpen ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]' : 'lg:grid-cols-1',
-        )}
+        className="relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:grid-cols-[minmax(0,1fr)_auto]"
       >
         <div
           ref={canvasFocusRef}
@@ -598,7 +581,13 @@ export function RoadmapCanvasView({ input }: Props) {
             />
           </NodeChangeCountsProvider>
         </div>
-        <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
+        <RoadmapPanelColumn
+          isOpen={isSidePanelOpen}
+          width={activePanelWidth}
+          scene={model.isCanvasPreview ? 'canvas-preview' : 'roadmap'}
+        >
+          <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
+        </RoadmapPanelColumn>
       </section>
       <RoadmapCanvasConfirmation model={model} />
     </SidebarProvider>
@@ -974,6 +963,7 @@ function RoadmapTutorialLink({
     <>
       <Tooltip>
         <TooltipTrigger
+          delay={150}
           render={
             <Link
               {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}

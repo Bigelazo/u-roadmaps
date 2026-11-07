@@ -11,7 +11,10 @@ import { Toaster } from '@/shared/ui/toast';
 import { findToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
 
-beforeEach(() => mockViewport(1280));
+beforeEach(() => {
+  mockViewport(1280);
+  Element.prototype.getAnimations = () => [];
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
