@@ -48,7 +48,7 @@ test('Markdown drops require confirmation and update the Node draft before savin
   await confirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
   await expect(confirmation).toBeHidden();
   await expect(fullscreenDescription).toHaveValue(content);
-  await expect(fullscreen.locator('.markdown-editor .token.title')).toHaveText('# Guía de estudio');
+  await expect(fullscreen.locator('.markdown-editor .token-title')).toHaveText('# Guía de estudio');
 
   const beforeSave = await api.get(course.apiPath());
   expect((await beforeSave.json()).nodes).toEqual(
@@ -69,6 +69,95 @@ test('Markdown drops require confirmation and update the Node draft before savin
     expect.arrayContaining([expect.objectContaining({ id: nodeId, description: content })]),
   );
   await transfer.dispose();
+});
+
+test('a dragged Markdown file turns the description into a drop target', async ({
+  page,
+  course,
+  teacherApi: api,
+}) => {
+  const created = await api.post(course.apiPath('/nodes'), {
+    data: {
+      title: 'Nodo para arrastrar Markdown',
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 0,
+      positionY: 0,
+    },
+  });
+  await ok(created, 201);
+  const nodeId: string = (await created.json()).node.id;
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+
+  const description = page.locator('#edit-node-description');
+  const dropTarget = page.getByText('Suelta el archivo Markdown aquí');
+  const markdown = await fileDrop(page, 'guia.md', '# Guía');
+  const pdf = await fileDrop(page, 'guia.pdf', 'PDF', 'application/pdf');
+
+  await description.dispatchEvent('dragover', { dataTransfer: pdf });
+  await expect(dropTarget).toBeHidden();
+
+  await description.dispatchEvent('dragover', { dataTransfer: markdown });
+  await expect(dropTarget).toBeVisible();
+  await description.dispatchEvent('dragleave', { dataTransfer: markdown });
+  await expect(dropTarget).toBeHidden();
+
+  await description.dispatchEvent('dragover', { dataTransfer: markdown });
+  await expect(dropTarget).toBeVisible();
+  await description.dispatchEvent('drop', { dataTransfer: markdown });
+  await expect(dropTarget).toBeHidden();
+  await expect(
+    page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' }),
+  ).toContainText('guia.md');
+
+  await markdown.dispose();
+  await pdf.dispose();
+});
+
+test('a long Markdown table scrolls with the side panel, not inside the description', async ({
+  page,
+  course,
+  teacherApi: api,
+}) => {
+  const row =
+    '| `url` | https://github.com/uchile-cc/plantilla-memoria-typst/blob/main/template/parametros/final/descripcion_completa.typ |';
+  const table = ['| Parámetro | Descripción |', '| --------- | ----------- |'];
+  const description = [...table, ...Array.from({ length: 60 }, () => row)].join('\n');
+  const created = await api.post(course.apiPath('/nodes'), {
+    data: {
+      title: 'Nodo con tabla larga',
+      description,
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 0,
+      positionY: 0,
+    },
+  });
+  await ok(created, 201);
+  const nodeId: string = (await created.json()).node.id;
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+
+  const input = page.locator('#edit-node-description');
+  await expect(input).toHaveValue(description);
+  const layout = await input.evaluate((element) => {
+    const highlight = element.parentElement?.querySelector('pre');
+    const panel = element.closest<HTMLElement>('[data-slot="sidebar-content"]');
+    if (!highlight || !panel) throw new Error('Missing description layers or side panel');
+    return {
+      inputOverflow: element.scrollHeight - element.clientHeight,
+      highlightOverflow: highlight.scrollWidth - highlight.clientWidth,
+      panelOverflow: panel.scrollHeight - panel.clientHeight,
+      panelHorizontalOverflow: panel.scrollWidth - panel.clientWidth,
+      panelScrollbar: getComputedStyle(panel).scrollbarWidth,
+    };
+  });
+  expect(layout.inputOverflow).toBe(0);
+  expect(layout.highlightOverflow).toBe(0);
+  expect(layout.panelHorizontalOverflow).toBe(0);
+  expect(layout.panelOverflow).toBeGreaterThan(0);
+  expect(layout.panelScrollbar).not.toBe('none');
 });
 
 test('teaching staff create a Node whose description comes from a dropped Markdown file', async ({

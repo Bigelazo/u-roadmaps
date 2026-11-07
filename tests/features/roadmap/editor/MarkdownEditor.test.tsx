@@ -90,3 +90,58 @@ test('a read failure preserves the draft and reports the problem', async () => {
     read.mockRestore();
   }
 });
+
+const dropTargetMessage = 'Suelta el archivo Markdown aquí';
+
+function dragOverWith(dataTransfer: { types: string[]; items: { kind: string; type: string }[] }) {
+  fireEvent.dragOver(screen.getByRole('textbox'), { dataTransfer: { files: [], ...dataTransfer } });
+}
+
+function fileItems(...types: string[]) {
+  return { types: ['Files'], items: types.map((type) => ({ kind: 'file', type })) };
+}
+
+test.each([
+  ['a Markdown media type', fileItems('text/markdown')],
+  ['the legacy Markdown media type', fileItems('text/x-markdown')],
+  ['a file whose type the browser cannot tell', fileItems('')],
+  ['a drag that hides its items until the drop', { types: ['Files'], items: [] }],
+])('offers itself as a drop target while dragging %s', (_, dataTransfer) => {
+  render(<Editor />);
+  expect(screen.queryByText(dropTargetMessage)).toBeNull();
+  dragOverWith(dataTransfer);
+  expect(screen.getByText(dropTargetMessage)).toBeTruthy();
+});
+
+test.each([
+  ['another file type', fileItems('application/pdf')],
+  ['several files', fileItems('text/markdown', 'text/markdown')],
+  ['selected text', { types: ['text/plain'], items: [{ kind: 'string', type: 'text/plain' }] }],
+])('does not offer itself as a drop target while dragging %s', (_, dataTransfer) => {
+  render(<Editor />);
+  dragOverWith(dataTransfer);
+  expect(screen.queryByText(dropTargetMessage)).toBeNull();
+});
+
+test.each([{ readOnly: true }, { disabled: true }])(
+  'a non-editable field does not offer itself as a drop target (%#)',
+  (props) => {
+    render(<MarkdownEditor {...props} value="Original" onValueChange={vi.fn()} />);
+    dragOverWith(fileItems('text/markdown'));
+    expect(screen.queryByText(dropTargetMessage)).toBeNull();
+  },
+);
+
+test('the drop target clears when the file leaves the field', () => {
+  render(<Editor />);
+  dragOverWith(fileItems('text/markdown'));
+  fireEvent.dragLeave(screen.getByRole('textbox'));
+  expect(screen.queryByText(dropTargetMessage)).toBeNull();
+});
+
+test('the drop target clears when the file is dropped', () => {
+  render(<Editor />);
+  dragOverWith(fileItems('text/markdown'));
+  dropFiles([new File(['Nuevo'], 'guia.md')]);
+  expect(screen.queryByText(dropTargetMessage)).toBeNull();
+});
