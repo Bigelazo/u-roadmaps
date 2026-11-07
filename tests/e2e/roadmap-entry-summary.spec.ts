@@ -165,7 +165,7 @@ test('entry from Academic overview groups changes under current Node titles and 
     dialog
       .locator('section')
       .last()
-      .getByText(`«Título vigente» pasó de tipo «${originalTypeName}» a tipo «Lectura inicial».`, {
+      .getByText(`Título vigente pasó de tipo «${originalTypeName}» a tipo «Lectura inicial».`, {
         exact: true,
       }),
   ).toBeVisible();
