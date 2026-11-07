@@ -34,14 +34,32 @@ export type DateTimePickerProps = {
 
 const dayFormatter = new Intl.DateTimeFormat('es-CL', {
   timeZone: 'UTC',
-  weekday: 'short',
+  weekday: 'long',
   day: 'numeric',
-  month: 'short',
-  year: 'numeric',
+  month: 'long',
 });
 
+const monthFormatter = new Intl.DateTimeFormat('es-CL', { month: 'long' });
+
+const capitalizedParts = new Set<Intl.DateTimeFormatPartTypes>(['weekday', 'month']);
+
+function capitalize(text: string) {
+  return text.charAt(0).toLocaleUpperCase('es-CL') + text.slice(1);
+}
+
+function formatCapitalized(formatter: Intl.DateTimeFormat, date: Date) {
+  return formatter
+    .formatToParts(date)
+    .map(({ type, value }) => (capitalizedParts.has(type) ? capitalize(value) : value))
+    .join('');
+}
+
+function formatMonthCaption(month: Date) {
+  return `${formatCapitalized(monthFormatter, month)} ${month.getFullYear()}`;
+}
+
 function formatDay(day: string) {
-  return dayFormatter.format(new Date(`${day}T12:00:00.000Z`));
+  return formatCapitalized(dayFormatter, new Date(`${day}T12:00:00.000Z`));
 }
 
 function dayOfDate(date: Date) {
@@ -119,20 +137,25 @@ export function DateTimePicker({
               disabled={disabled}
               aria-label={selected ? `${dayLabel}: ${formatDay(selected.day)}` : dayLabel}
               className={cn(
-                'min-w-0 flex-1 basis-40 justify-start font-normal tabular-nums',
+                'min-w-fit flex-1 justify-start font-normal tabular-nums',
                 !selected && 'text-muted-foreground',
               )}
             />
           }
         >
-          <CalendarDays data-icon="inline-start" aria-hidden="true" />
-          <span className="truncate">{selected ? formatDay(selected.day) : dayPlaceholder}</span>
+          <CalendarDays
+            data-icon="inline-start"
+            className="text-muted-foreground"
+            aria-hidden="true"
+          />
+          {selected ? formatDay(selected.day) : dayPlaceholder}
           <ChevronDown data-icon="inline-end" className="ml-auto" aria-hidden="true" />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar
             mode="single"
             locale={es}
+            formatters={{ formatCaption: formatMonthCaption }}
             selected={selected ? dateOfDay(selected.day) : undefined}
             defaultMonth={dateOfDay(selected?.day ?? minimumDay)}
             startMonth={dateOfDay(minimumDay)}
@@ -148,12 +171,16 @@ export function DateTimePicker({
       <Select value={time} onValueChange={selectTime} disabled={disabled}>
         <SelectTrigger
           aria-label={timeLabel}
-          className="w-28 shrink-0 tabular-nums data-[size=default]:h-11"
+          className="w-28 shrink-0 rounded-(--radius-md) border-border bg-background tabular-nums hover:bg-muted aria-expanded:bg-muted data-[size=default]:h-11"
         >
           <Clock className="text-muted-foreground" aria-hidden="true" />
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className="max-h-72">
+        <SelectContent
+          alignItemWithTrigger={false}
+          align="end"
+          className="max-h-[min(18rem,var(--available-height))]"
+        >
           <SelectGroup>
             {slots.map((slot) => (
               <SelectItem
