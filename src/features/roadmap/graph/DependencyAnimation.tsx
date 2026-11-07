@@ -15,6 +15,7 @@ import {
   dependencyAnimationSchedule,
   dependencyDrawingEase,
   nodeRevealSeconds,
+  roadmapEntranceCadence,
 } from '@/features/roadmap/graph/dependency-animation-schedule';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { DependencyPath } from '@/features/roadmap/graph/DependencyPath';
@@ -87,7 +88,7 @@ function createPlayback(edges: readonly RoadmapFlowEdge[], nodeIds: readonly str
     paint(clock.get());
     entryAnimation = animate(clock, total, {
       duration: Math.max(0, total - clock.get()),
-      ease: dependencyDrawingEase,
+      ease: roadmapEntranceCadence,
       onUpdate: paint,
       onComplete: () => {
         paint(total);

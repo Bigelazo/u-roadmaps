@@ -4,9 +4,23 @@ import {
   dependencyDrawingEase,
   dependencyDrawingVelocity,
   nodeRevealSeconds,
+  roadmapEntranceCadence,
 } from '@/features/roadmap/graph/dependency-animation-schedule';
 
 const edge = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
+const chain = (count: number) =>
+  Array.from({ length: count }, (_, index) => edge(`n${index}`, `n${index + 1}`));
+
+function playbackSecondsAt(clockSeconds: number, totalSeconds: number) {
+  let low = 0;
+  let high = 1;
+  for (let step = 0; step < 60; step++) {
+    const middle = (low + high) / 2;
+    if (roadmapEntranceCadence(middle) * totalSeconds < clockSeconds) low = middle;
+    else high = middle;
+  }
+  return ((low + high) / 2) * totalSeconds;
+}
 
 describe('Dependency entry animation', () => {
   it('starts the Bézier draw slowly and increases its speed smoothly to the endpoint', () => {
@@ -54,27 +68,30 @@ describe('Dependency entry animation', () => {
   });
 
   it.each([3, 12, 200])(
-    'finishes the entrance of %i dependencies and their last node within one second',
+    'draws %i dependencies fastest first and slower later within one second',
     (count) => {
-      const schedule = dependencyAnimationSchedule(
-        Array.from({ length: count }, (_, index) => edge(`n${index}`, `n${index + 1}`)),
-      );
+      const schedule = dependencyAnimationSchedule(chain(count));
       const last = schedule[schedule.length - 1];
+      const total = last.start + last.duration;
       expect(schedule).toHaveLength(count);
-      expect(last.start + last.duration + nodeRevealSeconds).toBeCloseTo(1);
+      expect(total + nodeRevealSeconds).toBeLessThanOrEqual(1 + 1e-9);
+      const shown = (slot: (typeof schedule)[number]) =>
+        playbackSecondsAt(slot.start + slot.duration, total) - playbackSecondsAt(slot.start, total);
+      expect(shown(schedule[0])).toBeLessThan(shown(last));
+      for (let index = 1; index < schedule.length; index++) {
+        expect(schedule[index].duration).toBeGreaterThan(schedule[index - 1].duration);
+      }
     },
   );
 
-  it('keeps the cadence of a short roadmap and accelerates through a large one', () => {
-    const short = dependencyAnimationSchedule([edge('a', 'b'), edge('b', 'c')]);
+  it('keeps the cadence of a short roadmap', () => {
+    const short = dependencyAnimationSchedule(chain(2));
     expect(short[1].start + short[1].duration).toBeCloseTo(0.64);
-    const schedule = dependencyAnimationSchedule(
-      Array.from({ length: 200 }, (_, index) => edge(`n${index}`, `n${index + 1}`)),
-    );
-    for (let index = 1; index < schedule.length; index++) {
-      expect(schedule[index].duration).toBeGreaterThan(0);
-      expect(schedule[index].duration).toBeLessThan(schedule[index - 1].duration);
-    }
+  });
+
+  it('eases the entrance out from its fastest start', () => {
+    expect(roadmapEntranceCadence(0.25)).toBeGreaterThan(0.25);
+    expect(roadmapEntranceCadence(0.75)).toBeGreaterThan(0.75);
   });
 
   it('does not draw hidden dependencies or create a pause for an empty roadmap', () => {

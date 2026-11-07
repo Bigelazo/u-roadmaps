@@ -45,7 +45,7 @@ export function dependencyAnimationSchedule(
     roadmapEntranceBudgetSeconds - nodeRevealSeconds,
     count * dependencyDrawSeconds,
   );
-  const weight = (index: number) => (count < 2 ? 1 : 1 - (0.35 * index) / (count - 1));
+  const weight = (index: number) => (count < 2 ? 1 : 0.65 + (0.35 * index) / (count - 1));
   const weights = ordered.reduce((sum, _edge, index) => sum + weight(index), 0);
   let start = 0;
   return ordered.map((edge, index) => {
@@ -57,6 +57,8 @@ export function dependencyAnimationSchedule(
 }
 
 export const dependencyDrawingVelocity = cubicBezier(0.42, 0, 1, 1);
+
+export const roadmapEntranceCadence = cubicBezier(0, 0, 0.58, 1);
 
 const velocitySamples = 256;
 const distances = [0];
