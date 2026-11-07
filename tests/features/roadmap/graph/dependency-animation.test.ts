@@ -3,6 +3,7 @@ import {
   dependencyAnimationSchedule,
   dependencyDrawingEase,
   dependencyDrawingVelocity,
+  nodeRevealSeconds,
 } from '@/features/roadmap/graph/dependency-animation-schedule';
 
 const edge = (source: string, target: string) => ({ id: `${source}-${target}`, source, target });
@@ -52,13 +53,24 @@ describe('Dependency entry animation', () => {
     }
   });
 
-  it('keeps a large roadmap within two seconds while progressively increasing the cadence', () => {
+  it.each([3, 12, 200])(
+    'finishes the entrance of %i dependencies and their last node within one second',
+    (count) => {
+      const schedule = dependencyAnimationSchedule(
+        Array.from({ length: count }, (_, index) => edge(`n${index}`, `n${index + 1}`)),
+      );
+      const last = schedule[schedule.length - 1];
+      expect(schedule).toHaveLength(count);
+      expect(last.start + last.duration + nodeRevealSeconds).toBeCloseTo(1);
+    },
+  );
+
+  it('keeps the cadence of a short roadmap and accelerates through a large one', () => {
+    const short = dependencyAnimationSchedule([edge('a', 'b'), edge('b', 'c')]);
+    expect(short[1].start + short[1].duration).toBeCloseTo(0.64);
     const schedule = dependencyAnimationSchedule(
       Array.from({ length: 200 }, (_, index) => edge(`n${index}`, `n${index + 1}`)),
     );
-    const last = schedule[schedule.length - 1];
-    expect(schedule).toHaveLength(200);
-    expect(last.start + last.duration).toBeCloseTo(2);
     for (let index = 1; index < schedule.length; index++) {
       expect(schedule[index].duration).toBeGreaterThan(0);
       expect(schedule[index].duration).toBeLessThan(schedule[index - 1].duration);
