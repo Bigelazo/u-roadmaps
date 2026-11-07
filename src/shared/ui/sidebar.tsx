@@ -73,6 +73,7 @@ function SidebarRail({
 }: React.ComponentProps<'button'> & ResizableSidebarRailProps) {
   const railRef = React.useRef<HTMLButtonElement>(null);
   const activePointerId = React.useRef<number | null>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
   const changeWidth = (nextValue: number) => {
     onValueChange(Math.min(max, Math.max(min, nextValue)));
   };
@@ -88,6 +89,7 @@ function SidebarRail({
       ref={railRef}
       data-sidebar="rail"
       data-slot="sidebar-rail"
+      data-resizing={isResizing}
       role="separator"
       type="button"
       tabIndex={0}
@@ -107,6 +109,7 @@ function SidebarRail({
         event.preventDefault();
         event.stopPropagation();
         activePointerId.current = event.pointerId;
+        setIsResizing(true);
         event.currentTarget.setPointerCapture?.(event.pointerId);
         resizeFromPointer(event.clientX);
       }}
@@ -121,10 +124,13 @@ function SidebarRail({
         event.preventDefault();
         event.stopPropagation();
         activePointerId.current = null;
+        setIsResizing(false);
         event.currentTarget.releasePointerCapture?.(event.pointerId);
       }}
       onPointerCancel={(event) => {
-        if (activePointerId.current === event.pointerId) activePointerId.current = null;
+        if (activePointerId.current !== event.pointerId) return;
+        activePointerId.current = null;
+        setIsResizing(false);
       }}
       onKeyDown={(event) => {
         if (event.key === 'Home') changeWidth(min);
