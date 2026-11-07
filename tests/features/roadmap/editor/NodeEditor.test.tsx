@@ -243,6 +243,7 @@ test('schedules the unlock day and time of a teacher-blocked Node in Chilean tim
     const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
     expect(schedule.disabled).toBe(true);
     await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
+    expect(screen.getByText('Noviembre 2026')).toBeTruthy();
     const pastDay = screen.getByRole('button', { name: /, 6 de noviembre de 2026/ });
     expect((pastDay as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByRole('button', { name: /21 de noviembre de 2026/ }));
@@ -260,10 +261,13 @@ test('schedules the unlock day and time of a teacher-blocked Node in Chilean tim
       withNode({ isTeacherBlocked: true, teacherUnlockAt: '2026-11-21T17:30:00.000Z' }),
     );
     expect(
-      screen.getByText(
-        /Se desbloqueará el sábado, 21 de noviembre de 2026, a las 14:30 \(hora de Chile\)/,
-      ),
+      (await screen.findByRole('button', { name: 'Día del desbloqueo: Sábado, 21 de Noviembre' }))
+        .textContent,
+    ).toBe('Sábado, 21 de Noviembre');
+    expect(
+      within(screen.getByRole('combobox', { name: 'Hora del desbloqueo' })).getByText('14:30'),
     ).toBeTruthy();
+    expect(screen.queryByText(/Chile/)).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Quitar programación' }));
     expect(view.onIntent).toHaveBeenCalledWith({
       kind: 'schedule-teacher-unlock',

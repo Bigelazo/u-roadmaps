@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { CHILE_TIME_ZONE } from '@/features/roadmap/domain/scheduled-unlock';
 import { Button } from '@/shared/ui/button';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Separator } from '@/shared/ui/separator';
 import { NodeContentFields } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
@@ -181,25 +181,6 @@ const DateTimePicker = dynamic(
   { ssr: false, loading: () => <div className="h-11" aria-hidden="true" /> },
 );
 
-const scheduledUnlockFormatter = new Intl.DateTimeFormat('es-CL', {
-  timeZone: CHILE_TIME_ZONE,
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
-
-const scheduledUnlockTimeFormatter = new Intl.DateTimeFormat('es-CL', {
-  timeZone: CHILE_TIME_ZONE,
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-});
-
-function formatScheduledUnlock(instant: Date) {
-  return `${scheduledUnlockFormatter.format(instant)}, a las ${scheduledUnlockTimeFormatter.format(instant)}`;
-}
-
 function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
   const { scheduleTeacherUnlock } = useNodeEditorContext();
   const [draft, setDraft] = useState(scheduledAt ? new Date(scheduledAt) : null);
@@ -214,20 +195,11 @@ function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
       }}
     >
       <Field>
-        <div className="flex items-start gap-2">
-          <CalendarClock
-            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <div>
-            <FieldLabel htmlFor="node-unlock-date">Desbloqueo programado</FieldLabel>
-            <FieldDescription>
-              {scheduledAt
-                ? `Se desbloqueará el ${formatScheduledUnlock(new Date(scheduledAt))} (hora de Chile).`
-                : 'Elige el día y la hora (de Chile) en que este nodo se desbloqueará solo.'}{' '}
-              Si a esa hora un prerrequisito sigue bloqueado, esperará a que lo desbloquees.
-            </FieldDescription>
-          </div>
+        <div className="flex items-center gap-2.5">
+          <CalendarClock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <FieldLabel htmlFor="node-unlock-date" className="font-semibold">
+            Desbloqueo programado
+          </FieldLabel>
         </div>
         <DateTimePicker
           id="node-unlock-date"
