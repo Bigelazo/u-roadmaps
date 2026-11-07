@@ -663,31 +663,29 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       </div>
       <NodeResourceSummary fileCount={data.fileCount} linkCount={data.linkCount} />
       <NodeActionBadge id={id} data={data} selected={selected} />
-      {!hidden
-        ? (
-            [
-              ['top', Position.Top],
-              ['right', Position.Right],
-              ['bottom', Position.Bottom],
-              ['left', Position.Left],
-            ] as const
-          ).map(([id, position]) => (
-            <Handle
-              key={id}
-              id={id}
-              data-testid="roadmap-node-handle"
-              className="roadmap-node-handle"
-              type="source"
-              position={position}
-              isConnectable={canConnect}
-              onTouchStartCapture={(event) => event.stopPropagation()}
-              style={{
-                visibility: canConnect ? 'visible' : 'hidden',
-                pointerEvents: canConnect ? undefined : 'none',
-              }}
-            />
-          ))
-        : null}
+      {(
+        [
+          ['top', Position.Top],
+          ['right', Position.Right],
+          ['bottom', Position.Bottom],
+          ['left', Position.Left],
+        ] as const
+      ).map(([id, position]) => (
+        <Handle
+          key={id}
+          id={id}
+          data-testid="roadmap-node-handle"
+          className="roadmap-node-handle"
+          type="source"
+          position={position}
+          isConnectable={canConnect}
+          onTouchStartCapture={(event) => event.stopPropagation()}
+          style={{
+            visibility: canConnect ? 'visible' : 'hidden',
+            pointerEvents: canConnect ? undefined : 'none',
+          }}
+        />
+      ))}
       <NodeNotificationBadge id={id} data={data} />
     </motion.div>
   );

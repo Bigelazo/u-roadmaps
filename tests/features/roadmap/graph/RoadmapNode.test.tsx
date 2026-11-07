@@ -115,7 +115,11 @@ test('marks hidden teacher nodes with a distinct visual treatment and no visibil
     }),
   );
 
-  expect(screen.queryAllByTestId('roadmap-node-handle')).toHaveLength(0);
+  expect(screen.getAllByTestId('roadmap-node-handle')).toHaveLength(4);
+  for (const handle of screen.getAllByTestId('roadmap-node-handle')) {
+    expect(handle.style.visibility).toBe('hidden');
+    expect(handle.style.pointerEvents).toBe('none');
+  }
   expect(screen.queryByText('Oculto para estudiantes')).toBeNull();
   expect(screen.queryByRole('button')).toBeNull();
   const card = screen.getByTestId('roadmap-card');
