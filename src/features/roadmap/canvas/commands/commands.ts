@@ -1,6 +1,6 @@
 import type { ChangeImpactOf as PlannedChangeImpactOf } from '@/features/roadmap/domain/change-impact';
 import { linkResourceOnlyError, resourceEditError } from '@/features/roadmap/domain/resource';
-import { decideScheduledUnlock } from '@/features/roadmap/domain/scheduled-unlock';
+import { chileWallClock, decideScheduledUnlock } from '@/features/roadmap/domain/scheduled-unlock';
 import type {
   NodeEditorGuardReason,
   NodeUpdate,
@@ -15,6 +15,7 @@ import type {
   RoadmapNodeTypeInput,
 } from '@/features/roadmap/session/types';
 import {
+  affectedNodes,
   canvasConfirmationChoices,
   canvasPreviewResetConfirmation,
   nodeDeletionConfirmation,
@@ -26,7 +27,9 @@ import {
   roadmapTeacherBlockConfirmation,
   type CanvasConfirmationChoice,
   type RoadmapConfirmationRoadmap,
+  type UnlockScheduleDraft,
 } from '@/features/roadmap/ui/roadmap-confirmation';
+import { formatCalendarDay } from '@/shared/calendar-day-format';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import type {
   RoadmapDependencyRequest,
@@ -69,8 +72,18 @@ type CommandSession<Command extends { kind: string }> = {
   ): Promise<{ readonly applied: boolean } & ExecutionResult>;
 };
 
+export type ConfirmationInput = {
+  readonly unlockAt?: string;
+};
+
+export type ConfirmationContext = {
+  readonly schedule?: UnlockScheduleDraft;
+  readonly isPending?: boolean;
+};
+
 export type CommandOutcome<Command> = ExecutionResult & {
   readonly choice?: CanvasConfirmationChoice;
+  readonly input?: ConfirmationInput;
   readonly remaining?: Command;
 };
 
@@ -83,11 +96,13 @@ type ConfirmedAction<Command extends { kind: string }, Impact> = {
     command: Command,
     impact: Impact,
     choice: CanvasConfirmationChoice | undefined,
+    input?: ConfirmationInput,
   ): Promise<boolean | { retry: Command }>;
   confirmation(
     command: Command,
     impact: Impact | null,
     roadmap: RoadmapConfirmationRoadmap,
+    context: ConfirmationContext,
   ): ConfirmationPresentation | null;
 };
 
@@ -102,7 +117,7 @@ export type CommandEntry<Command extends { kind: string }, Impact> = {
     previewVersion?: string,
   ): ExecutionResult | void;
   readonly changesCanvasPreview?: true;
-  success?(command: Command, outcome: CommandOutcome<Command>): string;
+  success?(command: Command, outcome: CommandOutcome<Command>, impact?: Impact | null): string;
   report?(command: Command, outcome: CommandOutcome<Command>): PracticeCanvasAction | null;
   readonly confirmedAction?: ConfirmedAction<Command, Impact>;
 } & (Command['kind'] extends keyof PlannedChangeImpactOf
@@ -147,6 +162,116 @@ const teacherBlockSuccess: Readonly<Record<TeacherBlockOperation, string>> = {
 };
 
 const completionSuccess = () => 'Nodo completado.';
+
+type ScheduledUnlockRequest = {
+  readonly nodeId: string;
+  readonly unlockAt: string | null;
+  readonly includeDependents?: boolean;
+};
+
+const scheduledUnlockRequest = ({
+  nodeId,
+  unlockAt,
+  includeDependents,
+}: ScheduledUnlockRequest): RouteRequest => ({
+  path: `/nodes/${nodeId}/teacher-block/schedule`,
+  ...(unlockAt
+    ? {
+        method: 'PUT',
+        body: includeDependents ? { unlockAt, includeDependents } : { unlockAt },
+      }
+    : { method: 'DELETE' }),
+});
+
+const scheduleUnlockInPractice = (
+  practice: PracticeRoadmap,
+  { nodeId, unlockAt, includeDependents }: ScheduledUnlockRequest,
+) =>
+  practice.mutateNode(nodeId, (node) => {
+    if (!('isTeacherBlocked' in node)) return node;
+    const decision = decideScheduledUnlock({
+      node,
+      unlockAt,
+      includeDependents,
+      now: new Date(),
+    });
+    if (decision.kind === 'REJECTED') throw new Error(decision.message);
+    return {
+      ...node,
+      teacherUnlockAt: decision.unlockAt ?? undefined,
+      teacherUnlockIncludesDependents: decision.includesDependents || undefined,
+    };
+  });
+
+type TeacherBlockSchedule = {
+  readonly unlockAt: string;
+  readonly nodeIds: readonly string[];
+};
+
+const scheduledUnlocks = (
+  operation: TeacherBlockOperation,
+  { unlockAt, nodeIds }: TeacherBlockSchedule,
+) =>
+  nodeIds.map((nodeId) => ({
+    nodeId,
+    unlockAt,
+    includeDependents: operation === 'BRANCH_UNLOCK',
+  }));
+
+const scheduledNodeIds = (
+  nodeId: string,
+  preview: TeacherBlockOperationImpact | undefined,
+  choice: CanvasConfirmationChoice | undefined,
+) =>
+  choice === canvasConfirmationChoices.unlockPrerequisites && preview
+    ? preview.nodes.map(({ id }) => id)
+    : [nodeId];
+
+const scheduledMoment = (unlockAt: string) => {
+  const { day, time } = chileWallClock(new Date(unlockAt));
+  return `el ${formatCalendarDay(day)} a las ${time}`;
+};
+
+export function scheduledUnlockSuccess({
+  title,
+  unlockAt,
+  companions = 0,
+  companion = 'dependiente',
+}: {
+  title: string;
+  unlockAt: string;
+  companions?: number;
+  companion?: 'dependiente' | 'prerrequisito';
+}) {
+  const moment = scheduledMoment(unlockAt);
+  if (companions === 0) return `${title} se desbloqueará ${moment}.`;
+  const along = companions === 1 ? `su ${companion}` : `sus ${companions} ${companion}s`;
+  return `Se desbloquearán ${title} y ${along} ${moment}.`;
+}
+
+const teacherBlockScheduleSuccess = (
+  { nodeId, operation }: { nodeId: string; operation: TeacherBlockOperation },
+  choice: CanvasConfirmationChoice | undefined,
+  unlockAt: string,
+  impact: TeacherBlockChangeImpact | null | undefined,
+) => {
+  const chosen = chosenTeacherBlockOperation(operation, choice);
+  const preview = impact?.[chosen];
+  const title = preview?.nodes.find(({ id }) => id === nodeId)?.title ?? 'El nodo';
+  if (!preview) return scheduledUnlockSuccess({ title, unlockAt });
+  if (choice === canvasConfirmationChoices.unlockPrerequisites)
+    return scheduledUnlockSuccess({
+      title,
+      unlockAt,
+      companions: affectedNodes(preview, nodeId).length,
+      companion: 'prerrequisito',
+    });
+  return scheduledUnlockSuccess({
+    title,
+    unlockAt,
+    companions: chosen === 'BRANCH_UNLOCK' ? affectedNodes(preview, nodeId).length : 0,
+  });
+};
 
 const nodeMoves = {
   requests: ({ positions }: { positions: readonly RoadmapNodePlacement[] }): RouteRequest[] =>
@@ -247,20 +372,33 @@ export const canvasCommandCatalog = {
     report: ({ nodeId }) => ({ type: 'deleteNode', nodeId }),
   }),
   'change-teacher-block': command<
-    { kind: 'change-teacher-block'; nodeId: string; operation: TeacherBlockOperation },
+    {
+      kind: 'change-teacher-block';
+      nodeId: string;
+      operation: TeacherBlockOperation;
+      schedule?: TeacherBlockSchedule;
+    },
     TeacherBlockChangeImpact
   >({
-    requests: ({ nodeId, operation }) => ({
-      method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
-      path: `/nodes/${nodeId}/teacher-block`,
-    }),
+    requests: ({ nodeId, operation, schedule }) =>
+      schedule
+        ? scheduledUnlocks(operation, schedule).map(scheduledUnlockRequest)
+        : {
+            method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
+            path: `/nodes/${nodeId}/teacher-block`,
+          },
     previewHeader: 'x-teacher-block-preview',
     failure: 'No se pudo cambiar el bloqueo docente.',
     changeImpact: {
       path: ({ nodeId, operation }) => `/nodes/${nodeId}/teacher-block?operation=${operation}`,
       failure: 'No se pudo calcular el impacto del bloqueo docente.',
     },
-    practice: (practice, command, previewVersion) => practice.confirm(command, previewVersion),
+    practice: (practice, command, previewVersion) =>
+      command.schedule
+        ? practice.settleEach(scheduledUnlocks(command.operation, command.schedule), (request) =>
+            scheduleUnlockInPractice(practice, request),
+          )
+        : practice.confirm(command, previewVersion),
     confirmedAction: {
       impact: async (session, command) => {
         const operations = teacherBlockImpactOperations(command.operation);
@@ -274,12 +412,24 @@ export const canvasCommandCatalog = {
         );
         return impact[command.operation] ? impact : null;
       },
-      apply: async (session, command, impact, choice) => {
+      apply: async (session, command, impact, choice, input) => {
         const operation = chosenTeacherBlockOperation(command.operation, choice);
-        return (await session.execute({ ...command, operation }, impact[operation]?.version))
-          .applied;
+        const preview = impact[operation];
+        const schedule =
+          operation !== 'BLOCK' && input?.unlockAt
+            ? {
+                unlockAt: input.unlockAt,
+                nodeIds: scheduledNodeIds(command.nodeId, preview, choice),
+              }
+            : undefined;
+        return (
+          await session.execute(
+            { ...command, operation, ...(schedule ? { schedule } : {}) },
+            preview?.version,
+          )
+        ).applied;
       },
-      confirmation: ({ nodeId, operation }, impact, roadmap) => {
+      confirmation: ({ nodeId, operation }, impact, roadmap, { schedule, isPending }) => {
         const preview = impact?.[operation];
         return preview
           ? roadmapTeacherBlockConfirmation({
@@ -288,19 +438,26 @@ export const canvasCommandCatalog = {
               preview,
               individualPreview: impact?.UNBLOCK,
               branchPreview: impact?.BRANCH_UNLOCK,
+              schedule: operation === 'BLOCK' ? undefined : schedule,
+              isPending,
             })
           : null;
       },
     },
-    success: ({ operation }, { choice }) =>
-      choice === canvasConfirmationChoices.unlockPrerequisites
-        ? 'Nodos desbloqueados exitosamente.'
-        : teacherBlockSuccess[chosenTeacherBlockOperation(operation, choice)],
-    report: ({ nodeId, operation }, { choice }) => ({
-      type: 'changeTeacherBlock',
-      nodeId,
-      operation: chosenTeacherBlockOperation(operation, choice),
-    }),
+    success: (command, { choice, input }, impact) =>
+      input?.unlockAt && command.operation !== 'BLOCK'
+        ? teacherBlockScheduleSuccess(command, choice, input.unlockAt, impact)
+        : choice === canvasConfirmationChoices.unlockPrerequisites
+          ? 'Nodos desbloqueados exitosamente.'
+          : teacherBlockSuccess[chosenTeacherBlockOperation(command.operation, choice)],
+    report: ({ nodeId, operation }, { choice, input }) =>
+      input?.unlockAt
+        ? null
+        : {
+            type: 'changeTeacherBlock',
+            nodeId,
+            operation: chosenTeacherBlockOperation(operation, choice),
+          },
   }),
   'schedule-teacher-unlock': command<{
     kind: 'schedule-teacher-unlock';
@@ -308,32 +465,9 @@ export const canvasCommandCatalog = {
     unlockAt: string | null;
     includeDependents?: boolean;
   }>({
-    requests: ({ nodeId, unlockAt, includeDependents }) => ({
-      path: `/nodes/${nodeId}/teacher-block/schedule`,
-      ...(unlockAt
-        ? {
-            method: 'PUT',
-            body: includeDependents ? { unlockAt, includeDependents } : { unlockAt },
-          }
-        : { method: 'DELETE' }),
-    }),
+    requests: scheduledUnlockRequest,
     failure: 'No se pudo programar el desbloqueo.',
-    practice: (practice, { nodeId, unlockAt, includeDependents }) =>
-      practice.mutateNode(nodeId, (node) => {
-        if (!('isTeacherBlocked' in node)) return node;
-        const decision = decideScheduledUnlock({
-          node,
-          unlockAt,
-          includeDependents,
-          now: new Date(),
-        });
-        if (decision.kind === 'REJECTED') throw new Error(decision.message);
-        return {
-          ...node,
-          teacherUnlockAt: decision.unlockAt ?? undefined,
-          teacherUnlockIncludesDependents: decision.includesDependents || undefined,
-        };
-      }),
+    practice: scheduleUnlockInPractice,
     success: ({ unlockAt }) =>
       unlockAt ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
   }),

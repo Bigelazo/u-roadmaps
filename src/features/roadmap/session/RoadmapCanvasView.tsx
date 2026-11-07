@@ -34,6 +34,7 @@ import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
 import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
+import { useUnlockSchedule } from '@/features/roadmap/canvas/commands/use-unlock-schedule';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type {
   RoadmapDto,
@@ -630,12 +631,17 @@ function RoadmapCanvasConfirmation({
     canvasCommands: { pending, cancel, confirm },
     roadmap,
   } = model;
+  const schedule = useUnlockSchedule(pending?.request);
   return (
     <ConfirmationDialog
-      confirmation={pending && roadmap ? canvasConfirmation(pending, roadmap) : null}
+      confirmation={
+        pending && roadmap
+          ? canvasConfirmation(pending, roadmap, { schedule: schedule.draft })
+          : null
+      }
       pendingActionId={pending?.phase === 'confirming' ? pending.choice : undefined}
       onCancel={cancel}
-      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice)}
+      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice, schedule.input)}
     />
   );
 }

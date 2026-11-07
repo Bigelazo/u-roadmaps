@@ -11,7 +11,11 @@ import type {
   PracticeCanvasAction,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
-import type { CanvasCommand, CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type {
+  CanvasCommand,
+  CanvasCommandOf,
+  ConfirmationInput,
+} from '@/features/roadmap/canvas/commands/commands';
 import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
@@ -88,8 +92,8 @@ async function openCanvas(
       await waitFor(() => expect(commands().pending?.phase).toBe('awaiting'));
       return commands().pending!;
     },
-    async confirm(choice: CanvasConfirmationChoice) {
-      await act(() => commands().confirm(choice));
+    async confirm(choice: CanvasConfirmationChoice, input?: ConfirmationInput) {
+      await act(() => commands().confirm(choice, input));
     },
   };
 }
@@ -448,6 +452,78 @@ describe('canvas commands', () => {
 
       expect(canvas.commands().pending).toBeNull();
       expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual([]);
+    });
+
+    const unlockAt = '2030-11-10T19:30:00.000Z';
+
+    async function scheduledUnlockOf(persistence: RoadmapCanvasSessionPersistence, nodeId: string) {
+      const node = await nodeOf(persistence, nodeId);
+      return node && 'teacherUnlockAt' in node
+        ? {
+            unlockAt: node.teacherUnlockAt,
+            includesDependents: node.teacherUnlockIncludesDependents ?? false,
+          }
+        : undefined;
+    }
+
+    test.each([
+      [
+        'unlock-node',
+        'only the Node',
+        { unlockAt, includesDependents: false },
+        'Límites se desbloqueará el Domingo, 10 de Noviembre a las 16:30.',
+      ],
+      [
+        'unlock-branch',
+        'the Node with its dependents',
+        { unlockAt, includesDependents: true },
+        'Se desbloquearán Límites y su dependiente el Domingo, 10 de Noviembre a las 16:30.',
+      ],
+    ] as const)(
+      'a scheduled %s schedules %s instead of unlocking it now',
+      async (choice, _, scheduled, toast) => {
+        const canvas = await openCanvas(
+          createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits', 'derivatives')),
+        );
+        await act(() =>
+          canvas
+            .commands()
+            .request({ kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' }),
+        );
+        await canvas.awaiting();
+
+        await canvas.confirm(choice, { unlockAt });
+
+        expect(canvas.commands().pending).toBeNull();
+        expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'derivatives']);
+        expect(await scheduledUnlockOf(canvas.persistence, 'limits')).toEqual(scheduled);
+        expect(successToasts()).toEqual([toast]);
+        expect(canvas.reported()).toEqual([]);
+      },
+    );
+
+    test('scheduling an unlock behind blocked prerequisites schedules them for the same moment', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits', 'derivatives')),
+      );
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'change-teacher-block', nodeId: 'derivatives', operation: 'UNBLOCK' }),
+      );
+      await canvas.awaiting();
+
+      await canvas.confirm('unlock-prerequisites', { unlockAt });
+
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'derivatives']);
+      for (const nodeId of ['limits', 'derivatives'])
+        expect(await scheduledUnlockOf(canvas.persistence, nodeId)).toEqual({
+          unlockAt,
+          includesDependents: false,
+        });
+      expect(successToasts()).toEqual([
+        'Se desbloquearán Derivadas y su prerrequisito el Domingo, 10 de Noviembre a las 16:30.',
+      ]);
     });
 
     const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
