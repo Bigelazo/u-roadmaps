@@ -90,16 +90,11 @@ beforeAll(async () => {
       roadmapId: ids.roadmap,
     },
   });
-  await prisma.roadmapNode.create({
-    data: {
-      id: ids.node,
-      title: 'Nodo',
-      roadmapId: ids.roadmap,
-      nodeTypeId: ids.type,
-      positionX: 0,
-      positionY: 0,
-    },
-  });
+  await sql.query(
+    `INSERT INTO "RoadmapNode" ("id", "title", "roadmapId", "nodeTypeId", "positionX", "positionY")
+     VALUES ($1, 'Nodo', $2, $3, 0, 0)`,
+    [ids.node, ids.roadmap, ids.type],
+  );
 }, 60_000);
 
 afterAll(async () => {
