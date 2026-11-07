@@ -10,9 +10,60 @@ const chain = [
   { sourceNodeId: 'theory', targetNodeId: 'assessment' },
 ];
 
-function node(id: string, teacherUnlockOn: string | null, isTeacherBlocked = true) {
-  return { id, isVisible: true, isTeacherBlocked, teacherUnlockOn };
+function node(
+  id: string,
+  teacherUnlockOn: string | null,
+  isTeacherBlocked = true,
+  teacherUnlockIncludesDependents = false,
+) {
+  return {
+    id,
+    isVisible: true,
+    isTeacherBlocked,
+    teacherUnlockOn,
+    teacherUnlockIncludesDependents,
+  };
 }
+
+const longChain = [
+  { sourceNodeId: 'a', targetNodeId: 'b' },
+  { sourceNodeId: 'b', targetNodeId: 'c' },
+  { sourceNodeId: 'c', targetNodeId: 'd' },
+];
+
+test('a Scheduled unlock with dependents releases its branch, stopping at a dependent with its own pending schedule', () => {
+  const nodes = [
+    node('a', '2026-10-14', true, true),
+    node('b', null),
+    node('c', '2026-10-20'),
+    node('d', null),
+  ];
+
+  expect(
+    new Set(dueScheduledUnlockNodeIds({ nodes, dependencies: longChain, today: '2026-10-14' })),
+  ).toEqual(new Set(['a', 'b']));
+});
+
+test('a Scheduled unlock with dependents releases through a dependent whose own schedule is also due', () => {
+  const nodes = [
+    node('a', '2026-10-14', true, true),
+    node('b', null),
+    node('c', '2026-10-14'),
+    node('d', null),
+  ];
+
+  expect(
+    new Set(dueScheduledUnlockNodeIds({ nodes, dependencies: longChain, today: '2026-10-14' })),
+  ).toEqual(new Set(['a', 'b', 'c', 'd']));
+});
+
+test('a Scheduled unlock without dependents releases only its Node', () => {
+  const nodes = [node('a', '2026-10-14'), node('b', null), node('c', null), node('d', null)];
+
+  expect([
+    ...dueScheduledUnlockNodeIds({ nodes, dependencies: longChain, today: '2026-10-14' }),
+  ]).toEqual(['a']);
+});
 
 test('releases a blocked node on its scheduled Chilean day and not before', () => {
   const nodes = [
@@ -79,6 +130,7 @@ test('schedules a Teacher-blocked Node only on a future calendar day', () => {
   expect(decideScheduledUnlock({ node: blocked, unlockOn: '2026-10-15', today })).toEqual({
     kind: 'ALLOWED',
     day: '2026-10-15',
+    includesDependents: false,
   });
   expect(decideScheduledUnlock({ node: blocked, unlockOn: '2026-10-14', today })).toMatchObject({
     ...invalidDate,
@@ -122,5 +174,21 @@ test('discards a schedule on any Node', () => {
       unlockOn: null,
       today: '2026-10-14',
     }),
-  ).toEqual({ kind: 'ALLOWED', day: null });
+  ).toEqual({ kind: 'ALLOWED', day: null, includesDependents: false });
+});
+
+test('schedules a Node together with its dependents only when asked to', () => {
+  const today = '2026-10-14';
+
+  expect(
+    decideScheduledUnlock({
+      node: blocked,
+      unlockOn: '2026-10-15',
+      includeDependents: true,
+      today,
+    }),
+  ).toEqual({ kind: 'ALLOWED', day: '2026-10-15', includesDependents: true });
+  expect(
+    decideScheduledUnlock({ node: blocked, unlockOn: null, includeDependents: true, today }),
+  ).toEqual({ kind: 'ALLOWED', day: null, includesDependents: false });
 });

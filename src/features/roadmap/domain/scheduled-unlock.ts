@@ -1,5 +1,6 @@
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
+  eligibleBranchUnlockNodeIds,
   transitivePrerequisiteNodeIds,
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
@@ -11,6 +12,7 @@ type ScheduledUnlockNode = {
   isVisible: boolean;
   isTeacherBlocked: boolean;
   teacherUnlockOn: CalendarDay | null;
+  teacherUnlockIncludesDependents: boolean;
 };
 
 const chileCalendarDayFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -40,16 +42,19 @@ export type ScheduledUnlockRuleFailure =
   'INVALID_TEACHER_UNLOCK_DATE' | 'TEACHER_UNLOCK_SCHEDULE_REQUIRES_BLOCK';
 
 export type ScheduledUnlockDecision =
-  { kind: 'ALLOWED'; day: CalendarDay | null } | RuleRejection<ScheduledUnlockRuleFailure>;
+  | { kind: 'ALLOWED'; day: CalendarDay | null; includesDependents: boolean }
+  | RuleRejection<ScheduledUnlockRuleFailure>;
 
 export function decideScheduledUnlockDay({
   unlockOn,
+  includeDependents,
   today,
 }: {
   unlockOn: unknown;
+  includeDependents?: unknown;
   today: CalendarDay;
 }): ScheduledUnlockDecision {
-  if (unlockOn === null) return { kind: 'ALLOWED', day: null };
+  if (unlockOn === null) return { kind: 'ALLOWED', day: null, includesDependents: false };
   if (!isCalendarDay(unlockOn))
     return ruleRejection(
       'INVALID_TEACHER_UNLOCK_DATE',
@@ -60,19 +65,21 @@ export function decideScheduledUnlockDay({
       'INVALID_TEACHER_UNLOCK_DATE',
       'La fecha de desbloqueo debe ser posterior a hoy.',
     );
-  return { kind: 'ALLOWED', day: unlockOn };
+  return { kind: 'ALLOWED', day: unlockOn, includesDependents: includeDependents === true };
 }
 
 export function decideScheduledUnlock({
   node,
   unlockOn,
+  includeDependents,
   today,
 }: {
   node: { isVisible: boolean; isTeacherBlocked: boolean };
   unlockOn: unknown;
+  includeDependents?: unknown;
   today: CalendarDay;
 }): ScheduledUnlockDecision {
-  const day = decideScheduledUnlockDay({ unlockOn, today });
+  const day = decideScheduledUnlockDay({ unlockOn, includeDependents, today });
   if (day.kind === 'REJECTED' || day.day === null) return day;
   if (!node.isVisible || !node.isTeacherBlocked)
     return ruleRejection(
@@ -101,20 +108,51 @@ export function dueScheduledUnlockNodeIds({
       node.teacherUnlockOn !== null &&
       node.teacherUnlockOn <= today,
   );
+  const retainedNodeIds = pendingScheduledUnlockNodeIds({ nodes, today });
   const released = new Set<string>();
   let changed = true;
   while (changed) {
     changed = false;
-    for (const { id } of candidates) {
-      if (released.has(id)) continue;
+    for (const { id, teacherUnlockIncludesDependents } of candidates) {
+      if (!teacherBlockedNodeIds.has(id)) continue;
       const prerequisites = transitivePrerequisiteNodeIds(dependencies, id);
       if ([...prerequisites].some((prerequisite) => teacherBlockedNodeIds.has(prerequisite))) {
         continue;
       }
-      teacherBlockedNodeIds.delete(id);
-      released.add(id);
+      const releasedNodeIds = teacherUnlockIncludesDependents
+        ? eligibleBranchUnlockNodeIds({
+            dependencies,
+            teacherBlockedNodeIds,
+            rootNodeId: id,
+            retainedNodeIds,
+          })
+        : [id];
+      for (const releasedNodeId of releasedNodeIds) {
+        teacherBlockedNodeIds.delete(releasedNodeId);
+        released.add(releasedNodeId);
+      }
       changed = true;
     }
   }
   return released;
+}
+
+export function pendingScheduledUnlockNodeIds({
+  nodes,
+  today,
+}: {
+  nodes: readonly Omit<ScheduledUnlockNode, 'teacherUnlockIncludesDependents'>[];
+  today: CalendarDay;
+}) {
+  return new Set(
+    nodes
+      .filter(
+        (node) =>
+          node.isVisible &&
+          node.isTeacherBlocked &&
+          node.teacherUnlockOn !== null &&
+          node.teacherUnlockOn > today,
+      )
+      .map(({ id }) => id),
+  );
 }

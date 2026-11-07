@@ -309,18 +309,33 @@ export const canvasCommandCatalog = {
     kind: 'schedule-teacher-unlock';
     nodeId: string;
     unlockOn: string | null;
+    includeDependents?: boolean;
   }>({
-    requests: ({ nodeId, unlockOn }) => ({
+    requests: ({ nodeId, unlockOn, includeDependents }) => ({
       path: `/nodes/${nodeId}/teacher-block/schedule`,
-      ...(unlockOn ? { method: 'PUT', body: { unlockOn } } : { method: 'DELETE' }),
+      ...(unlockOn
+        ? {
+            method: 'PUT',
+            body: includeDependents ? { unlockOn, includeDependents } : { unlockOn },
+          }
+        : { method: 'DELETE' }),
     }),
     failure: 'No se pudo programar el desbloqueo.',
-    practice: (practice, { nodeId, unlockOn }) =>
+    practice: (practice, { nodeId, unlockOn, includeDependents }) =>
       practice.mutateNode(nodeId, (node) => {
         if (!('isTeacherBlocked' in node)) return node;
-        const decision = decideScheduledUnlock({ node, unlockOn, today: chileCalendarDay() });
+        const decision = decideScheduledUnlock({
+          node,
+          unlockOn,
+          includeDependents,
+          today: chileCalendarDay(),
+        });
         if (decision.kind === 'REJECTED') throw new Error(decision.message);
-        return { ...node, teacherUnlockOn: decision.day ?? undefined };
+        return {
+          ...node,
+          teacherUnlockOn: decision.day ?? undefined,
+          teacherUnlockIncludesDependents: decision.includesDependents || undefined,
+        };
       }),
     success: ({ unlockOn }) =>
       unlockOn ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',

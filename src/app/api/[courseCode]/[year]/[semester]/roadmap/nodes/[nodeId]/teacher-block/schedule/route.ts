@@ -7,7 +7,13 @@ export const PUT = courseRoute(
   async ({ identifier, user, params, prepared: body }) =>
     NextResponse.json(
       await scheduleTeacherUnlock(
-        { userId: user.id, identifier, id: params.nodeId, unlockOn: body.unlockOn ?? null },
+        {
+          userId: user.id,
+          identifier,
+          id: params.nodeId,
+          unlockOn: body.unlockOn ?? null,
+          includeDependents: body.includeDependents,
+        },
         roadmapChangePort,
       ),
     ),

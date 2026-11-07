@@ -122,6 +122,7 @@ async function loadRoadmapSnapshot(
         isVisible: true,
         isTeacherBlocked: true,
         teacherUnlockOn: true,
+        teacherUnlockIncludesDependents: true,
         resources: { select: { id: true, title: true } },
       },
     }),
@@ -154,7 +155,11 @@ async function persistConsequences(
   if (unblockedNodeIds.length > 0)
     await transaction.roadmapNode.updateMany({
       where: { id: { in: unblockedNodeIds } },
-      data: { isTeacherBlocked: false, teacherUnlockOn: null },
+      data: {
+        isTeacherBlocked: false,
+        teacherUnlockOn: null,
+        teacherUnlockIncludesDependents: false,
+      },
     });
   if (removedDependencyIds.length > 0)
     await transaction.dependency.deleteMany({ where: { id: { in: removedDependencyIds } } });
@@ -610,23 +615,45 @@ function calendarDayDate(day: CalendarDay) {
 
 export const scheduleTeacherUnlock = roadmapCommand({
   capability: 'edit',
-  parse: ({ id, unlockOn }: { id: string; unlockOn: unknown }) => {
+  parse: ({
+    id,
+    unlockOn,
+    includeDependents,
+  }: {
+    id: string;
+    unlockOn: unknown;
+    includeDependents?: unknown;
+  }) => {
     const nodeId = requireUuid(id, 'nodeId');
     const today = chileCalendarDay();
-    const decision = decideScheduledUnlockDay({ unlockOn, today });
+    const decision = decideScheduledUnlockDay({ unlockOn, includeDependents, today });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
-    return { nodeId, day: decision.day, today };
+    return { nodeId, day: decision.day, includesDependents: decision.includesDependents, today };
   },
   access: 'none',
-  run: async ({ tx, roadmap, input: { nodeId, day, today } }) => {
+  run: async ({ tx, roadmap, input: { nodeId, day, includesDependents, today } }) => {
     const node = await requireNode(tx, nodeId, roadmap.id);
-    const decision = decideScheduledUnlock({ node, unlockOn: day, today });
+    const decision = decideScheduledUnlock({
+      node,
+      unlockOn: day,
+      includeDependents: includesDependents,
+      today,
+    });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
     await tx.roadmapNode.update({
       where: { id: node.id },
-      data: { teacherUnlockOn: decision.day ? calendarDayDate(decision.day) : null },
+      data: {
+        teacherUnlockOn: decision.day ? calendarDayDate(decision.day) : null,
+        teacherUnlockIncludesDependents: decision.includesDependents,
+      },
     });
-    return { result: { teacherUnlockOn: decision.day }, facts: [] };
+    return {
+      result: {
+        teacherUnlockOn: decision.day,
+        teacherUnlockIncludesDependents: decision.includesDependents,
+      },
+      facts: [],
+    };
   },
 });
 

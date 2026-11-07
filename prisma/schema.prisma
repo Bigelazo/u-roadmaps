@@ -100,24 +100,25 @@ model NodeType {
 }
 
 model RoadmapNode {
-  id                   String                @id @default(uuid()) @db.Uuid
-  roadmapId            String                @db.Uuid
-  nodeTypeId           String                @db.Uuid
-  title                String                @db.VarChar(240)
-  description          String?
-  positionX            Float
-  positionY            Float
-  isVisible            Boolean               @default(true)
-  isTeacherBlocked     Boolean               @default(false)
-  teacherUnlockOn      DateTime?             @db.Date
-  roadmap              Roadmap               @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  nodeType             NodeType              @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
-  outgoingDependencies Dependency[]          @relation("OutgoingDependencies")
-  incomingDependencies Dependency[]          @relation("IncomingDependencies")
-  resources            Resource[]
-  completions          Completion[]
-  simulatedCompletions SimulatedCompletion[]
-  changeReviews        NodeChangeReview[]
+  id                              String                @id @default(uuid()) @db.Uuid
+  roadmapId                       String                @db.Uuid
+  nodeTypeId                      String                @db.Uuid
+  title                           String                @db.VarChar(240)
+  description                     String?
+  positionX                       Float
+  positionY                       Float
+  isVisible                       Boolean               @default(true)
+  isTeacherBlocked                Boolean               @default(false)
+  teacherUnlockOn                 DateTime?             @db.Date
+  teacherUnlockIncludesDependents Boolean               @default(false)
+  roadmap                         Roadmap               @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  nodeType                        NodeType              @relation(fields: [nodeTypeId], references: [id], onDelete: Restrict)
+  outgoingDependencies            Dependency[]          @relation("OutgoingDependencies")
+  incomingDependencies            Dependency[]          @relation("IncomingDependencies")
+  resources                       Resource[]
+  completions                     Completion[]
+  simulatedCompletions            SimulatedCompletion[]
+  changeReviews                   NodeChangeReview[]
 
   @@unique([id, roadmapId])
   @@index([roadmapId])

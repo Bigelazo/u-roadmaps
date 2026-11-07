@@ -188,6 +188,24 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
+  'schedule an unlock with its dependents': {
+    command: {
+      kind: 'schedule-teacher-unlock',
+      nodeId: 'node-1',
+      unlockOn: '2026-11-01',
+      includeDependents: true,
+    },
+    requests: [
+      [
+        '/nodes/node-1/teacher-block/schedule',
+        {
+          method: 'PUT',
+          headers: json,
+          body: JSON.stringify({ unlockOn: '2026-11-01', includeDependents: true }),
+        },
+      ],
+    ],
+  },
   'cancel a Scheduled unlock': {
     command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockOn: null },
     requests: [['/nodes/node-1/teacher-block/schedule', { method: 'DELETE' }]],

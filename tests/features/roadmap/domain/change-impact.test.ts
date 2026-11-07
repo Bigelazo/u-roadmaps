@@ -16,6 +16,7 @@ function node(id: string, overrides: Partial<SnapshotNode> = {}): SnapshotNode {
     isVisible: true,
     isTeacherBlocked: false,
     teacherUnlockOn: null,
+    teacherUnlockIncludesDependents: false,
     resources: [],
     ...overrides,
   };
@@ -280,6 +281,74 @@ test('a Branch unlock unlocks the eligible dependents, keeping those an external
       ],
     },
     consequences: { unblockedNodeIds: ['eligible', 'root'] },
+  });
+});
+
+test('a Branch unlock stops at a dependent with a pending Scheduled unlock, keeping everything past it blocked', () => {
+  const snapshot = roadmap(
+    [
+      node('a', { title: 'A', isTeacherBlocked: true }),
+      node('b', { title: 'B', isTeacherBlocked: true }),
+      node('c', { title: 'C', isTeacherBlocked: true, teacherUnlockOn: '2026-11-04' }),
+      node('d', { title: 'D', isTeacherBlocked: true }),
+    ],
+    [
+      ['a', 'b'],
+      ['b', 'c'],
+      ['c', 'd'],
+    ],
+  );
+
+  expect(planChange(snapshot, teacherBlock('a', 'BRANCH_UNLOCK'))).toMatchObject({
+    impact: {
+      mode: 'BRANCH',
+      nodes: [
+        { id: 'a', relation: 'SELECTED_NODE' },
+        { id: 'b', relation: 'DEPENDENT' },
+      ],
+    },
+    consequences: { unblockedNodeIds: ['a', 'b'] },
+  });
+});
+
+test('a Branch unlock of a Node with its own pending Scheduled unlock unlocks it and its branch now', () => {
+  const snapshot = roadmap(
+    [
+      node('a', { title: 'A', isTeacherBlocked: true, teacherUnlockOn: '2026-11-04' }),
+      node('b', { title: 'B', isTeacherBlocked: true }),
+    ],
+    [['a', 'b']],
+  );
+
+  expect(planChange(snapshot, teacherBlock('a', 'BRANCH_UNLOCK'))).toMatchObject({
+    impact: { mode: 'BRANCH', nodes: [{ id: 'a' }, { id: 'b' }] },
+    consequences: { unblockedNodeIds: ['a', 'b'] },
+  });
+});
+
+test('a Node unlock unlocks a blocked prerequisite now despite its pending Scheduled unlock', () => {
+  const snapshot = roadmap(
+    [
+      node('a', { title: 'A', isTeacherBlocked: true, teacherUnlockOn: '2026-11-10' }),
+      node('b', { title: 'B', isTeacherBlocked: true, teacherUnlockOn: '2026-11-04' }),
+      node('c', { title: 'C', isTeacherBlocked: true }),
+    ],
+    [
+      ['a', 'b'],
+      ['b', 'c'],
+    ],
+  );
+
+  expect(planChange(snapshot, teacherBlock('c', 'BRANCH_UNLOCK'))).toMatchObject({
+    impact: {
+      mode: 'UPSTREAM',
+      nodes: [
+        { id: 'a', relation: 'PREREQUISITE' },
+        { id: 'b', relation: 'PREREQUISITE' },
+        { id: 'c', relation: 'SELECTED_NODE' },
+      ],
+    },
+    consequences: { unblockedNodeIds: ['a', 'b', 'c'] },
   });
 });
 

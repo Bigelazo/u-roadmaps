@@ -8,6 +8,7 @@ import {
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
   dueScheduledUnlockNodeIds,
+  pendingScheduledUnlockNodeIds,
   type CalendarDay,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
@@ -29,6 +30,7 @@ export type RoadmapSnapshot = {
     isVisible: boolean;
     isTeacherBlocked: boolean;
     teacherUnlockOn: CalendarDay | null;
+    teacherUnlockIncludesDependents: boolean;
     resources: readonly { id: string; title: string }[];
   }[];
   dependencies: readonly { id: string; sourceNodeId: string; targetNodeId: string }[];
@@ -286,6 +288,7 @@ function teacherBlockScope(
       dependencies: snapshot.dependencies,
       teacherBlockedNodeIds,
       rootNodeId: nodeId,
+      retainedNodeIds: pendingScheduledUnlockNodeIds(snapshot),
     }),
   };
 }

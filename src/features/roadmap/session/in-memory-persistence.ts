@@ -60,6 +60,8 @@ function snapshotOf(roadmap: AnyRoadmapDto): RoadmapSnapshot {
   const nodes = teachingNodes(roadmap).map((node) => ({
     ...node,
     teacherUnlockOn: (node.isVisible && node.teacherUnlockOn) || null,
+    teacherUnlockIncludesDependents:
+      node.isVisible && Boolean(node.teacherUnlockIncludesDependents),
   }));
   return { ...roadmap, nodes, today: chileCalendarDay() };
 }
@@ -152,7 +154,12 @@ export function createInMemoryRoadmapSessionPersistence(
           if (!('isTeacherBlocked' in node)) return node;
           if (blocked.has(node.id)) return { ...node, isTeacherBlocked: true };
           if (unblocked.has(node.id))
-            return { ...node, isTeacherBlocked: false, teacherUnlockOn: undefined };
+            return {
+              ...node,
+              isTeacherBlocked: false,
+              teacherUnlockOn: undefined,
+              teacherUnlockIncludesDependents: undefined,
+            };
           return node;
         }),
       );

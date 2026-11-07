@@ -13,6 +13,7 @@ import {
   previewRoadmapDependency,
   previewTeacherBlock,
   releaseScheduledTeacherUnlocks,
+  scheduleTeacherUnlock,
   createRoadmapResource,
   uploadRoadmapResource,
   updateRoadmapResource,
@@ -309,6 +310,51 @@ test('scheduled releases report committed access transitions and are idempotent'
   recording.changes.length = 0;
   await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
   expect(recording.facts()).toEqual([]);
+});
+
+test('a Scheduled unlock with dependents releases its branch up to a dependent with its own pending schedule', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const [b, c, d] = [
+    await addNode(course, 'Colas'),
+    await addNode(course, 'Árboles'),
+    await addNode(course, 'Grafos'),
+  ];
+  const chain = [course.change.nodeId, b.id, c.id, d.id];
+  await prisma.dependency.createMany({
+    data: chain.slice(1).map((targetNodeId, index) => ({
+      sourceNodeId: chain[index]!,
+      targetNodeId,
+    })),
+  });
+  await prisma.roadmapNode.updateMany({
+    where: { id: { in: chain } },
+    data: { isTeacherBlocked: true },
+  });
+  await scheduleTeacherUnlock(
+    {
+      ...teacher(course),
+      id: course.change.nodeId,
+      unlockOn: '2099-01-01',
+      includeDependents: true,
+    },
+    recording.port,
+  );
+  await scheduleTeacherUnlock(
+    { ...teacher(course), id: c.id, unlockOn: '2099-02-01' },
+    recording.port,
+  );
+
+  await releaseScheduledTeacherUnlocks(recording.port, '2099-01-01');
+
+  const nodes = await prisma.roadmapNode.findMany({
+    where: { id: { in: chain } },
+    select: { id: true, isTeacherBlocked: true },
+  });
+  expect(new Set(nodes.filter((node) => !node.isTeacherBlocked).map(({ id }) => id))).toEqual(
+    new Set([course.change.nodeId, b.id]),
+  );
 });
 
 test('a conflicting scheduled release allows other due Roadmaps to release and retries next pass', async ({

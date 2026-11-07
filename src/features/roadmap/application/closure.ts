@@ -51,7 +51,11 @@ export async function closeDueRoadmaps(now = new Date()) {
           });
           await transaction.roadmapNode.updateMany({
             where: { roadmapId: id },
-            data: { isTeacherBlocked: false, teacherUnlockOn: null },
+            data: {
+              isTeacherBlocked: false,
+              teacherUnlockOn: null,
+              teacherUnlockIncludesDependents: false,
+            },
           });
           await transaction.roadmap.update({ where: { id }, data: { closedAt: now } });
         },
