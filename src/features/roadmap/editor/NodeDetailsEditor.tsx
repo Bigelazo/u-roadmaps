@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { CHILE_TIME_ZONE } from '@/features/roadmap/domain/scheduled-unlock';
 import { Button } from '@/shared/ui/button';
-import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Separator } from '@/shared/ui/separator';
 import { NodeContentFields } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
@@ -209,6 +209,12 @@ function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
           dayLabel="Día del desbloqueo"
           timeLabel="Hora del desbloqueo"
         />
+        {scheduledAt ? (
+          <FieldDescription>
+            Si a esa hora algún prerrequisito sigue bloqueado, este nodo esperará a que lo
+            desbloquees.
+          </FieldDescription>
+        ) : null}
         <div className="flex flex-wrap justify-end gap-2">
           {scheduledAt && (
             <Button
