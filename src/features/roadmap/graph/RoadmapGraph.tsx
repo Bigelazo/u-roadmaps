@@ -66,7 +66,9 @@ import {
 } from '@/features/roadmap/graph/ConnectionPreview';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
+import { NodeName, type NodeNameType } from '@/features/roadmap/ui/NodeName';
 import {
+  pendingPrerequisites,
   studentNodeBlockMessages,
   studentNodeBlockReason,
   studentNodeStatus,
@@ -1373,10 +1375,16 @@ function TutorialRevealTarget({
   return null;
 }
 
+type BlockedNodeExplanation = {
+  title: string;
+  description: string;
+  prerequisites: { id: string; title: string; nodeType: NodeNameType }[];
+};
+
 function blockedNodeExplanation(
   roadmap: RoadmapGraphProjection['roadmap'],
   nodeId: string,
-): { title: string; description: string } | null {
+): BlockedNodeExplanation | null {
   const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
   const reason = node ? studentNodeBlockReason(node) : undefined;
   if (!node || !reason) return null;
@@ -1384,17 +1392,20 @@ function blockedNodeExplanation(
     return {
       title: studentNodeBlockMessages.TEACHER_BLOCK,
       description: 'El equipo docente lo liberará cuando lo decida.',
+      prerequisites: [],
     };
-  const pending = roadmap.dependencies.flatMap((dependency) => {
-    if (dependency.targetNodeId !== nodeId) return [];
-    const source = roadmap.nodes.find((candidate) => candidate.id === dependency.sourceNodeId);
-    return source && studentNodeStatus(source) !== 'completed' ? [source.title] : [];
-  });
+  const prerequisites = pendingPrerequisites(roadmap, nodeId).map((source) => ({
+    id: source.id,
+    title: source.title,
+    nodeType:
+      roadmap.nodeTypes.find((candidate) => candidate.id === source.nodeTypeId) ?? unknownNodeType,
+  }));
   return {
     title: studentNodeBlockMessages.PREREQUISITE_BLOCK,
-    description: pending.length
-      ? `Para abrirlo, completa antes: ${pending.map((title) => `"${title}"`).join(', ')}.`
+    description: prerequisites.length
+      ? 'Para abrirlo, completa antes:'
       : 'Este nodo se desbloquea cuando completes sus prerrequisitos.',
+    prerequisites,
   };
 }
 
@@ -1448,6 +1459,18 @@ function BlockedNodeNotice({
                 {nodeTitle ? <span className="sr-only">{nodeTitle}: </span> : null}
                 {explanation?.description}
               </PopoverPrimitive.Description>
+              {explanation?.prerequisites.length ? (
+                <ul
+                  aria-label="Prerrequisitos pendientes"
+                  className="mx-auto mt-1 flex w-fit max-w-full flex-col gap-1"
+                >
+                  {explanation.prerequisites.map((prerequisite) => (
+                    <li key={prerequisite.id} className="min-w-0 break-words">
+                      <NodeName title={prerequisite.title} nodeType={prerequisite.nodeType} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </PopoverPrimitive.Popup>
         </PopoverPrimitive.Positioner>

@@ -979,7 +979,14 @@ test('explains a blocked Node on tap with its pending prerequisites instead of s
 
   expect(onSelectNode).not.toHaveBeenCalled();
   const notice = await screen.findByRole('dialog', { name: 'Completa los prerrequisitos' });
-  expect(notice.textContent).toContain('Para abrirlo, completa antes: "Derivadas".');
+  expect(notice.textContent).toContain('Para abrirlo, completa antes:');
+  const prerequisites = within(notice).getByRole('list', { name: 'Prerrequisitos pendientes' });
+  expect(
+    within(prerequisites)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['Derivadas']);
+  expect(notice.textContent).not.toMatch(/["“”«»]/);
 });
 
 function noticePlacement(notice: HTMLElement) {
@@ -1043,7 +1050,7 @@ test('moves the prerequisite notice to the most recently tapped blocked Node', a
 
   await user.click(screen.getByTestId('rendered-node-control'));
   const controlNotice = await screen.findByRole('dialog', { name: 'Completa los prerrequisitos' });
-  await waitFor(() => expect(controlNotice.textContent).toContain('"Introducción"'));
+  await waitFor(() => expect(controlNotice.textContent).toContain('completa antes:Introducción'));
   await waitFor(() => expect(noticePlacement(controlNotice)).toMatch(/600/));
 
   await user.click(screen.getByTestId('rendered-node-exercises'));
@@ -1051,7 +1058,7 @@ test('moves the prerequisite notice to the most recently tapped blocked Node', a
   const exercisesNotice = await screen.findByRole('dialog', {
     name: 'Completa los prerrequisitos',
   });
-  await waitFor(() => expect(exercisesNotice.textContent).toContain('"Control 1"'));
+  await waitFor(() => expect(exercisesNotice.textContent).toContain('completa antes:Control 1'));
   await waitFor(() => expect(noticePlacement(exercisesNotice)).toMatch(/300/));
 });
 
