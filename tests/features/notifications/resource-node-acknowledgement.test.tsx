@@ -5,11 +5,12 @@ import {
   RoadmapEntryNotifications,
   useNotificationAcknowledgement,
 } from '@/features/notifications/components/NotificationsInbox';
+import { NodeName } from '@/features/roadmap/ui/NodeName';
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return (
     <NotificationsProvider identity={{ userId: 'user-id' }}>
-      <RoadmapEntryNotifications>{children}</RoadmapEntryNotifications>
+      <RoadmapEntryNotifications NodeName={NodeName}>{children}</RoadmapEntryNotifications>
     </NotificationsProvider>
   );
 }

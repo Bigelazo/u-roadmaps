@@ -400,7 +400,11 @@ const nodeDeletion = roadmapCommand({
         {
           kind: 'node-deleted',
           nodeId,
-          nodeTypeName: impact.node.nodeType.name,
+          nodeType: {
+            name: impact.node.nodeType.name,
+            icon: impact.node.nodeType.icon,
+            color: impact.node.nodeType.color,
+          },
           previous: node,
           current: null,
         },

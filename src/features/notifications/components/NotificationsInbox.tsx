@@ -8,7 +8,7 @@ import {
   type InboxRecord,
   type NoticeAcknowledgementOperation,
 } from './inbox-api';
-import { ChangeSummaryDialog } from './ChangeSummaryDialog';
+import { ChangeSummaryDialog, type ChangeSummaryNodeName } from './ChangeSummaryDialog';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from '@/shared/ui/popover';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
@@ -316,7 +316,13 @@ export function NotificationsProvider({
   );
 }
 
-export function RoadmapEntryNotifications({ children }: { children: ReactNode }) {
+export function RoadmapEntryNotifications({
+  children,
+  NodeName,
+}: {
+  children: ReactNode;
+  NodeName: ChangeSummaryNodeName;
+}) {
   const [summary, setSummary] = useState<ChangeSummary | null>(null);
   const active = useRef(true);
   useEffect(() => {
@@ -366,7 +372,7 @@ export function RoadmapEntryNotifications({ children }: { children: ReactNode })
   return (
     <NotificationAcknowledgementContext.Provider value={acknowledgement}>
       {children}
-      <ChangeSummaryDialog summary={summary} close={() => setSummary(null)} />
+      <ChangeSummaryDialog summary={summary} close={() => setSummary(null)} NodeName={NodeName} />
     </NotificationAcknowledgementContext.Provider>
   );
 }

@@ -10,6 +10,7 @@ import {
   pendingNotices,
   teacherEdits,
   announceRoadmap,
+  summaryInInboxWords,
 } from './roadmap';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
@@ -130,7 +131,10 @@ test('the Change summary places route notices under «Ruta y clasificación» in
   await teacherEdits(course).connect(prerequisite.id, dependent.id);
   const [notice] = await routeNotices(course.studentId, course.roadmapId);
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
-  expect(summary?.groups).toContainEqual({ title: 'Ruta y clasificación', items: [notice.body] });
+  expect(summaryInInboxWords(summary)).toContainEqual({
+    title: 'Ruta y clasificación',
+    items: [notice.body],
+  });
   expect(await routeNotices(course.studentId, course.roadmapId)).toEqual([]);
 });
 

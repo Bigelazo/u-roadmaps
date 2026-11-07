@@ -1,6 +1,15 @@
 import { expect } from 'vitest';
 import { test } from './fixtures';
-import { addNode, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
+import { prisma } from '@/shared/server/db';
+import {
+  addNode,
+  enterRoadmap,
+  pendingNotices,
+  summaryInInboxWords,
+  teacherEdits,
+} from './roadmap';
+
+const tema = { name: 'Tema', icon: 'BookOpen', color: '#024AD8' };
 
 test('the Change summary uses the Inbox words for title, access, new and deleted Node notices', async ({
   course,
@@ -20,17 +29,46 @@ test('the Change summary uses the Inbox words for title, access, new and deleted
     '«Recursión» fue bloqueado.',
     '«Recursividad» pasó a llamarse «Recursión».',
   ]);
-  expect(summary).toEqual({
-    courseCode: course.identifier.courseCode,
-    groups: [
-      { title: 'Colas', items: ['Nodo eliminado.'] },
-      { title: 'Pilas', items: ['Nuevo Nodo «Pilas».'] },
-      {
-        title: 'Recursión',
-        items: ['«Recursión» fue bloqueado.', '«Recursividad» pasó a llamarse «Recursión».'],
-      },
-    ],
+  expect(summary?.courseCode).toBe(course.identifier.courseCode);
+  expect(summaryInInboxWords(summary)).toEqual([
+    { title: 'Colas', items: ['Nodo eliminado.'] },
+    { title: 'Pilas', items: ['Nuevo Nodo «Pilas».'] },
+    {
+      title: 'Recursión',
+      items: ['«Recursión» fue bloqueado.', '«Recursividad» pasó a llamarse «Recursión».'],
+    },
+  ]);
+});
+
+test('the Change summary names every Node with its type, including a deleted Node', async ({
+  course,
+}) => {
+  const deleted = await addNode(course, 'Colas');
+  await enterRoadmap(course.studentId, course.roadmapId);
+  const edits = teacherEdits(course);
+  await edits.rename(course.change.nodeId, 'Recursión');
+  await edits.remove(deleted.id);
+  await prisma.nodeType.update({
+    where: { id: course.nodeTypeId },
+    data: { name: 'Unidad', icon: 'Layers', color: '#1467A8' },
   });
+  const unidad = { name: 'Unidad', icon: 'Layers', color: '#1467A8' };
+  const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
+  expect(summary?.groups).toEqual([
+    { title: 'Colas', node: { title: 'Colas', nodeType: tema }, items: ['Nodo eliminado.'] },
+    {
+      title: 'Recursión',
+      node: { title: 'Recursión', nodeType: unidad },
+      items: [
+        [
+          { node: { title: 'Recursividad', nodeType: unidad } },
+          ' pasó a llamarse ',
+          { node: { title: 'Recursión', nodeType: unidad } },
+          '.',
+        ],
+      ],
+    },
+  ]);
 });
 
 test('a blocked new Node reads «(bloqueado)» in the Inbox and the Change summary', async ({
@@ -44,7 +82,7 @@ test('a blocked new Node reads «(bloqueado)» in the Inbox and the Change summa
   const inbox = (await pendingNotices(course.studentId, course.roadmapId)).map(({ body }) => body);
   expect(inbox).toContain('Nuevo Nodo «Pilas» (bloqueado).');
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
-  expect(summary?.groups).toContainEqual({
+  expect(summaryInInboxWords(summary)).toContainEqual({
     title: 'Pilas',
     items: ['Nuevo Nodo «Pilas» (bloqueado).'],
   });
@@ -66,7 +104,7 @@ test('Resource summary items leave out the Node, which titles the group', async 
     'Se actualizó el recurso «Guía 1» en «Recursividad». «Guía 1» ahora se llama «Guía 1 resuelta».',
   ]);
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
-  expect(summary?.groups).toEqual([
+  expect(summaryInInboxWords(summary)).toEqual([
     {
       title: 'Recursividad',
       items: [

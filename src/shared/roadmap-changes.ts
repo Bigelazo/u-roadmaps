@@ -1,5 +1,6 @@
 import type { CourseOfferingIdentifier } from './course-offering';
 import type { NodeAccessState } from './node-access';
+import type { NodeTypeAppearance } from './node-type';
 import type { resourceContentState } from './server/resource-content-state';
 
 export type RoadmapNodeState = Readonly<{
@@ -15,7 +16,7 @@ export type RoadmapChangeFact =
   | {
       kind: 'node-deleted';
       nodeId: string;
-      nodeTypeName: string;
+      nodeType: NodeTypeAppearance;
       previous: RoadmapNodeState;
       current: null;
     }

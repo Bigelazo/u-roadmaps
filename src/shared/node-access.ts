@@ -6,11 +6,14 @@ export function nodeAccessState(isVisible: boolean, isAccessible: boolean): Node
 }
 
 export function nodeAccessChangeText(title: string, known: string, current: string) {
-  const node = `«${title}»`;
-  if (current === 'Retirado') return `${node} fue ocultado del Roadmap.`;
+  return `«${title}»${nodeAccessChangePredicate(known, current)}`;
+}
+
+export function nodeAccessChangePredicate(known: string, current: string) {
+  if (current === 'Retirado') return ' fue ocultado del Roadmap.';
   if (known === 'Retirado')
     return current === 'Bloqueado'
-      ? `${node} volvió a mostrarse en el Roadmap, pero está bloqueado.`
-      : `${node} volvió a mostrarse en el Roadmap.`;
-  return current === 'Bloqueado' ? `${node} fue bloqueado.` : `${node} fue desbloqueado.`;
+      ? ' volvió a mostrarse en el Roadmap, pero está bloqueado.'
+      : ' volvió a mostrarse en el Roadmap.';
+  return current === 'Bloqueado' ? ' fue bloqueado.' : ' fue desbloqueado.';
 }
