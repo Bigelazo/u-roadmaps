@@ -82,13 +82,12 @@ test('sets a Node to the target visibility, as production does', async () => {
   );
 });
 
-test('a confirmed Node unlock unlocks its Change impact and releases a due Scheduled unlock waiting on it', async () => {
+test('a confirmed Node unlock unlocks exactly its Change impact, leaving a due Scheduled unlock to the release pass', async () => {
+  const overdue = new Date(Date.now() - 60_000).toISOString();
   const persistence = createInMemoryRoadmapSessionPersistence({
     ...roadmap,
     nodes: roadmap.nodes.map((node) =>
-      node.id === 'dependent'
-        ? { ...node, teacherUnlockAt: new Date(Date.now() - 60_000).toISOString() }
-        : node,
+      node.id === 'dependent' ? { ...node, teacherUnlockAt: overdue } : node,
     ),
   });
   const unlock = {
@@ -104,7 +103,11 @@ test('a confirmed Node unlock unlocks its Change impact and releases a due Sched
   await executeWithChangeImpact(persistence, unlock);
 
   expect((await persistence.load()).nodes).toEqual(
-    roadmap.nodes.map((node) => ({ ...node, isTeacherBlocked: false })),
+    roadmap.nodes.map((node) =>
+      node.id === 'dependent'
+        ? { ...node, teacherUnlockAt: overdue }
+        : { ...node, isTeacherBlocked: false },
+    ),
   );
 });
 

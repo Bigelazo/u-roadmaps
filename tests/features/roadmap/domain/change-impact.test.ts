@@ -368,7 +368,7 @@ test('a Node unlock unlocks a blocked prerequisite now despite its pending Sched
   });
 });
 
-test('a Node unlock also releases the due Scheduled unlocks it no longer holds, outside its Change impact', () => {
+test('a Node unlock persists exactly its Change impact, leaving due Scheduled unlocks to the release pass', () => {
   const snapshot = roadmap(
     [
       node('unlocked', { title: 'Desbloqueado', isTeacherBlocked: true }),
@@ -387,7 +387,7 @@ test('a Node unlock also releases the due Scheduled unlocks it no longer holds, 
 
   expect(planChange(snapshot, teacherBlock('unlocked', 'UNBLOCK'))).toMatchObject({
     impact: { mode: 'SINGLE', nodes: [{ id: 'unlocked' }] },
-    consequences: { unblockedNodeIds: ['unlocked', 'released'] },
+    consequences: { unblockedNodeIds: ['unlocked'] },
   });
   expect(planChange(snapshot, teacherBlock('unlocked', 'BLOCK'))).toMatchObject({
     consequences: { unblockedNodeIds: [] },

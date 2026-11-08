@@ -130,7 +130,7 @@ export function decideScheduledUnlock({
   return decision;
 }
 
-export function dueScheduledUnlockNodeIds({
+export function settleDueScheduledUnlocks({
   nodes,
   dependencies,
   now,
@@ -171,7 +171,10 @@ export function dueScheduledUnlockNodeIds({
       changed = true;
     }
   }
-  return released;
+  const discarded = new Set(
+    candidates.filter(({ id }) => teacherBlockedNodeIds.has(id)).map(({ id }) => id),
+  );
+  return { releasedNodeIds: released, discardedNodeIds: discarded };
 }
 
 export function pendingScheduledUnlockNodeIds({

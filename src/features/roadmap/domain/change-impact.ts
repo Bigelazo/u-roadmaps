@@ -7,7 +7,6 @@ import {
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
   blockedPrerequisiteNodeIds,
-  dueScheduledUnlockNodeIds,
   pendingScheduledUnlockNodeIds,
   type UnlockInstant,
 } from '@/features/roadmap/domain/scheduled-unlock';
@@ -237,7 +236,7 @@ function planTeacherBlock(
         ? { blockedNodeIds: nodeIds, unblockedNodeIds: [], removedDependencyIds: [] }
         : {
             blockedNodeIds: [],
-            unblockedNodeIds: [...nodeIds, ...releasedScheduledUnlocks(snapshot, changedNodeIds)],
+            unblockedNodeIds: nodeIds,
             removedDependencyIds: [],
           },
     stale: staleImpact(
@@ -245,15 +244,6 @@ function planTeacherBlock(
       mode === 'BLOCK' ? 'del bloqueo' : 'del desbloqueo',
     ),
   };
-}
-
-function releasedScheduledUnlocks(snapshot: RoadmapSnapshot, unlockedNodeIds: ReadonlySet<string>) {
-  return dueScheduledUnlockNodeIds({
-    ...snapshot,
-    nodes: snapshot.nodes.map((node) =>
-      unlockedNodeIds.has(node.id) ? { ...node, isTeacherBlocked: false } : node,
-    ),
-  });
 }
 
 function teacherBlockScope(

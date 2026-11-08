@@ -50,7 +50,7 @@ import {
   blockedPrerequisiteNodeIds,
   decideScheduledUnlock,
   decideScheduledUnlockInstant,
-  dueScheduledUnlockNodeIds,
+  settleDueScheduledUnlocks,
   type ScheduledUnlockRuleFailure,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { cleanupStoredFiles } from '@/features/roadmap/infrastructure/resources/lifecycle';
@@ -706,16 +706,20 @@ export const releaseScheduledTeacherUnlocks = async (
               lock: 'update',
             },
             async () => {
-              const unblockedNodeIds = [
-                ...dueScheduledUnlockNodeIds(
-                  await loadRoadmapSnapshot(transaction, roadmap.id, now),
-                ),
-              ];
+              const { releasedNodeIds, discardedNodeIds } = settleDueScheduledUnlocks(
+                await loadRoadmapSnapshot(transaction, roadmap.id, now),
+              );
+              const unblockedNodeIds = [...releasedNodeIds];
               await persistConsequences(transaction, {
                 blockedNodeIds: [],
                 unblockedNodeIds,
                 removedDependencyIds: [],
               });
+              if (discardedNodeIds.size > 0)
+                await transaction.roadmapNode.updateMany({
+                  where: { id: { in: [...discardedNodeIds] } },
+                  data: { teacherUnlockAt: null, teacherUnlockIncludesDependents: false },
+                });
               return { result: unblockedNodeIds, facts: [] };
             },
           ),
