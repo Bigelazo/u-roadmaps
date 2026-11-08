@@ -6,6 +6,7 @@ import { Textarea } from '@/shared/ui/textarea';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { FieldError } from '@/shared/ui/field';
 import { cn } from 'cn';
+import { mayHoldSingleMarkdownFile, useMarkdownFileDrag } from './use-markdown-file-drag';
 
 type Props = Omit<
   ComponentProps<'textarea'>,
@@ -31,22 +32,18 @@ function renderTokens(content: string | Prism.Token | (string | Prism.Token)[]):
   return renderTokens([content]);
 }
 
-const markdownMediaTypes = ['text/markdown', 'text/x-markdown'];
-
-function mayHoldSingleMarkdownFile(dataTransfer: DataTransfer) {
-  const files = Array.from(dataTransfer.items).filter((item) => item.kind === 'file');
-  if (files.length > 1) return false;
-  const mediaType = files[0]?.type;
-  return !mediaType || markdownMediaTypes.includes(mediaType);
-}
-
-function MarkdownDropTarget() {
+function MarkdownDropTarget({ isFileOver }: { isFileOver: boolean }) {
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 rounded-lg bg-card font-sans motion-safe:animate-in motion-safe:duration-150 motion-safe:fade-in"
     >
-      <div className="flex size-full flex-col items-center justify-center rounded-lg border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center">
+      <div
+        className={cn(
+          'flex size-full flex-col items-center justify-center rounded-lg border border-dashed px-4 py-5 text-center transition-colors',
+          isFileOver ? 'border-primary bg-primary/10' : 'border-primary/40 bg-primary/5',
+        )}
+      >
         <div className="sticky inset-y-6 flex flex-col items-center">
           <FileUp className="mb-2 size-5 text-primary" />
           <span className="text-sm font-semibold">Suelta el archivo Markdown aquí</span>
@@ -73,7 +70,10 @@ export function MarkdownEditor({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [isReading, setIsReading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
-  const [isDropTarget, setIsDropTarget] = useState(false);
+  const [isFileOver, setIsFileOver] = useState(false);
+  const isMarkdownFileDragged = useMarkdownFileDrag(
+    !disabled && !readOnly && !pendingFile && !isReading,
+  );
   const readerRef = useRef<FileReader | null>(null);
   useEffect(() => () => readerRef.current?.abort(), []);
   const highlighted = useMemo(
@@ -119,17 +119,15 @@ export function MarkdownEditor({
             event.preventDefault();
             event.stopPropagation();
             event.dataTransfer.dropEffect = disabled || readOnly ? 'none' : 'copy';
-            setIsDropTarget(
-              !disabled && !readOnly && mayHoldSingleMarkdownFile(event.dataTransfer),
-            );
+            setIsFileOver(mayHoldSingleMarkdownFile(event.dataTransfer));
           }}
           onDragLeave={(event) => {
             onDragLeave?.(event);
-            setIsDropTarget(false);
+            setIsFileOver(false);
           }}
           onDrop={(event) => {
             onDrop?.(event);
-            setIsDropTarget(false);
+            setIsFileOver(false);
             if (event.defaultPrevented || !event.dataTransfer.types.includes('Files')) return;
             event.preventDefault();
             event.stopPropagation();
@@ -144,7 +142,7 @@ export function MarkdownEditor({
             setPendingFile(files[0]);
           }}
         />
-        {isDropTarget ? <MarkdownDropTarget /> : null}
+        {isMarkdownFileDragged ? <MarkdownDropTarget isFileOver={isFileOver} /> : null}
       </div>
       <FieldError>{importError}</FieldError>
       <ConfirmationDialog

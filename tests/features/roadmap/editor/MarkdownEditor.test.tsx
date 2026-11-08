@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { MarkdownEditor } from '@/features/roadmap/editor/MarkdownEditor';
@@ -132,11 +132,11 @@ test.each([{ readOnly: true }, { disabled: true }])(
   },
 );
 
-test('the drop target clears when the file leaves the field', () => {
+test('keeps the drop target when the file leaves the field for the rest of the window', () => {
   render(<Editor />);
   dragOverWith(fileItems('text/markdown'));
   fireEvent.dragLeave(screen.getByRole('textbox'));
-  expect(screen.queryByText(dropTargetMessage)).toBeNull();
+  expect(screen.getByText(dropTargetMessage)).toBeTruthy();
 });
 
 test('the drop target clears when the file is dropped', () => {
@@ -144,4 +144,63 @@ test('the drop target clears when the file is dropped', () => {
   dragOverWith(fileItems('text/markdown'));
   dropFiles([new File(['Nuevo'], 'guia.md')]);
   expect(screen.queryByText(dropTargetMessage)).toBeNull();
+});
+
+function dragEnterWindow(dataTransfer = fileItems('text/markdown')) {
+  fireEvent.dragEnter(document.body, { dataTransfer: { files: [], ...dataTransfer } });
+}
+
+function dragLeaveAt(clientX: number, clientY: number) {
+  fireEvent(
+    document.body,
+    new MouseEvent('dragleave', { bubbles: true, clientX, clientY, relatedTarget: null }),
+  );
+}
+
+test('offers itself as a drop target as soon as a Markdown file enters the window', () => {
+  render(<Editor />);
+  dragEnterWindow();
+  expect(screen.getByText(dropTargetMessage)).toBeTruthy();
+});
+
+test('does not offer itself as a drop target when another file enters the window', () => {
+  render(<Editor />);
+  dragEnterWindow(fileItems('application/pdf'));
+  expect(screen.queryByText(dropTargetMessage)).toBeNull();
+});
+
+test('keeps the drop target while the file moves between elements of the window', () => {
+  render(<Editor />);
+  dragEnterWindow();
+  dragLeaveAt(200, 200);
+  expect(screen.getByText(dropTargetMessage)).toBeTruthy();
+});
+
+test('the drop target clears when the file leaves the window', () => {
+  render(<Editor />);
+  dragEnterWindow();
+  dragLeaveAt(0, 200);
+  expect(screen.queryByText(dropTargetMessage)).toBeNull();
+});
+
+test('the drop target clears when the drag stops reaching the window', () => {
+  vi.useFakeTimers();
+  try {
+    render(<Editor />);
+    dragEnterWindow();
+    act(() => vi.advanceTimersByTime(500));
+    expect(screen.getByText(dropTargetMessage)).toBeTruthy();
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.queryByText(dropTargetMessage)).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('a file dropped outside the field is not opened by the browser', () => {
+  render(<Editor />);
+  const dataTransfer = { files: [], dropEffect: 'copy', ...fileItems('text/markdown') };
+  const dragContinues = fireEvent.dragOver(document.body, { dataTransfer });
+  expect(dragContinues).toBe(false);
+  expect(dataTransfer.dropEffect).toBe('none');
 });
