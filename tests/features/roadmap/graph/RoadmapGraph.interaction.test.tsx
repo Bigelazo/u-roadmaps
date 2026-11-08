@@ -33,6 +33,9 @@ const {
           nodes: { id: string; position: { x: number; y: number } }[],
         ) => void)
       | undefined,
+    onSelectionDragStop: undefined as
+      | ((event: unknown, nodes: { id: string; position: { x: number; y: number } }[]) => void)
+      | undefined,
   },
 }));
 
@@ -61,6 +64,7 @@ vi.mock('@xyflow/react', () => ({
     onConnect,
     onEdgesDelete,
     onNodeDragStop,
+    onSelectionDragStop,
     onMoveEnd,
     children,
   }: {
@@ -85,11 +89,16 @@ vi.mock('@xyflow/react', () => ({
       node: { id: string; position: { x: number; y: number } },
       nodes: { id: string; position: { x: number; y: number } }[],
     ) => void;
+    onSelectionDragStop?: (
+      event: unknown,
+      nodes: { id: string; position: { x: number; y: number } }[],
+    ) => void;
     onMoveEnd?: (event: object | null, viewport: { x: number; y: number; zoom: number }) => void;
     children: ReactNode;
   }) => {
     reactFlowHandlers.onMoveEnd = onMoveEnd;
     reactFlowHandlers.onNodeDragStop = onNodeDragStop;
+    reactFlowHandlers.onSelectionDragStop = onSelectionDragStop;
     return (
       <>
         {nodes.map((node) => (
@@ -416,6 +425,7 @@ beforeEach(() => {
   updateNodeInternalsMock.mockReset();
   reactFlowHandlers.onMoveEnd = undefined;
   reactFlowHandlers.onNodeDragStop = undefined;
+  reactFlowHandlers.onSelectionDragStop = undefined;
 });
 
 afterEach(() => {
@@ -749,28 +759,43 @@ test.each([
   });
 });
 
-test('persists every dragged Node together with the Nodes pushed two cells away in one move', () => {
-  const onEditingIntent = vi.fn();
-  const crowded = structuredClone(roadmap);
-  crowded.nodes.push({ ...crowded.nodes[1], id: 'node-3', title: 'Integrales', positionX: 900 });
-  renderGraph({ roadmap: crowded, editing: { onEditingIntent } });
+test.each([
+  {
+    gesture: 'a grabbed Node',
+    drop: (dragged: { id: string; position: { x: number; y: number } }[]) =>
+      reactFlowHandlers.onNodeDragStop?.(null, dragged[0], dragged),
+  },
+  {
+    gesture: 'a selection rectangle',
+    drop: (dragged: { id: string; position: { x: number; y: number } }[]) =>
+      reactFlowHandlers.onSelectionDragStop?.(null, dragged),
+  },
+])(
+  'persists every Node dragged by $gesture with the Nodes pushed two cells away in one move',
+  ({ drop }) => {
+    const onEditingIntent = vi.fn();
+    const crowded = structuredClone(roadmap);
+    crowded.nodes.push({ ...crowded.nodes[1], id: 'node-3', title: 'Integrales', positionX: 900 });
+    renderGraph({ roadmap: crowded, editing: { onEditingIntent } });
 
-  const dragged = [
-    { id: 'node-1', position: { x: 300, y: 100 } },
-    { id: 'node-3', position: { x: 707, y: 593 } },
-  ];
-  act(() => reactFlowHandlers.onNodeDragStop?.(null, dragged[0], dragged));
+    act(() =>
+      drop([
+        { id: 'node-1', position: { x: 300, y: 100 } },
+        { id: 'node-3', position: { x: 707, y: 593 } },
+      ]),
+    );
 
-  expect(onEditingIntent).toHaveBeenCalledExactlyOnceWith({
-    kind: 'move-nodes',
-    positions: [
-      { nodeId: 'node-1', position: { x: 300, y: 100 } },
-      { nodeId: 'node-3', position: { x: 700, y: 600 } },
-      { nodeId: 'node-2', position: { x: 300, y: 220 } },
-    ],
-  });
-  expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,220');
-});
+    expect(onEditingIntent).toHaveBeenCalledExactlyOnceWith({
+      kind: 'move-nodes',
+      positions: [
+        { nodeId: 'node-1', position: { x: 300, y: 100 } },
+        { nodeId: 'node-3', position: { x: 700, y: 600 } },
+        { nodeId: 'node-2', position: { x: 300, y: 220 } },
+      ],
+    });
+    expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,220');
+  },
+);
 
 test('keeps one action menu open, closes it with Escape, and emits a teacher-block intent', async () => {
   const user = userEvent.setup();

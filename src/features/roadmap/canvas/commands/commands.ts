@@ -11,7 +11,7 @@ import type {
   ResourceInput,
 } from '@/features/roadmap/editor/types';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
-import { placementsWithoutCollisions } from '@/features/roadmap/graph/node-collisions';
+import { nodesDisplacedByNewNode } from '@/features/roadmap/graph/node-collisions';
 import type { PracticeRoadmap } from '@/features/roadmap/session/in-memory-persistence';
 import type {
   ExecutionResult,
@@ -641,18 +641,16 @@ export const canvasCommandCatalog = {
       practice.requireAvailableNodeType(node.nodeTypeId);
       const id = crypto.randomUUID();
       const position = practice.createdNodePosition ?? requested;
-      const [, ...displaced] = placementsWithoutCollisions(
-        [
-          ...practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
+      nodeMoves.practice(practice, {
+        positions: nodesDisplacedByNewNode(
+          practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
             id,
             title,
             position: { x: positionX, y: positionY },
           })),
           { id, title: node.title, position },
-        ],
-        [{ nodeId: id, position }],
-      );
-      nodeMoves.practice(practice, { positions: displaced });
+        ),
+      });
       practice.updateNodes((nodes) => [
         ...nodes,
         {

@@ -1,43 +1,55 @@
+import type { RoadmapNodePlacement } from '@/features/roadmap/canvas/commands/commands';
 import {
   roadmapGridSize,
   roadmapNodeClearance,
   roadmapNodeSizeForTitle,
+  snapToRoadmapGrid,
+  type NodeRect,
   type Point,
 } from '@/features/roadmap/graph/geometry';
 
 export type CanvasNode = { readonly id: string; readonly title: string; readonly position: Point };
-export type CanvasNodePlacement = { readonly nodeId: string; readonly position: Point };
 
 const maxIterations = 50;
 
-type Box = { id: string; x: number; y: number; width: number; height: number };
+type NodeBox = NodeRect & { readonly id: string };
+type Axis = 'x' | 'y';
 
-function snapAway(value: number, direction: number) {
+function snapAwayFromOrigin(value: number, delta: number) {
   const cells = value / roadmapGridSize;
-  return (direction > 0 ? Math.ceil(cells) : Math.floor(cells)) * roadmapGridSize || 0;
+  return (delta > 0 ? Math.ceil(cells) : Math.floor(cells)) * roadmapGridSize || 0;
+}
+
+function clearanceOverlap(a: NodeBox, b: NodeBox) {
+  const dx = a.x + a.width / 2 - (b.x + b.width / 2);
+  const dy = a.y + a.height / 2 - (b.y + b.height / 2);
+  const x = (a.width + b.width) / 2 + roadmapNodeClearance - Math.abs(dx);
+  const y = (a.height + b.height) / 2 + roadmapNodeClearance - Math.abs(dy);
+  if (x <= 0 || y <= 0) return null;
+  const axis: Axis = x < y ? 'x' : 'y';
+  return { axis, amount: axis === 'x' ? x : y, offset: axis === 'x' ? dx : dy };
 }
 
 export function placementsWithoutCollisions(
   nodes: readonly CanvasNode[],
-  placed: readonly CanvasNodePlacement[],
-): CanvasNodePlacement[] {
+  placed: readonly RoadmapNodePlacement[],
+): RoadmapNodePlacement[] {
   const anchored = new Map(placed.map(({ nodeId, position }) => [nodeId, position]));
-  const boxes: Box[] = nodes
+  const boxes: NodeBox[] = nodes
     .map(({ id, title, position }) => ({
       id,
       ...(anchored.get(id) ?? position),
       ...roadmapNodeSizeForTitle(title),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
-  const active = new Set(anchored.keys());
-  const displaced = new Set<string>();
-  const push = (box: Box, axis: 'x' | 'y', delta: number) => {
-    if (delta === 0) return;
-    const cross = axis === 'x' ? 'y' : 'x';
-    box[axis] = snapAway(box[axis] + delta, delta);
-    box[cross] = Math.round(box[cross] / roadmapGridSize) * roadmapGridSize || 0;
-    active.add(box.id);
-    displaced.add(box.id);
+  const reached = new Set(anchored.keys());
+  const pushed = new Set<string>();
+  const push = (box: NodeBox, axis: Axis, delta: number) => {
+    const snapped = snapToRoadmapGrid(box);
+    const next = { ...snapped, [axis]: snapAwayFromOrigin(box[axis] + delta, delta) };
+    boxes[boxes.indexOf(box)] = { ...box, ...next };
+    reached.add(box.id);
+    pushed.add(box.id);
   };
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -48,19 +60,14 @@ export function placementsWithoutCollisions(
         const b = boxes[j];
         const aAnchored = anchored.has(a.id);
         const bAnchored = anchored.has(b.id);
-        if ((aAnchored && bAnchored) || (!active.has(a.id) && !active.has(b.id))) continue;
-        const dx = a.x + a.width / 2 - (b.x + b.width / 2);
-        const dy = a.y + a.height / 2 - (b.y + b.height / 2);
-        const overlapX = (a.width + b.width) / 2 + roadmapNodeClearance - Math.abs(dx);
-        const overlapY = (a.height + b.height) / 2 + roadmapNodeClearance - Math.abs(dy);
-        if (overlapX <= 0 || overlapY <= 0) continue;
+        if ((aAnchored && bAnchored) || (!reached.has(a.id) && !reached.has(b.id))) continue;
+        const overlap = clearanceOverlap(a, b);
+        if (!overlap) continue;
         collided = true;
-        const axis = overlapX < overlapY ? 'x' : 'y';
-        const overlap = axis === 'x' ? overlapX : overlapY;
-        const offset = axis === 'x' ? dx : dy;
-        const movesA = !aAnchored && (bAnchored || (active.has(b.id) && !active.has(a.id)));
-        if (movesA) push(a, axis, (offset < 0 ? -1 : 1) * overlap);
-        else push(b, axis, (offset > 0 ? -1 : 1) * overlap);
+        const aYields = !aAnchored && (bAnchored || (reached.has(b.id) && !reached.has(a.id)));
+        const offset = aYields ? overlap.offset : -overlap.offset;
+        const away = offset < 0 ? -1 : 1;
+        push(aYields ? a : b, overlap.axis, away * overlap.amount);
       }
     }
     if (!collided) break;
@@ -69,7 +76,17 @@ export function placementsWithoutCollisions(
   return [
     ...placed,
     ...boxes
-      .filter(({ id }) => displaced.has(id))
+      .filter(({ id }) => pushed.has(id))
       .map(({ id, x, y }) => ({ nodeId: id, position: { x, y } })),
   ];
+}
+
+export function nodesDisplacedByNewNode(
+  nodes: readonly CanvasNode[],
+  newNode: CanvasNode,
+): RoadmapNodePlacement[] {
+  return placementsWithoutCollisions(
+    [...nodes, newNode],
+    [{ nodeId: newNode.id, position: newNode.position }],
+  ).slice(1);
 }

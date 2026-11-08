@@ -2,6 +2,10 @@ import { expect, test, type E2ECourseOffering } from './fixtures';
 import { authenticateAs, ok } from './helpers';
 import { createDependency } from './create-node';
 
+const gridCell = 20;
+const nodeSize = { width: 160, height: 80 };
+const clearance = 2 * gridCell;
+
 test('dropping a Node on another pushes it two grid cells away, saves both and draws their Dependency', async ({
   page,
   course,
@@ -46,7 +50,7 @@ test('dropping a Node on another pushes it two grid cells away, saves both and d
   const savedDragged = saved(dragged);
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 + 20, { steps: 12 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 + gridCell, { steps: 12 });
   await page.mouse.up();
   expect((await savedDragged).status()).toBe(200);
 
@@ -57,17 +61,17 @@ test('dropping a Node on another pushes it two grid cells away, saves both and d
     const [a, b] = ids.map((id) => nodes.find((candidate) => candidate.id === id)!);
     return {
       grid: [a, b].every(
-        ({ positionX, positionY }) => positionX % 20 === 0 && positionY % 20 === 0,
+        ({ positionX, positionY }) => positionX % gridCell === 0 && positionY % gridCell === 0,
       ),
       gap: Math.max(
-        Math.abs(a.positionY - b.positionY) - 80,
+        Math.abs(a.positionY - b.positionY) - nodeSize.height,
         a.positionX < b.positionX
-          ? b.positionX - a.positionX - 160
-          : a.positionX - b.positionX - 160,
+          ? b.positionX - a.positionX - nodeSize.width
+          : a.positionX - b.positionX - nodeSize.width,
       ),
     };
   };
-  await expect.poll(separated).toMatchObject({ grid: true, gap: 40 });
+  await expect.poll(separated).toMatchObject({ grid: true, gap: clearance });
   const result = await separated();
   await page.screenshot({ path: testInfo.outputPath('collision-desktop.png') });
 

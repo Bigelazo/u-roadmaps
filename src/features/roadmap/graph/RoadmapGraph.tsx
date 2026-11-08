@@ -53,7 +53,10 @@ import type {
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { DependencyRouting } from '@/features/roadmap/graph/routing/DependencyRouting';
-import { placementsWithoutCollisions } from '@/features/roadmap/graph/node-collisions';
+import {
+  nodesDisplacedByNewNode,
+  placementsWithoutCollisions,
+} from '@/features/roadmap/graph/node-collisions';
 import {
   DependencyAnimationProvider,
   DependencyAnimationReady,
@@ -421,11 +424,14 @@ function RoadmapGraphToolbar({
           size,
           viewport,
         ) ?? snapToRoadmapGrid(center);
-      const [, ...displaced] = placementsWithoutCollisions(
-        [...canvasNodes(nodes), { id: newNodeId, title, position }],
-        [{ nodeId: newNodeId, position }],
-      );
-      return { position, displaced };
+      return {
+        position,
+        displaced: nodesDisplacedByNewNode(canvasNodes(nodes), {
+          id: newNodeId,
+          title,
+          position,
+        }),
+      };
     },
     [getViewport, nodes],
   );
@@ -1162,6 +1168,9 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 }
                 onNodeDragStop={
                   canInteract ? (_event, _node, dragged) => settleDraggedNodes(dragged) : undefined
+                }
+                onSelectionDragStop={
+                  canInteract ? (_event, dragged) => settleDraggedNodes(dragged) : undefined
                 }
                 onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
                 onConnectStart={canInteract ? connection.onConnectStart : undefined}

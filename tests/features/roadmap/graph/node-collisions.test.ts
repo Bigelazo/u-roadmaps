@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import type { RoadmapNodePlacement } from '@/features/roadmap/canvas/commands/commands';
 import {
   roadmapGridSize,
   roadmapNodeSizeForTitle,
@@ -7,7 +8,6 @@ import {
 import {
   placementsWithoutCollisions,
   type CanvasNode,
-  type CanvasNodePlacement,
 } from '@/features/roadmap/graph/node-collisions';
 
 const clearance = 2 * roadmapGridSize;
@@ -16,7 +16,7 @@ function node(id: string, x: number, y: number, title = 'Nodo'): CanvasNode {
   return { id, title, position: { x, y } };
 }
 
-function layout(nodes: readonly CanvasNode[], placements: readonly CanvasNodePlacement[]) {
+function layout(nodes: readonly CanvasNode[], placements: readonly RoadmapNodePlacement[]) {
   const moved = new Map(placements.map(({ nodeId, position }) => [nodeId, position]));
   return nodes.map(({ id, title, position }) => ({
     id,

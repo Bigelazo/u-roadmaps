@@ -9,15 +9,15 @@ Descubrimos por casualidad que el lienzo permite eliminar varias Dependencias a 
 
 ## Probables defectos
 
-1. Arrastrar varios Nodos seleccionados guarda solo la posición del Nodo agarrado; los demás vuelven a su lugar al recargar, porque `onNodeDragStop` persiste solo ese Nodo (`src/features/roadmap/graph/RoadmapGraph.tsx:1145`). Requiere verificación manual.
+1. Resuelto: arrastrar varios Nodos seleccionados guardaba solo la posición del Nodo agarrado. Ahora se guardan todos los Nodos arrastrados, también al arrastrar el recuadro de selección, junto con los Nodos que se apartan.
 2. La selección por área con Shift también selecciona Dependencias hacia Nodos fuera del recuadro, y Backspace las elimina junto con las demás.
 3. Programar un desbloqueo para una hora ya pasada de hoy deja «Programar» habilitado y el envío no hace nada (`src/features/roadmap/editor/NodeDetailsEditor.tsx:188,195`).
-4. «Crear nodo» falla sin mensaje cuando no hay espacio libre en la vista, por ejemplo con mucho zoom sobre una zona llena (`src/features/roadmap/session/RoadmapCanvasView.tsx:519-526`, `src/features/roadmap/editor/NodeCreator.tsx:183-190`).
+4. Resuelto: «Crear nodo» fallaba sin mensaje cuando no había espacio libre en la vista. Ahora el Nodo aparece en el centro de la vista y aparta a los Nodos que alcanza.
 5. Una descripción con solo espacios llega al servidor y se rechaza con «description debe ser un texto no vacío.» (`src/features/roadmap/canvas/commands/commands.ts`, `src/features/roadmap/application/validation.ts:32-37`).
 6. Un título de más de 240 caracteres no tiene límite en el cliente, y el servidor responde «title debe ser un texto no vacío.», con una razón equivocada y el campo en inglés (`validation.ts:12-21`).
 7. Entre el instante de Cierre del Roadmap y la siguiente pasada del cierre, hasta cinco minutos o más si el servidor estaba caído, la vista académica ya muestra «Solo lectura» pero el Roadmap sigue editable (`src/features/academic-overview/components/AcademicOverview.tsx:271`, `src/features/roadmap/domain/roadmap-capability.ts:56`).
 8. El diálogo de creación no advierte los efectos de la copia: todos los Nodos visibles quedan con Bloqueo docente, no se copian los Desbloqueos programados y se descartan sin aviso los archivos que ya no existen en disco (`src/features/roadmap/domain/roadmap-copy.ts:82-83`, `src/features/roadmap/infrastructure/resources/lifecycle.ts:68-69`).
-9. En la práctica docente, todos los Nodos nuevos aparecen en la misma posición fija y se superponen (`src/features/roadmap/practice/practice-roadmap.ts:27`). Sus marcas de cambios nunca se limpian.
+9. En la práctica docente, todos los Nodos nuevos aparecen en la misma posición fija (`src/features/roadmap/practice/practice-roadmap.ts:27`); ya no se superponen, porque cada Nodo nuevo aparta a los anteriores. Sus marcas de cambios nunca se limpian.
 10. Los enlaces profundos se pierden al iniciar sesión: tras el login siempre se llega a `/academic-overview` (`src/features/institutional-access/application/login.ts:78`).
 11. El 6 de septiembre de 2026 no existe la hora 00:00–00:59 en America/Santiago; elegir 00:00, 00:15 u 00:45 resulta en 23:xx del día anterior. Al volver al horario de invierno no se puede elegir la segunda hora 23:xx (`src/shared/zoned-time.ts:37-41`, `src/shared/ui/date-time-picker.tsx:84-98`).
 12. La invitación posterior a la creación dice «repetir» el tutorial, pero su botón siempre dice «Hacer tutorial» (`src/features/roadmap/ui/PostCreationInvitationDialog.tsx:25-28`). La campana por curso dice «avisos sin leer», aunque los Avisos no tienen estado de leído (`src/features/notifications/components/NotificationsInbox.tsx:53`).
@@ -34,7 +34,7 @@ Descubrimos por casualidad que el lienzo permite eliminar varias Dependencias a 
 - Al abrir el menú radial cerca del borde derecho o inferior, el lienzo se desplaza solo (`RoadmapGraph.tsx:546-580`). Sus íconos cambian del estado actual a la acción al pasar el cursor, y el disparador cambia de tamaño con el zoom (`RoadmapNode.tsx:236-258,390-412`).
 - Los títulos largos se cortan en dos líneas y el título completo solo aparece en un tooltip nativo, invisible en pantallas táctiles (`RoadmapNode.tsx:657-662`).
 - Las posiciones se ajustan a una cuadrícula de 20 px; arrastrar requiere más de 5 px y un clic tolera 6 px. Arrastrar un Nodo u ordenar termina al instante la animación de entrada.
-- Superponer Nodos muestra «Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.» y esas Dependencias no se dibujan; si el ruteo falla, el aviso pide volver a abrir el mapa (`src/features/roadmap/graph/routing/DependencyRouting.tsx:196-205`).
+- Al soltar o crear un Nodo, los Nodos que quedan a menos de dos celdas de la cuadrícula se apartan solos y se guardan con el movimiento (`src/features/roadmap/graph/node-collisions.ts`). Las superposiciones ya guardadas no se corrigen al abrir el mapa; sus Dependencias se dibujan con un trazado de respaldo, sin aviso. Si el ruteo falla, el aviso pide volver a abrir el mapa (`src/features/roadmap/graph/routing/DependencyRouting.tsx`).
 - Si el motor de ruteo tarda o falla, aparece «Preparando dependencias…» y luego una alerta con «Reintentar»; hasta entonces no se dibujan Dependencias (`DependencyRouting.tsx:89-157`).
 - Un estudiante que hace clic en un Nodo bloqueado ve un popover con el motivo (`RoadmapGraph.tsx:1371-1473`).
 
@@ -44,7 +44,7 @@ Descubrimos por casualidad que el lienzo permite eliminar varias Dependencias a 
 - Bajo 1024 px: el menú del Nodo es una hoja inferior, la barra de herramientas muestra solo íconos y se desplaza, el título se oculta con 500 px de alto o menos, tocar el fondo cierra el panel lateral y la bandeja se abre a pantalla completa (`src/features/roadmap/graph/NodeActionSheet.tsx`, `RoadmapGraph.tsx:437,461-490,617-662,1131-1135`).
 - La vista inicial compacta usa un zoom fijo (0,8 para estudiantes y 0,7 para el equipo docente) y centra en el primer Nodo disponible o en el Nodo superior izquierdo (`RoadmapGraph.tsx:115-210`).
 - El ancho del panel lateral se guarda en el navegador, por separado para el editor y el detalle del estudiante, entre 320 y 560 px (`src/features/roadmap/ui/ResizablePanel.tsx:5-55`).
-- Un Nodo nuevo aparece en el espacio libre de la cuadrícula más cercano al centro de la vista (`RoadmapGraph.tsx:403-418`).
+- Un Nodo nuevo aparece en el espacio libre de la cuadrícula más cercano al centro de la vista, a dos celdas de los demás Nodos (`RoadmapGraph.tsx`, `placeNewNode`).
 
 ## Archivos que se sueltan
 
