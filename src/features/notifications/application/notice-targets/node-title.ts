@@ -2,6 +2,7 @@ import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import {
   isNodeViewer,
+  nodePart,
   nodeViewers,
   nodeVisibleBefore,
   nodeVisibleThroughout,
@@ -41,6 +42,7 @@ export const nodeTitleTarget: NoticeTargetDescriptor<NodeTitleFact> = {
     subject: currentValue,
     body: `«${knownValue}» pasó a llamarse «${currentValue}».`,
     summaryGroup: 'node',
+    summaryParts: [nodePart(knownValue), ' pasó a llamarse ', nodePart(currentValue), '.'],
   }),
   apiData: ({ knownValue, currentValue }) => ({
     nodeTitle: currentValue,

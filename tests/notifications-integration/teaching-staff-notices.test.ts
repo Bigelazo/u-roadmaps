@@ -1,6 +1,13 @@
 import { expect } from 'vitest';
 import { test, type IntegrationCourse } from './fixtures';
-import { addNode, addType, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
+import {
+  addNode,
+  addType,
+  enterRoadmap,
+  pendingNotices,
+  summaryInInboxWords,
+  teacherEdits,
+} from './roadmap';
 import { countOwnNodeChangeTargets, countOwnNotices } from '@/features/notifications/server';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
@@ -199,18 +206,15 @@ test('teaching staff recognize changes on a hidden Node as on a visible one', as
   await enterRoadmap(course.colleagueId, course.roadmapId);
   await edits.rename(node.id, 'Montículos');
   await edits.update(node.id, { description: 'Después' });
-  expect(await enterRoadmap(course.colleagueId, course.roadmapId)).toEqual({
-    acknowledged: 2,
-    summary: {
-      courseCode: course.identifier.courseCode,
-      groups: [
-        {
-          title: 'Montículos',
-          items: ['Se actualizó la descripción.', '«Heaps» pasó a llamarse «Montículos».'],
-        },
-      ],
+  const entry = await enterRoadmap(course.colleagueId, course.roadmapId);
+  expect(entry.acknowledged).toBe(2);
+  expect(entry.summary?.courseCode).toBe(course.identifier.courseCode);
+  expect(summaryInInboxWords(entry.summary)).toEqual([
+    {
+      title: 'Montículos',
+      items: ['Se actualizó la descripción.', '«Heaps» pasó a llamarse «Montículos».'],
     },
-  });
+  ]);
   expect(await pendingNotices(course.colleagueId, course.roadmapId)).toEqual([]);
   await edits.rename(node.id, 'Montículos binarios');
   expect(await pendingNotices(course.colleagueId, course.roadmapId)).toMatchObject([

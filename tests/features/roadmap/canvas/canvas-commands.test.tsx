@@ -11,7 +11,11 @@ import type {
   PracticeCanvasAction,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
-import type { CanvasCommand, CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
+import type {
+  CanvasCommand,
+  CanvasCommandOf,
+  ConfirmationInput,
+} from '@/features/roadmap/canvas/commands/commands';
 import type { CanvasConfirmationChoice } from '@/features/roadmap/ui/roadmap-confirmation';
 import type { NodeType, RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
 import { notify } from '@/shared/ui/notify';
@@ -88,8 +92,8 @@ async function openCanvas(
       await waitFor(() => expect(commands().pending?.phase).toBe('awaiting'));
       return commands().pending!;
     },
-    async confirm(choice: CanvasConfirmationChoice) {
-      await act(() => commands().confirm(choice));
+    async confirm(choice: CanvasConfirmationChoice, input?: ConfirmationInput) {
+      await act(() => commands().confirm(choice, input));
     },
   };
 }
@@ -316,8 +320,7 @@ describe('canvas commands', () => {
     { kind: 'delete-node', nodeId: 'derivatives' },
     {
       kind: 'apply-automatic-layout',
-      positions: [{ nodeId: 'limits', position: { x: 0, y: 200 } }],
-      direction: 'LR',
+      layouts: { TB: [], LR: [{ nodeId: 'limits', position: { x: 0, y: 200 } }] },
     },
     { kind: 'delete-node-type', nodeTypeId: 'content' },
     { kind: 'reset-canvas-preview' },
@@ -448,6 +451,112 @@ describe('canvas commands', () => {
 
       expect(canvas.commands().pending).toBeNull();
       expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual([]);
+    });
+
+    const unlockAt = '2030-11-10T19:30:00.000Z';
+
+    async function scheduledUnlockOf(persistence: RoadmapCanvasSessionPersistence, nodeId: string) {
+      const node = await nodeOf(persistence, nodeId);
+      return node && 'teacherUnlockAt' in node
+        ? {
+            unlockAt: node.teacherUnlockAt,
+            includesDependents: node.teacherUnlockIncludesDependents ?? false,
+          }
+        : undefined;
+    }
+
+    test.each([
+      [
+        'unlock-node',
+        'only the Node',
+        { unlockAt, includesDependents: false },
+        'Límites se desbloqueará el Domingo, 10 de Noviembre a las 16:30.',
+      ],
+      [
+        'unlock-branch',
+        'the Node with its dependents',
+        { unlockAt, includesDependents: true },
+        'Se desbloquearán Límites y su dependiente el Domingo, 10 de Noviembre a las 16:30.',
+      ],
+    ] as const)(
+      'a scheduled %s schedules %s instead of unlocking it now',
+      async (choice, _, scheduled, toast) => {
+        const canvas = await openCanvas(
+          createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits', 'derivatives')),
+        );
+        await act(() =>
+          canvas
+            .commands()
+            .request({ kind: 'change-teacher-block', nodeId: 'limits', operation: 'UNBLOCK' }),
+        );
+        await canvas.awaiting();
+
+        await canvas.confirm(choice, { unlockAt });
+
+        expect(canvas.commands().pending).toBeNull();
+        expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'derivatives']);
+        expect(await scheduledUnlockOf(canvas.persistence, 'limits')).toEqual(scheduled);
+        expect(successToasts()).toEqual([toast]);
+        expect(canvas.reported()).toEqual([]);
+      },
+    );
+
+    test('scheduling an unlock behind blocked prerequisites schedules them for the same moment', async () => {
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence(withTeacherBlocks('limits', 'derivatives')),
+      );
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'change-teacher-block', nodeId: 'derivatives', operation: 'UNBLOCK' }),
+      );
+      await canvas.awaiting();
+
+      await canvas.confirm('unlock-prerequisites', { unlockAt });
+
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'derivatives']);
+      for (const nodeId of ['limits', 'derivatives'])
+        expect(await scheduledUnlockOf(canvas.persistence, nodeId)).toEqual({
+          unlockAt,
+          includesDependents: false,
+        });
+      expect(successToasts()).toEqual([
+        'Se desbloquearán Derivadas y su prerrequisito el Domingo, 10 de Noviembre a las 16:30.',
+      ]);
+    });
+
+    test('scheduling from the side panel behind blocked prerequisites schedules them for the same moment, replacing their schedules', async () => {
+      const blocked = withTeacherBlocks('limits', 'derivatives');
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence({
+          ...blocked,
+          nodes: blocked.nodes.map((node) =>
+            node.id === 'limits'
+              ? {
+                  ...node,
+                  teacherUnlockAt: '2031-01-01T12:00:00.000Z',
+                  teacherUnlockIncludesDependents: true,
+                }
+              : node,
+          ),
+        }),
+      );
+
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'schedule-teacher-unlock', nodeId: 'derivatives', unlockAt }),
+      );
+
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'derivatives']);
+      for (const nodeId of ['limits', 'derivatives'])
+        expect(await scheduledUnlockOf(canvas.persistence, nodeId)).toEqual({
+          unlockAt,
+          includesDependents: false,
+        });
+      expect(successToasts()).toEqual([
+        'Se desbloquearán Derivadas y su prerrequisito el Domingo, 10 de Noviembre a las 16:30.',
+      ]);
     });
 
     const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
@@ -670,39 +779,46 @@ describe('canvas commands', () => {
     });
   });
 
-  test('applying an automatic layout asks first, then moves every Node and reports it applied', async () => {
-    const canvas = await openCanvas();
-    const layout = {
-      kind: 'apply-automatic-layout',
-      positions: [
-        { nodeId: 'limits', position: { x: 0, y: 200 } },
-        { nodeId: 'derivatives', position: { x: 300, y: 200 } },
-      ],
-      direction: 'LR',
-    } as const;
+  const layouts = {
+    TB: [
+      { nodeId: 'limits', position: { x: 100, y: 0 } },
+      { nodeId: 'derivatives', position: { x: 100, y: 200 } },
+    ],
+    LR: [
+      { nodeId: 'limits', position: { x: 0, y: 200 } },
+      { nodeId: 'derivatives', position: { x: 300, y: 200 } },
+    ],
+  } as const;
 
-    await act(() => canvas.commands().request(layout));
-    expect(canvas.commands().pending).toEqual({
-      kind: 'apply-automatic-layout',
-      request: layout,
-      impact: null,
-      phase: 'awaiting',
-    });
-    expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ positionY: 0 });
+  test.each([
+    ['auto-layout-vertical', layouts.TB],
+    ['auto-layout-horizontal', layouts.LR],
+  ] as const)(
+    'applying an automatic layout asks first, then moves every Node to the %s distribution and reports it applied',
+    async (choice, chosen) => {
+      const canvas = await openCanvas();
+      const layout = { kind: 'apply-automatic-layout', layouts } as const;
 
-    await canvas.confirm('auto-layout');
+      await act(() => canvas.commands().request(layout));
+      expect(canvas.commands().pending).toEqual({
+        kind: 'apply-automatic-layout',
+        request: layout,
+        impact: null,
+        phase: 'awaiting',
+      });
+      expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ positionY: 0 });
 
-    expect(canvas.commands().pending).toBeNull();
-    expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({
-      positionX: 0,
-      positionY: 200,
-    });
-    expect(await nodeOf(canvas.persistence, 'derivatives')).toMatchObject({
-      positionX: 300,
-      positionY: 200,
-    });
-    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout, undefined);
-  });
+      await canvas.confirm(choice);
+
+      expect(canvas.commands().pending).toBeNull();
+      for (const { nodeId, position } of chosen)
+        expect(await nodeOf(canvas.persistence, nodeId)).toMatchObject({
+          positionX: position.x,
+          positionY: position.y,
+        });
+      expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout, undefined);
+    },
+  );
 
   test('an automatic layout with a failed move keeps the moved Nodes and stays open to retry', async () => {
     const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
@@ -710,23 +826,17 @@ describe('canvas commands', () => {
       intercepting(adapter, 'apply-automatic-layout', async (layout) => {
         await adapter.execute({
           ...layout,
-          positions: layout.positions.filter(({ nodeId }) => nodeId !== 'derivatives'),
+          layouts: {
+            ...layout.layouts,
+            LR: layout.layouts.LR.filter(({ nodeId }) => nodeId !== 'derivatives'),
+          },
         });
         throw new Error('No se pudo guardar la posición.');
       }),
     );
 
-    await act(() =>
-      canvas.commands().request({
-        kind: 'apply-automatic-layout',
-        positions: [
-          { nodeId: 'limits', position: { x: 0, y: 200 } },
-          { nodeId: 'derivatives', position: { x: 300, y: 200 } },
-        ],
-        direction: 'LR',
-      }),
-    );
-    await canvas.confirm('auto-layout');
+    await act(() => canvas.commands().request({ kind: 'apply-automatic-layout', layouts }));
+    await canvas.confirm('auto-layout-horizontal');
 
     expect(canvas.commands().pending).toMatchObject({
       kind: 'apply-automatic-layout',
@@ -920,10 +1030,9 @@ describe('canvas commands', () => {
         roadmap,
         {
           kind: 'apply-automatic-layout',
-          positions: [{ nodeId: 'limits', position: { x: 0, y: 200 } }],
-          direction: 'LR',
+          layouts: { TB: [], LR: [{ nodeId: 'limits', position: { x: 0, y: 200 } }] },
         },
-        'auto-layout',
+        'auto-layout-horizontal',
         'Nodos ordenados exitosamente.',
       ],
       [
@@ -995,7 +1104,7 @@ describe('canvas commands', () => {
       (await nodeOf(persistence, 'limits')) as RoadmapNode;
     const scheduledUnlock = async (persistence: RoadmapCanvasSessionPersistence) => {
       const node = await limits(persistence);
-      return 'teacherUnlockOn' in node ? node.teacherUnlockOn : undefined;
+      return 'teacherUnlockAt' in node ? node.teacherUnlockAt : undefined;
     };
     const workshop = { name: 'Taller', icon: 'Shapes', color: '#024AD8' } as const;
 
@@ -1061,14 +1170,14 @@ describe('canvas commands', () => {
       ],
       [
         'scheduling an unlock',
-        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockOn: '2099-03-01' },
-        'Desbloqueo programado.',
+        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockAt: '2099-03-01T15:00:00.000Z' },
+        'Límites se desbloqueará el Domingo, 1 de Marzo a las 12:00.',
         scheduledUnlock,
-        '2099-03-01',
+        '2099-03-01T15:00:00.000Z',
       ],
       [
         'cancelling a Scheduled unlock',
-        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockOn: null },
+        { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockAt: null },
         'Desbloqueo programado cancelado.',
         scheduledUnlock,
         undefined,

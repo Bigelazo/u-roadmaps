@@ -20,7 +20,6 @@ Object.assign(process.env, {
   MUFASA_BASE_URL: 'http://127.0.0.1:3201',
   PGCONNECT_TIMEOUT: '5',
   PGOPTIONS: '-c statement_timeout=10000 -c lock_timeout=5000',
-  SCHEDULED_UNLOCK_INTERVAL_MS: '1000',
   ROADMAP_CLOSURE_INTERVAL_MS: '1000',
 });
 export default defineConfig({

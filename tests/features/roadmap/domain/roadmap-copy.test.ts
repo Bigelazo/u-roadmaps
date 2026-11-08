@@ -104,7 +104,7 @@ describe('planRoadmapCopy', () => {
   });
 
   it('drops every Scheduled unlock', () => {
-    expect(plan.nodes.map(({ teacherUnlockOn }) => teacherUnlockOn)).toEqual([null, null, null]);
+    expect(plan.nodes.map(({ teacherUnlockAt }) => teacherUnlockAt)).toEqual([null, null, null]);
   });
 
   it('remaps Custom node types and keeps Predefined node types shared', () => {

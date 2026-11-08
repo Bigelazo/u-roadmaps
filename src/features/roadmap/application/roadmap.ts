@@ -56,7 +56,8 @@ export function nodeDto(node: {
   nodeTypeId: string;
   isVisible: boolean;
   isTeacherBlocked: boolean;
-  teacherUnlockOn?: Date | null;
+  teacherUnlockAt?: Date | null;
+  teacherUnlockIncludesDependents?: boolean;
 }) {
   return {
     id: node.id,
@@ -67,8 +68,9 @@ export function nodeDto(node: {
     nodeTypeId: node.nodeTypeId,
     isVisible: node.isVisible,
     isTeacherBlocked: node.isTeacherBlocked,
-    ...(node.teacherUnlockOn
-      ? { teacherUnlockOn: node.teacherUnlockOn.toISOString().slice(0, 10) }
+    ...(node.teacherUnlockAt ? { teacherUnlockAt: node.teacherUnlockAt.toISOString() } : {}),
+    ...(node.teacherUnlockAt && node.teacherUnlockIncludesDependents
+      ? { teacherUnlockIncludesDependents: true }
       : {}),
   };
 }

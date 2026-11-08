@@ -169,7 +169,7 @@ test.each([false, true])(
 
     await user.click(screen.getByRole('button', { name: 'Reiniciar progreso' }));
     const dialog = await screen.findByRole('alertdialog', {
-      name: 'Reiniciar progreso de previsualización',
+      name: '¿Reiniciar el progreso simulado?',
     });
     await user.click(within(dialog).getByRole('button', { name: 'Reiniciar progreso' }));
     expect(await findToast('Progreso de previsualización reiniciado.')).toBeTruthy();

@@ -11,6 +11,7 @@ test('requires confirmation before submitting the logout request', async () => {
 
   const dialog = screen.getByRole('alertdialog', { name: '¿Cerrar sesión?' });
   expect(dialog.textContent).toContain('Tendrás que autenticarte nuevamente para ingresar.');
+  expect(dialog.getAttribute('data-intent')).toBe('default');
 
   await user.click(screen.getByRole('button', { name: 'Cancelar' }));
   expect(screen.queryByRole('alertdialog')).toBeNull();

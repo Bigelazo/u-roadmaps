@@ -10,7 +10,7 @@ import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
-import { RoadmapEntryNotifications } from '@/features/notifications';
+import { RoadmapEntryNotices } from '@/app/_components/RoadmapEntryNotices';
 import { getInboxIdentity } from '@/features/notifications/server';
 
 function redirectUnavailableNotice(
@@ -85,7 +85,7 @@ export default async function CoursePage(
 
   return (
     <main data-viewport-page className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-cloud">
-      <RoadmapEntryNotifications key={roadmapEntryKey}>
+      <RoadmapEntryNotices key={roadmapEntryKey}>
         <RoadmapCanvasSession
           notificationsEnabled={Boolean(inboxIdentity)}
           roadmapEntryKey={roadmapEntryKey}
@@ -98,7 +98,7 @@ export default async function CoursePage(
             term: isHistorical ? 'historical' : 'current',
           }}
         />
-      </RoadmapEntryNotifications>
+      </RoadmapEntryNotices>
       {invitation ? (
         <PostCreationInvitationDialog
           wording={invitation.wording}

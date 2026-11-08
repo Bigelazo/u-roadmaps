@@ -30,3 +30,17 @@ export function studentNodeStatus(node: StudentNode): StudentNodeStatus {
   if ('isCompleted' in node && node.isCompleted) return 'completed';
   return 'canComplete' in node && node.canComplete ? 'available' : 'locked';
 }
+
+export function pendingPrerequisites(
+  roadmap: {
+    nodes: readonly StudentNode[];
+    dependencies: readonly { sourceNodeId: string; targetNodeId: string }[];
+  },
+  nodeId: string,
+): StudentNode[] {
+  return roadmap.dependencies.flatMap((dependency) => {
+    if (dependency.targetNodeId !== nodeId) return [];
+    const source = roadmap.nodes.find((candidate) => candidate.id === dependency.sourceNodeId);
+    return source && studentNodeStatus(source) !== 'completed' ? [source] : [];
+  });
+}

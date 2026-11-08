@@ -6,6 +6,7 @@ import {
   deferredNoticePort,
   enterRoadmap,
   pendingNotices,
+  summaryInInboxWords,
   teacherEdits,
 } from './roadmap';
 
@@ -129,16 +130,15 @@ test('the Change summary lists a type change under «Ruta y clasificación» wit
   await edits.update(course.change.nodeId, { nodeTypeId: workshop.id });
   await edits.rename(course.change.nodeId, 'Recursión');
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
-  expect(summary).toEqual({
-    courseCode: course.identifier.courseCode,
-    groups: [
-      { title: 'Recursión', items: ['«Recursividad» pasó a llamarse «Recursión».'] },
-      {
-        title: 'Ruta y clasificación',
-        items: ['«Recursión» pasó de tipo «Tema» a tipo «Taller».'],
-      },
-    ],
-  });
+  expect(summary?.courseCode).toBe(course.identifier.courseCode);
+  expect(summaryInInboxWords(summary)).toEqual([
+    { title: 'Recursión', items: ['«Recursividad» pasó a llamarse «Recursión».'] },
+    {
+      title: 'Ruta y clasificación',
+      items: ['«Recursión» pasó de tipo «Tema» a tipo «Taller».'],
+    },
+  ]);
+  expect(summary?.groups.map(({ node }) => node?.nodeType.name)).toEqual(['Taller', undefined]);
 });
 
 test('retried and concurrent deliveries of type changes keep one notice', async ({ course }) => {

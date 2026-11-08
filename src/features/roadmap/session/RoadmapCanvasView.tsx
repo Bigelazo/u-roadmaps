@@ -34,7 +34,7 @@ import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
 import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
-import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
+import { useUnlockSchedule } from '@/features/roadmap/canvas/commands/use-unlock-schedule';
 import type {
   RoadmapDto,
   RoadmapNode,
@@ -42,6 +42,7 @@ import type {
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
+import { blockedPrerequisiteNodeIds } from '@/features/roadmap/domain/scheduled-unlock';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
@@ -151,11 +152,6 @@ function useRoadmapCanvasController({ input }: Props) {
       nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
     [],
   );
-  const [confirmedAutomaticLayout, setConfirmedAutomaticLayout] = useState<{
-    token: string;
-    direction: RoadmapLayoutDirection;
-  } | null>(null);
-  const automaticLayoutTokenRef = useRef(0);
   const followAppliedCommand = useCallback(
     (command: CanvasCommand, createdNodeId?: string) => {
       if (command.kind === 'add-node' && createdNodeId) {
@@ -163,11 +159,6 @@ function useRoadmapCanvasController({ input }: Props) {
       } else if (command.kind === 'delete-node') {
         dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
         requestNodeFocusReturn();
-      } else if (command.kind === 'apply-automatic-layout') {
-        setConfirmedAutomaticLayout({
-          token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
-          direction: command.direction,
-        });
       }
     },
     [requestNodeFocusReturn],
@@ -433,7 +424,6 @@ function useRoadmapCanvasController({ input }: Props) {
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
-    confirmedAutomaticLayout,
     performEditorEffect,
     canvasMode,
     isHistoricalRoadmap,
@@ -630,12 +620,17 @@ function RoadmapCanvasConfirmation({
     canvasCommands: { pending, cancel, confirm },
     roadmap,
   } = model;
+  const schedule = useUnlockSchedule(pending?.request);
   return (
     <ConfirmationDialog
-      confirmation={pending && roadmap ? canvasConfirmation(pending, roadmap) : null}
+      confirmation={
+        pending && roadmap
+          ? canvasConfirmation(pending, roadmap, { schedule: schedule.draft })
+          : null
+      }
       pendingActionId={pending?.phase === 'confirming' ? pending.choice : undefined}
       onCancel={cancel}
-      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice)}
+      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice, schedule.input)}
     />
   );
 }
@@ -659,6 +654,7 @@ function RoadmapCanvasPanels({
     performEditorEffect,
     handleNodeEditorIntent,
   } = model;
+  const editedNode = selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined;
   return (
     <>
       {canvasMode.isEditing && (
@@ -670,8 +666,17 @@ function RoadmapCanvasPanels({
           <NodeEditor
             ref={nodeEditorRef}
             session={{
-              node: selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined,
+              node: editedNode,
               nodeTypes: roadmap.nodeTypes,
+              blockedPrerequisites: editedNode
+                ? blockedPrerequisiteNodeIds({
+                    nodes: roadmap.nodes.filter(
+                      (node): node is RoadmapNode => 'isTeacherBlocked' in node,
+                    ),
+                    dependencies: roadmap.dependencies,
+                    nodeId: editedNode.id,
+                  }).length
+                : 0,
               isVisibilityPending:
                 (pending?.kind === 'hide-node' || pending?.kind === 'show-node') &&
                 pending.phase !== 'awaiting',
@@ -787,7 +792,6 @@ function RoadmapCanvasGraph({
     guardEditorDraft,
     canvasCommands,
     canvasPreviewWorkflow,
-    confirmedAutomaticLayout,
     canvasMode,
     isHistoricalRoadmap,
     isCanvasPreview,
@@ -828,7 +832,6 @@ function RoadmapCanvasGraph({
       onFitView={() => input.practice?.onAction?.({ type: 'fitView' })}
       onViewportChange={canvasPreviewWorkflow.onViewportChange}
       viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
-      confirmedAutomaticLayout={confirmedAutomaticLayout}
       bottomLeftActions={
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
@@ -1001,7 +1004,7 @@ function RoadmapCanvasHeader({
       <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
         {isCanvasPreview ? (
           <Badge
-            className="border-orange-300 text-secondary-foreground"
+            className="text-secondary-foreground"
             style={{
               backgroundColor: 'color-mix(in srgb, var(--background) 78%, #f97316)',
             }}

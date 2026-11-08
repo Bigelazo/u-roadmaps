@@ -26,7 +26,15 @@ export type RoadmapNodeTypeInput = {
   color: NodeTypeColor;
 };
 
-export type ExecutionResult = { readonly createdNodeId?: string };
+export type ScheduledUnlockOutcome = {
+  readonly title: string;
+  readonly prerequisites: number;
+};
+
+export type ExecutionResult = {
+  readonly createdNodeId?: string;
+  readonly scheduledUnlock?: ScheduledUnlockOutcome;
+};
 
 export type RoadmapCanvasSessionPersistence = {
   load(): Promise<AnyRoadmapDto>;

@@ -40,7 +40,8 @@ type RoadmapNodeDetails = RoadmapNodeSummary & {
 export type VisibleRoadmapNode = RoadmapNodeDetails & {
   isVisible: true;
   isTeacherBlocked: boolean;
-  teacherUnlockOn?: string;
+  teacherUnlockAt?: string;
+  teacherUnlockIncludesDependents?: boolean;
 };
 
 export type HiddenRoadmapNode = RoadmapNodeDetails & {

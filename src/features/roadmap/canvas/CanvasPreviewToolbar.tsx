@@ -16,7 +16,7 @@ export function CanvasPreviewToolbar({
 }: CanvasPreviewToolbarProps) {
   return (
     <div className="pointer-events-auto flex w-full flex-wrap items-center justify-center gap-2 rounded-xl border border-border bg-card/95 p-2 shadow-lg shadow-black/5 backdrop-blur-sm sm:w-auto sm:flex-nowrap">
-      <p className="px-2 text-sm font-semibold text-foreground">Previsualización del canvas</p>
+      <p className="px-2 text-sm font-semibold text-foreground">Vista estudiantil</p>
       {canReset ? (
         <Button type="button" variant="outline" size="sm" onClick={onRequestReset}>
           <RotateCcw data-icon="inline-start" />

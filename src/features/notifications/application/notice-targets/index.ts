@@ -30,6 +30,8 @@ export type {
   RoadmapViewNodeType,
   RoadmapViewResource,
   ShownTo,
+  SummaryNodeIdField,
+  SummaryPart,
   TargetContext,
   TargetCurrent,
   TargetValues,

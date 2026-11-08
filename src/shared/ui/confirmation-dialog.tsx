@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowRight, CircleAlert, CircleHelp, TriangleAlert } from 'lucide-react';
+import { CircleAlert, CircleHelp, TriangleAlert } from 'lucide-react';
 
 import { cn } from 'cn';
 import {
@@ -11,50 +11,17 @@ import {
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogHeader,
   AlertDialogTitle,
 } from '@/shared/ui/alert-dialog';
-import { Badge } from '@/shared/ui/badge';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/shared/ui/empty';
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/shared/ui/item';
-import { Separator } from '@/shared/ui/separator';
 import { Spinner } from '@/shared/ui/spinner';
 
 type ConfirmationIntent = 'default' | 'warning' | 'destructive';
 
-type ConfirmationDetail =
-  | {
-      kind: 'item';
-      id: string;
-      title: string;
-      description?: string;
-      media?: React.ReactNode;
-      badge?: string;
-    }
-  | {
-      kind: 'relationship';
-      id: string;
-      source: string;
-      target: string;
-      description?: string;
-    };
-
-type ConfirmationSection = {
-  title: string;
-  items: ConfirmationDetail[];
-  emptyMessage?: string;
-};
-
 type ConfirmationAction = {
   id: string;
   label: string;
+  emphasis?: 'primary' | 'secondary';
+  disabled?: boolean;
 };
 
 type ConfirmationActions =
@@ -65,7 +32,7 @@ type ConfirmationPresentation = {
   description: React.ReactNode;
   intent: ConfirmationIntent;
   cancelLabel?: string;
-  sections?: ConfirmationSection[];
+  content?: React.ReactNode;
   actions: ConfirmationActions;
 };
 
@@ -103,75 +70,8 @@ const intentPresentation: Record<
   },
 };
 
-function ConfirmationDetailRow({ detail }: { detail: ConfirmationDetail }) {
-  if (detail.kind === 'relationship') {
-    return (
-      <Item
-        render={<li />}
-        aria-label={`Relación: ${detail.source} → ${detail.target}`}
-        variant="outline"
-      >
-        <ItemContent>
-          <ItemTitle className="max-w-full flex-wrap whitespace-normal">
-            <span>{detail.source}</span>
-            <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-            <span>{detail.target}</span>
-          </ItemTitle>
-          {detail.description ? <ItemDescription>{detail.description}</ItemDescription> : null}
-        </ItemContent>
-      </Item>
-    );
-  }
-
-  return (
-    <Item render={<li />} aria-label={detail.title} variant="outline">
-      {detail.media ? <ItemMedia variant="icon">{detail.media}</ItemMedia> : null}
-      <ItemContent>
-        <ItemTitle>
-          <span>{detail.title}</span>
-          {detail.badge ? <Badge variant="secondary">{detail.badge}</Badge> : null}
-        </ItemTitle>
-        {detail.description ? <ItemDescription>{detail.description}</ItemDescription> : null}
-      </ItemContent>
-    </Item>
-  );
-}
-
-function ConfirmationDetails({ sections }: { sections: ConfirmationSection[] }) {
-  const id = React.useId();
-
-  return (
-    <div className="grid gap-5">
-      <Separator />
-      {sections.map((section, index) => {
-        const headingId = `${id}-section-${index}`;
-
-        return (
-          <section key={section.title} aria-labelledby={headingId} className="grid gap-2.5">
-            <h3 id={headingId} className="text-sm font-bold">
-              {section.title}
-            </h3>
-            {section.items.length > 0 ? (
-              <ItemGroup aria-label={section.title} className="gap-2">
-                {section.items.map((detail) => (
-                  <ConfirmationDetailRow key={detail.id} detail={detail} />
-                ))}
-              </ItemGroup>
-            ) : (
-              <Empty className="border border-dashed border-border py-4">
-                <EmptyHeader>
-                  <EmptyTitle>Sin elementos</EmptyTitle>
-                  <EmptyDescription>
-                    {section.emptyMessage ?? 'No hay elementos para mostrar.'}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-          </section>
-        );
-      })}
-    </div>
-  );
+function emphasisOf(action: ConfirmationAction, index: number, actions: ConfirmationActions) {
+  return action.emphasis ?? (index === actions.length - 1 ? 'primary' : 'secondary');
 }
 
 function ConfirmationDialog({
@@ -198,6 +98,9 @@ function ConfirmationDialog({
     wasOpenRef.current = isOpen;
   }, [confirmation]);
 
+  const isWide =
+    confirmation !== null && (confirmation.actions.length > 1 || !!confirmation.content);
+
   return (
     <AlertDialog
       open={confirmation !== null}
@@ -216,17 +119,24 @@ function ConfirmationDialog({
       {confirmation ? (
         <AlertDialogContent
           data-intent={confirmation.intent}
-          className={cn('max-h-[calc(100dvh-2rem)] gap-5 overflow-y-auto sm:max-w-xl', className)}
+          data-layout={isWide ? 'wide' : 'compact'}
+          className={cn(
+            'max-h-[calc(100dvh-2rem)] gap-5 overflow-y-auto data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-md',
+            isWide && 'data-[size=default]:sm:max-w-xl',
+            className,
+          )}
           initialFocus={cancelRef}
           finalFocus={finalFocusRef}
         >
-          <AlertDialogHeader className="items-stretch gap-4 text-left">
+          <div
+            data-slot="confirmation-header"
+            className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 text-left"
+          >
             <div
-              data-slot="alert-dialog-media"
               data-confirmation-intent-icon
               aria-hidden="true"
               className={cn(
-                'flex size-10 items-center justify-center rounded-full',
+                'flex size-9 shrink-0 items-center justify-center rounded-full',
                 intentPresentation[confirmation.intent].iconClassName,
               )}
             >
@@ -234,23 +144,27 @@ function ConfirmationDialog({
                 className: 'size-5',
               })}
             </div>
-            <AlertDialogTitle className="tracking-tight">{confirmation.title}</AlertDialogTitle>
-            <AlertDialogDescription className="leading-relaxed">
+            <AlertDialogTitle className="text-base leading-snug font-semibold tracking-tight text-pretty wrap-break-word">
+              {confirmation.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="col-span-2 leading-relaxed text-pretty sm:col-span-1 sm:col-start-2">
               {confirmation.description}
             </AlertDialogDescription>
-          </AlertDialogHeader>
+          </div>
 
-          {confirmation.sections?.length ? (
-            <ConfirmationDetails sections={confirmation.sections} />
+          {confirmation.content ? (
+            <div data-slot="confirmation-content" className="min-w-0 sm:pl-12">
+              {confirmation.content}
+            </div>
           ) : null}
 
-          <AlertDialogFooter className="sm:flex-wrap">
+          <AlertDialogFooter className="sm:flex-nowrap">
             <AlertDialogCancel ref={cancelRef} disabled={isPending}>
               {confirmation.cancelLabel ?? 'Cancelar'}
             </AlertDialogCancel>
             {confirmation.actions.map((action, index) => {
               const isActionPending = pendingActionId === action.id;
-              const isPrimary = index === confirmation.actions.length - 1;
+              const emphasis = emphasisOf(action, index, confirmation.actions);
 
               return (
                 <AlertDialogAction
@@ -258,12 +172,14 @@ function ConfirmationDialog({
                   type="button"
                   autoFocus={false}
                   aria-busy={isActionPending || undefined}
-                  data-emphasis={isPrimary ? 'primary' : 'secondary'}
+                  data-emphasis={emphasis}
                   data-intent={confirmation.intent}
-                  disabled={isPending}
+                  disabled={isPending || action.disabled}
                   onClick={() => onAction(action.id)}
                   variant={
-                    isPrimary ? intentPresentation[confirmation.intent].actionVariant : 'outline'
+                    emphasis === 'primary'
+                      ? intentPresentation[confirmation.intent].actionVariant
+                      : 'outline'
                   }
                 >
                   {isActionPending ? (
@@ -288,4 +204,9 @@ function ConfirmationDialog({
 const useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? React.useEffect : React.useLayoutEffect;
 
-export { ConfirmationDialog, type ConfirmationDialogProps, type ConfirmationPresentation };
+export {
+  ConfirmationDialog,
+  type ConfirmationAction,
+  type ConfirmationDialogProps,
+  type ConfirmationPresentation,
+};

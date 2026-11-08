@@ -370,7 +370,7 @@ test('Canvas preview and opening the teaching Node leave later notices pending',
     ),
     page.getByRole('button', { name: 'Vista estudiante' }).click(),
   ]);
-  await expect(page.getByText('Previsualización del canvas')).toBeVisible();
+  await expect(page.getByText('Vista estudiantil')).toBeVisible();
   await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
   await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toBeVisible();
   await expect.poll(() => count()).toBe(1);

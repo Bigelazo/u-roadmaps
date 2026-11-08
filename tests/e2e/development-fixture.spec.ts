@@ -78,8 +78,8 @@ test('the FI1001 catalog exposes a closed four-edition lineage and an empty curr
     expect(version.nodes).toHaveLength(15);
     expect(
       version.nodes.every(
-        (node: { isTeacherBlocked: boolean; teacherUnlockOn?: string }) =>
-          node.isTeacherBlocked === false && !node.teacherUnlockOn,
+        (node: { isTeacherBlocked: boolean; teacherUnlockAt?: string }) =>
+          node.isTeacherBlocked === false && !node.teacherUnlockAt,
       ),
     ).toBe(true);
     expect(version.nodes.filter((node: { isVisible: boolean }) => !node.isVisible)).toHaveLength(1);

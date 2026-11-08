@@ -80,7 +80,7 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
       positionY: node.positionY,
       isVisible: node.isVisible,
       isTeacherBlocked: node.isVisible,
-      teacherUnlockOn: null,
+      teacherUnlockAt: null,
     })),
     dependencies: source.dependencies.map((dependency) => ({
       id: newId(),
