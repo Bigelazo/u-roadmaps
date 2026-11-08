@@ -1,12 +1,7 @@
 'use client';
 
 import { createContext, useContext, type RefObject } from 'react';
-import type {
-  RoadmapDto,
-  RoadmapNode,
-  Resource,
-  TeacherBlockOperation,
-} from '@/features/roadmap/types';
+import type { RoadmapDto, RoadmapNode, Resource } from '@/features/roadmap/types';
 import type { NodeEditorState } from './session';
 import type { NodeUpdate, ResourceInput, ResourceSession } from './types';
 
@@ -34,7 +29,7 @@ type NodeEditorContextValue = {
   saveResource: () => void;
   requestResourceDeletion: (resource: Resource) => void;
   toggleVisibility: () => void;
-  requestTeacherBlock: (operation: TeacherBlockOperation) => void;
+  requestTeacherBlock: (operation: 'BLOCK' | 'UNBLOCK') => void;
   scheduleTeacherUnlock: (unlockAt: string | null) => void;
   requestNodeDeletion: () => void;
   closeNode: () => void;

@@ -18,12 +18,7 @@ import {
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
-import type {
-  Resource,
-  RoadmapNode,
-  StudentAccessibleRoadmapNode,
-  TeacherBlockOperation,
-} from '@/features/roadmap/types';
+import type { Resource, RoadmapNode, StudentAccessibleRoadmapNode } from '@/features/roadmap/types';
 import { NodeDetailsEditor } from './NodeDetailsEditor';
 import { NodeEditorProvider } from './context';
 import {
@@ -317,7 +312,7 @@ function useNodeEditorController(
           nodeId: currentNode.id,
         }),
       ),
-      requestTeacherBlock: withCurrentNode((currentNode, operation: TeacherBlockOperation) =>
+      requestTeacherBlock: withCurrentNode((currentNode, operation: 'BLOCK' | 'UNBLOCK') =>
         onIntent({ kind: 'change-teacher-block', nodeId: currentNode.id, operation }),
       ),
       scheduleTeacherUnlock: withCurrentNode((currentNode, unlockAt: string | null) =>

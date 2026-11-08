@@ -356,26 +356,10 @@ export function roadmapTeacherBlockConfirmation({
     );
   }
 
-  const branchDependents = preview.mode === 'BRANCH' ? affectedNodes(preview, nodeId).length : 0;
   return unlockPresentation(
     unlockTitle,
-    branchDependents > 0 ? (
-      <>
-        {opensLater} También se desbloquearán <Emphasis>{nodeCount(branchDependents)}</Emphasis> que
-        dependen de él.
-      </>
-    ) : (
-      opensLater
-    ),
-    [
-      {
-        id:
-          branchDependents > 0
-            ? canvasConfirmationChoices.unlockBranch
-            : canvasConfirmationChoices.unlockNode,
-        label: verb,
-      },
-    ],
+    opensLater,
+    [{ id: canvasConfirmationChoices.unlockNode, label: verb }],
     schedule,
     isPending,
     scheduledUnlockPrerequisiteHint(0),

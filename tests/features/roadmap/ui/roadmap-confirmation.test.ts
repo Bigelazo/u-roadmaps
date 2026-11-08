@@ -182,12 +182,6 @@ describe('roadmapTeacherBlockConfirmation', () => {
         { id: 'unlock-branch', label: 'Incluir dependientes', emphasis: 'primary' },
       ],
     ],
-    [
-      'unlocks a branch requested on its own',
-      { preview: preview('BRANCH', ['Gráficas', 'Límites']) },
-      'Los estudiantes podrán acceder a él cuando completen sus prerrequisitos. También se desbloquearán 2 nodos que dependen de él.',
-      [{ id: 'unlock-branch', label: 'Desbloquear', emphasis: 'primary' }],
-    ],
   ] as const)('%s', (_, previews, description, actions) => {
     const confirmation = roadmapTeacherBlockConfirmation({ roadmap, nodeId: 'n0', ...previews });
     expect(plain(confirmation)).toEqual({
