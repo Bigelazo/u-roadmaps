@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { expect, it } from 'vitest';
+import { NodeCreator } from '@/features/roadmap/editor/NodeCreator';
+import { resolveElement } from '@/shared/client/tutorial/tutorial-support';
 import { practiceNodeIds, practiceRoadmap } from '@/features/roadmap/practice/practice-roadmap';
 import { teachingTutorialSteps } from '@/features/roadmap/practice/teaching-tutorial';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
@@ -26,6 +29,30 @@ it('explains "Gestionar tipos de nodo" in its own step right after "Crea un nodo
   expect(nodeTypes.description).toContain('Tipos de nodo');
   expect(nodeTypes.advanceWhen).toBeUndefined();
   expect(steps[creation].description).not.toContain('Gestionar tipos de nodo');
+});
+
+it('highlights only the "Crear nodo" action of the open creation menu in "Crea un nodo"', async () => {
+  const user = userEvent.setup();
+  const creation = teachingTutorialSteps().find((step) => step.title === 'Crea un nodo')!;
+  render(
+    <NodeCreator
+      nodeTypes={[]}
+      onSubmit={async () => false}
+      onCreateNodeType={async () => false}
+      onUpdateNodeType={async () => false}
+      onRequestDeleteNodeType={() => undefined}
+    />,
+  );
+  const trigger = screen.getByRole('button', { name: 'Crear en el mapa' });
+  expect(resolveElement(creation.element)?.contains(trigger)).toBe(true);
+
+  await user.click(trigger);
+  const createItem = await screen.findByRole('menuitem', { name: 'Crear nodo' });
+  const highlighted = resolveElement(creation.element);
+  expect(highlighted).toBe(createItem);
+  expect(
+    highlighted?.contains(screen.getByRole('menuitem', { name: 'Gestionar tipos de nodo' })),
+  ).toBe(false);
 });
 
 it('advances "Oculta un nodo" when the Practice roadmap hides the Node, not when it shows it', async () => {

@@ -94,3 +94,5 @@ export type NodeTypeDraft = {
 };
 
 export const NODE_TYPES_MENU_ITEM_LABEL = 'Gestionar tipos de nodo';
+
+export const CREATE_NODE_MENU_ITEM_LABEL = 'Crear nodo';
