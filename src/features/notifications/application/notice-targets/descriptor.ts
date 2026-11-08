@@ -86,12 +86,24 @@ export type EntryValue = Readonly<{
   context?: TargetContext;
 }>;
 
+export type SummaryNodeIdField = 'nodeId' | 'sourceNodeId' | 'targetNodeId';
+
+export type SummaryPart = string | Readonly<{ nodeTitle: string; nodeIdField: SummaryNodeIdField }>;
+
 export type TargetWording = Readonly<{
   subject: string;
   body: string;
   summaryGroup: 'node' | 'general';
   summary?: string;
+  summaryParts?: readonly SummaryPart[];
 }>;
+
+export function nodePart(
+  nodeTitle: string,
+  nodeIdField: SummaryNodeIdField = 'nodeId',
+): SummaryPart {
+  return { nodeTitle, nodeIdField };
+}
 
 export type ShownTo =
   'everyone' | 'node-viewers' | 'node-openers' | 'dependency-viewers' | 'node-type-viewers';

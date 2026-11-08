@@ -11,7 +11,10 @@ import { Toaster } from '@/shared/ui/toast';
 import { findToast } from '../../../support/toast';
 import { mockViewport } from '../../../support/viewport';
 
-beforeEach(() => mockViewport(1280));
+beforeEach(() => {
+  mockViewport(1280);
+  Element.prototype.getAnimations = () => [];
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -166,7 +169,7 @@ test.each([false, true])(
 
     await user.click(screen.getByRole('button', { name: 'Reiniciar progreso' }));
     const dialog = await screen.findByRole('alertdialog', {
-      name: 'Reiniciar progreso de previsualización',
+      name: '¿Reiniciar el progreso simulado?',
     });
     await user.click(within(dialog).getByRole('button', { name: 'Reiniciar progreso' }));
     expect(await findToast('Progreso de previsualización reiniciado.')).toBeTruthy();

@@ -256,15 +256,14 @@ export function RoadmapTutorial<Action = never>({
               description:
                 'Podrás seguir explorando el mapa de práctica y repetir el tutorial cuando quieras.',
               intent: 'default',
-              cancelLabel: 'Salir',
-              actions: [{ id: 'resume', label: 'Seguir con el tutorial' }],
+              cancelLabel: 'Seguir con el tutorial',
+              actions: [{ id: 'leave', label: 'Salir' }],
             }
           : null
       }
       className="u-roadmaps-tour-exit z-(--tutorial-z-exit-confirmation)"
-      onCancel={leave}
-      onDismiss={resume}
-      onAction={resume}
+      onCancel={resume}
+      onAction={leave}
     />
   );
 }

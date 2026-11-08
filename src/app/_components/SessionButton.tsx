@@ -11,7 +11,7 @@ const LOGOUT_ACTION_ID = 'logout';
 const logoutConfirmation = {
   title: '¿Cerrar sesión?',
   description: 'Tendrás que autenticarte nuevamente para ingresar.',
-  intent: 'destructive',
+  intent: 'default',
   actions: [{ id: LOGOUT_ACTION_ID, label: 'Cerrar sesión' }],
 } as const satisfies ConfirmationPresentation;
 

@@ -133,14 +133,14 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
 
   await nodeAction(page, titles.b, 'Bloquear nodo');
   await page
-    .getByRole('alertdialog', { name: /^¿Bloquear “/ })
+    .getByRole('alertdialog', { name: /^¿Bloquear / })
     .getByRole('button', { name: 'Bloquear nodo' })
     .click();
   await expectNodeAction(page, titles.b, 'Desbloquear');
 
   await nodeAction(page, titles.g, 'Ocultar para estudiantes');
   await page
-    .getByRole('alertdialog', { name: /^¿Ocultar “/ })
+    .getByRole('alertdialog', { name: /^¿Ocultar / })
     .getByRole('button', { name: 'Ocultar' })
     .click();
   await expect(page.getByLabel(`${titles.g}: oculto para estudiantes`)).toBeVisible();

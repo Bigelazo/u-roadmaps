@@ -1,6 +1,8 @@
 import { Eye, EyeOff, FilePlusCorner, LockKeyhole, LockKeyholeOpen, Trash2 } from 'lucide-react';
 import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 
+export const nodeActionMenuCloseDurationMs = 160;
+
 export function nodeMenuActions(
   nodeId: string,
   hidden: boolean,
@@ -15,8 +17,8 @@ export function nodeMenuActions(
           {
             id: 'access',
             label: accessLabel,
-            Icon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
-            HoverIcon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
+            Icon: teacherBlocked ? LockKeyholeOpen : LockKeyhole,
+            RestIcon: teacherBlocked ? LockKeyhole : LockKeyholeOpen,
             onSelect: () =>
               onAction?.({
                 kind: 'change-teacher-block',
@@ -30,8 +32,8 @@ export function nodeMenuActions(
     {
       id: 'visibility',
       label: visibilityLabel,
-      Icon: hidden ? EyeOff : Eye,
-      HoverIcon: hidden ? Eye : EyeOff,
+      Icon: hidden ? Eye : EyeOff,
+      RestIcon: hidden ? EyeOff : Eye,
       onSelect: () => onAction?.({ kind: hidden ? 'show-node' : 'hide-node', nodeId }),
       angle: 30,
     },
@@ -39,7 +41,7 @@ export function nodeMenuActions(
       id: 'resource',
       label: 'Agregar recurso',
       Icon: FilePlusCorner,
-      HoverIcon: null,
+      RestIcon: null,
       onSelect: () => onAction?.({ kind: 'add-resource', nodeId }),
       angle: 60,
     },
@@ -47,7 +49,7 @@ export function nodeMenuActions(
       id: 'delete',
       label: 'Eliminar nodo',
       Icon: Trash2,
-      HoverIcon: null,
+      RestIcon: null,
       onSelect: () => onAction?.({ kind: 'delete-node', nodeId }),
       angle: 90,
     },

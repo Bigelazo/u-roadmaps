@@ -4,15 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 
 import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { ArrowLeft, CircleAlert, CircleHelp, Eye, History, LogOut, Users } from 'lucide-react';
@@ -42,7 +34,7 @@ import { usePersistentPanelWidth } from '@/features/roadmap/ui/ResizablePanel';
 import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
 import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
-import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
+import { useUnlockSchedule } from '@/features/roadmap/canvas/commands/use-unlock-schedule';
 import type {
   RoadmapDto,
   RoadmapNode,
@@ -50,6 +42,7 @@ import type {
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
+import { blockedPrerequisiteNodeIds } from '@/features/roadmap/domain/scheduled-unlock';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
@@ -58,6 +51,7 @@ import { notify } from '@/shared/ui/notify';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
 import { buttonVariants } from '@/shared/ui/button-variants';
+import { RoadmapPanelColumn } from '@/features/roadmap/ui/RoadmapPanelColumn';
 import { SidebarProvider } from '@/shared/ui/sidebar';
 import { cn } from 'cn';
 import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
@@ -158,11 +152,6 @@ function useRoadmapCanvasController({ input }: Props) {
       nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
     [],
   );
-  const [confirmedAutomaticLayout, setConfirmedAutomaticLayout] = useState<{
-    token: string;
-    direction: RoadmapLayoutDirection;
-  } | null>(null);
-  const automaticLayoutTokenRef = useRef(0);
   const followAppliedCommand = useCallback(
     (command: CanvasCommand, createdNodeId?: string) => {
       if (command.kind === 'add-node' && createdNodeId) {
@@ -170,11 +159,6 @@ function useRoadmapCanvasController({ input }: Props) {
       } else if (command.kind === 'delete-node') {
         dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
         requestNodeFocusReturn();
-      } else if (command.kind === 'apply-automatic-layout') {
-        setConfirmedAutomaticLayout({
-          token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
-          direction: command.direction,
-        });
       }
     },
     [requestNodeFocusReturn],
@@ -440,7 +424,6 @@ function useRoadmapCanvasController({ input }: Props) {
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
-    confirmedAutomaticLayout,
     performEditorEffect,
     canvasMode,
     isHistoricalRoadmap,
@@ -543,20 +526,10 @@ export function RoadmapCanvasView({ input }: Props) {
   };
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
-    <SidebarProvider
-      className="min-h-0 flex-1"
-      style={
-        {
-          '--sidebar-width': `${activePanelWidth}px`,
-        } as CSSProperties
-      }
-    >
+    <SidebarProvider className="min-h-0 flex-1">
       <section
         data-page-width="full"
-        className={cn(
-          'relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)]',
-          isSidePanelOpen ? 'lg:grid-cols-[minmax(0,1fr)_var(--sidebar-width)]' : 'lg:grid-cols-1',
-        )}
+        className="relative box-border grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden border border-border bg-card shadow-[0_2px_9px_rgb(26_26_26/5%)] lg:grid-cols-[minmax(0,1fr)_auto]"
       >
         <div
           ref={canvasFocusRef}
@@ -598,7 +571,13 @@ export function RoadmapCanvasView({ input }: Props) {
             />
           </NodeChangeCountsProvider>
         </div>
-        <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
+        <RoadmapPanelColumn
+          isOpen={isSidePanelOpen}
+          width={activePanelWidth}
+          scene={model.isCanvasPreview ? 'canvas-preview' : 'roadmap'}
+        >
+          <RoadmapCanvasPanels model={model} selectedNode={selectedNode} roadmap={roadmap} />
+        </RoadmapPanelColumn>
       </section>
       <RoadmapCanvasConfirmation model={model} />
     </SidebarProvider>
@@ -641,12 +620,17 @@ function RoadmapCanvasConfirmation({
     canvasCommands: { pending, cancel, confirm },
     roadmap,
   } = model;
+  const schedule = useUnlockSchedule(pending?.request);
   return (
     <ConfirmationDialog
-      confirmation={pending && roadmap ? canvasConfirmation(pending, roadmap) : null}
+      confirmation={
+        pending && roadmap
+          ? canvasConfirmation(pending, roadmap, { schedule: schedule.draft })
+          : null
+      }
       pendingActionId={pending?.phase === 'confirming' ? pending.choice : undefined}
       onCancel={cancel}
-      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice)}
+      onAction={(choice) => void confirm(choice as CanvasConfirmationChoice, schedule.input)}
     />
   );
 }
@@ -670,6 +654,7 @@ function RoadmapCanvasPanels({
     performEditorEffect,
     handleNodeEditorIntent,
   } = model;
+  const editedNode = selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined;
   return (
     <>
       {canvasMode.isEditing && (
@@ -681,8 +666,17 @@ function RoadmapCanvasPanels({
           <NodeEditor
             ref={nodeEditorRef}
             session={{
-              node: selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined,
+              node: editedNode,
               nodeTypes: roadmap.nodeTypes,
+              blockedPrerequisites: editedNode
+                ? blockedPrerequisiteNodeIds({
+                    nodes: roadmap.nodes.filter(
+                      (node): node is RoadmapNode => 'isTeacherBlocked' in node,
+                    ),
+                    dependencies: roadmap.dependencies,
+                    nodeId: editedNode.id,
+                  }).length
+                : 0,
               isVisibilityPending:
                 (pending?.kind === 'hide-node' || pending?.kind === 'show-node') &&
                 pending.phase !== 'awaiting',
@@ -798,7 +792,6 @@ function RoadmapCanvasGraph({
     guardEditorDraft,
     canvasCommands,
     canvasPreviewWorkflow,
-    confirmedAutomaticLayout,
     canvasMode,
     isHistoricalRoadmap,
     isCanvasPreview,
@@ -839,7 +832,6 @@ function RoadmapCanvasGraph({
       onFitView={() => input.practice?.onAction?.({ type: 'fitView' })}
       onViewportChange={canvasPreviewWorkflow.onViewportChange}
       viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
-      confirmedAutomaticLayout={confirmedAutomaticLayout}
       bottomLeftActions={
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (
@@ -974,6 +966,7 @@ function RoadmapTutorialLink({
     <>
       <Tooltip>
         <TooltipTrigger
+          delay={150}
           render={
             <Link
               {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
@@ -1011,7 +1004,7 @@ function RoadmapCanvasHeader({
       <div className={cn('flex flex-wrap items-center gap-2', hidesBadgeRow && 'hidden')}>
         {isCanvasPreview ? (
           <Badge
-            className="border-orange-300 text-secondary-foreground"
+            className="text-secondary-foreground"
             style={{
               backgroundColor: 'color-mix(in srgb, var(--background) 78%, #f97316)',
             }}

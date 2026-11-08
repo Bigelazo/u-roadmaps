@@ -1,91 +1,61 @@
-@keyframes radial-menu-open {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
+.actionAnchor {
+  width: 2rem;
+  height: 2rem;
 }
 
-@keyframes radial-menu-close {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
-  50% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0);
-  }
+.actionHub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: -1.375rem;
+  transform-origin: center;
 }
 
 .menuRing {
-  --radius: 4.5rem;
-  --action-size: 2rem;
+  --action-size: 2.75rem;
   position: absolute;
   top: 50%;
   left: 50%;
   z-index: 1;
-  width: 13rem;
-  height: 13rem;
+  width: 16rem;
+  height: 16rem;
   pointer-events: none;
-  transform: translate(-50%, -50%) scale(0);
-  transform-origin: center;
-  opacity: 0;
-}
-
-.menuRingOpen {
-  animation: radial-menu-open 400ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-.menuRingClosing {
-  animation: radial-menu-close 400ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform: translate(-50%, -50%);
 }
 
 .actionItem {
-  --angle: 0deg;
   position: absolute;
   top: 50%;
   left: 50%;
+  z-index: calc(var(--total) - var(--i));
   width: var(--action-size);
   height: var(--action-size);
   margin: calc(var(--action-size) / -2);
   pointer-events: auto;
-  transform: rotate(var(--angle)) translate(var(--radius)) rotate(calc(-1 * var(--angle)));
+}
+
+.menuRing[data-closing] .actionItem {
+  pointer-events: none;
 }
 
 .actionButton {
-  position: relative;
   display: flex;
   width: 100%;
   height: 100%;
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--card);
-  border-radius: 999px;
+  border: 0;
+  border-radius: 9999px;
   color: var(--primary-deep);
   background: var(--card);
-  box-shadow: 0 6px 15px color-mix(in srgb, var(--ink) 15%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ink) 18%, transparent);
   cursor: pointer;
   transition:
-    transform 160ms ease-out,
-    background-color 160ms ease-out,
-    box-shadow 160ms ease-out,
-    color 160ms ease-out;
-}
-
-.actionButton:hover,
-.actionButton:focus-visible {
-  color: var(--primary-foreground);
-  background: var(--primary);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--primary) 18%, transparent),
-    0 6px 14px color-mix(in srgb, var(--primary) 25%, transparent);
-  outline: none;
+    background-color 140ms ease-out,
+    box-shadow 140ms ease-out,
+    color 140ms ease-out;
 }
 
 .actionIcon {
@@ -93,148 +63,95 @@
   place-items: center;
 }
 
-.actionIcon svg {
+.actionIcon > span {
+  display: flex;
   grid-area: 1 / 1;
-  transition:
-    opacity 140ms ease-out,
-    transform 140ms ease-out;
 }
 
-.actionHoverIcon {
-  opacity: 0;
-  transform: scale(0.7);
+.actionButton svg {
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
-.actionButton:hover .actionDefaultIcon,
-.actionButton:focus-visible .actionDefaultIcon {
-  opacity: 0;
-  transform: scale(0.7);
+.actionButton:hover,
+.actionButton:focus-visible {
+  background: var(--primary-soft);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--ink) 20%, transparent);
 }
 
-.actionButton:hover .actionHoverIcon,
-.actionButton:focus-visible .actionHoverIcon {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.resourceAction svg {
-  transition: transform 160ms ease-out;
-}
-
-.resourceAction:hover svg,
-.resourceAction:focus-visible svg {
-  transform: translateY(-2px) rotate(-12deg) scale(1.14);
-}
-
-.resourceAction:active {
-  transform: scale(0.94);
+.actionButton:focus-visible,
+.actionTrigger:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
 }
 
 .deleteAction {
   color: var(--destructive);
 }
 
-.deleteAction svg {
-  transition: transform 160ms ease-out;
-}
-
 .deleteAction:hover,
 .deleteAction:focus-visible {
-  color: #fff;
-  background: var(--destructive);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--destructive) 18%, transparent),
-    0 6px 14px color-mix(in srgb, var(--destructive) 25%, transparent);
-}
-
-.deleteAction:hover svg,
-.deleteAction:focus-visible svg {
-  transform: translateY(-1px);
-}
-
-.deleteAction:active {
-  transform: scale(0.94);
+  background: color-mix(in srgb, var(--destructive) 12%, var(--card));
 }
 
 .actionTrigger {
   position: relative;
   z-index: 2;
   display: flex;
-  width: var(--action-size, 2rem);
-  height: var(--action-size, 2rem);
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.triggerVisual {
+  display: flex;
+  width: 100%;
+  height: 100%;
   align-items: center;
   justify-content: center;
   border: 2px solid var(--card);
-  border-radius: 999px;
+  border-radius: 9999px;
   color: var(--primary-deep);
   background: var(--card);
   box-shadow: 0 3px 8px color-mix(in srgb, var(--ink) 12%, transparent);
-  cursor: pointer;
   transition:
-    transform 150ms ease-out,
+    color 150ms ease-out,
     background-color 150ms ease-out,
     box-shadow 150ms ease-out;
 }
 
-.actionTrigger:hover {
-  background: var(--cloud);
-  box-shadow: 0 5px 12px color-mix(in srgb, var(--ink) 16%, transparent);
-  transform: scale(1.1);
+.actionTrigger:hover .triggerVisual,
+.actionTrigger:focus-visible .triggerVisual {
+  background: var(--primary-soft);
 }
 
-.actionTrigger:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+.actionTrigger[data-open] .triggerVisual {
+  color: var(--primary-foreground);
+  background: var(--primary-deep);
+}
+
+.triggerIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .coarse {
-  --action-size: 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
-.coarse .menuRing {
-  --radius: 5.25rem;
-  --action-size: 2.75rem;
-  width: 15rem;
-  height: 15rem;
+.overview {
+  visibility: hidden;
 }
 
-.coarse .actionTrigger::before {
-  position: absolute;
-  inset: -0.5rem;
-  border-radius: 999px;
-  content: '';
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .menuRing,
-  .menuRingOpen,
-  .menuRingClosing,
-  .actionButton,
-  .actionTrigger {
-    animation: none;
-    transition: none;
-  }
-
-  .actionHoverIcon {
-    opacity: 0;
-    transform: none;
-  }
-
-  .actionButton:hover .actionDefaultIcon,
-  .actionButton:focus-visible .actionDefaultIcon {
-    opacity: 0;
-    transform: none;
-  }
-
-  .actionButton:hover .actionHoverIcon,
-  .actionButton:focus-visible .actionHoverIcon {
-    opacity: 1;
-    transform: none;
-  }
-
-  .menuRingOpen,
-  .menuRingClosing {
-    opacity: 1;
-    transform: translate(-50%, -50%);
-  }
+.overview[data-active],
+:global(.react-flow__node:focus-within) .overview {
+  visibility: visible;
 }

@@ -1,3 +1,5 @@
+import { unknownNodeType } from '@/shared/node-type';
+
 export const nodeTypeColorPalette = [
   { value: '#024AD8', label: 'Azul institucional' },
   { value: '#1467A8', label: 'Azul océano' },
@@ -134,13 +136,9 @@ export const teachingIconCatalog = [
   icons: readonly (readonly [id: string, label: string])[];
 }[];
 
-export const defaultCustomNodeTypeIcon = { id: 'Shapes', label: 'Forma' } as const;
+export const defaultCustomNodeTypeIcon = { id: unknownNodeType.icon, label: 'Forma' } as const;
 
-export const unknownNodeType = {
-  name: 'Sin tipo',
-  icon: defaultCustomNodeTypeIcon.id,
-  color: 'currentColor',
-} as const;
+export { unknownNodeType };
 
 export type NodeTypeIconId =
   typeof defaultCustomNodeTypeIcon.id | (typeof teachingIconCatalog)[number]['icons'][number][0];

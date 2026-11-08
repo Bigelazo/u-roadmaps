@@ -4,6 +4,7 @@ import { ABSENT, PRESENT, absorbs, nodeCreationRef } from '../absorption';
 import {
   isNodeOpener,
   isNodeViewer,
+  nodePart,
   nodeViewers,
   participantIds,
   type EntryValue,
@@ -23,7 +24,12 @@ function presented({ context }: TargetValues) {
 function text(values: TargetValues) {
   const { nodeTitle, blocked } = presented(values);
   const subject = `Nuevo Nodo «${nodeTitle}»`;
-  return { subject, body: `${subject}${blocked ? ' (bloqueado)' : ''}.` };
+  const ending = blocked ? ' (bloqueado).' : '.';
+  return {
+    subject,
+    body: `${subject}${ending}`,
+    summaryParts: ['Nuevo Nodo ', nodePart(nodeTitle), ending],
+  };
 }
 
 export const nodeCreationTarget: NoticeTargetDescriptor<NodeCreatedFact> = {

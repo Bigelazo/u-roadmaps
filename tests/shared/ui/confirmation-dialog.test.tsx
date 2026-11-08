@@ -135,43 +135,12 @@ test('uses the intent to provide semantic treatment and fixed action emphasis', 
   ).toBe('primary');
 });
 
-test('renders item and relationship sections, including their empty state', async () => {
+test('renders supplementary content between the description and the actions', async () => {
   render(
     <ConfirmationDialog
       confirmation={{
         ...singleActionConfirmation,
-        sections: [
-          {
-            title: 'Nodos afectados',
-            items: [
-              {
-                kind: 'item',
-                id: 'node-1',
-                title: 'Introducción',
-                description: 'Contenido inicial',
-                media: <span data-testid="node-media">Contenido</span>,
-                badge: 'Seleccionado',
-              },
-            ],
-          },
-          {
-            title: 'Dependencias eliminadas',
-            items: [],
-            emptyMessage: 'No se eliminarán dependencias.',
-          },
-          {
-            title: 'Relaciones',
-            items: [
-              {
-                kind: 'relationship',
-                id: 'dependency-1',
-                source: 'Introducción',
-                target: 'Evaluación',
-                description: 'La primera habilita la segunda.',
-              },
-            ],
-          },
-        ],
+        content: <p>Contenido adicional</p>,
       }}
       onAction={vi.fn()}
       onCancel={vi.fn()}
@@ -179,24 +148,34 @@ test('renders item and relationship sections, including their empty state', asyn
   );
 
   const dialog = await screen.findByRole('alertdialog', { name: 'Archivar cambios' });
-  const nodes = within(dialog).getByRole('list', { name: 'Nodos afectados' });
-  expect(within(nodes).getByRole('listitem', { name: 'Introducción' })).toBeTruthy();
-  expect(within(nodes).getByText('Contenido inicial')).toBeTruthy();
-  expect(within(nodes).getByText('Seleccionado')).toBeTruthy();
-  expect(within(nodes).getByTestId('node-media')).toBeTruthy();
+  expect(within(dialog).getByText('Contenido adicional')).toBeTruthy();
+});
 
-  const dependencies = within(dialog).getByRole('region', {
-    name: 'Dependencias eliminadas',
-  });
-  expect(within(dependencies).getByText('No se eliminarán dependencias.')).toBeTruthy();
+test('lets every action share the primary emphasis and disables an unavailable action', async () => {
+  const user = userEvent.setup();
+  const onAction = vi.fn();
+  render(
+    <ConfirmationDialog
+      confirmation={{
+        ...twoActionConfirmation,
+        actions: [
+          { id: 'node', label: 'Desbloquear este Nodo', emphasis: 'primary' },
+          { id: 'branch', label: 'Desbloquear la rama', emphasis: 'primary', disabled: true },
+        ],
+      }}
+      onAction={onAction}
+      onCancel={vi.fn()}
+    />,
+  );
 
-  const relationships = within(dialog).getByRole('list', { name: 'Relaciones' });
-  expect(
-    within(relationships).getByRole('listitem', {
-      name: 'Relación: Introducción → Evaluación',
-    }),
-  ).toBeTruthy();
-  expect(within(relationships).getByText('La primera habilita la segunda.')).toBeTruthy();
+  const dialog = await screen.findByRole('alertdialog', { name: 'Desbloquear Nodo' });
+  const node = within(dialog).getByRole('button', { name: 'Desbloquear este Nodo' });
+  const branch = within(dialog).getByRole('button', { name: 'Desbloquear la rama' });
+  expect(node.getAttribute('data-emphasis')).toBe('primary');
+  expect(branch.getAttribute('data-emphasis')).toBe('primary');
+  expect((branch as HTMLButtonElement).disabled).toBe(true);
+  await user.click(node);
+  expect(onAction).toHaveBeenCalledWith('node');
 });
 
 test('opens on Cancel, then restores focus to the element that opened the confirmation', async () => {

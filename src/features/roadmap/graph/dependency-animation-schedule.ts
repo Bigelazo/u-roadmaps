@@ -2,6 +2,10 @@ import { cubicBezier } from 'motion';
 
 type DependencyRoute = { id: string; source: string; target: string; hidden?: boolean };
 
+export const roadmapEntranceBudgetSeconds = 1;
+export const nodeRevealSeconds = 0.18;
+const dependencyDrawSeconds = 0.32;
+
 export type DependencyAnimationSlot = {
   id: string;
   start: number;
@@ -37,8 +41,11 @@ export function dependencyAnimationSchedule(
   ordered.push(...edges.filter((edge) => !orderedIds.has(edge.id)));
 
   const count = ordered.length;
-  const total = Math.min(2, count * 0.32);
-  const weight = (index: number) => (count < 2 ? 1 : 1 - (0.35 * index) / (count - 1));
+  const total = Math.min(
+    roadmapEntranceBudgetSeconds - nodeRevealSeconds,
+    count * dependencyDrawSeconds,
+  );
+  const weight = (index: number) => (count < 2 ? 1 : 0.65 + (0.35 * index) / (count - 1));
   const weights = ordered.reduce((sum, _edge, index) => sum + weight(index), 0);
   let start = 0;
   return ordered.map((edge, index) => {
@@ -50,6 +57,8 @@ export function dependencyAnimationSchedule(
 }
 
 export const dependencyDrawingVelocity = cubicBezier(0.42, 0, 1, 1);
+
+export const roadmapEntranceCadence = cubicBezier(0, 0, 0.58, 1);
 
 const velocitySamples = 256;
 const distances = [0];

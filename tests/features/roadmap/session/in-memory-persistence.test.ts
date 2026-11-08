@@ -3,7 +3,6 @@ import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/sess
 import type { RoadmapDto } from '@/features/roadmap/types';
 import type { ResourceInput } from '@/features/roadmap/editor/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
-import { chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
 import { executeWithChangeImpact } from '../support/execute-with-change-impact';
 
 const roadmap = {
@@ -87,7 +86,9 @@ test('a confirmed Node unlock unlocks its Change impact and releases a due Sched
   const persistence = createInMemoryRoadmapSessionPersistence({
     ...roadmap,
     nodes: roadmap.nodes.map((node) =>
-      node.id === 'dependent' ? { ...node, teacherUnlockOn: chileCalendarDay() } : node,
+      node.id === 'dependent'
+        ? { ...node, teacherUnlockAt: new Date(Date.now() - 60_000).toISOString() }
+        : node,
     ),
   });
   const unlock = {
@@ -107,16 +108,16 @@ test('a confirmed Node unlock unlocks its Change impact and releases a due Sched
   );
 });
 
-test('rejects a Scheduled unlock that is not after today, as production does', async () => {
+test('rejects a Scheduled unlock that is not in the future, as production does', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
   await expect(
     persistence.execute({
       kind: 'schedule-teacher-unlock',
       nodeId: 'selected',
-      unlockOn: '2000-01-01',
+      unlockAt: '2000-01-01T12:00:00.000Z',
     }),
-  ).rejects.toThrow('La fecha de desbloqueo debe ser posterior a hoy.');
+  ).rejects.toThrow('El desbloqueo programado debe quedar en el futuro.');
 });
 
 test('rejects a student Completion of a blocked Node, as production does', async () => {

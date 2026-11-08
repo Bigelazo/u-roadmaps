@@ -203,7 +203,7 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   expect(metadataBox.y - canvasBox.y).toBeCloseTo(24, 0);
   await expect(canvas.locator('header')).toHaveCSS('pointer-events', 'none');
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
-  await expect(page.getByText('Previsualización del canvas')).toBeVisible();
+  await expect(page.getByText('Vista estudiantil')).toBeVisible();
   const previewToolbar = canvas.locator('.react-flow__panel.top.center');
   const [previewCanvasBox, previewBox] = await Promise.all([
     bounds(canvas),
@@ -238,6 +238,47 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   );
   await page.getByRole('button', { name: 'Ir al editor' }).click();
   await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeFocused();
+});
+
+test('orders every Node vertically or horizontally and keeps the chosen positions', async ({
+  page,
+  course,
+  teacherApi,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  type Saved = {
+    nodes: { id: string; positionX: number; positionY: number }[];
+    dependencies: { sourceNodeId: string; targetNodeId: string }[];
+  };
+  const saved = async (): Promise<Saved> => (await teacherApi.get(course.apiPath())).json();
+  const [{ sourceNodeId, targetNodeId }] = (await saved()).dependencies;
+  const placement = (roadmap: Saved, nodeId: string) =>
+    roadmap.nodes.find(({ id }) => id === nodeId)!;
+
+  for (const [choice, axis] of [
+    ['Horizontal', 'positionX'],
+    ['Vertical', 'positionY'],
+  ] as const) {
+    await page.getByRole('button', { name: 'Ordenar', exact: true }).click();
+    const dialog = page.getByRole('alertdialog', { name: '¿Ordenar los nodos automáticamente?' });
+    await expect(dialog).toContainText(
+      'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
+    );
+    await dialog.getByRole('button', { name: choice }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(toast(page, 'Nodos ordenados exitosamente.').first()).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const roadmap = await saved();
+        const source = placement(roadmap, sourceNodeId);
+        const target = placement(roadmap, targetNodeId);
+        return source[axis] < target[axis];
+      })
+      .toBe(true);
+  }
 });
 
 test('keeps feedback visible beside an open editor', async ({ page, course }) => {
@@ -291,7 +332,7 @@ test('keeps the radial node actions above their canvas focus treatment', async (
 
   await page.getByRole('button', { name: 'Ocultar para estudiantes' }).click();
 
-  await expect(page.getByRole('alertdialog', { name: /^¿Ocultar “/ })).toBeVisible();
+  await expect(page.getByRole('alertdialog', { name: /^¿Ocultar / })).toBeVisible();
   await page.getByRole('button', { name: 'Cancelar' }).click();
 });
 
@@ -336,4 +377,78 @@ test('keeps radial node actions evenly sized and separated', async ({ page, cour
       expect(centerDistance).toBeGreaterThanOrEqual((first.width + second.width) / 2);
     }
   }
+});
+
+function recordColumnWidths(column: Locator) {
+  return column.evaluate(
+    (element) =>
+      new Promise<number[]>((resolve) => {
+        const widths: number[] = [];
+        const startedAt = performance.now();
+        const sample = () => {
+          widths.push(element.getBoundingClientRect().width);
+          if (performance.now() - startedAt < 800) requestAnimationFrame(sample);
+          else resolve(widths);
+        };
+        requestAnimationFrame(sample);
+      }),
+  );
+}
+
+function intermediateWidths(widths: number[], panelWidth: number) {
+  return widths.filter((width) => width > 1 && width < panelWidth - 1);
+}
+
+test('slides the side panel open and closed beside the canvas', async ({ page, course }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+
+  const column = page.locator('[data-slot="roadmap-panel-column"]');
+  const panel = page.locator('#roadmap-editor-panel');
+  const canvas = page.getByLabel('Lienzo del roadmap');
+  const closedCanvas = await bounds(canvas);
+
+  const opening = recordColumnWidths(column);
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+  const openingWidths = await opening;
+  const { width: panelWidth } = await bounds(panel);
+  expect(intermediateWidths(openingWidths, panelWidth).length).toBeGreaterThan(0);
+  expect((await bounds(column)).width).toBeCloseTo(panelWidth, 0);
+  expect((await bounds(canvas)).width).toBeCloseTo(closedCanvas.width - panelWidth, 0);
+
+  const closing = recordColumnWidths(column);
+  await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
+  await expect(column).toHaveAttribute('inert');
+  await expect(panel).toBeVisible();
+  const closingWidths = await closing;
+  expect(intermediateWidths(closingWidths, panelWidth).length).toBeGreaterThan(0);
+  await expect(panel).toBeHidden();
+  await expect(column).not.toHaveAttribute('inert');
+  expect((await bounds(canvas)).width).toBeCloseTo(closedCanvas.width, 0);
+});
+
+test('opens and closes the side panel without motion when reduced motion is requested', async ({
+  page,
+  course,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+
+  const column = page.locator('[data-slot="roadmap-panel-column"]');
+  const panel = page.locator('#roadmap-editor-panel');
+
+  const opening = recordColumnWidths(column);
+  await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+  const openingWidths = await opening;
+  const { width: panelWidth } = await bounds(panel);
+  expect(intermediateWidths(openingWidths, panelWidth)).toEqual([]);
+
+  const closing = recordColumnWidths(column);
+  await page.getByRole('button', { name: 'Deseleccionar nodo' }).click();
+  const closingWidths = await closing;
+  expect(intermediateWidths(closingWidths, panelWidth)).toEqual([]);
+  await expect(panel).toBeHidden();
 });

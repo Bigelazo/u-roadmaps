@@ -13,3 +13,4 @@ export { CreateRoadmapDialog } from '@/features/roadmap/ui/CreateRoadmapDialog';
 export { PracticeRoadmapCanvas } from '@/features/roadmap/practice/PracticeRoadmapCanvas';
 export { PostCreationInvitationDialog } from '@/features/roadmap/ui/PostCreationInvitationDialog';
 export { RouteSpecimen, type RouteSpecimenNodeId } from '@/features/roadmap/ui/RouteSpecimen';
+export { NodeName } from '@/features/roadmap/ui/NodeName';

@@ -7,6 +7,8 @@ import {
   type CanvasCommand,
   type ChangeImpactCommand,
   type CommandOutcome,
+  type ConfirmationContext,
+  type ConfirmationInput,
   type PendingConfirmation,
   type ReadChangeImpactOf,
 } from '@/features/roadmap/canvas/commands/commands';
@@ -38,7 +40,7 @@ type CanvasCommandsOptions = {
 export type CanvasCommands = {
   pending: PendingConfirmation | null;
   request: (command: CanvasCommand) => Promise<boolean>;
-  confirm: (choice: CanvasConfirmationChoice) => Promise<void>;
+  confirm: (choice: CanvasConfirmationChoice, input?: ConfirmationInput) => Promise<void>;
   cancel: () => void;
 };
 
@@ -52,6 +54,7 @@ function entryOf(command: CanvasCommand): AnyCommandEntry {
 export function canvasConfirmation(
   pending: PendingConfirmation,
   roadmap: RoadmapConfirmationRoadmap,
+  context: ConfirmationContext = {},
 ) {
   if (pending.phase === 'reading-impact') return null;
   return (
@@ -59,6 +62,10 @@ export function canvasConfirmation(
       pending.request,
       pending.impact,
       roadmap,
+      {
+        ...context,
+        isPending: pending.phase === 'confirming',
+      },
     ) ?? null
   );
 }
@@ -107,9 +114,13 @@ export function useCanvasCommands({
     };
     const isSlotFree = () => pendingRef.current === null;
 
-    function announceApplied(command: CanvasCommand, outcome: CommandOutcome<CanvasCommand>) {
+    function announceApplied(
+      command: CanvasCommand,
+      outcome: CommandOutcome<CanvasCommand>,
+      impact?: ChangeImpact,
+    ) {
       const entry = entryOf(command);
-      const message = entry.success?.(command, outcome);
+      const message = entry.success?.(command, outcome, impact);
       if (message) notify.success(message);
       if (outcome.remaining) return;
       const action = entry.report?.(command, outcome);
@@ -131,13 +142,20 @@ export function useCanvasCommands({
       opened: OpenedRequest,
       impact: ChangeImpact,
       choice?: CanvasConfirmationChoice,
+      input?: ConfirmationInput,
     ): Promise<boolean> {
       setPending(pendingConfirmation(opened, impact, 'confirming', choice));
-      const result = await opened.confirmedAction.apply(session, opened.request, impact, choice);
+      const result = await opened.confirmedAction.apply(
+        session,
+        opened.request,
+        impact,
+        choice,
+        input,
+      );
       if (result) {
         const remaining = result === true ? undefined : result.retry;
         if (!remaining) setPending(null);
-        announceApplied(opened.request, { choice, remaining });
+        announceApplied(opened.request, { choice, input, remaining }, impact);
         return remaining ? open({ ...opened, request: remaining }) : true;
       }
       const latest = (await readImpact(opened)) ?? impact;
@@ -171,20 +189,20 @@ export function useCanvasCommands({
       return open({ request: command, confirmedAction });
     }
 
-    async function confirm(choice: CanvasConfirmationChoice) {
+    async function confirm(choice: CanvasConfirmationChoice, input?: ConfirmationInput) {
       const awaiting = pendingRef.current;
       const confirmedAction = awaiting && entryOf(awaiting.request).confirmedAction;
       if (awaiting?.phase !== 'awaiting' || !confirmedAction) return;
       const opened = { request: awaiting.request, confirmedAction };
       if (!confirmedAction.impact) {
-        await applyConfirmed(opened, awaiting.impact, choice);
+        await applyConfirmed(opened, awaiting.impact, choice, input);
         return;
       }
       setPending(pendingConfirmation(opened, awaiting.impact, 'confirming', choice));
       const latest = await readImpact(opened);
       if (!latest) setPending(awaiting);
       else if (!sameChangeImpact(latest, awaiting.impact)) await present(opened, latest);
-      else await applyConfirmed(opened, latest, choice);
+      else await applyConfirmed(opened, latest, choice, input);
     }
 
     const cancel = () => {

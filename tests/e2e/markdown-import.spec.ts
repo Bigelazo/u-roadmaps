@@ -33,7 +33,9 @@ test('Markdown drops require confirmation and update the Node draft before savin
   await description.fill('Borrador sin guardar');
   await description.dispatchEvent('dragover', { dataTransfer: transfer });
   await description.dispatchEvent('drop', { dataTransfer: transfer });
-  const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
+  const confirmation = page.getByRole('alertdialog', {
+    name: '¿Reemplazar el texto con el archivo Markdown?',
+  });
   await expect(confirmation).toContainText('guia.md');
   await expect(description).toHaveValue('Borrador sin guardar');
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
@@ -121,7 +123,7 @@ test('a Markdown file dragged into the window turns the description into a drop 
   await description.dispatchEvent('drop', { dataTransfer: markdown });
   await expect(dropTarget).toBeHidden();
   await expect(
-    page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' }),
+    page.getByRole('alertdialog', { name: '¿Reemplazar el texto con el archivo Markdown?' }),
   ).toContainText('guia.md');
 
   await markdown.dispose();
@@ -195,7 +197,9 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
   const transfer = await fileDrop(page, 'guia.md', content);
   await description.fill('Borrador previo');
   await description.dispatchEvent('drop', { dataTransfer: transfer });
-  const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
+  const confirmation = page.getByRole('alertdialog', {
+    name: '¿Reemplazar el texto con el archivo Markdown?',
+  });
   await expect(confirmation).toContainText('guia.md');
   await expect(description).toHaveValue('Borrador previo');
   await confirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
@@ -235,4 +239,37 @@ test('teaching staff create a Node without a description', async ({ page, course
     (node: { title: string }) => node.title === 'Nodo sin descripción',
   );
   expect(created?.description ?? '').toBe('');
+});
+
+test('the fullscreen editor gives the description at least half the viewport', async ({
+  page,
+  course,
+  teacherApi: api,
+}) => {
+  const created = await api.post(course.apiPath('/nodes'), {
+    data: {
+      title: 'Nodo en pantalla completa',
+      description: 'Una línea',
+      nodeTypeId: '00000000-0000-4000-8000-000000000001',
+      positionX: 0,
+      positionY: 0,
+    },
+  });
+  await ok(created, 201);
+  const nodeId: string = (await created.json()).node.id;
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+  await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
+
+  const description = page.locator('#fullscreen-node-description');
+  await expect(description).toBeVisible();
+  const { height, viewportHeight } = await description.evaluate((element: HTMLElement) => ({
+    height: element.offsetHeight,
+    viewportHeight: window.innerHeight,
+  }));
+  expect(height).toBeGreaterThanOrEqual(viewportHeight / 2);
+
+  await page.getByRole('button', { name: 'Cerrar pantalla completa' }).click();
+  await expect(page.locator('#edit-node-description')).toHaveJSProperty('offsetHeight', 128);
 });
