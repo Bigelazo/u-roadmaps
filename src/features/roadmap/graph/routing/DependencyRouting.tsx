@@ -193,13 +193,11 @@ function RoutedCanvas({
     <PreviewRoutingContext value={previewContext}>
       <RoutingContext value={result.routes}>
         {children}
-        {failed || result.blocked ? (
+        {failed ? (
           <div className="pointer-events-none absolute top-3 left-1/2 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2">
             <Alert role="status">
               <AlertDescription>
-                {failed
-                  ? 'No pudimos trazar las dependencias. Vuelve a abrir el mapa.'
-                  : 'Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.'}
+                No pudimos trazar las dependencias. Vuelve a abrir el mapa.
               </AlertDescription>
             </Alert>
           </div>

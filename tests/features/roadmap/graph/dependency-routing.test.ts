@@ -133,13 +133,30 @@ test('coordinates parallel dependencies rather than leaving their intermediate s
   });
 });
 
-test('reports impossible overlapping endpoints instead of falling back to a line through a node', () => {
+test('draws an orthogonal fallback for overlapping endpoints that cannot be routed around nodes', () => {
   withRouter((router) => {
     const input = scene();
     input.obstacles[2] = body('middle', -20, -20, 160, 120);
     const result = router.route(input);
-    expect(result.routes.has('ab')).toBe(false);
     expect(result.blocked).toBe(1);
+    const { points, path } = result.routes.get('ab')!;
+    expect(path).toMatch(/^M/);
+    expect(points[0].x === 120 || points[0].y === 0 || points[0].y === 80).toBe(true);
+    const end = points.at(-1)!;
+    expect(end.x === 600 || end.x === 720 || end.y === 0 || end.y === 80).toBe(true);
+    for (let i = 1; i < points.length; i++)
+      expect(points[i].x === points[i - 1].x || points[i].y === points[i - 1].y).toBe(true);
+  });
+});
+
+test('draws a fallback between nodes stacked on top of each other', () => {
+  withRouter((router) => {
+    const result = router.route({
+      obstacles: [body('a', 0, 0), body('b', 0, 0)],
+      dependencies: [{ id: 'ab', source: 'a', target: 'b' }],
+    });
+    expect(result.blocked).toBe(1);
+    expect(result.routes.get('ab')!.path).toMatch(/^M/);
   });
 });
 

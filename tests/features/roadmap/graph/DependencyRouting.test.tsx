@@ -211,17 +211,19 @@ test('ignores completion and pending retries after unmount', async () => {
   expect(mocks.route).toHaveBeenCalledTimes(calls);
 });
 
-test('reports an impossible route without substituting a native crossing path', async () => {
-  mocks.route.mockReturnValue({ routes: new Map(), blocked: 1 });
+test('draws a dependency that cannot avoid overlapping nodes without warning about it', async () => {
+  mocks.route.mockReturnValue({
+    routes: new Map([['ab', { path: 'M0,0L60,0L60,40', points: [], label: { x: 0, y: 0 } }]]),
+    blocked: 1,
+  });
   render(
     <DependencyRouting nodes={nodes} edges={edges}>
       <Edge />
     </DependencyRouting>,
   );
-  await screen.findByText(
-    'Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.',
-  );
-  expect(screen.getByTestId('route').textContent).toBe('unrouted');
+  await waitFor(() => expect(screen.getByTestId('route').textContent).toBe('M0,0L60,0L60,40'));
+  expect(screen.queryByText(/sin espacio para trazarse|Separa los nodos/)).toBeNull();
+  expect(screen.queryByText(/No pudimos trazar/)).toBeNull();
 });
 
 function Preview({ target, pointer }: { target: string; pointer: number }) {

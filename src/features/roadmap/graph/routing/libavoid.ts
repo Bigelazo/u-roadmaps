@@ -10,7 +10,12 @@ import type {
 import { roadmapNodeSizeForTitle, type Point } from '@/features/roadmap/graph/geometry';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
-import { dependencyRoute, type DependencyRoute, type RoutingObstacle } from './path';
+import {
+  dependencyRoute,
+  fallbackDependencyRoute,
+  type DependencyRoute,
+  type RoutingObstacle,
+} from './path';
 
 export type RoutingDependency = { id: string; source: string; target: string };
 export type RoutingScene = { obstacles: RoutingObstacle[]; dependencies: RoutingDependency[] };
@@ -183,14 +188,26 @@ export class DependencyRouter {
     );
     const adjusted = this.routePorts(scene, this.ports(initial));
     const routes = new Map<string, DependencyRoute>();
+    let blocked = 0;
     for (const [id, { dependency }] of this.connectors) {
       const points = adjusted.get(id) ?? initial.get(id)!;
       const route =
         dependencyRoute(points, dependency.source, dependency.target, scene.obstacles) ??
         dependencyRoute(initial.get(id)!, dependency.source, dependency.target, scene.obstacles);
-      if (route) routes.set(id, route);
+      if (route) {
+        routes.set(id, route);
+        continue;
+      }
+      blocked++;
+      const fallback =
+        dependencyRoute(initial.get(id)!, dependency.source, dependency.target, []) ??
+        fallbackDependencyRoute(
+          this.shapes.get(`${dependency.source}:body`)!.obstacle,
+          this.shapes.get(`${dependency.target}:body`)!.obstacle,
+        );
+      if (fallback) routes.set(id, fallback);
     }
-    return { routes, blocked: scene.dependencies.length - routes.size };
+    return { routes, blocked };
   }
 
   private routePorts(scene: RoutingScene, ports: readonly Port[]): Map<string, Point[]> {
