@@ -56,12 +56,45 @@ async function panCanvas(page: Page, client: CDPSession, delta: { x: number; y: 
   await touch(client, 'touchEnd');
 }
 
+async function settleViewport(page: Page) {
+  let previous = '';
+  let stableSince = Date.now();
+  await expect
+    .poll(async () => {
+      const transform = await page
+        .locator('.react-flow__viewport')
+        .evaluate((element) => element.style.transform);
+      if (transform !== previous) {
+        previous = transform;
+        stableSince = Date.now();
+      }
+      return Date.now() - stableSince;
+    })
+    .toBeGreaterThan(200);
+}
+
+async function centerOverview(page: Page) {
+  await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+  await settleViewport(page);
+  const canvas = await center(page.locator('.react-flow'));
+  await page.mouse.move(canvas.x, canvas.y);
+  await page.mouse.wheel(0, 900);
+  await expect
+    .poll(() =>
+      page
+        .locator('.react-flow__viewport')
+        .evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).a),
+    )
+    .toBeLessThan(0.3);
+  await settleViewport(page);
+}
+
 async function centerPracticePair(page: Page, client: CDPSession) {
   const source = page.locator('.react-flow__node[data-id="practice-node-a"]');
   const target = page.locator('.react-flow__node[data-id="practice-node-d"]');
   const canvas = await page.locator('.react-flow').boundingBox();
   if (!canvas) throw new Error('Practice canvas is not visible.');
-  await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+  await centerOverview(page);
   const from = await center(source.locator('p'));
   const to = await center(target.locator('p'));
   const delta = {
@@ -194,6 +227,7 @@ for (const width of [390, 360]) {
 
       await openPractice(page);
       const fresh = await centerPracticePair(page, client);
+      await fresh.source.focus();
       const trigger = fresh.source.getByRole('button', { name: 'Abrir menú de acciones del nodo' });
       await touch(client, 'touchStart', await center(trigger));
       // eslint-disable-next-line playwright/no-wait-for-timeout -- Hold the excluded button beyond the real arming threshold.
@@ -204,6 +238,7 @@ for (const width of [390, 360]) {
       await expect(modeMessage(page)).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(actions).toBeHidden();
+      await fresh.source.focus();
       await trigger.tap();
       await expect(actions).toBeVisible();
       await actions.getByRole('button', { name: 'Cerrar acciones' }).tap();
@@ -261,7 +296,7 @@ test('touch Arrow mode reaches Nodes under its banner on a landscape phone', asy
 
     const viewport = page.locator('.react-flow__viewport');
     const readable = await viewport.evaluate((element) => element.style.transform);
-    await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+    await centerOverview(page);
     await expect
       .poll(() => viewport.evaluate((element) => element.style.transform))
       .not.toBe(readable);
