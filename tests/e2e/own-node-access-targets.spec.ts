@@ -91,9 +91,15 @@ test('hide → show → block collapses to one access notice and recognition reb
   const recognized = await ok(
     await recipient.post('/api/notifications/acknowledge', { data: next }),
   );
+  const roadmap = await (await author.get(course.apiPath())).json();
+  const { name, icon, color } = roadmap.nodeTypes.find(
+    (type: { id: string }) => type.id === findNode(roadmap, nodeId).nodeTypeId,
+  );
+  const node = { title, nodeType: { name, icon, color } };
   expect((await recognized.json()).summary.groups).toContainEqual({
-    title: title,
-    items: [`«${title}» fue ocultado del Roadmap.`],
+    title,
+    node,
+    items: [[{ node }, ' fue ocultado del Roadmap.']],
   });
   await expect.poll(notices).toHaveLength(0);
 });
