@@ -584,6 +584,69 @@ function ActionMenuViewportAdjustment({
   return null;
 }
 
+function CompactEditorViewportAdjustment({
+  nodeId,
+  containerRef,
+}: {
+  nodeId: string | null | undefined;
+  containerRef: RefObject<HTMLDivElement | null>;
+}) {
+  const compact = useCompactCanvasLayout();
+  const { getViewport, setViewport } = useReactFlow();
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const panel = container
+      ?.closest('section')
+      ?.querySelector<HTMLElement>('#roadmap-editor-panel');
+    const node = container?.querySelector<HTMLElement>(`.react-flow__node[data-id="${nodeId}"]`);
+    if (!compact || !nodeId || !container || !panel || !node) return;
+    let frame = 0;
+    const reveal = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const panelBounds = panel.getBoundingClientRect();
+        if (!panelBounds.height) return;
+        const canvas = container.getBoundingClientRect();
+        const bounds = node.getBoundingClientRect();
+        const insets = canvasOverlayInsets(container);
+        const panelMaxHeight = Math.max(
+          0,
+          window.innerHeight - canvas.top - insets.top - bounds.height - overlayGap * 2,
+        );
+        panel.style.setProperty('--roadmap-panel-max-height', `${panelMaxHeight}px`);
+        const bottom = Math.min(canvas.bottom - insets.bottom, panelBounds.top - overlayGap);
+        const top = Math.min(canvas.top + insets.top, bottom - bounds.height);
+        const x = Math.max(
+          canvas.left + insets.left - bounds.left,
+          Math.min(0, canvas.right - insets.right - bounds.right),
+        );
+        const y = Math.max(top - bounds.top, Math.min(0, bottom - bounds.bottom));
+        if (Math.abs(x) < 1 && Math.abs(y) < 1) return;
+        const viewport = getViewport();
+        void setViewport({ x: viewport.x + x, y: viewport.y + y, zoom: viewport.zoom });
+      });
+    };
+    const observer = new ResizeObserver(reveal);
+    [
+      container,
+      panel,
+      node,
+      ...container.querySelectorAll<HTMLElement>('[data-canvas-overlay]'),
+    ].forEach((element) => observer.observe(element));
+    panel.addEventListener('animationend', reveal);
+    reveal();
+    return () => {
+      observer.disconnect();
+      panel.removeEventListener('animationend', reveal);
+      panel.style.removeProperty('--roadmap-panel-max-height');
+      cancelAnimationFrame(frame);
+    };
+  }, [compact, containerRef, getViewport, nodeId, setViewport]);
+
+  return null;
+}
+
 function updateEdgeAppearance(edge: RoadmapFlowEdge, isHovered = false): RoadmapFlowEdge {
   const defaultStroke = edge.data?.defaultStroke ?? dependencyStroke;
   const stroke = edge.selected || isHovered ? selectedEdgeColor : defaultStroke;
@@ -1263,6 +1326,10 @@ function RoadmapGraphContents({
       />
       <TutorialRevealTarget containerRef={containerRef} />
       <NodeMeasurementRecovery nodes={flow.nodes} />
+      <CompactEditorViewportAdjustment
+        nodeId={canEdit ? props.selectedNodeId : null}
+        containerRef={containerRef}
+      />
       <ActionMenuViewportAdjustment
         nodeId={canEdit && !model.useActionSheet ? openActionMenuNodeId : null}
         containerRef={containerRef}
