@@ -11,14 +11,14 @@ test.each([
   ['application/vnd.ms-excel', 'spreadsheet'],
   ['text/csv; charset=utf-8', 'spreadsheet'],
   ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'document'],
-  ['application/zip', 'archive'],
+  ['application/x-7z-compressed', 'archive'],
   ['image/png', 'image'],
   ['video/mp4', 'video'],
   ['audio/mpeg', 'audio'],
   ['text/markdown', 'code'],
   ['APPLICATION/JSON', 'code'],
-])('the content type %s decides the %s category over the title', (contentType, category) => {
-  expect(file('sin-extension', contentType)).toBe(category);
+])('the content type %s decides the %s category over the extension', (contentType, category) => {
+  expect(file('descarga.zip', contentType)).toBe(category);
 });
 
 test.each([
