@@ -2,20 +2,28 @@ import { act, render } from '@testing-library/react';
 import type { Config } from 'driver.js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RoadmapTutorial } from '@/shared/client/tutorial/tutorial';
+import type { ConfirmationDialogProps } from '@/shared/ui/confirmation-dialog';
 
 const mock = vi.hoisted(() => ({
   config: {} as Config,
   index: 3,
   refresh: vi.fn(),
+  destroy: vi.fn(),
+  exit: null as ConfirmationDialogProps | null,
 }));
 
-vi.mock('@/shared/ui/confirmation-dialog', () => ({ ConfirmationDialog: () => null }));
+vi.mock('@/shared/ui/confirmation-dialog', () => ({
+  ConfirmationDialog: (props: ConfirmationDialogProps) => {
+    mock.exit = props;
+    return null;
+  },
+}));
 vi.mock('driver.js', () => ({
   driver: (config: Config) => {
     mock.config = config;
     return {
       drive: vi.fn(),
-      destroy: vi.fn(),
+      destroy: mock.destroy,
       isActive: () => true,
       getActiveIndex: () => mock.index,
       getActiveElement: () => document.body,
@@ -31,6 +39,7 @@ vi.mock('driver.js', () => ({
 afterEach(() => {
   vi.useRealTimers();
   mock.refresh.mockClear();
+  mock.destroy.mockClear();
   mock.index = 3;
 });
 
@@ -58,4 +67,24 @@ it('lets the step 4 to 5 animation finish before refreshing an action target', a
     vi.advanceTimersByTime(150);
   });
   expect(mock.refresh).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ['Salir', 'leaves', 1],
+  ['Seguir con el tutorial', 'resumes', 0],
+] as const)('asks before exiting; %s %s the tutorial', (_label, _outcome, destroyed) => {
+  render(<RoadmapTutorial steps={[{ element: 'body', title: 'Paso', description: '' }]} />);
+  act(() => mock.config.onCloseClick?.(document.body, {}, {} as never));
+
+  const exit = mock.exit!;
+  expect(exit.confirmation).toMatchObject({
+    title: '¿Salir del tutorial?',
+    cancelLabel: 'Seguir con el tutorial',
+    actions: [{ id: 'leave', label: 'Salir' }],
+  });
+  mock.destroy.mockClear();
+  act(() => (destroyed ? exit.onAction('leave') : exit.onCancel()));
+
+  expect(mock.destroy).toHaveBeenCalledTimes(destroyed);
+  expect(mock.exit?.confirmation).toBeNull();
 });

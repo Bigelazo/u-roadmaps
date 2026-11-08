@@ -152,7 +152,7 @@ test('touch actions reuse visibility, Resource editing, draft guards, and deleti
   ]);
   await sheet.getByRole('button', { name: 'Mostrar para estudiantes' }).tap();
   await expect(confirmation).toContainText(
-    'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
+    'Los estudiantes podrán verlo y acceder a él de inmediato.',
   );
   await confirmation.getByRole('button', { name: 'Mostrar', exact: true }).tap();
   await expect(confirmation).toBeHidden();

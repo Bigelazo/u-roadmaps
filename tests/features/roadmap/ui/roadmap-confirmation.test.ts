@@ -95,17 +95,17 @@ describe('roadmapTeacherBlockConfirmation', () => {
     [
       'blocks a Node without dependents',
       preview('BLOCK', []),
-      'Los estudiantes no podrán abrirlo hasta que lo desbloquees.',
+      'Los estudiantes no podrán acceder a él hasta que lo desbloquees.',
     ],
     [
       'stresses the one dependent blocked along',
       preview('BLOCK', ['Gráficas']),
-      'Los estudiantes no podrán abrirlo hasta que lo desbloquees. También se bloqueará el nodo que depende de él.',
+      'Los estudiantes no podrán acceder a él hasta que lo desbloquees. También se bloqueará el nodo que depende de él.',
     ],
     [
       'counts the dependents blocked along instead of listing them',
       preview('BLOCK', ['A', 'B', 'C', 'D']),
-      'Los estudiantes no podrán abrirlo hasta que lo desbloquees. También se bloquearán los 4 nodos que dependen de él.',
+      'Los estudiantes no podrán acceder a él hasta que lo desbloquees. También se bloquearán los 4 nodos que dependen de él.',
     ],
   ] as const)('%s as a danger action', (_, nodePreview, description) => {
     const confirmation = roadmapTeacherBlockConfirmation({
@@ -137,13 +137,13 @@ describe('roadmapTeacherBlockConfirmation', () => {
     [
       'counts the blocked prerequisites an upstream unlock carries',
       { preview: preview('UPSTREAM', ['Conjuntos', 'Números'], 'PREREQUISITE') },
-      'Para que los estudiantes puedan abrirlo, también se desbloquearán sus 2 prerrequisitos bloqueados.',
+      'Para que los estudiantes puedan acceder a él, también se desbloquearán sus 2 prerrequisitos bloqueados.',
       [{ id: 'unlock-prerequisites', label: 'Desbloquear 3 nodos', emphasis: 'primary' }],
     ],
     [
       'names the one blocked prerequisite an upstream unlock carries',
       { preview: preview('UPSTREAM', ['Conjuntos'], 'PREREQUISITE') },
-      'Para que los estudiantes puedan abrirlo, también se desbloqueará su prerrequisito bloqueado.',
+      'Para que los estudiantes puedan acceder a él, también se desbloqueará su prerrequisito bloqueado.',
       [{ id: 'unlock-prerequisites', label: 'Desbloquear 2 nodos', emphasis: 'primary' }],
     ],
     [
@@ -153,7 +153,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
         individualPreview: preview('SINGLE', []),
         branchPreview: preview('BRANCH', []),
       },
-      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.',
+      'Los estudiantes podrán acceder a él cuando completen sus prerrequisitos.',
       [{ id: 'unlock-node', label: 'Desbloquear', emphasis: 'primary' }],
     ],
     [
@@ -163,7 +163,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
         individualPreview: preview('SINGLE', []),
         branchPreview: preview('BRANCH', ['Gráficas', 'Límites']),
       },
-      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. 2 nodos que dependen de él siguen bloqueados.',
+      'Los estudiantes podrán acceder a él cuando completen sus prerrequisitos. 2 nodos que dependen de él siguen bloqueados.',
       [
         { id: 'unlock-node', label: 'Solo este nodo', emphasis: 'primary' },
         { id: 'unlock-branch', label: 'Incluir dependientes', emphasis: 'primary' },
@@ -176,7 +176,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
         individualPreview: preview('SINGLE', []),
         branchPreview: preview('BRANCH', ['Gráficas']),
       },
-      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. 1 nodo que depende de él sigue bloqueado.',
+      'Los estudiantes podrán acceder a él cuando completen sus prerrequisitos. 1 nodo que depende de él sigue bloqueado.',
       [
         { id: 'unlock-node', label: 'Solo este nodo', emphasis: 'primary' },
         { id: 'unlock-branch', label: 'Incluir dependientes', emphasis: 'primary' },
@@ -185,7 +185,7 @@ describe('roadmapTeacherBlockConfirmation', () => {
     [
       'unlocks a branch requested on its own',
       { preview: preview('BRANCH', ['Gráficas', 'Límites']) },
-      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos. También se desbloquearán 2 nodos que dependen de él.',
+      'Los estudiantes podrán acceder a él cuando completen sus prerrequisitos. También se desbloquearán 2 nodos que dependen de él.',
       [{ id: 'unlock-branch', label: 'Desbloquear', emphasis: 'primary' }],
     ],
   ] as const)('%s', (_, previews, description, actions) => {
@@ -320,8 +320,7 @@ describe('roadmapNodeVisibilityConfirmation', () => {
   it('explains how a hidden Node returns', () => {
     expect(plain(roadmapNodeVisibilityConfirmation(roadmap, roadmap.nodes[0], false, []))).toEqual({
       title: '¿Mostrar Conjuntos?',
-      description:
-        'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
+      description: 'Los estudiantes podrán verlo y acceder a él de inmediato.',
       intent: 'default',
       actions: [{ id: 'show-node', label: 'Mostrar' }],
     });
@@ -569,7 +568,8 @@ describe('canvasConfirmation', () => {
       ),
     ).toMatchObject({
       title: '¿Reiniciar el progreso simulado?',
-      intent: 'destructive',
+      description: 'Se reiniciarán los nodos completados en esta previsualización.',
+      intent: 'warning',
       actions: [{ id: 'reset-canvas-preview', label: 'Reiniciar progreso' }],
     });
   });

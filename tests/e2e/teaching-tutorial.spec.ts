@@ -234,7 +234,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   const confirmation = page.getByRole('alertdialog');
   await expect(confirmation).toHaveClass(/driver-active-element/);
   await expect(confirmation).toContainText(
-    'Los estudiantes no podrán abrirlo hasta que lo desbloquees.',
+    'Los estudiantes no podrán acceder a él hasta que lo desbloquees.',
   );
   await expect(confirmation).toContainText('También se bloquearán los 3 nodos que dependen de él.');
   await expect(confirmation.locator('[data-slot="node-name"] svg')).toHaveCount(1);

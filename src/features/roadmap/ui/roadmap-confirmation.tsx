@@ -99,9 +99,8 @@ export const roadmapAutoLayoutConfirmation = {
 
 export const canvasPreviewResetConfirmation = {
   title: '¿Reiniciar el progreso simulado?',
-  description:
-    'Se borrarán los nodos completados en esta previsualización. El progreso de los estudiantes no cambia.',
-  intent: 'destructive',
+  description: 'Se reiniciarán los nodos completados en esta previsualización.',
+  intent: 'warning',
   actions: [{ id: canvasConfirmationChoices.resetCanvasPreview, label: 'Reiniciar progreso' }],
 } as const satisfies ConfirmationPresentation;
 
@@ -276,7 +275,7 @@ export function roadmapTeacherBlockConfirmation({
       title: <>¿Bloquear {name}?</>,
       description: (
         <>
-          Los estudiantes no podrán abrirlo hasta que lo desbloquees.
+          Los estudiantes no podrán acceder a él hasta que lo desbloquees.
           {dependents > 0 ? (
             <>
               {' '}
@@ -297,14 +296,14 @@ export function roadmapTeacherBlockConfirmation({
   }
 
   const unlockTitle = <>¿Desbloquear {name}?</>;
-  const opensLater = 'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.';
+  const opensLater = 'Los estudiantes podrán acceder a él cuando completen sus prerrequisitos.';
 
   if (preview.mode === 'UPSTREAM') {
     const prerequisites = affectedNodes(preview, nodeId).length;
     return unlockPresentation(
       unlockTitle,
       <>
-        Para que los estudiantes puedan abrirlo, también se{' '}
+        Para que los estudiantes puedan acceder a él, también se{' '}
         {prerequisites === 1 ? 'desbloqueará' : 'desbloquearán'}{' '}
         <Emphasis>
           {prerequisites === 1
@@ -425,8 +424,7 @@ export function roadmapNodeVisibilityConfirmation(
   if (!isHiding) {
     return {
       title: <>¿Mostrar {name}?</>,
-      description:
-        'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
+      description: 'Los estudiantes podrán verlo y acceder a él de inmediato.',
       intent: 'default',
       actions: [{ id: canvasConfirmationChoices.showNode, label: 'Mostrar' }],
     };
