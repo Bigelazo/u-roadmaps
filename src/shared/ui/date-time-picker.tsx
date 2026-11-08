@@ -5,7 +5,12 @@ import { CalendarDays, ChevronDown, Clock } from 'lucide-react';
 import { es } from 'react-day-picker/locale';
 import { cn } from 'cn';
 import { formatCalendarDay, formatMonthCaption } from '@/shared/calendar-day-format';
-import { zonedInstant, zonedWallClock, type ZonedWallClock } from '@/shared/zoned-time';
+import {
+  END_OF_DAY_TIME,
+  zonedInstant,
+  zonedWallClock,
+  type ZonedWallClock,
+} from '@/shared/zoned-time';
 import { Button } from '@/shared/ui/button';
 import { Calendar } from '@/shared/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
@@ -44,8 +49,6 @@ function dateOfDay(day: string) {
   return new Date(year!, month! - 1, date);
 }
 
-const endOfDayTime = '23:59';
-
 function timeSlots(minuteStep: number) {
   const slots: string[] = [];
   for (let minutes = 0; minutes < 24 * 60; minutes += minuteStep) {
@@ -53,7 +56,7 @@ function timeSlots(minuteStep: number) {
     const minute = String(minutes % 60).padStart(2, '0');
     slots.push(`${hour}:${minute}`);
   }
-  if (slots.at(-1) !== endOfDayTime) slots.push(endOfDayTime);
+  if (slots.at(-1) !== END_OF_DAY_TIME) slots.push(END_OF_DAY_TIME);
   return slots;
 }
 

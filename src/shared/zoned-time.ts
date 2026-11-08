@@ -1,5 +1,7 @@
 export type ZonedWallClock = { day: string; time: string };
 
+export const END_OF_DAY_TIME = '23:59';
+
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
 function formatterFor(timeZone: string) {

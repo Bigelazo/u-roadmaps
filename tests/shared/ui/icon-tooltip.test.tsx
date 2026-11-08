@@ -25,12 +25,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderOrderButton({ enabled = true } = {}) {
+function renderOrderButton({ iconOnly = true } = {}) {
   const onClick = vi.fn();
   render(
     <IconTooltip
       label="Ordenar"
-      enabled={enabled}
+      iconOnly={iconOnly}
       delay={0}
       render={
         <button type="button" aria-label="Ordenar" onClick={onClick}>
@@ -61,7 +61,7 @@ test('names an icon-only control on keyboard focus', async () => {
 
 test('stays silent while the control already shows its label', async () => {
   const user = userEvent.setup();
-  const { button, onClick } = renderOrderButton({ enabled: false });
+  const { button, onClick } = renderOrderButton({ iconOnly: false });
 
   await user.tab();
   await user.hover(button);
@@ -111,4 +111,32 @@ test('drops the long-press when the finger moves away to pan', () => {
   act(() => vi.advanceTimersByTime(longPressDelayMs));
 
   expect(tooltip()).toBeNull();
+});
+
+test('opens on the platform long-press menu before its own delay without activating the control', () => {
+  vi.useFakeTimers();
+  const { button, onClick } = renderOrderButton();
+
+  touch(button, 'pointerDown');
+  act(() => vi.advanceTimersByTime(longPressDelayMs - 100));
+  const menuProceeded = fireEvent.contextMenu(button);
+  expect(menuProceeded).toBe(false);
+  expect(tooltip()?.textContent).toBe('Ordenar');
+
+  touch(button, 'pointerUp');
+  fireEvent.click(button);
+  expect(onClick).not.toHaveBeenCalled();
+});
+
+test('lets an assistive activation through after a long-press that produced no click', () => {
+  vi.useFakeTimers();
+  const { button, onClick } = renderOrderButton();
+
+  touch(button, 'pointerDown');
+  act(() => vi.advanceTimersByTime(longPressDelayMs));
+  touch(button, 'pointerUp');
+  act(() => vi.advanceTimersByTime(longPressTooltipDurationMs));
+  fireEvent.click(button);
+
+  expect(onClick).toHaveBeenCalledOnce();
 });

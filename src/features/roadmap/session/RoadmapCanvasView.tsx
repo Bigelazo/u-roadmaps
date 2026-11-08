@@ -840,7 +840,7 @@ function RoadmapCanvasGraph({
                 {canPreviewCanvas && !input.practice ? (
                   <IconTooltip
                     label="Historial de versiones"
-                    enabled={isCompactLayout}
+                    iconOnly={isCompactLayout}
                     render={
                       <Link
                         aria-label="Historial de versiones"
@@ -856,7 +856,7 @@ function RoadmapCanvasGraph({
                 {canPreviewCanvas && !input.practice ? (
                   <IconTooltip
                     label="Integrantes"
-                    enabled={isCompactLayout}
+                    iconOnly={isCompactLayout}
                     render={
                       <Link
                         aria-label="Integrantes"
@@ -872,7 +872,7 @@ function RoadmapCanvasGraph({
                 {canEnterCanvasPreview ? (
                   <IconTooltip
                     label="Vista estudiante"
-                    enabled={isCompactLayout}
+                    iconOnly={isCompactLayout}
                     render={
                       <Button
                         ref={canvasPreviewWorkflow.entryButtonRef}
