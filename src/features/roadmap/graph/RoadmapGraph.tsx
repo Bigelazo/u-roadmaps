@@ -29,7 +29,7 @@ import {
   type FitViewOptions,
 } from '@xyflow/react';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
-import { LayoutFreeform, LockKeyhole, Maximize } from 'lucide-react';
+import { LayoutFreeform, LockKeyhole, Maximize, Move } from 'lucide-react';
 import {
   findOpenRoadmapPosition,
   roadmapGridSize,
@@ -73,7 +73,10 @@ import {
   studentNodeBlockReason,
   studentNodeStatus,
 } from '@/features/roadmap/student/node-status';
-import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
+import {
+  useCoarsePointer,
+  useCompactCanvasLayout,
+} from '@/features/roadmap/ui/compact-canvas-layout';
 import {
   TUTORIAL_REVEAL_EVENT,
   type TutorialRevealDetail,
@@ -369,6 +372,7 @@ function changedNodePositions(
 function RoadmapGraphToolbar({
   containerRef,
   showAutoLayout,
+  nodeMovementControl,
   canAutoLayout,
   onAutoLayout,
   onFitView,
@@ -379,6 +383,7 @@ function RoadmapGraphToolbar({
   onFitView?: () => void;
   containerRef: RefObject<HTMLDivElement | null>;
   showAutoLayout: boolean;
+  nodeMovementControl?: ReactNode;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
   bottomLeftActions?: (
@@ -462,6 +467,7 @@ function RoadmapGraphToolbar({
             />
             <TooltipContent>Centrar mapa</TooltipContent>
           </Tooltip>
+          {nodeMovementControl}
           {showAutoLayout ? (
             compact ? (
               <Tooltip>
@@ -1036,6 +1042,22 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
   } = model;
 
   const compact = useCompactCanvasLayout();
+  const coarsePointer = useCoarsePointer();
+  const [pointerType, setPointerType] = useState<string | null>(null);
+  const touchInput = pointerType ? pointerType === 'touch' : coarsePointer;
+  const [movingNodes, setMovingNodes] = useState(false);
+  const [movementScope, setMovementScope] = useState({
+    canEdit,
+    roadmapId: props.projection.roadmap.roadmap.id,
+  });
+  if (
+    movementScope.canEdit !== canEdit ||
+    movementScope.roadmapId !== props.projection.roadmap.roadmap.id
+  ) {
+    setMovementScope({ canEdit, roadmapId: props.projection.roadmap.roadmap.id });
+    setMovingNodes(false);
+  }
+  const touchMoveMode = canEdit && movingNodes;
   const [blockedNoticeNodeId, setBlockedNoticeNodeId] = useState<string | null>(null);
   const isActionMenuActive = Boolean(openActionMenuNodeId || closingActionMenuNodeId);
   const isNavigationEnabled = !isActionMenuActive;
@@ -1044,7 +1066,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
   const connection = useWholeNodeConnection({
     nodes: flow.nodes,
     edges: flow.edges,
-    enabled: canInteract,
+    enabled: canInteract && !touchMoveMode,
     onConnect: connectNodes,
   });
   const connectionNodes = useMemo(
@@ -1074,6 +1096,12 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     : null;
 
   const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' && touchMoveMode) {
+      event.preventDefault();
+      event.stopPropagation();
+      setMovingNodes(false);
+      return;
+    }
     if (event.key === 'Escape' && connection.arrowSourceId) {
       event.preventDefault();
       event.stopPropagation();
@@ -1141,6 +1169,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         ref={containerRef}
         className="relative h-full"
         onKeyDownCapture={handleKeyDownCapture}
+        onPointerDownCapture={(event) => setPointerType(event.pointerType)}
         onMouseMoveCapture={connection.onPointerMove}
         onTouchStartCapture={connection.onTouchStartCapture}
         onTouchMoveCapture={connection.onPointerMove}
@@ -1162,7 +1191,9 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 edges={flow.edges}
                 nodeTypes={roadmapNodeTypes}
                 edgeTypes={roadmapEdgeTypes}
-                nodesDraggable={canInteract && !connection.arrowSourceId}
+                nodesDraggable={
+                  canInteract && !connection.arrowSourceId && (!touchInput || touchMoveMode)
+                }
                 nodesConnectable={canInteract}
                 snapToGrid
                 snapGrid={[roadmapGridSize, roadmapGridSize]}
@@ -1239,6 +1270,26 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                 <RoadmapGraphContents
                   props={props}
                   model={model}
+                  nodeMovementControl={
+                    canEdit &&
+                    !connection.arrowSourceId &&
+                    (coarsePointer || touchInput || touchMoveMode) ? (
+                      <Button
+                        type="button"
+                        variant={touchMoveMode ? 'default' : 'outline'}
+                        aria-pressed={touchMoveMode}
+                        className="min-h-11 shrink-0"
+                        disabled={!canInteract}
+                        onClick={() => {
+                          connection.cancelArrowMode();
+                          setMovingNodes((current) => !current);
+                        }}
+                      >
+                        <Move aria-hidden="true" data-icon="inline-start" />
+                        {touchMoveMode ? 'Listo' : 'Mover nodos'}
+                      </Button>
+                    ) : null
+                  }
                   onAutoLayout={() => {
                     dependencyAnimationRef.current?.finish();
                     model.proposeAutoLayout();
@@ -1264,6 +1315,16 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
             </ConnectionTargetContext>
           </DependencyRouting>
         </DependencyAnimationProvider>
+        {touchMoveMode ? (
+          <div className="pointer-events-none absolute inset-x-4 top-32 z-30 flex justify-center [@media(max-height:500px)]:top-2">
+            <span
+              role="status"
+              className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground shadow-md"
+            >
+              Arrastra un nodo para moverlo
+            </span>
+          </div>
+        ) : null}
         {connection.arrowSourceId ? (
           <div
             data-arrow-mode-controls
@@ -1305,10 +1366,12 @@ function RoadmapGraphContents({
   props,
   model,
   onAutoLayout,
+  nodeMovementControl,
 }: {
   props: RoadmapGraphProps;
   model: ReturnType<typeof useRoadmapGraphController>;
   onAutoLayout: () => void;
+  nodeMovementControl?: ReactNode;
 }) {
   const { overlaySlots, viewportRestoration, bottomLeftActions, bottomRightActions, onFitView } =
     props;
@@ -1337,6 +1400,7 @@ function RoadmapGraphContents({
       <RoadmapGraphToolbar
         containerRef={containerRef}
         showAutoLayout={canEdit}
+        nodeMovementControl={nodeMovementControl}
         canAutoLayout={canEdit && flow.nodes.length >= 2}
         onAutoLayout={onAutoLayout}
         onFitView={onFitView}
