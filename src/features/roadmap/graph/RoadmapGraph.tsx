@@ -100,6 +100,7 @@ const selectedEdgeColor = 'var(--primary)';
 const roadmapFitViewOptions = { padding: 0.28, minZoom: 0.5 };
 const roadmapMinZoom = 0.2;
 const roadmapMaxZoom = 2;
+const compactFitMinZoom = 0.8;
 const studentReadableZoom = 0.8;
 const staffReadableZoom = 0.7;
 const tutorialLegibleZoom = 0.5;
@@ -144,7 +145,11 @@ function insetPadding(insets: CanvasInsets): NonNullable<FitViewOptions['padding
 
 function fitAllOptions(compact: boolean, container: HTMLElement | null): FitViewOptions {
   return compact
-    ? { padding: insetPadding(canvasOverlayInsets(container)), minZoom: roadmapMinZoom, maxZoom: 1 }
+    ? {
+        padding: insetPadding(canvasOverlayInsets(container)),
+        minZoom: compactFitMinZoom,
+        maxZoom: 1,
+      }
     : { ...roadmapFitViewOptions, minZoom: roadmapMinZoom };
 }
 
