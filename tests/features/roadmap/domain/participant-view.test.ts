@@ -108,7 +108,15 @@ function roadmapNode(id: string, options: { hidden?: boolean; teacherBlocked?: b
     nodeTypeId: 'reading',
     positionX: 10,
     positionY: 20,
-    resources: [{ id: `resource-${id}`, title: 'Apunte', url: '/apunte', type: 'LINK' as const }],
+    resources: [
+      {
+        id: `resource-${id}`,
+        title: 'Apunte',
+        url: '/apunte',
+        type: 'LINK' as const,
+        fileContentType: null,
+      },
+    ],
   };
 }
 
@@ -153,7 +161,15 @@ test('an accessible Node adds its description, Resources and Completion, but no 
       isVisible: true,
       access: ACCESSIBLE,
       description: 'Descripción intro',
-      resources: [{ id: 'resource-intro', title: 'Apunte', url: '/apunte', type: 'LINK' }],
+      resources: [
+        {
+          id: 'resource-intro',
+          title: 'Apunte',
+          url: '/apunte',
+          type: 'LINK',
+          fileContentType: null,
+        },
+      ],
       isCompleted: true,
       canComplete: false,
     },

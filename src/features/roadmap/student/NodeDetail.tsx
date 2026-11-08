@@ -20,15 +20,7 @@ import {
 } from '@/features/roadmap/student/node-status';
 import { Button } from '@/shared/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/shared/ui/empty';
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from '@/shared/ui/item';
+import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/shared/ui/item';
 import { Separator } from '@/shared/ui/separator';
 import { Sheet, SheetContent } from '@/shared/ui/sheet';
 import { SidebarContent, SidebarProvider } from '@/shared/ui/sidebar';
@@ -37,11 +29,7 @@ import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
-import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
-
-function resourceTypeLabel(type: Resource['type']) {
-  return type === 'FILE' ? 'Archivo descargable' : 'Enlace externo';
-}
+import { ResourceIcon, resourceActionLabel } from '@/features/roadmap/ui/ResourceIcon';
 
 function resourceActionIcon(type: Resource['type']) {
   return type === 'FILE' ? (
@@ -169,16 +157,15 @@ function StudentNodeDetailContent({
                         href={resource.url}
                         target="_blank"
                         rel="noreferrer"
-                        aria-label={resource.title}
+                        aria-label={resourceActionLabel(resource)}
                       />
                     }
                   >
                     <ItemMedia variant="icon" className="text-primary">
-                      <ResourceIcon type={resource.type} />
+                      <ResourceIcon resource={resource} />
                     </ItemMedia>
                     <ItemContent>
                       <ItemTitle>{resource.title}</ItemTitle>
-                      <ItemDescription>{resourceTypeLabel(resource.type)}</ItemDescription>
                     </ItemContent>
                     <ItemActions className="text-primary">
                       {resourceActionIcon(resource.type)}

@@ -35,6 +35,7 @@ export function resourceDto(
     url: string;
     type: 'FILE' | 'LINK';
     fileKey?: string | null;
+    fileContentType: string | null;
   },
   identifier?: CourseOfferingIdentifier,
 ) {
@@ -44,6 +45,7 @@ export function resourceDto(
     url:
       resource.fileKey && identifier ? resourceDownloadUrl(identifier, resource.id) : resource.url,
     type: resource.type,
+    fileContentType: resource.type === 'FILE' ? (resource.fileContentType ?? null) : null,
   };
 }
 

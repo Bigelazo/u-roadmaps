@@ -18,7 +18,11 @@ const node: RoadmapNode = {
   isVisible: true,
   isTeacherBlocked: false,
 };
-const link = { title: 'Guía', url: 'https://example.com/guia', type: 'LINK' as const };
+const link = {
+  title: 'Guía',
+  url: 'https://example.com/guia',
+  type: 'LINK' as const,
+};
 
 function run(actions: NodeEditorAction[], state = createNodeEditorState(node)) {
   return actions.reduce<NodeEditorState>(nodeEditorReducer, state);
@@ -50,7 +54,7 @@ it('closes the Resource form when its own result is refreshed before the effect 
     [
       {
         type: 'canonical-refresh',
-        node: { ...node, resources: [{ id: 'resource-1', ...link }] },
+        node: { ...node, resources: [{ id: 'resource-1', ...link, fileContentType: null }] },
       },
       { type: 'resolve-effect', effectId: 1, epoch: pending.epoch, status: 'committed' },
     ],

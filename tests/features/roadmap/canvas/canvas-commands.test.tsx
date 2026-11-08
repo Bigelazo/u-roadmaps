@@ -1251,7 +1251,13 @@ describe('canvas commands', () => {
     });
 
     test('renaming a File applies at once and shows its toast', async () => {
-      const file = { id: 'file', title: 'Guía.pdf', url: 'guia.pdf', type: 'FILE' as const };
+      const file = {
+        id: 'file',
+        title: 'Guía.pdf',
+        url: 'guia.pdf',
+        type: 'FILE' as const,
+        fileContentType: 'application/pdf',
+      };
       const persistence = createInMemoryRoadmapSessionPersistence({
         ...editable,
         nodes: editable.nodes.map((node) =>

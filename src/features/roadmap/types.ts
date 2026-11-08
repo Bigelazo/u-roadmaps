@@ -12,6 +12,7 @@ export type Resource = {
   title: string;
   url: string;
   type: 'FILE' | 'LINK';
+  fileContentType: string | null;
 };
 
 export type NodeType = {

@@ -699,7 +699,11 @@ export const canvasCommandCatalog = {
     practice: (practice, { nodeId, resource }) => {
       const error = linkResourceOnlyError(resource.type);
       if (error) throw new Error(error);
-      practice.appendResource(nodeId, { ...resource, id: crypto.randomUUID() });
+      practice.appendResource(nodeId, {
+        ...resource,
+        id: crypto.randomUUID(),
+        fileContentType: null,
+      });
     },
     success: () => 'Enlace guardado exitosamente.',
     report: ({ nodeId }) => ({ type: 'addResource', nodeId }),
@@ -717,6 +721,7 @@ export const canvasCommandCatalog = {
         title: file.name,
         url: file.name,
         type: 'FILE',
+        fileContentType: file.type || null,
       }),
     success: () => 'Recurso guardado exitosamente.',
   }),

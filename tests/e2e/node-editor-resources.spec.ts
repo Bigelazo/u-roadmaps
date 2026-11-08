@@ -118,7 +118,7 @@ test('teacher saves consecutive Node edits and publishes links without reloading
     expect((await published).status()).toBe(201);
     await expect(form).toHaveCount(0);
     await expect(
-      editor.getByRole('link', { name: `Abrir recurso ${resourceTitle}`, exact: true }),
+      editor.getByRole('link', { name: `Abrir enlace ${resourceTitle}`, exact: true }),
     ).toBeVisible();
   }
 
@@ -132,7 +132,7 @@ test('teacher saves consecutive Node edits and publishes links without reloading
   await fileForm.getByRole('button', { name: 'Subir archivo', exact: true }).click();
   await expect(fileForm).toHaveCount(0);
   await expect(
-    editor.getByRole('link', { name: 'Abrir recurso archivo-consecutivo.txt', exact: true }),
+    editor.getByRole('link', { name: 'Descargar archivo-consecutivo.txt', exact: true }),
   ).toBeVisible();
 
   const finalTitle = 'Edición después de publicar recursos';

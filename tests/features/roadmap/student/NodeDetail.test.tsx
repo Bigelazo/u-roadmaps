@@ -30,12 +30,14 @@ const nodeWithResources = {
       id: 'resource-1',
       title: 'Guia de estudio',
       type: 'FILE' as const,
+      fileContentType: 'application/pdf',
       url: 'https://example.com/guide.pdf',
     },
     {
       id: 'resource-2',
       title: 'Clase grabada',
       type: 'LINK' as const,
+      fileContentType: null,
       url: 'https://example.com/class',
     },
   ],
@@ -129,13 +131,15 @@ test('student can complete an available node and open every resource in a new ta
   await user.click(screen.getByRole('button', { name: 'Completar' }));
   expect(onComplete).toHaveBeenCalledWith(nodeWithResources);
 
-  const guide = screen.getByRole('link', { name: /Guia de estudio/i });
+  const guide = screen.getByRole('link', { name: 'Descargar Guia de estudio' });
   expect(guide.getAttribute('href')).toBe(nodeWithResources.resources[0].url);
   expect(guide.getAttribute('target')).toBe('_blank');
   expect(guide.getAttribute('rel')).toBe('noreferrer');
-  expect(screen.getByRole('link', { name: /Clase grabada/i }).getAttribute('href')).toBe(
-    nodeWithResources.resources[1].url,
-  );
+  expect(guide.innerHTML).toContain('lucide-file-text"');
+  const recording = screen.getByRole('link', { name: 'Abrir enlace Clase grabada' });
+  expect(recording.getAttribute('href')).toBe(nodeWithResources.resources[1].url);
+  expect(recording.innerHTML).toContain('lucide-link-2"');
+  expect(screen.queryByText(/Archivo descargable|Enlace externo/)).toBeNull();
 });
 
 test('student cannot complete a completed node', () => {

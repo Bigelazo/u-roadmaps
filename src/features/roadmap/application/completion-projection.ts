@@ -25,6 +25,7 @@ type RoadmapNode = {
     url: string;
     type: 'FILE' | 'LINK';
     fileKey: string | null;
+    fileContentType: string | null;
   }>;
 };
 type RoadmapDependency = { id: string; sourceNodeId: string; targetNodeId: string };

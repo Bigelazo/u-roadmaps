@@ -364,7 +364,7 @@ test('presents a Node whose Node type is missing with the shared unknown Node ty
 
 test('lists the Resources of a deletion Change impact by title, as production does', async () => {
   const link = (id: string, title: string) =>
-    ({ id, title, url: 'https://example.com', type: 'LINK' }) as const;
+    ({ id, title, url: 'https://example.com', type: 'LINK', fileContentType: null }) as const;
   const persistence = createInMemoryRoadmapSessionPersistence({
     ...roadmap,
     nodes: roadmap.nodes.map((node) =>

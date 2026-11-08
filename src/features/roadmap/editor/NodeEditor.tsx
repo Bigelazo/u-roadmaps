@@ -84,6 +84,7 @@ function projectNodeInformationPreview(
           title: resourceSession.selectedFile.name,
           url: '#',
           type: 'FILE' as const,
+          fileContentType: resourceSession.selectedFile.type || null,
         },
       ];
     } else if (resourceSession.kind === 'adding-link') {
@@ -92,6 +93,7 @@ function projectNodeInformationPreview(
         {
           id: 'node-information-preview-resource',
           ...resourceSession.value,
+          fileContentType: null,
         },
       ];
     }

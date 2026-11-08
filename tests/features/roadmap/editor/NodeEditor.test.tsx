@@ -53,6 +53,7 @@ const resource = {
   title: 'Guía de ejercicios',
   url: 'https://example.test/guia',
   type: 'LINK' as const,
+  fileContentType: null,
 };
 
 const nodeTypes: RoadmapDto['nodeTypes'] = [
@@ -102,6 +103,27 @@ test.each(['Guía.docx', 'Guía.final.PDF', 'README', '.env'])(
     });
   },
 );
+
+test('Resource rows name their action and file category instead of a type caption', () => {
+  const sheet = {
+    ...resource,
+    id: 'resource-2',
+    title: 'Notas.xlsx',
+    url: '/api/protected/resource-2/file',
+    type: 'FILE' as const,
+    fileContentType: null,
+  };
+  renderEditor(withNode({ resources: [resource, sheet] }));
+  const list = screen.getByRole('list', { name: 'Recursos del nodo' });
+  const [linkRow, fileRow] = within(list).getAllByRole('listitem');
+  expect(
+    within(linkRow).getByRole('link', { name: `Abrir enlace ${resource.title}` }),
+  ).toBeTruthy();
+  expect(linkRow.innerHTML).toContain('lucide-link-2"');
+  expect(within(fileRow).getByRole('link', { name: 'Descargar Notas.xlsx' })).toBeTruthy();
+  expect(fileRow.innerHTML).toContain('lucide-file-spreadsheet"');
+  expect(within(list).queryByText(/^(Archivo|Enlace)$/)).toBeNull();
+});
 
 type User = ReturnType<typeof userEvent.setup>;
 

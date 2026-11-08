@@ -115,7 +115,13 @@ const teacherRoadmap: RoadmapDto = {
       isVisible: true,
       isTeacherBlocked: false,
       resources: [
-        { id: 'resource-1', title: 'Guía', url: 'https://example.test/guide', type: 'FILE' },
+        {
+          id: 'resource-1',
+          title: 'Guía',
+          url: 'https://example.test/guide',
+          type: 'FILE',
+          fileContentType: null,
+        },
       ],
     },
     {
@@ -156,7 +162,13 @@ const studentRoadmap: StudentRoadmapDto = {
       isCompleted: true,
       canComplete: false,
       resources: [
-        { id: 'resource-1', title: 'Guía', url: 'https://example.test/guide', type: 'FILE' },
+        {
+          id: 'resource-1',
+          title: 'Guía',
+          url: 'https://example.test/guide',
+          type: 'FILE',
+          fileContentType: null,
+        },
       ],
     },
     {
