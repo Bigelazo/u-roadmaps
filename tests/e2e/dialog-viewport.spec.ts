@@ -111,13 +111,31 @@ test('shared Dialog preserves desktop sizing and other consumers on a short view
   await page.screenshot({ path: testInfo.outputPath('node-types.png') });
   await types.getByRole('button', { name: 'Close', exact: true }).tap();
   await expect(types).toBeHidden();
-  await page.locator('.react-flow__node[data-id="practice-node-a"]').tap();
+  await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+  const introduction = page
+    .locator('.react-flow__node[data-id="practice-node-a"]')
+    .getByText('Introducción', { exact: true });
+  const canvas = (await page.locator('.react-flow').boundingBox())!;
+  await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+  await page.mouse.wheel(0, 900);
+  await expect
+    .poll(() =>
+      introduction.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return element.contains(
+          document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
+        );
+      }),
+    )
+    .toBe(true);
+  await introduction.tap();
   await page.getByRole('button', { name: 'Editar nodo en pantalla completa', exact: true }).tap();
   const fullscreen = page
     .getByRole('dialog')
     .filter({ has: page.getByRole('button', { name: 'Cerrar pantalla completa' }) });
   await expect(fullscreen).toBeVisible();
   await expectWithinViewport(fullscreen, 390);
+  await expect(fullscreen).toHaveCSS('opacity', '1');
   await page.screenshot({ path: testInfo.outputPath('fullscreen.png') });
   await fullscreen.getByRole('button', { name: 'Cerrar pantalla completa' }).tap();
   await expect(fullscreen).toBeHidden();
