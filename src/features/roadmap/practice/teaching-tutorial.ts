@@ -155,6 +155,11 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       element: '#roadmap-editor-panel [data-slot="sidebar-content"]',
       allowInteraction: true,
       title: 'Editor de nodo',
+      prepare: async () => {
+        if (!window.matchMedia(compactCanvasLayoutQuery).matches || !createdNodeId) return;
+        clickElement(nodeSelector(createdNodeId));
+        await waitForElement('#roadmap-editor-panel:not([hidden])');
+      },
       description:
         'Aquí puedes cambiar múltiples propiedades del nodo, como su título, descripción, tipo, recursos, bloquear, ocultar, etc.',
       side: 'left',
