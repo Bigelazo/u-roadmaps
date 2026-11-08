@@ -67,6 +67,17 @@ for (const viewport of [
       await exitConfirmation.getByRole('button', { name: 'Seguir con el tutorial' }).tap();
       await expect(heading).toHaveText('Editor de nodo');
       await next('Bloquea un nodo');
+      await popover.getByRole('button', { name: 'Anterior' }).tap();
+      await expect(heading).toHaveText('Editor de nodo');
+      const editor = page.locator('[aria-label="Editor de nodo"]');
+      await expect(editor).toBeVisible();
+      await expect(node('Mi nodo de práctica')).toHaveClass(/selected/);
+      await expect(editor.getByLabel('Título', { exact: true })).toHaveValue('Mi nodo de práctica');
+      await expect(page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]')).toHaveClass(
+        /driver-active-element/,
+      );
+      await page.screenshot({ path: `test-results/tutorial-editor-back-${viewport.width}.png` });
+      await next('Bloquea un nodo');
       await action('Conceptos básicos', 'Bloquear nodo');
       await page.getByRole('alertdialog').getByRole('button', { name: 'Bloquear nodo' }).tap();
       await expect(heading).toHaveText('Bloqueo propagado');
