@@ -46,13 +46,14 @@ import type {
   RoadmapGraphEditingIntent,
   RoadmapGraphEditing,
   RoadmapGraphProjection,
+  NewNodePlacement,
   RoadmapNodePlacement,
-  RoadmapNodePosition,
   RoadmapViewport,
   RoadmapViewportRestoration,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { DependencyRouting } from '@/features/roadmap/graph/routing/DependencyRouting';
+import { placementsWithoutCollisions } from '@/features/roadmap/graph/node-collisions';
 import {
   DependencyAnimationProvider,
   DependencyAnimationReady,
@@ -88,6 +89,7 @@ export type {
   RoadmapGraphEditingIntent,
   RoadmapGraphEditing,
   RoadmapGraphProjection,
+  NewNodePlacement,
   RoadmapNodePlacement,
   RoadmapNodePosition,
   RoadmapViewport,
@@ -336,6 +338,14 @@ function immutableNodePositions(
   );
 }
 
+const newNodeId = '__new-node__';
+
+function canvasNodes(nodes: readonly RoadmapFlowNode[]) {
+  return nodes.flatMap((node) =>
+    node.hidden ? [] : [{ id: node.id, title: node.data.title, position: node.position }],
+  );
+}
+
 function snappedNodePositions(
   positions: readonly RoadmapNodePlacement[],
 ): readonly RoadmapNodePlacement[] {
@@ -376,12 +386,8 @@ function RoadmapGraphToolbar({
   showAutoLayout: boolean;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
-  bottomLeftActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
-  bottomRightActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
+  bottomLeftActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
+  bottomRightActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
   nodes: readonly RoadmapFlowNode[];
 }) {
   const { fitView, screenToFlowPosition } = useReactFlow();
@@ -400,19 +406,26 @@ function RoadmapGraphToolbar({
       height: bottomRight.y - topLeft.y,
     };
   }, [containerRef, screenToFlowPosition]);
-  const findOpenPosition = useCallback(
-    (title: string) => {
+  const placeNewNode = useCallback(
+    (title: string): NewNodePlacement => {
       const size = roadmapNodeSizeForTitle(title);
       const viewport = getViewport();
-      return findOpenRoadmapPosition(
-        nodes.map((node) => ({ ...node.position, ...roadmapNodeSizeForTitle(node.data.title) })),
-        {
-          x: viewport.x + viewport.width / 2 - size.width / 2,
-          y: viewport.y + viewport.height / 2 - size.height / 2,
-        },
-        size,
-        viewport,
+      const center = {
+        x: viewport.x + viewport.width / 2 - size.width / 2,
+        y: viewport.y + viewport.height / 2 - size.height / 2,
+      };
+      const position =
+        findOpenRoadmapPosition(
+          nodes.map((node) => ({ ...node.position, ...roadmapNodeSizeForTitle(node.data.title) })),
+          center,
+          size,
+          viewport,
+        ) ?? snapToRoadmapGrid(center);
+      const [, ...displaced] = placementsWithoutCollisions(
+        [...canvasNodes(nodes), { id: newNodeId, title, position }],
+        [{ nodeId: newNodeId, position }],
       );
+      return { position, displaced };
     },
     [getViewport, nodes],
   );
@@ -494,7 +507,7 @@ function RoadmapGraphToolbar({
                   : 'flex-wrap',
               )}
             >
-              {bottomLeftActions(findOpenPosition)}
+              {bottomLeftActions(placeNewNode)}
             </div>
           ) : null}
         </div>
@@ -505,7 +518,7 @@ function RoadmapGraphToolbar({
           data-canvas-overlay="bottom"
           className={bottomRightPanelClassName}
         >
-          <div className="pointer-events-auto">{bottomRightActions(findOpenPosition)}</div>
+          <div className="pointer-events-auto">{bottomRightActions(placeNewNode)}</div>
         </Panel>
       ) : null}
     </>
@@ -591,12 +604,8 @@ export type RoadmapGraphProps = {
   onClearSelectedNode?: () => void;
   selectedNodeId?: string | null;
   focusReturnRequest?: string | null;
-  bottomLeftActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
-  bottomRightActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
+  bottomLeftActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
+  bottomRightActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
@@ -873,6 +882,17 @@ function useRoadmapGraphController({
     [emitEditingIntent],
   );
 
+  const settleDraggedNodes = useCallback(
+    (dragged: readonly RoadmapFlowNode[]) =>
+      applyNodePositions(
+        placementsWithoutCollisions(
+          canvasNodes(flow.nodes),
+          snappedNodePositions(immutableNodePositions(dragged)),
+        ),
+      ),
+    [applyNodePositions, flow.nodes],
+  );
+
   useEffect(() => {
     setFlow((current) => ({
       ...current,
@@ -939,6 +959,7 @@ function useRoadmapGraphController({
     flow,
     setFlow,
     applyNodePositions,
+    settleDraggedNodes,
     connectNodes,
     proposeAutoLayout,
     containerRef,
@@ -959,6 +980,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     flow,
     setFlow,
     applyNodePositions,
+    settleDraggedNodes,
     connectNodes,
     containerRef,
   } = model;
@@ -1139,11 +1161,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                   canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
                 }
                 onNodeDragStop={
-                  canInteract
-                    ? (_event, node) => {
-                        applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
-                      }
-                    : undefined
+                  canInteract ? (_event, _node, dragged) => settleDraggedNodes(dragged) : undefined
                 }
                 onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
                 onConnectStart={canInteract ? connection.onConnectStart : undefined}

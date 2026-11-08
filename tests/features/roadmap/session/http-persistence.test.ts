@@ -67,11 +67,12 @@ const executions: Record<string, Execution> = {
     command: { kind: 'complete-node', nodeId: 'node-1' },
     requests: [['/nodes/node-1/completion', { method: 'POST' }]],
   },
-  'add a Node and resolve with its identifier': {
+  'add a Node, move the Nodes it pushed aside and resolve with its identifier': {
     command: {
       kind: 'add-node',
       node: { title: 'Límites', description: '', nodeTypeId: 'content', isVisible: true },
       position: { x: 10, y: 20 },
+      displaced: [{ nodeId: 'node-2', position: { x: 10, y: 140 } }],
     },
     requests: [
       [
@@ -88,6 +89,10 @@ const executions: Record<string, Execution> = {
             positionY: 20,
           }),
         },
+      ],
+      [
+        '/nodes/node-2',
+        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 10, positionY: 140 }) },
       ],
     ],
     response: { node: { id: 'node-9' } },

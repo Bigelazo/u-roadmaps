@@ -33,16 +33,22 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onSelectNode: (nodeId: string) => void;
     selectedNodeId?: string | null;
     bottomLeftActions?: (
-      findOpenPosition: (title: string) => { x: number; y: number } | null,
+      placeNewNode: (title: string) => {
+        position: { x: number; y: number };
+        displaced: readonly unknown[];
+      },
     ) => ReactNode;
     bottomRightActions?: (
-      findOpenPosition: (title: string) => { x: number; y: number } | null,
+      placeNewNode: (title: string) => {
+        position: { x: number; y: number };
+        displaced: readonly unknown[];
+      },
     ) => ReactNode;
     overlaySlots?: { topCenter?: ReactNode };
   }) => (
     <>
-      {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
-      {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
+      {bottomLeftActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
+      {bottomRightActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
       <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
       <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>

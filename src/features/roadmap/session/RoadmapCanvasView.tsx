@@ -24,6 +24,7 @@ import type {
 import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
   RoadmapGraph,
+  type NewNodePlacement,
   type RoadmapGraphEditing,
   type RoadmapGraphEditingIntent,
   type RoadmapGraphProjection,
@@ -518,12 +519,8 @@ export function RoadmapCanvasView({ input }: Props) {
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
   const addNodeAtOpenPosition = (
     node: NodeInput,
-    findOpenPosition: (title: string) => { x: number; y: number } | null,
-  ) => {
-    const position = findOpenPosition(node.title);
-    if (!position) return Promise.resolve(false);
-    return canvasCommands.request({ kind: 'add-node', node, position });
-  };
+    placeNewNode: (title: string) => NewNodePlacement,
+  ) => canvasCommands.request({ kind: 'add-node', node, ...placeNewNode(node.title) });
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
     <SidebarProvider className="min-h-0 flex-1">
@@ -774,7 +771,7 @@ function RoadmapCanvasGraph({
   input: Props['input'];
   addNodeAtOpenPosition: (
     node: NodeInput,
-    findOpenPosition: (title: string) => { x: number; y: number } | null,
+    placeNewNode: (title: string) => NewNodePlacement,
   ) => Promise<boolean>;
   roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
   displayedRoadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['displayedRoadmap']>;
@@ -893,10 +890,10 @@ function RoadmapCanvasGraph({
       }
       bottomRightActions={
         !isCanvasPreview && canEditRoadmap
-          ? (findOpenPosition) => (
+          ? (placeNewNode) => (
               <NodeCreator
                 nodeTypes={roadmap.nodeTypes}
-                onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
+                onSubmit={(node) => addNodeAtOpenPosition(node, placeNewNode)}
                 onCreateNodeType={(nodeType) =>
                   canvasCommands.request({ kind: 'add-node-type', nodeType })
                 }

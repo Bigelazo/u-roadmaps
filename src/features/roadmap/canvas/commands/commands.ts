@@ -11,6 +11,7 @@ import type {
   ResourceInput,
 } from '@/features/roadmap/editor/types';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
+import { placementsWithoutCollisions } from '@/features/roadmap/graph/node-collisions';
 import type { PracticeRoadmap } from '@/features/roadmap/session/in-memory-persistence';
 import type {
   ExecutionResult,
@@ -50,6 +51,11 @@ export type RoadmapNodePosition = {
 export type RoadmapNodePlacement = {
   readonly nodeId: string;
   readonly position: RoadmapNodePosition;
+};
+
+export type NewNodePlacement = {
+  readonly position: RoadmapNodePosition;
+  readonly displaced: readonly RoadmapNodePlacement[];
 };
 
 export type TeacherBlockChangeImpact = {
@@ -615,23 +621,38 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Nodos ordenados exitosamente.',
   }),
-  'add-node': command<{ kind: 'add-node'; node: NewRoadmapNode; position: RoadmapNodePosition }>({
-    requests: ({ node, position }) => ({
-      method: 'POST',
-      path: '/nodes',
-      body: {
-        ...node,
-        description: node.description || null,
-        positionX: position.x,
-        positionY: position.y,
+  'add-node': command<{ kind: 'add-node'; node: NewRoadmapNode } & NewNodePlacement>({
+    requests: ({ node, position, displaced }) => [
+      {
+        method: 'POST',
+        path: '/nodes',
+        body: {
+          ...node,
+          description: node.description || null,
+          positionX: position.x,
+          positionY: position.y,
+        },
       },
-    }),
+      ...nodeMoves.requests({ positions: displaced }),
+    ],
     failure: 'No se pudo crear el nodo.',
     result: async ([response]) => ({ createdNodeId: (await response.json()).node.id }),
     practice: (practice, { node, position: requested }) => {
       practice.requireAvailableNodeType(node.nodeTypeId);
       const id = crypto.randomUUID();
       const position = practice.createdNodePosition ?? requested;
+      const [, ...displaced] = placementsWithoutCollisions(
+        [
+          ...practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
+            id,
+            title,
+            position: { x: positionX, y: positionY },
+          })),
+          { id, title: node.title, position },
+        ],
+        [{ nodeId: id, position }],
+      );
+      nodeMoves.practice(practice, { positions: displaced });
       practice.updateNodes((nodes) => [
         ...nodes,
         {

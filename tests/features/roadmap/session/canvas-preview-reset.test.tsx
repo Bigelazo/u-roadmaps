@@ -45,8 +45,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     overlaySlots,
   }: RoadmapGraphProps) => (
     <>
-      {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
-      {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
+      {bottomLeftActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
+      {bottomRightActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
       {overlaySlots?.topCenter}
       {projection.roadmap.nodes.map((node) => (
         <button key={node.id} type="button" onClick={() => onSelectNode(node.id)}>

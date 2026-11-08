@@ -4,7 +4,7 @@ export type NodeRect = { x: number; y: number; width: number; height: number };
 export type Point = { x: number; y: number };
 
 export const roadmapGridSize = 20;
-const roadmapNodeSeparation = roadmapGridSize;
+export const roadmapNodeClearance = roadmapGridSize * 2;
 
 const roadmapNodeMinimumSize = {
   width: roadmapGridSize * 6,
@@ -37,18 +37,18 @@ export function roadmapNodeSizeForTitle(title: string) {
 
 export function snapToRoadmapGrid(position: Point): Point {
   return {
-    x: Math.round(position.x / roadmapGridSize) * roadmapGridSize,
-    y: Math.round(position.y / roadmapGridSize) * roadmapGridSize,
+    x: Math.round(position.x / roadmapGridSize) * roadmapGridSize || 0,
+    y: Math.round(position.y / roadmapGridSize) * roadmapGridSize || 0,
   };
 }
 
 function hasRoomForNode(candidate: NodeRect, occupied: readonly NodeRect[]) {
   return occupied.every(
     (rect) =>
-      candidate.x + candidate.width + roadmapNodeSeparation <= rect.x ||
-      rect.x + rect.width + roadmapNodeSeparation <= candidate.x ||
-      candidate.y + candidate.height + roadmapNodeSeparation <= rect.y ||
-      rect.y + rect.height + roadmapNodeSeparation <= candidate.y,
+      candidate.x + candidate.width + roadmapNodeClearance <= rect.x ||
+      rect.x + rect.width + roadmapNodeClearance <= candidate.x ||
+      candidate.y + candidate.height + roadmapNodeClearance <= rect.y ||
+      rect.y + rect.height + roadmapNodeClearance <= candidate.y,
   );
 }
 

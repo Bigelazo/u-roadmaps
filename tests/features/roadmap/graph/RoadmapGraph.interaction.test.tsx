@@ -26,6 +26,13 @@ const {
     onMoveEnd: undefined as
       | ((event: object | null, viewport: { x: number; y: number; zoom: number }) => void)
       | undefined,
+    onNodeDragStop: undefined as
+      | ((
+          event: unknown,
+          node: { id: string; position: { x: number; y: number } },
+          nodes: { id: string; position: { x: number; y: number } }[],
+        ) => void)
+      | undefined,
   },
 }));
 
@@ -76,11 +83,13 @@ vi.mock('@xyflow/react', () => ({
     onNodeDragStop?: (
       event: unknown,
       node: { id: string; position: { x: number; y: number } },
+      nodes: { id: string; position: { x: number; y: number } }[],
     ) => void;
     onMoveEnd?: (event: object | null, viewport: { x: number; y: number; zoom: number }) => void;
     children: ReactNode;
   }) => {
     reactFlowHandlers.onMoveEnd = onMoveEnd;
+    reactFlowHandlers.onNodeDragStop = onNodeDragStop;
     return (
       <>
         {nodes.map((node) => (
@@ -130,7 +139,10 @@ vi.mock('@xyflow/react', () => ({
         </button>
         <button
           type="button"
-          onClick={() => onNodeDragStop?.(null, { id: 'node-1', position: { x: 27, y: 13 } })}
+          onClick={() => {
+            const node = { id: 'node-1', position: { x: 27, y: 13 } };
+            onNodeDragStop?.(null, node, [node]);
+          }}
         >
           Finalizar arrastre
         </button>
@@ -403,6 +415,7 @@ beforeEach(() => {
   getInternalNodeMock.mockReturnValue({ internals: { handleBounds: {} } });
   updateNodeInternalsMock.mockReset();
   reactFlowHandlers.onMoveEnd = undefined;
+  reactFlowHandlers.onNodeDragStop = undefined;
 });
 
 afterEach(() => {
@@ -600,15 +613,15 @@ test('centers the roadmap from the canvas control', async () => {
   expect(fitViewMock).toHaveBeenCalledWith({ padding: 0.28, minZoom: 0.2 });
 });
 
-test('offers toolbar content a snapped open position without exposing viewport geometry', async () => {
+test('offers toolbar content a snapped open placement without exposing viewport geometry', async () => {
   const user = userEvent.setup();
   screenToFlowPositionMock.mockImplementation(({ x, y }) => ({ x: x + 7, y: y + 9 }));
   mockCanvasRect(1_000, 1_000);
   const requests: unknown[] = [];
   renderGraph({
     editing: {},
-    bottomLeftActions: (findOpenPosition) => (
-      <button type="button" onClick={() => requests.push(findOpenPosition('Nuevo hito'))}>
+    bottomLeftActions: (placeNewNode) => (
+      <button type="button" onClick={() => requests.push(placeNewNode('Nuevo hito'))}>
         Solicitar posición
       </button>
     ),
@@ -616,54 +629,57 @@ test('offers toolbar content a snapped open position without exposing viewport g
 
   await user.click(screen.getByRole('button', { name: 'Solicitar posición' }));
 
-  expect(requests).toEqual([{ x: 420, y: 460 }]);
+  expect(requests).toEqual([{ position: { x: 420, y: 460 }, displaced: [] }]);
 });
 
 test.each([
   { width: 139, expected: { x: 0, y: 0 } },
-  { width: 119, expected: null },
-])('keeps new cards inside the unsnapped viewport at width $width', async ({ width, expected }) => {
-  const user = userEvent.setup();
-  mockCanvasRect(width, 99);
-  screenToFlowPositionMock.mockImplementation(({ x, y }, options) => {
-    const position = { x: x - 7, y: y - 9 };
-    return options?.snapToGrid === false
-      ? position
-      : {
-          x: Math.round(position.x / 20) * 20,
-          y: Math.round(position.y / 20) * 20,
-        };
-  });
-  const responses: unknown[] = [];
-  renderGraph({
-    roadmap: { ...roadmap, nodes: [] },
-    editing: {},
-    bottomLeftActions: (findOpenPosition) => (
-      <button type="button" onClick={() => responses.push(findOpenPosition('Corto'))}>
-        Solicitar posición en viewport desplazado
-      </button>
-    ),
-  });
+  { width: 119, expected: { x: 0, y: 0 } },
+])(
+  'keeps new cards inside the unsnapped viewport at width $width or centers them when they cannot fit',
+  async ({ width, expected }) => {
+    const user = userEvent.setup();
+    mockCanvasRect(width, 99);
+    screenToFlowPositionMock.mockImplementation(({ x, y }, options) => {
+      const position = { x: x - 7, y: y - 9 };
+      return options?.snapToGrid === false
+        ? position
+        : {
+            x: Math.round(position.x / 20) * 20,
+            y: Math.round(position.y / 20) * 20,
+          };
+    });
+    const responses: unknown[] = [];
+    renderGraph({
+      roadmap: { ...roadmap, nodes: [] },
+      editing: {},
+      bottomLeftActions: (placeNewNode) => (
+        <button type="button" onClick={() => responses.push(placeNewNode('Corto'))}>
+          Solicitar posición en viewport desplazado
+        </button>
+      ),
+    });
 
-  await user.click(
-    screen.getByRole('button', { name: 'Solicitar posición en viewport desplazado' }),
-  );
+    await user.click(
+      screen.getByRole('button', { name: 'Solicitar posición en viewport desplazado' }),
+    );
 
-  expect(responses).toEqual([expected]);
-});
+    expect(responses).toEqual([{ position: expected, displaced: [] }]);
+  },
+);
 
-test('finds a grid-aligned gap when toolbar content requests an occupied position', async () => {
+test('finds a grid-aligned gap two cells away when toolbar content requests an occupied position', async () => {
   const user = userEvent.setup();
   mockCanvasRect(1_000, 1_000);
   const occupiedRoadmap = structuredClone(roadmap);
   occupiedRoadmap.nodes[0].positionX = 400;
   occupiedRoadmap.nodes[0].positionY = 460;
-  let position: { x: number; y: number } | null = null;
+  let placement: unknown = null;
   renderGraph({
     roadmap: occupiedRoadmap,
     editing: {},
-    bottomLeftActions: (findOpenPosition) => (
-      <button type="button" onClick={() => (position = findOpenPosition('Nuevo hito'))}>
+    bottomLeftActions: (placeNewNode) => (
+      <button type="button" onClick={() => (placement = placeNewNode('Nuevo hito'))}>
         Solicitar posición libre
       </button>
     ),
@@ -671,47 +687,28 @@ test('finds a grid-aligned gap when toolbar content requests an occupied positio
 
   await user.click(screen.getByRole('button', { name: 'Solicitar posición libre' }));
 
-  expect(position).toEqual({ x: 420, y: 360 });
+  expect(placement).toEqual({ position: { x: 420, y: 340 }, displaced: [] });
 });
 
-test('reports no available position to toolbar content when the title cannot fit or occupancy fills the graph', async () => {
+test('centers a new card and pushes aside the Nodes it lands on when the viewport has no gap', async () => {
   const user = userEvent.setup();
   mockCanvasRect(200, 100);
-  const responses: unknown[] = [];
-  const { rerenderGraph } = renderGraph({
-    roadmap: { ...roadmap, nodes: [] },
+  let placement: unknown = null;
+  renderGraph({
     editing: {},
-    bottomLeftActions: (findOpenPosition) => (
-      <button
-        type="button"
-        onClick={() => {
-          responses.push(findOpenPosition('Corto'));
-          responses.push(
-            findOpenPosition(
-              'Un título deliberadamente muy largo que necesita varias líneas para leerse completo',
-            ),
-          );
-        }}
-      >
-        Solicitar posiciones
-      </button>
-    ),
-  });
-
-  await user.click(screen.getByRole('button', { name: 'Solicitar posiciones' }));
-  expect(responses).toEqual([{ x: 40, y: 20 }, null]);
-
-  rerenderGraph({
-    editing: {},
-    bottomLeftActions: (findOpenPosition) => (
-      <button type="button" onClick={() => responses.push(findOpenPosition('Corto'))}>
+    bottomLeftActions: (placeNewNode) => (
+      <button type="button" onClick={() => (placement = placeNewNode('Corto'))}>
         Solicitar posición ocupada
       </button>
     ),
   });
+
   await user.click(screen.getByRole('button', { name: 'Solicitar posición ocupada' }));
 
-  expect(responses.at(-1)).toBeNull();
+  expect(placement).toEqual({
+    position: { x: 40, y: 20 },
+    displaced: [{ nodeId: 'node-1', position: { x: 0, y: -100 } }],
+  });
 });
 
 test('closes the selected node when Escape is pressed on the canvas node', async () => {
@@ -750,6 +747,29 @@ test.each([
     kind: 'move-nodes',
     positions: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
   });
+});
+
+test('persists every dragged Node together with the Nodes pushed two cells away in one move', () => {
+  const onEditingIntent = vi.fn();
+  const crowded = structuredClone(roadmap);
+  crowded.nodes.push({ ...crowded.nodes[1], id: 'node-3', title: 'Integrales', positionX: 900 });
+  renderGraph({ roadmap: crowded, editing: { onEditingIntent } });
+
+  const dragged = [
+    { id: 'node-1', position: { x: 300, y: 100 } },
+    { id: 'node-3', position: { x: 707, y: 593 } },
+  ];
+  act(() => reactFlowHandlers.onNodeDragStop?.(null, dragged[0], dragged));
+
+  expect(onEditingIntent).toHaveBeenCalledExactlyOnceWith({
+    kind: 'move-nodes',
+    positions: [
+      { nodeId: 'node-1', position: { x: 300, y: 100 } },
+      { nodeId: 'node-3', position: { x: 700, y: 600 } },
+      { nodeId: 'node-2', position: { x: 300, y: 220 } },
+    ],
+  });
+  expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,220');
 });
 
 test('keeps one action menu open, closes it with Escape, and emits a teacher-block intent', async () => {

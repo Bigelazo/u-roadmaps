@@ -1207,6 +1207,7 @@ describe('canvas commands', () => {
           kind: 'add-node',
           node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
           position: { x: 480, y: 240 },
+          displaced: [],
         },
         'Nodo creado exitosamente.',
         async (persistence) => (await persistence.load()).nodes.at(-1)?.title,
@@ -1337,6 +1338,7 @@ describe('canvas commands', () => {
         kind: 'add-node',
         node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
         position: { x: 480, y: 240 },
+        displaced: [],
       } as const;
 
       await act(() => canvas.commands().request(command));

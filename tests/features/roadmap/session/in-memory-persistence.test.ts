@@ -251,6 +251,7 @@ test('refuses a Node type that is not available in the Roadmap, as production do
       kind: 'add-node',
       node: { title: 'Nuevo', description: '', nodeTypeId: 'missing', isVisible: true },
       position: { x: 0, y: 0 },
+      displaced: [],
     }),
   ).rejects.toThrow(unavailable);
   await expect(
@@ -282,7 +283,7 @@ test('never reuses an identifier after a deletion', async () => {
     };
   };
   const createAll = async () => {
-    await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 } });
+    await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 }, displaced: [] });
     await executeWithChangeImpact(persistence, {
       kind: 'create-dependency',
       sourceNodeId: 'prerequisite',
@@ -317,12 +318,40 @@ test('places a created Node at its created-node position and resolves with its i
   });
   const node = { title: 'Nuevo', description: '', nodeTypeId: 'content', isVisible: true };
 
-  const created = await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 } });
+  const created = await persistence.execute({
+    kind: 'add-node',
+    node,
+    position: { x: 0, y: 0 },
+    displaced: [],
+  });
 
   expect(created).toEqual({ createdNodeId: expect.any(String) });
   expect((await persistence.load()).nodes).toContainEqual(
     expect.objectContaining({ id: created?.createdNodeId, positionX: 960, positionY: 360 }),
   );
+});
+
+test('pushes the Nodes a created Node lands on two grid cells away and keeps them moved', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap, {
+    createdNodePosition: { x: 960, y: 360 },
+  });
+  const create = async (title: string) =>
+    (
+      await persistence.execute({
+        kind: 'add-node',
+        node: { title, description: '', nodeTypeId: 'content', isVisible: true },
+        position: { x: 0, y: 0 },
+        displaced: [],
+      })
+    )?.createdNodeId;
+
+  const first = await create('Primero');
+  const second = await create('Segundo');
+
+  const nodes = (await persistence.load()).nodes;
+  const placed = (id?: string) => nodes.find((node) => node.id === id)!;
+  expect(placed(second)).toMatchObject({ positionX: 960, positionY: 360 });
+  expect(placed(first)).toMatchObject({ positionX: 960, positionY: 480 });
 });
 
 test('presents a Node whose Node type is missing with the shared unknown Node type', async () => {
