@@ -304,6 +304,25 @@ const nodeMoves = {
     ),
 };
 
+export type AutomaticLayouts = Readonly<
+  Record<RoadmapLayoutDirection, readonly RoadmapNodePlacement[]>
+>;
+
+const chosenLayout = ({
+  layouts,
+  direction = 'TB',
+}: {
+  layouts: AutomaticLayouts;
+  direction?: RoadmapLayoutDirection;
+}) => layouts[direction];
+
+const layoutDirectionByChoice: Partial<
+  Readonly<Record<CanvasConfirmationChoice, RoadmapLayoutDirection>>
+> = {
+  [canvasConfirmationChoices.autoLayoutVertical]: 'TB',
+  [canvasConfirmationChoices.autoLayoutHorizontal]: 'LR',
+};
+
 const visibility = (isVisible: boolean) => ({
   requests: ({ nodeId }: { nodeId: string }): RouteRequest => ({
     method: 'PATCH',
@@ -577,12 +596,21 @@ export const canvasCommandCatalog = {
   ),
   'apply-automatic-layout': command<{
     kind: 'apply-automatic-layout';
-    positions: readonly RoadmapNodePlacement[];
-    direction: RoadmapLayoutDirection;
+    layouts: AutomaticLayouts;
+    direction?: RoadmapLayoutDirection;
   }>({
-    ...nodeMoves,
+    requests: (layout) => nodeMoves.requests({ positions: chosenLayout(layout) }),
+    failure: nodeMoves.failure,
+    practice: (practice, layout) =>
+      nodeMoves.practice(practice, { positions: chosenLayout(layout) }),
     confirmedAction: {
-      apply: executeAsRequested,
+      apply: async (session, command, _, choice) =>
+        (
+          await session.execute({
+            ...command,
+            direction: choice ? layoutDirectionByChoice[choice] : command.direction,
+          })
+        ).applied,
       confirmation: () => roadmapAutoLayoutConfirmation,
     },
     success: () => 'Nodos ordenados exitosamente.',

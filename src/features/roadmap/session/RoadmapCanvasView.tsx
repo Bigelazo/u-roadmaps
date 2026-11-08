@@ -35,7 +35,6 @@ import { useRoadmapCanvasSession } from '@/features/roadmap/session/session';
 import type { CanvasCommand } from '@/features/roadmap/canvas/commands/commands';
 import { canvasConfirmation } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { useUnlockSchedule } from '@/features/roadmap/canvas/commands/use-unlock-schedule';
-import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
 import type {
   RoadmapDto,
   RoadmapNode,
@@ -153,11 +152,6 @@ function useRoadmapCanvasController({ input }: Props) {
       nodeEditorRef.current?.guardDraft(reason) ?? Promise.resolve(true),
     [],
   );
-  const [confirmedAutomaticLayout, setConfirmedAutomaticLayout] = useState<{
-    token: string;
-    direction: RoadmapLayoutDirection;
-  } | null>(null);
-  const automaticLayoutTokenRef = useRef(0);
   const followAppliedCommand = useCallback(
     (command: CanvasCommand, createdNodeId?: string) => {
       if (command.kind === 'add-node' && createdNodeId) {
@@ -165,11 +159,6 @@ function useRoadmapCanvasController({ input }: Props) {
       } else if (command.kind === 'delete-node') {
         dispatchCanvas({ type: 'closeSelectedNode', panel: 'editor' });
         requestNodeFocusReturn();
-      } else if (command.kind === 'apply-automatic-layout') {
-        setConfirmedAutomaticLayout({
-          token: `automatic-layout-${++automaticLayoutTokenRef.current}`,
-          direction: command.direction,
-        });
       }
     },
     [requestNodeFocusReturn],
@@ -435,7 +424,6 @@ function useRoadmapCanvasController({ input }: Props) {
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
-    confirmedAutomaticLayout,
     performEditorEffect,
     canvasMode,
     isHistoricalRoadmap,
@@ -804,7 +792,6 @@ function RoadmapCanvasGraph({
     guardEditorDraft,
     canvasCommands,
     canvasPreviewWorkflow,
-    confirmedAutomaticLayout,
     canvasMode,
     isHistoricalRoadmap,
     isCanvasPreview,
@@ -845,7 +832,6 @@ function RoadmapCanvasGraph({
       onFitView={() => input.practice?.onAction?.({ type: 'fitView' })}
       onViewportChange={canvasPreviewWorkflow.onViewportChange}
       viewportRestoration={canvasPreviewWorkflow.viewportRestoration}
-      confirmedAutomaticLayout={confirmedAutomaticLayout}
       bottomLeftActions={
         !isCanvasPreview && (canEditRoadmap || canPreviewCanvas)
           ? () => (

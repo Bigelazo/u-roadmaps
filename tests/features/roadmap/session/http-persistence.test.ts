@@ -125,10 +125,13 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'apply an automatic layout as Node moves': {
+  'apply the chosen automatic layout as Node moves': {
     command: {
       kind: 'apply-automatic-layout',
-      positions: [{ nodeId: 'node-1', position: { x: 0, y: 200 } }],
+      layouts: {
+        TB: [{ nodeId: 'node-2', position: { x: 90, y: 90 } }],
+        LR: [{ nodeId: 'node-1', position: { x: 0, y: 200 } }],
+      },
       direction: 'LR',
     },
     requests: [

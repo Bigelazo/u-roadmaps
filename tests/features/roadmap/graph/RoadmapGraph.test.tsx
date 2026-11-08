@@ -201,7 +201,7 @@ test('renders student Node state and resources without teaching controls', () =>
   expect(screen.getByLabelText('Completado')).toBeTruthy();
   expect(screen.getByLabelText('Bloqueado')).toBeTruthy();
   expect(screen.getByLabelText('1 archivo')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Ordenar' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Abrir menú de acciones del nodo' })).toBeNull();
 });
 
@@ -214,7 +214,7 @@ test('enables the complete editing capability only for an editable teaching proj
     />,
   );
 
-  expect(screen.getByRole('button', { name: 'Ordenar horizontalmente' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Ordenar' })).toBeTruthy();
   expect(screen.getByTestId('dependency-dependency-1').style.stroke).toBe('var(--ink)');
   expect(screen.getAllByRole('button', { name: 'Abrir menú de acciones del nodo' })).toHaveLength(
     2,

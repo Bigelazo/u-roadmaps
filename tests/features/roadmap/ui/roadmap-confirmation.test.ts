@@ -523,7 +523,7 @@ describe('canvasConfirmation', () => {
       canvasConfirmation(
         {
           kind: 'apply-automatic-layout',
-          request: { kind: 'apply-automatic-layout', positions: [], direction: 'LR' },
+          request: { kind: 'apply-automatic-layout', layouts: { TB: [], LR: [] } },
           impact: null,
           phase: 'awaiting',
         },
@@ -531,7 +531,13 @@ describe('canvasConfirmation', () => {
       ),
     ).toMatchObject({
       title: '¿Ordenar los nodos automáticamente?',
-      actions: [{ id: 'auto-layout', label: 'Ordenar nodos' }],
+      description:
+        'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
+      intent: 'warning',
+      actions: [
+        { id: 'auto-layout-vertical', label: 'Vertical' },
+        { id: 'auto-layout-horizontal', label: 'Horizontal' },
+      ],
     });
   });
 

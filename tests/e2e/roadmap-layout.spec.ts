@@ -240,6 +240,47 @@ test('keeps roadmap metadata and preview controls inside the canvas', async ({ p
   await expect(page.getByRole('button', { name: 'Vista estudiante' })).toBeFocused();
 });
 
+test('orders every Node vertically or horizontally and keeps the chosen positions', async ({
+  page,
+  course,
+  teacherApi,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  type Saved = {
+    nodes: { id: string; positionX: number; positionY: number }[];
+    dependencies: { sourceNodeId: string; targetNodeId: string }[];
+  };
+  const saved = async (): Promise<Saved> => (await teacherApi.get(course.apiPath())).json();
+  const [{ sourceNodeId, targetNodeId }] = (await saved()).dependencies;
+  const placement = (roadmap: Saved, nodeId: string) =>
+    roadmap.nodes.find(({ id }) => id === nodeId)!;
+
+  for (const [choice, axis] of [
+    ['Horizontal', 'positionX'],
+    ['Vertical', 'positionY'],
+  ] as const) {
+    await page.getByRole('button', { name: 'Ordenar', exact: true }).click();
+    const dialog = page.getByRole('alertdialog', { name: '¿Ordenar los nodos automáticamente?' });
+    await expect(dialog).toContainText(
+      'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
+    );
+    await dialog.getByRole('button', { name: choice }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(toast(page, 'Nodos ordenados exitosamente.').first()).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const roadmap = await saved();
+        const source = placement(roadmap, sourceNodeId);
+        const target = placement(roadmap, targetNodeId);
+        return source[axis] < target[axis];
+      })
+      .toBe(true);
+  }
+});
+
 test('keeps feedback visible beside an open editor', async ({ page, course }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });

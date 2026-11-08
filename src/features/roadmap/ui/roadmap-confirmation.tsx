@@ -16,7 +16,8 @@ import {
 import type { ConfirmationAction, ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 
 export const canvasConfirmationChoices = {
-  autoLayout: 'auto-layout',
+  autoLayoutVertical: 'auto-layout-vertical',
+  autoLayoutHorizontal: 'auto-layout-horizontal',
   hideNode: 'hide-node',
   showNode: 'show-node',
   deleteNode: 'delete-node',
@@ -92,9 +93,17 @@ function roadmapNodeName(
 
 export const roadmapAutoLayoutConfirmation = {
   title: '¿Ordenar los nodos automáticamente?',
-  description: 'Todos los nodos del lienzo cambiarán de posición.',
+  description:
+    'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
   intent: 'warning',
-  actions: [{ id: canvasConfirmationChoices.autoLayout, label: 'Ordenar nodos' }],
+  actions: [
+    { id: canvasConfirmationChoices.autoLayoutVertical, label: 'Vertical', emphasis: 'primary' },
+    {
+      id: canvasConfirmationChoices.autoLayoutHorizontal,
+      label: 'Horizontal',
+      emphasis: 'primary',
+    },
+  ],
 } as const satisfies ConfirmationPresentation;
 
 export const canvasPreviewResetConfirmation = {

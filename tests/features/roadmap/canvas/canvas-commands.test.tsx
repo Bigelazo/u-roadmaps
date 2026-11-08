@@ -320,8 +320,7 @@ describe('canvas commands', () => {
     { kind: 'delete-node', nodeId: 'derivatives' },
     {
       kind: 'apply-automatic-layout',
-      positions: [{ nodeId: 'limits', position: { x: 0, y: 200 } }],
-      direction: 'LR',
+      layouts: { TB: [], LR: [{ nodeId: 'limits', position: { x: 0, y: 200 } }] },
     },
     { kind: 'delete-node-type', nodeTypeId: 'content' },
     { kind: 'reset-canvas-preview' },
@@ -780,39 +779,46 @@ describe('canvas commands', () => {
     });
   });
 
-  test('applying an automatic layout asks first, then moves every Node and reports it applied', async () => {
-    const canvas = await openCanvas();
-    const layout = {
-      kind: 'apply-automatic-layout',
-      positions: [
-        { nodeId: 'limits', position: { x: 0, y: 200 } },
-        { nodeId: 'derivatives', position: { x: 300, y: 200 } },
-      ],
-      direction: 'LR',
-    } as const;
+  const layouts = {
+    TB: [
+      { nodeId: 'limits', position: { x: 100, y: 0 } },
+      { nodeId: 'derivatives', position: { x: 100, y: 200 } },
+    ],
+    LR: [
+      { nodeId: 'limits', position: { x: 0, y: 200 } },
+      { nodeId: 'derivatives', position: { x: 300, y: 200 } },
+    ],
+  } as const;
 
-    await act(() => canvas.commands().request(layout));
-    expect(canvas.commands().pending).toEqual({
-      kind: 'apply-automatic-layout',
-      request: layout,
-      impact: null,
-      phase: 'awaiting',
-    });
-    expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ positionY: 0 });
+  test.each([
+    ['auto-layout-vertical', layouts.TB],
+    ['auto-layout-horizontal', layouts.LR],
+  ] as const)(
+    'applying an automatic layout asks first, then moves every Node to the %s distribution and reports it applied',
+    async (choice, chosen) => {
+      const canvas = await openCanvas();
+      const layout = { kind: 'apply-automatic-layout', layouts } as const;
 
-    await canvas.confirm('auto-layout');
+      await act(() => canvas.commands().request(layout));
+      expect(canvas.commands().pending).toEqual({
+        kind: 'apply-automatic-layout',
+        request: layout,
+        impact: null,
+        phase: 'awaiting',
+      });
+      expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({ positionY: 0 });
 
-    expect(canvas.commands().pending).toBeNull();
-    expect(await nodeOf(canvas.persistence, 'limits')).toMatchObject({
-      positionX: 0,
-      positionY: 200,
-    });
-    expect(await nodeOf(canvas.persistence, 'derivatives')).toMatchObject({
-      positionX: 300,
-      positionY: 200,
-    });
-    expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout, undefined);
-  });
+      await canvas.confirm(choice);
+
+      expect(canvas.commands().pending).toBeNull();
+      for (const { nodeId, position } of chosen)
+        expect(await nodeOf(canvas.persistence, nodeId)).toMatchObject({
+          positionX: position.x,
+          positionY: position.y,
+        });
+      expect(canvas.onCommandApplied).toHaveBeenCalledExactlyOnceWith(layout, undefined);
+    },
+  );
 
   test('an automatic layout with a failed move keeps the moved Nodes and stays open to retry', async () => {
     const adapter = createInMemoryRoadmapSessionPersistence(roadmap);
@@ -820,23 +826,17 @@ describe('canvas commands', () => {
       intercepting(adapter, 'apply-automatic-layout', async (layout) => {
         await adapter.execute({
           ...layout,
-          positions: layout.positions.filter(({ nodeId }) => nodeId !== 'derivatives'),
+          layouts: {
+            ...layout.layouts,
+            LR: layout.layouts.LR.filter(({ nodeId }) => nodeId !== 'derivatives'),
+          },
         });
         throw new Error('No se pudo guardar la posición.');
       }),
     );
 
-    await act(() =>
-      canvas.commands().request({
-        kind: 'apply-automatic-layout',
-        positions: [
-          { nodeId: 'limits', position: { x: 0, y: 200 } },
-          { nodeId: 'derivatives', position: { x: 300, y: 200 } },
-        ],
-        direction: 'LR',
-      }),
-    );
-    await canvas.confirm('auto-layout');
+    await act(() => canvas.commands().request({ kind: 'apply-automatic-layout', layouts }));
+    await canvas.confirm('auto-layout-horizontal');
 
     expect(canvas.commands().pending).toMatchObject({
       kind: 'apply-automatic-layout',
@@ -1030,10 +1030,9 @@ describe('canvas commands', () => {
         roadmap,
         {
           kind: 'apply-automatic-layout',
-          positions: [{ nodeId: 'limits', position: { x: 0, y: 200 } }],
-          direction: 'LR',
+          layouts: { TB: [], LR: [{ nodeId: 'limits', position: { x: 0, y: 200 } }] },
         },
-        'auto-layout',
+        'auto-layout-horizontal',
         'Nodos ordenados exitosamente.',
       ],
       [

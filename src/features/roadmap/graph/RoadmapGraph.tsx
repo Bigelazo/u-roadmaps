@@ -29,7 +29,7 @@ import {
   type FitViewOptions,
 } from '@xyflow/react';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
-import { LayoutTemplate, LockKeyhole, Maximize } from 'lucide-react';
+import { LayoutFreeform, LockKeyhole, Maximize } from 'lucide-react';
 import {
   findOpenRoadmapPosition,
   roadmapGridSize,
@@ -363,7 +363,6 @@ function changedNodePositions(
 
 function RoadmapGraphToolbar({
   containerRef,
-  layoutDirection,
   showAutoLayout,
   canAutoLayout,
   onAutoLayout,
@@ -374,7 +373,6 @@ function RoadmapGraphToolbar({
 }: {
   onFitView?: () => void;
   containerRef: RefObject<HTMLDivElement | null>;
-  layoutDirection: RoadmapLayoutDirection;
   showAutoLayout: boolean;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
@@ -420,7 +418,6 @@ function RoadmapGraphToolbar({
   );
 
   const compact = useCompactCanvasLayout();
-  const sortLabel = `Ordenar ${layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}`;
 
   return (
     <>
@@ -466,18 +463,18 @@ function RoadmapGraphToolbar({
                 <TooltipTrigger
                   render={
                     <Button
-                      aria-label={sortLabel}
+                      aria-label="Ordenar"
                       type="button"
                       variant="outline"
                       size="icon"
                       disabled={!canAutoLayout}
                       onClick={onAutoLayout}
                     >
-                      <LayoutTemplate aria-hidden="true" />
+                      <LayoutFreeform aria-hidden="true" />
                     </Button>
                   }
                 />
-                <TooltipContent>{sortLabel}</TooltipContent>
+                <TooltipContent>Ordenar</TooltipContent>
               </Tooltip>
             ) : (
               <Button
@@ -487,8 +484,8 @@ function RoadmapGraphToolbar({
                 disabled={!canAutoLayout}
                 onClick={onAutoLayout}
               >
-                <LayoutTemplate data-icon="inline-start" />
-                {sortLabel}
+                <LayoutFreeform data-icon="inline-start" />
+                Ordenar
               </Button>
             )
           ) : null}
@@ -607,7 +604,6 @@ export type RoadmapGraphProps = {
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
-  confirmedAutomaticLayout?: { token: string; direction: RoadmapLayoutDirection } | null;
   onFitView?: () => void;
 };
 
@@ -786,7 +782,6 @@ function useRoadmapGraphController({
   notificationsEnabled,
   selectedNodeId,
   focusReturnRequest,
-  confirmedAutomaticLayout,
 }: RoadmapGraphProps) {
   const editing: RoadmapGraphEditing | undefined =
     projection.kind === 'teaching' ? projection.editing : undefined;
@@ -800,7 +795,6 @@ function useRoadmapGraphController({
     }
     return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
   }, [editing, projectionKind, projectionRoadmap]);
-  const layoutDirection = confirmedAutomaticLayout?.direction ?? 'TB';
   const onEditingIntent = editing?.onEditingIntent;
   const handlers = useRef<{ onEditingIntent?: (intent: RoadmapGraphEditingIntent) => void }>({
     onEditingIntent,
@@ -908,16 +902,17 @@ function useRoadmapGraphController({
   );
 
   const proposeAutoLayout = useCallback(() => {
-    const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
-    const positions = immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction));
-    const changed = changedNodePositions(flow.nodes, positions);
-    if (changed.length === 0) return;
-    emitEditingIntent({
-      kind: 'apply-automatic-layout',
-      positions: freezeNodePositions(changed),
-      direction,
-    });
-  }, [emitEditingIntent, flow.edges, flow.nodes, layoutDirection]);
+    const layoutIn = (direction: RoadmapLayoutDirection) =>
+      freezeNodePositions(
+        changedNodePositions(
+          flow.nodes,
+          immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction)),
+        ),
+      );
+    const layouts = Object.freeze({ TB: layoutIn('TB'), LR: layoutIn('LR') });
+    if (layouts.TB.length === 0 && layouts.LR.length === 0) return;
+    emitEditingIntent({ kind: 'apply-automatic-layout', layouts });
+  }, [emitEditingIntent, flow.edges, flow.nodes]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const appliedFocusReturnRequestRef = useRef<string | null>(null);
@@ -939,7 +934,6 @@ function useRoadmapGraphController({
     useActionSheet,
     requestNodeAction: actionMenu.onAction,
     actionMenuFinalFocus,
-    layoutDirection,
     openActionMenuNodeId: actionMenu.openNodeId,
     closingActionMenuNodeId: actionMenu.closingNodeId,
     selectedNodeIdRef,
@@ -1250,7 +1244,7 @@ function RoadmapGraphContents({
 }) {
   const { overlaySlots, viewportRestoration, bottomLeftActions, bottomRightActions, onFitView } =
     props;
-  const { canEdit, openActionMenuNodeId, containerRef, layoutDirection, flow } = model;
+  const { canEdit, openActionMenuNodeId, containerRef, flow } = model;
   return (
     <>
       {' '}
@@ -1270,7 +1264,6 @@ function RoadmapGraphContents({
       />
       <RoadmapGraphToolbar
         containerRef={containerRef}
-        layoutDirection={layoutDirection}
         showAutoLayout={canEdit}
         canAutoLayout={canEdit && flow.nodes.length >= 2}
         onAutoLayout={onAutoLayout}
