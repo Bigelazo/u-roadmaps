@@ -4,6 +4,7 @@ import { enterRoadmap } from './enter-roadmap';
 import { fileDrop } from './file-drop';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
+import { expectExitReachable } from './tutorial-exit';
 
 const steps = [
   'Centrar roadmap',
@@ -78,6 +79,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   createUser,
 }) => {
   test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
   const user = await createUser();
   await authenticateAs(page.context(), user.id);
   await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
@@ -205,6 +207,8 @@ test('teaching staff perform each action step of the teaching tutorial', async (
     markdown,
   );
 
+  await expectExitReachable(page, 'editor-desktop');
+
   const editorScroll = page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]');
   await page.locator('[aria-label="Editor de nodo"]').hover();
   await page.mouse.wheel(0, 700);
@@ -273,7 +277,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await page.screenshot({ path: 'test-results/tutorial-hide.png' });
 
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
-  await expect(confirmation).toContainText('se eliminarán sus conexiones con');
+  await expect(confirmation).toContainText('se eliminará su conexión');
   await expect(confirmation).toHaveClass(/driver-active-element/);
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Oculta un nodo');

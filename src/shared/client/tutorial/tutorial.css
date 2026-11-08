@@ -134,7 +134,12 @@
   pointer-events: auto;
 }
 
+.driver-active [data-tutorial-exit][data-tutorial-obscured] {
+  visibility: hidden;
+}
+
 .driver-active:has([data-slot='sheet-overlay']) [data-tutorial-exit] {
+  visibility: hidden;
   z-index: 10;
 }
 
