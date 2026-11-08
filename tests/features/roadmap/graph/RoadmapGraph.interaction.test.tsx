@@ -1078,7 +1078,7 @@ test('keeps compact canvas controls in one row and centers the map clear of the 
 
   expect(fitViewMock).toHaveBeenCalledWith({
     padding: { top: '16px', right: '16px', bottom: '16px', left: '16px' },
-    minZoom: 0.2,
+    minZoom: 0.8,
     maxZoom: 1,
   });
 });
