@@ -15,7 +15,8 @@ function node(id: string, overrides: Partial<SnapshotNode> = {}): SnapshotNode {
     nodeTypeId: 'content',
     isVisible: true,
     isTeacherBlocked: false,
-    teacherUnlockOn: null,
+    teacherUnlockAt: null,
+    teacherUnlockIncludesDependents: false,
     resources: [],
     ...overrides,
   };
@@ -33,7 +34,7 @@ function roadmap(
       targetNodeId,
     })),
     nodeTypes: [{ id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8' }],
-    today: '2026-11-03',
+    now: new Date('2026-11-03T12:00:00.000Z'),
   };
 }
 
@@ -283,14 +284,98 @@ test('a Branch unlock unlocks the eligible dependents, keeping those an external
   });
 });
 
+test('a Branch unlock stops at a dependent with a pending Scheduled unlock, keeping everything past it blocked', () => {
+  const snapshot = roadmap(
+    [
+      node('a', { title: 'A', isTeacherBlocked: true }),
+      node('b', { title: 'B', isTeacherBlocked: true }),
+      node('c', {
+        title: 'C',
+        isTeacherBlocked: true,
+        teacherUnlockAt: '2026-11-04T12:00:00.000Z',
+      }),
+      node('d', { title: 'D', isTeacherBlocked: true }),
+    ],
+    [
+      ['a', 'b'],
+      ['b', 'c'],
+      ['c', 'd'],
+    ],
+  );
+
+  expect(planChange(snapshot, teacherBlock('a', 'BRANCH_UNLOCK'))).toMatchObject({
+    impact: {
+      mode: 'BRANCH',
+      nodes: [
+        { id: 'a', relation: 'SELECTED_NODE' },
+        { id: 'b', relation: 'DEPENDENT' },
+      ],
+    },
+    consequences: { unblockedNodeIds: ['a', 'b'] },
+  });
+});
+
+test('a Branch unlock of a Node with its own pending Scheduled unlock unlocks it and its branch now', () => {
+  const snapshot = roadmap(
+    [
+      node('a', {
+        title: 'A',
+        isTeacherBlocked: true,
+        teacherUnlockAt: '2026-11-04T12:00:00.000Z',
+      }),
+      node('b', { title: 'B', isTeacherBlocked: true }),
+    ],
+    [['a', 'b']],
+  );
+
+  expect(planChange(snapshot, teacherBlock('a', 'BRANCH_UNLOCK'))).toMatchObject({
+    impact: { mode: 'BRANCH', nodes: [{ id: 'a' }, { id: 'b' }] },
+    consequences: { unblockedNodeIds: ['a', 'b'] },
+  });
+});
+
+test('a Node unlock unlocks a blocked prerequisite now despite its pending Scheduled unlock', () => {
+  const snapshot = roadmap(
+    [
+      node('a', {
+        title: 'A',
+        isTeacherBlocked: true,
+        teacherUnlockAt: '2026-11-10T12:00:00.000Z',
+      }),
+      node('b', {
+        title: 'B',
+        isTeacherBlocked: true,
+        teacherUnlockAt: '2026-11-04T12:00:00.000Z',
+      }),
+      node('c', { title: 'C', isTeacherBlocked: true }),
+    ],
+    [
+      ['a', 'b'],
+      ['b', 'c'],
+    ],
+  );
+
+  expect(planChange(snapshot, teacherBlock('c', 'BRANCH_UNLOCK'))).toMatchObject({
+    impact: {
+      mode: 'UPSTREAM',
+      nodes: [
+        { id: 'a', relation: 'PREREQUISITE' },
+        { id: 'b', relation: 'PREREQUISITE' },
+        { id: 'c', relation: 'SELECTED_NODE' },
+      ],
+    },
+    consequences: { unblockedNodeIds: ['a', 'b', 'c'] },
+  });
+});
+
 test('a Node unlock also releases the due Scheduled unlocks it no longer holds, outside its Change impact', () => {
   const snapshot = roadmap(
     [
       node('unlocked', { title: 'Desbloqueado', isTeacherBlocked: true }),
-      node('released', { isTeacherBlocked: true, teacherUnlockOn: '2026-11-03' }),
-      node('future', { isTeacherBlocked: true, teacherUnlockOn: '2026-11-04' }),
+      node('released', { isTeacherBlocked: true, teacherUnlockAt: '2026-11-03T12:00:00.000Z' }),
+      node('future', { isTeacherBlocked: true, teacherUnlockAt: '2026-11-04T12:00:00.000Z' }),
       node('still-blocked', { isTeacherBlocked: true }),
-      node('waiting', { isTeacherBlocked: true, teacherUnlockOn: '2026-11-02' }),
+      node('waiting', { isTeacherBlocked: true, teacherUnlockAt: '2026-11-02T12:00:00.000Z' }),
     ],
     [
       ['unlocked', 'released'],
@@ -311,7 +396,11 @@ test('a Node unlock also releases the due Scheduled unlocks it no longer holds, 
 
 const touching = roadmap(
   [
-    node('theory', { title: 'Teoría', isTeacherBlocked: true, teacherUnlockOn: '2026-11-04' }),
+    node('theory', {
+      title: 'Teoría',
+      isTeacherBlocked: true,
+      teacherUnlockAt: '2026-11-04T12:00:00.000Z',
+    }),
     node('intro', { title: 'Introducción' }),
     node('quiz', { title: 'Control' }),
     node('unrelated', { title: 'Anexo' }),

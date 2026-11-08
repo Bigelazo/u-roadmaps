@@ -70,6 +70,7 @@ export type NodeEditorSession = {
   node: RoadmapNode | undefined;
   nodeTypes: RoadmapDto['nodeTypes'];
   isVisibilityPending: boolean;
+  blockedPrerequisites: number;
 };
 
 export type NodeEditorProps = {

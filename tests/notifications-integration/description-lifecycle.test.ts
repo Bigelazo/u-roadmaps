@@ -2,7 +2,14 @@ import { expect } from 'vitest';
 import { test } from './fixtures';
 import { prisma } from '@/shared/server/db';
 import { countOwnNotices } from '@/features/notifications/server';
-import { addNode, deferredNoticePort, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
+import {
+  addNode,
+  deferredNoticePort,
+  enterRoadmap,
+  pendingNotices,
+  summaryInInboxWords,
+  teacherEdits,
+} from './roadmap';
 
 const descriptionTargets = <N extends { data: unknown }>(notices: N[]) =>
   notices.filter(
@@ -120,10 +127,10 @@ test('the Change summary lists a description change under its Node', async ({ co
   await enterRoadmap(course.studentId, course.roadmapId);
   await teacherEdits(course).update(course.change.nodeId, { description: 'Nueva' });
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
-  expect(summary).toEqual({
-    courseCode: course.identifier.courseCode,
-    groups: [{ title: 'Recursividad', items: ['Se actualizó la descripción.'] }],
-  });
+  expect(summary?.courseCode).toBe(course.identifier.courseCode);
+  expect(summaryInInboxWords(summary)).toEqual([
+    { title: 'Recursividad', items: ['Se actualizó la descripción.'] },
+  ]);
 });
 
 test('retried and concurrent deliveries of description edits keep one notice', async ({

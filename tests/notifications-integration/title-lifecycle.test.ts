@@ -1,6 +1,13 @@
 import { expect } from 'vitest';
 import { test } from './fixtures';
-import { addNode, enterRoadmap, pendingNotices, teacherEdits, announceRoadmap } from './roadmap';
+import {
+  addNode,
+  enterRoadmap,
+  pendingNotices,
+  summaryInInboxWords,
+  teacherEdits,
+  announceRoadmap,
+} from './roadmap';
 import {
   countOwnNodeChangeTargets,
   countOwnNotices,
@@ -109,10 +116,8 @@ test('the Inbox and the Change summary describe a title notice in the same words
   const [notice] = await pendingNotices(course.studentId, course.roadmapId);
   expect(notice.body).toBe('«Recursividad» pasó a llamarse «Recursión».');
   const { summary } = await enterRoadmap(course.studentId, course.roadmapId);
-  expect(summary).toEqual({
-    courseCode: course.identifier.courseCode,
-    groups: [{ title: 'Recursión', items: [notice.body] }],
-  });
+  expect(summary?.courseCode).toBe(course.identifier.courseCode);
+  expect(summaryInInboxWords(summary)).toEqual([{ title: 'Recursión', items: [notice.body] }]);
 });
 
 test('counts, the Node change mark and the Grouped roadmap notice count title targets', async ({

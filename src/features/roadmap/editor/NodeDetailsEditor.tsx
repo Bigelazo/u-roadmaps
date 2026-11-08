@@ -1,6 +1,7 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import { useState, type ComponentType, type ReactNode } from 'react';
 import { cn } from 'cn';
+import dynamic from 'next/dynamic';
 import {
   CalendarClock,
   Eye,
@@ -12,16 +13,16 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { addCalendarDays, chileCalendarDay } from '@/features/roadmap/domain/scheduled-unlock';
+import { CHILE_TIME_ZONE } from '@/features/roadmap/domain/scheduled-unlock';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
-import { Input } from '@/shared/ui/input';
 import { Separator } from '@/shared/ui/separator';
 import { NodeContentFields } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
+import { scheduledUnlockPrerequisiteHint } from '@/features/roadmap/ui/UnlockScheduleField';
 
 function NodeHeader() {
   const { node, nodeTypes, closeNode } = useNodeEditorContext();
@@ -176,70 +177,54 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
   );
 }
 
-const calendarDayFormatter = new Intl.DateTimeFormat('es-CL', {
-  timeZone: 'UTC',
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-});
+const DateTimePicker = dynamic(
+  () => import('@/shared/ui/date-time-picker').then(({ DateTimePicker }) => DateTimePicker),
+  { ssr: false, loading: () => <div className="h-11" aria-hidden="true" /> },
+);
 
-function formatCalendarDay(day: string) {
-  return calendarDayFormatter.format(new Date(`${day}T12:00:00.000Z`));
-}
-
-function NodeUnlockSchedule({ scheduledDay }: { scheduledDay: string | null }) {
-  const { scheduleTeacherUnlock } = useNodeEditorContext();
-  const [draftDay, setDraftDay] = useState(scheduledDay ?? '');
-  const minimumDay = addCalendarDays(chileCalendarDay(), 1);
-  const canSchedule = draftDay >= minimumDay && draftDay !== scheduledDay;
+function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
+  const { blockedPrerequisites, scheduleTeacherUnlock } = useNodeEditorContext();
+  const [draft, setDraft] = useState(scheduledAt ? new Date(scheduledAt) : null);
+  const canSchedule = draft !== null && draft.toISOString() !== scheduledAt;
 
   return (
     <form
       className="flex flex-col gap-2 border-t border-border pt-3"
       onSubmit={(event) => {
         event.preventDefault();
-        if (canSchedule) scheduleTeacherUnlock(draftDay);
+        if (canSchedule && draft.getTime() > Date.now()) scheduleTeacherUnlock(draft.toISOString());
       }}
     >
       <Field>
-        <div className="flex items-start gap-2">
-          <CalendarClock
-            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <div>
-            <FieldLabel htmlFor="node-unlock-date">Desbloqueo programado</FieldLabel>
-            <FieldDescription>
-              {scheduledDay
-                ? `Se desbloqueará el ${formatCalendarDay(scheduledDay)}, a las 00:00 (hora de Chile).`
-                : 'Elige un día para desbloquear este nodo sin intervención docente.'}{' '}
-              Si ese día un prerrequisito sigue bloqueado, esperará a que lo desbloquees.
-            </FieldDescription>
-          </div>
+        <div className="flex items-center gap-2.5">
+          <CalendarClock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <FieldLabel htmlFor="node-unlock-date" className="font-semibold">
+            Desbloqueo programado
+          </FieldLabel>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Input
-            id="node-unlock-date"
-            type="date"
-            className="w-auto min-w-0 flex-1"
-            min={minimumDay}
-            value={draftDay}
-            onChange={(event) => setDraftDay(event.target.value)}
-          />
-          <Button type="submit" variant="outline" size="sm" disabled={!canSchedule}>
-            {scheduledDay ? 'Cambiar fecha' : 'Programar'}
-          </Button>
-          {scheduledDay && (
+        <DateTimePicker
+          id="node-unlock-date"
+          value={draft}
+          onValueChange={setDraft}
+          timeZone={CHILE_TIME_ZONE}
+          dayLabel="Día del desbloqueo"
+          timeLabel="Hora del desbloqueo"
+        />
+        <FieldDescription>{scheduledUnlockPrerequisiteHint(blockedPrerequisites)}</FieldDescription>
+        <div className="flex flex-wrap justify-end gap-2">
+          {scheduledAt && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => scheduleTeacherUnlock(null)}
             >
-              Quitar fecha
+              Quitar programación
             </Button>
           )}
+          <Button type="submit" variant="outline" size="sm" disabled={!canSchedule}>
+            {scheduledAt ? 'Reprogramar' : 'Programar'}
+          </Button>
         </div>
       </Field>
     </form>
@@ -337,8 +322,8 @@ function NodeTeacherBlock() {
     >
       {node.isVisible && node.isTeacherBlocked && (
         <NodeUnlockSchedule
-          key={`${node.id}:${node.teacherUnlockOn ?? ''}`}
-          scheduledDay={node.teacherUnlockOn ?? null}
+          key={`${node.id}:${node.teacherUnlockAt ?? ''}`}
+          scheduledAt={node.teacherUnlockAt ?? null}
         />
       )}
     </AccessRow>

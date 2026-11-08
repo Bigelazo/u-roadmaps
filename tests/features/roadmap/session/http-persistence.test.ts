@@ -55,6 +55,13 @@ type Execution = {
   resolves?: unknown;
 };
 
+const scheduledUnlockResponse = {
+  title: 'Límites',
+  teacherUnlockAt: '2026-11-01T12:00:00.000Z',
+  teacherUnlockIncludesDependents: false,
+  scheduledPrerequisiteIds: ['node-2'],
+};
+
 const executions: Record<string, Execution> = {
   'complete a Node': {
     command: { kind: 'complete-node', nodeId: 'node-1' },
@@ -118,10 +125,13 @@ const executions: Record<string, Execution> = {
       ],
     ],
   },
-  'apply an automatic layout as Node moves': {
+  'apply the chosen automatic layout as Node moves': {
     command: {
       kind: 'apply-automatic-layout',
-      positions: [{ nodeId: 'node-1', position: { x: 0, y: 200 } }],
+      layouts: {
+        TB: [{ nodeId: 'node-2', position: { x: 90, y: 90 } }],
+        LR: [{ nodeId: 'node-1', position: { x: 0, y: 200 } }],
+      },
       direction: 'LR',
     },
     requests: [
@@ -180,17 +190,49 @@ const executions: Record<string, Execution> = {
     ],
   },
   'schedule an unlock': {
-    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockOn: '2026-11-01' },
+    command: {
+      kind: 'schedule-teacher-unlock',
+      nodeId: 'node-1',
+      unlockAt: '2026-11-01T12:00:00.000Z',
+    },
     requests: [
       [
         '/nodes/node-1/teacher-block/schedule',
-        { method: 'PUT', headers: json, body: JSON.stringify({ unlockOn: '2026-11-01' }) },
+        {
+          method: 'PUT',
+          headers: json,
+          body: JSON.stringify({ unlockAt: '2026-11-01T12:00:00.000Z' }),
+        },
       ],
     ],
+    response: scheduledUnlockResponse,
+    resolves: { scheduledUnlock: { title: 'Límites', prerequisites: 1 } },
+  },
+  'schedule an unlock with its dependents': {
+    command: {
+      kind: 'schedule-teacher-unlock',
+      nodeId: 'node-1',
+      unlockAt: '2026-11-01T12:00:00.000Z',
+      includeDependents: true,
+    },
+    requests: [
+      [
+        '/nodes/node-1/teacher-block/schedule',
+        {
+          method: 'PUT',
+          headers: json,
+          body: JSON.stringify({ unlockAt: '2026-11-01T12:00:00.000Z', includeDependents: true }),
+        },
+      ],
+    ],
+    response: scheduledUnlockResponse,
+    resolves: { scheduledUnlock: { title: 'Límites', prerequisites: 1 } },
   },
   'cancel a Scheduled unlock': {
-    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockOn: null },
+    command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockAt: null },
     requests: [['/nodes/node-1/teacher-block/schedule', { method: 'DELETE' }]],
+    response: { ...scheduledUnlockResponse, teacherUnlockAt: null, scheduledPrerequisiteIds: [] },
+    resolves: { scheduledUnlock: { title: 'Límites', prerequisites: 0 } },
   },
   'hide a Node with its preview version': {
     command: { kind: 'hide-node', nodeId: 'node-1' },

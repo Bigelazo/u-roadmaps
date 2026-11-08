@@ -82,7 +82,7 @@ test('opening a tutorial from a Roadmap canvas first prevents the invitation', a
 
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Vista estudiante' }).click();
-  await expect(page.getByText('Previsualización del canvas')).toBeVisible();
+  await expect(page.getByText('Vista estudiantil')).toBeVisible();
   await expect(invitation(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Ir al editor' }).click();
   await expect(invitation(page)).toHaveCount(0);

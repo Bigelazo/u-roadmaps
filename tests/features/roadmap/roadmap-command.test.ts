@@ -199,7 +199,7 @@ test('invalid input is refused before authorisation and before the Roadmap lock'
           { ...nonEditor, id: nodeId, input: { title: 'Guía', url: 'sin-url', type: 'LINK' } },
           port,
         ),
-        scheduleTeacherUnlock({ ...nonEditor, id: nodeId, unlockOn: '17-10-2026' }, port),
+        scheduleTeacherUnlock({ ...nonEditor, id: nodeId, unlockAt: '17-10-2026' }, port),
         deleteRoadmapDependency({ ...nonEditor, id: 'not-a-dependency' }, port),
         completeNode({ ...nonEditor, nodeId: 'not-a-node' }, port),
         completeSimulatedNode({ ...nonEditor, nodeId: 'not-a-node' }, port),

@@ -33,7 +33,9 @@ test('Markdown drops require confirmation and update the Node draft before savin
   await description.fill('Borrador sin guardar');
   await description.dispatchEvent('dragover', { dataTransfer: transfer });
   await description.dispatchEvent('drop', { dataTransfer: transfer });
-  const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
+  const confirmation = page.getByRole('alertdialog', {
+    name: '¿Reemplazar el texto con el archivo Markdown?',
+  });
   await expect(confirmation).toContainText('guia.md');
   await expect(description).toHaveValue('Borrador sin guardar');
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
@@ -108,7 +110,7 @@ test('a dragged Markdown file turns the description into a drop target', async (
   await description.dispatchEvent('drop', { dataTransfer: markdown });
   await expect(dropTarget).toBeHidden();
   await expect(
-    page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' }),
+    page.getByRole('alertdialog', { name: '¿Reemplazar el texto con el archivo Markdown?' }),
   ).toContainText('guia.md');
 
   await markdown.dispose();
@@ -182,7 +184,9 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
   const transfer = await fileDrop(page, 'guia.md', content);
   await description.fill('Borrador previo');
   await description.dispatchEvent('drop', { dataTransfer: transfer });
-  const confirmation = page.getByRole('alertdialog', { name: 'Reemplazar texto con Markdown' });
+  const confirmation = page.getByRole('alertdialog', {
+    name: '¿Reemplazar el texto con el archivo Markdown?',
+  });
   await expect(confirmation).toContainText('guia.md');
   await expect(description).toHaveValue('Borrador previo');
   await confirmation.getByRole('button', { name: 'Reemplazar texto' }).click();

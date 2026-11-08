@@ -24,7 +24,13 @@ export const nodeDeletionTarget: NoticeTargetDescriptor<NodeDeletedFact> = {
     const node = await (target.nodeId ? roadmap.node(target.nodeId) : null);
     return { value: node ? PRESENT : ABSENT, visible: true };
   },
-  factContext: (fact) => ({ nodeTitle: fact.previous.title, nodeTypeName: fact.nodeTypeName }),
+  factContext: (fact) => ({
+    nodeTitle: fact.previous.title,
+    nodeTypeId: fact.previous.nodeTypeId,
+    nodeTypeName: fact.nodeType.name,
+    nodeTypeIcon: fact.nodeType.icon,
+    nodeTypeColor: fact.nodeType.color,
+  }),
   wording: (values) => ({
     subject: nodeTitle(values),
     body: `Nodo eliminado: «${nodeTitle(values)}».`,

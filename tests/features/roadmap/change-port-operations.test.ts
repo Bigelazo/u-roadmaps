@@ -13,6 +13,7 @@ import {
   previewRoadmapDependency,
   previewTeacherBlock,
   releaseScheduledTeacherUnlocks,
+  scheduleTeacherUnlock,
   createRoadmapResource,
   uploadRoadmapResource,
   updateRoadmapResource,
@@ -295,10 +296,10 @@ test('scheduled releases report committed access transitions and are idempotent'
 }) => {
   await prisma.roadmapNode.update({
     where: { id: course.change.nodeId },
-    data: { isTeacherBlocked: true, teacherUnlockOn: new Date('2026-10-01T00:00:00Z') },
+    data: { isTeacherBlocked: true, teacherUnlockAt: new Date('2026-10-01T00:00:00Z') },
   });
   const recording = recordingChangePort();
-  await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
+  await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z'));
   expect(recording.facts()).toContainEqual(
     access({
       recipientId: course.studentId,
@@ -307,8 +308,122 @@ test('scheduled releases report committed access transitions and are idempotent'
     }),
   );
   recording.changes.length = 0;
-  await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08');
+  await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z'));
   expect(recording.facts()).toEqual([]);
+});
+
+test('a Scheduled unlock with dependents releases its branch up to a dependent with its own pending schedule', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const [b, c, d] = [
+    await addNode(course, 'Colas'),
+    await addNode(course, 'Árboles'),
+    await addNode(course, 'Grafos'),
+  ];
+  const chain = [course.change.nodeId, b.id, c.id, d.id];
+  await prisma.dependency.createMany({
+    data: chain.slice(1).map((targetNodeId, index) => ({
+      sourceNodeId: chain[index]!,
+      targetNodeId,
+    })),
+  });
+  await prisma.roadmapNode.updateMany({
+    where: { id: { in: chain } },
+    data: { isTeacherBlocked: true },
+  });
+  await scheduleTeacherUnlock(
+    {
+      ...teacher(course),
+      id: course.change.nodeId,
+      unlockAt: '2099-01-01T12:00:00.000Z',
+      includeDependents: true,
+    },
+    recording.port,
+  );
+  await prisma.roadmapNode.update({
+    where: { id: c.id },
+    data: { teacherUnlockAt: new Date('2099-02-01T12:00:00.000Z') },
+  });
+
+  await releaseScheduledTeacherUnlocks(recording.port, new Date('2099-01-01T12:00:00.000Z'));
+
+  const nodes = await prisma.roadmapNode.findMany({
+    where: { id: { in: chain } },
+    select: { id: true, isTeacherBlocked: true },
+  });
+  expect(new Set(nodes.filter((node) => !node.isTeacherBlocked).map(({ id }) => id))).toEqual(
+    new Set([course.change.nodeId, b.id]),
+  );
+});
+
+test('a Scheduled unlock also schedules its blocked prerequisites for the same instant, replacing their schedules', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const [prerequisite, open, target] = [
+    await addNode(course, 'Colas'),
+    await addNode(course, 'Árboles'),
+    await addNode(course, 'Grafos'),
+  ];
+  const chain = [course.change.nodeId, prerequisite.id, open.id, target.id];
+  await prisma.dependency.createMany({
+    data: chain.slice(1).map((targetNodeId, index) => ({
+      sourceNodeId: chain[index]!,
+      targetNodeId,
+    })),
+  });
+  await prisma.roadmapNode.updateMany({
+    where: { id: { in: [course.change.nodeId, prerequisite.id, target.id] } },
+    data: { isTeacherBlocked: true },
+  });
+  await prisma.roadmapNode.update({
+    where: { id: prerequisite.id },
+    data: {
+      teacherUnlockAt: new Date('2099-03-01T12:00:00.000Z'),
+      teacherUnlockIncludesDependents: true,
+    },
+  });
+
+  const scheduled = await scheduleTeacherUnlock(
+    { ...teacher(course), id: target.id, unlockAt: '2099-01-01T12:00:00.000Z' },
+    recording.port,
+  );
+
+  expect(scheduled).toMatchObject({
+    teacherUnlockAt: '2099-01-01T12:00:00.000Z',
+    title: 'Grafos',
+    scheduledPrerequisiteIds: expect.arrayContaining([course.change.nodeId, prerequisite.id]),
+  });
+  expect(scheduled.scheduledPrerequisiteIds).toHaveLength(2);
+  const nodes = await prisma.roadmapNode.findMany({
+    where: { id: { in: chain } },
+    select: { id: true, teacherUnlockAt: true, teacherUnlockIncludesDependents: true },
+  });
+  expect(
+    Object.fromEntries(
+      nodes.map(({ id, teacherUnlockAt, teacherUnlockIncludesDependents }) => [
+        id,
+        [teacherUnlockAt?.toISOString() ?? null, teacherUnlockIncludesDependents],
+      ]),
+    ),
+  ).toEqual({
+    [course.change.nodeId]: ['2099-01-01T12:00:00.000Z', false],
+    [prerequisite.id]: ['2099-01-01T12:00:00.000Z', false],
+    [open.id]: [null, false],
+    [target.id]: ['2099-01-01T12:00:00.000Z', false],
+  });
+
+  await scheduleTeacherUnlock(
+    { ...teacher(course), id: target.id, unlockAt: null },
+    recording.port,
+  );
+  expect(
+    await prisma.roadmapNode.findUniqueOrThrow({
+      where: { id: prerequisite.id },
+      select: { teacherUnlockAt: true },
+    }),
+  ).toEqual({ teacherUnlockAt: new Date('2099-01-01T12:00:00.000Z') });
 });
 
 test('a conflicting scheduled release allows other due Roadmaps to release and retries next pass', async ({
@@ -317,7 +432,7 @@ test('a conflicting scheduled release allows other due Roadmaps to release and r
 }) => {
   await prisma.roadmapNode.updateMany({
     where: { id: { in: [course.change.nodeId, otherCourse.change.nodeId] } },
-    data: { isTeacherBlocked: true, teacherUnlockOn: new Date('2026-10-01T00:00:00Z') },
+    data: { isTeacherBlocked: true, teacherUnlockAt: new Date('2026-10-01T00:00:00Z') },
   });
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
   const recording = recordingChangePort();
@@ -335,7 +450,7 @@ test('a conflicting scheduled release allows other due Roadmaps to release and r
           return recording.port.report(transaction, changes);
         },
       },
-      '2026-10-08',
+      new Date('2026-10-08T12:00:00.000Z'),
     );
     const failed = [course, otherCourse].find(({ roadmapId }) => roadmapId === failedRoadmapId)!;
     const successful = failed === course ? otherCourse : course;
@@ -349,11 +464,15 @@ test('a conflicting scheduled release allows other due Roadmaps to release and r
       identifier: failed.identifier,
       error: expect.objectContaining({ code: 'CONFLICT' }),
     });
-    expect(await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08')).toContainEqual({
+    expect(
+      await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z')),
+    ).toContainEqual({
       identifier: failed.identifier,
       releasedNodeIds: [failed.change.nodeId],
     });
-    expect(await releaseScheduledTeacherUnlocks(recording.port, '2026-10-08')).toEqual([]);
+    expect(
+      await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z')),
+    ).toEqual([]);
   } finally {
     warning.mockRestore();
   }

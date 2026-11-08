@@ -119,7 +119,7 @@ function renderEditor(
     .mockResolvedValue({ status: 'committed' });
   const onIntent = vi.fn<(intent: NodeEditorIntent) => void>();
   const props: NodeEditorProps = {
-    session: { node, nodeTypes, isVisibilityPending: false },
+    session: { node, nodeTypes, isVisibilityPending: false, blockedPrerequisites: 0 },
     perform,
     onIntent,
     ...overrides,
@@ -145,6 +145,7 @@ function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'sessi
       node: { ...node, ...overrides } as RoadmapNode,
       nodeTypes,
       isVisibilityPending: false,
+      blockedPrerequisites: 0,
     },
   };
 }
@@ -234,31 +235,89 @@ test('rejects an incomplete link address in Spanish', async () => {
   expect(perform).not.toHaveBeenCalled();
 });
 
-test('schedules and removes the unlock day of a teacher-blocked Node', async () => {
-  const user = userEvent.setup();
-  const { onIntent, unmount } = renderEditor();
+const prerequisiteHint =
+  'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
 
-  const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
-  expect(schedule.disabled).toBe(true);
-  fireEvent.change(screen.getByLabelText('Desbloqueo programado'), {
-    target: { value: '2099-03-14' },
-  });
-  await user.click(schedule);
-  expect(onIntent).toHaveBeenCalledWith({
-    kind: 'schedule-teacher-unlock',
-    nodeId: node.id,
-    unlockOn: '2099-03-14',
-  });
-  unmount();
+test.each([
+  [1, 'Su prerrequisito bloqueado también se desbloqueará a esa hora.'],
+  [3, 'Sus 3 prerrequisitos bloqueados también se desbloquearán a esa hora.'],
+])(
+  'tells that scheduling also unlocks %i blocked prerequisites at that time',
+  (blockedPrerequisites, hint) => {
+    const { session } = withNode({ isTeacherBlocked: true });
+    renderEditor({ session: { ...session, blockedPrerequisites } });
 
-  const view = renderEditor(withNode({ isTeacherBlocked: true, teacherUnlockOn: '2099-03-14' }));
-  expect(screen.getByText(/Se desbloqueará el sábado, 14 de marzo de 2099/)).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: 'Quitar fecha' }));
-  expect(view.onIntent).toHaveBeenCalledWith({
-    kind: 'schedule-teacher-unlock',
-    nodeId: node.id,
-    unlockOn: null,
-  });
+    expect(screen.getByText(hint)).toBeTruthy();
+    expect(screen.queryByText(prerequisiteHint)).toBeNull();
+  },
+);
+
+test('schedules the unlock day and time of a teacher-blocked Node in Chilean time, and removes it', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
+  try {
+    const user = userEvent.setup();
+    const { onIntent, unmount } = renderEditor();
+
+    const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
+    expect(schedule.disabled).toBe(true);
+    expect(screen.getByText(prerequisiteHint)).toBeTruthy();
+    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
+    expect(screen.getByText('Noviembre 2026')).toBeTruthy();
+    const pastDay = screen.getByRole('button', { name: /, 6 de noviembre de 2026/ });
+    expect((pastDay as HTMLButtonElement).disabled).toBe(true);
+    await user.click(screen.getByRole('button', { name: /21 de noviembre de 2026/ }));
+    await user.click(screen.getByRole('combobox', { name: 'Hora del desbloqueo' }));
+    await user.click(await screen.findByRole('option', { name: '14:30' }));
+    await user.click(schedule);
+    expect(onIntent).toHaveBeenCalledWith({
+      kind: 'schedule-teacher-unlock',
+      nodeId: node.id,
+      unlockAt: '2026-11-21T17:30:00.000Z',
+    });
+    unmount();
+
+    const view = renderEditor(
+      withNode({ isTeacherBlocked: true, teacherUnlockAt: '2026-11-21T17:30:00.000Z' }),
+    );
+    expect(
+      (await screen.findByRole('button', { name: 'Día del desbloqueo: Sábado, 21 de Noviembre' }))
+        .textContent,
+    ).toBe('Sábado, 21 de Noviembre');
+    expect(
+      within(screen.getByRole('combobox', { name: 'Hora del desbloqueo' })).getByText('14:30'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Chile/)).toBeNull();
+    expect(screen.getByText(prerequisiteHint)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Quitar programación' }));
+    expect(view.onIntent).toHaveBeenCalledWith({
+      kind: 'schedule-teacher-unlock',
+      nodeId: node.id,
+      unlockAt: null,
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('offers only future times on the current Chilean day', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
+  try {
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
+    await user.click(screen.getByRole('button', { name: /, 7 de noviembre de 2026/ }));
+    await user.click(screen.getByRole('combobox', { name: 'Hora del desbloqueo' }));
+
+    expect(
+      (await screen.findByRole('option', { name: '12:00' })).getAttribute('aria-disabled'),
+    ).toBe('true');
+    expect(screen.getByRole('option', { name: '12:15' }).getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test.each([
@@ -472,14 +531,17 @@ test('edits an existing Resource and retries a failed deletion through the same 
   });
 
   await user.click(screen.getByRole('button', { name: 'Eliminar recurso Guía de ejercicios' }));
-  const dialog = screen.getByRole('alertdialog', { name: 'Confirmar eliminación' });
+  const dialog = screen.getByRole('alertdialog', { name: '¿Eliminar Guía de ejercicios?' });
   await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(2));
-  expect(screen.getByRole('alertdialog', { name: 'Confirmar eliminación' })).toBeTruthy();
+  expect(screen.getByRole('alertdialog', { name: '¿Eliminar Guía de ejercicios?' })).toBeTruthy();
   await user.click(
-    within(screen.getByRole('alertdialog', { name: 'Confirmar eliminación' })).getByRole('button', {
-      name: 'Eliminar',
-    }),
+    within(screen.getByRole('alertdialog', { name: '¿Eliminar Guía de ejercicios?' })).getByRole(
+      'button',
+      {
+        name: 'Eliminar',
+      },
+    ),
   );
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(3));
   await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
@@ -492,13 +554,13 @@ test('guards a dirty transition and resets only after confirmed discard', async 
   await retitle(user, 'Borrador');
 
   const decision = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
   await expect(decision).resolves.toBe(false);
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Borrador');
 
   const confirmed = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
   await expect(confirmed).resolves.toBe(true);
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe(node.title);
@@ -514,7 +576,7 @@ test('keeps the complete Node and Resource session unchanged when a guard is can
   await fillLink(user, 'Borrador del recurso', 'https://example.test/borrador');
 
   const decision = ref.current!.guardDraft({ kind: 'deselect-node', nodeId: node.id });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Seguir editando' }));
 
   await expect(decision).resolves.toBe(false);
@@ -551,7 +613,7 @@ test('resets the complete editing session before a guarded caller resumes', asyn
       expect(screen.queryByText('Nuevo recurso')).toBeNull();
       onIntent({ kind: 'close', nodeId: node.id });
     });
-  await screen.findByRole('alertdialog', { name: 'Descartar cambios sin guardar' });
+  await screen.findByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' });
   await user.click(screen.getByRole('button', { name: 'Descartar y continuar' }));
 
   await resumed;
@@ -567,7 +629,9 @@ test('leaves the draft question of a Node deletion to the canvas, which asks it 
   await user.click(screen.getByRole('button', { name: 'Eliminar' }));
 
   expect(onIntent).toHaveBeenCalledWith({ kind: 'delete-node', nodeId: node.id });
-  expect(screen.queryByRole('alertdialog', { name: 'Descartar cambios sin guardar' })).toBeNull();
+  expect(
+    screen.queryByRole('alertdialog', { name: '¿Descartar los cambios sin guardar?' }),
+  ).toBeNull();
   const decision = ref.current!.guardDraft({ kind: 'delete-node', nodeId: node.id });
   await user.click(await screen.findByRole('button', { name: 'Descartar y continuar' }));
   await expect(decision).resolves.toBe(true);

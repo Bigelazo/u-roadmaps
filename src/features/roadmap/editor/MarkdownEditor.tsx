@@ -151,8 +151,16 @@ export function MarkdownEditor({
         confirmation={
           pendingFile
             ? {
-                title: 'Reemplazar texto con Markdown',
-                description: `Se reemplazará todo el texto actual por el contenido de «${pendingFile.name}». Los cambios quedarán en el borrador hasta que los guardes.`,
+                title: '¿Reemplazar el texto con el archivo Markdown?',
+                description: (
+                  <>
+                    Todo el texto actual se reemplazará por el contenido de{' '}
+                    <span className="font-medium break-all text-foreground">
+                      {pendingFile.name}
+                    </span>
+                    . El cambio quedará en el borrador hasta que lo guardes.
+                  </>
+                ),
                 intent: 'warning',
                 actions: [{ id: 'replace', label: 'Reemplazar texto' }],
               }

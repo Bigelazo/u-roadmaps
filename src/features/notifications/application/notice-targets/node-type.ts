@@ -2,6 +2,7 @@ import { NOTICE_TARGET } from './kinds';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
 import {
   isNodeViewer,
+  nodePart,
   nodeViewers,
   nodeVisibleBefore,
   nodeVisibleThroughout,
@@ -59,6 +60,10 @@ export const nodeTypeTarget: NoticeTargetDescriptor<NodeTypeFact> = {
       subject: nodeTitle,
       body: `«${nodeTitle}» pasó de tipo «${knownTypeName}» a tipo «${currentTypeName}».`,
       summaryGroup: 'general',
+      summaryParts: [
+        nodePart(nodeTitle),
+        ` pasó de tipo «${knownTypeName}» a tipo «${currentTypeName}».`,
+      ],
     };
   },
   apiData: names,

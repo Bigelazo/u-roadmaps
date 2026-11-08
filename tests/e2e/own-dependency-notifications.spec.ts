@@ -143,9 +143,7 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
     name: `Cambios en el Roadmap de ${course.courseCode}`,
   });
   await expect(addedDialog).toBeVisible();
-  await expect(addedDialog).toContainText(
-    `«${dependentTitle}» ahora requiere «${prerequisiteTitle}»`,
-  );
+  await expect(addedDialog).toContainText(`${dependentTitle} ahora requiere ${prerequisiteTitle}.`);
   await expect.poll(() => noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
 
@@ -171,7 +169,7 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   await expect(page).toHaveURL(course.pagePath());
   await expect(
     page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
-  ).toContainText(`«${dependentTitle}» ya no requiere «${prerequisiteTitle}»`);
+  ).toContainText(`${dependentTitle} ya no requiere ${prerequisiteTitle}.`);
   await expect.poll(() => noticesFor(studentWithoutPrerequisite)).toHaveLength(0);
   await page.getByRole('button', { name: 'Entendido' }).click();
   const dependentNode = page.locator(`.react-flow__node[data-id="${dependentId}"]`);
