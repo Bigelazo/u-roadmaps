@@ -54,7 +54,7 @@ Descubrimos por casualidad que el lienzo permite eliminar varias Dependencias a 
 ## Procesos automáticos y efectos silenciosos
 
 - Las pasadas del Desbloqueo programado y del Cierre del Roadmap arrancan con el servidor y corren una vez al iniciar (`src/instrumentation.ts`). El desbloqueo corre cinco segundos después de cada cuarto de hora; el cierre, cada cinco minutos (`ROADMAP_CLOSURE_INTERVAL_MS`).
-- Un Desbloqueo programado vencido espera mientras un prerrequisito conserve su Bloqueo docente. Programar un Nodo programa sus prerrequisitos bloqueados para el mismo momento, y una programación pendiente detiene un Desbloqueo de rama que llegue desde arriba.
+- Si un Desbloqueo programado vence mientras un prerrequisito conserva su Bloqueo docente, la programación se descarta sin Avisos y el Nodo sigue bloqueado. Programar un Nodo programa sus prerrequisitos bloqueados para el mismo momento, y una programación pendiente detiene un Desbloqueo de rama que llegue desde arriba.
 - Bloquear un Nodo bloquea a sus dependientes visibles; conectar desde un Nodo bloqueado bloquea la rama del destino; desbloquear un Nodo con prerrequisitos bloqueados los desbloquea y consume sus programaciones.
 - Ocultar un Nodo elimina sus Dependencias, su Bloqueo docente y su programación.
 - El Cierre del Roadmap quita Bloqueos docentes y programaciones sin producir Avisos. Un lienzo docente abierto pasa a solo lectura cuando un guardado choca con el cierre (`src/features/roadmap/session/http-persistence.ts:32-34`).
