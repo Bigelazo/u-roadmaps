@@ -135,3 +135,39 @@ test('a failed WASM load retries once, then offers retry without drawing an unsa
     page.getByText('Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.'),
   ).toHaveCount(0);
 });
+
+test('a stalled WASM request offers manual retry at its first deadline and recovers on a fresh request', async ({
+  page,
+  course,
+  teacherApi: api,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const roadmap = await (await api.get(course.apiPath())).json();
+  await authenticateAs(page.context(), course.users.teacher.id);
+  let requests = 0;
+  await page.route('**/vendor/libavoid/0.4.5/libavoid.wasm', (route) => {
+    requests += 1;
+    if (requests > 1) return route.continue();
+  });
+  await page.goto(course.pagePath(), { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText('Preparando dependencias…', { exact: true })).toBeVisible();
+  const node = page.locator('.react-flow__node').first();
+  await expect(node).toBeVisible();
+  await node.click();
+  await expect(node).toHaveClass(/selected/);
+  await expect(page.getByRole('group', { name: 'Editor de nodo', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Deseleccionar nodo', exact: true }).click();
+  await expect(node).not.toHaveClass(/selected/);
+  await expect(page.locator('.react-flow__edge-path')).toHaveCount(0);
+  const alert = page.getByRole('alert').filter({ hasText: 'No pudimos trazar las dependencias.' });
+  await expect(alert).toBeVisible({ timeout: 35_000 });
+  expect(requests).toBe(1);
+  await page.screenshot({ path: testInfo.outputPath('stalled-routing-mobile.png') });
+  await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
+  await expect(page.locator('.react-flow__edge-path')).toHaveCount(roadmap.dependencies.length);
+  expect(requests).toBeGreaterThan(1);
+  await expect(alert).toHaveCount(0);
+  await expect(page.getByText('Preparando dependencias…', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('recovered-routing-mobile.png') });
+});

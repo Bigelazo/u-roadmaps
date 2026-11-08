@@ -97,9 +97,9 @@ export function DependencyRouting({
           clearTimeout(status);
           setModule(loaded);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (!active) return;
-          if (retries > 0) {
+          if (retries > 0 && !(error instanceof Error && error.name === 'TimeoutError')) {
             retry = setTimeout(() => load(retries - 1), engineRetryDelayMs);
             return;
           }
