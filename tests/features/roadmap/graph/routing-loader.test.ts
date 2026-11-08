@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { AvoidLib } from 'libavoid-js';
 
 vi.mock('libavoid-js', () => ({ AvoidLib: { load: vi.fn(), getInstance: vi.fn() } }));
@@ -70,3 +72,42 @@ test.each(['resolve', 'reject'] as const)(
     expect(AvoidLib.load).toHaveBeenCalledTimes(2);
   },
 );
+
+test('recovers from an ordinary rejected load and shares the successful retry', async () => {
+  const offline = new Error('Network unavailable');
+  vi.mocked(AvoidLib.load).mockRejectedValueOnce(offline).mockResolvedValue(undefined);
+  const loadedModule = {} as ReturnType<typeof AvoidLib.getInstance>;
+  vi.mocked(AvoidLib.getInstance).mockReturnValue(loadedModule);
+  const { loadRoutingModule } = await import('@/features/roadmap/graph/routing/libavoid');
+  const first = loadRoutingModule();
+  await expect(first).rejects.toBe(offline);
+  const retry = loadRoutingModule();
+  expect(loadRoutingModule()).toBe(retry);
+  await expect(retry).resolves.toBe(loadedModule);
+  await expect(loadRoutingModule()).resolves.toBe(loadedModule);
+});
+
+test('loads a valid shipped WASM asset matching the installed engine', async () => {
+  const installed = await readFile(resolve('node_modules/libavoid-js/dist/libavoid.wasm'));
+  vi.mocked(AvoidLib.load).mockImplementation(async (url) => {
+    const shipped = await readFile(resolve('public', `.${url}`));
+    expect(shipped.equals(installed)).toBe(true);
+    expect(WebAssembly.validate(shipped)).toBe(true);
+  });
+  const loadedModule = {} as ReturnType<typeof AvoidLib.getInstance>;
+  vi.mocked(AvoidLib.getInstance).mockReturnValue(loadedModule);
+  const { loadRoutingModule } = await import('@/features/roadmap/graph/routing/libavoid');
+  await expect(loadRoutingModule()).resolves.toBe(loadedModule);
+});
+
+test('prepares a cross-origin fetch hint for the same asset the engine loads', async () => {
+  await import('react-dom/client');
+  const { prepareRoutingEngine, loadRoutingModule } =
+    await import('@/features/roadmap/graph/routing/libavoid');
+  prepareRoutingEngine();
+  await loadRoutingModule();
+  const hint = document.head.querySelector('link[rel="preload"][as="fetch"]');
+  expect(hint).not.toBeNull();
+  expect(hint?.getAttribute('href')).toBe(vi.mocked(AvoidLib.load).mock.calls[0][0]);
+  expect(hint?.getAttribute('crossorigin')).toBe('');
+});
