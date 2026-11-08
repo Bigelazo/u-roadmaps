@@ -435,6 +435,26 @@ test('uploads a file Resource as multipart form data without setting its boundar
   );
 });
 
+test('replaces a file Resource as multipart form data carrying its edited title', async () => {
+  const fetchMock = respondWith();
+
+  await http.execute({
+    kind: 'update-resource',
+    resourceId: 'resource-1',
+    resource: { title: 'Guía.pdf', url: '/api/protected', type: 'FILE' },
+    file,
+  });
+
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api('/resources/resource-1'), {
+    method: 'PATCH',
+    body: expect.any(FormData),
+  });
+  expect((fetchMock.mock.calls[0] as unknown as Request)[1].body).toSatisfy(
+    (body: FormData) =>
+      body.get('file') === file && body.get('title') === 'Guía.pdf' && !body.has('url'),
+  );
+});
+
 test('passes the server refusal message through', async () => {
   refuseWith(404, { message: 'El recurso no pertenece al roadmap.' });
 

@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { FileUp, Link2, Save, X } from 'lucide-react';
+import { FileUp, Link2, Save, Undo2, X } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
+import { fileTitleExtension } from '@/features/roadmap/domain/resource';
+import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 import { inputClassName } from './primitives';
 import { useNodeEditorContext } from './context';
 import type { ResourceInput } from './types';
@@ -27,9 +29,14 @@ function sessionValue(
   return session.kind === 'closed' ? { title: '', url: '', type: 'LINK' } : session.value;
 }
 
-function hasResourceChanges(resourceValue: ResourceInput, editingResource: Resource | null) {
+function hasResourceChanges(
+  resourceValue: ResourceInput,
+  editingResource: Resource | null,
+  replacementFile: File | null,
+) {
   return (
     !editingResource ||
+    Boolean(replacementFile) ||
     resourceValue.title !== editingResource.title ||
     resourceValue.url !== editingResource.url ||
     resourceValue.type !== editingResource.type
@@ -97,6 +104,74 @@ function ResourceFileField({
         />
       </label>
       <p className="mt-1 text-xs text-muted-foreground">Máximo 25 MB.</p>
+    </Field>
+  );
+}
+
+function ResourceReplacementField({
+  replacementFile,
+  selectResourceFile,
+}: {
+  replacementFile: File | null;
+  selectResourceFile: (file: File | null) => void;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor="resource-file">Reemplazar archivo</FieldLabel>
+      <input
+        key={replacementFile ? 'selected' : 'empty'}
+        id="resource-file"
+        className="peer sr-only"
+        type="file"
+        tabIndex={replacementFile ? -1 : undefined}
+        onChange={(event) => selectResourceFile(event.target.files?.item(0) ?? null)}
+      />
+      {replacementFile ? (
+        <div className="flex min-h-11 items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 py-1 pr-1 pl-3">
+          <ResourceIcon
+            resource={{
+              type: 'FILE',
+              title: replacementFile.name,
+              fileContentType: replacementFile.type || null,
+            }}
+            size={18}
+            className="shrink-0 text-primary"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">{replacementFile.name}</span>
+            <span className="block text-xs text-muted-foreground">
+              Reemplazará al archivo actual al guardar
+            </span>
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="min-h-11 shrink-0"
+            onClick={() => selectResourceFile(null)}
+          >
+            <Undo2 data-icon="inline-start" />
+            Mantener actual
+          </Button>
+        </div>
+      ) : (
+        <label
+          htmlFor="resource-file"
+          className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 transition-colors peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 hover:bg-primary/10"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            selectResourceFile(event.dataTransfer.files.item(0));
+          }}
+        >
+          <FileUp className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <span className="min-w-0 text-sm">
+            <span className="font-semibold">Arrastra un archivo nuevo</span>{' '}
+            <span className="text-muted-foreground">o selecciónalo</span>
+          </span>
+        </label>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">Opcional. Máximo 25 MB.</p>
     </Field>
   );
 }
@@ -169,13 +244,14 @@ function ResourceTextFields({
   );
 }
 
-function resourceTitle(resourceValue: ResourceInput, editingResource: Resource | null) {
-  const extensionIndex = editingResource?.title.lastIndexOf('.') ?? -1;
+function resourceTitle(
+  resourceValue: ResourceInput,
+  editingResource: Resource | null,
+  replacementFile: File | null,
+) {
   const extension =
-    editingResource?.type === 'FILE' &&
-    extensionIndex > 0 &&
-    extensionIndex < editingResource.title.length - 1
-      ? editingResource.title.slice(extensionIndex)
+    editingResource?.type === 'FILE'
+      ? fileTitleExtension(replacementFile?.name ?? editingResource.title)
       : '';
   const editableTitle = extension
     ? resourceValue.title.slice(0, -extension.length)
@@ -189,11 +265,17 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
   const isEditingResource = resourceSession.kind === 'editing-existing';
   const resourceValue = sessionValue(resourceSession);
   const selectedFile = resourceSession.kind === 'adding-file' ? resourceSession.selectedFile : null;
-  const { extension, editableTitle } = resourceTitle(resourceValue, editingResource);
+  const replacementFile =
+    resourceSession.kind === 'editing-existing' ? resourceSession.replacementFile : null;
+  const { extension, editableTitle } = resourceTitle(
+    resourceValue,
+    editingResource,
+    replacementFile,
+  );
   const isAddingFile = mode === 'file' && !isEditingResource;
   const canSave = isAddingFile
     ? Boolean(selectedFile)
-    : hasResourceChanges(resourceValue, editingResource);
+    : hasResourceChanges(resourceValue, editingResource, replacementFile);
   const [showErrors, setShowErrors] = useState(false);
   const errors = isAddingFile
     ? { title: undefined, url: undefined }
@@ -205,15 +287,23 @@ export function ResourceComposer({ mode, editingResource, onModeChange, onClose 
   const resourceFields = isAddingFile ? (
     <ResourceFileField selectedFile={selectedFile} selectResourceFile={selectResourceFile} />
   ) : (
-    <ResourceTextFields
-      mode={mode}
-      resourceValue={resourceValue}
-      editableTitle={editableTitle}
-      extension={extension}
-      titleError={titleError}
-      urlError={urlError}
-      changeResource={changeResource}
-    />
+    <>
+      <ResourceTextFields
+        mode={mode}
+        resourceValue={resourceValue}
+        editableTitle={editableTitle}
+        extension={extension}
+        titleError={titleError}
+        urlError={urlError}
+        changeResource={changeResource}
+      />
+      {editingResource?.type === 'FILE' ? (
+        <ResourceReplacementField
+          replacementFile={replacementFile}
+          selectResourceFile={selectResourceFile}
+        />
+      ) : null}
+    </>
   );
 
   return (

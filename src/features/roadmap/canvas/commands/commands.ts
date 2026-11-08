@@ -729,15 +729,34 @@ export const canvasCommandCatalog = {
     kind: 'update-resource';
     resourceId: string;
     resource: ResourceInput;
+    file?: File;
   }>({
-    requests: ({ resourceId, resource }) => ({
-      method: 'PATCH',
-      path: `/resources/${resourceId}`,
-      body: resource.type === 'FILE' ? { title: resource.title } : resource,
-    }),
+    requests: ({ resourceId, resource, file }) => {
+      const path = `/resources/${resourceId}`;
+      if (!file)
+        return {
+          method: 'PATCH',
+          path,
+          body: resource.type === 'FILE' ? { title: resource.title } : resource,
+        };
+      const body = new FormData();
+      body.append('title', resource.title);
+      body.append('file', file);
+      return { method: 'PATCH', path, body };
+    },
     failure: 'No se pudo guardar el recurso.',
-    practice: (practice, { resourceId, resource }) =>
+    practice: (practice, { resourceId, resource, file }) =>
       practice.mutateResource(resourceId, (current) => {
+        if (file) {
+          if (current.type !== 'FILE')
+            throw new Error('Solo un Archivo permite reemplazar su archivo.');
+          return {
+            ...current,
+            title: resource.title,
+            url: file.name,
+            fileContentType: file.type || null,
+          };
+        }
         const changes =
           current.type === 'FILE' && resource.type === 'FILE' && resource.url === current.url
             ? { title: resource.title }

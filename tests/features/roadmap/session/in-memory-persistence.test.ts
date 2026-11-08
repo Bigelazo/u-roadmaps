@@ -430,6 +430,50 @@ test('Practice resources preserve File ownership and permit Link edits', async (
   });
 });
 
+test('Practice replaces a File in place and refuses a replacement for a Link', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  const resources = async () =>
+    (await persistence.load()).nodes.flatMap((node) => ('resources' in node ? node.resources : []));
+  await persistence.execute({
+    kind: 'upload-resource',
+    nodeId: 'selected',
+    file: new File(['bytes'], 'guide.txt', { type: 'text/plain' }),
+  });
+  await persistence.execute({
+    kind: 'add-resource',
+    nodeId: 'selected',
+    resource: { title: 'Video', url: 'https://example.test/video', type: 'LINK' },
+  });
+  const [file, link] = await resources();
+  const replacement = new File(['slides'], 'slides.pptx', {
+    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  });
+  await persistence.execute({
+    kind: 'update-resource',
+    resourceId: file.id,
+    resource: { ...file, title: 'Guía.pptx' },
+    file: replacement,
+  });
+  await expect(
+    persistence.execute({
+      kind: 'update-resource',
+      resourceId: link.id,
+      resource: link,
+      file: replacement,
+    }),
+  ).rejects.toThrow('Solo un Archivo permite reemplazar su archivo.');
+  expect(await resources()).toEqual([
+    {
+      id: file.id,
+      title: 'Guía.pptx',
+      url: 'slides.pptx',
+      type: 'FILE',
+      fileContentType: replacement.type,
+    },
+    link,
+  ]);
+});
+
 test('refuses to delete a Dependency that is not in the Roadmap', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 

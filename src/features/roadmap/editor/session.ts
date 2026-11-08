@@ -1,4 +1,5 @@
 import type { RoadmapNode, Resource } from '@/features/roadmap/types';
+import { replaceFileTitleExtension } from '@/features/roadmap/domain/resource';
 import type {
   NodeEditorEffect,
   NodeEditorGuardReason,
@@ -108,7 +109,11 @@ export function resourceSessionIsDirty(node: RoadmapNode, session: ResourceSessi
       return Boolean(session.value.title.trim() || session.value.url.trim());
     case 'editing-existing': {
       const resource = node.resources.find((candidate) => candidate.id === session.resourceId);
-      return !resource || !sameResourceInput(session.value, resourceInputFromResource(resource));
+      return (
+        !resource ||
+        Boolean(session.replacementFile) ||
+        !sameResourceInput(session.value, resourceInputFromResource(resource))
+      );
     }
   }
 }
@@ -139,6 +144,7 @@ function resourceSessionMatchesEffect(session: ResourceSession, effect: NodeEdit
       return (
         session.kind === 'editing-existing' &&
         session.resourceId === effect.resourceId &&
+        session.replacementFile === (effect.file ?? null) &&
         sameResourceInput(session.value, effect.resource)
       );
     case 'update-node':
@@ -153,6 +159,43 @@ function replaceNodeInformation(node: RoadmapNode, value: NodeUpdate): RoadmapNo
     title: value.title,
     description: value.description || null,
     nodeTypeId: value.nodeTypeId,
+  };
+}
+
+function updatedResource(
+  resource: Resource,
+  effect: Extract<NodeEditorEffect, { kind: 'update-resource' }>,
+  next: RoadmapNode,
+): Resource {
+  if (!effect.file) return { ...resource, ...effect.resource };
+  const replaced = next.resources.find(({ id }) => id === resource.id);
+  return {
+    ...resource,
+    title: effect.resource.title,
+    url: replaced?.url ?? resource.url,
+    fileContentType: effect.file.type || null,
+  };
+}
+
+function withReplacementFile(
+  state: NodeEditorState,
+  session: Extract<ResourceSession, { kind: 'editing-existing' }>,
+  file: File | null,
+): ResourceSession {
+  const resource = state.canonicalNode?.resources.find(({ id }) => id === session.resourceId);
+  if (!resource || resource.type !== 'FILE') return session;
+  const previousName = session.replacementFile?.name ?? resource.title;
+  return {
+    ...session,
+    replacementFile: file,
+    value: {
+      ...session.value,
+      title: replaceFileTitleExtension(
+        session.value.title,
+        previousName,
+        file?.name ?? resource.title,
+      ),
+    },
   };
 }
 
@@ -202,7 +245,7 @@ function refreshMatchesPendingEffect(state: NodeEditorState, next: RoadmapNode) 
       return sameResources(
         next.resources,
         previous.resources.map((resource) =>
-          resource.id === effect.resourceId ? { ...resource, ...effect.resource } : resource,
+          resource.id === effect.resourceId ? updatedResource(resource, effect, next) : resource,
         ),
       );
     case 'delete-resource':
@@ -287,6 +330,7 @@ export function nodeEditorReducer(
           kind: 'editing-existing',
           resourceId: action.resource.id,
           value: resourceInputFromResource(action.resource),
+          replacementFile: null,
         },
       };
     case 'change-resource':
@@ -310,6 +354,13 @@ export function nodeEditorReducer(
       };
     }
     case 'select-resource-file':
+      if (state.resourceSession.kind === 'editing-existing') {
+        if (state.resourceSession.replacementFile === action.file) return state;
+        const resourceSession = withReplacementFile(state, state.resourceSession, action.file);
+        return resourceSession === state.resourceSession
+          ? state
+          : { ...state, epoch: state.epoch + 1, resourceSession };
+      }
       if (state.resourceSession.kind !== 'adding-file') return state;
       if (state.resourceSession.selectedFile === action.file) return state;
       return {

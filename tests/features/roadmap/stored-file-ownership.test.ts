@@ -85,7 +85,7 @@ vi.mock('node:fs/promises', async (original) => {
 
 const directory = mkdtempSync(join(tmpdir(), 'resource-ownership-'));
 process.env.UPLOADS_DIRECTORY = relative(process.cwd(), directory);
-const { uploadRoadmapResource, removeRoadmapResource } =
+const { uploadRoadmapResource, removeRoadmapResource, replaceRoadmapResourceFile } =
   await import('@/features/roadmap/application/resources/commands');
 const { deleteRoadmapNode, previewNodeDeletion } =
   await import('@/features/roadmap/application/editor');
@@ -638,4 +638,132 @@ test('downloads keep participant Node access separate from frozen version teache
       resource.id,
     ),
   ).rejects.toMatchObject({ status: 404 });
+});
+
+function replace(
+  course: Parameters<typeof teacher>[0],
+  id: string,
+  file: unknown,
+  port = recordingChangePort().port,
+  identifier = course.identifier,
+) {
+  return replaceRoadmapResourceFile(
+    { ...teacher(course), identifier, id, file, title: 'Guía revisada.pdf' },
+    port,
+  );
+}
+
+test('a file replacement keeps the Resource, serves the new bytes and deletes only the replaced file', async ({
+  course,
+}) => {
+  const resource = await upload(course, course.change.nodeId, 'Primera versión');
+  const [replacedKey] = await readdir(directory);
+  const recorder = recordingChangePort();
+  const { resource: replaced } = await replace(
+    course,
+    resource.id,
+    new File(['Segunda versión'], 'revisada.pdf', { type: 'application/pdf' }),
+    recorder.port,
+  );
+  expect(replaced).toMatchObject({
+    id: resource.id,
+    title: 'Guía revisada.pdf',
+    type: 'FILE',
+    fileContentType: 'application/pdf',
+    url: resource.url,
+  });
+  const keys = await readdir(directory);
+  expect(keys).toHaveLength(1);
+  expect(keys).not.toContain(replacedKey);
+  const downloaded = await downloadRoadmapResource({ ...teacher(course), resourceId: resource.id });
+  expect(downloaded).toMatchObject({ contentType: 'application/pdf', title: 'Guía revisada.pdf' });
+  expect(downloaded.bytes.toString()).toBe('Segunda versión');
+  const [fact] = recorder.facts();
+  expect(fact).toMatchObject({
+    kind: 'resource',
+    resourceId: resource.id,
+    previous: { title: 'guide.txt' },
+    current: { title: 'Guía revisada.pdf' },
+  });
+  expect(fact.kind === 'resource' && fact.previous?.revision).not.toBe(
+    fact.kind === 'resource' && fact.current?.revision,
+  );
+});
+
+test('replacing a file in a copied Roadmap leaves the frozen version with its own bytes', async ({
+  course,
+}) => {
+  const source = await copySource(course);
+  const { roadmap } = await source.copy();
+  await prisma.participation.create({
+    data: { userId: course.teacherId, role: 'TEACHER', courseOfferingId: roadmap.courseOfferingId },
+  });
+  const current = { ...course.identifier, year: 2027, semester: 1 };
+  const [copied] = await prisma.resource.findMany({
+    where: { roadmapNode: { roadmapId: roadmap.id } },
+  });
+  await replace(
+    course,
+    copied.id,
+    new File(['Versión 2027'], 'guia.pdf', { type: 'application/pdf' }),
+    recordingChangePort().port,
+    current,
+  );
+  expect(await readdir(directory)).toEqual(expect.arrayContaining(source.keys));
+  expect(await readdir(directory)).not.toContain(copied.fileKey);
+  const [frozen] = await prisma.resource.findMany({
+    where: { roadmapNode: { roadmapId: course.roadmapId } },
+  });
+  const frozenDownload = await downloadRoadmapVersionResource(
+    { id: course.teacherId, rut: null, ucampus: localFixtureUCampus },
+    course.identifier,
+    frozen.id,
+  );
+  expect(frozenDownload.bytes.toString()).toBe('Independent source');
+  const currentDownload = await downloadRoadmapResource({
+    ...teacher(course),
+    identifier: current,
+    resourceId: copied.id,
+  });
+  expect(currentDownload.bytes.toString()).toBe('Versión 2027');
+});
+
+test('a refused file replacement keeps the Resource and its stored file', async ({ course }) => {
+  const resource = await upload(course, course.change.nodeId);
+  const link = await prisma.resource.create({
+    data: {
+      roadmapNodeId: course.change.nodeId,
+      title: 'Enlace',
+      url: 'https://example.test/guia',
+      type: 'LINK',
+    },
+  });
+  const [stored] = await readdir(directory);
+  const pdf = () => new File(['Nueva'], 'guia.pdf', { type: 'application/pdf' });
+  await expect(replace(course, link.id, pdf())).rejects.toMatchObject({
+    status: 400,
+    code: 'INVALID_RESOURCE_EDIT',
+  });
+  await expect(replace(course, resource.id, new File([], 'vacio.pdf'))).rejects.toMatchObject({
+    status: 400,
+    message: 'El archivo seleccionado está vacío.',
+  });
+  await expect(replace(course, resource.id, 'not a file')).rejects.toMatchObject({ status: 400 });
+  await expect(
+    replace(course, resource.id, pdf(), {
+      async report() {
+        throw new Error('replacement registration refused');
+      },
+    }),
+  ).rejects.toThrow('replacement registration refused');
+  await prisma.roadmap.update({ where: { id: course.roadmapId }, data: { closedAt: new Date() } });
+  await expect(replace(course, resource.id, pdf())).rejects.toMatchObject({
+    code: 'ROADMAP_CLOSED',
+  });
+  expect(await readdir(directory)).toEqual([stored]);
+  expect(await readFile(join(directory, stored), 'utf8')).toBe('Contenido');
+  expect(await prisma.resource.findUniqueOrThrow({ where: { id: resource.id } })).toMatchObject({
+    title: 'guide.txt',
+    fileKey: stored,
+  });
 });

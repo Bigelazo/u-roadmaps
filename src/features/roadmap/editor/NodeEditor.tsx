@@ -73,7 +73,13 @@ function projectNodeInformationPreview(
     if (resourceSession.kind === 'editing-existing') {
       resources = node.resources.map((resource) =>
         resource.id === resourceSession.resourceId
-          ? { ...resource, ...resourceSession.value }
+          ? {
+              ...resource,
+              ...resourceSession.value,
+              ...(resourceSession.replacementFile
+                ? { fileContentType: resourceSession.replacementFile.type || null }
+                : {}),
+            }
           : resource,
       );
     } else if (resourceSession.kind === 'adding-file' && resourceSession.selectedFile) {
@@ -253,6 +259,7 @@ function useNodeEditorController(
       kind: 'update-resource',
       resourceId: session.resourceId,
       resource: session.value,
+      ...(session.replacementFile ? { file: session.replacementFile } : {}),
     });
   }, [startEffect]);
 

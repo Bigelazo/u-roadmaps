@@ -104,6 +104,38 @@ test.each(['Guía.docx', 'Guía.final.PDF', 'README', '.env'])(
   },
 );
 
+test('replaces a file keeping the edited title, adopting the new extension, and can keep the current one', async () => {
+  const user = userEvent.setup();
+  const file = { ...resource, title: 'Guía.docx', type: 'FILE' as const };
+  const { perform } = renderEditor(withNode({ resources: [file] }));
+  await user.click(screen.getByRole('button', { name: 'Editar recurso Guía.docx' }));
+  const form = screen.getByRole('form', { name: 'Editor de recurso' });
+  const title = within(form).getByRole('textbox', { name: 'Título' });
+  const save = within(form).getByRole('button', { name: 'Guardar recurso' });
+  expect(save.hasAttribute('disabled')).toBe(true);
+  await user.clear(title);
+  await user.type(title, 'Guía resuelta');
+  const replacement = new File(['pdf'], 'solucion.pdf', { type: 'application/pdf' });
+  await user.upload(within(form).getByLabelText('Reemplazar archivo'), replacement);
+  expect(within(form).getByText('solucion.pdf')).toBeTruthy();
+  expect((title as HTMLInputElement).value).toBe('Guía resuelta');
+  expect(within(form).getByText('.pdf')).toBeTruthy();
+  await user.click(within(form).getByRole('button', { name: 'Mantener actual' }));
+  expect(within(form).queryByText('solucion.pdf')).toBeNull();
+  expect(within(form).getByText('.docx')).toBeTruthy();
+  fireEvent.drop(within(form).getByText('Arrastra un archivo nuevo'), {
+    dataTransfer: { files: { item: () => replacement } },
+  });
+  await user.click(save);
+  expect(perform).toHaveBeenCalledWith({
+    kind: 'update-resource',
+    resourceId: file.id,
+    resource: { url: file.url, title: 'Guía resuelta.pdf', type: 'FILE' },
+    file: replacement,
+  });
+  await waitFor(() => expect(screen.queryByRole('form', { name: 'Editor de recurso' })).toBeNull());
+});
+
 test('Resource rows name their action and file category instead of a type caption', () => {
   const sheet = {
     ...resource,
@@ -123,6 +155,27 @@ test('Resource rows name their action and file category instead of a type captio
   expect(within(fileRow).getByRole('link', { name: 'Descargar Notas.xlsx' })).toBeTruthy();
   expect(fileRow.innerHTML).toContain('lucide-file-spreadsheet"');
   expect(within(list).queryByText(/^(Archivo|Enlace)$/)).toBeNull();
+});
+
+test('a Link edit offers its address but never a file replacement', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor(withNode({ resources: [resource] }));
+  await user.click(screen.getByRole('button', { name: `Editar recurso ${resource.title}` }));
+  const form = screen.getByRole('form', { name: 'Editor de recurso' });
+  expect(within(form).queryByLabelText('Reemplazar archivo')).toBeNull();
+  const address = within(form).getByRole('textbox', { name: 'Enlace' });
+  await user.clear(address);
+  await user.type(address, 'nueva-guia');
+  await user.click(within(form).getByRole('button', { name: 'Guardar enlace' }));
+  expect(perform).not.toHaveBeenCalled();
+  await user.clear(address);
+  await user.type(address, 'https://example.test/nueva');
+  await user.click(within(form).getByRole('button', { name: 'Guardar enlace' }));
+  expect(perform).toHaveBeenCalledWith({
+    kind: 'update-resource',
+    resourceId: resource.id,
+    resource: { title: resource.title, url: 'https://example.test/nueva', type: 'LINK' },
+  });
 });
 
 type User = ReturnType<typeof userEvent.setup>;

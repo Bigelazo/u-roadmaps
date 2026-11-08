@@ -27,6 +27,7 @@ export {
   removeRoadmapResource,
   updateRoadmapResource,
   uploadRoadmapResource,
+  replaceRoadmapResourceFile,
 } from '@/features/roadmap/application/resources';
 export {
   completeNode,

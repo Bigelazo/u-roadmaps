@@ -5,6 +5,7 @@ export {
   removeRoadmapResource,
   updateRoadmapResource,
   uploadRoadmapResource,
+  replaceRoadmapResourceFile,
 } from '@/features/roadmap/application/resources/commands';
 export {
   downloadRoadmapResource,

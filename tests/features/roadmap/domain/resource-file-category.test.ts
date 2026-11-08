@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { resourceCategory } from '@/features/roadmap/domain/resource-file-category';
+import { replaceFileTitleExtension } from '@/features/roadmap/domain/resource';
 
 const file = (title: string, fileContentType: string | null = null) =>
   resourceCategory({ type: 'FILE', title, fileContentType });
@@ -50,4 +51,13 @@ test('unknown files are generic and Links are links whatever their address says'
   expect(
     resourceCategory({ type: 'LINK', title: 'Apunte.pdf', fileContentType: 'application/pdf' }),
   ).toBe('link');
+});
+
+test('a replacement keeps the edited stem and adopts the new extension', () => {
+  expect(replaceFileTitleExtension('Guía resuelta.docx', 'Guía.docx', 'solucion.pdf')).toBe(
+    'Guía resuelta.pdf',
+  );
+  expect(replaceFileTitleExtension('README', 'README', 'notas.md')).toBe('README.md');
+  expect(replaceFileTitleExtension('Guía.pdf', 'solucion.pdf', 'Guía.docx')).toBe('Guía.docx');
+  expect(replaceFileTitleExtension('Datos.csv', 'Datos.csv', 'datos')).toBe('Datos');
 });
