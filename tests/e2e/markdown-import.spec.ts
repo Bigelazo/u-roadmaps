@@ -73,7 +73,7 @@ test('Markdown drops require confirmation and update the Node draft before savin
   await transfer.dispose();
 });
 
-test('a dragged Markdown file turns the description into a drop target', async ({
+test('a Markdown file dragged into the window turns the description into a drop target', async ({
   page,
   course,
   teacherApi: api,
@@ -93,20 +93,33 @@ test('a dragged Markdown file turns the description into a drop target', async (
   await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
 
   const description = page.locator('#edit-node-description');
+  const body = page.locator('body');
   const dropTarget = page.getByText('Suelta el archivo Markdown aquí');
   const markdown = await fileDrop(page, 'guia.md', '# Guía');
   const pdf = await fileDrop(page, 'guia.pdf', 'PDF', 'application/pdf');
 
-  await description.dispatchEvent('dragover', { dataTransfer: pdf });
+  await body.dispatchEvent('dragenter', { dataTransfer: pdf });
   await expect(dropTarget).toBeHidden();
 
-  await description.dispatchEvent('dragover', { dataTransfer: markdown });
+  await body.dispatchEvent('dragenter', { dataTransfer: markdown });
   await expect(dropTarget).toBeVisible();
-  await description.dispatchEvent('dragleave', { dataTransfer: markdown });
+  await body.dispatchEvent('dragleave', { dataTransfer: markdown, clientX: 0, clientY: 300 });
   await expect(dropTarget).toBeHidden();
 
-  await description.dispatchEvent('dragover', { dataTransfer: markdown });
+  await body.dispatchEvent('dragenter', { dataTransfer: markdown });
   await expect(dropTarget).toBeVisible();
+  const strayDropRejected = await body.evaluate((element, transfer) => {
+    const event = new DragEvent('dragover', {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: transfer,
+    });
+    element.dispatchEvent(event);
+    return event.defaultPrevented && transfer.dropEffect === 'none';
+  }, markdown);
+  expect(strayDropRejected).toBe(true);
+
+  await description.dispatchEvent('dragover', { dataTransfer: markdown });
   await description.dispatchEvent('drop', { dataTransfer: markdown });
   await expect(dropTarget).toBeHidden();
   await expect(
