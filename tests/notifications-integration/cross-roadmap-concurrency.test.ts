@@ -95,6 +95,7 @@ test.for([
         async (each) => (await Promise.all([knownNode(each), knownNode(each)]))[0],
       ),
     );
+    await prisma.$executeRaw`ANALYZE "NoticeKnownValue"`;
     const overlapping = overlappingPorts();
     await Promise.all([
       edit(course, overlapping.ports[0], nodeId),
