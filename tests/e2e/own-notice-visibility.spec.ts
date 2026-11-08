@@ -132,14 +132,26 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
   await expect.poll(async () => (await notices())[0]?.data.currentValue).toBe('Retirado');
   const recognized = await recognize();
   expect(recognized.acknowledged).toBe(5);
+  const recognizedNode = {
+    title: 'Título pendiente',
+    nodeType: { name: 'Evaluación', icon: 'ClipboardCheck', color: '#FF5050' },
+  };
   expect(recognized.summary.groups).toEqual([
-    { title: 'Título pendiente', items: ['«Título pendiente» fue ocultado del Roadmap.'] },
+    {
+      title: 'Título pendiente',
+      node: recognizedNode,
+      items: [[{ node: recognizedNode }, ' fue ocultado del Roadmap.']],
+    },
   ]);
   expect(await notices()).toHaveLength(0);
   await ok(await author.patch(path, { data: { isVisible: true } }));
   await expect.poll(targets).toEqual(['node-access']);
   expect((await recognize()).summary.groups).toEqual([
-    { title: 'Título pendiente', items: ['«Título pendiente» volvió a mostrarse en el Roadmap.'] },
+    {
+      title: 'Título pendiente',
+      node: recognizedNode,
+      items: [[{ node: recognizedNode }, ' volvió a mostrarse en el Roadmap.']],
+    },
   ]);
 });
 

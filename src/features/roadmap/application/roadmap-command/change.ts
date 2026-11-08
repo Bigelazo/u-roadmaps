@@ -73,6 +73,7 @@ async function serializableTransaction<T>(
 
 async function preferIndexScans(transaction: Prisma.TransactionClient) {
   await transaction.$executeRaw`SET LOCAL enable_seqscan = off`;
+  await transaction.$executeRaw`SET LOCAL enable_bitmapscan = off`;
 }
 
 export function isSerializationFailure(error: unknown): boolean {
