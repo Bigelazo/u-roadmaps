@@ -500,3 +500,31 @@ test('spaces outgoing dependencies on one side 8 px apart and nests their turns 
     expect(crossings(routes)).toBe(0);
   });
 });
+
+test('keeps spaced outgoing ports when their dependencies converge on another node’s shared arrow point', () => {
+  withRouter((router) => {
+    const result = router.route({
+      obstacles: [
+        body('concepts', 320, 40, 240, 80),
+        body('reading', 320, 180, 240, 80),
+        body('exercises', 640, 40, 240, 80),
+        body('control', 960, 160, 160, 80),
+      ],
+      dependencies: [
+        { id: 'concepts-exercises', source: 'concepts', target: 'exercises' },
+        { id: 'concepts-control', source: 'concepts', target: 'control' },
+        { id: 'exercises-control', source: 'exercises', target: 'control' },
+      ],
+    });
+    expect(result.blocked).toBe(0);
+    const [toExercises, toControl] = ['concepts-exercises', 'concepts-control'].map(
+      (id) => result.routes.get(id)!.points,
+    );
+    expect([toExercises[0], toControl[0]]).toEqual([
+      { x: 560, y: 76 },
+      { x: 560, y: 84 },
+    ]);
+    expect(toControl.at(-1)).toEqual({ x: 960, y: 200 });
+    expect(result.routes.get('exercises-control')!.points.at(-1)).toEqual({ x: 960, y: 200 });
+  });
+});

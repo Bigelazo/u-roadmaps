@@ -208,10 +208,21 @@ export class DependencyRouter {
         owned.push(shape);
         shapes.set(obstacle.id, shape);
       }
-      ports.forEach((port, index) => {
+      const pinsByPlace = new Map<string, number>();
+      ports.forEach((port) => {
         const { obstacle } = port.shape;
-        const shape = shapes.get(obstacle.id)!;
-        const id = index + 1;
+        const place = `${obstacle.id}:${port.side}:${port.point.x},${port.point.y}`;
+        const pair = endpoints.get(port.entry.dependency.id) ?? {};
+        pair[port.source ? 'source' : 'target'] = port;
+        endpoints.set(port.entry.dependency.id, pair);
+        const shared = pinsByPlace.get(place);
+        if (shared) {
+          pinIds.set(port, shared);
+          return;
+        }
+        const id = pinsByPlace.size + 1;
+        pinsByPlace.set(place, id);
+        pinIds.set(port, id);
         const directions = [
           this.avoid.ConnDirUp,
           this.avoid.ConnDirRight,
@@ -219,7 +230,7 @@ export class DependencyRouter {
           this.avoid.ConnDirLeft,
         ];
         const pin = new this.avoid.ShapeConnectionPin(
-          shape,
+          shapes.get(obstacle.id)!,
           id,
           port.point.x - obstacle.x,
           port.point.y - obstacle.y,
@@ -229,10 +240,6 @@ export class DependencyRouter {
         );
         pin.setExclusive(false);
         owned.push(pin);
-        const pair = endpoints.get(port.entry.dependency.id) ?? {};
-        pinIds.set(port, id);
-        pair[port.source ? 'source' : 'target'] = port;
-        endpoints.set(port.entry.dependency.id, pair);
       });
       for (const dependency of scene.dependencies) {
         const pair = endpoints.get(dependency.id);
