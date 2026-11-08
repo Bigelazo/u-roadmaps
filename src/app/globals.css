@@ -28,7 +28,7 @@ body:has([data-viewport-page]) [data-global-navigation] {
 }
 
 .markdown-editor pre {
-  min-height: 8rem;
+  min-height: var(--markdown-editor-min-height, 8rem);
   margin: 0;
   padding: calc(0.5rem + 1px) calc(0.625rem + 1px);
   white-space: pre-wrap;

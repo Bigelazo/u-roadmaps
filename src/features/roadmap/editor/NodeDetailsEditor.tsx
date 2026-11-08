@@ -97,7 +97,7 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
       noValidate
       className={cn(
         'flex flex-col gap-4 py-5',
-        isFullscreen && 'py-0 [&_.markdown-editor_pre]:min-h-[50dvh]',
+        isFullscreen && 'py-0 [--markdown-editor-min-height:50dvh]',
       )}
       onSubmit={(event) => {
         event.preventDefault();
