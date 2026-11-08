@@ -4,6 +4,7 @@ import type { RoadmapChangeFact, RoadmapChanges } from '@/shared/roadmap-changes
 import { dependencyTarget } from '@/shared/route-notice-target';
 import {
   isNodeViewer,
+  nodePart,
   nodeViewers,
   type NoticeTargetDescriptor,
   type NoticeTargetRef,
@@ -74,11 +75,22 @@ export const dependencyPairTarget: NoticeTargetDescriptor<DependencyFact> = {
   },
   factContext: (fact) => ({ dependencyId: fact.dependencyId }),
   storedData: dependencyPair,
-  wording: ({ currentValue, context }) => ({
-    subject: 'Ruta actualizada',
-    body: `«${String(context.dependentNodeTitle)}» ${currentValue === PRESENT ? 'ahora requiere' : 'ya no requiere'} «${String(context.prerequisiteNodeTitle)}».`,
-    summaryGroup: 'general',
-  }),
+  wording: ({ currentValue, context }) => {
+    const dependent = String(context.dependentNodeTitle);
+    const prerequisite = String(context.prerequisiteNodeTitle);
+    const relation = currentValue === PRESENT ? 'ahora requiere' : 'ya no requiere';
+    return {
+      subject: 'Ruta actualizada',
+      body: `«${dependent}» ${relation} «${prerequisite}».`,
+      summaryGroup: 'general',
+      summaryParts: [
+        nodePart(dependent, 'targetNodeId'),
+        ` ${relation} `,
+        nodePart(prerequisite, 'sourceNodeId'),
+        '.',
+      ],
+    };
+  },
   apiData: ({ context }) => ({
     dependencyId: context.dependencyId,
     prerequisiteNodeTitle: context.prerequisiteNodeTitle,

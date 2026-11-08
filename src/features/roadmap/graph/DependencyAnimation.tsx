@@ -14,6 +14,8 @@ import { animate, cubicBezier, motionValue, useMotionValue, type MotionValue } f
 import {
   dependencyAnimationSchedule,
   dependencyDrawingEase,
+  nodeRevealSeconds,
+  roadmapEntranceCadence,
 } from '@/features/roadmap/graph/dependency-animation-schedule';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { DependencyPath } from '@/features/roadmap/graph/DependencyPath';
@@ -41,7 +43,7 @@ function createPlayback(edges: readonly RoadmapFlowEdge[], nodeIds: readonly str
   const revealNode = (record: EdgePlayback) => {
     if (record.progress.get() >= 1 || record.animation) return;
     record.animation = animate(record.progress, 1, {
-      duration: 0.18 * (1 - record.progress.get()),
+      duration: nodeRevealSeconds * (1 - record.progress.get()),
       ease: cubicBezier(0.16, 1, 0.3, 1),
       onComplete: () => {
         record.animation = undefined;
@@ -86,7 +88,7 @@ function createPlayback(edges: readonly RoadmapFlowEdge[], nodeIds: readonly str
     paint(clock.get());
     entryAnimation = animate(clock, total, {
       duration: Math.max(0, total - clock.get()),
-      ease: dependencyDrawingEase,
+      ease: roadmapEntranceCadence,
       onUpdate: paint,
       onComplete: () => {
         paint(total);

@@ -1,14 +1,15 @@
 import {
   eligibleBranchUnlockNodeIds,
   transitiveDependentNodeIds,
-  transitivePrerequisiteNodeIds,
   visibleRoadmapGraph,
   wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
+  blockedPrerequisiteNodeIds,
   dueScheduledUnlockNodeIds,
-  type CalendarDay,
+  pendingScheduledUnlockNodeIds,
+  type UnlockInstant,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
@@ -28,12 +29,13 @@ export type RoadmapSnapshot = {
     nodeTypeId: string;
     isVisible: boolean;
     isTeacherBlocked: boolean;
-    teacherUnlockOn: CalendarDay | null;
+    teacherUnlockAt: UnlockInstant | null;
+    teacherUnlockIncludesDependents: boolean;
     resources: readonly { id: string; title: string }[];
   }[];
   dependencies: readonly { id: string; sourceNodeId: string; targetNodeId: string }[];
   nodeTypes: readonly { id: string; name: string; icon: string; color: string }[];
-  today: CalendarDay;
+  now: Date;
 };
 
 export type ChangeWithImpact =
@@ -267,12 +269,12 @@ function teacherBlockScope(
   const teacherBlockedNodeIds = new Set(
     snapshot.nodes.filter((node) => node.isTeacherBlocked).map(({ id }) => id),
   );
-  const prerequisiteNodeIds = transitivePrerequisiteNodeIds(snapshot.dependencies, nodeId);
-  if ([...prerequisiteNodeIds].some((id) => teacherBlockedNodeIds.has(id)))
+  const blockedPrerequisites = blockedPrerequisiteNodeIds({ ...snapshot, nodeId });
+  if (blockedPrerequisites.length > 0)
     return {
       mode: 'UPSTREAM',
       changedNodeIds: new Set(
-        [nodeId, ...prerequisiteNodeIds].filter((id) => teacherBlockedNodeIds.has(id)),
+        [nodeId, ...blockedPrerequisites].filter((id) => teacherBlockedNodeIds.has(id)),
       ),
     };
   if (operation === 'UNBLOCK')
@@ -286,6 +288,7 @@ function teacherBlockScope(
       dependencies: snapshot.dependencies,
       teacherBlockedNodeIds,
       rootNodeId: nodeId,
+      retainedNodeIds: pendingScheduledUnlockNodeIds(snapshot),
     }),
   };
 }

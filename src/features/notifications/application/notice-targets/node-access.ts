@@ -1,7 +1,11 @@
 import { NOTICE_TARGET } from './kinds';
-import { nodeAccessChangeText, nodeAccessState } from '@/shared/node-access';
+import {
+  nodeAccessChangePredicate,
+  nodeAccessChangeText,
+  nodeAccessState,
+} from '@/shared/node-access';
 import type { RoadmapChangeFact } from '@/shared/roadmap-changes';
-import { type NoticeTargetDescriptor, type TargetValues } from './descriptor';
+import { nodePart, type NoticeTargetDescriptor, type TargetValues } from './descriptor';
 
 type NodeAccessFact = Extract<RoadmapChangeFact, { kind: 'node-access' }>;
 
@@ -40,6 +44,10 @@ export const nodeAccessTarget: NoticeTargetDescriptor<NodeAccessFact> = {
     subject: nodeTitle(values),
     body: nodeAccessChangeText(nodeTitle(values), values.knownValue, values.currentValue),
     summaryGroup: 'node',
+    summaryParts: [
+      nodePart(nodeTitle(values)),
+      nodeAccessChangePredicate(values.knownValue, values.currentValue),
+    ],
   }),
   apiData: (values) => ({ nodeTitle: nodeTitle(values) }),
 };

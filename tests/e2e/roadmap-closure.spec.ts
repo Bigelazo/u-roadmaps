@@ -34,7 +34,7 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
   await ok(await changeTeacherBlock(teacher, offering.apiPath(`/nodes/${first.id}`)));
   await ok(
     await teacher.put(offering.apiPath(`/nodes/${second.id}/teacher-block/schedule`), {
-      data: { unlockOn: dayOffset(1) },
+      data: { unlockAt: `${dayOffset(1)}T12:00:00.000Z` },
     }),
   );
   await term.setFreezeDate(dayOffset(-1));
@@ -42,8 +42,8 @@ test('Roadmap closure clears Teacher blocks and schedules without completing pre
   const nodes = (await (await teacher.get(offering.apiPath())).json()).nodes;
   expect(
     nodes.every(
-      (node: { isTeacherBlocked: boolean; teacherUnlockOn?: string }) =>
-        !node.isTeacherBlocked && !node.teacherUnlockOn,
+      (node: { isTeacherBlocked: boolean; teacherUnlockAt?: string }) =>
+        !node.isTeacherBlocked && !node.teacherUnlockAt,
     ),
   ).toBe(true);
   const studentNodes = (await (await student.get(offering.apiPath())).json()).nodes;
@@ -168,7 +168,7 @@ test('the freeze date stays editable today and a failed closure is not a frozen 
   await ok(await changeTeacherBlock(teacher, offering.apiPath(`/nodes/${blocked.id}`)));
   await ok(
     await teacher.put(offering.apiPath(`/nodes/${blocked.id}/teacher-block/schedule`), {
-      data: { unlockOn: dayOffset(1) },
+      data: { unlockAt: `${dayOffset(1)}T12:00:00.000Z` },
     }),
   );
   await term.setFreezeDate(dayOffset(-1));
@@ -176,7 +176,10 @@ test('the freeze date stays editable today and a failed closure is not a frozen 
   const blockedNode = (await (await teacher.get(offering.apiPath())).json()).nodes.find(
     (node: { id: string }) => node.id === blocked.id,
   );
-  expect(blockedNode).toMatchObject({ isTeacherBlocked: true, teacherUnlockOn: dayOffset(1) });
+  expect(blockedNode).toMatchObject({
+    isTeacherBlocked: true,
+    teacherUnlockAt: `${dayOffset(1)}T12:00:00.000Z`,
+  });
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(offering.pagePath());
   await expect(page.getByRole('button', { name: 'Crear en el mapa' })).toBeVisible();
@@ -243,7 +246,7 @@ test('closed Roadmaps refuse teaching edits with a clear closure error', async (
     {
       method: 'PUT',
       suffix: `/nodes/${node.id}/teacher-block/schedule`,
-      data: { unlockOn: dayOffset(1) },
+      data: { unlockAt: `${dayOffset(1)}T12:00:00.000Z` },
     },
     { method: 'DELETE', suffix: `/nodes/${node.id}/teacher-block/schedule` },
     {

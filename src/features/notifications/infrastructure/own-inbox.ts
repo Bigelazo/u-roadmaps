@@ -212,7 +212,7 @@ export async function prepareOwnNoticeOpening(
       return operationId;
     }
     if (retry) throw new ApplicationError(404, 'NOT_FOUND', 'Apertura de Roadmap no encontrada.');
-    const [accessible, notices, nodes, roadmap] = await Promise.all([
+    const [accessible, notices, nodes, nodeTypes, roadmap] = await Promise.all([
       roadmapNodeAccess(readAccess, transaction, userId, roadmapId),
       transaction.roadmapNotice.findMany({
         where: { recipientId: userId, roadmapId, acknowledgedAt: null },
@@ -221,7 +221,17 @@ export async function prepareOwnNoticeOpening(
       }),
       transaction.roadmapNode.findMany({
         where: { roadmapId },
-        select: { id: true, title: true, isVisible: true, nodeTypeId: true },
+        select: {
+          id: true,
+          title: true,
+          isVisible: true,
+          nodeTypeId: true,
+          nodeType: { select: { name: true, icon: true, color: true } },
+        },
+      }),
+      transaction.nodeType.findMany({
+        where: { OR: [{ roadmapId }, { isPredefined: true }] },
+        select: { id: true, name: true, icon: true, color: true },
       }),
       transaction.roadmap.findUniqueOrThrow({
         where: { id: roadmapId },
@@ -241,6 +251,7 @@ export async function prepareOwnNoticeOpening(
           roadmap.courseOffering.courseCode,
           notices,
           nodes,
+          nodeTypes,
           accessible,
           participation.role,
         ),

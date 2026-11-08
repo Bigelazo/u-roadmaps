@@ -9,6 +9,7 @@ import {
   recordRoadmapNotices,
   type NoticeDelivery,
 } from '@/features/notifications/server';
+import type { ChangeSummary } from '@/features/notifications/contracts/change-summary';
 import {
   changeTeacherBlock,
   createRoadmapDependency,
@@ -187,4 +188,15 @@ export async function announceRoadmap(course: IntegrationCourse) {
     }),
   );
   await delivery?.((persist) => persist());
+}
+
+export function summaryInInboxWords(summary: ChangeSummary | null | undefined) {
+  return summary?.groups.map(({ title, items }) => ({
+    title,
+    items: items.map((item) =>
+      typeof item === 'string'
+        ? item
+        : item.map((part) => (typeof part === 'string' ? part : `«${part.node.title}»`)).join(''),
+    ),
+  }));
 }

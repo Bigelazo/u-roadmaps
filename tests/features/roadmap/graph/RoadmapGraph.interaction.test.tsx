@@ -90,6 +90,7 @@ vi.mock('@xyflow/react', () => ({
             className="react-flow__node"
             data-id={node.id}
             data-testid={`rendered-node-${node.id}`}
+            onClick={(event) => onNodeClick(event, node)}
           >
             Nodo renderizado {node.id}
           </button>
@@ -425,7 +426,7 @@ test.each([
 ])('$name', ({ element }) => {
   render(element());
 
-  expect(screen.queryByRole('button', { name: 'Ordenar horizontalmente' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Ordenar' })).toBeNull();
   expect(screen.queryByRole('button', { name: 'Abrir acciones node-1' })).toBeNull();
   expect(screen.queryByRole('alertdialog')).toBeNull();
 });
@@ -795,7 +796,7 @@ test('translates automatic-layout geometry into an automatic-layout command with
   const onEditingIntent = vi.fn();
   renderGraph({ editing: { onEditingIntent } });
 
-  const layoutButton = screen.getByRole('button', { name: 'Ordenar horizontalmente' });
+  const layoutButton = screen.getByRole('button', { name: 'Ordenar' });
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
   expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
   await user.click(layoutButton);
@@ -804,24 +805,28 @@ test('translates automatic-layout geometry into an automatic-layout command with
   const [intent] = onEditingIntent.mock.calls[0] as [RoadmapGraphEditingIntent];
   expect(intent.kind).toBe('apply-automatic-layout');
   if (intent.kind !== 'apply-automatic-layout') return;
-  expect(intent.positions.map(({ nodeId }) => nodeId)).toEqual(['node-1', 'node-2']);
-  expect(Object.isFrozen(intent.positions)).toBe(true);
-  expect(Object.isFrozen(intent.positions[0])).toBe(true);
-  expect(Object.isFrozen(intent.positions[0].position)).toBe(true);
+  expect(intent).not.toHaveProperty('direction');
+  for (const positions of [intent.layouts.TB, intent.layouts.LR]) {
+    expect(positions.map(({ nodeId }) => nodeId)).toEqual(['node-1', 'node-2']);
+    expect(Object.isFrozen(positions)).toBe(true);
+    expect(Object.isFrozen(positions[0])).toBe(true);
+    expect(Object.isFrozen(positions[0].position)).toBe(true);
+  }
+  expect(intent.layouts.LR).not.toEqual(intent.layouts.TB);
   expect(screen.getByTestId('node-position-node-1').textContent).toBe('0,0');
   expect(screen.getByTestId('node-position-node-2').textContent).toBe('300,180');
 });
 
-test('emits no automatic-layout command when every Node already sits where the layout puts it', async () => {
+test('proposes only the Nodes each automatic layout moves', async () => {
   const user = userEvent.setup();
   const onEditingIntent = vi.fn();
   const { rerenderGraph } = renderGraph({ editing: { onEditingIntent } });
-  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  await user.click(screen.getByRole('button', { name: 'Ordenar' }));
   const [layout] = onEditingIntent.mock.calls[0] as [CanvasCommandOf<'apply-automatic-layout'>];
   const laidOut: RoadmapDto = {
     ...roadmap,
     nodes: roadmap.nodes.map((node) => {
-      const placement = layout.positions.find(({ nodeId }) => nodeId === node.id);
+      const placement = layout.layouts.LR.find(({ nodeId }) => nodeId === node.id);
       return placement
         ? { ...node, positionX: placement.position.x, positionY: placement.position.y }
         : node;
@@ -830,9 +835,11 @@ test('emits no automatic-layout command when every Node already sits where the l
   onEditingIntent.mockClear();
 
   rerenderGraph({ roadmap: laidOut, editing: { onEditingIntent } });
-  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  await user.click(screen.getByRole('button', { name: 'Ordenar' }));
 
-  expect(onEditingIntent).not.toHaveBeenCalled();
+  const [next] = onEditingIntent.mock.calls[0] as [CanvasCommandOf<'apply-automatic-layout'>];
+  expect(next.layouts.LR).toEqual([]);
+  expect(next.layouts.TB.length).toBeGreaterThan(0);
 });
 
 test('emits a fresh automatic-layout request for each gesture', async () => {
@@ -840,8 +847,8 @@ test('emits a fresh automatic-layout request for each gesture', async () => {
   const onEditingIntent = vi.fn();
   renderGraph({ editing: { onEditingIntent } });
 
-  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
-  await user.click(screen.getByRole('button', { name: 'Ordenar horizontalmente' }));
+  await user.click(screen.getByRole('button', { name: 'Ordenar' }));
+  await user.click(screen.getByRole('button', { name: 'Ordenar' }));
   expect(onEditingIntent).toHaveBeenCalledTimes(2);
   expect(
     onEditingIntent.mock.calls.every(([intent]) => intent.kind === 'apply-automatic-layout'),
@@ -917,7 +924,7 @@ test('disables automatic ordering until the Roadmap has enough Nodes', async () 
   renderGraph({ roadmap: { ...roadmap, nodes: roadmap.nodes.slice(0, 1) }, editing: {} });
 
   const button = screen.getByRole('button', {
-    name: 'Ordenar horizontalmente',
+    name: 'Ordenar',
   }) as HTMLButtonElement;
   expect(button.disabled).toBe(true);
 
@@ -978,7 +985,87 @@ test('explains a blocked Node on tap with its pending prerequisites instead of s
 
   expect(onSelectNode).not.toHaveBeenCalled();
   const notice = await screen.findByRole('dialog', { name: 'Completa los prerrequisitos' });
-  expect(notice.textContent).toContain('Para abrirlo, completa antes: "Derivadas".');
+  expect(notice.textContent).toContain('Para abrirlo, completa antes:');
+  const prerequisites = within(notice).getByRole('list', { name: 'Prerrequisitos pendientes' });
+  expect(
+    within(prerequisites)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['Derivadas']);
+  expect(notice.textContent).not.toMatch(/["“”«»]/);
+});
+
+function noticePlacement(notice: HTMLElement) {
+  // eslint-disable-next-line testing-library/no-node-access -- Base UI positions the popup through its positioner.
+  const { style } = notice.parentElement!;
+  return style.transform || style.left;
+}
+
+test('moves the prerequisite notice to the most recently tapped blocked Node', async () => {
+  const user = userEvent.setup();
+  const blockedNode = (id: string, title: string, positionX: number) => ({
+    id,
+    title,
+    positionX,
+    positionY: 0,
+    nodeTypeId: 'content',
+    isVisible: true,
+    access: { status: 'BLOCKED' as const, reason: 'PREREQUISITE_BLOCK' as const },
+  });
+  const blockedRoadmap: StudentRoadmapDto = {
+    ...studentRoadmap,
+    nodes: [
+      { ...studentRoadmap.nodes[0], id: 'intro', title: 'Introducción' },
+      blockedNode('control', 'Control 1', 600),
+      blockedNode('exercises', 'Ejercicios guiados', 300),
+    ],
+    dependencies: [
+      {
+        id: 'dependency-1',
+        sourceNodeId: 'intro',
+        targetNodeId: 'control',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      },
+      {
+        id: 'dependency-2',
+        sourceNodeId: 'control',
+        targetNodeId: 'exercises',
+        sourceHandle: 'right',
+        targetHandle: 'left',
+      },
+    ],
+  };
+  render(
+    <RoadmapGraph
+      projection={{ kind: 'student', roadmap: blockedRoadmap }}
+      onSelectNode={vi.fn()}
+    />,
+  );
+  const placeNode = (id: string, left: number) => {
+    const rect = { x: left, y: 100, top: 100, left, right: left + 180, bottom: 160 };
+    vi.spyOn(screen.getByTestId(`rendered-node-${id}`), 'getBoundingClientRect').mockReturnValue({
+      ...rect,
+      width: 180,
+      height: 60,
+      toJSON: () => ({}),
+    });
+  };
+  placeNode('control', 600);
+  placeNode('exercises', 300);
+
+  await user.click(screen.getByTestId('rendered-node-control'));
+  const controlNotice = await screen.findByRole('dialog', { name: 'Completa los prerrequisitos' });
+  await waitFor(() => expect(controlNotice.textContent).toContain('completa antes:Introducción'));
+  await waitFor(() => expect(noticePlacement(controlNotice)).toMatch(/600/));
+
+  await user.click(screen.getByTestId('rendered-node-exercises'));
+
+  const exercisesNotice = await screen.findByRole('dialog', {
+    name: 'Completa los prerrequisitos',
+  });
+  await waitFor(() => expect(exercisesNotice.textContent).toContain('completa antes:Control 1'));
+  await waitFor(() => expect(noticePlacement(exercisesNotice)).toMatch(/300/));
 });
 
 test('keeps compact canvas controls in one row and centers the map clear of the overlays', async () => {
@@ -986,7 +1073,7 @@ test('keeps compact canvas controls in one row and centers the map clear of the 
   const user = userEvent.setup();
   renderGraph({ editing: {} });
 
-  expect(screen.getByRole('button', { name: 'Ordenar horizontalmente' }).textContent).toBe('');
+  expect(screen.getByRole('button', { name: 'Ordenar' }).textContent).toBe('');
   await user.click(screen.getByRole('button', { name: 'Centrar mapa' }));
 
   expect(fitViewMock).toHaveBeenCalledWith({

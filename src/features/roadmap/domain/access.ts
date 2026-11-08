@@ -90,10 +90,12 @@ export function eligibleBranchUnlockNodeIds({
   dependencies,
   teacherBlockedNodeIds,
   rootNodeId,
+  retainedNodeIds = new Set(),
 }: {
   dependencies: readonly RoadmapGraphDependency[];
   teacherBlockedNodeIds: ReadonlySet<string>;
   rootNodeId: string;
+  retainedNodeIds?: ReadonlySet<string>;
 }) {
   const branchNodeIds = new Set([
     rootNodeId,
@@ -106,6 +108,10 @@ export function eligibleBranchUnlockNodeIds({
     const cached = eligibilityByNodeId.get(nodeId);
     if (cached !== undefined) return cached;
     if (visitingNodeIds.has(nodeId)) return false;
+    if (nodeId !== rootNodeId && retainedNodeIds.has(nodeId)) {
+      eligibilityByNodeId.set(nodeId, false);
+      return false;
+    }
 
     visitingNodeIds.add(nodeId);
     const isEligibleForUnlock = (prerequisiteNodeIdsByNodeId.get(nodeId) ?? []).every(

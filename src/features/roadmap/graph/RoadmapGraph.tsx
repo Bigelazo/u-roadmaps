@@ -29,7 +29,7 @@ import {
   type FitViewOptions,
 } from '@xyflow/react';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
-import { LayoutTemplate, LockKeyhole, Maximize } from 'lucide-react';
+import { LayoutFreeform, LockKeyhole, Maximize } from 'lucide-react';
 import {
   findOpenRoadmapPosition,
   roadmapGridSize,
@@ -37,6 +37,7 @@ import {
   snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
 import type { NodeActionCallbacks, NodeActionIntent } from '@/features/roadmap/graph/node-action';
+import { nodeActionMenuCloseDurationMs } from '@/features/roadmap/graph/node-menu-actions';
 import { Button } from '@/shared/ui/button';
 import { NodeActionSheet, useNodeActionSheet } from '@/features/roadmap/graph/NodeActionSheet';
 import { type RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
@@ -65,7 +66,9 @@ import {
 } from '@/features/roadmap/graph/ConnectionPreview';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
+import { NodeName, type NodeNameType } from '@/features/roadmap/ui/NodeName';
 import {
+  pendingPrerequisites,
   studentNodeBlockMessages,
   studentNodeBlockReason,
   studentNodeStatus,
@@ -360,7 +363,6 @@ function changedNodePositions(
 
 function RoadmapGraphToolbar({
   containerRef,
-  layoutDirection,
   showAutoLayout,
   canAutoLayout,
   onAutoLayout,
@@ -371,7 +373,6 @@ function RoadmapGraphToolbar({
 }: {
   onFitView?: () => void;
   containerRef: RefObject<HTMLDivElement | null>;
-  layoutDirection: RoadmapLayoutDirection;
   showAutoLayout: boolean;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
@@ -417,7 +418,6 @@ function RoadmapGraphToolbar({
   );
 
   const compact = useCompactCanvasLayout();
-  const sortLabel = `Ordenar ${layoutDirection === 'TB' ? 'horizontalmente' : 'verticalmente'}`;
 
   return (
     <>
@@ -463,18 +463,18 @@ function RoadmapGraphToolbar({
                 <TooltipTrigger
                   render={
                     <Button
-                      aria-label={sortLabel}
+                      aria-label="Ordenar"
                       type="button"
                       variant="outline"
                       size="icon"
                       disabled={!canAutoLayout}
                       onClick={onAutoLayout}
                     >
-                      <LayoutTemplate aria-hidden="true" />
+                      <LayoutFreeform aria-hidden="true" />
                     </Button>
                   }
                 />
-                <TooltipContent>{sortLabel}</TooltipContent>
+                <TooltipContent>Ordenar</TooltipContent>
               </Tooltip>
             ) : (
               <Button
@@ -484,8 +484,8 @@ function RoadmapGraphToolbar({
                 disabled={!canAutoLayout}
                 onClick={onAutoLayout}
               >
-                <LayoutTemplate data-icon="inline-start" />
-                {sortLabel}
+                <LayoutFreeform data-icon="inline-start" />
+                Ordenar
               </Button>
             )
           ) : null}
@@ -604,7 +604,6 @@ export type RoadmapGraphProps = {
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
-  confirmedAutomaticLayout?: { token: string; direction: RoadmapLayoutDirection } | null;
   onFitView?: () => void;
 };
 
@@ -717,12 +716,18 @@ function useNodeActionMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusRef = useRef(true);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
   const beginClosing = useCallback(
     (nodeId: string) => {
       if (!editing || useActionSheet) return;
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       setClosingMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
-      closeTimerRef.current = setTimeout(() => setClosingMenu(null), 400);
+      closeTimerRef.current = setTimeout(() => setClosingMenu(null), nodeActionMenuCloseDurationMs);
     },
     [editing, selectedNodeIdRef, useActionSheet],
   );
@@ -743,11 +748,16 @@ function useNodeActionMenu({
         closeActionMenu();
         return;
       }
+      if (closingNodeId === nodeId) {
+        if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+        setClosingMenu(null);
+      }
       if (openNodeId) beginClosing(openNodeId);
       restoreFocusRef.current = true;
       setOpenMenu({ editing, selectedNodeId: selectedNodeIdRef.current, nodeId });
     },
-    [beginClosing, closeActionMenu, editing, openNodeId, selectedNodeIdRef],
+    [beginClosing, closeActionMenu, closingNodeId, editing, openNodeId, selectedNodeIdRef],
   );
   const onAction = useCallback(
     (intent: NodeActionIntent) => {
@@ -772,7 +782,6 @@ function useRoadmapGraphController({
   notificationsEnabled,
   selectedNodeId,
   focusReturnRequest,
-  confirmedAutomaticLayout,
 }: RoadmapGraphProps) {
   const editing: RoadmapGraphEditing | undefined =
     projection.kind === 'teaching' ? projection.editing : undefined;
@@ -786,7 +795,6 @@ function useRoadmapGraphController({
     }
     return { kind: 'teaching', roadmap: projectionRoadmap as RoadmapDto, editing };
   }, [editing, projectionKind, projectionRoadmap]);
-  const layoutDirection = confirmedAutomaticLayout?.direction ?? 'TB';
   const onEditingIntent = editing?.onEditingIntent;
   const handlers = useRef<{ onEditingIntent?: (intent: RoadmapGraphEditingIntent) => void }>({
     onEditingIntent,
@@ -894,16 +902,17 @@ function useRoadmapGraphController({
   );
 
   const proposeAutoLayout = useCallback(() => {
-    const direction = layoutDirection === 'TB' ? 'LR' : 'TB';
-    const positions = immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction));
-    const changed = changedNodePositions(flow.nodes, positions);
-    if (changed.length === 0) return;
-    emitEditingIntent({
-      kind: 'apply-automatic-layout',
-      positions: freezeNodePositions(changed),
-      direction,
-    });
-  }, [emitEditingIntent, flow.edges, flow.nodes, layoutDirection]);
+    const layoutIn = (direction: RoadmapLayoutDirection) =>
+      freezeNodePositions(
+        changedNodePositions(
+          flow.nodes,
+          immutableNodePositions(layoutRoadmapGraph(flow.nodes, flow.edges, direction)),
+        ),
+      );
+    const layouts = Object.freeze({ TB: layoutIn('TB'), LR: layoutIn('LR') });
+    if (layouts.TB.length === 0 && layouts.LR.length === 0) return;
+    emitEditingIntent({ kind: 'apply-automatic-layout', layouts });
+  }, [emitEditingIntent, flow.edges, flow.nodes]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const appliedFocusReturnRequestRef = useRef<string | null>(null);
@@ -925,7 +934,6 @@ function useRoadmapGraphController({
     useActionSheet,
     requestNodeAction: actionMenu.onAction,
     actionMenuFinalFocus,
-    layoutDirection,
     openActionMenuNodeId: actionMenu.openNodeId,
     closingActionMenuNodeId: actionMenu.closingNodeId,
     selectedNodeIdRef,
@@ -1236,7 +1244,7 @@ function RoadmapGraphContents({
 }) {
   const { overlaySlots, viewportRestoration, bottomLeftActions, bottomRightActions, onFitView } =
     props;
-  const { canEdit, openActionMenuNodeId, containerRef, layoutDirection, flow } = model;
+  const { canEdit, openActionMenuNodeId, containerRef, flow } = model;
   return (
     <>
       {' '}
@@ -1256,7 +1264,6 @@ function RoadmapGraphContents({
       />
       <RoadmapGraphToolbar
         containerRef={containerRef}
-        layoutDirection={layoutDirection}
         showAutoLayout={canEdit}
         canAutoLayout={canEdit && flow.nodes.length >= 2}
         onAutoLayout={onAutoLayout}
@@ -1361,10 +1368,16 @@ function TutorialRevealTarget({
   return null;
 }
 
+type BlockedNodeExplanation = {
+  title: string;
+  description: string;
+  prerequisites: { id: string; title: string; nodeType: NodeNameType }[];
+};
+
 function blockedNodeExplanation(
   roadmap: RoadmapGraphProjection['roadmap'],
   nodeId: string,
-): { title: string; description: string } | null {
+): BlockedNodeExplanation | null {
   const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
   const reason = node ? studentNodeBlockReason(node) : undefined;
   if (!node || !reason) return null;
@@ -1372,17 +1385,20 @@ function blockedNodeExplanation(
     return {
       title: studentNodeBlockMessages.TEACHER_BLOCK,
       description: 'El equipo docente lo liberará cuando lo decida.',
+      prerequisites: [],
     };
-  const pending = roadmap.dependencies.flatMap((dependency) => {
-    if (dependency.targetNodeId !== nodeId) return [];
-    const source = roadmap.nodes.find((candidate) => candidate.id === dependency.sourceNodeId);
-    return source && studentNodeStatus(source) !== 'completed' ? [source.title] : [];
-  });
+  const prerequisites = pendingPrerequisites(roadmap, nodeId).map((source) => ({
+    id: source.id,
+    title: source.title,
+    nodeType:
+      roadmap.nodeTypes.find((candidate) => candidate.id === source.nodeTypeId) ?? unknownNodeType,
+  }));
   return {
     title: studentNodeBlockMessages.PREREQUISITE_BLOCK,
-    description: pending.length
-      ? `Para abrirlo, completa antes: ${pending.map((title) => `"${title}"`).join(', ')}.`
+    description: prerequisites.length
+      ? 'Para abrirlo, completa antes:'
       : 'Este nodo se desbloquea cuando completes sus prerrequisitos.',
+    prerequisites,
   };
 }
 
@@ -1410,6 +1426,7 @@ function BlockedNodeNotice({
     >
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Positioner
+          key={shown}
           anchor={() =>
             shown
               ? (containerRef.current?.querySelector(`.react-flow__node[data-id="${shown}"]`) ??
@@ -1435,6 +1452,18 @@ function BlockedNodeNotice({
                 {nodeTitle ? <span className="sr-only">{nodeTitle}: </span> : null}
                 {explanation?.description}
               </PopoverPrimitive.Description>
+              {explanation?.prerequisites.length ? (
+                <ul
+                  aria-label="Prerrequisitos pendientes"
+                  className="mx-auto mt-1 flex w-fit max-w-full flex-col gap-1"
+                >
+                  {explanation.prerequisites.map((prerequisite) => (
+                    <li key={prerequisite.id} className="min-w-0 break-words">
+                      <NodeName title={prerequisite.title} nodeType={prerequisite.nodeType} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </PopoverPrimitive.Popup>
         </PopoverPrimitive.Positioner>

@@ -1,4 +1,4 @@
-import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
+import type { ReactNode } from 'react';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import type {
   Resource,
@@ -7,10 +7,17 @@ import type {
   TeacherBlockOperationImpact,
 } from '@/features/roadmap/types';
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
-import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
+import { NodeName } from '@/features/roadmap/ui/NodeName';
+import {
+  scheduledUnlockPrerequisiteHint,
+  UnlockScheduleField,
+  type UnlockScheduleDraft,
+} from '@/features/roadmap/ui/UnlockScheduleField';
+import type { ConfirmationAction, ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 
 export const canvasConfirmationChoices = {
-  autoLayout: 'auto-layout',
+  autoLayoutVertical: 'auto-layout-vertical',
+  autoLayoutHorizontal: 'auto-layout-horizontal',
   hideNode: 'hide-node',
   showNode: 'show-node',
   deleteNode: 'delete-node',
@@ -27,25 +34,13 @@ export const canvasConfirmationChoices = {
 export type CanvasConfirmationChoice =
   (typeof canvasConfirmationChoices)[keyof typeof canvasConfirmationChoices];
 
+export type { UnlockScheduleDraft };
+
 type NodeTypePresentation = {
   name: string;
   icon: string;
   color: string;
 };
-
-function quoted(title: string) {
-  return `“${title}”`;
-}
-
-function nodeNames(titles: readonly string[]) {
-  if (titles.length > 3) return `${titles.length} nodos`;
-  const names = titles.map(quoted);
-  return names.length > 1 ? `${names.slice(0, -1).join(', ')} y ${names.at(-1)}` : names[0];
-}
-
-function uniqueTitles(titles: readonly string[]) {
-  return [...new Set(titles)];
-}
 
 export type RoadmapConfirmationRoadmap = {
   nodes: readonly RoadmapNodeIdentity[];
@@ -65,18 +60,56 @@ type RoadmapNodeIdentity = {
   isTeacherBlocked?: boolean;
 };
 
+type UnlockActions = [ConfirmationAction] | [ConfirmationAction, ConfirmationAction];
+
+function Emphasis({ children }: { children: ReactNode }) {
+  return <strong className="font-semibold text-foreground">{children}</strong>;
+}
+
+function nodeCount(count: number) {
+  return count === 1 ? '1 nodo' : `${count} nodos`;
+}
+
+function sentenceList(parts: readonly string[]) {
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts.at(-1)}` : parts[0];
+}
+
+function nodeTypeFor(
+  roadmap: Pick<RoadmapDto, 'nodeTypes'>,
+  nodeTypeId: string,
+): NodeTypePresentation {
+  return roadmap.nodeTypes.find((candidate) => candidate.id === nodeTypeId) ?? unknownNodeType;
+}
+
+function roadmapNodeName(
+  roadmap: RoadmapConfirmationRoadmap,
+  nodeId: string,
+  known?: Pick<TeacherBlockImpact, 'title' | 'nodeType'>,
+) {
+  const node = roadmap.nodes.find((candidate) => candidate.id === nodeId);
+  const nodeType = known?.nodeType ?? nodeTypeFor(roadmap, node?.nodeTypeId ?? '');
+  return <NodeName title={known?.title ?? node?.title ?? nodeId} nodeType={nodeType} />;
+}
+
 export const roadmapAutoLayoutConfirmation = {
-  title: 'Confirmar ordenamiento',
-  description: 'El ordenamiento automático reubicará los nodos del lienzo. ¿Deseas continuar?',
+  title: '¿Ordenar los nodos automáticamente?',
+  description:
+    'Selecciona la distribución para ordenar. Todos los nodos del roadmap cambiarán de posición.',
   intent: 'warning',
-  actions: [{ id: canvasConfirmationChoices.autoLayout, label: 'Ordenar nodos' }],
+  actions: [
+    { id: canvasConfirmationChoices.autoLayoutVertical, label: 'Vertical', emphasis: 'primary' },
+    {
+      id: canvasConfirmationChoices.autoLayoutHorizontal,
+      label: 'Horizontal',
+      emphasis: 'primary',
+    },
+  ],
 } as const satisfies ConfirmationPresentation;
 
 export const canvasPreviewResetConfirmation = {
-  title: 'Reiniciar progreso de previsualización',
-  description:
-    'Eliminarás las completaciones simuladas de este Canvas preview. No se eliminarán las Completions estudiantiles. Esta acción no se puede deshacer.',
-  intent: 'destructive',
+  title: '¿Reiniciar el progreso simulado?',
+  description: 'Se reiniciarán los nodos completados en esta previsualización.',
+  intent: 'warning',
   actions: [{ id: canvasConfirmationChoices.resetCanvasPreview, label: 'Reiniciar progreso' }],
 } as const satisfies ConfirmationPresentation;
 
@@ -86,23 +119,19 @@ export const nodeEditorConfirmationActionIds = {
 } as const;
 
 const editorDraftDiscardDescriptions: Record<NodeEditorGuardReason['kind'], string> = {
-  'replace-node':
-    'Seleccionar otro Nodo descartará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
-  'open-resource':
-    'Agregar un recurso a otro nodo reemplazará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
-  'deselect-node':
-    'Cerrar este Nodo descartará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
-  'delete-node':
-    'Eliminar este Nodo descartará el borrador actual. Puedes seguir editando o descartarlo para continuar.',
+  'replace-node': 'Seleccionar otro nodo descartará el borrador actual.',
+  'open-resource': 'Agregar un recurso a otro nodo descartará el borrador actual.',
+  'deselect-node': 'Cerrar este nodo descartará el borrador actual.',
+  'delete-node': 'Eliminar este nodo descartará el borrador actual.',
   'enter-canvas-preview':
-    'La previsualización muestra únicamente el último estado guardado. Puedes seguir editando o descartar este borrador para continuar.',
+    'La previsualización muestra solo lo guardado, así que se descartará el borrador actual.',
 };
 
 export function editorDraftDiscardConfirmation(
   destination: NodeEditorGuardReason,
 ): ConfirmationPresentation {
   return {
-    title: 'Descartar cambios sin guardar',
+    title: '¿Descartar los cambios sin guardar?',
     description: editorDraftDiscardDescriptions[destination.kind],
     intent: 'destructive',
     cancelLabel: 'Seguir editando',
@@ -118,84 +147,6 @@ export function editorDraftDiscardConfirmation(
   };
 }
 
-function nodeTypeMedia(nodeType: NodeTypePresentation) {
-  return (
-    <NodeTypeIcon
-      icon={nodeType.icon}
-      className="size-4"
-      style={{ color: nodeType.color }}
-      aria-label={nodeType.name}
-    />
-  );
-}
-
-function resourceTypeLabel(type: Resource['type'] | undefined) {
-  if (type === 'FILE') return 'Archivo';
-  return 'Enlace';
-}
-
-function nodeItem(
-  nodeId: string,
-  node: { title: string; nodeType: NodeTypePresentation },
-  description?: string,
-) {
-  return {
-    kind: 'item' as const,
-    id: nodeId,
-    title: node.title,
-    description,
-    media: nodeTypeMedia(node.nodeType),
-    badge: node.nodeType.name,
-  };
-}
-
-function nodeTypeFor(
-  roadmap: Pick<RoadmapDto, 'nodeTypes'>,
-  nodeTypeId: string,
-): NodeTypePresentation {
-  return roadmap.nodeTypes.find((candidate) => candidate.id === nodeTypeId) ?? unknownNodeType;
-}
-
-function nodeTitleLookup(roadmap: RoadmapConfirmationRoadmap) {
-  const nodeTitles = new Map(roadmap.nodes.map((node) => [node.id, node.title]));
-  return (nodeId: string) => nodeTitles.get(nodeId) ?? nodeId;
-}
-
-const teacherBlockEmptyMessage = 'No hay Nodos afectados.';
-
-function teacherBlockRelationLabel(relation: TeacherBlockImpact['relation']) {
-  if (relation === 'SELECTED_NODE') return 'Nodo seleccionado';
-  if (relation === 'PREREQUISITE') return 'Prerrequisito';
-  if (relation === 'DEPENDENT') return 'Dependiente';
-  return undefined;
-}
-
-function teacherBlockItems(
-  roadmap: RoadmapConfirmationRoadmap,
-  nodes: readonly TeacherBlockImpact[],
-  selectedNodeId?: string,
-) {
-  return nodes.map((node) => {
-    const roadmapNode = roadmap.nodes.find((candidate) => candidate.id === node.id);
-    const nodeType = node.nodeType
-      ? node.nodeType
-      : roadmapNode
-        ? nodeTypeFor(roadmap, roadmapNode.nodeTypeId)
-        : nodeTypeFor(roadmap, '');
-
-    return nodeItem(
-      node.id,
-      { title: node.title, nodeType },
-      teacherBlockRelationLabel(node.relation) ??
-        (node.id === selectedNodeId ? 'Nodo seleccionado' : undefined),
-    );
-  });
-}
-
-function countLabel(count: number) {
-  return count === 1 ? 'nodo' : 'nodos';
-}
-
 type RoadmapDependencyConfirmationInput = {
   roadmap: RoadmapConfirmationRoadmap;
   sourceNodeId: string;
@@ -209,30 +160,21 @@ export function roadmapDependencyConfirmation({
   targetNodeId,
   nodes,
 }: RoadmapDependencyConfirmationInput): ConfirmationPresentation {
-  const titleOf = nodeTitleLookup(roadmap);
+  const source = roadmapNodeName(roadmap, sourceNodeId);
 
   return {
-    title: 'Confirmar bloqueo',
-    description: `Esta dependencia bloqueará persistentemente ${nodes.length} ${countLabel(nodes.length)}. Se aplicará un Bloqueo docente y esta acción puede afectar el acceso y progreso estudiantil.`,
+    title: (
+      <>
+        ¿Conectar {source} con {roadmapNodeName(roadmap, targetNodeId)}?
+      </>
+    ),
+    description: (
+      <>
+        Como {source} tiene bloqueo docente, la conexión también bloqueará{' '}
+        <Emphasis>{nodeCount(nodes.length)}</Emphasis>.
+      </>
+    ),
     intent: 'warning',
-    sections: [
-      {
-        title: 'Dependencia que se creará',
-        items: [
-          {
-            kind: 'relationship',
-            id: `dependency:${sourceNodeId}:${targetNodeId}`,
-            source: titleOf(sourceNodeId),
-            target: titleOf(targetNodeId),
-          },
-        ],
-      },
-      {
-        title: 'Nodos que se bloquearán',
-        items: teacherBlockItems(roadmap, nodes),
-        emptyMessage: teacherBlockEmptyMessage,
-      },
-    ],
     actions: [{ id: canvasConfirmationChoices.createDependency, label: 'Conectar y bloquear' }],
   };
 }
@@ -240,11 +182,12 @@ export function roadmapDependencyConfirmation({
 export function roadmapDependencyDeletionConfirmation(
   dependencyIds: readonly string[],
 ): ConfirmationPresentation {
-  const dependencyLabel = dependencyIds.length === 1 ? 'esta dependencia' : 'estas dependencias';
-
   return {
-    title: 'Confirmar eliminación',
-    description: `Eliminarás ${dependencyLabel}. Esta acción no se puede deshacer.`,
+    title:
+      dependencyIds.length === 1
+        ? '¿Eliminar la dependencia?'
+        : `¿Eliminar ${dependencyIds.length} dependencias?`,
+    description: 'Los nodos dejarán de estar conectados. Esta acción no se puede deshacer.',
     intent: 'destructive',
     actions: [{ id: canvasConfirmationChoices.deleteDependencies, label: 'Eliminar' }],
   };
@@ -256,38 +199,68 @@ type RoadmapTeacherBlockConfirmationInput = {
   preview: TeacherBlockOperationImpact;
   individualPreview?: TeacherBlockOperationImpact;
   branchPreview?: TeacherBlockOperationImpact;
+  schedule?: UnlockScheduleDraft;
+  isPending?: boolean;
 };
 
-function affectedTitles(
-  preview: TeacherBlockOperationImpact,
+export function affectedNodes(preview: TeacherBlockOperationImpact, nodeId: string) {
+  return preview.nodes.filter((node) => node.id !== nodeId && node.relation !== 'SELECTED_NODE');
+}
+
+export function releasableDependents(
   nodeId: string,
-  relation?: TeacherBlockImpact['relation'],
+  individualPreview?: TeacherBlockOperationImpact,
+  branchPreview?: TeacherBlockOperationImpact,
 ) {
-  return uniqueTitles(
-    preview.nodes
-      .filter(
-        (node) =>
-          node.id !== nodeId &&
-          node.relation !== 'SELECTED_NODE' &&
-          (!relation || node.relation === relation),
-      )
-      .map((node) => node.title),
+  if (individualPreview?.mode !== 'SINGLE' || branchPreview?.mode !== 'BRANCH') return [];
+  return affectedNodes(branchPreview, nodeId);
+}
+
+function dependentsStillBlocked(count: number) {
+  return count === 1 ? (
+    <>
+      <Emphasis>1 nodo</Emphasis> que depende de él sigue bloqueado.
+    </>
+  ) : (
+    <>
+      <Emphasis>{count} nodos</Emphasis> que dependen de él siguen bloqueados.
+    </>
   );
 }
 
-function dependentsPhrase(titles: readonly string[], state: { one: string; many: string }) {
-  if (titles.length > 3) return `Los ${nodeNames(titles)} que dependen de él ${state.many}`;
-  return titles.length === 1
-    ? `${nodeNames(titles)}, que depende de él, ${state.one}`
-    : `${nodeNames(titles)}, que dependen de él, ${state.many}`;
-}
+function unlockPresentation(
+  title: ReactNode,
+  description: ReactNode,
+  actions: UnlockActions,
+  schedule: UnlockScheduleDraft | undefined,
+  isPending: boolean,
+  scheduleHint: string | null,
+): ConfirmationPresentation {
+  const isMissingDate = !!schedule?.isScheduling && schedule.unlockAt === null;
+  const primary = (action: ConfirmationAction): ConfirmationAction => ({
+    ...action,
+    emphasis: 'primary',
+    ...(isMissingDate ? { disabled: true } : {}),
+  });
 
-function withDependents(
-  sentence: string,
-  dependents: readonly string[],
-  state: { one: string; many: string },
-) {
-  return dependents.length ? `${sentence} ${dependentsPhrase(dependents, state)}.` : sentence;
+  return {
+    title,
+    description,
+    intent: 'default',
+    ...(schedule
+      ? {
+          content: (
+            <UnlockScheduleField
+              draft={schedule}
+              hint={scheduleHint ?? undefined}
+              disabled={isPending}
+            />
+          ),
+        }
+      : {}),
+    actions:
+      actions.length === 1 ? [primary(actions[0])] : [primary(actions[0]), primary(actions[1])],
+  };
 }
 
 export function roadmapTeacherBlockConfirmation({
@@ -296,112 +269,101 @@ export function roadmapTeacherBlockConfirmation({
   preview,
   individualPreview,
   branchPreview,
+  schedule,
+  isPending = false,
 }: RoadmapTeacherBlockConfirmationInput): ConfirmationPresentation {
-  const title = quoted(nodeTitleLookup(roadmap)(nodeId));
-
-  if (individualPreview?.mode === 'SINGLE' && branchPreview?.mode === 'BRANCH') {
-    const dependents = affectedTitles(branchPreview, nodeId);
-    return {
-      title: `¿Desbloquear ${title}?`,
-      description: `Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.${
-        dependents.length
-          ? ` ${dependentsPhrase(dependents, { one: 'sigue bloqueado', many: 'siguen bloqueados' })}: puedes desbloquear solo este nodo o también sus dependientes.`
-          : ''
-      }`,
-      intent: 'warning',
-      actions: [
-        { id: canvasConfirmationChoices.unlockNode, label: 'Solo este nodo' },
-        { id: canvasConfirmationChoices.unlockBranch, label: 'Incluir dependientes' },
-      ],
-    };
-  }
+  const selected = preview.nodes.find(
+    (node) => node.id === nodeId || node.relation === 'SELECTED_NODE',
+  );
+  const name = roadmapNodeName(roadmap, nodeId, selected);
+  const verb = schedule?.isScheduling ? 'Programar' : 'Desbloquear';
 
   if (preview.mode === 'BLOCK') {
-    const selectedNode = roadmap.nodes.find((node) => node.id === nodeId);
-    const inlineNode = (node: TeacherBlockImpact) => {
-      const roadmapNode = roadmap.nodes.find((candidate) => candidate.id === node.id);
-      const nodeType = node.nodeType ?? nodeTypeFor(roadmap, roadmapNode?.nodeTypeId ?? '');
-      return (
-        <span key={node.id}>
-          <NodeTypeIcon
-            icon={nodeType.icon}
-            className="inline size-[1em] align-[-0.125em]"
-            style={{ color: nodeType.color }}
-            aria-hidden="true"
-          />{' '}
-          {quoted(node.title)}
-        </span>
-      );
-    };
-    const dependents = preview.nodes.filter(
-      (node) => node.id !== nodeId && node.relation !== 'SELECTED_NODE',
-    );
-    const selected = preview.nodes.find((node) => node.id === nodeId) ?? {
-      id: nodeId,
-      title: selectedNode?.title ?? nodeId,
-      relation: 'SELECTED_NODE' as const,
-    };
+    const dependents = affectedNodes(preview, nodeId).length;
     return {
-      title: <>¿Bloquear {inlineNode(selected)}?</>,
+      title: <>¿Bloquear {name}?</>,
       description: (
         <>
-          Los estudiantes no podrán acceder a él hasta su desbloqueo.
-          {dependents.length > 0 ? (
+          Los estudiantes no podrán acceder a él hasta que lo desbloquees.
+          {dependents > 0 ? (
             <>
               {' '}
-              {dependents.length === 1 ? 'El nodo ' : 'Los nodos '}
-              {dependents.map((node, index) => (
-                <span key={node.id}>
-                  {index > 0 ? (index === dependents.length - 1 ? ' y ' : ', ') : null}
-                  {inlineNode(node)}
-                </span>
-              ))}
-              {dependents.length === 1 ? ' también será bloqueado.' : ' también serán bloqueados.'}
+              También se {dependents === 1 ? 'bloqueará' : 'bloquearán'}{' '}
+              <Emphasis>
+                {dependents === 1
+                  ? 'el nodo que depende de él'
+                  : `los ${dependents} nodos que dependen de él`}
+              </Emphasis>
+              .
             </>
           ) : null}
         </>
       ),
-      intent: 'warning',
+      intent: 'destructive',
       actions: [{ id: canvasConfirmationChoices.blockTeacher, label: 'Bloquear nodo' }],
     };
   }
 
+  const unlockTitle = <>¿Desbloquear {name}?</>;
+  const opensLater = 'Los estudiantes podrán acceder a él cuando completen sus prerrequisitos.';
+
   if (preview.mode === 'UPSTREAM') {
-    const prerequisites = affectedTitles(preview, nodeId, 'PREREQUISITE');
-    const nodes = preview.nodes.length;
-    return {
-      title: `¿Desbloquear ${title}?`,
-      description: `Para que los estudiantes puedan abrirlo, también se desbloquearán sus prerrequisitos bloqueados: ${nodeNames(
-        prerequisites,
-      )}.`,
-      intent: 'warning',
-      actions: [
+    const prerequisites = affectedNodes(preview, nodeId).length;
+    return unlockPresentation(
+      unlockTitle,
+      <>
+        Para que los estudiantes puedan acceder a él, también se{' '}
+        {prerequisites === 1 ? 'desbloqueará' : 'desbloquearán'}{' '}
+        <Emphasis>
+          {prerequisites === 1
+            ? 'su prerrequisito bloqueado'
+            : `sus ${prerequisites} prerrequisitos bloqueados`}
+        </Emphasis>
+        .
+      </>,
+      [
         {
           id: canvasConfirmationChoices.unlockPrerequisites,
-          label: `Desbloquear ${nodes} ${countLabel(nodes)}`,
+          label: `${verb} ${nodeCount(preview.nodes.length)}`,
         },
       ],
-    };
+      schedule,
+      isPending,
+      null,
+    );
   }
 
-  return {
-    title: `¿Desbloquear ${title}?`,
-    description: withDependents(
-      'Los estudiantes podrán abrirlo cuando completen sus prerrequisitos.',
-      affectedTitles(preview, nodeId),
-      { one: 'también quedará desbloqueado', many: 'también quedarán desbloqueados' },
-    ),
-    intent: 'warning',
-    actions: [
-      {
-        id:
-          preview.mode === 'BRANCH'
-            ? canvasConfirmationChoices.unlockBranch
-            : canvasConfirmationChoices.unlockNode,
-        label: 'Desbloquear nodo',
-      },
-    ],
-  };
+  const dependents = releasableDependents(nodeId, individualPreview, branchPreview).length;
+  if (dependents > 0) {
+    return unlockPresentation(
+      unlockTitle,
+      <>
+        {opensLater} {dependentsStillBlocked(dependents)}
+      </>,
+      [
+        {
+          id: canvasConfirmationChoices.unlockNode,
+          label: schedule?.isScheduling ? 'Programar este nodo' : 'Solo este nodo',
+        },
+        {
+          id: canvasConfirmationChoices.unlockBranch,
+          label: schedule?.isScheduling ? 'Programar con dependientes' : 'Incluir dependientes',
+        },
+      ],
+      schedule,
+      isPending,
+      scheduledUnlockPrerequisiteHint(0),
+    );
+  }
+
+  return unlockPresentation(
+    unlockTitle,
+    opensLater,
+    [{ id: canvasConfirmationChoices.unlockNode, label: verb }],
+    schedule,
+    isPending,
+    scheduledUnlockPrerequisiteHint(0),
+  );
 }
 
 export function nodeDeletionConfirmation({
@@ -413,24 +375,31 @@ export function nodeDeletionConfirmation({
   resources: readonly { id: string }[];
   dependencies: readonly { sourceTitle: string; targetTitle: string }[];
 }): ConfirmationPresentation {
-  const connected = uniqueTitles(
-    dependencies.map((dependency) =>
-      dependency.sourceTitle === node.title ? dependency.targetTitle : dependency.sourceTitle,
-    ),
-  );
   const losses = [
     resources.length === 1
       ? 'su recurso'
       : resources.length > 1
         ? `sus ${resources.length} recursos`
         : '',
-    connected.length ? `sus conexiones con ${nodeNames(connected)}` : '',
+    dependencies.length === 1
+      ? 'su conexión'
+      : dependencies.length > 1
+        ? `sus ${dependencies.length} conexiones`
+        : '',
   ].filter(Boolean);
+  const verb =
+    losses.length === 1 && resources.length + dependencies.length === 1
+      ? 'eliminará'
+      : 'eliminarán';
 
   return {
-    title: <span className="wrap-break-word">¿Eliminar {quoted(node.title)}?</span>,
+    title: (
+      <>
+        ¿Eliminar <NodeName title={node.title} nodeType={node.nodeType} />?
+      </>
+    ),
     description: `${
-      losses.length ? `También se eliminarán ${losses.join(' y ')}. ` : ''
+      losses.length ? `También se ${verb} ${sentenceList(losses)}. ` : ''
     }Esta acción no se puede deshacer.`,
     intent: 'destructive',
     actions: [{ id: canvasConfirmationChoices.deleteNode, label: 'Eliminar nodo' }],
@@ -443,38 +412,33 @@ export function roadmapNodeVisibilityConfirmation(
   isHiding: boolean,
   dependencies: readonly StructuralDependency[],
 ): ConfirmationPresentation {
-  const titleOf = nodeTitleLookup(roadmap);
-  const title = quoted(node.title);
+  const name = <NodeName title={node.title} nodeType={nodeTypeFor(roadmap, node.nodeTypeId)} />;
 
   if (!isHiding) {
     return {
-      title: `¿Mostrar ${title}?`,
-      description:
-        'Los estudiantes podrán verlo y abrirlo de inmediato. Aparecerá sin conexiones ni bloqueo docente.',
+      title: <>¿Mostrar {name}?</>,
+      description: 'Los estudiantes podrán verlo y acceder a él de inmediato.',
       intent: 'default',
       actions: [{ id: canvasConfirmationChoices.showNode, label: 'Mostrar' }],
     };
   }
 
-  const connected = uniqueTitles(
-    dependencies.map((dependency) =>
-      titleOf(
-        dependency.sourceNodeId === node.id ? dependency.targetNodeId : dependency.sourceNodeId,
-      ),
-    ),
-  );
   const losses = [
     node.isTeacherBlocked ? 'se quitará su bloqueo docente' : '',
-    connected.length ? `se eliminarán sus conexiones con ${nodeNames(connected)}` : '',
+    dependencies.length === 1
+      ? 'se eliminará su conexión'
+      : dependencies.length > 1
+        ? `se eliminarán sus ${dependencies.length} conexiones`
+        : '',
   ].filter(Boolean);
   const consequences = losses.length
-    ? ` Además, ${losses.join(' y ')}${
-        connected.length ? '; al volver a mostrarlo, tendrás que conectarlo de nuevo' : ''
+    ? ` Además, ${sentenceList(losses)}${
+        dependencies.length ? '; al volver a mostrarlo, tendrás que conectarlo de nuevo' : ''
       }.`
     : '';
 
   return {
-    title: `¿Ocultar ${title}?`,
+    title: <>¿Ocultar {name}?</>,
     description: `Dejará de aparecer en el roadmap de los estudiantes.${consequences}`,
     intent: 'destructive',
     actions: [{ id: canvasConfirmationChoices.hideNode, label: 'Ocultar' }],
@@ -483,22 +447,15 @@ export function roadmapNodeVisibilityConfirmation(
 
 export function resourceDeletionConfirmation(resource: Resource): ConfirmationPresentation {
   return {
-    title: 'Confirmar eliminación',
-    description: `Eliminarás el recurso ${resource.title}. Esta acción no se puede deshacer.`,
+    title: (
+      <>
+        ¿Eliminar <span className="font-medium text-foreground">{resource.title}</span>?
+      </>
+    ),
+    description: `Se quitará ${
+      resource.type === 'FILE' ? 'este archivo' : 'este enlace'
+    } del nodo. Esta acción no se puede deshacer.`,
     intent: 'destructive',
-    sections: [
-      {
-        title: 'Recurso que se eliminará',
-        items: [
-          {
-            kind: 'item',
-            id: resource.id,
-            title: resource.title,
-            description: resourceTypeLabel(resource.type),
-          },
-        ],
-      },
-    ],
     actions: [{ id: nodeEditorConfirmationActionIds.deleteResource, label: 'Eliminar' }],
   };
 }
@@ -507,23 +464,13 @@ export function nodeTypeDeletionConfirmation(
   nodeType: NodeTypePresentation & { id: string },
 ): ConfirmationPresentation {
   return {
-    title: 'Confirmar eliminación',
-    description: `Eliminarás el Tipo de nodo ${nodeType.name}. Esta acción no se puede deshacer.`,
+    title: (
+      <>
+        ¿Eliminar el tipo <NodeName title={nodeType.name} nodeType={nodeType} />?
+      </>
+    ),
+    description: 'Esta acción no se puede deshacer.',
     intent: 'destructive',
-    sections: [
-      {
-        title: 'Tipo de nodo que se eliminará',
-        items: [
-          {
-            kind: 'item',
-            id: nodeType.id,
-            title: nodeType.name,
-            media: nodeTypeMedia(nodeType),
-            badge: 'Personalizado',
-          },
-        ],
-      },
-    ],
     actions: [{ id: canvasConfirmationChoices.deleteNodeType, label: 'Eliminar' }],
   };
 }

@@ -173,9 +173,12 @@ test('a Scheduled unlock release notifies like a manual unlock, from teaching st
   await enterRoadmap(course.studentId, course.roadmapId);
   await prisma.roadmapNode.update({
     where: { id: node.id },
-    data: { teacherUnlockOn: new Date('2026-01-01T00:00:00.000Z') },
+    data: { teacherUnlockAt: new Date('2026-01-01T00:00:00.000Z') },
   });
-  await releaseScheduledTeacherUnlocks(scheduledRoadmapChangePort, '2026-01-02');
+  await releaseScheduledTeacherUnlocks(
+    scheduledRoadmapChangePort,
+    new Date('2026-01-02T12:00:00.000Z'),
+  );
   expect(accessNotices(await pendingNotices(course.studentId, course.roadmapId))).toMatchObject([
     {
       body: '«Colas» fue desbloqueado.',
