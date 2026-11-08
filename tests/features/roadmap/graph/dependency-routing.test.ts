@@ -323,7 +323,7 @@ test.each(
         return source === 'hub' ? points[0] : points.at(-1);
       });
       const coordinates =
-        mode === 'outgoing' ? [35, 40, 45] : mode === 'incoming' ? [40, 40, 40] : [37.5, 40, 42.5];
+        mode === 'outgoing' ? [32, 40, 48] : mode === 'incoming' ? [40, 40, 40] : [36, 40, 44];
       expect(actual).toEqual(coordinates.map((y) => rotate({ x: 120, y })));
       const reordered = router.route({ ...input, dependencies: [...input.dependencies].reverse() });
       for (const [id, route] of result.routes)
@@ -441,5 +441,62 @@ test('rebuilds canonical routes after movement and connector history', () => {
       const expected = fresh.route(input);
       expect([...saved.routes].sort()).toEqual([...expected.routes].sort());
     });
+  });
+});
+
+function crossings(routes: readonly (readonly { x: number; y: number }[])[]) {
+  const segments = routes.map((points) => points.slice(1).map((end, i) => [points[i], end]));
+  let count = 0;
+  segments.forEach((route, i) =>
+    segments.slice(i + 1).forEach((other) => {
+      for (const [a, b] of route)
+        for (const [c, d] of other) {
+          const [h, v] =
+            a.y === b.y
+              ? [
+                  [a, b],
+                  [c, d],
+                ]
+              : [
+                  [c, d],
+                  [a, b],
+                ];
+          if (h[0].y !== h[1].y || v[0].x !== v[1].x) continue;
+          const x = v[0].x;
+          const y = h[0].y;
+          if (
+            x > Math.min(h[0].x, h[1].x) &&
+            x < Math.max(h[0].x, h[1].x) &&
+            y > Math.min(v[0].y, v[1].y) &&
+            y < Math.max(v[0].y, v[1].y)
+          )
+            count++;
+        }
+    }),
+  );
+  return count;
+}
+
+test('spaces outgoing dependencies on one side 8 px apart and nests their turns without crossings', () => {
+  withRouter((router) => {
+    const targets = ['far', 'near', 'ahead', 'low'];
+    const result = router.route({
+      obstacles: [
+        body('hub', 0, 0),
+        body('above', 0, -140),
+        body('below', 0, 140),
+        body('far', 600, -300),
+        body('near', 240, -160),
+        body('ahead', 600, 0),
+        body('low', 300, 200),
+      ],
+      dependencies: targets.map((target) => ({ id: target, source: 'hub', target })),
+    });
+    expect(result.blocked).toBe(0);
+    const routes = targets.map((id) => result.routes.get(id)!.points);
+    expect(routes.map(([start]) => start.x)).toEqual([120, 120, 120, 120]);
+    expect(routes.map(([start, next]) => next.y - start.y)).toEqual([0, 0, 0, 0]);
+    expect(routes.map(([start]) => start.y).sort((a, b) => a - b)).toEqual([28, 36, 44, 52]);
+    expect(crossings(routes)).toBe(0);
   });
 });

@@ -86,6 +86,8 @@ function compareDependencies(a: RoutingDependency, b: RoutingDependency) {
   return a.source.localeCompare(b.source) || a.target.localeCompare(b.target);
 }
 
+const dependencySpacing = 8;
+
 type ShapeEntry = { obstacle: RoutingObstacle; shape: AvoidShape; pins: AvoidPin[] };
 type ConnectorEntry = { dependency: RoutingDependency; connector: AvoidConnector };
 type Port = {
@@ -95,6 +97,8 @@ type Port = {
   side: number;
   point: Point;
   opposite: Point;
+  bend: number;
+  reach: number;
   groupSize: number;
 };
 
@@ -110,7 +114,7 @@ export class DependencyRouter {
     const router = new this.avoid.Router(this.avoid.OrthogonalRouting);
     router.setRoutingParameter(this.avoid.shapeBufferDistance, 12);
     router.setRoutingParameter(this.avoid.segmentPenalty, 24);
-    router.setRoutingParameter(this.avoid.idealNudgingDistance, 8);
+    router.setRoutingParameter(this.avoid.idealNudgingDistance, dependencySpacing);
     router.setRoutingOption(this.avoid.nudgeSharedPathsWithCommonEndPoint, true);
     return router;
   }
@@ -291,8 +295,12 @@ export class DependencyRouter {
         const shape = this.shapes.get(`${nodeId}:body`)!;
         const point = { ...(source ? points[0] : points[points.length - 1]) };
         const neighbor = source ? points[1] : points[points.length - 2];
+        const following = source ? points[2] : points[points.length - 3];
         const side =
           neighbor.y < point.y ? 0 : neighbor.x > point.x ? 1 : neighbor.y > point.y ? 2 : 3;
+        const axis = side % 2 === 1 ? 'y' : 'x';
+        const reach = Math.abs(neighbor.x - point.x) + Math.abs(neighbor.y - point.y);
+        const bend = following ? Math.sign(following[axis] - neighbor[axis]) : 0;
         const port: Port = {
           entry,
           source,
@@ -300,6 +308,8 @@ export class DependencyRouter {
           side,
           point,
           opposite: source ? points[points.length - 1] : points[0],
+          bend,
+          reach,
           groupSize: 1,
         };
         const key = `${nodeId}:${side}:${source ? 'outgoing' : 'incoming'}`;
@@ -317,10 +327,12 @@ export class DependencyRouter {
       const length = verticalSide ? rect.height : rect.width;
       const center = rect[axis] + length / 2;
       const spacing = group[0].source
-        ? Math.min(5, Math.max(0, length - 24) / Math.max(1, group.length - 1))
+        ? Math.min(dependencySpacing, Math.max(0, length - 24) / Math.max(1, group.length - 1))
         : 0;
       group.sort(
         (a, b) =>
+          a.bend - b.bend ||
+          (b.reach - a.reach) * a.bend ||
           a.opposite[axis] - b.opposite[axis] ||
           compareDependencies(a.entry.dependency, b.entry.dependency) ||
           Number(a.source) - Number(b.source),
