@@ -94,21 +94,6 @@ function ToastDescription({ className, ...props }: ToastPrimitive.Description.Pr
   );
 }
 
-function ToastAction({
-  className,
-  render = <Button variant="outline" size="sm" />,
-  ...props
-}: ToastPrimitive.Action.Props) {
-  return (
-    <ToastPrimitive.Action
-      data-slot="toast-action"
-      render={render}
-      className={cn('shrink-0', className)}
-      {...props}
-    />
-  );
-}
-
 function ToastClose({
   className,
   children,
@@ -161,7 +146,6 @@ function ToastList() {
           <ToastTitle />
           <ToastDescription />
         </div>
-        <ToastAction />
         <ToastClose />
       </ToastContent>
     </Toast>
@@ -181,15 +165,4 @@ function Toaster({ children, toastManager = toast, ...props }: ToastPrimitive.Pr
   );
 }
 
-export {
-  Toaster,
-  Toast,
-  ToastAction,
-  ToastClose,
-  ToastContent,
-  ToastDescription,
-  ToastPortal,
-  ToastProvider,
-  ToastTitle,
-  ToastViewport,
-};
+export { Toaster };

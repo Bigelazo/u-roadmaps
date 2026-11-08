@@ -125,7 +125,7 @@ test('hidden Node content returns on showing, but entry recognizes hidden target
   const ids = (await notices()).map((notice) => notice.id).sort();
   await ok(await hideNode(author, path));
   await expect.poll(targets).toEqual(['node-access']);
-  await ok(await recipient.get(`/api/notifications/${ids[0]}`), 404);
+  expect((await notices()).map(({ id }) => id)).not.toContain(ids[0]);
   await ok(await author.patch(path, { data: { isVisible: true } }));
   await expect.poll(async () => (await notices()).map((notice) => notice.id).sort()).toEqual(ids);
   await ok(await hideNode(author, path));

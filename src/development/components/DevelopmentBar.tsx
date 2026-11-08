@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,14 +15,7 @@ import { Button } from '@/shared/ui/button';
 
 type Persona = { id: string; label: string };
 
-export default function DevelopmentBar({
-  personas,
-  hideOnPersonaPage = false,
-}: {
-  personas: Persona[];
-  hideOnPersonaPage?: boolean;
-}) {
-  const pathname = usePathname();
+export default function DevelopmentBar({ personas }: { personas: Persona[] }) {
   const router = useRouter();
 
   async function assumePersona(userId: string) {
@@ -36,8 +29,6 @@ export default function DevelopmentBar({
       router.refresh();
     }
   }
-
-  if (hideOnPersonaPage && pathname === '/development/personas') return null;
 
   return (
     <DropdownMenu>

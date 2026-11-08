@@ -52,7 +52,7 @@ export type RoadmapNodePlacement = {
   readonly position: RoadmapNodePosition;
 };
 
-export type TeacherBlockChangeImpact = {
+type TeacherBlockChangeImpact = {
   readonly [Operation in TeacherBlockOperation]?: TeacherBlockOperationImpact;
 };
 
@@ -242,7 +242,7 @@ const scheduledMoment = (unlockAt: string) => {
   return `el ${formatCalendarDay(day)} a las ${time}`;
 };
 
-export function scheduledUnlockSuccess({
+function scheduledUnlockSuccess({
   title,
   unlockAt,
   companions = 0,
@@ -304,9 +304,7 @@ const nodeMoves = {
     ),
 };
 
-export type AutomaticLayouts = Readonly<
-  Record<RoadmapLayoutDirection, readonly RoadmapNodePlacement[]>
->;
+type AutomaticLayouts = Readonly<Record<RoadmapLayoutDirection, readonly RoadmapNodePlacement[]>>;
 
 const chosenLayout = ({
   layouts,
@@ -834,7 +832,7 @@ export type CanvasCommand = CanvasCommandOf<CanvasCommandKind>;
 
 export type ChangeImpactCommand = CanvasCommandOf<keyof PlannedChangeImpactOf>;
 
-export type ChangeImpactOf<Kind extends CanvasCommandKind> = EntryTypes[Kind]['impact'];
+type ChangeImpactOf<Kind extends CanvasCommandKind> = EntryTypes[Kind]['impact'];
 
 export type AnyCommandEntry = CommandEntry<CanvasCommand, ChangeImpactOf<CanvasCommandKind> | null>;
 

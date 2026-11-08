@@ -5,7 +5,7 @@ export type AcademicOverviewActor = Readonly<{
 
 export type AcademicOverviewSource = 'MUFASA' | 'LOCAL';
 
-export type AcademicOverviewRole = 'STUDENT' | 'TEACHER';
+type AcademicOverviewRole = 'STUDENT' | 'TEACHER';
 
 export type AcademicOverviewInstitutionalPosition =
   import('@/shared/institutional-position').InstitutionalCoursePosition;

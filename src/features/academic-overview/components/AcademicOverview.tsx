@@ -124,27 +124,23 @@ function CourseRoadmapAction({
   isPastOffering,
   awaitsCreation,
   renderRoadmapCreation,
-  notificationsEnabled,
 }: Readonly<{
   course: AcademicOverviewCourse;
   isPastOffering: boolean;
   awaitsCreation: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
-  notificationsEnabled: boolean;
 }>) {
   if (course.hasRoadmap) {
     return (
       <>
-        {notificationsEnabled ? (
-          <NotificationCountButton
-            filter={{
-              courseCode: course.courseCode,
-              year: course.year,
-              semester: course.semester,
-            }}
-            label={`el curso ${course.name}`}
-          />
-        ) : null}
+        <NotificationCountButton
+          filter={{
+            courseCode: course.courseCode,
+            year: course.year,
+            semester: course.semester,
+          }}
+          label={`el curso ${course.name}`}
+        />
         {isPastOffering ? (
           <Link
             aria-label={`Ver roadmap de ${course.name}`}
@@ -198,12 +194,10 @@ function CourseActions({
   course,
   isPastOffering,
   renderRoadmapCreation,
-  notificationsEnabled,
 }: Readonly<{
   course: AcademicOverviewCourse;
   isPastOffering: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
-  notificationsEnabled: boolean;
 }>) {
   const awaitsCreation =
     course.role === 'TEACHER' &&
@@ -224,7 +218,6 @@ function CourseActions({
         isPastOffering={isPastOffering}
         awaitsCreation={awaitsCreation}
         renderRoadmapCreation={renderRoadmapCreation}
-        notificationsEnabled={notificationsEnabled}
       />
       {(isPastOffering && course.role === 'TEACHER') || awaitsCreation ? (
         <Link
@@ -255,13 +248,11 @@ function CourseRow({
   headingLevel: Heading,
   isPastTerm,
   renderRoadmapCreation,
-  notificationsEnabled,
 }: Readonly<{
   course: AcademicOverviewCourse;
   headingLevel: CourseHeadingLevel;
   isPastTerm: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
-  notificationsEnabled: boolean;
 }>) {
   const position =
     positionDetails[
@@ -303,7 +294,6 @@ function CourseRow({
             course={course}
             isPastOffering={isPastOffering}
             renderRoadmapCreation={renderRoadmapCreation}
-            notificationsEnabled={notificationsEnabled}
           />
         </div>
       </div>
@@ -316,13 +306,11 @@ function CourseList({
   headingLevel,
   isPastTerm = false,
   renderRoadmapCreation,
-  notificationsEnabled,
 }: Readonly<{
   term: AcademicOverviewTerm;
   headingLevel: CourseHeadingLevel;
   isPastTerm?: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
-  notificationsEnabled: boolean;
 }>) {
   return (
     <ul className={cn(dividedListClassName, 'sm:grid sm:grid-cols-[minmax(0,1fr)_auto]')}>
@@ -333,7 +321,6 @@ function CourseList({
           isPastTerm={isPastTerm}
           key={`${course.courseCode}:${course.year}:${course.semester}`}
           renderRoadmapCreation={renderRoadmapCreation}
-          notificationsEnabled={notificationsEnabled}
         />
       ))}
     </ul>
@@ -344,12 +331,10 @@ function AcademicTermSection({
   term,
   isPastTerm = false,
   renderRoadmapCreation,
-  notificationsEnabled,
 }: Readonly<{
   term: AcademicOverviewTerm;
   isPastTerm?: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
-  notificationsEnabled: boolean;
 }>) {
   const id = `term-${term.year}-${term.semester}`;
   const Heading = isPastTerm ? 'h3' : 'h2';
@@ -377,7 +362,6 @@ function AcademicTermSection({
       <CourseList
         headingLevel={isPastTerm ? 'h4' : 'h3'}
         isPastTerm={isPastTerm}
-        notificationsEnabled={notificationsEnabled}
         renderRoadmapCreation={renderRoadmapCreation}
         term={term}
       />
@@ -388,11 +372,9 @@ function AcademicTermSection({
 function PreviousTermsSection({
   previousTerms,
   renderRoadmapCreation,
-  notificationsEnabled,
 }: Readonly<{
   previousTerms: AcademicOverviewTerm[];
   renderRoadmapCreation: RoadmapCreationAction;
-  notificationsEnabled: boolean;
 }>) {
   return (
     <Collapsible>
@@ -418,7 +400,6 @@ function PreviousTermsSection({
             <div className="pt-6">
               <AcademicTermSection
                 isPastTerm
-                notificationsEnabled={notificationsEnabled}
                 renderRoadmapCreation={renderRoadmapCreation}
                 term={previousTerms[0]}
               />
@@ -444,7 +425,6 @@ function PreviousTermsSection({
                     <CourseList
                       headingLevel="h4"
                       isPastTerm
-                      notificationsEnabled={notificationsEnabled}
                       renderRoadmapCreation={renderRoadmapCreation}
                       term={term}
                     />
@@ -462,14 +442,12 @@ function PreviousTermsSection({
 export function AcademicOverview({
   overview,
   renderRoadmapCreation,
-  notificationsEnabled,
   tutorialInvitation = false,
   notice,
 }: Readonly<{
   overview: AcademicOverviewPage;
   notice?: React.ReactNode;
   renderRoadmapCreation: RoadmapCreationAction;
-  notificationsEnabled: boolean;
   tutorialInvitation?: boolean;
 }>) {
   const [currentTerm, ...previousTerms] = overview.terms;
@@ -515,7 +493,6 @@ export function AcademicOverview({
           <div className="flex flex-col gap-12 md:gap-16">
             {currentTerm ? (
               <AcademicTermSection
-                notificationsEnabled={notificationsEnabled}
                 renderRoadmapCreation={renderRoadmapCreation}
                 term={currentTerm}
               />
@@ -524,7 +501,6 @@ export function AcademicOverview({
               <PreviousTermsSection
                 previousTerms={previousTerms}
                 renderRoadmapCreation={renderRoadmapCreation}
-                notificationsEnabled={notificationsEnabled}
               />
             ) : null}
           </div>

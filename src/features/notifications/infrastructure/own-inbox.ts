@@ -1,6 +1,5 @@
 import 'server-only';
 import { lockNoticeParticipation } from './participation-lock';
-import { isOwnNoticeVisible } from './notice-visibility';
 import { randomUUID } from 'node:crypto';
 import { prisma, Prisma } from '@/shared/server/db';
 import { ApplicationError } from '@/shared/errors/server';
@@ -37,7 +36,7 @@ async function pruneNoticeOpenings(
   });
 }
 
-export function noticeRecord(notice: {
+function noticeRecord(notice: {
   id: string;
   courseName?: string;
   subject: string;
@@ -173,29 +172,11 @@ export async function reviewOwnNode(userId: string, input: Record<string, unknow
   return { reviewed: true };
 }
 
-export async function findOwnNotice(
-  userId: string,
-  id: string,
-  readAccess: ParticipantAccessReader,
-) {
-  const notice = await prisma.roadmapNotice.findFirst({
-    where: { id: uuid(id), recipientId: userId },
-  });
-  if (!notice || !(await isOwnNoticeVisible(userId, notice, readAccess)))
-    throw new ApplicationError(404, 'NOT_FOUND', 'Aviso no encontrado.');
-  const offering = await prisma.courseOffering.findUnique({
-    where: { id: notice.courseOfferingId },
-    select: { course: { select: { name: true } } },
-  });
-  return { ...notice, courseName: offering?.course.name };
-}
-
 export async function prepareOwnNoticeOpening(
   userId: string,
   roadmapId: string,
   readAccess: ParticipantAccessReader,
   operationId: string = randomUUID(),
-  retry = false,
 ) {
   return prisma.$transaction(async (transaction) => {
     const participation = await lockNoticeParticipation(transaction, userId, roadmapId);
@@ -211,7 +192,6 @@ export async function prepareOwnNoticeOpening(
         throw new ApplicationError(400, 'INVALID_REQUEST', 'Apertura inválida.');
       return operationId;
     }
-    if (retry) throw new ApplicationError(404, 'NOT_FOUND', 'Apertura de Roadmap no encontrada.');
     const [accessible, notices, nodes, nodeTypes, roadmap] = await Promise.all([
       roadmapNodeAccess(readAccess, transaction, userId, roadmapId),
       transaction.roadmapNotice.findMany({

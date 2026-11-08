@@ -6,7 +6,6 @@ import DevelopmentBar from '@/development/components/DevelopmentBar';
 const { refresh, replace } = vi.hoisted(() => ({ refresh: vi.fn(), replace: vi.fn() }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/academic-overview',
   useRouter: () => ({ refresh, replace }),
 }));
 

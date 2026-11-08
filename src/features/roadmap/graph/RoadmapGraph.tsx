@@ -88,12 +88,9 @@ export type {
   RoadmapGraphEditingIntent,
   RoadmapGraphEditing,
   RoadmapGraphProjection,
-  RoadmapNodePlacement,
   RoadmapNodePosition,
   RoadmapViewport,
   RoadmapViewportRestoration,
-  StudentRoadmapGraphProjection,
-  TeachingRoadmapGraphProjection,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 
 const selectedEdgeColor = 'var(--primary)';
@@ -611,7 +608,6 @@ export type RoadmapGraphOverlaySlots = {
   topLeft?: ReactNode;
   topCenter?: ReactNode;
   topRight?: ReactNode;
-  bottomRight?: ReactNode;
 };
 
 const titlePlateClassName = cn(
@@ -663,15 +659,6 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
       {slots?.topRight ? (
         <Panel position="top-right" className="m-4! sm:m-6!">
           {slots.topRight}
-        </Panel>
-      ) : null}
-      {slots?.bottomRight ? (
-        <Panel
-          position="bottom-right"
-          data-canvas-overlay="bottom"
-          className={bottomRightPanelClassName}
-        >
-          {slots.bottomRight}
         </Panel>
       ) : null}
     </>

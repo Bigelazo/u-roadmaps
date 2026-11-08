@@ -11,7 +11,7 @@ import {
   type RoadmapView,
 } from './descriptor';
 
-export const dependencyPairRef = (sourceNodeId: string, targetNodeId: string) => ({
+const dependencyPairRef = (sourceNodeId: string, targetNodeId: string) => ({
   noticeTarget: NOTICE_TARGET.dependency,
   targetKey: dependencyTarget(sourceNodeId, targetNodeId),
   nodeId: null,

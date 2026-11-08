@@ -76,7 +76,6 @@ for (const target of ['dependency', 'node-type-name'] as const)
     await hide();
     await expect.poll(targetNotices).toHaveLength(0);
     await expect.poll(count).toBe(1);
-    await ok(await recipient.get(`/api/notifications/${id}`), 404);
     await show();
     await expect.poll(async () => (await targetNotices()).map((notice) => notice.id)).toEqual([id]);
     await expect.poll(count).toBe(1);

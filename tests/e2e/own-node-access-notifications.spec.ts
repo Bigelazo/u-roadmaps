@@ -46,7 +46,7 @@ test('access notices retain context through blocking, unlocking, hiding and dele
       page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toHaveCount(0);
-    await expect(page).not.toHaveURL(/targetNode=/);
+    await expect(page).toHaveURL(course.pagePath());
     await expect
       .poll(async () => (await noticesFor(student, nodeId)).filter(({ read }) => !read).length)
       .toBe(0);

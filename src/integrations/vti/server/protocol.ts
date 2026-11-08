@@ -118,9 +118,5 @@ export async function authenticateVtiCallback(
     rut,
     institutionalEmail,
     name,
-    preferredUsername:
-      typeof payload.preferred_username === 'string'
-        ? payload.preferred_username.trim().slice(0, 320)
-        : undefined,
   };
 }

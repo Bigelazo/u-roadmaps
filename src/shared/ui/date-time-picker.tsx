@@ -22,15 +22,10 @@ export type DateTimePickerProps = {
   value: Date | null;
   onValueChange: (value: Date) => void;
   timeZone: string;
-  min?: Date;
-  minuteStep?: number;
-  defaultTime?: string;
   id?: string;
-  dayLabel?: string;
-  timeLabel?: string;
-  dayPlaceholder?: string;
+  dayLabel: string;
+  timeLabel: string;
   disabled?: boolean;
-  className?: string;
 };
 
 function dayOfDate(date: Date) {
@@ -44,41 +39,31 @@ function dateOfDay(day: string) {
   return new Date(year!, month! - 1, date);
 }
 
-function timeSlots(minuteStep: number) {
-  const slots: string[] = [];
-  for (let minutes = 0; minutes < 24 * 60; minutes += minuteStep) {
-    const hour = String(Math.floor(minutes / 60)).padStart(2, '0');
-    const minute = String(minutes % 60).padStart(2, '0');
-    slots.push(`${hour}:${minute}`);
-  }
-  return slots;
-}
+const TIME_SLOTS = Array.from({ length: 96 }, (_, index) => {
+  const hour = String(Math.floor(index / 4)).padStart(2, '0');
+  const minute = String((index % 4) * 15).padStart(2, '0');
+  return `${hour}:${minute}`;
+});
 
 export function DateTimePicker({
   value,
   onValueChange,
   timeZone,
-  min,
-  minuteStep = 15,
-  defaultTime = '08:00',
   id,
-  dayLabel = 'Día',
-  timeLabel = 'Hora',
-  dayPlaceholder = 'Elige un día',
+  dayLabel,
+  timeLabel,
   disabled = false,
-  className,
 }: DateTimePickerProps) {
   const [isCalendarOpen, setCalendarOpen] = useState(false);
-  const [draftTime, setDraftTime] = useState(defaultTime);
-  const minimum = min ?? new Date();
+  const [draftTime, setDraftTime] = useState('08:00');
+  const minimum = new Date();
   const selected = value ? zonedWallClock(value, timeZone) : null;
   const time = selected?.time ?? draftTime;
   const minimumDay = zonedWallClock(minimum, timeZone).day;
-  const slots = timeSlots(minuteStep);
   const isAvailable = (wallClock: ZonedWallClock) =>
     zonedInstant(wallClock, timeZone).getTime() > minimum.getTime();
   const firstAvailableSlot = (day: string) =>
-    slots.find((slot) => isAvailable({ day, time: slot }));
+    TIME_SLOTS.find((slot) => isAvailable({ day, time: slot }));
 
   function selectDay(date: Date | undefined) {
     if (!date) return;
@@ -97,7 +82,7 @@ export function DateTimePicker({
   }
 
   return (
-    <div className={cn('flex min-w-0 flex-wrap gap-2', className)}>
+    <div className="flex min-w-0 flex-wrap gap-2">
       <Popover open={isCalendarOpen} onOpenChange={setCalendarOpen}>
         <PopoverTrigger
           render={
@@ -119,7 +104,7 @@ export function DateTimePicker({
             className="text-muted-foreground"
             aria-hidden="true"
           />
-          {selected ? formatCalendarDay(selected.day) : dayPlaceholder}
+          {selected ? formatCalendarDay(selected.day) : 'Elige un día'}
           <ChevronDown data-icon="inline-end" className="ml-auto" aria-hidden="true" />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto p-0">
@@ -153,7 +138,7 @@ export function DateTimePicker({
           className="max-h-[min(18rem,var(--available-height))]"
         >
           <SelectGroup>
-            {slots.map((slot) => (
+            {TIME_SLOTS.map((slot) => (
               <SelectItem
                 key={slot}
                 value={slot}

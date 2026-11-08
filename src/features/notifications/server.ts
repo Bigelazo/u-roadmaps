@@ -6,9 +6,7 @@ import {
   acknowledgeOwnNotices as acknowledgeNotices,
   countOwnNodeChanges,
   countOwnNoticeTargets,
-  findOwnNotice,
   listOwnNotices as listNotices,
-  noticeRecord,
   uuid,
   prepareOwnNoticeOpening as prepareNoticeOpening,
 } from './infrastructure/own-inbox';
@@ -52,10 +50,6 @@ export function getInboxIdentity(userId: string): InboxIdentity {
   return { userId };
 }
 
-export async function getOwnNotice(userId: string, id: string) {
-  return noticeRecord(await findOwnNotice(userId, id, readParticipantAccess));
-}
-
 export function prepareOwnRoadmapOpening(userId: string, input: Record<string, unknown>) {
   if (input.nodeId !== undefined)
     throw new ApplicationError(
@@ -65,13 +59,9 @@ export function prepareOwnRoadmapOpening(userId: string, input: Record<string, u
     );
   const roadmapId = uuid(input.roadmapId);
   const operationId = uuid(input.operationId);
-  return prepareNoticeOpening(
-    userId,
-    roadmapId,
-    readParticipantAccess,
-    operationId,
-    input.retry === true,
-  ).then((operationId) => ({ roadmapId, operationId }));
+  return prepareNoticeOpening(userId, roadmapId, readParticipantAccess, operationId).then(
+    (operationId) => ({ roadmapId, operationId }),
+  );
 }
 
 export { openNotificationStream } from './infrastructure/sse';

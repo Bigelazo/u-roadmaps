@@ -38,8 +38,6 @@ function asStudentRoadmap(
 ): StudentRoadmapDto {
   if (roadmap.nodes.every((node) => 'access' in node)) return copy(roadmap as StudentRoadmapDto);
   return copy({
-    course: roadmap.course,
-    courseOffering: roadmap.courseOffering,
     roadmap: roadmap.roadmap,
     nodeTypes: roadmap.nodeTypes,
     ...studentRoadmapNodes({

@@ -1,7 +1,6 @@
 import { expect, it } from 'vitest';
 import { Position } from '@xyflow/react';
 import {
-  dependencyArrowGeometry,
   floatingEdgeGeometry,
   findOpenRoadmapPosition,
   nearestSide,
@@ -42,7 +41,7 @@ it.each([
 ])(
   'connects both arrow ends to the actual Node border when facing $direction',
   ({ target, sourceAnchor, targetAnchor }) => {
-    const geometry = dependencyArrowGeometry(card(0, 0), target);
+    const geometry = floatingEdgeGeometry(card(0, 0), target);
     expect({ x: geometry.sourceX, y: geometry.sourceY }).toEqual(sourceAnchor);
     expect({ x: geometry.targetX, y: geometry.targetY }).toEqual(targetAnchor);
   },

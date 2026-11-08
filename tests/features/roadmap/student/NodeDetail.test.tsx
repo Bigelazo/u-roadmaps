@@ -171,12 +171,12 @@ test.each(['TEACHER_BLOCK', 'PREREQUISITE_BLOCK'] as const)(
   },
 );
 
-test('does not render a desktop detail sidebar when no node is selected', () => {
+test('renders nothing when no node is selected', () => {
   mockViewport(1280);
 
-  renderDetail({ node: undefined, status: null });
+  const { container } = renderDetail({ node: undefined, status: null });
 
-  expect(screen.queryByText('Selecciona un nodo')).toBeNull();
+  expect(container.innerHTML).toBe('');
 });
 
 test('uses the student profile width and exposes a desktop resize control', () => {

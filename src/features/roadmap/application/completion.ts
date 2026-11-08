@@ -55,25 +55,21 @@ export async function requireStudentNodeAccess(
 }
 
 export function readRoadmapForParticipant(participant: RoadmapParticipant) {
-  return roadmapRead(
-    participant,
-    'read',
-    async ({ tx, courseOffering, participation, roadmap }) => {
-      if (participation.role === 'TEACHER') {
-        const data = await loadRoadmapProjectionData(tx, { courseOffering, roadmap });
-        return projectTeacherRoadmap(data, participant.identifier);
-      }
-      const [data, completedNodeIds] = await Promise.all([
-        loadRoadmapProjectionData(tx, { courseOffering, roadmap }),
-        loadCompletedNodeIds(tx, {
-          kind: 'COMPLETION',
-          userId: participant.userId,
-          roadmapId: roadmap.id,
-        }),
-      ]);
-      return projectStudentRoadmap(data, participant.identifier, completedNodeIds);
-    },
-  );
+  return roadmapRead(participant, 'read', async ({ tx, participation, roadmap }) => {
+    if (participation.role === 'TEACHER') {
+      const data = await loadRoadmapProjectionData(tx, { roadmap });
+      return projectTeacherRoadmap(data, participant.identifier);
+    }
+    const [data, completedNodeIds] = await Promise.all([
+      loadRoadmapProjectionData(tx, { roadmap }),
+      loadCompletedNodeIds(tx, {
+        kind: 'COMPLETION',
+        userId: participant.userId,
+        roadmapId: roadmap.id,
+      }),
+    ]);
+    return projectStudentRoadmap(data, participant.identifier, completedNodeIds);
+  });
 }
 
 export const completeNode = roadmapCommand({
@@ -93,21 +89,17 @@ export const completeNode = roadmapCommand({
 });
 
 export function readSimulatedRoadmap(participant: RoadmapParticipant) {
-  return roadmapRead(
-    participant,
-    'oversee',
-    async ({ tx, courseOffering, participation, roadmap }) => {
-      const [data, completedNodeIds] = await Promise.all([
-        loadRoadmapProjectionData(tx, { courseOffering, roadmap }),
-        loadCompletedNodeIds(tx, {
-          kind: 'SIMULATED_COMPLETION',
-          participationId: participation.id,
-          roadmapId: roadmap.id,
-        }),
-      ]);
-      return projectStudentRoadmap(data, participant.identifier, completedNodeIds);
-    },
-  );
+  return roadmapRead(participant, 'oversee', async ({ tx, participation, roadmap }) => {
+    const [data, completedNodeIds] = await Promise.all([
+      loadRoadmapProjectionData(tx, { roadmap }),
+      loadCompletedNodeIds(tx, {
+        kind: 'SIMULATED_COMPLETION',
+        participationId: participation.id,
+        roadmapId: roadmap.id,
+      }),
+    ]);
+    return projectStudentRoadmap(data, participant.identifier, completedNodeIds);
+  });
 }
 
 export const completeSimulatedNode = roadmapCommand({
