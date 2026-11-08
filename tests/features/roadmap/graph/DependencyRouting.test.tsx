@@ -66,7 +66,7 @@ beforeEach(() => {
     routes: new Map([
       ['ab', { path: `M${scene.obstacles[0]?.x ?? 0},0L100,0`, points: [], label: { x: 0, y: 0 } }],
     ]),
-    blocked: 0,
+    fallbacks: 0,
   }));
 });
 
@@ -214,7 +214,7 @@ test('ignores completion and pending retries after unmount', async () => {
 test('draws a dependency that cannot avoid overlapping nodes without warning about it', async () => {
   mocks.route.mockReturnValue({
     routes: new Map([['ab', { path: 'M0,0L60,0L60,40', points: [], label: { x: 0, y: 0 } }]]),
-    blocked: 1,
+    fallbacks: 1,
   });
   render(
     <DependencyRouting nodes={nodes} edges={edges}>
@@ -238,7 +238,7 @@ function Preview({ target, pointer }: { target: string; pointer: number }) {
 test('speculates in a separate router only when target or routing scene changes', async () => {
   mocks.route.mockImplementation((scene: { dependencies: { id: string; target: string }[] }) => ({
     routes: new Map(scene.dependencies.map(({ id, target }) => [id, { path: target }])),
-    blocked: 0,
+    fallbacks: 0,
   }));
   const view = (target: string, pointer: number, currentNodes = nodes) => (
     <DependencyRouting nodes={currentNodes} edges={edges}>

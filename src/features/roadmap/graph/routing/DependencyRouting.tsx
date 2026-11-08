@@ -28,7 +28,7 @@ import {
 const engineStatusDelayMs = 400;
 const engineRetryDelayMs = 1000;
 
-const emptyRoutes: RoutingResult = { routes: new Map(), blocked: 0 };
+const emptyRoutes: RoutingResult = { routes: new Map(), fallbacks: 0 };
 const PreviewRoutingContext = createContext<{ module: AvoidModule; sceneKey: string } | null>(null);
 
 export function useConnectionPreviewRoute(source: string | null, target: string | null) {

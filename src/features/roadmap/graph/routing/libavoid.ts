@@ -19,7 +19,7 @@ import {
 
 export type RoutingDependency = { id: string; source: string; target: string };
 export type RoutingScene = { obstacles: RoutingObstacle[]; dependencies: RoutingDependency[] };
-export type RoutingResult = { routes: ReadonlyMap<string, DependencyRoute>; blocked: number };
+export type RoutingResult = { routes: ReadonlyMap<string, DependencyRoute>; fallbacks: number };
 
 export function roadmapRoutingScene(
   nodes: readonly RoadmapFlowNode[],
@@ -188,7 +188,7 @@ export class DependencyRouter {
     );
     const adjusted = this.routePorts(scene, this.ports(initial));
     const routes = new Map<string, DependencyRoute>();
-    let blocked = 0;
+    let fallbacks = 0;
     for (const [id, { dependency }] of this.connectors) {
       const points = adjusted.get(id) ?? initial.get(id)!;
       const route =
@@ -198,7 +198,7 @@ export class DependencyRouter {
         routes.set(id, route);
         continue;
       }
-      blocked++;
+      fallbacks++;
       const fallback =
         dependencyRoute(initial.get(id)!, dependency.source, dependency.target, []) ??
         fallbackDependencyRoute(
@@ -207,7 +207,7 @@ export class DependencyRouter {
         );
       if (fallback) routes.set(id, fallback);
     }
-    return { routes, blocked };
+    return { routes, fallbacks };
   }
 
   private routePorts(scene: RoutingScene, ports: readonly Port[]): Map<string, Point[]> {
@@ -228,7 +228,7 @@ export class DependencyRouter {
       const pinsByPlace = new Map<string, number>();
       ports.forEach((port) => {
         const { obstacle } = port.shape;
-        const place = `${obstacle.id}:${port.side}:${port.point.x},${port.point.y}`;
+        const place = `${obstacle.id}:${port.side}:${port.source}:${port.point.x},${port.point.y}`;
         const pair = endpoints.get(port.entry.dependency.id) ?? {};
         pair[port.source ? 'source' : 'target'] = port;
         endpoints.set(port.entry.dependency.id, pair);
