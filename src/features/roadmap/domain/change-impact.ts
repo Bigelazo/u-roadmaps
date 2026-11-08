@@ -8,6 +8,7 @@ import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rul
 import {
   blockedPrerequisiteNodeIds,
   pendingScheduledUnlockNodeIds,
+  settleDueScheduledUnlocks,
   type UnlockInstant,
 } from '@/features/roadmap/domain/scheduled-unlock';
 import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
@@ -49,10 +50,14 @@ export type ChangeImpactOf = {
   'delete-node': NodeDeletionImpact;
 };
 
-export type ChangeConsequences = {
+type PlannedConsequences = {
   blockedNodeIds: string[];
   unblockedNodeIds: string[];
   removedDependencyIds: string[];
+};
+
+export type ChangeConsequences = PlannedConsequences & {
+  discardedScheduleNodeIds: string[];
 };
 
 export type ChangeRuleFailure =
@@ -69,23 +74,42 @@ export type StaleChangeImpactReason =
   | 'DEPENDENCY_PREVIEW_STALE'
   | 'TEACHER_BLOCK_PREVIEW_STALE';
 
-export type ChangePlan<Kind extends ChangeWithImpact['kind'] = ChangeWithImpact['kind']> =
+type PlanWith<Consequences, Kind extends ChangeWithImpact['kind']> =
   | {
       kind: 'ALLOWED';
       impact: ChangeImpactOf[Kind];
-      consequences: ChangeConsequences;
+      consequences: Consequences;
       stale: RuleRejection<StaleChangeImpactReason>;
     }
   | RuleRejection<ChangeRuleFailure>;
+
+export type ChangePlan<Kind extends ChangeWithImpact['kind'] = ChangeWithImpact['kind']> = PlanWith<
+  ChangeConsequences,
+  Kind
+>;
+
+type PlannedChange<Kind extends ChangeWithImpact['kind'] = ChangeWithImpact['kind']> = PlanWith<
+  PlannedConsequences,
+  Kind
+>;
 
 export function planChange<Change extends ChangeWithImpact>(
   snapshot: RoadmapSnapshot,
   change: Change,
 ): ChangePlan<Change['kind']> {
-  return planAnyChange(snapshot, change) as ChangePlan<Change['kind']>;
+  const plan = planAnyChange(snapshot, change);
+  if (plan.kind === 'REJECTED') return plan;
+  const unblockedNodeIds = new Set(plan.consequences.unblockedNodeIds);
+  const discardedScheduleNodeIds = [...settleDueScheduledUnlocks(snapshot).discardedNodeIds].filter(
+    (nodeId) => !unblockedNodeIds.has(nodeId),
+  );
+  return {
+    ...plan,
+    consequences: { ...plan.consequences, discardedScheduleNodeIds },
+  } as ChangePlan<Change['kind']>;
 }
 
-function planAnyChange(snapshot: RoadmapSnapshot, change: ChangeWithImpact): ChangePlan {
+function planAnyChange(snapshot: RoadmapSnapshot, change: ChangeWithImpact): PlannedChange {
   switch (change.kind) {
     case 'create-dependency':
       return planDependency(snapshot, change);
@@ -114,7 +138,7 @@ function staleImpact(reason: StaleChangeImpactReason, impact: string) {
   );
 }
 
-function planHiding(snapshot: RoadmapSnapshot, nodeId: string): ChangePlan<'hide-node'> {
+function planHiding(snapshot: RoadmapSnapshot, nodeId: string): PlannedChange<'hide-node'> {
   if (!nodeOf(snapshot, nodeId)) return nodeNotFound();
   const dependencies = dependenciesTouching(snapshot, nodeId).map(
     ({ id, sourceNodeId, targetNodeId }) => ({ id, sourceNodeId, targetNodeId }),
@@ -131,7 +155,7 @@ function planHiding(snapshot: RoadmapSnapshot, nodeId: string): ChangePlan<'hide
   };
 }
 
-function planDeletion(snapshot: RoadmapSnapshot, nodeId: string): ChangePlan<'delete-node'> {
+function planDeletion(snapshot: RoadmapSnapshot, nodeId: string): PlannedChange<'delete-node'> {
   const node = nodeOf(snapshot, nodeId);
   if (!node) return nodeNotFound();
   const dependencies = dependenciesTouching(snapshot, nodeId);
@@ -172,7 +196,7 @@ function dependenciesTouching(snapshot: RoadmapSnapshot, nodeId: string) {
 function planDependency(
   snapshot: RoadmapSnapshot,
   { sourceNodeId, targetNodeId }: Extract<ChangeWithImpact, { kind: 'create-dependency' }>,
-): ChangePlan<'create-dependency'> {
+): PlannedChange<'create-dependency'> {
   if (sourceNodeId === targetNodeId)
     return ruleRejection('SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
   const sourceNode = nodeOf(snapshot, sourceNodeId);
@@ -208,7 +232,7 @@ function planDependency(
 function planTeacherBlock(
   snapshot: RoadmapSnapshot,
   { nodeId, operation }: Extract<ChangeWithImpact, { kind: 'change-teacher-block' }>,
-): ChangePlan<'change-teacher-block'> {
+): PlannedChange<'change-teacher-block'> {
   const selectedNode = nodeOf(snapshot, nodeId);
   if (!selectedNode) return nodeNotFound();
   if (!selectedNode.isVisible)

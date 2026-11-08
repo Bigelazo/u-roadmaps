@@ -148,9 +148,16 @@ export function createInMemoryRoadmapSessionPersistence(
       const blocked = new Set(plan.consequences.blockedNodeIds);
       const unblocked = new Set(plan.consequences.unblockedNodeIds);
       const removed = new Set(plan.consequences.removedDependencyIds);
+      const discarded = new Set(plan.consequences.discardedScheduleNodeIds);
       practice.updateNodes((nodes) =>
         nodes.map((node) => {
           if (!('isTeacherBlocked' in node)) return node;
+          if (discarded.has(node.id))
+            return {
+              ...node,
+              teacherUnlockAt: undefined,
+              teacherUnlockIncludesDependents: undefined,
+            };
           if (blocked.has(node.id)) return { ...node, isTeacherBlocked: true };
           if (unblocked.has(node.id))
             return {

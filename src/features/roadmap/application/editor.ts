@@ -144,7 +144,12 @@ async function loadRoadmapSnapshot(
 
 async function persistConsequences(
   transaction: Prisma.TransactionClient,
-  { blockedNodeIds, unblockedNodeIds, removedDependencyIds }: ChangeConsequences,
+  {
+    blockedNodeIds,
+    unblockedNodeIds,
+    removedDependencyIds,
+    discardedScheduleNodeIds,
+  }: ChangeConsequences,
 ) {
   if (blockedNodeIds.length > 0)
     await transaction.roadmapNode.updateMany({
@@ -159,6 +164,11 @@ async function persistConsequences(
         teacherUnlockAt: null,
         teacherUnlockIncludesDependents: false,
       },
+    });
+  if (discardedScheduleNodeIds.length > 0)
+    await transaction.roadmapNode.updateMany({
+      where: { id: { in: discardedScheduleNodeIds } },
+      data: { teacherUnlockAt: null, teacherUnlockIncludesDependents: false },
     });
   if (removedDependencyIds.length > 0)
     await transaction.dependency.deleteMany({ where: { id: { in: removedDependencyIds } } });
@@ -714,12 +724,8 @@ export const releaseScheduledTeacherUnlocks = async (
                 blockedNodeIds: [],
                 unblockedNodeIds,
                 removedDependencyIds: [],
+                discardedScheduleNodeIds: [...discardedNodeIds],
               });
-              if (discardedNodeIds.size > 0)
-                await transaction.roadmapNode.updateMany({
-                  where: { id: { in: [...discardedNodeIds] } },
-                  data: { teacherUnlockAt: null, teacherUnlockIncludesDependents: false },
-                });
               return { result: unblockedNodeIds, facts: [] };
             },
           ),
