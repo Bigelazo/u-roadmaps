@@ -929,7 +929,7 @@ test('guards Node replacement and deselection without losing the editor session'
   });
   await expect(replacementDialog).toBeVisible();
   await expect(replacementDialog).toContainText(
-    'Seleccionar otro Nodo descartará el borrador actual.',
+    'Seleccionar otro nodo descartará el borrador actual.',
   );
   await replacementDialog.getByRole('button', { name: 'Seguir editando' }).click();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue(firstDraftTitle);
@@ -945,7 +945,7 @@ test('guards Node replacement and deselection without losing the editor session'
   const deselectionDialog = page.getByRole('alertdialog', {
     name: '¿Descartar los cambios sin guardar?',
   });
-  await expect(deselectionDialog).toContainText('Cerrar este Nodo descartará el borrador actual.');
+  await expect(deselectionDialog).toContainText('Cerrar este nodo descartará el borrador actual.');
   await deselectionDialog.getByRole('button', { name: 'Seguir editando' }).click();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue(secondDraftTitle);
 
