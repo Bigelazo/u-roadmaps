@@ -235,8 +235,13 @@ test('rejects an incomplete link address in Spanish', async () => {
   expect(perform).not.toHaveBeenCalled();
 });
 
-const prerequisiteHint =
-  'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
+function prerequisiteHint(_: string, element: Element | null) {
+  return (
+    element?.getAttribute('data-slot') === 'field-description' &&
+    element.textContent ===
+      'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no será desbloqueado.'
+  );
+}
 
 test.each([
   [1, 'Su prerrequisito bloqueado también se desbloqueará a esa hora.'],
@@ -260,7 +265,9 @@ test('schedules the unlock day and time of a teacher-blocked Node in Chilean tim
 
     const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
     expect(schedule.disabled).toBe(true);
-    expect(screen.getByText(prerequisiteHint)).toBeTruthy();
+    expect(
+      within(screen.getByText(prerequisiteHint)).getByText('no', { selector: 'strong' }),
+    ).toBeTruthy();
     await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
     expect(screen.getByText('Noviembre 2026')).toBeTruthy();
     const pastDay = screen.getByRole('button', { name: /, 6 de noviembre de 2026/ });
@@ -293,6 +300,61 @@ test('schedules the unlock day and time of a teacher-blocked Node in Chilean tim
       kind: 'schedule-teacher-unlock',
       nodeId: node.id,
       unlockAt: null,
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('defaults the unlock time to 23:59, listed right after 23:45', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
+  try {
+    const user = userEvent.setup();
+    const { onIntent } = renderEditor();
+
+    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
+    await user.click(screen.getByRole('button', { name: /21 de noviembre de 2026/ }));
+    const time = screen.getByRole('combobox', { name: 'Hora del desbloqueo' });
+    expect(within(time).getByText('23:59')).toBeTruthy();
+    await user.click(time);
+    const options = (await screen.findAllByRole('option')).map((option) => option.textContent);
+    expect(options.slice(-2)).toEqual(['23:45', '23:59']);
+    await user.click(screen.getByRole('option', { name: '23:59' }));
+    await user.click(screen.getByRole('button', { name: 'Programar' }));
+    expect(onIntent).toHaveBeenCalledWith({
+      kind: 'schedule-teacher-unlock',
+      nodeId: node.id,
+      unlockAt: '2026-11-22T02:59:00.000Z',
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('keeps 23:59 available on the current Chilean day after 23:45 has passed', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-08T02:50:00.000Z') });
+  try {
+    const user = userEvent.setup();
+    const { onIntent } = renderEditor();
+
+    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
+    await user.click(screen.getByRole('button', { name: /, 7 de noviembre de 2026/ }));
+    expect(
+      within(screen.getByRole('combobox', { name: 'Hora del desbloqueo' })).getByText('23:59'),
+    ).toBeTruthy();
+    await user.click(screen.getByRole('combobox', { name: 'Hora del desbloqueo' }));
+    expect(
+      (await screen.findByRole('option', { name: '23:45' })).getAttribute('aria-disabled'),
+    ).toBe('true');
+    expect(screen.getByRole('option', { name: '23:59' }).getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Programar' }));
+    expect(onIntent).toHaveBeenCalledWith({
+      kind: 'schedule-teacher-unlock',
+      nodeId: node.id,
+      unlockAt: '2026-11-08T02:59:00.000Z',
     });
   } finally {
     vi.useRealTimers();

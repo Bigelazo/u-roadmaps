@@ -44,6 +44,8 @@ function dateOfDay(day: string) {
   return new Date(year!, month! - 1, date);
 }
 
+const endOfDayTime = '23:59';
+
 function timeSlots(minuteStep: number) {
   const slots: string[] = [];
   for (let minutes = 0; minutes < 24 * 60; minutes += minuteStep) {
@@ -51,6 +53,7 @@ function timeSlots(minuteStep: number) {
     const minute = String(minutes % 60).padStart(2, '0');
     slots.push(`${hour}:${minute}`);
   }
+  if (slots.at(-1) !== endOfDayTime) slots.push(endOfDayTime);
   return slots;
 }
 

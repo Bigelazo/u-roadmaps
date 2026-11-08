@@ -234,7 +234,7 @@ function unlockPresentation(
   actions: UnlockActions,
   schedule: UnlockScheduleDraft | undefined,
   isPending: boolean,
-  scheduleHint: string | null,
+  scheduleHint: ReactNode,
 ): ConfirmationPresentation {
   const isMissingDate = !!schedule?.isScheduling && schedule.unlockAt === null;
   const primary = (action: ConfirmationAction): ConfirmationAction => ({
@@ -250,11 +250,7 @@ function unlockPresentation(
     ...(schedule
       ? {
           content: (
-            <UnlockScheduleField
-              draft={schedule}
-              hint={scheduleHint ?? undefined}
-              disabled={isPending}
-            />
+            <UnlockScheduleField draft={schedule} hint={scheduleHint} disabled={isPending} />
           ),
         }
       : {}),

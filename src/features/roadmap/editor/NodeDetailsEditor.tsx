@@ -1,7 +1,6 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
 import { useState, type ComponentType, type ReactNode } from 'react';
 import { cn } from 'cn';
-import dynamic from 'next/dynamic';
 import {
   CalendarClock,
   Eye,
@@ -13,7 +12,6 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { CHILE_TIME_ZONE } from '@/features/roadmap/domain/scheduled-unlock';
 import { Button } from '@/shared/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Separator } from '@/shared/ui/separator';
@@ -22,7 +20,10 @@ import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
-import { scheduledUnlockPrerequisiteHint } from '@/features/roadmap/ui/UnlockScheduleField';
+import {
+  scheduledUnlockPrerequisiteHint,
+  UnlockDateTimePicker,
+} from '@/features/roadmap/ui/UnlockScheduleField';
 
 function NodeHeader() {
   const { node, nodeTypes, closeNode } = useNodeEditorContext();
@@ -177,11 +178,6 @@ function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
   );
 }
 
-const DateTimePicker = dynamic(
-  () => import('@/shared/ui/date-time-picker').then(({ DateTimePicker }) => DateTimePicker),
-  { ssr: false, loading: () => <div className="h-11" aria-hidden="true" /> },
-);
-
 function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
   const { blockedPrerequisites, scheduleTeacherUnlock } = useNodeEditorContext();
   const [draft, setDraft] = useState(scheduledAt ? new Date(scheduledAt) : null);
@@ -202,14 +198,7 @@ function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
             Desbloqueo programado
           </FieldLabel>
         </div>
-        <DateTimePicker
-          id="node-unlock-date"
-          value={draft}
-          onValueChange={setDraft}
-          timeZone={CHILE_TIME_ZONE}
-          dayLabel="Día del desbloqueo"
-          timeLabel="Hora del desbloqueo"
-        />
+        <UnlockDateTimePicker id="node-unlock-date" value={draft} onValueChange={setDraft} />
         <FieldDescription>{scheduledUnlockPrerequisiteHint(blockedPrerequisites)}</FieldDescription>
         <div className="flex flex-wrap justify-end gap-2">
           {scheduledAt && (

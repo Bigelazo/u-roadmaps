@@ -12,6 +12,8 @@ export type UnlockInstant = string;
 
 export const CHILE_TIME_ZONE = 'America/Santiago';
 
+export const SCHEDULED_UNLOCK_DEFAULT_TIME = '23:59';
+
 type ScheduledUnlockNode = {
   id: string;
   isVisible: boolean;

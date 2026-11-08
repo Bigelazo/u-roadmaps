@@ -1,5 +1,9 @@
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
-import { addCalendarDays, chileInstant } from '@/features/roadmap/domain/scheduled-unlock';
+import {
+  addCalendarDays,
+  chileInstant,
+  SCHEDULED_UNLOCK_DEFAULT_TIME,
+} from '@/features/roadmap/domain/scheduled-unlock';
 
 export type { PracticeExperience } from '@/features/roadmap/types';
 export type PracticeAcademicTerm = Readonly<{ year: number; semester: number }>;
@@ -150,7 +154,7 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
           isTeacherBlocked: true,
           teacherUnlockAt: chileInstant({
             day: addCalendarDays(today, 14),
-            time: '08:00',
+            time: SCHEDULED_UNLOCK_DEFAULT_TIME,
           }).toISOString(),
         },
       ),
