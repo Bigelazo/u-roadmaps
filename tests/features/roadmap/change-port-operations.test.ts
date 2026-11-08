@@ -341,10 +341,10 @@ test('a Scheduled unlock with dependents releases its branch up to a dependent w
     },
     recording.port,
   );
-  await scheduleTeacherUnlock(
-    { ...teacher(course), id: c.id, unlockAt: '2099-02-01T12:00:00.000Z' },
-    recording.port,
-  );
+  await prisma.roadmapNode.update({
+    where: { id: c.id },
+    data: { teacherUnlockAt: new Date('2099-02-01T12:00:00.000Z') },
+  });
 
   await releaseScheduledTeacherUnlocks(recording.port, new Date('2099-01-01T12:00:00.000Z'));
 
@@ -355,6 +355,75 @@ test('a Scheduled unlock with dependents releases its branch up to a dependent w
   expect(new Set(nodes.filter((node) => !node.isTeacherBlocked).map(({ id }) => id))).toEqual(
     new Set([course.change.nodeId, b.id]),
   );
+});
+
+test('a Scheduled unlock also schedules its blocked prerequisites for the same instant, replacing their schedules', async ({
+  course,
+}) => {
+  const recording = recordingChangePort();
+  const [prerequisite, open, target] = [
+    await addNode(course, 'Colas'),
+    await addNode(course, 'Árboles'),
+    await addNode(course, 'Grafos'),
+  ];
+  const chain = [course.change.nodeId, prerequisite.id, open.id, target.id];
+  await prisma.dependency.createMany({
+    data: chain.slice(1).map((targetNodeId, index) => ({
+      sourceNodeId: chain[index]!,
+      targetNodeId,
+    })),
+  });
+  await prisma.roadmapNode.updateMany({
+    where: { id: { in: [course.change.nodeId, prerequisite.id, target.id] } },
+    data: { isTeacherBlocked: true },
+  });
+  await prisma.roadmapNode.update({
+    where: { id: prerequisite.id },
+    data: {
+      teacherUnlockAt: new Date('2099-03-01T12:00:00.000Z'),
+      teacherUnlockIncludesDependents: true,
+    },
+  });
+
+  const scheduled = await scheduleTeacherUnlock(
+    { ...teacher(course), id: target.id, unlockAt: '2099-01-01T12:00:00.000Z' },
+    recording.port,
+  );
+
+  expect(scheduled).toMatchObject({
+    teacherUnlockAt: '2099-01-01T12:00:00.000Z',
+    title: 'Grafos',
+    scheduledPrerequisiteIds: expect.arrayContaining([course.change.nodeId, prerequisite.id]),
+  });
+  expect(scheduled.scheduledPrerequisiteIds).toHaveLength(2);
+  const nodes = await prisma.roadmapNode.findMany({
+    where: { id: { in: chain } },
+    select: { id: true, teacherUnlockAt: true, teacherUnlockIncludesDependents: true },
+  });
+  expect(
+    Object.fromEntries(
+      nodes.map(({ id, teacherUnlockAt, teacherUnlockIncludesDependents }) => [
+        id,
+        [teacherUnlockAt?.toISOString() ?? null, teacherUnlockIncludesDependents],
+      ]),
+    ),
+  ).toEqual({
+    [course.change.nodeId]: ['2099-01-01T12:00:00.000Z', false],
+    [prerequisite.id]: ['2099-01-01T12:00:00.000Z', false],
+    [open.id]: [null, false],
+    [target.id]: ['2099-01-01T12:00:00.000Z', false],
+  });
+
+  await scheduleTeacherUnlock(
+    { ...teacher(course), id: target.id, unlockAt: null },
+    recording.port,
+  );
+  expect(
+    await prisma.roadmapNode.findUniqueOrThrow({
+      where: { id: prerequisite.id },
+      select: { teacherUnlockAt: true },
+    }),
+  ).toEqual({ teacherUnlockAt: new Date('2099-01-01T12:00:00.000Z') });
 });
 
 test('a conflicting scheduled release allows other due Roadmaps to release and retries next pass', async ({

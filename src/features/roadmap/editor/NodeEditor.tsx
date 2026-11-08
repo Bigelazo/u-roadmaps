@@ -121,7 +121,7 @@ function useNodeEditorController(
   { session, command, perform, onIntent }: NodeEditorProps,
   ref: React.ForwardedRef<NodeEditorHandle>,
 ) {
-  const { node, nodeTypes, isVisibilityPending } = session;
+  const { node, nodeTypes, isVisibilityPending, blockedPrerequisites } = session;
   const [state, dispatch] = useReducer(nodeEditorReducer, node, createNodeEditorState);
   const stateRef = useRef(state);
   const guardResolverRef = useRef<((proceed: boolean) => void) | null>(null);
@@ -385,6 +385,7 @@ function useNodeEditorController(
         !state.pendingEditorEffect &&
         nodeDraftIsDirty(activeNode, state.nodeDraft),
       isVisibilityPending,
+      blockedPrerequisites,
       pendingEditorEffect: state.pendingEditorEffect,
       previewButtonRef,
       ...transitions,
@@ -394,6 +395,7 @@ function useNodeEditorController(
       previewNodeInformation,
     };
   }, [
+    blockedPrerequisites,
     intents,
     isVisibilityPending,
     node,

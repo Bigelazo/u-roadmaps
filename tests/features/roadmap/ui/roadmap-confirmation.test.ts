@@ -198,6 +198,18 @@ describe('roadmapTeacherBlockConfirmation', () => {
     });
   });
 
+  it('does not repeat while scheduling that the blocked prerequisites unlock along', () => {
+    const upstream = roadmapTeacherBlockConfirmation({
+      roadmap,
+      nodeId: 'n0',
+      preview: preview('UPSTREAM', ['Funciones', 'Gráficas']),
+      schedule: schedule(true),
+    });
+
+    expect(renderToStaticMarkup(upstream.content)).toContain('Programar desbloqueo');
+    expect(renderToStaticMarkup(upstream.content)).not.toContain('prerrequisito');
+  });
+
   it('offers scheduling inside every unlock and relabels the actions while scheduling', () => {
     const pair = {
       roadmap,

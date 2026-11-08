@@ -12,8 +12,13 @@ const DateTimePicker = dynamic(
   { ssr: false, loading: () => <div className="h-11" aria-hidden="true" /> },
 );
 
-export const scheduledUnlockPrerequisiteHint =
-  'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
+export function scheduledUnlockPrerequisiteHint(blockedPrerequisites: number) {
+  if (blockedPrerequisites === 0)
+    return 'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
+  return blockedPrerequisites === 1
+    ? 'Su prerrequisito bloqueado también se desbloqueará a esa hora.'
+    : `Sus ${blockedPrerequisites} prerrequisitos bloqueados también se desbloquearán a esa hora.`;
+}
 
 export type UnlockScheduleDraft = {
   readonly isScheduling: boolean;
@@ -24,9 +29,11 @@ export type UnlockScheduleDraft = {
 
 export function UnlockScheduleField({
   draft,
+  hint,
   disabled = false,
 }: {
   draft: UnlockScheduleDraft;
+  hint?: string;
   disabled?: boolean;
 }) {
   const id = useId();
@@ -72,7 +79,7 @@ export function UnlockScheduleField({
             dayLabel="Día del desbloqueo"
             timeLabel="Hora del desbloqueo"
           />
-          <FieldDescription>{scheduledUnlockPrerequisiteHint}</FieldDescription>
+          {hint ? <FieldDescription>{hint}</FieldDescription> : null}
         </div>
       ) : null}
     </div>

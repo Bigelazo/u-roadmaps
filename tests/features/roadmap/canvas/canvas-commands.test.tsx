@@ -526,6 +526,40 @@ describe('canvas commands', () => {
       ]);
     });
 
+    test('scheduling from the side panel behind blocked prerequisites schedules them for the same moment, replacing their schedules', async () => {
+      const blocked = withTeacherBlocks('limits', 'derivatives');
+      const canvas = await openCanvas(
+        createInMemoryRoadmapSessionPersistence({
+          ...blocked,
+          nodes: blocked.nodes.map((node) =>
+            node.id === 'limits'
+              ? {
+                  ...node,
+                  teacherUnlockAt: '2031-01-01T12:00:00.000Z',
+                  teacherUnlockIncludesDependents: true,
+                }
+              : node,
+          ),
+        }),
+      );
+
+      await act(() =>
+        canvas
+          .commands()
+          .request({ kind: 'schedule-teacher-unlock', nodeId: 'derivatives', unlockAt }),
+      );
+
+      expect(await teacherBlockedNodeIds(canvas.persistence)).toEqual(['limits', 'derivatives']);
+      for (const nodeId of ['limits', 'derivatives'])
+        expect(await scheduledUnlockOf(canvas.persistence, nodeId)).toEqual({
+          unlockAt,
+          includesDependents: false,
+        });
+      expect(successToasts()).toEqual([
+        'Se desbloquearán Derivadas y su prerrequisito el Domingo, 10 de Noviembre a las 16:30.',
+      ]);
+    });
+
     const blockIntegralsBehindDerivatives = (persistence: RoadmapCanvasSessionPersistence) =>
       executeWithChangeImpact(persistence, {
         kind: 'create-dependency',
@@ -1138,7 +1172,7 @@ describe('canvas commands', () => {
       [
         'scheduling an unlock',
         { kind: 'schedule-teacher-unlock', nodeId: 'limits', unlockAt: '2099-03-01T15:00:00.000Z' },
-        'Desbloqueo programado.',
+        'Límites se desbloqueará el Domingo, 1 de Marzo a las 12:00.',
         scheduledUnlock,
         '2099-03-01T15:00:00.000Z',
       ],

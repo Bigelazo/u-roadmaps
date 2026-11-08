@@ -19,6 +19,7 @@ type NodeEditorContextValue = {
   unsavedFields: readonly ('title' | 'description' | 'nodeTypeId')[];
   canSaveNode: boolean;
   isVisibilityPending: boolean;
+  blockedPrerequisites: number;
   pendingEditorEffect: NodeEditorState['pendingEditorEffect'];
   previewButtonRef: RefObject<HTMLButtonElement | null>;
   changeNodeDraft: (value: NodeUpdate) => void;

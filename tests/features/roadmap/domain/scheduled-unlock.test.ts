@@ -3,6 +3,7 @@ import {
   chileCalendarDay,
   chileInstant,
   chileWallClock,
+  blockedPrerequisiteNodeIds,
   decideScheduledUnlock,
   dueScheduledUnlockNodeIds,
 } from '@/features/roadmap/domain/scheduled-unlock';
@@ -197,4 +198,18 @@ test('schedules a Node together with its dependents only when asked to', () => {
   expect(
     decideScheduledUnlock({ node: blocked, unlockAt: null, includeDependents: true, now }),
   ).toEqual({ kind: 'ALLOWED', unlockAt: null, includesDependents: false });
+});
+
+test('finds every Teacher-blocked transitive prerequisite a Scheduled unlock also schedules', () => {
+  const nodes = [
+    node('a', null),
+    node('b', null, false),
+    node('c', null),
+    node('d', null),
+    node('e', null),
+  ];
+  const dependencies = [...longChain, { sourceNodeId: 'd', targetNodeId: 'e' }];
+
+  expect(blockedPrerequisiteNodeIds({ nodes, dependencies, nodeId: 'd' })).toEqual(['a', 'c']);
+  expect(blockedPrerequisiteNodeIds({ nodes, dependencies, nodeId: 'a' })).toEqual([]);
 });

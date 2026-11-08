@@ -43,6 +43,7 @@ import type {
   StudentRoadmapNode,
 } from '@/features/roadmap/types';
 import type { RoadmapCanvasSessionInput } from '@/features/roadmap/session/types';
+import { blockedPrerequisiteNodeIds } from '@/features/roadmap/domain/scheduled-unlock';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
@@ -665,6 +666,7 @@ function RoadmapCanvasPanels({
     performEditorEffect,
     handleNodeEditorIntent,
   } = model;
+  const editedNode = selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined;
   return (
     <>
       {canvasMode.isEditing && (
@@ -676,8 +678,17 @@ function RoadmapCanvasPanels({
           <NodeEditor
             ref={nodeEditorRef}
             session={{
-              node: selectedNode && 'isTeacherBlocked' in selectedNode ? selectedNode : undefined,
+              node: editedNode,
               nodeTypes: roadmap.nodeTypes,
+              blockedPrerequisites: editedNode
+                ? blockedPrerequisiteNodeIds({
+                    nodes: roadmap.nodes.filter(
+                      (node): node is RoadmapNode => 'isTeacherBlocked' in node,
+                    ),
+                    dependencies: roadmap.dependencies,
+                    nodeId: editedNode.id,
+                  }).length
+                : 0,
               isVisibilityPending:
                 (pending?.kind === 'hide-node' || pending?.kind === 'show-node') &&
                 pending.phase !== 'awaiting',

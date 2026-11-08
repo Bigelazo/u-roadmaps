@@ -119,7 +119,7 @@ function renderEditor(
     .mockResolvedValue({ status: 'committed' });
   const onIntent = vi.fn<(intent: NodeEditorIntent) => void>();
   const props: NodeEditorProps = {
-    session: { node, nodeTypes, isVisibilityPending: false },
+    session: { node, nodeTypes, isVisibilityPending: false, blockedPrerequisites: 0 },
     perform,
     onIntent,
     ...overrides,
@@ -145,6 +145,7 @@ function withNode(overrides: Partial<RoadmapNode>): Pick<NodeEditorProps, 'sessi
       node: { ...node, ...overrides } as RoadmapNode,
       nodeTypes,
       isVisibilityPending: false,
+      blockedPrerequisites: 0,
     },
   };
 }
@@ -236,6 +237,20 @@ test('rejects an incomplete link address in Spanish', async () => {
 
 const prerequisiteHint =
   'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
+
+test.each([
+  [1, 'Su prerrequisito bloqueado también se desbloqueará a esa hora.'],
+  [3, 'Sus 3 prerrequisitos bloqueados también se desbloquearán a esa hora.'],
+])(
+  'tells that scheduling also unlocks %i blocked prerequisites at that time',
+  (blockedPrerequisites, hint) => {
+    const { session } = withNode({ isTeacherBlocked: true });
+    renderEditor({ session: { ...session, blockedPrerequisites } });
+
+    expect(screen.getByText(hint)).toBeTruthy();
+    expect(screen.queryByText(prerequisiteHint)).toBeNull();
+  },
+);
 
 test('schedules the unlock day and time of a teacher-blocked Node in Chilean time, and removes it', async () => {
   vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });

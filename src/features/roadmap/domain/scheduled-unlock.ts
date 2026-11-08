@@ -186,3 +186,18 @@ export function pendingScheduledUnlockNodeIds({
       .map(({ id }) => id),
   );
 }
+
+export function blockedPrerequisiteNodeIds({
+  nodes,
+  dependencies,
+  nodeId,
+}: {
+  nodes: readonly { id: string; isTeacherBlocked: boolean }[];
+  dependencies: readonly RoadmapGraphDependency[];
+  nodeId: string;
+}) {
+  const prerequisiteNodeIds = transitivePrerequisiteNodeIds(dependencies, nodeId);
+  return nodes
+    .filter(({ id, isTeacherBlocked }) => isTeacherBlocked && prerequisiteNodeIds.has(id))
+    .map(({ id }) => id);
+}

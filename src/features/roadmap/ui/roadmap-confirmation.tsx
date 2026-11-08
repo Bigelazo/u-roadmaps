@@ -9,6 +9,7 @@ import type {
 import type { NodeEditorGuardReason } from '@/features/roadmap/editor/types';
 import { NodeName } from '@/features/roadmap/ui/NodeName';
 import {
+  scheduledUnlockPrerequisiteHint,
   UnlockScheduleField,
   type UnlockScheduleDraft,
 } from '@/features/roadmap/ui/UnlockScheduleField';
@@ -225,6 +226,7 @@ function unlockPresentation(
   actions: UnlockActions,
   schedule: UnlockScheduleDraft | undefined,
   isPending: boolean,
+  scheduleHint: string | null,
 ): ConfirmationPresentation {
   const isMissingDate = !!schedule?.isScheduling && schedule.unlockAt === null;
   const primary = (action: ConfirmationAction): ConfirmationAction => ({
@@ -237,7 +239,17 @@ function unlockPresentation(
     title,
     description,
     intent: 'default',
-    ...(schedule ? { content: <UnlockScheduleField draft={schedule} disabled={isPending} /> } : {}),
+    ...(schedule
+      ? {
+          content: (
+            <UnlockScheduleField
+              draft={schedule}
+              hint={scheduleHint ?? undefined}
+              disabled={isPending}
+            />
+          ),
+        }
+      : {}),
     actions:
       actions.length === 1 ? [primary(actions[0])] : [primary(actions[0]), primary(actions[1])],
   };
@@ -309,6 +321,7 @@ export function roadmapTeacherBlockConfirmation({
       ],
       schedule,
       isPending,
+      null,
     );
   }
 
@@ -331,6 +344,7 @@ export function roadmapTeacherBlockConfirmation({
       ],
       schedule,
       isPending,
+      scheduledUnlockPrerequisiteHint(0),
     );
   }
 
@@ -356,6 +370,7 @@ export function roadmapTeacherBlockConfirmation({
     ],
     schedule,
     isPending,
+    scheduledUnlockPrerequisiteHint(0),
   );
 }
 

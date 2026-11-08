@@ -183,7 +183,7 @@ const DateTimePicker = dynamic(
 );
 
 function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
-  const { scheduleTeacherUnlock } = useNodeEditorContext();
+  const { blockedPrerequisites, scheduleTeacherUnlock } = useNodeEditorContext();
   const [draft, setDraft] = useState(scheduledAt ? new Date(scheduledAt) : null);
   const canSchedule = draft !== null && draft.toISOString() !== scheduledAt;
 
@@ -210,7 +210,7 @@ function NodeUnlockSchedule({ scheduledAt }: { scheduledAt: string | null }) {
           dayLabel="Día del desbloqueo"
           timeLabel="Hora del desbloqueo"
         />
-        <FieldDescription>{scheduledUnlockPrerequisiteHint}</FieldDescription>
+        <FieldDescription>{scheduledUnlockPrerequisiteHint(blockedPrerequisites)}</FieldDescription>
         <div className="flex flex-wrap justify-end gap-2">
           {scheduledAt && (
             <Button

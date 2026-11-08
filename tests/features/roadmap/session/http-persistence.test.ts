@@ -55,6 +55,13 @@ type Execution = {
   resolves?: unknown;
 };
 
+const scheduledUnlockResponse = {
+  title: 'Límites',
+  teacherUnlockAt: '2026-11-01T12:00:00.000Z',
+  teacherUnlockIncludesDependents: false,
+  scheduledPrerequisiteIds: ['node-2'],
+};
+
 const executions: Record<string, Execution> = {
   'complete a Node': {
     command: { kind: 'complete-node', nodeId: 'node-1' },
@@ -195,6 +202,8 @@ const executions: Record<string, Execution> = {
         },
       ],
     ],
+    response: scheduledUnlockResponse,
+    resolves: { scheduledUnlock: { title: 'Límites', prerequisites: 1 } },
   },
   'schedule an unlock with its dependents': {
     command: {
@@ -213,10 +222,14 @@ const executions: Record<string, Execution> = {
         },
       ],
     ],
+    response: scheduledUnlockResponse,
+    resolves: { scheduledUnlock: { title: 'Límites', prerequisites: 1 } },
   },
   'cancel a Scheduled unlock': {
     command: { kind: 'schedule-teacher-unlock', nodeId: 'node-1', unlockAt: null },
     requests: [['/nodes/node-1/teacher-block/schedule', { method: 'DELETE' }]],
+    response: { ...scheduledUnlockResponse, teacherUnlockAt: null, scheduledPrerequisiteIds: [] },
+    resolves: { scheduledUnlock: { title: 'Límites', prerequisites: 0 } },
   },
   'hide a Node with its preview version': {
     command: { kind: 'hide-node', nodeId: 'node-1' },

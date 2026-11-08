@@ -57,14 +57,17 @@ test('a scheduled unlock waits for blocked prerequisites and releases at its tim
   const saved = await teacher.put(schedulePath(scheduled.id), { data: { unlockAt: tomorrow } });
   await ok(saved);
   expect(await saved.json()).toEqual({
+    title: scheduled.title,
     teacherUnlockAt: tomorrow,
     teacherUnlockIncludesDependents: false,
+    scheduledPrerequisiteIds: [prerequisite.id],
   });
   const teacherView = await (await teacher.get(course.apiPath())).json();
-  expect(teacherView.nodes.find((node: { id: string }) => node.id === scheduled.id)).toMatchObject({
-    isTeacherBlocked: true,
-    teacherUnlockAt: tomorrow,
-  });
+  for (const nodeId of [scheduled.id, prerequisite.id])
+    expect(teacherView.nodes.find((node: { id: string }) => node.id === nodeId)).toMatchObject({
+      isTeacherBlocked: true,
+      teacherUnlockAt: tomorrow,
+    });
 
   await ok(await teacher.put(schedulePath(standalone.id), { data: { unlockAt: tomorrow } }));
 

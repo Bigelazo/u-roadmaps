@@ -47,6 +47,7 @@ import type { ApplicationErrorStatus } from '@/shared/errors/types';
 import type { TeacherBlockOperation } from '@/features/roadmap/types';
 import type { RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
+  blockedPrerequisiteNodeIds,
   decideScheduledUnlock,
   decideScheduledUnlockInstant,
   dueScheduledUnlockNodeIds,
@@ -639,6 +640,9 @@ export const scheduleTeacherUnlock = roadmapCommand({
       now,
     });
     if (decision.kind === 'REJECTED') throw ruleError(decision);
+    const scheduledPrerequisiteIds = decision.unlockAt
+      ? blockedPrerequisiteNodeIds({ ...(await loadRoadmapSnapshot(tx, roadmap.id, now)), nodeId })
+      : [];
     await tx.roadmapNode.update({
       where: { id: node.id },
       data: {
@@ -646,10 +650,17 @@ export const scheduleTeacherUnlock = roadmapCommand({
         teacherUnlockIncludesDependents: decision.includesDependents,
       },
     });
+    if (scheduledPrerequisiteIds.length > 0)
+      await tx.roadmapNode.updateMany({
+        where: { id: { in: scheduledPrerequisiteIds }, roadmapId: roadmap.id },
+        data: { teacherUnlockAt: decision.unlockAt, teacherUnlockIncludesDependents: false },
+      });
     return {
       result: {
+        title: node.title,
         teacherUnlockAt: decision.unlockAt,
         teacherUnlockIncludesDependents: decision.includesDependents,
+        scheduledPrerequisiteIds,
       },
       facts: [],
     };

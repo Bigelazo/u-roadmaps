@@ -1,12 +1,12 @@
 import {
   eligibleBranchUnlockNodeIds,
   transitiveDependentNodeIds,
-  transitivePrerequisiteNodeIds,
   visibleRoadmapGraph,
   wouldCreateDependencyCycle,
 } from '@/features/roadmap/domain/access';
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
+  blockedPrerequisiteNodeIds,
   dueScheduledUnlockNodeIds,
   pendingScheduledUnlockNodeIds,
   type UnlockInstant,
@@ -269,12 +269,12 @@ function teacherBlockScope(
   const teacherBlockedNodeIds = new Set(
     snapshot.nodes.filter((node) => node.isTeacherBlocked).map(({ id }) => id),
   );
-  const prerequisiteNodeIds = transitivePrerequisiteNodeIds(snapshot.dependencies, nodeId);
-  if ([...prerequisiteNodeIds].some((id) => teacherBlockedNodeIds.has(id)))
+  const blockedPrerequisites = blockedPrerequisiteNodeIds({ ...snapshot, nodeId });
+  if (blockedPrerequisites.length > 0)
     return {
       mode: 'UPSTREAM',
       changedNodeIds: new Set(
-        [nodeId, ...prerequisiteNodeIds].filter((id) => teacherBlockedNodeIds.has(id)),
+        [nodeId, ...blockedPrerequisites].filter((id) => teacherBlockedNodeIds.has(id)),
       ),
     };
   if (operation === 'UNBLOCK')

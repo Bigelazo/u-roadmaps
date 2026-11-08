@@ -1,6 +1,10 @@
 import type { ChangeImpactOf as PlannedChangeImpactOf } from '@/features/roadmap/domain/change-impact';
 import { linkResourceOnlyError, resourceEditError } from '@/features/roadmap/domain/resource';
-import { chileWallClock, decideScheduledUnlock } from '@/features/roadmap/domain/scheduled-unlock';
+import {
+  blockedPrerequisiteNodeIds,
+  chileWallClock,
+  decideScheduledUnlock,
+} from '@/features/roadmap/domain/scheduled-unlock';
 import type {
   NodeEditorGuardReason,
   NodeUpdate,
@@ -33,6 +37,7 @@ import { formatCalendarDay } from '@/shared/calendar-day-format';
 import type { ConfirmationPresentation } from '@/shared/ui/confirmation-dialog';
 import type {
   RoadmapDependencyRequest,
+  RoadmapNode,
   TeacherBlockOperation,
   TeacherBlockOperationImpact,
 } from '@/features/roadmap/types';
@@ -186,46 +191,51 @@ const scheduledUnlockRequest = ({
 const scheduleUnlockInPractice = (
   practice: PracticeRoadmap,
   { nodeId, unlockAt, includeDependents }: ScheduledUnlockRequest,
-) =>
-  practice.mutateNode(nodeId, (node) => {
-    if (!('isTeacherBlocked' in node)) return node;
-    const decision = decideScheduledUnlock({
-      node,
-      unlockAt,
-      includeDependents,
-      now: new Date(),
-    });
-    if (decision.kind === 'REJECTED') throw new Error(decision.message);
-    return {
-      ...node,
-      teacherUnlockAt: decision.unlockAt ?? undefined,
-      teacherUnlockIncludesDependents: decision.includesDependents || undefined,
-    };
-  });
+): ExecutionResult => {
+  const nodes = practice.roadmap.nodes.filter(
+    (node): node is RoadmapNode => 'isTeacherBlocked' in node,
+  );
+  const node = nodes.find(({ id }) => id === nodeId);
+  if (!node) return {};
+  const decision = decideScheduledUnlock({ node, unlockAt, includeDependents, now: new Date() });
+  if (decision.kind === 'REJECTED') throw new Error(decision.message);
+  const prerequisiteIds = decision.unlockAt
+    ? blockedPrerequisiteNodeIds({ nodes, dependencies: practice.roadmap.dependencies, nodeId })
+    : [];
+  const schedules = new Map([
+    [nodeId, { unlockAt: decision.unlockAt, includesDependents: decision.includesDependents }],
+    ...prerequisiteIds.map(
+      (id) => [id, { unlockAt: decision.unlockAt, includesDependents: false }] as const,
+    ),
+  ]);
+  practice.updateNodes((current) =>
+    current.map((candidate) => {
+      const schedule = schedules.get(candidate.id);
+      return schedule && 'isTeacherBlocked' in candidate
+        ? {
+            ...candidate,
+            teacherUnlockAt: schedule.unlockAt ?? undefined,
+            teacherUnlockIncludesDependents: schedule.includesDependents || undefined,
+          }
+        : candidate;
+    }),
+  );
+  return { scheduledUnlock: { title: node.title, prerequisites: prerequisiteIds.length } };
+};
 
 type TeacherBlockSchedule = {
   readonly unlockAt: string;
-  readonly nodeIds: readonly string[];
 };
 
-const scheduledUnlocks = (
-  operation: TeacherBlockOperation,
-  { unlockAt, nodeIds }: TeacherBlockSchedule,
-) =>
-  nodeIds.map((nodeId) => ({
-    nodeId,
-    unlockAt,
-    includeDependents: operation === 'BRANCH_UNLOCK',
-  }));
-
-const scheduledNodeIds = (
+const scheduledUnlock = (
   nodeId: string,
-  preview: TeacherBlockOperationImpact | undefined,
-  choice: CanvasConfirmationChoice | undefined,
-) =>
-  choice === canvasConfirmationChoices.unlockPrerequisites && preview
-    ? preview.nodes.map(({ id }) => id)
-    : [nodeId];
+  operation: TeacherBlockOperation,
+  { unlockAt }: TeacherBlockSchedule,
+): ScheduledUnlockRequest => ({
+  nodeId,
+  unlockAt,
+  includeDependents: operation === 'BRANCH_UNLOCK',
+});
 
 const scheduledMoment = (unlockAt: string) => {
   const { day, time } = chileWallClock(new Date(unlockAt));
@@ -382,7 +392,7 @@ export const canvasCommandCatalog = {
   >({
     requests: ({ nodeId, operation, schedule }) =>
       schedule
-        ? scheduledUnlocks(operation, schedule).map(scheduledUnlockRequest)
+        ? scheduledUnlockRequest(scheduledUnlock(nodeId, operation, schedule))
         : {
             method: operation === 'BLOCK' ? 'POST' : operation === 'UNBLOCK' ? 'DELETE' : 'PATCH',
             path: `/nodes/${nodeId}/teacher-block`,
@@ -395,8 +405,9 @@ export const canvasCommandCatalog = {
     },
     practice: (practice, command, previewVersion) =>
       command.schedule
-        ? practice.settleEach(scheduledUnlocks(command.operation, command.schedule), (request) =>
-            scheduleUnlockInPractice(practice, request),
+        ? void scheduleUnlockInPractice(
+            practice,
+            scheduledUnlock(command.nodeId, command.operation, command.schedule),
           )
         : practice.confirm(command, previewVersion),
     confirmedAction: {
@@ -416,12 +427,7 @@ export const canvasCommandCatalog = {
         const operation = chosenTeacherBlockOperation(command.operation, choice);
         const preview = impact[operation];
         const schedule =
-          operation !== 'BLOCK' && input?.unlockAt
-            ? {
-                unlockAt: input.unlockAt,
-                nodeIds: scheduledNodeIds(command.nodeId, preview, choice),
-              }
-            : undefined;
+          operation !== 'BLOCK' && input?.unlockAt ? { unlockAt: input.unlockAt } : undefined;
         return (
           await session.execute(
             { ...command, operation, ...(schedule ? { schedule } : {}) },
@@ -467,9 +473,20 @@ export const canvasCommandCatalog = {
   }>({
     requests: scheduledUnlockRequest,
     failure: 'No se pudo programar el desbloqueo.',
+    result: async ([response]) => {
+      const { title, scheduledPrerequisiteIds } = await response.json();
+      return { scheduledUnlock: { title, prerequisites: scheduledPrerequisiteIds.length } };
+    },
     practice: scheduleUnlockInPractice,
-    success: ({ unlockAt }) =>
-      unlockAt ? 'Desbloqueo programado.' : 'Desbloqueo programado cancelado.',
+    success: ({ unlockAt }, { scheduledUnlock }) =>
+      !unlockAt
+        ? 'Desbloqueo programado cancelado.'
+        : scheduledUnlockSuccess({
+            title: scheduledUnlock?.title ?? 'El nodo',
+            unlockAt,
+            companions: scheduledUnlock?.prerequisites,
+            companion: 'prerrequisito',
+          }),
   }),
   'create-dependency': command<{ kind: 'create-dependency' } & RoadmapDependencyRequest>({
     requests: ({ sourceNodeId, targetNodeId, sourceHandle, targetHandle }) => ({
