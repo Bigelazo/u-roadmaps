@@ -143,6 +143,10 @@ function renderSession(persistence: SessionPersistence, input: SessionInput = te
   return { ...utils, rerenderSession: (next: SessionInput) => utils.rerender(view(next)) };
 }
 
+function tooltipContent() {
+  return document.querySelector('[data-slot="tooltip-content"]');
+}
+
 function signalChange(detail: object) {
   window.dispatchEvent(new CustomEvent(ROADMAP_CHANGE_RECEIVED_EVENT, { detail }));
 }
@@ -380,6 +384,27 @@ describe('RoadmapCanvasSession', () => {
     await closeToast(user, await findToast('No se pudo completar el nodo.'));
     await waitFor(() => expect(queryToast('No se pudo completar el nodo.')).toBeNull());
     expect(screen.getByRole('button', { name: 'Límites' })).not.toBeNull();
+  });
+
+  test('leaves the labeled Canvas toolbar actions without a tooltip on desktop', async () => {
+    mockViewport(1280);
+    const user = userEvent.setup();
+    renderSession(createInMemoryRoadmapSessionPersistence(teachingRoadmap));
+
+    const action = await screen.findByRole('button', { name: 'Vista estudiante' });
+    await user.hover(action);
+
+    expect(action.getAttribute('data-slot')).not.toBe('tooltip-trigger');
+    expect(tooltipContent()).toBeNull();
+  });
+
+  test('names the icon-only Canvas toolbar actions in a tooltip on compact layouts', async () => {
+    const user = userEvent.setup();
+    renderSession(createInMemoryRoadmapSessionPersistence(teachingRoadmap));
+
+    await user.hover(await screen.findByRole('button', { name: 'Vista estudiante' }));
+
+    await waitFor(() => expect(tooltipContent()?.textContent).toBe('Vista estudiante'));
   });
 
   test('routes current teaching Canvas preview through the session and isolates Canvas preview Completions', async () => {

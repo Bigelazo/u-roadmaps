@@ -1,6 +1,6 @@
 'use client';
 
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+import { IconTooltip } from '@/shared/ui/icon-tooltip';
 
 import {
   useCallback,
@@ -437,45 +437,41 @@ function RoadmapGraphToolbar({
             compact ? 'flex-nowrap overflow-x-auto overscroll-x-contain' : 'flex-wrap',
           )}
         >
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-label="Centrar mapa"
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() =>
-                    void fitView(fitAllOptions(compact, containerRef.current)).then(() =>
-                      onFitView?.(),
-                    )
-                  }
-                >
-                  <Maximize aria-hidden="true" />
-                </Button>
-              }
-            />
-            <TooltipContent>Centrar mapa</TooltipContent>
-          </Tooltip>
+          <IconTooltip
+            label="Centrar mapa"
+            render={
+              <Button
+                aria-label="Centrar mapa"
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() =>
+                  void fitView(fitAllOptions(compact, containerRef.current)).then(() =>
+                    onFitView?.(),
+                  )
+                }
+              >
+                <Maximize aria-hidden="true" />
+              </Button>
+            }
+          />
           {showAutoLayout ? (
             compact ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      aria-label="Ordenar"
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      disabled={!canAutoLayout}
-                      onClick={onAutoLayout}
-                    >
-                      <LayoutFreeform aria-hidden="true" />
-                    </Button>
-                  }
-                />
-                <TooltipContent>Ordenar</TooltipContent>
-              </Tooltip>
+              <IconTooltip
+                label="Ordenar"
+                render={
+                  <Button
+                    aria-label="Ordenar"
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={!canAutoLayout}
+                    onClick={onAutoLayout}
+                  >
+                    <LayoutFreeform aria-hidden="true" />
+                  </Button>
+                }
+              />
             ) : (
               <Button
                 type="button"

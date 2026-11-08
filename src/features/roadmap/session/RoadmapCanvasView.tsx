@@ -1,6 +1,6 @@
 'use client';
 
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+import { IconTooltip } from '@/shared/ui/icon-tooltip';
 
 import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
@@ -802,6 +802,7 @@ function RoadmapCanvasGraph({
     canResetCanvasPreview,
     closeSelectedNode,
   } = model;
+  const isCompactLayout = useCompactCanvasLayout();
   return (
     <RoadmapGraph
       projection={graphProjection}
@@ -837,57 +838,54 @@ function RoadmapCanvasGraph({
           ? () => (
               <>
                 {canPreviewCanvas && !input.practice ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Link
-                          aria-label="Historial de versiones"
-                          className={cn(buttonVariants({ variant: 'outline' }))}
-                          href={versionHistoryUrl(courseCode)}
-                        >
-                          <History data-icon="inline-start" />
-                          Historial de versiones
-                        </Link>
-                      }
-                    />
-                    <TooltipContent>Historial de versiones</TooltipContent>
-                  </Tooltip>
+                  <IconTooltip
+                    label="Historial de versiones"
+                    enabled={isCompactLayout}
+                    render={
+                      <Link
+                        aria-label="Historial de versiones"
+                        className={cn(buttonVariants({ variant: 'outline' }))}
+                        href={versionHistoryUrl(courseCode)}
+                      >
+                        <History data-icon="inline-start" />
+                        Historial de versiones
+                      </Link>
+                    }
+                  />
                 ) : null}
                 {canPreviewCanvas && !input.practice ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Link
-                          aria-label="Integrantes"
-                          className={cn(buttonVariants({ variant: 'outline' }))}
-                          href={courseParticipantsUrl({ courseCode, year, semester })}
-                        >
-                          <Users data-icon="inline-start" />
-                          Integrantes
-                        </Link>
-                      }
-                    />
-                    <TooltipContent>Integrantes</TooltipContent>
-                  </Tooltip>
+                  <IconTooltip
+                    label="Integrantes"
+                    enabled={isCompactLayout}
+                    render={
+                      <Link
+                        aria-label="Integrantes"
+                        className={cn(buttonVariants({ variant: 'outline' }))}
+                        href={courseParticipantsUrl({ courseCode, year, semester })}
+                      >
+                        <Users data-icon="inline-start" />
+                        Integrantes
+                      </Link>
+                    }
+                  />
                 ) : null}
                 {canEnterCanvasPreview ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          ref={canvasPreviewWorkflow.entryButtonRef}
-                          aria-label="Vista estudiante"
-                          type="button"
-                          variant="outline"
-                          onClick={canvasPreviewWorkflow.requestEntry}
-                        >
-                          <Eye data-icon="inline-start" />
-                          Vista estudiante
-                        </Button>
-                      }
-                    />
-                    <TooltipContent>Vista estudiante</TooltipContent>
-                  </Tooltip>
+                  <IconTooltip
+                    label="Vista estudiante"
+                    enabled={isCompactLayout}
+                    render={
+                      <Button
+                        ref={canvasPreviewWorkflow.entryButtonRef}
+                        aria-label="Vista estudiante"
+                        type="button"
+                        variant="outline"
+                        onClick={canvasPreviewWorkflow.requestEntry}
+                      >
+                        <Eye data-icon="inline-start" />
+                        Vista estudiante
+                      </Button>
+                    }
+                  />
                 ) : null}
               </>
             )
@@ -964,23 +962,21 @@ function RoadmapTutorialLink({
 }) {
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger
-          delay={150}
-          render={
-            <Link
-              {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
-              aria-label="Abrir tutorial"
-              className={buttonVariants({ variant: 'outline', size: 'icon' })}
-              href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
-              prefetch={false}
-            >
-              <CircleHelp />
-            </Link>
-          }
-        />
-        <TooltipContent>Abrir tutorial</TooltipContent>
-      </Tooltip>
+      <IconTooltip
+        label="Abrir tutorial"
+        delay={150}
+        render={
+          <Link
+            {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
+            aria-label="Abrir tutorial"
+            className={buttonVariants({ variant: 'outline', size: 'icon' })}
+            href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
+            prefetch={false}
+          >
+            <CircleHelp />
+          </Link>
+        }
+      />
       <TutorialClosingPopover />
     </>
   );
