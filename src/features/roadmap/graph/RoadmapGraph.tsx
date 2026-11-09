@@ -888,13 +888,10 @@ function useRoadmapGraphController({
     [emitEditingIntent],
   );
 
-  const settleDraggedNodes = useCallback(
-    (dragged: readonly RoadmapFlowNode[]) =>
+  const settleMovedNodes = useCallback(
+    (moved: readonly RoadmapNodePlacement[]) =>
       applyNodePositions(
-        placementsWithoutCollisions(
-          canvasNodes(flow.nodes),
-          snappedNodePositions(immutableNodePositions(dragged)),
-        ),
+        placementsWithoutCollisions(canvasNodes(flow.nodes), snappedNodePositions(moved)),
       ),
     [applyNodePositions, flow.nodes],
   );
@@ -964,8 +961,7 @@ function useRoadmapGraphController({
     closeActionMenu,
     flow,
     setFlow,
-    applyNodePositions,
-    settleDraggedNodes,
+    settleMovedNodes,
     connectNodes,
     proposeAutoLayout,
     containerRef,
@@ -985,8 +981,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     closeActionMenu,
     flow,
     setFlow,
-    applyNodePositions,
-    settleDraggedNodes,
+    settleMovedNodes,
     connectNodes,
     containerRef,
   } = model;
@@ -1080,7 +1075,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         current.nodes,
       ),
     }));
-    if (movedWithKeyboard) applyNodePositions(snappedNodePositions(positions));
+    if (movedWithKeyboard) settleMovedNodes(positions);
   };
 
   const setEdgeHover = (edgeId: string, isHovered: boolean) =>
@@ -1167,10 +1162,14 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                   canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
                 }
                 onNodeDragStop={
-                  canInteract ? (_event, _node, dragged) => settleDraggedNodes(dragged) : undefined
+                  canInteract
+                    ? (_event, _node, dragged) => settleMovedNodes(immutableNodePositions(dragged))
+                    : undefined
                 }
                 onSelectionDragStop={
-                  canInteract ? (_event, dragged) => settleDraggedNodes(dragged) : undefined
+                  canInteract
+                    ? (_event, dragged) => settleMovedNodes(immutableNodePositions(dragged))
+                    : undefined
                 }
                 onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
                 onConnectStart={canInteract ? connection.onConnectStart : undefined}

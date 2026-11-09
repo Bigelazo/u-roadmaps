@@ -759,6 +759,27 @@ test.each([
   });
 });
 
+test('persists a keyboard move of a Node with the Nodes it pushes two cells away in one move', async () => {
+  const user = userEvent.setup();
+  const onEditingIntent = vi.fn();
+  const crowded = structuredClone(roadmap);
+  crowded.nodes[1] = { ...crowded.nodes[1], positionX: 60, positionY: 20 };
+  renderGraph({ roadmap: crowded, editing: { onEditingIntent }, selectedNodeId: 'node-1' });
+
+  screen.getByTestId('keyboard-node').focus();
+  await user.keyboard('{ArrowRight}');
+
+  expect(onEditingIntent).toHaveBeenCalledExactlyOnceWith({
+    kind: 'move-nodes',
+    positions: [
+      { nodeId: 'node-1', position: { x: 20, y: 20 } },
+      { nodeId: 'node-2', position: { x: 60, y: 140 } },
+    ],
+  });
+  expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
+  expect(screen.getByTestId('node-position-node-2').textContent).toBe('60,140');
+});
+
 test.each([
   {
     gesture: 'a grabbed Node',
