@@ -106,7 +106,6 @@ test('used Type renames deliver one general notice across Sections and recognize
     .filter({ hasText: /El Roadmap ha recibido \d+ cambios\./ })
     .click();
   await expect(page).toHaveURL(course.pagePath());
-  await expect(page).not.toHaveURL(/targetNode=/);
   await expect(
     page.getByRole('dialog', { name: `Cambios en el Roadmap de ${course.courseCode}` }),
   ).toBeVisible();

@@ -85,7 +85,9 @@ test('Resource notices stream to two tabs while student content stays stable unt
     const stream = page.waitForResponse((response) =>
       response.url().endsWith('/api/notifications/stream'),
     );
-    await page.goto(`${course.pagePath()}?targetNode=${nodeId}`);
+    await page.goto(course.pagePath());
+    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
+    await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toBeVisible();
     const response = await stream;
     expect(response.headers()['content-type']).toContain('text/event-stream');
     expect(response.headers()['x-accel-buffering']).toBe('no');

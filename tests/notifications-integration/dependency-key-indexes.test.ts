@@ -17,9 +17,23 @@ test.for(DEPENDENCY_ENDS)(
   'the %s end of a Dependency pair key matches its partial expression index',
   async (end) => {
     const plan = await prisma.$transaction(async (transaction) => {
+      await transaction.$executeRaw`
+        CREATE TEMP TABLE "IsolatedNoticeKnownValue"
+        (LIKE "NoticeKnownValue" INCLUDING ALL) ON COMMIT DROP`;
+      await transaction.$executeRaw`
+        INSERT INTO "IsolatedNoticeKnownValue"
+          ("recipientId", "roadmapId", "targetKey", "knownValue", "noticeTarget")
+        SELECT gen_random_uuid(), ${roadmapId}::uuid,
+          CASE WHEN row % 10 = 0
+            THEN 'dependency:' || gen_random_uuid() || ':' || gen_random_uuid()
+            ELSE 'node:' || gen_random_uuid() END,
+          '',
+          CASE WHEN row % 10 = 0 THEN 'dependency' ELSE 'node' END
+        FROM generate_series(1, 10000) AS row`;
+      await transaction.$executeRaw`ANALYZE "IsolatedNoticeKnownValue"`;
       await transaction.$executeRaw`SET LOCAL enable_seqscan = off`;
       const rows = await transaction.$queryRaw<{ 'QUERY PLAN': string }[]>`
-        EXPLAIN SELECT 1 FROM "NoticeKnownValue"
+        EXPLAIN SELECT 1 FROM "IsolatedNoticeKnownValue"
         WHERE "roadmapId" = ${roadmapId}::uuid AND ${dependencyIndexPredicate()}
           AND ${dependencyKeyNode(end)} = ${end === 'source' ? source : target}`;
       return rows.map((row) => row['QUERY PLAN']).join('\n');

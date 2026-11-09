@@ -122,7 +122,6 @@ function useRoadmapCanvasController({ input }: Props) {
   const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
   const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
   const [syncedSelectionNotice, setSyncedSelectionNotice] = useState<string | null>(null);
-  const [dismissedInvalidTargetId, setDismissedInvalidTargetId] = useState<string | null>(null);
   const acknowledgedRoadmapRef = useRef<string | null>(null);
   const { acknowledge } = useNotificationAcknowledgement();
   const canvasFocusRef = useRef<HTMLDivElement>(null);
@@ -282,30 +281,13 @@ function useRoadmapCanvasController({ input }: Props) {
   }, [canEditRoadmap, closeTeacherPreview, isCanvasPreview, isEditorOpen, teacherPreviewNode]);
 
   const displayedRoadmap = isCanvasPreview ? canvasPreviewRoadmap : roadmap;
-  const accessibleNodeIds = useMemo(() => {
-    if (!roadmap) return new Set<string>();
-    return new Set(
-      roadmap.nodes.flatMap((node) => {
-        if ('isVisible' in node && !node.isVisible) return [];
-        if ('access' in node && node.access?.status === 'BLOCKED') return [];
-        if ('isTeacherBlocked' in node && node.isTeacherBlocked) return [];
-        return [node.id];
-      }),
-    );
-  }, [roadmap]);
-  const invalidTargetId =
-    roadmap && input.targetNodeId && !accessibleNodeIds.has(input.targetNodeId)
-      ? input.targetNodeId
-      : null;
-  const selectionNotice =
-    invalidTargetId && invalidTargetId !== dismissedInvalidTargetId
-      ? 'Este Nodo ya no está disponible. Puedes revisar el Roadmap actualizado.'
-      : syncedSelectionNotice;
-  const dismissSelectionNotice = useCallback(() => {
-    setDismissedInvalidTargetId(invalidTargetId);
-    setSyncedSelectionNotice(null);
-  }, [invalidTargetId]);
-  useStateToast('neutral', 'roadmap-selection-notice', selectionNotice, dismissSelectionNotice);
+  const dismissSelectionNotice = useCallback(() => setSyncedSelectionNotice(null), []);
+  useStateToast(
+    'neutral',
+    'roadmap-selection-notice',
+    syncedSelectionNotice,
+    dismissSelectionNotice,
+  );
   const acknowledgesRoadmap = fetchesRoadmapNotices(input);
   useEffect(() => {
     if (!acknowledgesRoadmap || !roadmap || isCanvasPreview) return;
@@ -314,26 +296,7 @@ function useRoadmapCanvasController({ input }: Props) {
     acknowledgedRoadmapRef.current = roadmapId;
     const operation = { roadmapId, entryKey: input.roadmapEntryKey };
     void acknowledge(operation);
-  }, [
-    acknowledge,
-    accessibleNodeIds,
-    acknowledgesRoadmap,
-    input.roadmapEntryKey,
-    isCanvasPreview,
-    roadmap,
-  ]);
-  const deepLinkHandledRef = useRef<string | null>(null);
-  useEffect(() => {
-    const nodeId = input.targetNodeId;
-    if (!nodeId || !roadmap || deepLinkHandledRef.current === nodeId) return;
-    deepLinkHandledRef.current = nodeId;
-    if (!accessibleNodeIds.has(nodeId)) return;
-    dispatchCanvas({
-      type: 'selectNode',
-      nodeId,
-      panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
-    });
-  }, [accessibleNodeIds, canEditRoadmap, input.targetNodeId, isStudentExperience, roadmap]);
+  }, [acknowledge, acknowledgesRoadmap, input.roadmapEntryKey, isCanvasPreview, roadmap]);
   useEffect(() => {
     if (!selectedNodeId || !displayedRoadmap) return;
     const selected = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);

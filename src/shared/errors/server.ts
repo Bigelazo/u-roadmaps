@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { ResultAsync, type Result } from 'neverthrow';
+import { ResultAsync } from 'neverthrow';
 import { unstable_rethrow } from 'next/navigation';
 import { Prisma } from '@/shared/server/db';
 import { ApplicationError, type ApplicationResult } from '@/shared/errors/types';
@@ -40,15 +40,4 @@ export function applicationResult<Value>(
   operation: () => Promise<Value>,
 ): ApplicationResult<Value> {
   return ResultAsync.fromPromise(Promise.resolve().then(operation), normalizeApplicationError);
-}
-
-export async function unwrap<Value, Failure>(
-  result: () => Result<Value, Failure> | ResultAsync<Value, Failure>,
-): Promise<Value> {
-  return result().match(
-    (value) => value,
-    (error) => {
-      throw error;
-    },
-  );
 }

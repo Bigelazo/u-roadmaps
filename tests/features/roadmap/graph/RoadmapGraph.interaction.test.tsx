@@ -293,8 +293,6 @@ import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { CanvasCommandOf } from '@/features/roadmap/canvas/commands/commands';
 
 const roadmap: RoadmapDto = {
-  course: { code: 'CC1001', name: 'Introducción', department: 'DCC' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
     { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
@@ -993,7 +991,6 @@ test('places each roadmap overlay slot in its constrained viewport panel', () =>
     overlaySlots: {
       topLeft: <span data-testid="top-left-overlay">Metadata</span>,
       topCenter: <span data-testid="top-center-overlay">Preview</span>,
-      bottomRight: <span data-testid="bottom-right-overlay">Feedback</span>,
     },
   });
 
@@ -1002,9 +999,6 @@ test('places each roadmap overlay slot in its constrained viewport panel', () =>
   ).toBeTruthy();
   expect(
     within(screen.getByTestId('roadmap-panel-top-center')).getByTestId('top-center-overlay'),
-  ).toBeTruthy();
-  expect(
-    within(screen.getByTestId('roadmap-panel-bottom-right')).getByTestId('bottom-right-overlay'),
   ).toBeTruthy();
 });
 

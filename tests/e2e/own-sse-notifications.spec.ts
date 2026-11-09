@@ -26,13 +26,15 @@ test('real SSE keeps student content stable while notices and counters update, i
     });
     nodeId = (await (await ok(created, 201)).json()).node.id;
     const teacherPage = await teacher.newPage();
-    await teacherPage.goto(`${course.pagePath()}?targetNode=${nodeId}`);
+    await teacherPage.goto(course.pagePath());
+    await teacherPage.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
     const page = await student.newPage();
     const other = await student.newPage();
     const stream = page.waitForResponse((response) =>
       response.url().endsWith('/api/notifications/stream'),
     );
-    await page.goto(`${course.pagePath()}?targetNode=${nodeId}`);
+    await page.goto(course.pagePath());
+    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
     expect((await stream).headers()['content-type']).toContain('text/event-stream');
     await expect(page.getByText('Original SSE detail', { exact: true })).toBeVisible();
     await other.goto('/academic-overview');
@@ -92,7 +94,8 @@ test('real SSE keeps student content stable while notices and counters update, i
     await page.getByRole('dialog').getByRole('button', { name: 'Entendido' }).click();
     await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
-    await page.goto(`${course.pagePath()}?targetNode=${nodeId}`);
+    await page.reload();
+    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await ok(
       await teacher.request.patch(course.apiPath(`/nodes/${nodeId}`), {
@@ -104,6 +107,7 @@ test('real SSE keeps student content stable while notices and counters update, i
     await expect(page.getByText('Recovered after reconnect', { exact: true })).toBeVisible();
     await page.reload();
     await page.getByRole('button', { name: 'Entendido' }).click();
+    await page.locator(`.react-flow__node[data-id="${nodeId}"]`).click();
     await expect(page.getByText('Actualizado al refrescar', { exact: true })).toBeVisible();
 
     const denied = page.waitForResponse(

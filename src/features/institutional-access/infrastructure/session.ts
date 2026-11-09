@@ -10,18 +10,12 @@ export function applicationSessionCookieName(request: Request) {
   return isHttps(request) ? '__Secure-next-auth.session-token' : 'next-auth.session-token';
 }
 
-export async function createApplicationSessionToken(
-  userId: string,
-  preferredUsername: string | undefined,
-) {
+export async function createApplicationSessionToken(userId: string) {
   const secret = authOptions.secret;
   if (!secret) return null;
 
   return encode({
-    token: {
-      sub: userId,
-      ...(preferredUsername ? { preferred_username: preferredUsername } : {}),
-    },
+    token: { sub: userId },
     secret,
     maxAge: applicationSessionMaxAge,
   });

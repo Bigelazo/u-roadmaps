@@ -17,8 +17,6 @@ import { nodeDeletionTarget } from './node-deletion';
 import { roadmapAvailabilityTarget } from './roadmap-availability';
 
 export type {
-  BroadScope,
-  EntryValue,
   KnownTarget,
   NoticeTargetDescriptor,
   NoticeTargetRef,
@@ -30,10 +28,8 @@ export type {
   RoadmapViewNodeType,
   RoadmapViewResource,
   ShownTo,
-  SummaryNodeIdField,
   SummaryPart,
   TargetContext,
-  TargetCurrent,
   TargetValues,
   TargetWording,
 } from './descriptor';
@@ -91,7 +87,7 @@ export function targetContext(value: unknown): TargetContext {
     : {};
 }
 
-export function noticeActorLabel(data: unknown): { actorName?: string } {
+function noticeActorLabel(data: unknown): { actorName?: string } {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
   const { actorId, actorName } = data as { actorId?: unknown; actorName?: unknown };
   if (typeof actorName === 'string') return { actorName };

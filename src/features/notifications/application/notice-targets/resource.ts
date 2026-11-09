@@ -7,7 +7,7 @@ import {
   type TargetValues,
 } from './descriptor';
 
-export const resourceRef = (resourceId: string, nodeId: string) => ({
+const resourceRef = (resourceId: string, nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.resource,
   targetKey: `resource:${resourceId}`,
   nodeId,
@@ -16,7 +16,7 @@ export const resourceRef = (resourceId: string, nodeId: string) => ({
 type ResourceFact = Extract<RoadmapChangeFact, { kind: 'resource' }>;
 type ResourceState = Readonly<{ title: string; revision: string }>;
 
-export function resourceValue(state: ResourceState | null) {
+function resourceValue(state: ResourceState | null) {
   return JSON.stringify(state && { title: state.title, revision: state.revision });
 }
 

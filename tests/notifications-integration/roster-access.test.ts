@@ -27,10 +27,7 @@ function countedQueries(transaction: Prisma.TransactionClient, count: () => void
   });
 }
 
-async function recordingQueries(
-  course: IntegrationCourse,
-  edit: (port: RoadmapChangePort) => Promise<unknown>,
-) {
+async function recordingQueries(edit: (port: RoadmapChangePort) => Promise<unknown>) {
   let queries = 0;
   const deliveries: NoticeDelivery[] = [];
   await edit({
@@ -57,8 +54,8 @@ test.for(Object.entries(changes))(
   'a %s change reads the Node access of the whole roster at once',
   async ([, change], { course, otherCourse }) => {
     const [newcomer] = await enrollStudents(otherCourse, 40);
-    const small = await recordingQueries(course, (port) => change(port, course));
-    const large = await recordingQueries(otherCourse, (port) => change(port, otherCourse));
+    const small = await recordingQueries((port) => change(port, course));
+    const large = await recordingQueries((port) => change(port, otherCourse));
     expect(large).toBe(small);
     expect(await pendingNotices(newcomer, otherCourse.roadmapId)).toHaveLength(1);
   },

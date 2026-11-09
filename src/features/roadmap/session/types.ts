@@ -11,7 +11,6 @@ import type {
   StudentRoadmapDto,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
-import type { ResourceInput } from '@/features/roadmap/editor/types';
 
 export type NewRoadmapNode = {
   title: string;
@@ -20,7 +19,6 @@ export type NewRoadmapNode = {
   isVisible: boolean;
 };
 
-export type NewRoadmapResource = ResourceInput;
 export type RoadmapNodeTypeInput = {
   name: string;
   icon: NodeTypeIconId;
@@ -59,7 +57,6 @@ export type RoadmapCanvasExperience =
 export type RoadmapCanvasSessionInput = {
   readonly notificationsEnabled?: boolean;
   readonly roadmapEntryKey?: string | null;
-  readonly targetNodeId?: string;
   readonly courseOffering: {
     readonly identifier: CourseOfferingIdentifier;
     readonly title: string;

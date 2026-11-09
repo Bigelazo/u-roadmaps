@@ -59,7 +59,7 @@ export type E2EPrimaryCourseOffering = E2ECourseOffering & {
   users: Record<CourseUserKey, E2EUser>;
 };
 
-export type CourseOfferingOptions = {
+type CourseOfferingOptions = {
   roadmap?: boolean;
   year?: number;
   semester?: number;
@@ -193,7 +193,7 @@ function courseOfferingScript(options: CourseOfferingOptions, workerIndex: numbe
   return { offering, script, roadmap };
 }
 
-export type E2EAcademicTerm = {
+type E2EAcademicTerm = {
   year: number;
   semester: number;
   setFreezeDate(day: string | null): Promise<void>;

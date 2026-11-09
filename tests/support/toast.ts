@@ -1,7 +1,7 @@
 import { waitFor } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 
-export function queryToasts(message: string) {
+function queryToasts(message: string) {
   return [...document.querySelectorAll('[data-slot="toast-title"]')]
     .filter((title) => title.textContent === message)
     .map((title) => title.closest<HTMLElement>('[data-slot="toast"]')!);

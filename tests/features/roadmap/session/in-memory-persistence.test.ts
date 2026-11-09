@@ -6,8 +6,6 @@ import { unknownNodeType } from '@/features/roadmap/node-type-appearance';
 import { executeWithChangeImpact } from '../support/execute-with-change-impact';
 
 const roadmap = {
-  course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
     { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },

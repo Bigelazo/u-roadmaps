@@ -21,7 +21,8 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
     });
     const node = await creator.createNode(uniqueName('Nodo pendiente'), 350);
     await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-    await page.goto(`${course.pagePath()}?targetNode=${node.id}`);
+    await page.goto(course.pagePath());
+    await page.locator(`.react-flow__node[data-id="${node.id}"]`).click();
     await expect(page.getByRole('button', { name: 'Completar', exact: true })).toBeEnabled();
 
     const endpoint = course.apiPath(`/nodes/${node.id}`);

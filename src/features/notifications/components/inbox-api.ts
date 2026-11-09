@@ -35,8 +35,6 @@ export async function acknowledgeOwnInbox(input: NoticeAcknowledgementOperation)
   return result;
 }
 
-export async function prepareOwnInboxOpening(
-  input: NoticeAcknowledgementOperation & { retry: boolean },
-) {
+export async function prepareOwnInboxOpening(input: NoticeAcknowledgementOperation) {
   await postJson('/openings', input);
 }

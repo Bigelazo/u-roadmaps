@@ -153,7 +153,6 @@ test('opens the teaching action menu independently and emits contextual Roadmap 
   expect(onToggleActionMenu).toHaveBeenCalledWith('teacher-node', expect.any(HTMLButtonElement));
 
   rerenderWith(menuProps(true));
-  expect(screen.queryByTestId('node-action-focus')).toBeNull();
   expect(screen.getByRole('group', { name: 'Menú de acciones del nodo' })).toBeTruthy();
 
   await user.click(screen.getByRole('button', { name: 'Bloquear nodo' }));

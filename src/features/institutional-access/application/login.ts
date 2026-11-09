@@ -66,7 +66,7 @@ export function completeInstitutionalLogin(request: Request, rawToken: FormDataE
       asApplicationError,
     );
     const user = await reconcileInstitutionalUser(identity).catch(asApplicationError);
-    const sessionToken = await createApplicationSessionToken(user.id, identity.preferredUsername);
+    const sessionToken = await createApplicationSessionToken(user.id);
     if (!sessionToken) {
       throw new ApplicationError(
         500,

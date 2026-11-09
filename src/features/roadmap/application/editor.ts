@@ -57,7 +57,7 @@ import { cleanupStoredFiles } from '@/features/roadmap/infrastructure/resources/
 
 type JsonObject = Record<string, unknown>;
 
-export const SCHEDULED_UNLOCK_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
+const SCHEDULED_UNLOCK_ACTOR_ID = '00000000-0000-0000-0000-000000000000';
 
 function dependencyFact(
   nodes: readonly { id: string; title: string; isVisible: boolean }[],

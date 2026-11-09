@@ -202,7 +202,7 @@ async function reconcileUncaptured(
   }
 }
 
-export async function recognizeKnownValue(
+async function recognizeKnownValue(
   transaction: Prisma.TransactionClient,
   input: {
     identity: RecipientRoadmap;

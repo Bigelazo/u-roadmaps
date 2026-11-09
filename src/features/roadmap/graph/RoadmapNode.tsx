@@ -400,7 +400,7 @@ function NodeActionMenu({
   return (
     <div
       className={cn(
-        'absolute right-[-10px] bottom-[-10px] z-10',
+        'absolute z-10',
         styles.actionAnchor,
         coarsePointer && styles.coarse,
         overview && styles.overview,

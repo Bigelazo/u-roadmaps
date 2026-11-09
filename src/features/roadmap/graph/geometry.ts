@@ -146,7 +146,3 @@ export function floatingEdgeGeometry(source: NodeRect, target: NodeRect) {
     targetPosition,
   };
 }
-
-export function dependencyArrowGeometry(source: NodeRect, target: NodeRect) {
-  return floatingEdgeGeometry(source, target);
-}

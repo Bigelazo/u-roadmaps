@@ -138,7 +138,6 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   const addedRouteNotice = (await routeNoticesFor(studentWithoutPrerequisite, dependencyId))[0];
   await selectRouteNotice(studentWithoutPrerequisite, addedRouteNotice);
   await expect(page).toHaveURL(course.pagePath());
-  await expect(page).not.toHaveURL(/targetNode=/);
   const addedDialog = page.getByRole('dialog', {
     name: `Cambios en el Roadmap de ${course.courseCode}`,
   });

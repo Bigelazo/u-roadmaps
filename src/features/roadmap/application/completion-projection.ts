@@ -9,8 +9,6 @@ import {
 import { nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import { Prisma } from '@/shared/server/db';
 
-type RoadmapCourse = { code: string; name: string; department: string };
-type RoadmapCourseOffering = { id: string; year: number; semester: number };
 type RoadmapNode = {
   id: string;
   title: string;
@@ -33,8 +31,6 @@ type RoadmapNode = {
 type RoadmapDependency = { id: string; sourceNodeId: string; targetNodeId: string };
 
 type RoadmapProjectionData = {
-  course: RoadmapCourse;
-  courseOffering: RoadmapCourseOffering;
   roadmap: { id: string; closedAt?: Date | null };
   nodeTypes: Array<{
     id: string;
@@ -92,13 +88,7 @@ export async function loadReviewedResourceIds(
 
 export async function loadRoadmapProjectionData(
   transaction: Prisma.TransactionClient,
-  {
-    courseOffering,
-    roadmap,
-  }: {
-    courseOffering: RoadmapCourseOffering & { course: RoadmapCourse };
-    roadmap: { id: string; closedAt?: Date | null };
-  },
+  { roadmap }: { roadmap: { id: string; closedAt?: Date | null } },
 ): Promise<RoadmapProjectionData> {
   const [predefinedNodeTypes, customNodeTypes, nodes, dependencies, accessCounts] =
     await Promise.all([
@@ -121,12 +111,6 @@ export async function loadRoadmapProjectionData(
     ]);
 
   return {
-    course: courseOffering.course,
-    courseOffering: {
-      id: courseOffering.id,
-      year: courseOffering.year,
-      semester: courseOffering.semester,
-    },
     roadmap: { id: roadmap.id, closedAt: roadmap.closedAt },
     nodeTypes: [...predefinedNodeTypes, ...customNodeTypes].map((type) => ({
       id: type.id,
@@ -170,8 +154,6 @@ export async function loadStudentNodeAccess(
 
 function commonRoadmapProjection(data: RoadmapProjectionData) {
   return {
-    course: data.course,
-    courseOffering: data.courseOffering,
     roadmap: data.roadmap,
     nodeTypes: data.nodeTypes,
   };

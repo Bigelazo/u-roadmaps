@@ -23,15 +23,11 @@ function exclusivePass({ run, onError }: PassOptions) {
 export function startPeriodicPass({
   run,
   intervalMs,
-  defaultIntervalMs = DEFAULT_INTERVAL_MS,
   onError,
-}: PassOptions & {
-  intervalMs: string | undefined;
-  defaultIntervalMs?: number;
-}) {
+}: PassOptions & { intervalMs: string | undefined }) {
   const configured = Number(intervalMs);
   const interval =
-    Number.isFinite(configured) && configured >= 1_000 ? configured : defaultIntervalMs;
+    Number.isFinite(configured) && configured >= 1_000 ? configured : DEFAULT_INTERVAL_MS;
   const pass = exclusivePass({ run, onError });
   pass();
   setInterval(pass, interval).unref();

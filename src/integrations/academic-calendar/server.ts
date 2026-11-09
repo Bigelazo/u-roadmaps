@@ -1,6 +1,6 @@
 import { PDFParse } from 'pdf-parse';
 
-export const ACADEMIC_CALENDAR_PAGE_URL =
+const ACADEMIC_CALENDAR_PAGE_URL =
   'https://ingenieria.uchile.cl/escuela/pregrado/informacion-para-estudiantes/calendarios';
 
 export type Semester = 1 | 2;
@@ -146,7 +146,7 @@ export function extractAcademicTermDates(pdfText: string): AcademicTermDates {
   };
 }
 
-export async function extractPdfText(pdf: Uint8Array) {
+async function extractPdfText(pdf: Uint8Array) {
   const parser = new PDFParse({ data: pdf });
   try {
     return (await parser.getText()).text;

@@ -16,64 +16,31 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 afterEach(() => vi.unstubAllGlobals());
 
-test('a failed Roadmap recognition retries the same opening operation without absorbing later arrivals', async () => {
-  const operations: { path: string; input: Record<string, unknown> }[] = [];
-  let fail = true;
+test('a failed Roadmap acknowledgement returns false', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (path: string, init: RequestInit) => {
-      operations.push({ path, input: JSON.parse(String(init.body)) });
-      if (path.endsWith('/acknowledge') && fail) {
-        fail = false;
-        return Response.json({}, { status: 503 });
-      }
-      return Response.json({});
-    }),
+    vi.fn(async (path: string) =>
+      path.endsWith('/acknowledge') ? Response.json({}, { status: 503 }) : Response.json({}),
+    ),
   );
   const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
   const input = { roadmapId: 'roadmap-id', entryKey: 'opening-id' };
   await act(async () => expect(await result.current.acknowledge(input)).toBe(false));
-  await act(async () => expect(await result.current.retry(input)).toBe(true));
-  expect(operations.map(({ path }) => path)).toEqual([
-    '/api/notifications/openings',
-    '/api/notifications/acknowledge',
-    '/api/notifications/openings',
-    '/api/notifications/acknowledge',
-  ]);
-  const operationId = operations[0].input.operationId;
-  expect(operationId).toEqual(expect.any(String));
-  expect(operations[0].input).toEqual({ roadmapId: input.roadmapId, operationId, retry: false });
-  expect(operations[2].input).toEqual({ roadmapId: input.roadmapId, operationId, retry: true });
-  expect(operations[1].input).toEqual(operations[3].input);
 });
 
-test('a pruned Roadmap opening keeps retries failed and never recognizes a replacement opening', async () => {
-  const operations: { path: string; input: Record<string, unknown> }[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (path: string, init: RequestInit) => {
-      const input = JSON.parse(String(init.body));
-      operations.push({ path, input });
-      return Response.json(
-        {},
-        { status: operations.length === 1 ? 200 : operations.length === 2 ? 503 : 404 },
-      );
-    }),
+test('a Roadmap acknowledgement opens and acknowledges the same operation', async () => {
+  const fetch = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>(async () =>
+    Response.json({ acknowledged: 0, summary: null }),
   );
+  vi.stubGlobal('fetch', fetch);
   const { result } = renderHook(() => useNotificationAcknowledgement(), { wrapper });
   const input = { roadmapId: 'roadmap-id', entryKey: 'opening-id' };
-  await act(async () => expect(await result.current.acknowledge(input)).toBe(false));
-  await act(async () => expect(await result.current.retry(input)).toBe(false));
-  await act(async () => expect(await result.current.retry(input)).toBe(false));
-  expect(operations.map(({ path }) => path)).toEqual([
-    '/api/notifications/openings',
-    '/api/notifications/acknowledge',
-    '/api/notifications/openings',
-    '/api/notifications/openings',
-  ]);
-  const operationId = operations[0].input.operationId;
-  expect(operations.slice(2).map(({ input }) => input)).toEqual([
-    { roadmapId: input.roadmapId, operationId, retry: true },
-    { roadmapId: input.roadmapId, operationId, retry: true },
-  ]);
+  await act(async () => expect(await result.current.acknowledge(input)).toBe(true));
+  const posts = fetch.mock.calls.filter(
+    ([path]) => path.endsWith('/openings') || path.endsWith('/acknowledge'),
+  );
+  expect(posts.map(([path]) => path.split('/').at(-1))).toEqual(['openings', 'acknowledge']);
+  const [opening, acknowledgement] = posts.map(([, init]) => JSON.parse(String(init?.body)));
+  expect(opening).toEqual({ roadmapId: 'roadmap-id', operationId: expect.any(String) });
+  expect(acknowledgement).toEqual(opening);
 });

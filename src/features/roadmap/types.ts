@@ -127,8 +127,6 @@ export type NodeDeletionImpact = {
 };
 
 type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
-  course: { code: string; name: string; department: string };
-  courseOffering: { id: string; year: number; semester: number };
   roadmap: { id: string; closedAt?: Date | string | null };
   nodeTypes: NodeType[];
   nodes: Node[];

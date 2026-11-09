@@ -13,7 +13,7 @@ export const rejectionPrefixes = {
 } as const;
 export type RejectedTable = keyof typeof rejectionPrefixes;
 
-export type TestDataScope =
+type TestDataScope =
   | {
       courseCodes: readonly string[];
       userIds: readonly string[];

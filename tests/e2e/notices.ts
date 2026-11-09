@@ -2,7 +2,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { insert, literal, sql } from './database';
 import { expect, type E2EPrimaryCourseOffering } from './fixtures';
 
-export type StoredTarget = Readonly<{
+type StoredTarget = Readonly<{
   noticeTarget: string;
   targetKey: string;
   knownValue: string;
@@ -104,7 +104,7 @@ export function findNode(roadmap: { nodes: any[] }, nodeId: string) {
   return node;
 }
 
-export type StreamFrame = { kind: string; data: { userId: string; courseCode?: string } };
+type StreamFrame = { kind: string; data: { userId: string; courseCode?: string } };
 export type StreamWindow = Window & { notificationFrames: StreamFrame[] };
 
 export async function openNativeStream(page: Page) {

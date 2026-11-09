@@ -11,24 +11,6 @@ import { resolveSessionUser } from '@/app/_adapters/auth';
 import { prisma } from '@/shared/server/db';
 import { notFound, redirect } from 'next/navigation';
 import { RoadmapEntryNotices } from '@/app/_components/RoadmapEntryNotices';
-import { getInboxIdentity } from '@/features/notifications/server';
-
-function redirectUnavailableNotice(
-  noticeId: string | null,
-  participation: unknown,
-  roadmap: unknown,
-) {
-  if (noticeId && !participation) {
-    redirect(
-      `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'course-unavailable' })}`,
-    );
-  }
-  if (noticeId && !roadmap) {
-    redirect(
-      `/academic-overview?${new URLSearchParams({ notice: noticeId, noticeFallback: 'roadmap-unavailable' })}`,
-    );
-  }
-}
 
 async function readCourseCreationInvitation({
   userId,
@@ -50,9 +32,6 @@ export default async function CoursePage(
 ) {
   const params = await props.params;
   const searchParams = await props.searchParams;
-  const singleSearchParam = (value: string | string[] | undefined) =>
-    typeof value === 'string' ? value : null;
-  const noticeId = singleSearchParam(searchParams.notice);
   const identifier = parseCourseOfferingIdentifier(params);
   if (!identifier) notFound();
 
@@ -66,15 +45,10 @@ export default async function CoursePage(
       roadmap: { select: { id: true, closedAt: true } },
     },
   });
-  if (!courseOffering) {
-    redirectUnavailableNotice(noticeId, null, null);
-    notFound();
-  }
-  redirectUnavailableNotice(noticeId, participation, courseOffering.roadmap);
+  if (!courseOffering) notFound();
   const isTeaching = participation?.role === 'TEACHER';
   const isHistorical = Boolean(courseOffering.roadmap?.closedAt);
   const courseName = courseOffering.course.name ?? identifier.courseCode;
-  const inboxIdentity = getInboxIdentity(user.id);
   const roadmapEntryKey = courseOffering.roadmap ? randomUUID() : null;
   const invitation = await readCourseCreationInvitation({
     userId: user.id,
@@ -87,11 +61,8 @@ export default async function CoursePage(
     <main data-viewport-page className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-cloud">
       <RoadmapEntryNotices key={roadmapEntryKey}>
         <RoadmapCanvasSession
-          notificationsEnabled={Boolean(inboxIdentity)}
+          notificationsEnabled
           roadmapEntryKey={roadmapEntryKey}
-          targetNodeId={
-            noticeId ? undefined : (singleSearchParam(searchParams.targetNode) ?? undefined)
-          }
           courseOffering={{ identifier, title: courseName }}
           experience={{
             kind: isTeaching ? 'teaching' : 'student',
