@@ -28,7 +28,7 @@ test('pages and Roadmap HTTP routes share the normalized Course offering identif
   const term = `${course.year}/${course.semester}`;
   const roadmap = await api.get(`/api/${spacedCode}/${term}/roadmap`);
   await ok(roadmap);
-  expect((await roadmap.json()).course.code).toBe(course.courseCode);
+  expect((await roadmap.json()).roadmap.id).toBe(course.roadmapId);
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(`/courses/${spacedCode}/${term}`);
@@ -119,7 +119,7 @@ test('course participants receive their authorized roadmap representation', asyn
   await ok(teacherRoadmap);
   expect(await teacherRoadmap.json()).toEqual(
     expect.objectContaining({
-      course: expect.objectContaining({ code: course.courseCode, name: course.courseName }),
+      roadmap: expect.objectContaining({ id: course.roadmapId }),
       nodes: expect.arrayContaining([
         expect.objectContaining({ title: 'Proyecto de datos con archivos' }),
       ]),

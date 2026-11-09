@@ -325,12 +325,6 @@ test('content notices follow individual prerequisites, teacher policy, inactive 
   await ok(await request.post('/api/notifications/openings', { data: opening }), 401);
   for (const user of [outsider, course.users.withdrawnStudent])
     await ok(await (await apiAs(user)).post('/api/notifications/openings', { data: opening }), 403);
-  await ok(
-    await withProgressApi.post('/api/notifications/openings', {
-      data: { ...opening, retry: true },
-    }),
-    404,
-  );
   await ok(await withProgressApi.post('/api/notifications/openings', { data: opening }));
   await ok(await changeTeacherBlock(author, roadmapPath(`/nodes/${nodeId}`)));
   const blocked = { noticeTarget: 'node-access', currentValue: 'Bloqueado' };

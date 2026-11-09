@@ -62,8 +62,6 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
     targetHandle: 'left' as const,
   });
   return {
-    course: { code: PRACTICE_COURSE_CODE, name: PRACTICE_ROADMAP_TITLE, department: '' },
-    courseOffering: { id: 'practice-course-offering', year: term.year, semester: term.semester },
     roadmap: { id: 'practice-roadmap', closedAt: null },
     nodeTypes: [
       {

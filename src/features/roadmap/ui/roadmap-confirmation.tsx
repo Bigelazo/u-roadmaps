@@ -207,7 +207,7 @@ export function affectedNodes(preview: TeacherBlockOperationImpact, nodeId: stri
   return preview.nodes.filter((node) => node.id !== nodeId && node.relation !== 'SELECTED_NODE');
 }
 
-export function releasableDependents(
+function releasableDependents(
   nodeId: string,
   individualPreview?: TeacherBlockOperationImpact,
   branchPreview?: TeacherBlockOperationImpact,

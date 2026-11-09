@@ -16,7 +16,6 @@ export {
   previewTeacherBlock,
   releaseScheduledTeacherUnlocks,
   scheduleTeacherUnlock,
-  SCHEDULED_UNLOCK_ACTOR_ID,
   updateRoadmapNode,
   updateRoadmapNodeType,
 } from '@/features/roadmap/application/editor';
@@ -39,26 +38,19 @@ export {
   createRoadmapForActor,
   getNodeTypesForActor,
 } from '@/features/roadmap/application/queries';
-export { type RoadmapActor } from '@/features/roadmap/application/participation';
 
 export {
   synchronizeAcademicHistory,
   synchronizeCourseOffering,
 } from './application/academic-participation';
-export { readCourseParticipants, type CourseParticipants } from './application/course-participants';
+export { readCourseParticipants } from './application/course-participants';
 export {
   downloadRoadmapVersionResource,
   readRoadmapVersion,
   readRoadmapVersionHistory,
-  type RoadmapVersion,
-  type RoadmapVersionHistory,
 } from './application/version-history';
 
-export type {
-  RoadmapChangePort,
-  RoadmapChanges,
-  RoadmapChangeFact,
-} from './application/change-port';
+export type { RoadmapChangePort, RoadmapChanges } from './application/change-port';
 export { readPracticeRoadmapCalendar } from './application/practice';
 export {
   claimTutorialInvitation,
@@ -66,9 +58,4 @@ export {
   recordPracticeRoadmapOpened,
 } from './application/tutorial-invitation';
 export { isFirstVisitInvitationDue } from './application/first-visit-invitation';
-export {
-  isPracticeExperience,
-  isTutorialInvitation,
-  type PracticeExperience,
-  type TutorialInvitation,
-} from './types';
+export { isPracticeExperience, isTutorialInvitation } from './types';

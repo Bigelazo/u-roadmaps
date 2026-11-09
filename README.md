@@ -144,7 +144,7 @@ La demostración incluye roadmaps de programación y cálculo, dos versiones cer
 Para inicializar solamente el esquema y los tipos predefinidos, sin cargar los escenarios ficticios:
 
 ```bash
-pnpm prisma:migrate:dev
+pnpm prisma:migrate
 pnpm exec dotenv -e .env -- pnpm prisma:seed
 ```
 
@@ -181,7 +181,6 @@ Los avisos no tienen configuración externa. Véase [operación y verificación]
 | `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                    |
 | `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas. |
 | `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                   |
-| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                      |
 | `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                      |
 | `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                 |
 | `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                              |

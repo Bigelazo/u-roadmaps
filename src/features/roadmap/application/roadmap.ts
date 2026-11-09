@@ -24,7 +24,7 @@ import { ApplicationError } from '@/shared/errors/server';
 
 type JsonObject = Record<string, unknown>;
 
-export function resourceDownloadUrl(identifier: CourseOfferingIdentifier, resourceId: string) {
+function resourceDownloadUrl(identifier: CourseOfferingIdentifier, resourceId: string) {
   return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap/resources/${resourceId}/file`;
 }
 

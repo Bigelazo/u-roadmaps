@@ -66,7 +66,7 @@ export type StudentBlockedRoadmapNode = RoadmapNodeSummary & {
 
 export type StudentRoadmapNode = StudentAccessibleRoadmapNode | StudentBlockedRoadmapNode;
 
-export type RoadmapNodeDto = RoadmapNode | StudentRoadmapNode;
+type RoadmapNodeDto = RoadmapNode | StudentRoadmapNode;
 
 export type RoadmapDependency = {
   id: string;
@@ -123,8 +123,6 @@ export type NodeDeletionImpact = {
 };
 
 type RoadmapDtoBase<Node extends RoadmapNodeDto> = {
-  course: { code: string; name: string; department: string };
-  courseOffering: { id: string; year: number; semester: number };
   roadmap: { id: string; closedAt?: Date | string | null };
   nodeTypes: NodeType[];
   nodes: Node[];

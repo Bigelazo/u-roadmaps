@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
-import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change-signal';
+import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/shared/client/roadmap-events';
 import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
@@ -78,8 +78,6 @@ type SessionPersistence = ComponentProps<
 >['persistence'];
 
 const roadmap: StudentRoadmapDto = {
-  course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
     { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },

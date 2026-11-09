@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { APIRequestContext } from '@playwright/test';
-import { insert, sql } from './database';
+import { insert, literal, queryJson, sql } from './database';
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
 import { listNotices, storeTitleNotices } from './notices';
@@ -14,7 +14,6 @@ test('own Inbox requires authentication and isolates notice identities', async (
   await ok(await request.get('/api/notifications'), 401);
   const response = await ok(await studentApi.get('/api/notifications'));
   expect(await response.json()).toMatchObject({ notifications: [], hasMore: false });
-  await ok(await studentApi.get('/api/notifications/00000000-0000-4000-8000-000000000001'), 404);
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
   await page.getByRole('button', { name: 'Avisos', exact: true }).click();
@@ -73,13 +72,13 @@ test('Roadmap creation persists one own notice for each eligible Participation a
     .notifications[0];
   const subject = `Roadmap disponible: ${offering.courseCode}`;
   expect(first).toMatchObject({ subject, read: false });
-  await ok(await author.get(`/api/notifications/${first.id}`), 404);
-  await ok(
-    await author.patch(`/api/notifications/${first.id}`, {
-      data: { action: 'read', recipientId: multiCourseStudent.id },
-    }),
-    405,
-  );
+  expect((await listNotices(author, { roadmapId })).map(({ id }) => id)).not.toContain(first.id);
+  const listed = async () =>
+    (await listNotices(recipient, { roadmapId })).find(({ id }) => id === first.id);
+  const acknowledged = () =>
+    queryJson<boolean>(
+      `SELECT to_jsonb("acknowledgedAt" IS NOT NULL) FROM "RoadmapNotice" WHERE id = ${literal(first.id)};`,
+    );
   await authenticateAs(page.context(), multiCourseStudent.id);
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
@@ -87,20 +86,17 @@ test('Roadmap creation persists one own notice for each eligible Participation a
     .getByRole('list', { name: 'Lista de avisos' })
     .getByRole('button', { name: first.courseName });
   await expect(row).toBeVisible();
-  expect(await getJson(recipient, `/api/notifications/${first.id}`)).not.toHaveProperty('seen');
-  expect((await getJson(recipient, `/api/notifications/${first.id}`)).read).toBe(false);
+  expect(await listed()).not.toHaveProperty('seen');
+  expect(await listed()).toMatchObject({ id: first.id, read: false });
   await row.click();
   await expect(page).toHaveURL(offering.pagePath());
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect
-    .poll(async () => (await getJson(recipient, `/api/notifications/${first.id}`)).read)
-    .toBe(true);
+  await expect.poll(acknowledged).toBe(true);
+  expect(await listed()).toBeUndefined();
   await page.reload();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  expect(await getJson(recipient, `/api/notifications/${first.id}`)).toMatchObject({
-    id: first.id,
-    read: true,
-  });
+  expect(await acknowledged()).toBe(true);
+  expect(await listed()).toBeUndefined();
 });
 
 test('pagination and visible rows preserve notices when entry recognition fails', async ({
@@ -139,7 +135,11 @@ test('pagination and visible rows preserve notices when entry recognition fails'
       .getByRole('list', { name: 'Lista de avisos' })
       .getByRole('button', { name: /El Roadmap ha recibido 12 cambios\./ }),
   ).toBeVisible();
-  expect(await getJson(api, `/api/notifications/${ids[11]}`)).not.toHaveProperty('seen');
+  const oldest = (await listNotices(api, { roadmapId, limit: 100 })).find(
+    ({ id }) => id === ids[11],
+  );
+  expect(oldest).toMatchObject({ id: ids[11], read: false });
+  expect(oldest).not.toHaveProperty('seen');
   const failRecognition = true;
   await page.route('**/api/notifications/acknowledge', async (route) => {
     if (failRecognition) {

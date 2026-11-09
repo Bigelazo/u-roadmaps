@@ -2,10 +2,8 @@ import { toast } from '@/shared/ui/toast-manager';
 
 type Tone = 'success' | 'error' | 'neutral';
 
-export type NotifyOptions = {
+type NotifyOptions = {
   id?: string;
-  persistent?: boolean;
-  action?: { label: string; onClick: () => void };
   onClose?: () => void;
 };
 
@@ -17,20 +15,15 @@ const tones = {
   neutral: { priority: 'low', timeout: 0 },
 } as const;
 
-function show(
-  tone: Tone,
-  message: string,
-  { id, persistent, action, onClose }: NotifyOptions = {},
-) {
+function show(tone: Tone, message: string, { id, onClose }: NotifyOptions = {}) {
   const { priority, timeout } = tones[tone];
   return toast.add({
     id,
     title: message,
     type: tone,
     priority,
-    timeout: persistent ? 0 : timeout,
+    timeout,
     onClose,
-    actionProps: action && { children: action.label, onClick: action.onClick },
   });
 }
 

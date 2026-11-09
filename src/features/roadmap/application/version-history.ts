@@ -192,8 +192,6 @@ export async function readRoadmapVersion(
     .filter((ancestor) => isWithinVersionHorizon(ancestor, horizon))
     .map((ancestor) => ({ ...ancestor, edition: editionLabel(ancestor) }));
   const roadmapDto = {
-    course: { code: course.code, name: course.name, department: course.department },
-    courseOffering: { id: offering.id, ...term },
     roadmap: { id: roadmap.id, closedAt: roadmap.closedAt.toISOString() },
     nodeTypes: nodeTypes as NodeType[],
     nodes: nodes.map((node) => ({
@@ -212,6 +210,7 @@ export async function readRoadmapVersion(
   } satisfies RoadmapDto;
   return {
     ...roadmapDto,
+    course: { code: course.code, name: course.name },
     horizon,
     version: {
       ...term,

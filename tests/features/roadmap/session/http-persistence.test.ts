@@ -13,8 +13,6 @@ const http = createHttpRoadmapCanvasSessionPersistence({
 });
 
 const roadmap = {
-  course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [],
   nodes: [],

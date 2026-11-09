@@ -5,7 +5,6 @@ import {
   requireFixtureEnvironment,
 } from '@/shared/server/environment/development';
 import { developmentPersonas } from '@/development';
-import { isDevelopmentPersona } from '@/development/server';
 
 const originalEnvironment = { ...process.env };
 
@@ -31,12 +30,7 @@ describe('fixture environment', () => {
     expect(developmentEnvironmentEnabled()).toBe(true);
   });
 
-  it('identifies development personas only when development data is enabled', () => {
-    vi.stubEnv('NODE_ENV', 'development');
-    vi.stubEnv('U_ROADMAPS_DEV_DATA', 'true');
-
-    expect(isDevelopmentPersona('10000000-0000-4000-8000-000000000001')).toBe(true);
-    expect(isDevelopmentPersona('30000000-0000-4000-8000-000000000001')).toBe(false);
+  it('lists the development personas', () => {
     expect(developmentPersonas).toEqual([
       { id: '10000000-0000-4000-8000-000000000001', label: 'Daniela Rojas Mella' },
       { id: '10000000-0000-4000-8000-000000000002', label: 'Nicolás Fuentes Arancibia' },

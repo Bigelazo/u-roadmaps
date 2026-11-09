@@ -64,7 +64,7 @@ export function useDependencyRoute(id: string) {
   return useContext(RoutingContext).get(id);
 }
 
-export type RoutingEngineStatus = 'waiting' | 'routed' | 'unavailable';
+type RoutingEngineStatus = 'waiting' | 'routed' | 'unavailable';
 const RoutingEngineStatusContext = createContext<RoutingEngineStatus>('routed');
 
 export function useRoutingEngineStatus() {

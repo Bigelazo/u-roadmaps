@@ -48,8 +48,6 @@ function dependency(id: string, sourceNodeId: string, targetNodeId: string) {
 }
 
 const roadmap: RoadmapDto = {
-  course: { code: 'CC1001', name: 'Cálculo', department: 'DIM' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
     { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
