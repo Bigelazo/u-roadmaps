@@ -44,6 +44,8 @@ function hintPopup(page: Page) {
 async function expectGatedCompletion(page: Page) {
   const complete = page.getByRole('button', { name: 'Completar', exact: true });
   await expect(complete).toHaveAttribute('aria-disabled', 'true');
+  await expect(complete).toBeInViewport({ ratio: 1 });
+  // eslint-disable-next-line playwright/no-force-option -- an aria-disabled button still receives clicks, but Playwright treats it as disabled.
   await complete.click({ force: true });
   await expect(hintPopup(page)).toBeVisible();
   return complete;

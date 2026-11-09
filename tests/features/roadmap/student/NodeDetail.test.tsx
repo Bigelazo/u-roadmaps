@@ -212,7 +212,10 @@ test('the editor student preview reviews a Resource locally before Completar wor
   const onResourceAccess = vi.fn();
   const teachingNode = {
     ...nodeWithResources,
-    resources: nodeWithResources.resources.map(({ isReviewed: _, ...resource }) => resource),
+    resources: nodeWithResources.resources.map((resource) => ({
+      ...resource,
+      isReviewed: undefined,
+    })),
   };
   renderDetail({ node: teachingNode, onComplete, onResourceAccess, isTeacherPreview: true });
   for (const link of screen.getAllByRole('link'))
