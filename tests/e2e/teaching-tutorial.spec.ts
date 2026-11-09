@@ -244,6 +244,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(confirmation.locator('[data-slot="node-name"] svg')).toHaveCount(1);
   await page.screenshot({ path: 'test-results/tutorial-block-confirmation.png' });
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(confirmation).toBeHidden();
   await expectStep(page, 'Bloquea un nodo');
   await expect(blockMenuTrigger).toHaveClass(/driver-active-element/);
   await blockMenuTrigger.click();
@@ -277,7 +278,9 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await page.screenshot({ path: 'test-results/tutorial-hide.png' });
 
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
-  await expect(confirmation).toContainText('se eliminará su conexión');
+  await expect(confirmation).toContainText(
+    'Además, se eliminará su conexión; al volver a mostrarlo, tendrás que conectarlo de nuevo.',
+  );
   await expect(confirmation).toHaveClass(/driver-active-element/);
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Oculta un nodo');
@@ -388,7 +391,9 @@ test('the highlighted creation menu stays behind its floating button', async ({
   await next(page, 'Crea un nodo');
   const creator = page.getByRole('button', { name: 'Crear en el mapa' });
   await creator.click();
-  await expect(page.getByRole('menu')).toHaveClass(/driver-active-element/);
+  await expect(page.getByRole('menuitem', { name: 'Crear nodo', exact: true })).toHaveClass(
+    /driver-active-element/,
+  );
   await expect(page.getByRole('menuitem', { name: 'Crear nodo', exact: true })).toHaveCSS(
     'transform',
     'none',

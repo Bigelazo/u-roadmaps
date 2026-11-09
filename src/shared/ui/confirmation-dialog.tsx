@@ -39,7 +39,6 @@ type ConfirmationPresentation = {
 type ConfirmationDialogProps = {
   confirmation: ConfirmationPresentation | null;
   className?: string;
-  onDismiss?: () => void;
   pendingActionId?: string;
   onCancel: () => void;
   onAction: (actionId: string) => void;
@@ -79,7 +78,6 @@ function ConfirmationDialog({
   className,
   pendingActionId,
   onCancel,
-  onDismiss = onCancel,
   onAction,
 }: ConfirmationDialogProps) {
   const isPending = pendingActionId !== undefined;
@@ -112,8 +110,7 @@ function ConfirmationDialog({
           return;
         }
 
-        if (eventDetails.reason === 'close-press') onCancel();
-        else onDismiss();
+        onCancel();
       }}
     >
       {confirmation ? (

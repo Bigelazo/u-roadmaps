@@ -107,7 +107,12 @@ test('a Dependency from a Node without a Teacher block blocks nothing', () => {
     kind: 'ALLOWED',
     stale: expect.anything(),
     impact: { nodes: [], version: expect.any(String) },
-    consequences: { blockedNodeIds: [], unblockedNodeIds: [], removedDependencyIds: [] },
+    consequences: {
+      blockedNodeIds: [],
+      unblockedNodeIds: [],
+      removedDependencyIds: [],
+      discardedScheduleNodeIds: [],
+    },
   });
 });
 
@@ -144,6 +149,7 @@ test('a Dependency from a Teacher-blocked Node blocks the target and its visible
       blockedNodeIds: ['exercises-a', 'exercises-b', 'theory'],
       unblockedNodeIds: [],
       removedDependencyIds: [],
+      discardedScheduleNodeIds: [],
     },
   });
 });
@@ -187,6 +193,7 @@ test('a Teacher block blocks the Node and its visible dependents without one, by
       blockedNodeIds: ['selected', 'visible-a', 'visible-b'],
       unblockedNodeIds: [],
       removedDependencyIds: [],
+      discardedScheduleNodeIds: [],
     },
   });
 });
@@ -241,6 +248,7 @@ test('a Node unlock with a Teacher-blocked prerequisite unlocks every blocked pr
       blockedNodeIds: [],
       unblockedNodeIds: ['a', 'b', 'c'],
       removedDependencyIds: [],
+      discardedScheduleNodeIds: [],
     },
   });
 });
@@ -368,7 +376,7 @@ test('a Node unlock unlocks a blocked prerequisite now despite its pending Sched
   });
 });
 
-test('a Node unlock also releases the due Scheduled unlocks it no longer holds, outside its Change impact', () => {
+test('a change discards the due Scheduled unlocks still held by a Teacher-blocked prerequisite, outside its Change impact', () => {
   const snapshot = roadmap(
     [
       node('unlocked', { title: 'Desbloqueado', isTeacherBlocked: true }),
@@ -387,10 +395,19 @@ test('a Node unlock also releases the due Scheduled unlocks it no longer holds, 
 
   expect(planChange(snapshot, teacherBlock('unlocked', 'UNBLOCK'))).toMatchObject({
     impact: { mode: 'SINGLE', nodes: [{ id: 'unlocked' }] },
-    consequences: { unblockedNodeIds: ['unlocked', 'released'] },
+    consequences: {
+      unblockedNodeIds: ['unlocked'],
+      discardedScheduleNodeIds: ['released', 'waiting'],
+    },
   });
   expect(planChange(snapshot, teacherBlock('unlocked', 'BLOCK'))).toMatchObject({
-    consequences: { unblockedNodeIds: [] },
+    consequences: { unblockedNodeIds: [], discardedScheduleNodeIds: ['released', 'waiting'] },
+  });
+  expect(planChange(snapshot, teacherBlock('still-blocked', 'UNBLOCK'))).toMatchObject({
+    consequences: {
+      unblockedNodeIds: ['still-blocked'],
+      discardedScheduleNodeIds: ['released', 'waiting'],
+    },
   });
 });
 
@@ -427,6 +444,7 @@ test('hiding a Node removes every Dependency touching it, by identifier, with it
       blockedNodeIds: [],
       unblockedNodeIds: ['theory'],
       removedDependencyIds: ['intro-theory', 'theory-quiz'],
+      discardedScheduleNodeIds: [],
     },
   });
 });
@@ -468,6 +486,7 @@ test('deleting a Node shows it with its Node type, its Dependencies by identifie
       blockedNodeIds: [],
       unblockedNodeIds: [],
       removedDependencyIds: ['intro-theory', 'theory-quiz'],
+      discardedScheduleNodeIds: [],
     },
   });
 });

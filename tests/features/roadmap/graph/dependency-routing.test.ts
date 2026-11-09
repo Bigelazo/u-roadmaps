@@ -44,7 +44,7 @@ test('keeps an aligned dependency straight when another dependency branches from
         { id: 'ad', source: 'a', target: 'd' },
       ],
     });
-    expect(result.blocked).toBe(0);
+    expect(result.fallbacks).toBe(0);
     expect(result.routes.get('ab')!.points).toEqual([
       { x: 120, y: 40 },
       { x: 600, y: 40 },
@@ -58,7 +58,7 @@ test('keeps near-aligned opposing ports straight instead of adding a three-pixel
       obstacles: [body('a', 0, 0), body('b', 600, 3)],
       dependencies: [{ id: 'ab', source: 'a', target: 'b' }],
     });
-    expect(result.blocked).toBe(0);
+    expect(result.fallbacks).toBe(0);
     const points = result.routes.get('ab')!.points;
     expect(new Set(points.map(({ y }) => y)).size).toBe(1);
     expect(points.at(-1)).toEqual({ x: 600, y: 43 });
@@ -68,9 +68,9 @@ test('keeps near-aligned opposing ports straight instead of adding a three-pixel
 test('routes around an unrelated node with real WASM, keeping rounded corners and the arrow at its target', () => {
   withRouter((router) => {
     const input = scene();
-    const { routes, blocked } = router.route(input);
+    const { routes, fallbacks } = router.route(input);
     const route = routes.get('ab')!;
-    expect(blocked).toBe(0);
+    expect(fallbacks).toBe(0);
     expect(route.path).toContain('Q');
     expect(route.points.length).toBeGreaterThan(2);
     for (let i = 1; i < route.points.length; i++) {
@@ -107,8 +107,8 @@ test('coordinates parallel dependencies rather than leaving their intermediate s
     const input = scene();
     input.obstacles.push(body('c', 600, 160));
     input.dependencies.push({ id: 'ac', source: 'a', target: 'c' });
-    const { routes, blocked } = router.route(input);
-    expect(blocked).toBe(0);
+    const { routes, fallbacks } = router.route(input);
+    expect(fallbacks).toBe(0);
     const first = routes.get('ab')!.points;
     const second = routes.get('ac')!.points;
     const shared = first
@@ -133,13 +133,30 @@ test('coordinates parallel dependencies rather than leaving their intermediate s
   });
 });
 
-test('reports impossible overlapping endpoints instead of falling back to a line through a node', () => {
+test('draws an orthogonal fallback for overlapping endpoints that cannot be routed around nodes', () => {
   withRouter((router) => {
     const input = scene();
     input.obstacles[2] = body('middle', -20, -20, 160, 120);
     const result = router.route(input);
-    expect(result.routes.has('ab')).toBe(false);
-    expect(result.blocked).toBe(1);
+    expect(result.fallbacks).toBe(1);
+    const { points, path } = result.routes.get('ab')!;
+    expect(path).toMatch(/^M/);
+    expect(points[0].x === 120 || points[0].y === 0 || points[0].y === 80).toBe(true);
+    const end = points.at(-1)!;
+    expect(end.x === 600 || end.x === 720 || end.y === 0 || end.y === 80).toBe(true);
+    for (let i = 1; i < points.length; i++)
+      expect(points[i].x === points[i - 1].x || points[i].y === points[i - 1].y).toBe(true);
+  });
+});
+
+test('draws a fallback between nodes stacked on top of each other', () => {
+  withRouter((router) => {
+    const result = router.route({
+      obstacles: [body('a', 0, 0), body('b', 0, 0)],
+      dependencies: [{ id: 'ab', source: 'a', target: 'b' }],
+    });
+    expect(result.fallbacks).toBe(1);
+    expect(result.routes.get('ab')!.path).toMatch(/^M/);
   });
 });
 
@@ -153,7 +170,7 @@ test('updates sizes, retargets and removes dependencies, and releases a scene id
     expect(router.route(input).routes.size).toBe(1);
     input.dependencies = [];
     input.obstacles = [];
-    expect(router.route(input)).toEqual({ routes: new Map(), blocked: 0 });
+    expect(router.route(input)).toEqual({ routes: new Map(), fallbacks: 0 });
     router.dispose();
     router.dispose();
   });
@@ -213,7 +230,7 @@ test('includes persistent ornaments, ignores hidden nodes and keeps selection ou
       [node, { ...node, id: 'b', position: { x: 500, y: 0 } }],
       [{ id: 'ab', source: 'a', target: 'b' }],
     );
-    expect(router.route(input).blocked).toBe(0);
+    expect(router.route(input).fallbacks).toBe(0);
   });
 });
 
@@ -284,7 +301,7 @@ test('keeps every dependency routable in the supplied screenshot topology', () =
     pairs.map(([source, target], i) => ({ id: String(i), source, target })),
   );
   withRouter((router) => {
-    expect(router.route(input).blocked).toBe(0);
+    expect(router.route(input).fallbacks).toBe(0);
     expect(router.route(input).routes.size).toBe(pairs.length);
   });
 });
@@ -327,13 +344,13 @@ test.each(
         }),
       };
       const result = router.route(input);
-      expect(result.blocked).toBe(0);
+      expect(result.fallbacks).toBe(0);
       const actual = input.dependencies.map(({ id, source }) => {
         const points = result.routes.get(id)!.points;
         return source === 'hub' ? points[0] : points.at(-1);
       });
       const coordinates =
-        mode === 'outgoing' ? [35, 40, 45] : mode === 'incoming' ? [40, 40, 40] : [37.5, 40, 42.5];
+        mode === 'outgoing' ? [32, 40, 48] : mode === 'incoming' ? [40, 40, 40] : [36, 40, 44];
       expect(actual).toEqual(coordinates.map((y) => rotate({ x: 120, y })));
       const reordered = router.route({ ...input, dependencies: [...input.dependencies].reverse() });
       for (const [id, route] of result.routes)
@@ -349,7 +366,7 @@ test('keeps near-aligned vertical ports straight and retains necessary larger be
         obstacles: [body('a', 0, 0), body('b', offset, 600)],
         dependencies: [{ id: 'ab', source: 'a', target: 'b' }],
       });
-      expect(result.blocked).toBe(0);
+      expect(result.fallbacks).toBe(0);
       const points = result.routes.get('ab')!.points;
       expect(new Set(points.map(({ x }) => x)).size).toBe(offset === 3 ? 1 : 2);
       expect(points.at(-1)).toEqual({ x: 60 + offset, y: 600 });
@@ -372,7 +389,7 @@ test('keeps dense shared ports inside the side with distinct bounded slots', () 
       })),
     };
     const result = router.route(input);
-    expect(result.blocked).toBe(0);
+    expect(result.fallbacks).toBe(0);
     const endpoints = [...result.routes.values()].map(({ points }) => points[0]);
     for (const point of endpoints) {
       expect(point.x).toBeGreaterThanOrEqual(0);
@@ -418,8 +435,8 @@ test('preview and saved dependencies have identical routes despite transient IDs
           ...base.dependencies,
         ],
       });
-      expect(speculative.blocked).toBe(0);
-      expect(saved.blocked).toBe(0);
+      expect(speculative.fallbacks).toBe(0);
+      expect(saved.fallbacks).toBe(0);
       expect(saved.routes.get('saved-persisted-id')).toEqual(
         speculative.routes.get('__connection-preview__'),
       );
@@ -477,9 +494,9 @@ test('releases native routers on scene replacement and idempotent disposal', () 
   });
   const router = new DependencyRouter(tracked);
   try {
-    expect(router.route(scene()).blocked).toBe(0);
+    expect(router.route(scene()).fallbacks).toBe(0);
     expect(live.size).toBe(1);
-    expect(router.route(scene()).blocked).toBe(0);
+    expect(router.route(scene()).fallbacks).toBe(0);
     expect(live.size).toBe(1);
     router.dispose();
     expect(live.size).toBe(0);
@@ -516,12 +533,97 @@ test('separates intermediate corridors for dependencies sharing the same incomin
         { id: 'upper', source: '2', target: '6' },
       ],
     });
-    expect(result.blocked).toBe(0);
+    expect(result.fallbacks).toBe(0);
     const lower = result.routes.get('lower')!.points;
     const upper = result.routes.get('upper')!.points;
     expect(lower.at(-1)).toEqual(upper.at(-1));
     const corridor = (points: typeof lower) =>
       points.slice(1, -2).find((point, i) => point.x === points[i + 2].x)!;
     expect(Math.abs(corridor(lower).x - corridor(upper).x)).toBeGreaterThanOrEqual(2);
+  });
+});
+
+function crossings(routes: readonly (readonly { x: number; y: number }[])[]) {
+  const segments = routes.map((points) => points.slice(1).map((end, i) => [points[i], end]));
+  let count = 0;
+  segments.forEach((route, i) =>
+    segments.slice(i + 1).forEach((other) => {
+      for (const [a, b] of route)
+        for (const [c, d] of other) {
+          const [h, v] =
+            a.y === b.y
+              ? [
+                  [a, b],
+                  [c, d],
+                ]
+              : [
+                  [c, d],
+                  [a, b],
+                ];
+          if (h[0].y !== h[1].y || v[0].x !== v[1].x) continue;
+          const x = v[0].x;
+          const y = h[0].y;
+          if (
+            x > Math.min(h[0].x, h[1].x) &&
+            x < Math.max(h[0].x, h[1].x) &&
+            y > Math.min(v[0].y, v[1].y) &&
+            y < Math.max(v[0].y, v[1].y)
+          )
+            count++;
+        }
+    }),
+  );
+  return count;
+}
+
+test('spaces outgoing dependencies on one side 8 px apart and nests their turns without crossings', () => {
+  withRouter((router) => {
+    const targets = ['far', 'near', 'ahead', 'low'];
+    const result = router.route({
+      obstacles: [
+        body('hub', 0, 0),
+        body('above', 0, -140),
+        body('below', 0, 140),
+        body('far', 600, -300),
+        body('near', 240, -160),
+        body('ahead', 600, 0),
+        body('low', 300, 200),
+      ],
+      dependencies: targets.map((target) => ({ id: target, source: 'hub', target })),
+    });
+    expect(result.fallbacks).toBe(0);
+    const routes = targets.map((id) => result.routes.get(id)!.points);
+    expect(routes.map(([start]) => start.x)).toEqual([120, 120, 120, 120]);
+    expect(routes.map(([start, next]) => next.y - start.y)).toEqual([0, 0, 0, 0]);
+    expect(routes.map(([start]) => start.y).sort((a, b) => a - b)).toEqual([28, 36, 44, 52]);
+    expect(crossings(routes)).toBe(0);
+  });
+});
+
+test('keeps spaced outgoing ports when their dependencies converge on another node’s shared arrow point', () => {
+  withRouter((router) => {
+    const result = router.route({
+      obstacles: [
+        body('concepts', 320, 40, 240, 80),
+        body('reading', 320, 180, 240, 80),
+        body('exercises', 640, 40, 240, 80),
+        body('control', 960, 160, 160, 80),
+      ],
+      dependencies: [
+        { id: 'concepts-exercises', source: 'concepts', target: 'exercises' },
+        { id: 'concepts-control', source: 'concepts', target: 'control' },
+        { id: 'exercises-control', source: 'exercises', target: 'control' },
+      ],
+    });
+    expect(result.fallbacks).toBe(0);
+    const [toExercises, toControl] = ['concepts-exercises', 'concepts-control'].map(
+      (id) => result.routes.get(id)!.points,
+    );
+    expect([toExercises[0], toControl[0]]).toEqual([
+      { x: 560, y: 76 },
+      { x: 560, y: 84 },
+    ]);
+    expect(toControl.at(-1)).toEqual({ x: 960, y: 200 });
+    expect(result.routes.get('exercises-control')!.points.at(-1)).toEqual({ x: 960, y: 200 });
   });
 });

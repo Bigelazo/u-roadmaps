@@ -194,3 +194,32 @@ test('a Scheduled unlock release notifies like a manual unlock, from teaching st
   });
   expect((stored.data as { actorName?: unknown }).actorName).toBeNull();
 });
+
+test('a discarded Scheduled unlock produces no Roadmap notice', async ({ course }) => {
+  const prerequisite = await addNode(course, 'Colas');
+  const node = await addNode(course, 'Árboles');
+  await prisma.dependency.create({
+    data: { sourceNodeId: prerequisite.id, targetNodeId: node.id },
+  });
+  const edits = teacherEdits(course);
+  await edits.block(prerequisite.id);
+  await enterRoadmap(course.studentId, course.roadmapId);
+  await prisma.roadmapNode.update({
+    where: { id: node.id },
+    data: { teacherUnlockAt: new Date('2026-01-01T00:00:00.000Z') },
+  });
+  const before = await pendingNotices(course.studentId, course.roadmapId);
+
+  await releaseScheduledTeacherUnlocks(
+    scheduledRoadmapChangePort,
+    new Date('2026-01-02T12:00:00.000Z'),
+  );
+
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual(before);
+  expect(
+    await prisma.roadmapNode.findUniqueOrThrow({
+      where: { id: node.id },
+      select: { isTeacherBlocked: true, teacherUnlockAt: true },
+    }),
+  ).toEqual({ isTeacherBlocked: true, teacherUnlockAt: null });
+});

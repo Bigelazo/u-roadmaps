@@ -131,9 +131,6 @@ test('a failed WASM load retries once, then offers retry without drawing an unsa
   await page.unroute('**/vendor/libavoid/0.4.5/libavoid.wasm');
   await page.getByRole('button', { name: 'Reintentar', exact: true }).click();
   await expect(page.locator('.react-flow__edge-path')).toHaveCount(roadmap.dependencies.length);
-  await expect(
-    page.getByText('Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.'),
-  ).toHaveCount(0);
 });
 
 test('a stalled WASM request offers manual retry at its first deadline and recovers on a fresh request', async ({

@@ -1,4 +1,5 @@
-import type { NodeRect, Point } from '@/features/roadmap/graph/geometry';
+import { Position } from '@xyflow/react';
+import { floatingEdgeGeometry, type NodeRect, type Point } from '@/features/roadmap/graph/geometry';
 
 export type RoutingObstacle = NodeRect & { id: string; nodeId: string; body: boolean };
 export type DependencyRoute = {
@@ -8,6 +9,7 @@ export type DependencyRoute = {
 };
 
 const strokeClearance = 2;
+const fallbackLoopReach = 24;
 
 export function intersectsRect(a: Point, b: Point, rect: NodeRect, margin = 0) {
   const left = rect.x - margin;
@@ -148,4 +150,46 @@ export function dependencyRoute(
   }
   path += `L${end.x},${end.y}`;
   return { path, points, label: routeLabel(points, obstacles) };
+}
+
+export function fallbackDependencyRoute(
+  source: NodeRect,
+  target: NodeRect,
+): DependencyRoute | null {
+  const { sourceX, sourceY, sourcePosition, targetX, targetY } = floatingEdgeGeometry(
+    source,
+    target,
+  );
+  const horizontal = sourcePosition === Position.Left || sourcePosition === Position.Right;
+  const middleX = (sourceX + targetX) / 2;
+  const middleY = (sourceY + targetY) / 2;
+  const sourceRight = source.x + source.width;
+  const targetRight = target.x + target.width;
+  const loopX = Math.max(sourceRight, targetRight) + fallbackLoopReach;
+  const sourceMiddle = source.y + source.height / 2 - fallbackLoopReach / 2;
+  const targetMiddle = target.y + target.height / 2 + fallbackLoopReach / 2;
+  return (
+    dependencyRoute(
+      [
+        { x: sourceX, y: sourceY },
+        horizontal ? { x: middleX, y: sourceY } : { x: sourceX, y: middleY },
+        horizontal ? { x: middleX, y: targetY } : { x: targetX, y: middleY },
+        { x: targetX, y: targetY },
+      ],
+      '',
+      '',
+      [],
+    ) ??
+    dependencyRoute(
+      [
+        { x: sourceRight, y: sourceMiddle },
+        { x: loopX, y: sourceMiddle },
+        { x: loopX, y: targetMiddle },
+        { x: targetRight, y: targetMiddle },
+      ],
+      '',
+      '',
+      [],
+    )
+  );
 }

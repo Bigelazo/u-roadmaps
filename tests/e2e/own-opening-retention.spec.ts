@@ -14,7 +14,7 @@ const openings = [
 ];
 
 for (const { context, open } of openings) {
-  test(`${context} opening prunes expired recipient snapshots and expired retries recognize no notices`, async ({
+  test(`${context} opening prunes expired recipient snapshots`, async ({
     course,
     apiAs,
     teacherApi: teacher,
@@ -76,12 +76,6 @@ for (const { context, open } of openings) {
     await ok(
       await student.post('/api/notifications/acknowledge', {
         data: { roadmapId: course.roadmapId, operationId: expired },
-      }),
-      404,
-    );
-    await ok(
-      await student.post('/api/notifications/openings', {
-        data: { roadmapId: course.roadmapId, operationId: expired, retry: true },
       }),
       404,
     );

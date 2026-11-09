@@ -196,7 +196,7 @@ export function DependencyAnimationReady() {
   return null;
 }
 
-export function useDependencyProgress(id: string) {
+function useDependencyProgress(id: string) {
   const playback = useContext(DependencyAnimationContext);
   const complete = useMotionValue(1);
   useEffect(() => playback?.mountPath(id), [id, playback]);

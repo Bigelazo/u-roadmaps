@@ -59,6 +59,10 @@ export async function seedPredefinedNodeTypes() {
 }
 
 export async function resetDevelopmentData() {
+  const fixtureFiles = developmentFixtureFileContents();
+  const fixtureFileSizes = new Map(
+    fixtureFiles.map(({ fileKey, bytes }) => [fileKey, bytes.length]),
+  );
   const previousFiles = await prisma.resource.findMany({
     where: {
       fileKey: { not: null },
@@ -177,6 +181,7 @@ export async function resetDevelopmentData() {
           url,
           fileKey,
           fileContentType,
+          fileSize: (fileKey && fixtureFileSizes.get(fileKey)) || null,
         }),
       ),
     });
@@ -205,5 +210,5 @@ export async function resetDevelopmentData() {
       fileKey ? rm(join(fixtureUploadsDirectory, fileKey), { force: true }) : Promise.resolve(),
     ),
   );
-  await replaceFixtureUploadedFiles(developmentFixtureFileContents());
+  await replaceFixtureUploadedFiles(fixtureFiles);
 }

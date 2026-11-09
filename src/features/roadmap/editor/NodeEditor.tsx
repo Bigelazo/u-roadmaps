@@ -1,5 +1,6 @@
 'use client';
 
+import { uploadedContentType } from '@/features/roadmap/domain/resource';
 import {
   forwardRef,
   useCallback,
@@ -73,7 +74,16 @@ function projectNodeInformationPreview(
     if (resourceSession.kind === 'editing-existing') {
       resources = node.resources.map((resource) =>
         resource.id === resourceSession.resourceId
-          ? { ...resource, ...resourceSession.value }
+          ? {
+              ...resource,
+              ...resourceSession.value,
+              ...(resourceSession.replacementFile
+                ? {
+                    fileContentType: uploadedContentType(resourceSession.replacementFile),
+                    fileSize: resourceSession.replacementFile.size,
+                  }
+                : {}),
+            }
           : resource,
       );
     } else if (resourceSession.kind === 'adding-file' && resourceSession.selectedFile) {
@@ -84,6 +94,9 @@ function projectNodeInformationPreview(
           title: resourceSession.selectedFile.name,
           url: '#',
           type: 'FILE' as const,
+          fileContentType: uploadedContentType(resourceSession.selectedFile),
+          fileSize: resourceSession.selectedFile.size,
+          accessCount: 0,
         },
       ];
     } else if (resourceSession.kind === 'adding-link') {
@@ -92,6 +105,9 @@ function projectNodeInformationPreview(
         {
           id: 'node-information-preview-resource',
           ...resourceSession.value,
+          fileContentType: null,
+          fileSize: null,
+          accessCount: 0,
         },
       ];
     }
@@ -251,6 +267,7 @@ function useNodeEditorController(
       kind: 'update-resource',
       resourceId: session.resourceId,
       resource: session.value,
+      ...(session.replacementFile ? { file: session.replacementFile } : {}),
     });
   }, [startEffect]);
 

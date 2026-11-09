@@ -21,12 +21,8 @@ export function applicationErrorResponse(error: ApplicationError): NextResponse 
 
 export function handleApplicationResult<Success extends Response>(
   operation: () => Promise<Success>,
-  onError: (error: ApplicationError) => Response = applicationErrorResponse,
 ): Promise<Response> {
-  return applicationResult(operation).match(
-    (response) => response,
-    (error) => onError(error),
-  );
+  return applicationResult(operation).match((response) => response, applicationErrorResponse);
 }
 
 export async function parseJsonObject(request: Request): Promise<JsonObject> {

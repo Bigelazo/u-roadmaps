@@ -1,5 +1,6 @@
 import { developmentFixtureIds, fixtureRoadmaps } from '@/development';
 import { fixtureParticipations, developmentFixtureOfferings } from '@/development/fixtures/catalog';
+import { literal, queryJson } from './database';
 import { expect, test } from './fixtures';
 import { authenticateAs, fixtureRoadmapPath, ok } from './helpers';
 
@@ -129,7 +130,11 @@ test('the reset fixture exposes the three complete roadmap scenarios', async ({ 
   ] as const) {
     const response = await ok(await api.get(fixtureRoadmapPath(offering)));
     const roadmap = await response.json();
-    expect(roadmap.course).toEqual(expect.objectContaining(course));
+    expect(
+      await queryJson(
+        `SELECT jsonb_build_object('code', c.code, 'name', c.name) FROM "Roadmap" r JOIN "CourseOffering" o ON o.id = r."courseOfferingId" JOIN "Course" c ON c.code = o."courseCode" WHERE r.id = ${literal(roadmap.roadmap.id)};`,
+      ),
+    ).toEqual(course);
     expect(roadmap.nodes).toHaveLength(15);
     expect(roadmap.nodes.filter((node: { isVisible: boolean }) => !node.isVisible)).toHaveLength(1);
     expect(roadmap.nodeTypes).toEqual(

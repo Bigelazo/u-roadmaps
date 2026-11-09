@@ -48,8 +48,6 @@ function dependency(id: string, sourceNodeId: string, targetNodeId: string) {
 }
 
 const roadmap: RoadmapDto = {
-  course: { code: 'CC1001', name: 'Cálculo', department: 'DIM' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
     { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
@@ -1207,6 +1205,7 @@ describe('canvas commands', () => {
           kind: 'add-node',
           node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
           position: { x: 480, y: 240 },
+          displaced: [],
         },
         'Nodo creado exitosamente.',
         async (persistence) => (await persistence.load()).nodes.at(-1)?.title,
@@ -1250,7 +1249,14 @@ describe('canvas commands', () => {
     });
 
     test('renaming a File applies at once and shows its toast', async () => {
-      const file = { id: 'file', title: 'Guía.pdf', url: 'guia.pdf', type: 'FILE' as const };
+      const file = {
+        id: 'file',
+        title: 'Guía.pdf',
+        url: 'guia.pdf',
+        type: 'FILE' as const,
+        fileContentType: 'application/pdf',
+        fileSize: null,
+      };
       const persistence = createInMemoryRoadmapSessionPersistence({
         ...editable,
         nodes: editable.nodes.map((node) =>
@@ -1337,6 +1343,7 @@ describe('canvas commands', () => {
         kind: 'add-node',
         node: { title: 'Sucesiones', description: '', nodeTypeId: 'content', isVisible: true },
         position: { x: 480, y: 240 },
+        displaced: [],
       } as const;
 
       await act(() => canvas.commands().request(command));

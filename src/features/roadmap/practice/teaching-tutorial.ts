@@ -5,7 +5,10 @@ import {
   type TutorialStep,
 } from '@/shared/client/tutorial/tutorial-support';
 import type { PracticeCanvasAction } from '@/features/roadmap/session/types';
-import { NODE_TYPES_MENU_ITEM_LABEL } from '@/features/roadmap/editor/types';
+import {
+  CREATE_NODE_MENU_ITEM_LABEL,
+  NODE_TYPES_MENU_ITEM_LABEL,
+} from '@/features/roadmap/editor/types';
 import { compactCanvasLayoutQuery } from '@/features/roadmap/ui/compact-canvas-layout';
 import { practiceNodeIds } from './practice-roadmap';
 import { canvas, nodeSelector, nodeTypeAndResourcesStep } from './student-tutorial';
@@ -15,7 +18,10 @@ function nodeCreator() {
     candidate.textContent?.includes('Agregar al mapa'),
   );
   const layer = document.querySelector('button[aria-label="Crear en el mapa"]')?.parentElement;
-  return dialog ?? layer?.querySelector('[role="menu"]') ?? layer ?? null;
+  const createAction = [...(layer?.querySelectorAll('[role="menuitem"]') ?? [])].find(
+    (item) => item.textContent?.trim() === CREATE_NODE_MENU_ITEM_LABEL,
+  );
+  return dialog ?? createAction ?? layer ?? null;
 }
 
 function confirmationOrCanvas() {

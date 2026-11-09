@@ -144,7 +144,7 @@ La demostración incluye roadmaps de programación y cálculo, dos versiones cer
 Para inicializar solamente el esquema y los tipos predefinidos, sin cargar los escenarios ficticios:
 
 ```bash
-pnpm prisma:migrate:dev
+pnpm prisma:migrate
 pnpm exec dotenv -e .env -- pnpm prisma:seed
 ```
 
@@ -181,10 +181,10 @@ Los avisos no tienen configuración externa. Véase [operación y verificación]
 | `pnpm test:e2e`                            | Ejecuta Playwright con su base y servidor propios.                                                    |
 | `pnpm test`                                | Ejecuta la validación agregada definida en `package.json`; requiere configurar el entorno de pruebas. |
 | `pnpm prisma:generate`                     | Genera el cliente Prisma en `src/generated/prisma`.                                                   |
-| `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                      |
 | `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                      |
 | `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                 |
-| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                              |
+| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones, ejecuta el seed y registra tamaños de archivo faltantes.       |
+| `pnpm resources:backfill-file-sizes`       | Registra el tamaño de los recursos de archivo que no lo tienen, leyendo `uploads/`.                   |
 | `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                   |
 | `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.  |
 
@@ -249,7 +249,7 @@ docs/                         ADR, especificaciones, investigación y prototipos
 uploads/                      Archivos subidos; no se versiona
 ```
 
-Las entidades persistidas principales son `Course`, `CourseOffering`, `Roadmap`, `RoadmapNode`, `NodeType`, `Dependency`, `Resource`, `User`, `Participation`, `Completion`, `SimulatedCompletion`, `AcademicTerm` y los registros de avisos y reconocimiento.
+Las entidades persistidas principales son `Course`, `CourseOffering`, `Roadmap`, `RoadmapNode`, `NodeType`, `Dependency`, `Resource`, `ResourceAccess`, `User`, `Participation`, `Completion`, `SimulatedCompletion`, `SimulatedResourceReview`, `AcademicTerm` y los registros de avisos y reconocimiento.
 
 Las pantallas principales son `/`, `/academic-overview` y `/courses/[courseCode]/[year]/[semester]`. La API del roadmap parte de `/api/[courseCode]/[year]/[semester]/roadmap`; los avisos propios se consultan en `/api/notifications`.
 

@@ -26,6 +26,7 @@ export type RoadmapCopySource = Readonly<{
     type: Resource['type'];
     fileKey?: string | null;
     fileContentType?: string | null;
+    fileSize?: number | null;
   }[];
 }>;
 
@@ -48,6 +49,7 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
       type: resource.type,
       fileKey: null as string | null,
       fileContentType: null as string | null,
+      fileSize: null as number | null,
     };
     if (resource.fileKey) {
       const fileKey = newId();
@@ -55,6 +57,7 @@ export function planRoadmapCopy(source: RoadmapCopySource, roadmapId: string, ne
         url: fileResourceUrl(fileKey),
         fileKey,
         fileContentType: resource.fileContentType ?? null,
+        fileSize: resource.fileSize ?? null,
       });
       fileCopies.push({ sourceFileKey: resource.fileKey, fileKey });
     }

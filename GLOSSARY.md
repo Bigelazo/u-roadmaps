@@ -184,7 +184,7 @@ A teaching-staff action that removes Teacher blocks according to the selected No
 _Avoid_: Prerequisite block removal, Dependency unlock
 
 **Scheduled unlock (Desbloqueo programado)**:
-A future day and time in America/Santiago, chosen by teaching staff, at which a visible node's Teacher block is removed automatically, as a Node unlock of only that node or, when scheduled with its dependents, as a Branch unlock from that node. Scheduling a node also schedules every blocked transitive prerequisite for the same moment, as a Node unlock of only that prerequisite, replacing any schedule it had; cancelling a schedule leaves the prerequisites' schedules untouched. When that moment arrives while any transitive prerequisite keeps a Teacher block, the node waits and is released once those blocks are removed; prerequisites released in the same pass count as removed. A pending Scheduled unlock takes precedence over any Branch unlock that reaches its node from upstream: the node, and everything past it, keeps its Teacher block until its own schedule. Removing the Teacher block by any other means or hiding the node discards the schedule; a frozen Roadmap never releases it. Its release produces the same Roadmap notices as a manual unlock, attributed to teaching staff.
+A future day and time in America/Santiago, chosen by teaching staff, at which a visible node's Teacher block is removed automatically, as a Node unlock of only that node or, when scheduled with its dependents, as a Branch unlock from that node. Scheduling a node also schedules every blocked transitive prerequisite for the same moment, as a Node unlock of only that prerequisite, replacing any schedule it had; cancelling a schedule leaves the prerequisites' schedules untouched. When that moment arrives while any transitive prerequisite keeps a Teacher block, the node is not released: its schedule is discarded, without Roadmap notices, and it keeps its Teacher block. Prerequisites released in the same pass count as removed. A pending Scheduled unlock takes precedence over any Branch unlock that reaches its node from upstream: the node, and everything past it, keeps its Teacher block until its own schedule. Removing the Teacher block by any other means or hiding the node discards the schedule; a frozen Roadmap never releases it. Its release produces the same Roadmap notices as a manual unlock, attributed to teaching staff.
 _Avoid_: Timed visibility
 
 **Branch unlock (Desbloqueo de rama)**:
@@ -224,11 +224,11 @@ A unique, directed relationship between distinct nodes in the same roadmap where
 _Avoid_: Link, visual connection
 
 **Completion (Completación)**:
-The dated fact that a participating student completed a node in their course offering's roadmap. Only current visible prerequisites must be complete; a student cannot reverse it, and repeated completion attempts preserve the original fact and date. Later roadmap changes do not invalidate it, though it disappears if a teacher deletes the node. Its absence means the node is pending.
+The dated fact that a participating student completed a node in their course offering's roadmap. Only current visible prerequisites must be complete, and the student must hold a Resource review of every current Resource of the node; a student cannot reverse it, and repeated completion attempts preserve the original fact and date. Later roadmap changes, including new or replaced Resources, do not invalidate it, though it disappears if a teacher deletes the node. Its absence means the node is pending.
 _Avoid_: Progress state, mutable progress
 
 **Canvas preview (Previsualización del canvas)**:
-A teaching-staff simulation of a Roadmap's student experience that follows the same access and progress rules without representing or changing any actual student's Participation or Completion. It cannot change on a closed Roadmap.
+A teaching-staff simulation of a Roadmap's student experience that follows the same access and progress rules, including simulated Resource reviews, without representing or changing any actual student's Participation, Completion, Resource access or Resource review. Resetting it discards its simulated Completions and Resource reviews. It cannot change on a closed Roadmap.
 _Avoid_: Preview, teacher progress, student impersonation, preview completion
 
 **Roadmap canvas session (Sesión del canvas del roadmap)**:
@@ -240,11 +240,11 @@ A teaching-staff change to the Roadmap that takes effect only after explicit con
 _Avoid_: Dialog, workflow, confirmation flow
 
 **Change impact (Impacto del cambio)**:
-What a Confirmed action would remove, block or release, such as Dependencies, Resources or Teacher blocks. It is recomputed on confirmation; if it changed, the new impact is shown instead of the change taking effect. Scheduled unlocks released because a Node unlock removed the Teacher blocks they waited on are a consequence of that unlock, not part of its Change impact.
+What a Confirmed action would remove, block or release, such as Dependencies, Resources or Teacher blocks. It is recomputed on confirmation; if it changed, the new impact is shown instead of the change taking effect. A due Scheduled unlock that the release pass has not settled yet, and whose node a Teacher-blocked prerequisite still holds, is discarded as a consequence of any Confirmed action, not part of its Change impact.
 _Avoid_: Preview, impact preview
 
 **Node information preview (Previsualización de información del nodo)**:
-A teaching-staff inspection of a Node's information through the same view available to a student who can access that Node, projecting any unsaved change that is visible in that view. Unlike Canvas preview, it does not evaluate the Node's visibility, Teacher block, or Prerequisite block.
+A teaching-staff inspection of a Node's information through the same view available to a student who can access that Node, projecting any unsaved change that is visible in that view. Unlike Canvas preview, it does not evaluate the Node's visibility, Teacher block, or Prerequisite block, and nothing done in it, such as completing the Node or reviewing a Resource, is kept once it closes.
 _Avoid_: Preview, student access preview, draft preview
 
 **Resource (Recurso)**:
@@ -258,6 +258,18 @@ _Avoid_: External file resource, shared file
 **Link resource (Recurso de enlace)**:
 A Resource that references material through an external web address, including videos and externally hosted files.
 _Avoid_: Video resource, uploaded file
+
+**Resource access (Acceso a recurso)**:
+A participating student's download of a File resource or opening of a Link resource in their Course offering's open Roadmap. Teaching staff, Canvas preview, Node information preview and the Practice roadmap never produce one.
+_Avoid_: View, visit, download count
+
+**Access count (Conteo de accesos)**:
+The number of Resource accesses a Resource has received, counting every repetition by the same student. Replacing a File resource's file keeps it, and a Roadmap copy starts it again from zero.
+_Avoid_: Downloads, views, popularity
+
+**Resource review (Revisión de recurso)**:
+The fact that a student has accessed a Resource's current material at least once. A student whose Completion of a node predates the requirement holds one for every Resource the node had then, without it counting as a Resource access. Replacing a File resource's file withdraws every student's Resource review of it, because the material is new; a Roadmap copy starts without any.
+_Avoid_: Read receipt, seen, Resource completion
 
 **Roadmap tutorial (Tutorial del roadmap)**:
 A guided, repeatable walkthrough of the Roadmap canvas on the Practice roadmap for one experience: explanatory for students and observers, interactive for teaching staff, who perform each action themselves. Each User is invited once, on their first Academic overview visit, to choose either tutorial or decline, and a course professor is invited once more to the teaching tutorial after their first Roadmap creation; it can be repeated from the Academic overview or from the Roadmap canvas for the current experience, never inside Canvas preview.

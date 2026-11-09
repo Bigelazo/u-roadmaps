@@ -5,7 +5,7 @@ import { afterAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { RoadmapCanvasSession } from '@/features/roadmap/session';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
-import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/features/roadmap/session/change-signal';
+import { ROADMAP_CHANGE_RECEIVED_EVENT } from '@/shared/client/roadmap-events';
 import { RoadmapAccessLostError } from '@/features/roadmap/session/access-lost';
 import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import { Toaster } from '@/shared/ui/toast';
@@ -33,16 +33,22 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     onSelectNode: (nodeId: string) => void;
     selectedNodeId?: string | null;
     bottomLeftActions?: (
-      findOpenPosition: (title: string) => { x: number; y: number } | null,
+      placeNewNode: (title: string) => {
+        position: { x: number; y: number };
+        displaced: readonly unknown[];
+      },
     ) => ReactNode;
     bottomRightActions?: (
-      findOpenPosition: (title: string) => { x: number; y: number } | null,
+      placeNewNode: (title: string) => {
+        position: { x: number; y: number };
+        displaced: readonly unknown[];
+      },
     ) => ReactNode;
     overlaySlots?: { topCenter?: ReactNode };
   }) => (
     <>
-      {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
-      {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
+      {bottomLeftActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
+      {bottomRightActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
       <div data-testid="roadmap-overlay-top-center">{overlaySlots?.topCenter}</div>
       <output data-testid="selected-node-id">{selectedNodeId ?? ''}</output>
       <output data-testid="roadmap-mode">{projection.editing ? 'editing' : 'student'}</output>
@@ -78,8 +84,6 @@ type SessionPersistence = ComponentProps<
 >['persistence'];
 
 const roadmap: StudentRoadmapDto = {
-  course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
     { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
@@ -141,6 +145,10 @@ function renderSession(persistence: SessionPersistence, input: SessionInput = te
   );
   const utils = render(view(input));
   return { ...utils, rerenderSession: (next: SessionInput) => utils.rerender(view(next)) };
+}
+
+function tooltipContent() {
+  return document.querySelector('[data-slot="tooltip-content"]');
 }
 
 function signalChange(detail: object) {
@@ -380,6 +388,27 @@ describe('RoadmapCanvasSession', () => {
     await closeToast(user, await findToast('No se pudo completar el nodo.'));
     await waitFor(() => expect(queryToast('No se pudo completar el nodo.')).toBeNull());
     expect(screen.getByRole('button', { name: 'Límites' })).not.toBeNull();
+  });
+
+  test('leaves the labeled Canvas toolbar actions without a tooltip on desktop', async () => {
+    mockViewport(1280);
+    const user = userEvent.setup();
+    renderSession(createInMemoryRoadmapSessionPersistence(teachingRoadmap));
+
+    const action = await screen.findByRole('button', { name: 'Vista estudiante' });
+    await user.hover(action);
+
+    expect(action.getAttribute('data-slot')).not.toBe('tooltip-trigger');
+    expect(tooltipContent()).toBeNull();
+  });
+
+  test('names the icon-only Canvas toolbar actions in a tooltip on compact layouts', async () => {
+    const user = userEvent.setup();
+    renderSession(createInMemoryRoadmapSessionPersistence(teachingRoadmap));
+
+    await user.hover(await screen.findByRole('button', { name: 'Vista estudiante' }));
+
+    await waitFor(() => expect(tooltipContent()?.textContent).toBe('Vista estudiante'));
   });
 
   test('routes current teaching Canvas preview through the session and isolates Canvas preview Completions', async () => {

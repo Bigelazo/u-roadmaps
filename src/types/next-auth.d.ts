@@ -13,7 +13,6 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     sub?: string;
-    preferred_username?: string;
     useLocalFixtureData?: boolean;
   }
 }

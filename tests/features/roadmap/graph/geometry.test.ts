@@ -1,7 +1,6 @@
 import { expect, it } from 'vitest';
 import { Position } from '@xyflow/react';
 import {
-  dependencyArrowGeometry,
   floatingEdgeGeometry,
   findOpenRoadmapPosition,
   nearestSide,
@@ -42,7 +41,7 @@ it.each([
 ])(
   'connects both arrow ends to the actual Node border when facing $direction',
   ({ target, sourceAnchor, targetAnchor }) => {
-    const geometry = dependencyArrowGeometry(card(0, 0), target);
+    const geometry = floatingEdgeGeometry(card(0, 0), target);
     expect({ x: geometry.sourceX, y: geometry.sourceY }).toEqual(sourceAnchor);
     expect({ x: geometry.targetX, y: geometry.targetY }).toEqual(targetAnchor);
   },
@@ -114,10 +113,10 @@ it('keeps a free requested position and moves an occupied one to a grid-aligned 
   expect(position!.x % roadmapGridSize).toBe(0);
   expect(position!.y % roadmapGridSize).toBe(0);
   expect(
-    candidate.x + candidate.width + roadmapGridSize <= occupied[0].x ||
-      occupied[0].x + occupied[0].width + roadmapGridSize <= candidate.x ||
-      candidate.y + candidate.height + roadmapGridSize <= occupied[0].y ||
-      occupied[0].y + occupied[0].height + roadmapGridSize <= candidate.y,
+    candidate.x + candidate.width + 2 * roadmapGridSize <= occupied[0].x ||
+      occupied[0].x + occupied[0].width + 2 * roadmapGridSize <= candidate.x ||
+      candidate.y + candidate.height + 2 * roadmapGridSize <= occupied[0].y ||
+      occupied[0].y + occupied[0].height + 2 * roadmapGridSize <= candidate.y,
   ).toBe(true);
 });
 

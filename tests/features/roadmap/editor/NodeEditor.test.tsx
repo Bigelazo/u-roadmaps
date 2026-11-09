@@ -53,6 +53,8 @@ const resource = {
   title: 'Guía de ejercicios',
   url: 'https://example.test/guia',
   type: 'LINK' as const,
+  fileContentType: null,
+  fileSize: null,
 };
 
 const nodeTypes: RoadmapDto['nodeTypes'] = [
@@ -102,6 +104,81 @@ test.each(['Guía.docx', 'Guía.final.PDF', 'README', '.env'])(
     });
   },
 );
+
+test('replaces a file keeping the edited title, adopting the new extension, and can keep the current one', async () => {
+  const user = userEvent.setup();
+  const file = { ...resource, title: 'Guía.docx', type: 'FILE' as const };
+  const { perform } = renderEditor(withNode({ resources: [file] }));
+  await user.click(screen.getByRole('button', { name: 'Editar recurso Guía.docx' }));
+  const form = screen.getByRole('form', { name: 'Editor de recurso' });
+  const title = within(form).getByRole('textbox', { name: 'Título' });
+  const save = within(form).getByRole('button', { name: 'Guardar recurso' });
+  expect(save.hasAttribute('disabled')).toBe(true);
+  await user.clear(title);
+  await user.type(title, 'Guía resuelta');
+  const replacement = new File(['pdf'], 'solucion.pdf', { type: 'application/pdf' });
+  await user.upload(within(form).getByLabelText('Reemplazar archivo'), replacement);
+  expect(within(form).getByText('solucion.pdf')).toBeTruthy();
+  expect((title as HTMLInputElement).value).toBe('Guía resuelta');
+  expect(within(form).getByText('.pdf')).toBeTruthy();
+  await user.click(within(form).getByRole('button', { name: 'Mantener actual' }));
+  expect(within(form).queryByText('solucion.pdf')).toBeNull();
+  expect(within(form).getByText('.docx')).toBeTruthy();
+  fireEvent.drop(within(form).getByText('Arrastra o selecciona un archivo'), {
+    dataTransfer: { files: { item: () => replacement } },
+  });
+  await user.click(save);
+  expect(perform).toHaveBeenCalledWith({
+    kind: 'update-resource',
+    resourceId: file.id,
+    resource: { url: file.url, title: 'Guía resuelta.pdf', type: 'FILE' },
+    file: replacement,
+  });
+  await waitFor(() => expect(screen.queryByRole('form', { name: 'Editor de recurso' })).toBeNull());
+});
+
+test('Resource rows name their action and file category instead of a type caption', () => {
+  const sheet = {
+    ...resource,
+    id: 'resource-2',
+    title: 'Notas.xlsx',
+    url: '/api/protected/resource-2/file',
+    type: 'FILE' as const,
+    fileContentType: null,
+    fileSize: null,
+  };
+  renderEditor(withNode({ resources: [resource, sheet] }));
+  const list = screen.getByRole('list', { name: 'Recursos del nodo' });
+  const [linkRow, fileRow] = within(list).getAllByRole('listitem');
+  expect(
+    within(linkRow).getByRole('link', { name: `Abrir enlace ${resource.title}` }),
+  ).toBeTruthy();
+  expect(linkRow.innerHTML).toContain('lucide-link-2"');
+  expect(within(fileRow).getByRole('link', { name: 'Descargar Notas.xlsx' })).toBeTruthy();
+  expect(fileRow.innerHTML).toContain('lucide-file-spreadsheet"');
+  expect(within(list).queryByText(/^(Archivo|Enlace)$/)).toBeNull();
+});
+
+test('a Link edit offers its address but never a file replacement', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor(withNode({ resources: [resource] }));
+  await user.click(screen.getByRole('button', { name: `Editar recurso ${resource.title}` }));
+  const form = screen.getByRole('form', { name: 'Editor de recurso' });
+  expect(within(form).queryByLabelText('Reemplazar archivo')).toBeNull();
+  const address = within(form).getByRole('textbox', { name: 'Enlace' });
+  await user.clear(address);
+  await user.type(address, 'nueva-guia');
+  await user.click(within(form).getByRole('button', { name: 'Guardar enlace' }));
+  expect(perform).not.toHaveBeenCalled();
+  await user.clear(address);
+  await user.type(address, 'https://example.test/nueva');
+  await user.click(within(form).getByRole('button', { name: 'Guardar enlace' }));
+  expect(perform).toHaveBeenCalledWith({
+    kind: 'update-resource',
+    resourceId: resource.id,
+    resource: { title: resource.title, url: 'https://example.test/nueva', type: 'LINK' },
+  });
+});
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -186,12 +263,60 @@ test('renders the selected Node as one cohesive editing surface', () => {
   expect(screen.getByRole('heading', { name: /Recursos/ })).toBeTruthy();
 });
 
-test('places support material before student access', () => {
+test('orders the panel so a long description comes last, after every other section', () => {
   renderEditor();
 
-  const resources = screen.getByRole('heading', { name: /Recursos/ });
-  const status = screen.getByRole('heading', { name: 'Acceso de estudiantes' });
-  expect(resources.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const sections = [
+    screen.getByLabelText('Título'),
+    screen.getByRole('combobox', { name: 'Tipo' }),
+    screen.getByRole('heading', { name: /Recursos/ }),
+    screen.getByRole('heading', { name: 'Acceso de estudiantes' }),
+    screen.getByRole('heading', { name: 'Eliminar nodo' }),
+    screen.getByLabelText(/Descripción o Contenido del nodo/),
+  ];
+  for (const [index, section] of sections.slice(1).entries())
+    expect(
+      sections[index].compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+});
+
+test('labels the description as optional Markdown content that accepts a dropped .md file', () => {
+  renderEditor();
+
+  const description = screen.getByRole('textbox', {
+    name: 'Descripción o Contenido del nodo opcional',
+  });
+  expect(screen.getByText('opcional').tagName).toBe('EM');
+  expect(description.getAttribute('aria-describedby')).toBe('edit-node-description-help');
+  expect(
+    screen.getByText(
+      'El texto es compatible con Markdown. Puedes arrastrar un archivo .md para reemplazarlo.',
+    ).id,
+  ).toBe('edit-node-description-help');
+});
+
+test('keeps saving and previewing in a footer pinned below the scrolling content', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor();
+
+  const footer = screen.getByRole('form', { name: 'Guardar nodo' });
+  expect(footer.className).toContain('sticky');
+  expect(footer.className).toContain('bottom-0');
+  expect(within(footer).getByRole('button', { name: 'Guardar cambios' })).toBe(saveButton());
+  expect(within(footer).getByRole('button', { name: 'Previsualizar' })).toBeTruthy();
+  expect(
+    screen.getByLabelText(/Descripción o Contenido del nodo/).compareDocumentPosition(footer) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+
+  await retitle(user, 'Título enviado con Enter');
+  await user.keyboard('{Enter}');
+  expect(perform).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'update-node',
+      value: expect.objectContaining({ title: 'Título enviado con Enter' }),
+    }),
+  );
 });
 
 const unsavedNotice = (text: string) => (_: string, element: Element | null) =>
@@ -235,8 +360,13 @@ test('rejects an incomplete link address in Spanish', async () => {
   expect(perform).not.toHaveBeenCalled();
 });
 
-const prerequisiteHint =
-  'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
+function prerequisiteHint(_: string, element: Element | null) {
+  return (
+    element?.getAttribute('data-slot') === 'field-description' &&
+    element.textContent ===
+      'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no será desbloqueado.'
+  );
+}
 
 test.each([
   [1, 'Su prerrequisito bloqueado también se desbloqueará a esa hora.'],
@@ -260,7 +390,9 @@ test('schedules the unlock day and time of a teacher-blocked Node in Chilean tim
 
     const schedule = screen.getByRole('button', { name: 'Programar' }) as HTMLButtonElement;
     expect(schedule.disabled).toBe(true);
-    expect(screen.getByText(prerequisiteHint)).toBeTruthy();
+    expect(
+      within(screen.getByText(prerequisiteHint)).getByText('no', { selector: 'strong' }),
+    ).toBeTruthy();
     await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
     expect(screen.getByText('Noviembre 2026')).toBeTruthy();
     const pastDay = screen.getByRole('button', { name: /, 6 de noviembre de 2026/ });
@@ -293,6 +425,61 @@ test('schedules the unlock day and time of a teacher-blocked Node in Chilean tim
       kind: 'schedule-teacher-unlock',
       nodeId: node.id,
       unlockAt: null,
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('defaults the unlock time to 23:59, listed right after 23:45', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-07T15:00:00.000Z') });
+  try {
+    const user = userEvent.setup();
+    const { onIntent } = renderEditor();
+
+    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
+    await user.click(screen.getByRole('button', { name: /21 de noviembre de 2026/ }));
+    const time = screen.getByRole('combobox', { name: 'Hora del desbloqueo' });
+    expect(within(time).getByText('23:59')).toBeTruthy();
+    await user.click(time);
+    const options = (await screen.findAllByRole('option')).map((option) => option.textContent);
+    expect(options.slice(-2)).toEqual(['23:45', '23:59']);
+    await user.click(screen.getByRole('option', { name: '23:59' }));
+    await user.click(screen.getByRole('button', { name: 'Programar' }));
+    expect(onIntent).toHaveBeenCalledWith({
+      kind: 'schedule-teacher-unlock',
+      nodeId: node.id,
+      unlockAt: '2026-11-22T02:59:00.000Z',
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('keeps 23:59 available on the current Chilean day after 23:45 has passed', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-08T02:50:00.000Z') });
+  try {
+    const user = userEvent.setup();
+    const { onIntent } = renderEditor();
+
+    await user.click(await screen.findByRole('button', { name: 'Día del desbloqueo' }));
+    await user.click(screen.getByRole('button', { name: /, 7 de noviembre de 2026/ }));
+    expect(
+      within(screen.getByRole('combobox', { name: 'Hora del desbloqueo' })).getByText('23:59'),
+    ).toBeTruthy();
+    await user.click(screen.getByRole('combobox', { name: 'Hora del desbloqueo' }));
+    expect(
+      (await screen.findByRole('option', { name: '23:45' })).getAttribute('aria-disabled'),
+    ).toBe('true');
+    expect(screen.getByRole('option', { name: '23:59' }).getAttribute('aria-disabled')).not.toBe(
+      'true',
+    );
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Programar' }));
+    expect(onIntent).toHaveBeenCalledWith({
+      kind: 'schedule-teacher-unlock',
+      nodeId: node.id,
+      unlockAt: '2026-11-08T02:59:00.000Z',
     });
   } finally {
     vi.useRealTimers();

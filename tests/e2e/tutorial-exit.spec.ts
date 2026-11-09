@@ -35,7 +35,9 @@ for (const viewport of [
       await expectExitReachable(page, `creator-${viewport.width}`);
       const creatorButton = page.getByRole('button', { name: 'Crear en el mapa' });
       await creatorButton.tap();
-      await expect(page.getByRole('menu')).toHaveClass(/driver-active-element/);
+      await expect(page.getByRole('menuitem', { name: 'Crear nodo', exact: true })).toHaveClass(
+        /driver-active-element/,
+      );
       await expect(popover).toHaveCSS('opacity', '1');
       await expect(creatorButton).toHaveCSS('transform', 'none');
       await expectExitReachable(page, `creator-menu-open-${viewport.width}`);

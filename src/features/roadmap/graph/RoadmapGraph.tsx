@@ -1,6 +1,6 @@
 'use client';
 
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+import { IconTooltip } from '@/shared/ui/icon-tooltip';
 
 import {
   useCallback,
@@ -46,13 +46,17 @@ import type {
   RoadmapGraphEditingIntent,
   RoadmapGraphEditing,
   RoadmapGraphProjection,
+  NewNodePlacement,
   RoadmapNodePlacement,
-  RoadmapNodePosition,
   RoadmapViewport,
   RoadmapViewportRestoration,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 import { roadmapEdgeTypes, type RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import { DependencyRouting } from '@/features/roadmap/graph/routing/DependencyRouting';
+import {
+  nodesDisplacedByNewNode,
+  placementsWithoutCollisions,
+} from '@/features/roadmap/graph/node-collisions';
 import {
   DependencyAnimationProvider,
   DependencyAnimationReady,
@@ -91,12 +95,11 @@ export type {
   RoadmapGraphEditingIntent,
   RoadmapGraphEditing,
   RoadmapGraphProjection,
+  NewNodePlacement,
   RoadmapNodePlacement,
   RoadmapNodePosition,
   RoadmapViewport,
   RoadmapViewportRestoration,
-  StudentRoadmapGraphProjection,
-  TeachingRoadmapGraphProjection,
 } from '@/features/roadmap/graph/roadmap-graph-projection';
 
 const selectedEdgeColor = 'var(--primary)';
@@ -344,6 +347,14 @@ function immutableNodePositions(
   );
 }
 
+const newNodeId = '__new-node__';
+
+function canvasNodes(nodes: readonly RoadmapFlowNode[]) {
+  return nodes.flatMap((node) =>
+    node.hidden ? [] : [{ id: node.id, title: node.data.title, position: node.position }],
+  );
+}
+
 function snappedNodePositions(
   positions: readonly RoadmapNodePlacement[],
 ): readonly RoadmapNodePlacement[] {
@@ -386,12 +397,8 @@ function RoadmapGraphToolbar({
   nodeMovementControl?: ReactNode;
   canAutoLayout: boolean;
   onAutoLayout: () => void;
-  bottomLeftActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
-  bottomRightActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
+  bottomLeftActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
+  bottomRightActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
   nodes: readonly RoadmapFlowNode[];
 }) {
   const { fitView, screenToFlowPosition } = useReactFlow();
@@ -410,19 +417,29 @@ function RoadmapGraphToolbar({
       height: bottomRight.y - topLeft.y,
     };
   }, [containerRef, screenToFlowPosition]);
-  const findOpenPosition = useCallback(
-    (title: string) => {
+  const placeNewNode = useCallback(
+    (title: string): NewNodePlacement => {
       const size = roadmapNodeSizeForTitle(title);
       const viewport = getViewport();
-      return findOpenRoadmapPosition(
-        nodes.map((node) => ({ ...node.position, ...roadmapNodeSizeForTitle(node.data.title) })),
-        {
-          x: viewport.x + viewport.width / 2 - size.width / 2,
-          y: viewport.y + viewport.height / 2 - size.height / 2,
-        },
-        size,
-        viewport,
-      );
+      const center = {
+        x: viewport.x + viewport.width / 2 - size.width / 2,
+        y: viewport.y + viewport.height / 2 - size.height / 2,
+      };
+      const position =
+        findOpenRoadmapPosition(
+          nodes.map((node) => ({ ...node.position, ...roadmapNodeSizeForTitle(node.data.title) })),
+          center,
+          size,
+          viewport,
+        ) ?? snapToRoadmapGrid(center);
+      return {
+        position,
+        displaced: nodesDisplacedByNewNode(canvasNodes(nodes), {
+          id: newNodeId,
+          title,
+          position,
+        }),
+      };
     },
     [getViewport, nodes],
   );
@@ -447,46 +464,42 @@ function RoadmapGraphToolbar({
             compact ? 'flex-nowrap overflow-x-auto overscroll-x-contain' : 'flex-wrap',
           )}
         >
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  aria-label="Centrar mapa"
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() =>
-                    void fitView(fitAllOptions(compact, containerRef.current)).then(() =>
-                      onFitView?.(),
-                    )
-                  }
-                >
-                  <Maximize aria-hidden="true" />
-                </Button>
-              }
-            />
-            <TooltipContent>Centrar mapa</TooltipContent>
-          </Tooltip>
+          <IconTooltip
+            label="Centrar mapa"
+            render={
+              <Button
+                aria-label="Centrar mapa"
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() =>
+                  void fitView(fitAllOptions(compact, containerRef.current)).then(() =>
+                    onFitView?.(),
+                  )
+                }
+              >
+                <Maximize aria-hidden="true" />
+              </Button>
+            }
+          />
           {nodeMovementControl}
           {showAutoLayout ? (
             compact ? (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      aria-label="Ordenar"
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      disabled={!canAutoLayout}
-                      onClick={onAutoLayout}
-                    >
-                      <LayoutFreeform aria-hidden="true" />
-                    </Button>
-                  }
-                />
-                <TooltipContent>Ordenar</TooltipContent>
-              </Tooltip>
+              <IconTooltip
+                label="Ordenar"
+                render={
+                  <Button
+                    aria-label="Ordenar"
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    disabled={!canAutoLayout}
+                    onClick={onAutoLayout}
+                  >
+                    <LayoutFreeform aria-hidden="true" />
+                  </Button>
+                }
+              />
             ) : (
               <Button
                 type="button"
@@ -509,7 +522,7 @@ function RoadmapGraphToolbar({
                   : 'flex-wrap',
               )}
             >
-              {bottomLeftActions(findOpenPosition)}
+              {bottomLeftActions(placeNewNode)}
             </div>
           ) : null}
         </div>
@@ -520,7 +533,7 @@ function RoadmapGraphToolbar({
           data-canvas-overlay="bottom"
           className={bottomRightPanelClassName}
         >
-          <div className="pointer-events-auto">{bottomRightActions(findOpenPosition)}</div>
+          <div className="pointer-events-auto">{bottomRightActions(placeNewNode)}</div>
         </Panel>
       ) : null}
     </>
@@ -607,6 +620,7 @@ function CompactEditorViewportAdjustment({
       ?.querySelector<HTMLElement>('#roadmap-editor-panel');
     const node = container?.querySelector<HTMLElement>(`.react-flow__node[data-id="${nodeId}"]`);
     if (!compact || !nodeId || !container || !panel || !node) return;
+    const visualViewport = window.visualViewport;
     let frame = 0;
     const reveal = () => {
       cancelAnimationFrame(frame);
@@ -616,9 +630,13 @@ function CompactEditorViewportAdjustment({
         const canvas = container.getBoundingClientRect();
         const bounds = node.getBoundingClientRect();
         const insets = canvasOverlayInsets(container);
+        const visibleBottom = Math.min(
+          canvas.bottom,
+          visualViewport ? visualViewport.offsetTop + visualViewport.height : window.innerHeight,
+        );
         const panelMaxHeight = Math.max(
           0,
-          window.innerHeight - canvas.top - insets.top - bounds.height - overlayGap * 2,
+          visibleBottom - canvas.top - insets.top - bounds.height - overlayGap * 2,
         );
         panel.style.setProperty('--roadmap-panel-max-height', `${panelMaxHeight}px`);
         const bottom = Math.min(canvas.bottom - insets.bottom, panelBounds.top - overlayGap);
@@ -641,10 +659,14 @@ function CompactEditorViewportAdjustment({
       ...container.querySelectorAll<HTMLElement>('[data-canvas-overlay]'),
     ].forEach((element) => observer.observe(element));
     panel.addEventListener('animationend', reveal);
+    visualViewport?.addEventListener('resize', reveal);
+    visualViewport?.addEventListener('scroll', reveal);
     reveal();
     return () => {
       observer.disconnect();
       panel.removeEventListener('animationend', reveal);
+      visualViewport?.removeEventListener('resize', reveal);
+      visualViewport?.removeEventListener('scroll', reveal);
       panel.style.removeProperty('--roadmap-panel-max-height');
       cancelAnimationFrame(frame);
     };
@@ -669,12 +691,8 @@ export type RoadmapGraphProps = {
   onClearSelectedNode?: () => void;
   selectedNodeId?: string | null;
   focusReturnRequest?: string | null;
-  bottomLeftActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
-  bottomRightActions?: (
-    findOpenPosition: (title: string) => RoadmapNodePosition | null,
-  ) => ReactNode;
+  bottomLeftActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
+  bottomRightActions?: (placeNewNode: (title: string) => NewNodePlacement) => ReactNode;
   overlaySlots?: RoadmapGraphOverlaySlots;
   onViewportChange?: (viewport: RoadmapViewport) => void;
   viewportRestoration?: RoadmapViewportRestoration | null;
@@ -685,7 +703,6 @@ export type RoadmapGraphOverlaySlots = {
   topLeft?: ReactNode;
   topCenter?: ReactNode;
   topRight?: ReactNode;
-  bottomRight?: ReactNode;
 };
 
 const titlePlateClassName = cn(
@@ -737,15 +754,6 @@ function RoadmapGraphOverlays({ slots }: { slots?: RoadmapGraphOverlaySlots }) {
       {slots?.topRight ? (
         <Panel position="top-right" className="m-4! sm:m-6!">
           {slots.topRight}
-        </Panel>
-      ) : null}
-      {slots?.bottomRight ? (
-        <Panel
-          position="bottom-right"
-          data-canvas-overlay="bottom"
-          className={bottomRightPanelClassName}
-        >
-          {slots.bottomRight}
         </Panel>
       ) : null}
     </>
@@ -951,6 +959,14 @@ function useRoadmapGraphController({
     [emitEditingIntent],
   );
 
+  const settleMovedNodes = useCallback(
+    (moved: readonly RoadmapNodePlacement[]) =>
+      applyNodePositions(
+        placementsWithoutCollisions(canvasNodes(flow.nodes), snappedNodePositions(moved)),
+      ),
+    [applyNodePositions, flow.nodes],
+  );
+
   useEffect(() => {
     setFlow((current) => ({
       ...current,
@@ -1016,7 +1032,7 @@ function useRoadmapGraphController({
     closeActionMenu,
     flow,
     setFlow,
-    applyNodePositions,
+    settleMovedNodes,
     connectNodes,
     proposeAutoLayout,
     containerRef,
@@ -1036,7 +1052,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     closeActionMenu,
     flow,
     setFlow,
-    applyNodePositions,
+    settleMovedNodes,
     connectNodes,
     containerRef,
   } = model;
@@ -1128,6 +1144,9 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
       keyboardMovePendingRef.current = true;
   };
 
+  const settleDraggedNodes = (dragged: readonly RoadmapFlowNode[]) =>
+    settleMovedNodes(immutableNodePositions(dragged));
+
   const handleNodesChange = (changes: NodeChange<RoadmapFlowNode>[]) => {
     const movedWithKeyboard = keyboardMovePendingRef.current;
     keyboardMovePendingRef.current = false;
@@ -1152,7 +1171,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         current.nodes,
       ),
     }));
-    if (movedWithKeyboard) applyNodePositions(snappedNodePositions(positions));
+    if (movedWithKeyboard) settleMovedNodes(positions);
   };
 
   const setEdgeHover = (edgeId: string, isHovered: boolean) =>
@@ -1242,11 +1261,10 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                   canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
                 }
                 onNodeDragStop={
-                  canInteract
-                    ? (_event, node) => {
-                        applyNodePositions(snappedNodePositions(immutableNodePositions([node])));
-                      }
-                    : undefined
+                  canInteract ? (_event, _node, dragged) => settleDraggedNodes(dragged) : undefined
+                }
+                onSelectionDragStop={
+                  canInteract ? (_event, dragged) => settleDraggedNodes(dragged) : undefined
                 }
                 onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
                 onConnectStart={canInteract ? connection.onConnectStart : undefined}

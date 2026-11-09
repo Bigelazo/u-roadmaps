@@ -7,10 +7,10 @@ import type { NodeTypeColor, NodeTypeIconId } from '@/features/roadmap/node-type
 import type {
   AnyRoadmapDto,
   CourseOfferingIdentifier,
+  Resource,
   StudentRoadmapDto,
   TeacherBlockOperation,
 } from '@/features/roadmap/types';
-import type { ResourceInput } from '@/features/roadmap/editor/types';
 
 export type NewRoadmapNode = {
   title: string;
@@ -19,7 +19,6 @@ export type NewRoadmapNode = {
   isVisible: boolean;
 };
 
-export type NewRoadmapResource = ResourceInput;
 export type RoadmapNodeTypeInput = {
   name: string;
   icon: NodeTypeIconId;
@@ -36,9 +35,15 @@ export type ExecutionResult = {
   readonly scheduledUnlock?: ScheduledUnlockOutcome;
 };
 
+export type ResourceAccessScope = 'roadmap' | 'canvas-preview';
+
 export type RoadmapCanvasSessionPersistence = {
   load(): Promise<AnyRoadmapDto>;
   loadCanvasPreview(): Promise<StudentRoadmapDto>;
+  recordResourceAccess(
+    resource: Pick<Resource, 'id' | 'type'>,
+    scope: ResourceAccessScope,
+  ): Promise<{ readonly countsAccess: boolean }>;
   readChangeImpact<Command extends ChangeImpactCommand>(
     command: Command,
   ): Promise<ReadChangeImpactOf<Command['kind']>>;
@@ -52,7 +57,6 @@ export type RoadmapCanvasExperience =
 export type RoadmapCanvasSessionInput = {
   readonly notificationsEnabled?: boolean;
   readonly roadmapEntryKey?: string | null;
-  readonly targetNodeId?: string;
   readonly courseOffering: {
     readonly identifier: CourseOfferingIdentifier;
     readonly title: string;

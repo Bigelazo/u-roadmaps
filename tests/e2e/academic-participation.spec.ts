@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { forgetUcampusUser, failUcampusEndpoint } from './ucampus';
@@ -141,8 +140,8 @@ test('entering a Course offering that a complete U-Campus history omits revokes 
   await ok(await api.get(course.apiPath()));
   await reportPosition(user, await createCourse({ roadmap: false }), 'STUDENT');
   await authenticateAs(page.context(), user.id);
-  await page.goto(`${course.pagePath()}?notice=${randomUUID()}`);
-  await expect(page).toHaveURL(/noticeFallback=course-unavailable/);
+  await page.goto(course.pagePath());
+  await expect(page).toHaveURL(/accessLost=1/);
   await ok(await api.get(course.apiPath()), 403);
 });
 

@@ -18,10 +18,12 @@ import {
   type CanvasCommandSession,
 } from '@/features/roadmap/canvas/commands/use-canvas-commands';
 import { createHttpRoadmapCanvasSessionPersistence } from '@/features/roadmap/session/http-persistence';
-import type { AnyRoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
+import type { AnyRoadmapDto, Resource, StudentRoadmapDto } from '@/features/roadmap/types';
+import { withAccessedResource } from '@/features/roadmap/domain/resource-review';
 import type { NodeEditorHandle } from '@/features/roadmap/editor/types';
 import type {
   ExecutionResult,
+  ResourceAccessScope,
   RoadmapCanvasSessionInput,
   RoadmapCanvasSessionPersistence,
 } from '@/features/roadmap/session/types';
@@ -94,11 +96,13 @@ type RoadmapCanvasSessionState = {
   accessLost: boolean;
   isClosed: boolean;
   loadCanvasPreview: () => Promise<boolean>;
+  recordResourceAccess: (resource: Resource, scope: ResourceAccessScope) => void;
 };
 
-export type RoadmapCanvasSession = RoadmapCanvasSessionState & {
+export type RoadmapCanvasSession = Omit<RoadmapCanvasSessionState, 'recordResourceAccess'> & {
   canvasPreviewWorkflow: ReturnType<typeof useCanvasPreviewWorkflow>;
   canvasCommands: CanvasCommands;
+  accessResource: (resource: Resource) => void;
 };
 
 function useInjectedSession(
@@ -292,6 +296,23 @@ function useInjectedSession(
     }
   }, [persistence, stableInput]);
 
+  const recordResourceAccess = useCallback(
+    (resource: Resource, scope: ResourceAccessScope) => {
+      const requestKey = roadmapCanvasSessionKey(stableInput);
+      void persistence.recordResourceAccess(resource, scope).then(
+        ({ countsAccess }) => {
+          if (activeKeyRef.current !== requestKey) return;
+          const markAccessed = <Roadmap extends AnyRoadmapDto>(current: Roadmap | null) =>
+            current ? withAccessedResource(current, resource.id, countsAccess) : current;
+          if (scope === 'canvas-preview') setCanvasPreviewRoadmap(markAccessed);
+          else setRoadmap(markAccessed);
+        },
+        () => undefined,
+      );
+    },
+    [persistence, stableInput],
+  );
+
   const readChangeImpact = useCallback<CanvasCommandSession['readChangeImpact']>(
     async (command) => {
       const requestKey = roadmapCanvasSessionKey(stableInput);
@@ -349,6 +370,7 @@ function useInjectedSession(
         closedKey === key ||
         (roadmapKey === key && Boolean(roadmap?.roadmap.closedAt)),
       loadCanvasPreview,
+      recordResourceAccess,
     },
     commandSession,
   };
@@ -394,14 +416,33 @@ export function useRoadmapCanvasSession(
     onEnter: enterCanvasPreview,
     onExit: options.canvasPreview?.onExit ?? noop,
   });
-  const { roadmap: canonicalRoadmap, loadCanvasPreview: reloadPreview } = active;
+  const {
+    roadmap: canonicalRoadmap,
+    loadCanvasPreview: reloadPreview,
+    recordResourceAccess,
+    isClosed,
+    ...state
+  } = active;
   useEffect(() => {
     if (canvasPreviewWorkflow.isActive && canonicalRoadmap) void reloadPreview();
   }, [canonicalRoadmap, reloadPreview, canvasPreviewWorkflow.isActive]);
+  const isCanvasPreview = canvasPreviewWorkflow.isActive;
+  const accessResource = useCallback(
+    (resource: Resource) => {
+      if (isClosed) return;
+      if (isCanvasPreview) recordResourceAccess(resource, 'canvas-preview');
+      else if (input.experience.kind === 'student') recordResourceAccess(resource, 'roadmap');
+    },
+    [input.experience.kind, isCanvasPreview, isClosed, recordResourceAccess],
+  );
 
   return {
-    ...active,
+    ...state,
+    roadmap: canonicalRoadmap,
+    loadCanvasPreview: reloadPreview,
+    isClosed,
     canvasPreviewWorkflow,
     canvasCommands,
+    accessResource,
   };
 }

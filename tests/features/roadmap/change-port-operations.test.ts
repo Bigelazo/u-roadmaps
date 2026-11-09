@@ -312,6 +312,89 @@ test('scheduled releases report committed access transitions and are idempotent'
   expect(recording.facts()).toEqual([]);
 });
 
+test('a due Scheduled unlock whose prerequisite keeps a Teacher block is discarded, keeping the block, silently', async ({
+  course,
+}) => {
+  const target = await addNode(course, 'Colas');
+  await prisma.dependency.create({
+    data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
+  });
+  await prisma.roadmapNode.update({
+    where: { id: course.change.nodeId },
+    data: { isTeacherBlocked: true, teacherUnlockAt: new Date('2026-10-20T00:00:00Z') },
+  });
+  await prisma.roadmapNode.update({
+    where: { id: target.id },
+    data: {
+      isTeacherBlocked: true,
+      teacherUnlockAt: new Date('2026-10-01T00:00:00Z'),
+      teacherUnlockIncludesDependents: true,
+    },
+  });
+  const recording = recordingChangePort();
+
+  expect(
+    await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z')),
+  ).toContainEqual({ identifier: course.identifier, releasedNodeIds: [] });
+
+  expect(recording.facts()).toEqual([]);
+  const stored = await prisma.roadmapNode.findMany({
+    where: { id: { in: [course.change.nodeId, target.id] } },
+    select: {
+      id: true,
+      isTeacherBlocked: true,
+      teacherUnlockAt: true,
+      teacherUnlockIncludesDependents: true,
+    },
+  });
+  expect(Object.fromEntries(stored.map(({ id, ...node }) => [id, node]))).toEqual({
+    [course.change.nodeId]: {
+      isTeacherBlocked: true,
+      teacherUnlockAt: new Date('2026-10-20T00:00:00Z'),
+      teacherUnlockIncludesDependents: false,
+    },
+    [target.id]: {
+      isTeacherBlocked: true,
+      teacherUnlockAt: null,
+      teacherUnlockIncludesDependents: false,
+    },
+  });
+  expect(
+    await releaseScheduledTeacherUnlocks(recording.port, new Date('2026-10-08T12:00:00.000Z')),
+  ).not.toContainEqual(expect.objectContaining({ identifier: course.identifier }));
+});
+
+test('a manual unlock before the release pass discards a due Scheduled unlock its prerequisite held', async ({
+  course,
+}) => {
+  const target = await addNode(course, 'Colas');
+  await prisma.dependency.create({
+    data: { sourceNodeId: course.change.nodeId, targetNodeId: target.id },
+  });
+  await prisma.roadmapNode.update({
+    where: { id: course.change.nodeId },
+    data: { isTeacherBlocked: true },
+  });
+  await prisma.roadmapNode.update({
+    where: { id: target.id },
+    data: { isTeacherBlocked: true, teacherUnlockAt: new Date(Date.now() - 60_000) },
+  });
+  const recording = recordingChangePort();
+  const input = { ...teacher(course), id: course.change.nodeId, operation: 'UNBLOCK' as const };
+  const preview = await previewTeacherBlock(input);
+  expect(preview.nodes.map(({ id }) => id)).toEqual([course.change.nodeId]);
+
+  await changeTeacherBlock({ ...input, previewVersion: preview.version }, recording.port);
+  await releaseScheduledTeacherUnlocks(recording.port, new Date());
+
+  expect(
+    await prisma.roadmapNode.findUniqueOrThrow({
+      where: { id: target.id },
+      select: { isTeacherBlocked: true, teacherUnlockAt: true },
+    }),
+  ).toEqual({ isTeacherBlocked: true, teacherUnlockAt: null });
+});
+
 test('a Scheduled unlock with dependents releases its branch up to a dependent with its own pending schedule', async ({
   course,
 }) => {

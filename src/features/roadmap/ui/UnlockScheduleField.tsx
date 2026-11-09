@@ -1,9 +1,13 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { CalendarClock } from 'lucide-react';
-import { CHILE_TIME_ZONE } from '@/features/roadmap/domain/scheduled-unlock';
+import {
+  CHILE_TIME_ZONE,
+  SCHEDULED_UNLOCK_DEFAULT_TIME,
+} from '@/features/roadmap/domain/scheduled-unlock';
+import type { DateTimePickerProps } from '@/shared/ui/date-time-picker';
 import { Field, FieldContent, FieldDescription, FieldLabel } from '@/shared/ui/field';
 import { Switch } from '@/shared/ui/switch';
 
@@ -12,9 +16,28 @@ const DateTimePicker = dynamic(
   { ssr: false, loading: () => <div className="h-11" aria-hidden="true" /> },
 );
 
-export function scheduledUnlockPrerequisiteHint(blockedPrerequisites: number) {
+export function UnlockDateTimePicker(
+  props: Pick<DateTimePickerProps, 'id' | 'value' | 'onValueChange' | 'disabled'>,
+) {
+  return (
+    <DateTimePicker
+      {...props}
+      timeZone={CHILE_TIME_ZONE}
+      defaultTime={SCHEDULED_UNLOCK_DEFAULT_TIME}
+      dayLabel="Día del desbloqueo"
+      timeLabel="Hora del desbloqueo"
+    />
+  );
+}
+
+export function scheduledUnlockPrerequisiteHint(blockedPrerequisites: number): ReactNode {
   if (blockedPrerequisites === 0)
-    return 'Si a esa hora algún prerrequisito sigue bloqueado, este nodo no se desbloqueará hasta que se desbloqueen sus prerrequisitos.';
+    return (
+      <>
+        Si a esa hora algún prerrequisito sigue bloqueado, este nodo{' '}
+        <strong className="font-semibold text-foreground">no</strong> será desbloqueado.
+      </>
+    );
   return blockedPrerequisites === 1
     ? 'Su prerrequisito bloqueado también se desbloqueará a esa hora.'
     : `Sus ${blockedPrerequisites} prerrequisitos bloqueados también se desbloquearán a esa hora.`;
@@ -33,7 +56,7 @@ export function UnlockScheduleField({
   disabled = false,
 }: {
   draft: UnlockScheduleDraft;
-  hint?: string;
+  hint?: ReactNode;
   disabled?: boolean;
 }) {
   const id = useId();
@@ -71,13 +94,10 @@ export function UnlockScheduleField({
       </Field>
       {draft.isScheduling ? (
         <div className="flex animate-in flex-col gap-2 duration-150 fade-in-0 slide-in-from-top-1">
-          <DateTimePicker
+          <UnlockDateTimePicker
             value={draft.unlockAt}
             onValueChange={draft.onUnlockAtChange}
-            timeZone={CHILE_TIME_ZONE}
             disabled={disabled}
-            dayLabel="Día del desbloqueo"
-            timeLabel="Hora del desbloqueo"
           />
           {hint ? <FieldDescription>{hint}</FieldDescription> : null}
         </div>

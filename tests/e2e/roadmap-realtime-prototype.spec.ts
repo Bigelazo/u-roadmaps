@@ -46,7 +46,8 @@ test('teaching sessions reload live and recover transient projection failures th
     });
     const node = await creator.createNode('Nodo de sincronización', 350);
     const page = await recipient.newPage();
-    await page.goto(`${course.pagePath()}?targetNode=${node.id}`);
+    await page.goto(course.pagePath());
+    await page.locator(`.react-flow__node[data-id="${node.id}"]`).click();
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue(node.title);
     await ok(
       await author.patch(course.apiPath(`/nodes/${node.id}`), {

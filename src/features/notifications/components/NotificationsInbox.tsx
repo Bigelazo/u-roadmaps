@@ -2,12 +2,7 @@
 
 import { useCounts, useNotifications } from './inbox-driver';
 import { OwnInboxRealtime } from './own-realtime';
-import {
-  acknowledgeOwnInbox,
-  prepareOwnInboxOpening,
-  type InboxRecord,
-  type NoticeAcknowledgementOperation,
-} from './inbox-api';
+import { acknowledgeOwnInbox, prepareOwnInboxOpening, type InboxRecord } from './inbox-api';
 import { ChangeSummaryDialog, type ChangeSummaryNodeName } from './ChangeSummaryDialog';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from '@/shared/ui/popover';
@@ -81,14 +76,13 @@ type AcknowledgeInput = {
 };
 const NotificationAcknowledgementContext = createContext<{
   acknowledge: (input: AcknowledgeInput) => Promise<boolean>;
-  retry: (input: AcknowledgeInput) => Promise<boolean>;
-}>({ acknowledge: async () => true, retry: async () => true });
+}>({ acknowledge: async () => true });
 
 export function useNotificationAcknowledgement() {
   return useContext(NotificationAcknowledgementContext);
 }
 
-export function useOpenNotificationInbox() {
+function useOpenNotificationInbox() {
   return useContext(NotificationInboxContext).openInbox;
 }
 
@@ -331,43 +325,20 @@ export function RoadmapEntryNotifications({
       active.current = false;
     };
   }, []);
-  const preparedOperations = useRef(new Set<string>());
-  const shownOperations = useRef(new Set<string>());
-  const ownOperations = useRef(new Map<string, NoticeAcknowledgementOperation | null>());
-  const acknowledgeOwn = useCallback(async (input: AcknowledgeInput, retry: boolean) => {
-    const operation = retry
-      ? ownOperations.current.get(input.roadmapId)
-      : input.entryKey
-        ? { roadmapId: input.roadmapId, operationId: crypto.randomUUID() }
-        : null;
-    ownOperations.current.set(input.roadmapId, operation ?? null);
-    if (!operation) return false;
+  const acknowledge = useCallback(async (input: AcknowledgeInput) => {
+    if (!input.entryKey) return false;
+    const operation = { roadmapId: input.roadmapId, operationId: crypto.randomUUID() };
     try {
-      await prepareOwnInboxOpening({
-        ...operation,
-        retry: preparedOperations.current.has(operation.operationId),
-      });
-      preparedOperations.current.add(operation.operationId);
+      await prepareOwnInboxOpening(operation);
       const result = await acknowledgeOwnInbox(operation);
       if (!active.current) return true;
-      if (result.summary?.groups.length && !shownOperations.current.has(operation.operationId)) {
-        shownOperations.current.add(operation.operationId);
-        setSummary(result.summary);
-      }
+      if (result.summary?.groups.length) setSummary(result.summary);
       return true;
     } catch {
       return false;
     }
   }, []);
-  const acknowledge = useCallback(
-    (input: AcknowledgeInput) => acknowledgeOwn(input, false),
-    [acknowledgeOwn],
-  );
-  const retry = useCallback(
-    (input: AcknowledgeInput) => acknowledgeOwn(input, true),
-    [acknowledgeOwn],
-  );
-  const acknowledgement = useMemo(() => ({ acknowledge, retry }), [acknowledge, retry]);
+  const acknowledgement = useMemo(() => ({ acknowledge }), [acknowledge]);
 
   return (
     <NotificationAcknowledgementContext.Provider value={acknowledgement}>

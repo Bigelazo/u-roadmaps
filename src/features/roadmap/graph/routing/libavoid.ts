@@ -10,11 +10,16 @@ import type {
 import { roadmapNodeSizeForTitle, type Point } from '@/features/roadmap/graph/geometry';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
-import { dependencyRoute, type DependencyRoute, type RoutingObstacle } from './path';
+import {
+  dependencyRoute,
+  fallbackDependencyRoute,
+  type DependencyRoute,
+  type RoutingObstacle,
+} from './path';
 
 export type RoutingDependency = { id: string; source: string; target: string };
 export type RoutingScene = { obstacles: RoutingObstacle[]; dependencies: RoutingDependency[] };
-export type RoutingResult = { routes: ReadonlyMap<string, DependencyRoute>; blocked: number };
+export type RoutingResult = { routes: ReadonlyMap<string, DependencyRoute>; fallbacks: number };
 
 export function roadmapRoutingScene(
   nodes: readonly RoadmapFlowNode[],
@@ -96,6 +101,8 @@ function compareDependencies(a: RoutingDependency, b: RoutingDependency) {
   return a.source.localeCompare(b.source) || a.target.localeCompare(b.target);
 }
 
+const dependencySpacing = 8;
+
 type ShapeEntry = { obstacle: RoutingObstacle; shape: AvoidShape; pins: AvoidPin[] };
 type ConnectorEntry = { dependency: RoutingDependency; connector: AvoidConnector };
 type Port = {
@@ -105,6 +112,8 @@ type Port = {
   side: number;
   point: Point;
   opposite: Point;
+  bend: number;
+  reach: number;
   groupSize: number;
 };
 
@@ -120,7 +129,7 @@ export class DependencyRouter {
     const router = new this.avoid.Router(this.avoid.OrthogonalRouting);
     router.setRoutingParameter(this.avoid.shapeBufferDistance, 12);
     router.setRoutingParameter(this.avoid.segmentPenalty, 24);
-    router.setRoutingParameter(this.avoid.idealNudgingDistance, 8);
+    router.setRoutingParameter(this.avoid.idealNudgingDistance, dependencySpacing);
     router.setRoutingOption(this.avoid.nudgeSharedPathsWithCommonEndPoint, true);
     return router;
   }
@@ -189,14 +198,26 @@ export class DependencyRouter {
     );
     const adjusted = this.routePorts(scene, this.ports(initial));
     const routes = new Map<string, DependencyRoute>();
+    let fallbacks = 0;
     for (const [id, { dependency }] of this.connectors) {
       const points = adjusted.get(id) ?? initial.get(id)!;
       const route =
         dependencyRoute(points, dependency.source, dependency.target, scene.obstacles) ??
         dependencyRoute(initial.get(id)!, dependency.source, dependency.target, scene.obstacles);
-      if (route) routes.set(id, route);
+      if (route) {
+        routes.set(id, route);
+        continue;
+      }
+      fallbacks++;
+      const fallback =
+        dependencyRoute(initial.get(id)!, dependency.source, dependency.target, []) ??
+        fallbackDependencyRoute(
+          this.shapes.get(`${dependency.source}:body`)!.obstacle,
+          this.shapes.get(`${dependency.target}:body`)!.obstacle,
+        );
+      if (fallback) routes.set(id, fallback);
     }
-    return { routes, blocked: scene.dependencies.length - routes.size };
+    return { routes, fallbacks };
   }
 
   private routePorts(scene: RoutingScene, ports: readonly Port[]): Map<string, Point[]> {
@@ -214,10 +235,21 @@ export class DependencyRouter {
         owned.push(shape);
         shapes.set(obstacle.id, shape);
       }
-      ports.forEach((port, index) => {
+      const pinsByPlace = new Map<string, number>();
+      ports.forEach((port) => {
         const { obstacle } = port.shape;
-        const shape = shapes.get(obstacle.id)!;
-        const id = index + 1;
+        const place = `${obstacle.id}:${port.side}:${port.source}:${port.point.x},${port.point.y}`;
+        const pair = endpoints.get(port.entry.dependency.id) ?? {};
+        pair[port.source ? 'source' : 'target'] = port;
+        endpoints.set(port.entry.dependency.id, pair);
+        const shared = pinsByPlace.get(place);
+        if (shared) {
+          pinIds.set(port, shared);
+          return;
+        }
+        const id = pinsByPlace.size + 1;
+        pinsByPlace.set(place, id);
+        pinIds.set(port, id);
         const directions = [
           this.avoid.ConnDirUp,
           this.avoid.ConnDirRight,
@@ -225,7 +257,7 @@ export class DependencyRouter {
           this.avoid.ConnDirLeft,
         ];
         const pin = new this.avoid.ShapeConnectionPin(
-          shape,
+          shapes.get(obstacle.id)!,
           id,
           port.point.x - obstacle.x,
           port.point.y - obstacle.y,
@@ -235,10 +267,6 @@ export class DependencyRouter {
         );
         pin.setExclusive(false);
         owned.push(pin);
-        const pair = endpoints.get(port.entry.dependency.id) ?? {};
-        pinIds.set(port, id);
-        pair[port.source ? 'source' : 'target'] = port;
-        endpoints.set(port.entry.dependency.id, pair);
       });
       for (const dependency of scene.dependencies) {
         const pair = endpoints.get(dependency.id);
@@ -301,8 +329,12 @@ export class DependencyRouter {
         const shape = this.shapes.get(`${nodeId}:body`)!;
         const point = { ...(source ? points[0] : points[points.length - 1]) };
         const neighbor = source ? points[1] : points[points.length - 2];
+        const following = source ? points[2] : points[points.length - 3];
         const side =
           neighbor.y < point.y ? 0 : neighbor.x > point.x ? 1 : neighbor.y > point.y ? 2 : 3;
+        const axis = side % 2 === 1 ? 'y' : 'x';
+        const reach = Math.abs(neighbor.x - point.x) + Math.abs(neighbor.y - point.y);
+        const bend = following ? Math.sign(following[axis] - neighbor[axis]) : 0;
         const port: Port = {
           entry,
           source,
@@ -310,6 +342,8 @@ export class DependencyRouter {
           side,
           point,
           opposite: source ? points[points.length - 1] : points[0],
+          bend,
+          reach,
           groupSize: 1,
         };
         const key = `${nodeId}:${side}:${source ? 'outgoing' : 'incoming'}`;
@@ -327,10 +361,12 @@ export class DependencyRouter {
       const length = verticalSide ? rect.height : rect.width;
       const center = rect[axis] + length / 2;
       const spacing = group[0].source
-        ? Math.min(5, Math.max(0, length - 24) / Math.max(1, group.length - 1))
+        ? Math.min(dependencySpacing, Math.max(0, length - 24) / Math.max(1, group.length - 1))
         : 0;
       group.sort(
         (a, b) =>
+          a.bend - b.bend ||
+          (b.reach - a.reach) * a.bend ||
           a.opposite[axis] - b.opposite[axis] ||
           compareDependencies(a.entry.dependency, b.entry.dependency) ||
           Number(a.source) - Number(b.source),

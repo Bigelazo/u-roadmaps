@@ -108,3 +108,35 @@ test('desktop selection keeps the Node beside its editor and adapts to compact l
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNodeAbovePanel(page, node);
 });
+
+test('the selected Node and editor actions remain visible above the virtual keyboard', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const node = await openLowNode(page);
+  await expectNodeAbovePanel(page, node);
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Object.defineProperty(viewport, 'height', {
+      configurable: true,
+      value: window.innerHeight - 180,
+    });
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  const panel = page.locator('#roadmap-editor-panel');
+  await expect(panel).toHaveCSS('bottom', '180px');
+  await expectNodeAbovePanel(page, node);
+  const save = panel.getByRole('button', { name: 'Guardar cambios', exact: true });
+  await expect(save).toBeInViewport();
+  expect((await save.boundingBox())!.y + (await save.boundingBox())!.height).toBeLessThanOrEqual(
+    664,
+  );
+  await page.screenshot({ path: testInfo.outputPath('selected-node-simulated-keyboard.png') });
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Reflect.deleteProperty(viewport, 'height');
+    viewport.dispatchEvent(new Event('resize'));
+  });
+  await expect(panel).toHaveCSS('bottom', '0px');
+  await expectNodeAbovePanel(page, node);
+});

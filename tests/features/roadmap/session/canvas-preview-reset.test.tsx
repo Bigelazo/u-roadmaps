@@ -45,8 +45,8 @@ vi.mock('@/features/roadmap/graph/RoadmapGraph', () => ({
     overlaySlots,
   }: RoadmapGraphProps) => (
     <>
-      {bottomLeftActions?.(() => ({ x: 480, y: 240 }))}
-      {bottomRightActions?.(() => ({ x: 480, y: 240 }))}
+      {bottomLeftActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
+      {bottomRightActions?.(() => ({ position: { x: 480, y: 240 }, displaced: [] }))}
       {overlaySlots?.topCenter}
       {projection.roadmap.nodes.map((node) => (
         <button key={node.id} type="button" onClick={() => onSelectNode(node.id)}>
@@ -75,8 +75,6 @@ const limitsNode: RoadmapDto['nodes'][number] = {
 };
 
 const teachingRoadmap: RoadmapDto = {
-  course: { code: 'CC1001', name: 'Programación I', department: 'DCC' },
-  courseOffering: { id: 'offering-1', year: 2026, semester: 2 },
   roadmap: { id: 'roadmap-1' },
   nodeTypes: [
     { id: 'content', name: 'Contenido', icon: 'BookOpen', color: '#024AD8', isPredefined: true },
@@ -119,6 +117,8 @@ test.each([false, true])(
           id: 'derivatives-guide',
           title: 'Guía exclusiva de derivadas',
           type: 'LINK' as const,
+          fileContentType: null,
+          fileSize: null,
           url: 'https://example.edu/derivadas',
         },
       ],
@@ -155,10 +155,15 @@ test.each([false, true])(
     expect(within(detail).getByText(dependent.description)).toBeTruthy();
     expect(
       within(detail)
-        .getByRole('link', { name: 'Guía exclusiva de derivadas' })
+        .getByRole('link', { name: 'Abrir enlace Guía exclusiva de derivadas' })
         .getAttribute('href'),
     ).toBe('https://example.edu/derivadas');
     if (completeDependent) {
+      const guide = within(detail).getByRole('link', {
+        name: 'Abrir enlace Guía exclusiva de derivadas',
+      });
+      guide.addEventListener('click', (event) => event.preventDefault());
+      await user.click(guide);
       await user.click(within(detail).getByRole('button', { name: 'Completar' }));
     }
     await waitFor(async () =>
@@ -178,8 +183,15 @@ test.each([false, true])(
     expect(reset.nodes[1]).toMatchObject({ access: { status: 'BLOCKED' } });
     expect(reset.nodes[1]).not.toHaveProperty('description');
     expect(reset.nodes[1]).not.toHaveProperty('resources');
+    await persistence.execute({ kind: 'complete-canvas-preview-node', nodeId: limitsNode.id });
+    const reopened = await persistence.loadCanvasPreview();
+    expect(reopened.nodes[1]).toMatchObject({
+      resources: [expect.objectContaining({ isReviewed: false })],
+    });
     expect(screen.queryByText(dependent.description)).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Guía exclusiva de derivadas' })).toBeNull();
+    expect(
+      screen.queryByRole('link', { name: 'Abrir enlace Guía exclusiva de derivadas' }),
+    ).toBeNull();
     expect(screen.queryByLabelText('Derivadas')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Ir al editor' }));
@@ -191,7 +203,7 @@ test.each([false, true])(
     ).toBe(dependent.description);
     expect(
       within(editor)
-        .getByRole('link', { name: 'Abrir recurso Guía exclusiva de derivadas' })
+        .getByRole('link', { name: 'Abrir enlace Guía exclusiva de derivadas' })
         .getAttribute('href'),
     ).toBe('https://example.edu/derivadas');
     expect((await persistence.load()).nodes).toEqual([limitsNode, dependent]);
@@ -283,7 +295,7 @@ test('persists successive Node titles and Link resources in one mounted canvas s
       );
       expect(
         within(editor)
-          .getByRole('link', { name: `Abrir recurso ${resourceTitle}` })
+          .getByRole('link', { name: `Abrir enlace ${resourceTitle}` })
           .getAttribute('href'),
       ).toBe(url);
       const node = (await base.load()).nodes[0];
