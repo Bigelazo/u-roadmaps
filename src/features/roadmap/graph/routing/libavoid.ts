@@ -21,10 +21,12 @@ export type RoutingDependency = { id: string; source: string; target: string };
 export type RoutingScene = { obstacles: RoutingObstacle[]; dependencies: RoutingDependency[] };
 export type RoutingResult = { routes: ReadonlyMap<string, DependencyRoute>; fallbacks: number };
 
+const statusBadgeSize = 44;
+const resourcesBadgeWidth = 52;
+
 export function roadmapRoutingScene(
   nodes: readonly RoadmapFlowNode[],
   edges: readonly RoadmapFlowEdge[],
-  { coarsePointer = false }: { coarsePointer?: boolean } = {},
 ): RoutingScene {
   const obstacles: RoutingObstacle[] = [];
   const visible = new Set<string>();
@@ -39,25 +41,19 @@ export function roadmapRoutingScene(
       body = false,
     ) => obstacles.push({ id: `${node.id}:${suffix}`, nodeId: node.id, body, ...rect });
     add('body', { x, y, width, height }, true);
-    const actionSize = node.data.canManageActions && coarsePointer ? 44 : 32;
     add('status', {
-      x: x + width - actionSize + 10,
-      y: y + height - actionSize + 10,
-      width: actionSize,
-      height: actionSize,
+      x: x + width - statusBadgeSize + 10,
+      y: y + height - statusBadgeSize + 10,
+      width: statusBadgeSize,
+      height: statusBadgeSize,
     });
-    if (node.data.fileCount || node.data.linkCount) {
-      const resourceWidth = node.data.fileCount && node.data.linkCount ? 52 : 28;
-      add('resources', {
-        x: x + width - resourceWidth + 10,
-        y: y - 10,
-        width: resourceWidth,
-        height: 26,
-      });
-    }
-    if (node.data.notificationsEnabled && node.data.status !== 'locked') {
-      add('notices', { x: x - 10, y: y - 10, width: 40, height: 24 });
-    }
+    add('resources', {
+      x: x + width - resourcesBadgeWidth + 10,
+      y: y - 10,
+      width: resourcesBadgeWidth,
+      height: 26,
+    });
+    add('notices', { x: x - 10, y: y - 10, width: 40, height: 24 });
   }
   return {
     obstacles,

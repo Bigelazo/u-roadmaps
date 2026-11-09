@@ -176,7 +176,7 @@ test('updates sizes, retargets and removes dependencies, and releases a scene id
   });
 });
 
-test('includes persistent ornaments, ignores hidden nodes and keeps selection out of routing geometry', () => {
+test('reserves the same ornament footprints for every viewer and ignores hidden nodes', () => {
   const node: RoadmapFlowNode = {
     id: 'a',
     type: 'roadmap',
@@ -201,20 +201,29 @@ test('includes persistent ornaments, ignores hidden nodes and keeps selection ou
     'a:resources',
     'a:notices',
   ]);
-  const twoResourceGroups = roadmapRoutingScene(
-    [{ ...node, data: { ...node.data, linkCount: 1 } }],
+  const studentView = roadmapRoutingScene(
+    [
+      {
+        ...node,
+        data: {
+          ...node.data,
+          status: 'locked',
+          fileCount: 0,
+          linkCount: 0,
+          notificationsEnabled: false,
+          canManageActions: false,
+        },
+      },
+    ],
     [],
   );
-  expect(twoResourceGroups.obstacles.find((o) => o.id === 'a:resources')!.width).toBe(52);
-  expect(input.obstacles.find((o) => o.id === 'a:status')!.width).toBe(32);
-  const coarse = roadmapRoutingScene([node], [], { coarsePointer: true });
-  expect(coarse.obstacles.find((o) => o.id === 'a:status')!.width).toBe(44);
+  expect(studentView).toEqual(roadmapRoutingScene([node], []));
   expect(
     roadmapRoutingScene(
       [{ ...node, selected: true, data: { ...node.data, isActionMenuOpen: true } }],
       [],
     ),
-  ).toEqual(input);
+  ).toEqual(roadmapRoutingScene([node], []));
   withRouter((router) => {
     const input = roadmapRoutingScene(
       [node, { ...node, id: 'b', position: { x: 500, y: 0 } }],

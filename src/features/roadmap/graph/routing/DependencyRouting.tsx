@@ -12,7 +12,6 @@ import {
 import type { AvoidModule } from 'libavoid-js';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
-import { useCoarsePointer } from '@/features/roadmap/ui/compact-canvas-layout';
 import { Button } from '@/shared/ui/button';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { cn } from 'cn';
@@ -81,7 +80,6 @@ export function DependencyRouting({
   children: ReactNode;
 }) {
   useState(prepareRoutingEngine);
-  const coarsePointer = useCoarsePointer();
   const [module, setModule] = useState<AvoidModule | null>(null);
   const [slow, setSlow] = useState(false);
   const [error, setError] = useState(false);
@@ -118,10 +116,7 @@ export function DependencyRouting({
   const status: RoutingEngineStatus = module ? 'routed' : slow || error ? 'unavailable' : 'waiting';
   return (
     <RoutingEngineStatusContext value={status}>
-      <RoutedCanvas
-        module={module}
-        sceneKey={JSON.stringify(roadmapRoutingScene(nodes, edges, { coarsePointer }))}
-      >
+      <RoutedCanvas module={module} sceneKey={JSON.stringify(roadmapRoutingScene(nodes, edges))}>
         {children}
         {module || !(slow || error) ? null : (
           <div
