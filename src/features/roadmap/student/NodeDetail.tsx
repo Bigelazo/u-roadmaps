@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
-import { Download, Eye, FileText, Pencil, X } from 'lucide-react';
+import { Eye, Pencil, X } from 'lucide-react';
 import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
   isStudentBlockedNode,
@@ -9,8 +9,6 @@ import {
   type StudentNodeStatus,
 } from '@/features/roadmap/student/node-status';
 import { Button } from '@/shared/ui/button';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/shared/ui/empty';
-import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/shared/ui/item';
 import { CompleteNodeButton } from '@/features/roadmap/student/CompleteNodeButton';
 import { ResourceMetadata } from '@/features/roadmap/ui/ResourceMetadata';
 import { Separator } from '@/shared/ui/separator';
@@ -121,61 +119,68 @@ function StudentNodeDetailContent({
       />
       {!blocked ? (
         <DetailBody isSidebar={isSidebar}>
-          <h3 className="flex items-center gap-2 font-semibold">
-            <FileText size={18} /> Descripción
-          </h3>
-          <div className="mt-5">
-            <NodeDescription description={node.description} />
-          </div>
-          <Separator className="my-6" />
-          <h3 className="flex items-center gap-2 font-semibold">
-            <Download size={18} /> Recursos
-          </h3>
-          <div className="mt-6">
-            {node.resources.length ? (
-              <ItemGroup>
-                {node.resources.map((resource) => (
-                  <Item
-                    key={resource.id}
-                    variant="outline"
-                    render={
-                      <a
-                        href={resource.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={resourceActionLabel(resource)}
-                        onClick={() => accessResource(resource)}
-                        onAuxClick={(event: MouseEvent) => {
-                          if (event.button === 1) accessResource(resource);
-                        }}
-                      />
-                    }
-                  >
-                    <ItemMedia variant="icon" className="text-primary">
-                      <ResourceIcon resource={resource} />
-                    </ItemMedia>
-                    <ItemContent>
-                      <ItemTitle>{resource.title}</ItemTitle>
-                      <ResourceMetadata resource={resource} isReviewed={isReviewed(resource)} />
-                    </ItemContent>
-                    <ItemActions className="text-primary">
-                      <ResourceActionIcon type={resource.type} size={18} />
-                    </ItemActions>
-                  </Item>
-                ))}
-              </ItemGroup>
-            ) : (
-              <Empty className="py-8">
-                <EmptyHeader>
-                  <EmptyTitle>No hay recursos adjuntos</EmptyTitle>
-                  <EmptyDescription>No hay recursos adjuntos para este nodo.</EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-          </div>
+          {node.resources.length ? (
+            <>
+              <StudentResourceList
+                resources={node.resources}
+                isReviewed={isReviewed}
+                onAccess={accessResource}
+              />
+              <Separator className="my-5" />
+            </>
+          ) : null}
+          <NodeDescription description={node.description} />
         </DetailBody>
       ) : null}
     </>
+  );
+}
+
+function StudentResourceList({
+  resources,
+  isReviewed,
+  onAccess,
+}: {
+  resources: Resource[];
+  isReviewed: (resource: Resource) => boolean;
+  onAccess: (resource: Resource) => void;
+}) {
+  return (
+    <section aria-labelledby="student-node-resources-heading">
+      <h3 id="student-node-resources-heading" className="mb-1.5 text-sm font-semibold">
+        Recursos
+      </h3>
+      <ul className="-mx-2 flex flex-col">
+        {resources.map((resource) => (
+          <li key={resource.id}>
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={resourceActionLabel(resource)}
+              onClick={() => onAccess(resource)}
+              onAuxClick={(event: MouseEvent) => {
+                if (event.button === 1) onAccess(resource);
+              }}
+              className="group/resource flex min-h-11 items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              <span className="shrink-0 text-primary">
+                <ResourceIcon resource={resource} size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{resource.title}</span>
+                <ResourceMetadata resource={resource} isReviewed={isReviewed(resource)} />
+              </span>
+              <ResourceActionIcon
+                type={resource.type}
+                size={16}
+                className="shrink-0 text-muted-foreground group-hover/resource:text-primary"
+              />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

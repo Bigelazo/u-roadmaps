@@ -305,3 +305,30 @@ test('uses the selected-node header and keeps completion next to the close actio
   const panel = screen.getByLabelText(node.title);
   expect(panel.className).toContain('shadow-(--shadow-roadmap-panel)');
 });
+
+test('lists Resources before the description, which shows without a heading', () => {
+  renderDetail({ node: nodeWithResources });
+
+  expect(screen.queryByRole('heading', { name: 'Descripción' })).toBeNull();
+  const resources = screen.getByRole('heading', { name: 'Recursos' });
+  const description = screen.getByText(node.description!);
+  expect(
+    resources.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(screen.getByRole('separator')).toBeTruthy();
+});
+
+test('a Node without Resources shows only its description', () => {
+  renderDetail();
+
+  expect(screen.queryByRole('heading', { name: 'Recursos' })).toBeNull();
+  expect(screen.queryByText(/No hay recursos adjuntos/)).toBeNull();
+  expect(screen.queryByRole('separator')).toBeNull();
+  expect(screen.getByText(node.description!)).toBeTruthy();
+});
+
+test('Resource rows keep a 44px touch target', () => {
+  renderDetail({ node: nodeWithResources });
+
+  for (const link of screen.getAllByRole('link')) expect(link.className).toContain('min-h-11');
+});
