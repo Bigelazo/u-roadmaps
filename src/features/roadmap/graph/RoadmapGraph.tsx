@@ -1051,6 +1051,9 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
       keyboardMovePendingRef.current = true;
   };
 
+  const settleDraggedNodes = (dragged: readonly RoadmapFlowNode[]) =>
+    settleMovedNodes(immutableNodePositions(dragged));
+
   const handleNodesChange = (changes: NodeChange<RoadmapFlowNode>[]) => {
     const movedWithKeyboard = keyboardMovePendingRef.current;
     keyboardMovePendingRef.current = false;
@@ -1162,14 +1165,10 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
                   canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
                 }
                 onNodeDragStop={
-                  canInteract
-                    ? (_event, _node, dragged) => settleMovedNodes(immutableNodePositions(dragged))
-                    : undefined
+                  canInteract ? (_event, _node, dragged) => settleDraggedNodes(dragged) : undefined
                 }
                 onSelectionDragStop={
-                  canInteract
-                    ? (_event, dragged) => settleMovedNodes(immutableNodePositions(dragged))
-                    : undefined
+                  canInteract ? (_event, dragged) => settleDraggedNodes(dragged) : undefined
                 }
                 onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
                 onConnectStart={canInteract ? connection.onConnectStart : undefined}

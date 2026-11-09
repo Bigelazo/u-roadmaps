@@ -210,6 +210,11 @@ vi.mock('@xyflow/react', () => ({
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight')
               onNodesChange([{ id: 'node-1', type: 'position', position: { x: 27, y: 13 } }]);
+            if (event.key === 'ArrowDown')
+              onNodesChange([
+                { id: 'node-1', type: 'position', position: { x: 0, y: 20 } },
+                { id: 'node-3', type: 'position', position: { x: 300, y: 120 } },
+              ]);
           }}
         >
           Nodo con teclado
@@ -759,26 +764,44 @@ test.each([
   });
 });
 
-test('persists a keyboard move of a Node with the Nodes it pushes two cells away in one move', async () => {
-  const user = userEvent.setup();
-  const onEditingIntent = vi.fn();
-  const crowded = structuredClone(roadmap);
-  crowded.nodes[1] = { ...crowded.nodes[1], positionX: 60, positionY: 20 };
-  renderGraph({ roadmap: crowded, editing: { onEditingIntent }, selectedNodeId: 'node-1' });
-
-  screen.getByTestId('keyboard-node').focus();
-  await user.keyboard('{ArrowRight}');
-
-  expect(onEditingIntent).toHaveBeenCalledExactlyOnceWith({
-    kind: 'move-nodes',
-    positions: [
-      { nodeId: 'node-1', position: { x: 20, y: 20 } },
-      { nodeId: 'node-2', position: { x: 60, y: 140 } },
+test.each([
+  {
+    keys: 'a single Node',
+    key: '{ArrowRight}',
+    moved: [{ nodeId: 'node-1', position: { x: 20, y: 20 } }],
+    pushed: { nodeId: 'node-2', position: { x: 60, y: 140 } },
+  },
+  {
+    keys: 'a selection of Nodes',
+    key: '{ArrowDown}',
+    moved: [
+      { nodeId: 'node-1', position: { x: 0, y: 20 } },
+      { nodeId: 'node-3', position: { x: 300, y: 120 } },
     ],
-  });
-  expect(screen.getByTestId('node-position-node-1').textContent).toBe('20,20');
-  expect(screen.getByTestId('node-position-node-2').textContent).toBe('60,140');
-});
+    pushed: { nodeId: 'node-2', position: { x: 60, y: 140 } },
+  },
+])(
+  'saves the keyboard move of $keys together with the Node it pushes in one move-nodes intent',
+  async ({ key, moved, pushed }) => {
+    const user = userEvent.setup();
+    const onEditingIntent = vi.fn();
+    const crowded = structuredClone(roadmap);
+    crowded.nodes[1] = { ...crowded.nodes[1], positionX: 60, positionY: 20 };
+    crowded.nodes.push({ ...crowded.nodes[1], id: 'node-3', title: 'Integrales', positionX: 900 });
+    renderGraph({ roadmap: crowded, editing: { onEditingIntent }, selectedNodeId: 'node-1' });
+
+    screen.getByTestId('keyboard-node').focus();
+    await user.keyboard(key);
+
+    expect(onEditingIntent).toHaveBeenCalledExactlyOnceWith({
+      kind: 'move-nodes',
+      positions: [...moved, pushed],
+    });
+    expect(screen.getByTestId(`node-position-${pushed.nodeId}`).textContent).toBe(
+      `${pushed.position.x},${pushed.position.y}`,
+    );
+  },
+);
 
 test.each([
   {
