@@ -120,6 +120,7 @@ test.each([false, true])(
           title: 'Guía exclusiva de derivadas',
           type: 'LINK' as const,
           fileContentType: null,
+          fileSize: null,
           url: 'https://example.edu/derivadas',
         },
       ],
@@ -160,6 +161,11 @@ test.each([false, true])(
         .getAttribute('href'),
     ).toBe('https://example.edu/derivadas');
     if (completeDependent) {
+      const guide = within(detail).getByRole('link', {
+        name: 'Abrir enlace Guía exclusiva de derivadas',
+      });
+      guide.addEventListener('click', (event) => event.preventDefault());
+      await user.click(guide);
       await user.click(within(detail).getByRole('button', { name: 'Completar' }));
     }
     await waitFor(async () =>
@@ -179,6 +185,11 @@ test.each([false, true])(
     expect(reset.nodes[1]).toMatchObject({ access: { status: 'BLOCKED' } });
     expect(reset.nodes[1]).not.toHaveProperty('description');
     expect(reset.nodes[1]).not.toHaveProperty('resources');
+    await persistence.execute({ kind: 'complete-canvas-preview-node', nodeId: limitsNode.id });
+    const reopened = await persistence.loadCanvasPreview();
+    expect(reopened.nodes[1]).toMatchObject({
+      resources: [expect.objectContaining({ isReviewed: false })],
+    });
     expect(screen.queryByText(dependent.description)).toBeNull();
     expect(
       screen.queryByRole('link', { name: 'Abrir enlace Guía exclusiva de derivadas' }),

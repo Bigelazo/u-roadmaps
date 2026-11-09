@@ -8,6 +8,7 @@ import {
   ResourceIcon,
   resourceActionLabel,
 } from '@/features/roadmap/ui/ResourceIcon';
+import { ResourceMetadata } from '@/features/roadmap/ui/ResourceMetadata';
 import { dividedItemClassName } from './primitives';
 
 type Props = {
@@ -34,6 +35,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
           </ItemMedia>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium">{item.title}</span>
+            <ResourceMetadata resource={item} className="mt-0.5" />
           </span>
           <a
             href={item.url}

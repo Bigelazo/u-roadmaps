@@ -1,17 +1,8 @@
 'use client';
 
-import { type CSSProperties, type ReactNode } from 'react';
-import {
-  Check,
-  CircleCheckBig,
-  Download,
-  Eye,
-  FileText,
-  LockKeyhole,
-  Pencil,
-  X,
-} from 'lucide-react';
-import type { NodeType, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
+import { useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
+import { Download, Eye, FileText, Pencil, X } from 'lucide-react';
+import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
   isStudentBlockedNode,
   studentNodeBlockMessages,
@@ -20,6 +11,8 @@ import {
 import { Button } from '@/shared/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/shared/ui/empty';
 import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/shared/ui/item';
+import { CompleteNodeButton } from '@/features/roadmap/student/CompleteNodeButton';
+import { ResourceMetadata } from '@/features/roadmap/ui/ResourceMetadata';
 import { Separator } from '@/shared/ui/separator';
 import { Sheet, SheetContent } from '@/shared/ui/sheet';
 import { SidebarContent, SidebarProvider } from '@/shared/ui/sidebar';
@@ -39,6 +32,7 @@ type ContentProps = {
   status: StudentNodeStatus;
   onClose: () => void;
   onComplete: (node: RoadmapNode | StudentRoadmapNode) => void;
+  onResourceAccess?: (resource: Resource) => void;
   isReadOnly?: boolean;
   isModal?: boolean;
   isSidebar?: boolean;
@@ -51,6 +45,7 @@ function StudentNodeDetailContent({
   status,
   onClose,
   onComplete,
+  onResourceAccess,
   isReadOnly = false,
   isModal = false,
   isSidebar = false,
@@ -58,6 +53,17 @@ function StudentNodeDetailContent({
   nodeType,
 }: ContentProps) {
   const blocked = isStudentBlockedNode(node);
+  const [previewReviewedIds, setPreviewReviewedIds] = useState<ReadonlySet<string>>(new Set());
+  const resources = blocked ? [] : node.resources;
+  const isReviewed = (resource: Resource) =>
+    isTeacherPreview ? previewReviewedIds.has(resource.id) : Boolean(resource.isReviewed);
+  const accessResource = (resource: Resource) => {
+    if (isTeacherPreview) setPreviewReviewedIds((ids) => new Set(ids).add(resource.id));
+    else onResourceAccess?.(resource);
+  };
+  const accessOnMiddleClick = (resource: Resource) => (event: MouseEvent) => {
+    if (event.button === 1) accessResource(resource);
+  };
   return (
     <>
       {isTeacherPreview ? (
@@ -87,25 +93,12 @@ function StudentNodeDetailContent({
         isSidebar={isSidebar}
         actions={
           <>
-            {status === 'completed' ? (
-              <Button disabled variant="outline">
-                <Check data-icon="inline-start" />
-                Completado
-              </Button>
-            ) : (
-              <Button
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
-                disabled={status === 'locked' || isReadOnly}
-                onClick={() => onComplete(node)}
-              >
-                {status === 'locked' ? (
-                  <LockKeyhole data-icon="inline-start" />
-                ) : (
-                  <CircleCheckBig data-icon="inline-start" />
-                )}
-                {status === 'locked' ? 'Completa prerrequisitos' : 'Completar'}
-              </Button>
-            )}
+            <CompleteNodeButton
+              status={status}
+              isReadOnly={isReadOnly}
+              hasUnreviewedResources={resources.some((resource) => !isReviewed(resource))}
+              onComplete={() => onComplete(node)}
+            />
             {!blocked && !isModal ? (
               <NodeFullscreenDialog
                 key={node.id}
@@ -153,6 +146,8 @@ function StudentNodeDetailContent({
                         target="_blank"
                         rel="noreferrer"
                         aria-label={resourceActionLabel(resource)}
+                        onClick={() => accessResource(resource)}
+                        onAuxClick={accessOnMiddleClick(resource)}
                       />
                     }
                   >
@@ -161,6 +156,7 @@ function StudentNodeDetailContent({
                     </ItemMedia>
                     <ItemContent>
                       <ItemTitle>{resource.title}</ItemTitle>
+                      <ResourceMetadata resource={resource} isReviewed={isReviewed(resource)} />
                     </ItemContent>
                     <ItemActions className="text-primary">
                       <ResourceActionIcon type={resource.type} size={18} />
@@ -204,6 +200,7 @@ export function StudentNodeDetail({
   status,
   onClose,
   onComplete,
+  onResourceAccess,
   isReadOnly,
   isTeacherPreview,
   nodeTypes,
@@ -217,6 +214,7 @@ export function StudentNodeDetail({
     status,
     onClose,
     onComplete,
+    onResourceAccess,
     isReadOnly,
     isTeacherPreview,
     nodeType: nodeTypes?.find((type) => type.id === node.nodeTypeId),
@@ -231,7 +229,7 @@ export function StudentNodeDetail({
           aria-modal="true"
           className="max-h-[85dvh] gap-0 overflow-hidden rounded-t-xl bg-card pb-[env(safe-area-inset-bottom)]"
         >
-          <StudentNodeDetailContent {...contentProps} isModal />
+          <StudentNodeDetailContent key={node.id} {...contentProps} isModal />
         </SheetContent>
       </Sheet>
     );
@@ -249,7 +247,7 @@ export function StudentNodeDetail({
         panelWidth={panelWidth}
         onPanelWidthChange={onPanelWidthChange}
       >
-        <StudentNodeDetailContent {...contentProps} isSidebar />
+        <StudentNodeDetailContent key={node.id} {...contentProps} isSidebar />
       </RoadmapSidePanel>
     </SidebarProvider>
   );

@@ -194,6 +194,7 @@ function useRoadmapCanvasController({ input }: Props) {
     canvasCommands,
     canvasPreviewRoadmap,
     canvasPreviewWorkflow,
+    accessResource,
     isClosed,
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
@@ -425,6 +426,7 @@ function useRoadmapCanvasController({ input }: Props) {
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
+    accessResource,
     performEditorEffect,
     canvasMode,
     isHistoricalRoadmap,
@@ -708,6 +710,7 @@ function RoadmapStudentPanel({
     canvasPreviewWorkflow,
     dispatchCanvas,
     canvasCommands,
+    accessResource,
     isHistoricalRoadmap,
     editorPanel,
     studentPanel,
@@ -735,6 +738,7 @@ function RoadmapStudentPanel({
             if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
             else void canvasCommands.request({ kind: 'complete-node', nodeId: node.id });
           }}
+          onResourceAccess={accessResource}
           isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
           isTeacherPreview={Boolean(teacherPreviewNode)}
           nodeTypes={roadmap.nodeTypes}
