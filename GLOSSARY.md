@@ -268,7 +268,7 @@ The number of Resource accesses a Resource has received, counting every repetiti
 _Avoid_: Downloads, views, popularity
 
 **Resource review (Revisión de recurso)**:
-The fact that a student has accessed a Resource's current material at least once. Replacing a File resource's file withdraws every student's Resource review of it, because the material is new; a Roadmap copy starts without any.
+The fact that a student has accessed a Resource's current material at least once. A student whose Completion of a node predates the requirement holds one for every Resource the node had then, without it counting as a Resource access. Replacing a File resource's file withdraws every student's Resource review of it, because the material is new; a Roadmap copy starts without any.
 _Avoid_: Read receipt, seen, Resource completion
 
 **Roadmap tutorial (Tutorial del roadmap)**:
