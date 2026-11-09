@@ -61,9 +61,7 @@ function StudentNodeDetailContent({
     if (isTeacherPreview) setPreviewReviewedIds((ids) => new Set(ids).add(resource.id));
     else onResourceAccess?.(resource);
   };
-  const accessOnMiddleClick = (resource: Resource) => (event: MouseEvent) => {
-    if (event.button === 1) accessResource(resource);
-  };
+
   return (
     <>
       {isTeacherPreview ? (
@@ -147,7 +145,9 @@ function StudentNodeDetailContent({
                         rel="noreferrer"
                         aria-label={resourceActionLabel(resource)}
                         onClick={() => accessResource(resource)}
-                        onAuxClick={accessOnMiddleClick(resource)}
+                        onAuxClick={(event: MouseEvent) => {
+                          if (event.button === 1) accessResource(resource);
+                        }}
                       />
                     }
                   >

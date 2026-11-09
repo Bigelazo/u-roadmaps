@@ -4,6 +4,7 @@ import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import {
   participantNodeAccess,
   studentRoadmapNodes,
+  type StudentProgress,
 } from '@/features/roadmap/domain/participant-view';
 import { nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import { Prisma } from '@/shared/server/db';
@@ -189,7 +190,7 @@ function projectedResources(
 export function projectStudentRoadmap(
   data: RoadmapProjectionData,
   identifier: CourseOfferingIdentifier,
-  progress: { completedNodeIds: ReadonlySet<string>; reviewedResourceIds: ReadonlySet<string> },
+  progress: StudentProgress,
 ) {
   return {
     ...commonRoadmapProjection(data),

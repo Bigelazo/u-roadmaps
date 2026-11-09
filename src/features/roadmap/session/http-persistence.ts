@@ -65,19 +65,18 @@ export function createHttpRoadmapCanvasSessionPersistence(
     return response;
   }
 
-  function sendWithoutWaiting(path: string) {
-    void fetch(roadmapUrl(identifier, path), { method: 'POST', keepalive: true }).catch(
-      () => undefined,
-    );
+  async function sendBesideNavigation(path: string) {
+    const response = await fetch(roadmapUrl(identifier, path), { method: 'POST', keepalive: true });
+    if (!response.ok) throw new Error('No se pudo registrar el acceso al recurso.');
   }
 
   return {
-    recordResourceAccess(resource, scope) {
+    async recordResourceAccess(resource, scope) {
       if (scope === 'canvas-preview') {
-        sendWithoutWaiting(`/simulation/resources/${resource.id}/review`);
+        await sendBesideNavigation(`/simulation/resources/${resource.id}/review`);
         return { countsAccess: false };
       }
-      if (resource.type === 'LINK') sendWithoutWaiting(`/resources/${resource.id}/access`);
+      if (resource.type === 'LINK') await sendBesideNavigation(`/resources/${resource.id}/access`);
       return { countsAccess: true };
     },
 

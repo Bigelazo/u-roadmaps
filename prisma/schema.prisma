@@ -158,13 +158,12 @@ model Resource {
 }
 
 model ResourceAccess {
-  userId         String   @db.Uuid
-  resourceId     String   @db.Uuid
-  accessCount    Int
-  isReviewed     Boolean
-  lastAccessedAt DateTime @default(now()) @db.Timestamptz(3)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  resource       Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  userId      String   @db.Uuid
+  resourceId  String   @db.Uuid
+  accessCount Int
+  isReviewed  Boolean
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource    Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
   @@id([userId, resourceId])
   @@index([resourceId])

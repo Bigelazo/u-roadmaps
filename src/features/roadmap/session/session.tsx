@@ -298,17 +298,19 @@ function useInjectedSession(
 
   const recordResourceAccess = useCallback(
     (resource: Resource, scope: ResourceAccessScope) => {
-      const { countsAccess } = persistence.recordResourceAccess(resource, scope);
-      if (scope === 'canvas-preview')
-        setCanvasPreviewRoadmap((current) =>
-          current ? withAccessedResource(current, resource.id, countsAccess) : current,
-        );
-      else
-        setRoadmap((current) =>
-          current ? withAccessedResource(current, resource.id, countsAccess) : current,
-        );
+      const requestKey = roadmapCanvasSessionKey(stableInput);
+      void persistence.recordResourceAccess(resource, scope).then(
+        ({ countsAccess }) => {
+          if (activeKeyRef.current !== requestKey) return;
+          const markAccessed = <Roadmap extends AnyRoadmapDto>(current: Roadmap | null) =>
+            current ? withAccessedResource(current, resource.id, countsAccess) : current;
+          if (scope === 'canvas-preview') setCanvasPreviewRoadmap(markAccessed);
+          else setRoadmap(markAccessed);
+        },
+        () => undefined,
+      );
     },
-    [persistence],
+    [persistence, stableInput],
   );
 
   const readChangeImpact = useCallback<CanvasCommandSession['readChangeImpact']>(

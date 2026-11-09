@@ -239,7 +239,7 @@ export function createInMemoryRoadmapSessionPersistence(
   };
 
   return {
-    recordResourceAccess(resource, scope) {
+    async recordResourceAccess(resource, scope) {
       const progress =
         scope === 'canvas-preview' ? practice.canvasPreviewProgress : studentProgress;
       progress?.reviewedResourceIds.add(resource.id);

@@ -514,7 +514,9 @@ test('a practice student completes a Node only after reviewing its Resources, wi
   await expect(
     persistence.execute({ kind: 'complete-node', nodeId: independent.id }),
   ).rejects.toThrow('Revisa todos los recursos de este nodo antes de completarlo.');
-  expect(persistence.recordResourceAccess(guide, 'roadmap')).toEqual({ countsAccess: false });
+  await expect(persistence.recordResourceAccess(guide, 'roadmap')).resolves.toEqual({
+    countsAccess: false,
+  });
   await persistence.execute({ kind: 'complete-node', nodeId: independent.id });
 
   expect((await persistence.load()).nodes).toEqual([

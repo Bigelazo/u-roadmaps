@@ -60,17 +60,20 @@ type StudentRoadmapSourceNode = ParticipantNode & {
   resources: Resource[];
 };
 
+export type StudentProgress = {
+  completedNodeIds: ReadonlySet<string>;
+  reviewedResourceIds: ReadonlySet<string>;
+};
+
 export function studentRoadmapNodes<Dependency extends RoadmapGraphDependency>({
   nodes,
   dependencies,
   completedNodeIds,
   reviewedResourceIds,
   isClosed,
-}: {
+}: StudentProgress & {
   nodes: readonly StudentRoadmapSourceNode[];
   dependencies: readonly Dependency[];
-  completedNodeIds: ReadonlySet<string>;
-  reviewedResourceIds: ReadonlySet<string>;
   isClosed: boolean;
 }) {
   const view = participantNodeAccess({

@@ -7,7 +7,6 @@ CREATE TABLE "ResourceAccess" (
     "resourceId" UUID NOT NULL,
     "accessCount" INTEGER NOT NULL,
     "isReviewed" BOOLEAN NOT NULL,
-    "lastAccessedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ResourceAccess_pkey" PRIMARY KEY ("userId","resourceId")
 );

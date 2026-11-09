@@ -45,7 +45,7 @@ const resourceAccess = roadmapCommand({
       roadmapId: roadmap.id,
       nodeId: resource.roadmapNodeId,
     });
-    const reviewsCurrentMaterial = resource.fileKey === input.fileKey;
+    const reviewsCurrentMaterial = input.type === 'LINK' || resource.fileKey === input.fileKey;
     await tx.resourceAccess.upsert({
       where: { userId_resourceId: { userId: actor.userId, resourceId: resource.id } },
       create: {
@@ -56,7 +56,6 @@ const resourceAccess = roadmapCommand({
       },
       update: {
         accessCount: { increment: 1 },
-        lastAccessedAt: new Date(),
         ...(reviewsCurrentMaterial ? { isReviewed: true } : {}),
       },
     });

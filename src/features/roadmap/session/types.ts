@@ -45,7 +45,7 @@ export type RoadmapCanvasSessionPersistence = {
   recordResourceAccess(
     resource: Pick<Resource, 'id' | 'type'>,
     scope: ResourceAccessScope,
-  ): { readonly countsAccess: boolean };
+  ): Promise<{ readonly countsAccess: boolean }>;
   readChangeImpact<Command extends ChangeImpactCommand>(
     command: Command,
   ): Promise<ReadChangeImpactOf<Command['kind']>>;
