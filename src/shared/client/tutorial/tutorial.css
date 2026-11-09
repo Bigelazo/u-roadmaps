@@ -161,6 +161,23 @@
   }
 }
 
+.driver-active.u-roadmaps-tour-acting:has(
+    button[aria-label='Crear en el mapa'][aria-expanded='true']
+  )
+  [data-tutorial-exit] {
+  visibility: hidden;
+}
+
+.driver-active.u-roadmaps-tour-acting
+  .react-flow:has(button[aria-label='Crear en el mapa'][aria-expanded='true']) {
+  z-index: auto !important;
+}
+
+.driver-active.u-roadmaps-tour-acting
+  .react-flow__panel:has(button[aria-label='Crear en el mapa'][aria-expanded='true']) {
+  z-index: var(--tutorial-z-acting-layer);
+}
+
 .driver-active button[aria-label='Crear en el mapa'] {
   z-index: calc(var(--tutorial-z-acting-layer) + 1);
 }

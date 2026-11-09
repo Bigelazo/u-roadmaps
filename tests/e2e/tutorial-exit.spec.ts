@@ -33,7 +33,17 @@ for (const viewport of [
         await next(title);
       }
       await expectExitReachable(page, `creator-${viewport.width}`);
-      await page.getByRole('button', { name: 'Crear en el mapa' }).tap();
+      const creatorButton = page.getByRole('button', { name: 'Crear en el mapa' });
+      await creatorButton.tap();
+      await expect(page.getByRole('menu')).toHaveClass(/driver-active-element/);
+      await expect(popover).toHaveCSS('opacity', '1');
+      await expect(creatorButton).toHaveCSS('transform', 'none');
+      await expectExitReachable(page, `creator-menu-open-${viewport.width}`);
+      await page.screenshot({ path: `test-results/tutorial-creator-centre-${viewport.width}.png` });
+      await creatorButton.tap();
+      await expect(page.getByRole('menu')).toHaveCount(0);
+      await expectExitReachable(page, `creator-menu-closed-${viewport.width}`);
+      await creatorButton.tap();
       await page.getByRole('menuitem', { name: 'Crear nodo' }).tap();
       const creator = page.getByRole('dialog', { name: 'Agregar al mapa' });
       await creator.getByLabel('Título').fill('Mi nodo de práctica');
