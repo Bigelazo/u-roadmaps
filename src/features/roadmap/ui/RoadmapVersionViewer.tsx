@@ -2,10 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ChevronDown, Download, ExternalLink, FileText, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Download, FileText, X } from 'lucide-react';
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
-import { ResourceIcon, resourceActionLabel } from '@/features/roadmap/ui/ResourceIcon';
+import {
+  ResourceActionIcon,
+  ResourceIcon,
+  resourceActionLabel,
+} from '@/features/roadmap/ui/ResourceIcon';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { originLabel } from '@/features/roadmap/ui/version-labels';
 import { VersionAuthorshipList } from '@/features/roadmap/ui/VersionAuthorshipList';
@@ -85,19 +89,11 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
                           className="shrink-0 text-primary"
                         />
                         <span className="min-w-0 flex-1 truncate">{resource.title}</span>
-                        {resource.type === 'FILE' ? (
-                          <Download
-                            size={16}
-                            aria-hidden="true"
-                            className="text-muted-foreground"
-                          />
-                        ) : (
-                          <ExternalLink
-                            size={16}
-                            aria-hidden="true"
-                            className="text-muted-foreground"
-                          />
-                        )}
+                        <ResourceActionIcon
+                          type={resource.type}
+                          size={16}
+                          className="text-muted-foreground"
+                        />
                       </a>
                     </li>
                   ))}

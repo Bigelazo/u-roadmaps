@@ -107,6 +107,7 @@ closedVersion(
       id: resourceId,
       title: 'guia.txt',
       type: 'FILE',
+      fileContentType: 'text/plain',
       url: versionPath(closed, `/resources/${resourceId}/file`),
     });
     expect(body.nodeTypes.length).toBeGreaterThan(0);

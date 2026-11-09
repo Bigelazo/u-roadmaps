@@ -1,5 +1,10 @@
 import type { ChangeImpactOf as PlannedChangeImpactOf } from '@/features/roadmap/domain/change-impact';
-import { linkResourceOnlyError, resourceEditError } from '@/features/roadmap/domain/resource';
+import {
+  fileReplacementError,
+  linkResourceOnlyError,
+  resourceEditError,
+  uploadedContentType,
+} from '@/features/roadmap/domain/resource';
 import {
   blockedPrerequisiteNodeIds,
   chileWallClock,
@@ -721,7 +726,7 @@ export const canvasCommandCatalog = {
         title: file.name,
         url: file.name,
         type: 'FILE',
-        fileContentType: file.type || null,
+        fileContentType: uploadedContentType(file),
       }),
     success: () => 'Recurso guardado exitosamente.',
   }),
@@ -748,13 +753,13 @@ export const canvasCommandCatalog = {
     practice: (practice, { resourceId, resource, file }) =>
       practice.mutateResource(resourceId, (current) => {
         if (file) {
-          if (current.type !== 'FILE')
-            throw new Error('Solo un Archivo permite reemplazar su archivo.');
+          const error = fileReplacementError(current.type);
+          if (error) throw new Error(error);
           return {
             ...current,
             title: resource.title,
             url: file.name,
-            fileContentType: file.type || null,
+            fileContentType: uploadedContentType(file),
           };
         }
         const changes =

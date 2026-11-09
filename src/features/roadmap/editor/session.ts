@@ -1,5 +1,5 @@
 import type { RoadmapNode, Resource } from '@/features/roadmap/types';
-import { replaceFileTitleExtension } from '@/features/roadmap/domain/resource';
+import { replaceFileTitleExtension, uploadedContentType } from '@/features/roadmap/domain/resource';
 import type {
   NodeEditorEffect,
   NodeEditorGuardReason,
@@ -173,7 +173,7 @@ function updatedResource(
     ...resource,
     title: effect.resource.title,
     url: replaced?.url ?? resource.url,
-    fileContentType: effect.file.type || null,
+    fileContentType: uploadedContentType(effect.file),
   };
 }
 

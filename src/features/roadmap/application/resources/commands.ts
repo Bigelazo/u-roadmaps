@@ -18,7 +18,12 @@ import {
   cleanupStoredFiles,
   withStoredFiles,
 } from '@/features/roadmap/infrastructure/resources/lifecycle';
-import { resourceEditError, fileResourceUrl } from '@/features/roadmap/domain/resource';
+import {
+  resourceEditError,
+  fileResourceUrl,
+  uploadedContentType,
+  fileReplacementError,
+} from '@/features/roadmap/domain/resource';
 import { requireUuid } from '@/shared/validation';
 import { ApplicationError } from '@/shared/errors/server';
 
@@ -125,7 +130,7 @@ export async function uploadRoadmapResource(
   return withStoredFiles('upload Resource', async (files) => {
     await files.upload(fileKey, file);
     return createUploadedResource(
-      { ...participant, nodeId, title, fileKey, fileContentType: file.type || null },
+      { ...participant, nodeId, title, fileKey, fileContentType: uploadedContentType(file) },
       changePort,
     );
   });
@@ -184,12 +189,8 @@ const resourceFileReplacement = roadmapCommand({
   access: 'none',
   run: async ({ tx, roadmap, actor, input: { resourceId, title, fileKey, fileContentType } }) => {
     const resource = await requireResource(tx, resourceId, roadmap.id);
-    if (resource.type !== 'FILE')
-      throw new ApplicationError(
-        400,
-        'INVALID_RESOURCE_EDIT',
-        'Solo un Archivo permite reemplazar su archivo.',
-      );
+    const error = fileReplacementError(resource.type);
+    if (error) throw new ApplicationError(400, 'INVALID_RESOURCE_EDIT', error);
     const updated = await tx.resource.update({
       where: { id: resource.id },
       data: { title, url: fileResourceUrl(fileKey), fileKey, fileContentType },
@@ -231,7 +232,7 @@ export async function replaceRoadmapResourceFile(
     async (files) => {
       await files.upload(fileKey, file);
       return resourceFileReplacement(
-        { ...participant, resourceId, title, fileKey, fileContentType: file.type || null },
+        { ...participant, resourceId, title, fileKey, fileContentType: uploadedContentType(file) },
         changePort,
       );
     },

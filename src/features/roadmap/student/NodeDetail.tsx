@@ -5,14 +5,13 @@ import {
   Check,
   CircleCheckBig,
   Download,
-  ExternalLink,
   Eye,
   FileText,
   LockKeyhole,
   Pencil,
   X,
 } from 'lucide-react';
-import type { NodeType, Resource, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
+import type { NodeType, RoadmapNode, StudentRoadmapNode } from '@/features/roadmap/types';
 import {
   isStudentBlockedNode,
   studentNodeBlockMessages,
@@ -29,15 +28,11 @@ import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { useCompactCanvasLayout } from '@/features/roadmap/ui/compact-canvas-layout';
 import { NodeFullscreenDialog } from '@/features/roadmap/ui/NodeFullscreenDialog';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
-import { ResourceIcon, resourceActionLabel } from '@/features/roadmap/ui/ResourceIcon';
-
-function resourceActionIcon(type: Resource['type']) {
-  return type === 'FILE' ? (
-    <Download size={18} aria-hidden="true" />
-  ) : (
-    <ExternalLink size={18} aria-hidden="true" />
-  );
-}
+import {
+  ResourceActionIcon,
+  ResourceIcon,
+  resourceActionLabel,
+} from '@/features/roadmap/ui/ResourceIcon';
 
 type ContentProps = {
   node: RoadmapNode | StudentRoadmapNode;
@@ -168,7 +163,7 @@ function StudentNodeDetailContent({
                       <ItemTitle>{resource.title}</ItemTitle>
                     </ItemContent>
                     <ItemActions className="text-primary">
-                      {resourceActionIcon(resource.type)}
+                      <ResourceActionIcon type={resource.type} size={18} />
                     </ItemActions>
                   </Item>
                 ))}

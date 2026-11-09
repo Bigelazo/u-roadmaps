@@ -19,6 +19,14 @@ export function resourceEditError(
   return null;
 }
 
+export function uploadedContentType(file: File) {
+  return file.type || null;
+}
+
+export function fileReplacementError(type: 'FILE' | 'LINK'): string | null {
+  return type === 'FILE' ? null : 'Solo un Archivo permite reemplazar su archivo.';
+}
+
 export function fileTitleExtension(name: string) {
   const extensionIndex = name.lastIndexOf('.');
   return extensionIndex > 0 && extensionIndex < name.length - 1 ? name.slice(extensionIndex) : '';

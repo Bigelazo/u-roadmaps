@@ -1,5 +1,6 @@
 'use client';
 
+import { uploadedContentType } from '@/features/roadmap/domain/resource';
 import {
   forwardRef,
   useCallback,
@@ -77,7 +78,7 @@ function projectNodeInformationPreview(
               ...resource,
               ...resourceSession.value,
               ...(resourceSession.replacementFile
-                ? { fileContentType: resourceSession.replacementFile.type || null }
+                ? { fileContentType: uploadedContentType(resourceSession.replacementFile) }
                 : {}),
             }
           : resource,
@@ -90,7 +91,7 @@ function projectNodeInformationPreview(
           title: resourceSession.selectedFile.name,
           url: '#',
           type: 'FILE' as const,
-          fileContentType: resourceSession.selectedFile.type || null,
+          fileContentType: uploadedContentType(resourceSession.selectedFile),
         },
       ];
     } else if (resourceSession.kind === 'adding-link') {

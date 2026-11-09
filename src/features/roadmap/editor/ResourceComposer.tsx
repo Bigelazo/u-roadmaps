@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/button';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
-import { fileTitleExtension } from '@/features/roadmap/domain/resource';
+import { fileTitleExtension, uploadedContentType } from '@/features/roadmap/domain/resource';
 import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
 import { inputClassName } from './primitives';
 import { useNodeEditorContext } from './context';
@@ -132,7 +132,7 @@ function ResourceReplacementField({
             resource={{
               type: 'FILE',
               title: replacementFile.name,
-              fileContentType: replacementFile.type || null,
+              fileContentType: uploadedContentType(replacementFile),
             }}
             size={18}
             className="shrink-0 text-primary"

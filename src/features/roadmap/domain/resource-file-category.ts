@@ -1,3 +1,5 @@
+import { fileTitleExtension } from './resource';
+
 export type ResourceCategory =
   | 'link'
   | 'pdf'
@@ -120,8 +122,12 @@ const mediaPrefixes: readonly [string, FileCategory][] = [
   ['audio/', 'audio'],
 ];
 
+function contentTypeEssence(contentType: string | null) {
+  return contentType?.split(';')[0].trim().toLowerCase();
+}
+
 function contentTypeCategory(contentType: string | null): FileCategory | null {
-  const essence = contentType?.split(';')[0].trim().toLowerCase();
+  const essence = contentTypeEssence(contentType);
   if (!essence) return null;
   return (
     contentTypeCategories[essence] ??
@@ -131,13 +137,11 @@ function contentTypeCategory(contentType: string | null): FileCategory | null {
 }
 
 function extensionCategory(name: string): FileCategory | null {
-  const extensionIndex = name.lastIndexOf('.');
-  if (extensionIndex < 0) return null;
-  return extensionCategories[name.slice(extensionIndex + 1).toLowerCase()] ?? null;
+  return extensionCategories[fileTitleExtension(name).slice(1).toLowerCase()] ?? null;
 }
 
 function isPlainText(contentType: string | null) {
-  return contentType?.split(';')[0].trim().toLowerCase() === 'text/plain';
+  return contentTypeEssence(contentType) === 'text/plain';
 }
 
 export function resourceCategory(resource: {

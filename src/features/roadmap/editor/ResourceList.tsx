@@ -1,9 +1,13 @@
-import { Download, ExternalLink, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import { cn } from 'cn';
 import { Button } from '@/shared/ui/button';
 import { Item, ItemMedia } from '@/shared/ui/item';
-import { ResourceIcon, resourceActionLabel } from '@/features/roadmap/ui/ResourceIcon';
+import {
+  ResourceActionIcon,
+  ResourceIcon,
+  resourceActionLabel,
+} from '@/features/roadmap/ui/ResourceIcon';
 import { dividedItemClassName } from './primitives';
 
 type Props = {
@@ -38,11 +42,7 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
             aria-label={resourceActionLabel(item)}
             className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
-            {item.type === 'FILE' ? (
-              <Download className="size-3.5" aria-hidden="true" />
-            ) : (
-              <ExternalLink className="size-3.5" aria-hidden="true" />
-            )}
+            <ResourceActionIcon type={item.type} className="size-3.5" />
           </a>
           <Button
             type="button"

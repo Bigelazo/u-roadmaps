@@ -1,4 +1,6 @@
 import {
+  Download,
+  ExternalLink,
   File,
   FileArchive,
   FileCode,
@@ -49,4 +51,17 @@ export function resourceActionLabel(resource: Pick<Resource, 'type' | 'title'>) 
   return resource.type === 'FILE'
     ? `Descargar ${resource.title}`
     : `Abrir enlace ${resource.title}`;
+}
+
+export function ResourceActionIcon({
+  type,
+  size,
+  className,
+}: {
+  type: Resource['type'];
+  size?: number;
+  className?: string;
+}) {
+  const Icon = type === 'FILE' ? Download : ExternalLink;
+  return <Icon size={size} className={className} aria-hidden="true" />;
 }
