@@ -64,15 +64,19 @@ async function observeDrawing(page: Page) {
 
 async function waitForCompleteDrawing(page: Page) {
   await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const latest = window.dependencyAnimationFrames.at(-1);
-        return (
-          latest?.edges.length === 8 &&
-          latest.edges.every((edge) => edge.progress === 1) &&
-          latest.nodes.every((node) => node.scale === 1)
-        );
-      }),
+    .poll(
+      async () => {
+        await page.clock.runFor(16);
+        return page.evaluate(() => {
+          const latest = window.dependencyAnimationFrames.at(-1);
+          return (
+            latest?.edges.length === 8 &&
+            latest.edges.every((edge) => edge.progress === 1) &&
+            latest.nodes.every((node) => node.scale === 1)
+          );
+        });
+      },
+      { intervals: [1] },
     )
     .toBe(true);
 }
@@ -169,6 +173,9 @@ test('Dependencies draw sequentially with moving tips on entry and reload, prese
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  const clockStart = Date.now();
+  await page.clock.install({ time: clockStart });
+  await page.clock.pauseAt(clockStart + 1000);
   await observeDrawing(page);
   await ok(
     await page.request.post('/api/development/session', {
@@ -177,6 +184,7 @@ test('Dependencies draw sequentially with moving tips on entry and reload, prese
   );
   await page.goto('/practice-roadmap/teaching');
   await assertEntryDrawing(page);
+  await page.clock.resume();
   await closePracticeTutorial(page);
   await page
     .locator('.react-flow')
@@ -210,8 +218,10 @@ test('Dependencies draw sequentially with moving tips on entry and reload, prese
     ),
   ).toBe(true);
 
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
   await page.reload();
   await assertEntryDrawing(page);
+  await page.clock.resume();
   await expect(page.locator('.react-flow__node[data-id="practice-node-b"] p')).toHaveText(
     'Conceptos básicos',
   );
