@@ -24,7 +24,7 @@ export function subscribeToRoadmapChanges(
   return () => window.removeEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, onEvent);
 }
 
-export const ROADMAP_RECOVERY_EVENT = 'u-roadmaps:roadmap-recovery';
+const ROADMAP_RECOVERY_EVENT = 'u-roadmaps:roadmap-recovery';
 
 export function requestRoadmapRecovery() {
   window.dispatchEvent(new Event(ROADMAP_RECOVERY_EVENT));

@@ -33,7 +33,7 @@ export async function roadmapChangeTransaction<T>(
   const result =
     isolation === 'read-committed'
       ? await prisma.$transaction(attempt, timeout ? { timeout } : undefined)
-      : await serializableTransaction(attempt, timeout, conflictMessage);
+      : await serializableTransaction(attempt, conflictMessage);
   for (const { changes, deliver } of deliveries) {
     try {
       await deliver();
@@ -51,7 +51,6 @@ export async function roadmapChangeTransaction<T>(
 
 async function serializableTransaction<T>(
   operation: (transaction: Prisma.TransactionClient) => Promise<T>,
-  timeout?: number,
   conflictMessage?: string,
 ): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
@@ -61,7 +60,7 @@ async function serializableTransaction<T>(
           await preferIndexScans(transaction);
           return operation(transaction);
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (error) {
       if (!isSerializationFailure(error)) throw error;

@@ -56,6 +56,16 @@ async function panCanvas(page: Page, client: CDPSession, delta: { x: number; y: 
   await touch(client, 'touchEnd');
 }
 
+async function panToCanvasCenter(page: Page, client: CDPSession, node: Locator) {
+  const canvas = await page.locator('.react-flow').boundingBox();
+  if (!canvas) throw new Error('Practice canvas is not visible.');
+  const resting = await center(node.locator('p'));
+  await panCanvas(page, client, {
+    x: canvas.x + canvas.width / 2 - resting.x,
+    y: canvas.y + canvas.height / 2 - resting.y,
+  });
+}
+
 async function centerPracticePair(page: Page, client: CDPSession) {
   const source = page.locator('.react-flow__node[data-id="practice-node-a"]');
   const target = page.locator('.react-flow__node[data-id="practice-node-d"]');
@@ -195,6 +205,10 @@ for (const width of [390, 360]) {
       await openPractice(page);
       const fresh = await centerPracticePair(page, client);
       const trigger = fresh.source.getByRole('button', { name: 'Abrir menú de acciones del nodo' });
+      await expect(trigger).toBeHidden();
+      await openPractice(page);
+      await panToCanvasCenter(page, client, fresh.source);
+      await expect(trigger).toBeVisible();
       await touch(client, 'touchStart', await center(trigger));
       // eslint-disable-next-line playwright/no-wait-for-timeout -- Hold the excluded button beyond the real arming threshold.
       await page.waitForTimeout(600);

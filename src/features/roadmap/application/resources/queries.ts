@@ -10,6 +10,8 @@ import {
 import { readStoredFile } from '@/features/roadmap/infrastructure/resources/lifecycle';
 import { nodeNotFound, resourceNotFound } from '@/features/roadmap/application/errors';
 import { requireUuid } from '@/shared/validation';
+import type { RoadmapChangePort } from '@/features/roadmap/application/change-port';
+import { recordFileResourceAccess } from './access';
 
 async function requireStudentResourceAccess(
   { tx, participation, roadmap }: RoadmapReadContext,
@@ -42,10 +44,10 @@ export async function getRoadmapNodeResources({
   });
 }
 
-export async function downloadRoadmapResource({
-  resourceId,
-  ...participant
-}: RoadmapParticipant & { resourceId: string }) {
+export async function downloadRoadmapResource(
+  { resourceId, ...participant }: RoadmapParticipant & { resourceId: string },
+  changePort: RoadmapChangePort,
+) {
   const id = requireUuid(resourceId, 'resourceId');
   const resource = await roadmapRead(participant, 'read', async (context) => {
     const found = await context.tx.resource.findFirst({
@@ -54,10 +56,19 @@ export async function downloadRoadmapResource({
     if (!found?.fileKey) throw resourceNotFound();
     await requireStudentResourceAccess(context, found.roadmapNodeId);
     const { fileKey, fileContentType, title } = found;
-    return { fileKey, fileContentType, title };
+    const countsAccess = context.participation.role === 'STUDENT' && !context.roadmap.closedAt;
+    return { fileKey, fileContentType, title, countsAccess };
   });
+  const bytes = await readStoredFile(resource.fileKey);
+  if (resource.countsAccess)
+    await recordFileResourceAccess(
+      { ...participant, resourceId: id, fileKey: resource.fileKey },
+      changePort,
+    ).catch((error: unknown) => {
+      console.error('Resource access recording failed', { resourceId: id, error });
+    });
   return {
-    bytes: await readStoredFile(resource.fileKey),
+    bytes,
     contentType: resource.fileContentType ?? 'application/octet-stream',
     title: resource.title,
   };

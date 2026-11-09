@@ -2,9 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ChevronDown, Download, ExternalLink, FileText, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Download, FileText, X } from 'lucide-react';
 import { RoadmapGraph, type RoadmapGraphProjection } from '@/features/roadmap/graph/RoadmapGraph';
 import { NodeDescription } from '@/features/roadmap/ui/NodeDescription';
+import {
+  ResourceActionIcon,
+  ResourceIcon,
+  resourceActionLabel,
+} from '@/features/roadmap/ui/ResourceIcon';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
 import { originLabel } from '@/features/roadmap/ui/version-labels';
 import { VersionAuthorshipList } from '@/features/roadmap/ui/VersionAuthorshipList';
@@ -73,16 +78,22 @@ export function RoadmapVersionViewer({ version }: Readonly<{ version: RoadmapVer
                       <a
                         className="flex items-center gap-2 rounded-lg border border-fog px-3 py-2 text-sm hover:bg-muted"
                         href={resource.url}
+                        aria-label={resourceActionLabel(resource)}
                         {...(resource.type === 'FILE'
                           ? { download: resource.title }
                           : { target: '_blank', rel: 'noreferrer' })}
                       >
-                        {resource.type === 'FILE' ? (
-                          <Download size={16} aria-hidden="true" />
-                        ) : (
-                          <ExternalLink size={16} aria-hidden="true" />
-                        )}
-                        {resource.title}
+                        <ResourceIcon
+                          resource={resource}
+                          size={16}
+                          className="shrink-0 text-primary"
+                        />
+                        <span className="min-w-0 flex-1 truncate">{resource.title}</span>
+                        <ResourceActionIcon
+                          type={resource.type}
+                          size={16}
+                          className="text-muted-foreground"
+                        />
                       </a>
                     </li>
                   ))}

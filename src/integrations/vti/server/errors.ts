@@ -7,7 +7,6 @@ export type VtiIdentity = Readonly<{
   rut: string;
   institutionalEmail: string;
   name: string;
-  preferredUsername: string | undefined;
 }>;
 
 export class VtiAuthenticationError extends Error {

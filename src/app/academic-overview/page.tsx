@@ -6,19 +6,10 @@ import { AcademicOverview } from '@/features/academic-overview';
 import { getAcademicOverviewPage } from '@/app/_adapters/academic-overview';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
-import { getInboxIdentity } from '@/features/notifications/server';
-import { UnavailableNoticeFallback } from '@/features/notifications';
 import { ThirdPartyLicensesLink } from '@/app/_components/ThirdPartyLicensesLink';
 
 export default async function AcademicOverviewPage(props: PageProps<'/academic-overview'>) {
   const searchParams = await props.searchParams;
-  const noticeId = typeof searchParams.notice === 'string' ? searchParams.notice : null;
-  const reason =
-    searchParams.noticeFallback === 'course-unavailable'
-      ? 'course-unavailable'
-      : searchParams.noticeFallback === 'roadmap-unavailable'
-        ? 'roadmap-unavailable'
-        : null;
   const user = await resolveSessionUser(await getApplicationSession());
   if (!user) redirect('/api/plogin/start');
 
@@ -26,7 +17,6 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
     <>
       <AcademicOverview
         overview={await getAcademicOverviewPage(user)}
-        notificationsEnabled={Boolean(getInboxIdentity(user.id))}
         notice={
           searchParams.accessLost === '1' ? (
             <Alert role="status">
@@ -36,8 +26,6 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
                 hoy.
               </AlertDescription>
             </Alert>
-          ) : noticeId && reason ? (
-            <UnavailableNoticeFallback reason={reason} />
           ) : null
         }
         renderRoadmapCreation={(course) => <CreateRoadmapDialog {...course} />}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
+import { IconTooltip } from '@/shared/ui/icon-tooltip';
 
 import { NodeChangeCountsProvider } from '@/features/notifications/client';
 
@@ -24,6 +24,7 @@ import type {
 import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
   RoadmapGraph,
+  type NewNodePlacement,
   type RoadmapGraphEditing,
   type RoadmapGraphEditingIntent,
   type RoadmapGraphProjection,
@@ -121,7 +122,6 @@ function useRoadmapCanvasController({ input }: Props) {
   const [canvasState, dispatchCanvas] = useReducer(canvasStateReducer, initialCanvasState);
   const [focusReturnRequest, setFocusReturnRequest] = useState<string | null>(null);
   const [syncedSelectionNotice, setSyncedSelectionNotice] = useState<string | null>(null);
-  const [dismissedInvalidTargetId, setDismissedInvalidTargetId] = useState<string | null>(null);
   const acknowledgedRoadmapRef = useRef<string | null>(null);
   const { acknowledge } = useNotificationAcknowledgement();
   const canvasFocusRef = useRef<HTMLDivElement>(null);
@@ -193,6 +193,7 @@ function useRoadmapCanvasController({ input }: Props) {
     canvasCommands,
     canvasPreviewRoadmap,
     canvasPreviewWorkflow,
+    accessResource,
     isClosed,
   } = useRoadmapCanvasSession(input, {
     guardDraft: guardEditorDraft,
@@ -280,30 +281,13 @@ function useRoadmapCanvasController({ input }: Props) {
   }, [canEditRoadmap, closeTeacherPreview, isCanvasPreview, isEditorOpen, teacherPreviewNode]);
 
   const displayedRoadmap = isCanvasPreview ? canvasPreviewRoadmap : roadmap;
-  const accessibleNodeIds = useMemo(() => {
-    if (!roadmap) return new Set<string>();
-    return new Set(
-      roadmap.nodes.flatMap((node) => {
-        if ('isVisible' in node && !node.isVisible) return [];
-        if ('access' in node && node.access?.status === 'BLOCKED') return [];
-        if ('isTeacherBlocked' in node && node.isTeacherBlocked) return [];
-        return [node.id];
-      }),
-    );
-  }, [roadmap]);
-  const invalidTargetId =
-    roadmap && input.targetNodeId && !accessibleNodeIds.has(input.targetNodeId)
-      ? input.targetNodeId
-      : null;
-  const selectionNotice =
-    invalidTargetId && invalidTargetId !== dismissedInvalidTargetId
-      ? 'Este Nodo ya no está disponible. Puedes revisar el Roadmap actualizado.'
-      : syncedSelectionNotice;
-  const dismissSelectionNotice = useCallback(() => {
-    setDismissedInvalidTargetId(invalidTargetId);
-    setSyncedSelectionNotice(null);
-  }, [invalidTargetId]);
-  useStateToast('neutral', 'roadmap-selection-notice', selectionNotice, dismissSelectionNotice);
+  const dismissSelectionNotice = useCallback(() => setSyncedSelectionNotice(null), []);
+  useStateToast(
+    'neutral',
+    'roadmap-selection-notice',
+    syncedSelectionNotice,
+    dismissSelectionNotice,
+  );
   const acknowledgesRoadmap = fetchesRoadmapNotices(input);
   useEffect(() => {
     if (!acknowledgesRoadmap || !roadmap || isCanvasPreview) return;
@@ -312,26 +296,7 @@ function useRoadmapCanvasController({ input }: Props) {
     acknowledgedRoadmapRef.current = roadmapId;
     const operation = { roadmapId, entryKey: input.roadmapEntryKey };
     void acknowledge(operation);
-  }, [
-    acknowledge,
-    accessibleNodeIds,
-    acknowledgesRoadmap,
-    input.roadmapEntryKey,
-    isCanvasPreview,
-    roadmap,
-  ]);
-  const deepLinkHandledRef = useRef<string | null>(null);
-  useEffect(() => {
-    const nodeId = input.targetNodeId;
-    if (!nodeId || !roadmap || deepLinkHandledRef.current === nodeId) return;
-    deepLinkHandledRef.current = nodeId;
-    if (!accessibleNodeIds.has(nodeId)) return;
-    dispatchCanvas({
-      type: 'selectNode',
-      nodeId,
-      panel: isStudentExperience ? 'student' : canEditRoadmap ? 'editor' : 'none',
-    });
-  }, [accessibleNodeIds, canEditRoadmap, input.targetNodeId, isStudentExperience, roadmap]);
+  }, [acknowledge, acknowledgesRoadmap, input.roadmapEntryKey, isCanvasPreview, roadmap]);
   useEffect(() => {
     if (!selectedNodeId || !displayedRoadmap) return;
     const selected = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
@@ -424,6 +389,7 @@ function useRoadmapCanvasController({ input }: Props) {
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
+    accessResource,
     performEditorEffect,
     canvasMode,
     isHistoricalRoadmap,
@@ -518,12 +484,8 @@ export function RoadmapCanvasView({ input }: Props) {
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
   const addNodeAtOpenPosition = (
     node: NodeInput,
-    findOpenPosition: (title: string) => { x: number; y: number } | null,
-  ) => {
-    const position = findOpenPosition(node.title);
-    if (!position) return Promise.resolve(false);
-    return canvasCommands.request({ kind: 'add-node', node, position });
-  };
+    placeNewNode: (title: string) => NewNodePlacement,
+  ) => canvasCommands.request({ kind: 'add-node', node, ...placeNewNode(node.title) });
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
     <SidebarProvider className="min-h-0 flex-1">
@@ -711,6 +673,7 @@ function RoadmapStudentPanel({
     canvasPreviewWorkflow,
     dispatchCanvas,
     canvasCommands,
+    accessResource,
     isHistoricalRoadmap,
     editorPanel,
     studentPanel,
@@ -738,6 +701,7 @@ function RoadmapStudentPanel({
             if (teacherPreviewNode) dispatchCanvas({ type: 'completeTeacherPreview' });
             else void canvasCommands.request({ kind: 'complete-node', nodeId: node.id });
           }}
+          onResourceAccess={accessResource}
           isReadOnly={isHistoricalRoadmap && !teacherPreviewNode}
           isTeacherPreview={Boolean(teacherPreviewNode)}
           nodeTypes={roadmap.nodeTypes}
@@ -774,7 +738,7 @@ function RoadmapCanvasGraph({
   input: Props['input'];
   addNodeAtOpenPosition: (
     node: NodeInput,
-    findOpenPosition: (title: string) => { x: number; y: number } | null,
+    placeNewNode: (title: string) => NewNodePlacement,
   ) => Promise<boolean>;
   roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
   displayedRoadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['displayedRoadmap']>;
@@ -802,6 +766,7 @@ function RoadmapCanvasGraph({
     canResetCanvasPreview,
     closeSelectedNode,
   } = model;
+  const isCompactLayout = useCompactCanvasLayout();
   return (
     <RoadmapGraph
       projection={graphProjection}
@@ -837,57 +802,54 @@ function RoadmapCanvasGraph({
           ? () => (
               <>
                 {canPreviewCanvas && !input.practice ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Link
-                          aria-label="Historial de versiones"
-                          className={cn(buttonVariants({ variant: 'outline' }))}
-                          href={versionHistoryUrl(courseCode)}
-                        >
-                          <History data-icon="inline-start" />
-                          Historial de versiones
-                        </Link>
-                      }
-                    />
-                    <TooltipContent>Historial de versiones</TooltipContent>
-                  </Tooltip>
+                  <IconTooltip
+                    label="Historial de versiones"
+                    iconOnly={isCompactLayout}
+                    render={
+                      <Link
+                        aria-label="Historial de versiones"
+                        className={cn(buttonVariants({ variant: 'outline' }))}
+                        href={versionHistoryUrl(courseCode)}
+                      >
+                        <History data-icon="inline-start" />
+                        Historial de versiones
+                      </Link>
+                    }
+                  />
                 ) : null}
                 {canPreviewCanvas && !input.practice ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Link
-                          aria-label="Integrantes"
-                          className={cn(buttonVariants({ variant: 'outline' }))}
-                          href={courseParticipantsUrl({ courseCode, year, semester })}
-                        >
-                          <Users data-icon="inline-start" />
-                          Integrantes
-                        </Link>
-                      }
-                    />
-                    <TooltipContent>Integrantes</TooltipContent>
-                  </Tooltip>
+                  <IconTooltip
+                    label="Integrantes"
+                    iconOnly={isCompactLayout}
+                    render={
+                      <Link
+                        aria-label="Integrantes"
+                        className={cn(buttonVariants({ variant: 'outline' }))}
+                        href={courseParticipantsUrl({ courseCode, year, semester })}
+                      >
+                        <Users data-icon="inline-start" />
+                        Integrantes
+                      </Link>
+                    }
+                  />
                 ) : null}
                 {canEnterCanvasPreview ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          ref={canvasPreviewWorkflow.entryButtonRef}
-                          aria-label="Vista estudiante"
-                          type="button"
-                          variant="outline"
-                          onClick={canvasPreviewWorkflow.requestEntry}
-                        >
-                          <Eye data-icon="inline-start" />
-                          Vista estudiante
-                        </Button>
-                      }
-                    />
-                    <TooltipContent>Vista estudiante</TooltipContent>
-                  </Tooltip>
+                  <IconTooltip
+                    label="Vista estudiante"
+                    iconOnly={isCompactLayout}
+                    render={
+                      <Button
+                        ref={canvasPreviewWorkflow.entryButtonRef}
+                        aria-label="Vista estudiante"
+                        type="button"
+                        variant="outline"
+                        onClick={canvasPreviewWorkflow.requestEntry}
+                      >
+                        <Eye data-icon="inline-start" />
+                        Vista estudiante
+                      </Button>
+                    }
+                  />
                 ) : null}
               </>
             )
@@ -895,10 +857,10 @@ function RoadmapCanvasGraph({
       }
       bottomRightActions={
         !isCanvasPreview && canEditRoadmap
-          ? (findOpenPosition) => (
+          ? (placeNewNode) => (
               <NodeCreator
                 nodeTypes={roadmap.nodeTypes}
-                onSubmit={(node) => addNodeAtOpenPosition(node, findOpenPosition)}
+                onSubmit={(node) => addNodeAtOpenPosition(node, placeNewNode)}
                 onCreateNodeType={(nodeType) =>
                   canvasCommands.request({ kind: 'add-node-type', nodeType })
                 }
@@ -964,23 +926,21 @@ function RoadmapTutorialLink({
 }) {
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger
-          delay={150}
-          render={
-            <Link
-              {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
-              aria-label="Abrir tutorial"
-              className={buttonVariants({ variant: 'outline', size: 'icon' })}
-              href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
-              prefetch={false}
-            >
-              <CircleHelp />
-            </Link>
-          }
-        />
-        <TooltipContent>Abrir tutorial</TooltipContent>
-      </Tooltip>
+      <IconTooltip
+        label="Abrir tutorial"
+        delay={150}
+        render={
+          <Link
+            {...{ [TUTORIAL_TRIGGER_ATTRIBUTE]: '' }}
+            aria-label="Abrir tutorial"
+            className={buttonVariants({ variant: 'outline', size: 'icon' })}
+            href={`/practice-roadmap/${experience}?${new URLSearchParams({ origin })}`}
+            prefetch={false}
+          >
+            <CircleHelp />
+          </Link>
+        }
+      />
       <TutorialClosingPopover />
     </>
   );

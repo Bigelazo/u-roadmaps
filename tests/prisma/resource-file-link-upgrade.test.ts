@@ -344,6 +344,10 @@ test('upgrade normalizes ownership and translates only proven encoded revisions 
     ).rows.map((row) => row.enumlabel),
   ).toEqual(['FILE', 'LINK', 'VIDEO']);
   await sql.query(migration);
+  for (const name of (await readdir(migrations))
+    .filter((name) => name > migrationName && name !== 'migration_lock.toml')
+    .sort())
+    await sql.query(await readFile(new URL(`${name}/migration.sql`, migrations), 'utf8'));
   const rows = (await sql.query('SELECT * FROM "Resource"')).rows;
   for (const row of [video, external, stored, validLink, validFile, storedLink, removed, added]) {
     expect(rows.find((entry) => entry.id === row.id)).toMatchObject({

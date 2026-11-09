@@ -136,7 +136,7 @@ export const teachingIconCatalog = [
   icons: readonly (readonly [id: string, label: string])[];
 }[];
 
-export const defaultCustomNodeTypeIcon = { id: unknownNodeType.icon, label: 'Forma' } as const;
+const defaultCustomNodeTypeIcon = { id: unknownNodeType.icon, label: 'Forma' } as const;
 
 export { unknownNodeType };
 

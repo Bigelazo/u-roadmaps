@@ -2,7 +2,7 @@ import { cubicBezier } from 'motion';
 
 type DependencyRoute = { id: string; source: string; target: string; hidden?: boolean };
 
-export const roadmapEntranceBudgetSeconds = 1;
+const roadmapEntranceBudgetSeconds = 1;
 export const nodeRevealSeconds = 0.18;
 const dependencyDrawSeconds = 0.32;
 

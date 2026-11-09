@@ -20,7 +20,6 @@ test('entry recognizes Node notices and shows changes once without targeting a N
     (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
       .notifications;
   await expect.poll(pending).toHaveLength(1);
-  const notice = (await pending())[0];
   await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
   await page.getByRole('button', { name: /Pilas y colas/ }).click();
   await expect(page).toHaveURL(course.pagePath());
@@ -37,10 +36,6 @@ test('entry recognizes Node notices and shows changes once without targeting a N
   await page.reload();
   await expect(page.locator('.react-flow')).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.goto(`${course.pagePath()}?notice=${notice.id}&targetNode=${course.nodes.first}`);
-  await expect(page.locator('.react-flow')).toBeVisible();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Cerrar información del Nodo' })).toHaveCount(0);
 });
 
 test('first entry clears pending notices silently and opening a Node or Inbox recognizes no later changes', async ({
@@ -93,10 +88,6 @@ test('first entry clears pending notices silently and opening a Node or Inbox re
       },
     }),
     400,
-  );
-  await ok(
-    await recipient.patch(`/api/notifications/${before[0].id}`, { data: { action: 'seen' } }),
-    405,
   );
 });
 

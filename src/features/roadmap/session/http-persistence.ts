@@ -65,7 +65,21 @@ export function createHttpRoadmapCanvasSessionPersistence(
     return response;
   }
 
+  async function sendBesideNavigation(path: string) {
+    const response = await fetch(roadmapUrl(identifier, path), { method: 'POST', keepalive: true });
+    if (!response.ok) throw new Error('No se pudo registrar el acceso al recurso.');
+  }
+
   return {
+    async recordResourceAccess(resource, scope) {
+      if (scope === 'canvas-preview') {
+        await sendBesideNavigation(`/simulation/resources/${resource.id}/review`);
+        return { countsAccess: false };
+      }
+      if (resource.type === 'LINK') await sendBesideNavigation(`/resources/${resource.id}/access`);
+      return { countsAccess: true };
+    },
+
     load: async () =>
       (await request({ path: '' }, 'No se pudo cargar el roadmap.', { load: 'roadmap' })).json(),
 

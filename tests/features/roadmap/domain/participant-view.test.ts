@@ -108,7 +108,16 @@ function roadmapNode(id: string, options: { hidden?: boolean; teacherBlocked?: b
     nodeTypeId: 'reading',
     positionX: 10,
     positionY: 20,
-    resources: [{ id: `resource-${id}`, title: 'Apunte', url: '/apunte', type: 'LINK' as const }],
+    resources: [
+      {
+        id: `resource-${id}`,
+        title: 'Apunte',
+        url: '/apunte',
+        type: 'LINK' as const,
+        fileContentType: null,
+        fileSize: null,
+      },
+    ],
   };
 }
 
@@ -120,6 +129,7 @@ test('a Blocked node shows only its title, Node type, position and block reason,
     ],
     dependencies: [],
     completedNodeIds: new Set(['intro']),
+    reviewedResourceIds: new Set(),
     isClosed: false,
   });
 
@@ -140,6 +150,7 @@ test('an accessible Node adds its description, Resources and Completion, but no 
     nodes: [roadmapNode('intro'), roadmapNode('theory')],
     dependencies: [{ id: 'edge', ...dependency('intro', 'theory') }],
     completedNodeIds: new Set(['intro']),
+    reviewedResourceIds: new Set(),
     isClosed: false,
   });
 
@@ -153,7 +164,17 @@ test('an accessible Node adds its description, Resources and Completion, but no 
       isVisible: true,
       access: ACCESSIBLE,
       description: 'Descripción intro',
-      resources: [{ id: 'resource-intro', title: 'Apunte', url: '/apunte', type: 'LINK' }],
+      resources: [
+        {
+          id: 'resource-intro',
+          title: 'Apunte',
+          url: '/apunte',
+          type: 'LINK',
+          fileContentType: null,
+          fileSize: null,
+          isReviewed: false,
+        },
+      ],
       isCompleted: true,
       canComplete: false,
     },
@@ -169,6 +190,7 @@ test('no accessible Node can be completed on a closed Roadmap', () => {
     nodes: [roadmapNode('intro')],
     dependencies: [],
     completedNodeIds: new Set(),
+    reviewedResourceIds: new Set(),
     isClosed: true,
   });
 

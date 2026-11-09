@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { ok } from './helpers';
+import { ok, reviewNodeResources } from './helpers';
 
 test('teachers persist isolated student-progress simulations without changing student completions', async ({
   course,
@@ -28,6 +28,7 @@ test('teachers persist isolated student-progress simulations without changing st
   ) as { id: string };
   expect(accessibleNode).toBeDefined();
 
+  await reviewNodeResources(teacher, course.apiPath(), accessibleNode.id, 'canvas-preview');
   const completionPath = `${simulationPath}/nodes/${accessibleNode.id}/completion`;
   const completions = await Promise.all(
     Array.from({ length: 4 }, () => teacher.post(completionPath)),
@@ -67,7 +68,8 @@ test('teachers persist isolated student-progress simulations without changing st
     teacher.delete(simulationPath),
     teacher.post(completionPath),
   ]);
-  expect(racedReset.map((response) => response.status())).toEqual([200, 200]);
+  expect(racedReset[0].status()).toBe(200);
+  expect([200, 409]).toContain(racedReset[1].status());
   expect([0, 1]).toContain((await (await teacher.delete(simulationPath)).json()).deletedCount);
   expect(await (await teacher.delete(simulationPath)).json()).toEqual({ deletedCount: 0 });
   const afterReset = await (await teacher.get(simulationPath)).json();

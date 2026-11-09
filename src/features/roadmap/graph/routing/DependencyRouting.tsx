@@ -28,7 +28,7 @@ import {
 const engineStatusDelayMs = 400;
 const engineRetryDelayMs = 1000;
 
-const emptyRoutes: RoutingResult = { routes: new Map(), blocked: 0 };
+const emptyRoutes: RoutingResult = { routes: new Map(), fallbacks: 0 };
 const PreviewRoutingContext = createContext<{ module: AvoidModule; sceneKey: string } | null>(null);
 
 export function useConnectionPreviewRoute(source: string | null, target: string | null) {
@@ -64,7 +64,7 @@ export function useDependencyRoute(id: string) {
   return useContext(RoutingContext).get(id);
 }
 
-export type RoutingEngineStatus = 'waiting' | 'routed' | 'unavailable';
+type RoutingEngineStatus = 'waiting' | 'routed' | 'unavailable';
 const RoutingEngineStatusContext = createContext<RoutingEngineStatus>('routed');
 
 export function useRoutingEngineStatus() {
@@ -193,13 +193,11 @@ function RoutedCanvas({
     <PreviewRoutingContext value={previewContext}>
       <RoutingContext value={result.routes}>
         {children}
-        {failed || result.blocked ? (
+        {failed ? (
           <div className="pointer-events-none absolute top-3 left-1/2 z-10 max-w-[calc(100%-2rem)] -translate-x-1/2">
             <Alert role="status">
               <AlertDescription>
-                {failed
-                  ? 'No pudimos trazar las dependencias. Vuelve a abrir el mapa.'
-                  : 'Hay dependencias sin espacio para trazarse. Separa los nodos superpuestos.'}
+                No pudimos trazar las dependencias. Vuelve a abrir el mapa.
               </AlertDescription>
             </Alert>
           </div>

@@ -1,5 +1,4 @@
-export const NODE_ACCESS_STATES = ['Disponible', 'Bloqueado', 'Retirado'] as const;
-export type NodeAccessState = (typeof NODE_ACCESS_STATES)[number];
+export type NodeAccessState = 'Disponible' | 'Bloqueado' | 'Retirado';
 
 export function nodeAccessState(isVisible: boolean, isAccessible: boolean): NodeAccessState {
   return !isVisible ? 'Retirado' : isAccessible ? 'Disponible' : 'Bloqueado';

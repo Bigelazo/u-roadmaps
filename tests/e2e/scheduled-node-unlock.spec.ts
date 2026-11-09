@@ -19,7 +19,7 @@ async function moveScheduleToThePast(nodeId: string) {
   );
 }
 
-test('a scheduled unlock waits for blocked prerequisites and releases at its time', async ({
+test('a scheduled unlock releases at its time and is discarded while a prerequisite stays blocked', async ({
   course,
   teacherApi: teacher,
   studentApi: student,
@@ -109,16 +109,24 @@ test('a scheduled unlock waits for blocked prerequisites and releases at its tim
       { noticeTarget: 'node-access', currentValue: 'Disponible', actorName: 'Equipo docente' },
     ]);
 
+  const teacherNode = async (nodeId: string) =>
+    (await (await teacher.get(course.apiPath())).json()).nodes.find(
+      (node: { id: string }) => node.id === nodeId,
+    );
+  const discarded = await teacherNode(scheduled.id);
+  expect(discarded.isTeacherBlocked).toBe(true);
+  expect(discarded).not.toHaveProperty('teacherUnlockAt');
+  expect(await teacherNode(prerequisite.id)).toMatchObject({
+    isTeacherBlocked: true,
+    teacherUnlockAt: tomorrow,
+  });
+
   await ok(
     await changeTeacherBlock(teacher, course.apiPath(`/nodes/${prerequisite.id}`), 'UNBLOCK'),
   );
   expect(await studentAccess(scheduled.id)).toEqual({
     status: 'BLOCKED',
-    reason: 'PREREQUISITE_BLOCK',
+    reason: 'TEACHER_BLOCK',
   });
-  const released = (await (await teacher.get(course.apiPath())).json()).nodes.find(
-    (node: { id: string }) => node.id === scheduled.id,
-  );
-  expect(released.isTeacherBlocked).toBe(false);
-  expect(released).not.toHaveProperty('teacherUnlockAt');
+  expect((await teacherNode(scheduled.id)).isTeacherBlocked).toBe(true);
 });

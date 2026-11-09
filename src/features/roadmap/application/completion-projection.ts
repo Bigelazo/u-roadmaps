@@ -4,12 +4,11 @@ import type { CourseOfferingIdentifier } from '@/features/roadmap/types';
 import {
   participantNodeAccess,
   studentRoadmapNodes,
+  type StudentProgress,
 } from '@/features/roadmap/domain/participant-view';
 import { nodeDto, resourceDto } from '@/features/roadmap/application/roadmap';
 import { Prisma } from '@/shared/server/db';
 
-type RoadmapCourse = { code: string; name: string; department: string };
-type RoadmapCourseOffering = { id: string; year: number; semester: number };
 type RoadmapNode = {
   id: string;
   title: string;
@@ -25,13 +24,13 @@ type RoadmapNode = {
     url: string;
     type: 'FILE' | 'LINK';
     fileKey: string | null;
+    fileContentType: string | null;
+    fileSize: number | null;
   }>;
 };
 type RoadmapDependency = { id: string; sourceNodeId: string; targetNodeId: string };
 
 type RoadmapProjectionData = {
-  course: RoadmapCourse;
-  courseOffering: RoadmapCourseOffering;
   roadmap: { id: string; closedAt?: Date | null };
   nodeTypes: Array<{
     id: string;
@@ -42,6 +41,7 @@ type RoadmapProjectionData = {
   }>;
   nodes: RoadmapNode[];
   dependencies: RoadmapDependency[];
+  accessCountByResourceId: ReadonlyMap<string, number>;
 };
 
 export type RoadmapCompletionScope =
@@ -65,37 +65,52 @@ export async function loadCompletedNodeIds(
   return new Set(rows.map(({ roadmapNodeId }) => roadmapNodeId));
 }
 
+export async function loadReviewedResourceIds(
+  transaction: Prisma.TransactionClient,
+  scope: RoadmapCompletionScope,
+  nodeId?: string,
+): Promise<ReadonlySet<string>> {
+  const resource = nodeId
+    ? { roadmapNodeId: nodeId, roadmapNode: { roadmapId: scope.roadmapId } }
+    : { roadmapNode: { roadmapId: scope.roadmapId } };
+  const rows =
+    scope.kind === 'COMPLETION'
+      ? await transaction.resourceAccess.findMany({
+          where: { userId: scope.userId, isReviewed: true, resource },
+          select: { resourceId: true },
+        })
+      : await transaction.simulatedResourceReview.findMany({
+          where: { participationId: scope.participationId, resource },
+          select: { resourceId: true },
+        });
+  return new Set(rows.map(({ resourceId }) => resourceId));
+}
+
 export async function loadRoadmapProjectionData(
   transaction: Prisma.TransactionClient,
-  {
-    courseOffering,
-    roadmap,
-  }: {
-    courseOffering: RoadmapCourseOffering & { course: RoadmapCourse };
-    roadmap: { id: string; closedAt?: Date | null };
-  },
+  { roadmap }: { roadmap: { id: string; closedAt?: Date | null } },
 ): Promise<RoadmapProjectionData> {
-  const [predefinedNodeTypes, customNodeTypes, nodes, dependencies] = await Promise.all([
-    transaction.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
-    transaction.nodeType.findMany({ where: { roadmapId: roadmap.id }, orderBy: { name: 'asc' } }),
-    transaction.roadmapNode.findMany({
-      where: { roadmapId: roadmap.id },
-      orderBy: { title: 'asc' },
-      include: { resources: { orderBy: { title: 'asc' } } },
-    }),
-    transaction.dependency.findMany({
-      where: { sourceNode: { roadmapId: roadmap.id } },
-      orderBy: { id: 'asc' },
-    }),
-  ]);
+  const [predefinedNodeTypes, customNodeTypes, nodes, dependencies, accessCounts] =
+    await Promise.all([
+      transaction.nodeType.findMany({ where: { isPredefined: true }, orderBy: { name: 'asc' } }),
+      transaction.nodeType.findMany({ where: { roadmapId: roadmap.id }, orderBy: { name: 'asc' } }),
+      transaction.roadmapNode.findMany({
+        where: { roadmapId: roadmap.id },
+        orderBy: { title: 'asc' },
+        include: { resources: { orderBy: { title: 'asc' } } },
+      }),
+      transaction.dependency.findMany({
+        where: { sourceNode: { roadmapId: roadmap.id } },
+        orderBy: { id: 'asc' },
+      }),
+      transaction.resourceAccess.groupBy({
+        by: ['resourceId'],
+        where: { resource: { roadmapNode: { roadmapId: roadmap.id } } },
+        _sum: { accessCount: true },
+      }),
+    ]);
 
   return {
-    course: courseOffering.course,
-    courseOffering: {
-      id: courseOffering.id,
-      year: courseOffering.year,
-      semester: courseOffering.semester,
-    },
     roadmap: { id: roadmap.id, closedAt: roadmap.closedAt },
     nodeTypes: [...predefinedNodeTypes, ...customNodeTypes].map((type) => ({
       id: type.id,
@@ -110,6 +125,9 @@ export async function loadRoadmapProjectionData(
       sourceNodeId,
       targetNodeId,
     })),
+    accessCountByResourceId: new Map(
+      accessCounts.map(({ resourceId, _sum }) => [resourceId, _sum.accessCount ?? 0]),
+    ),
   };
 }
 
@@ -136,34 +154,35 @@ export async function loadStudentNodeAccess(
 
 function commonRoadmapProjection(data: RoadmapProjectionData) {
   return {
-    course: data.course,
-    courseOffering: data.courseOffering,
     roadmap: data.roadmap,
     nodeTypes: data.nodeTypes,
   };
 }
 
-function projectAccessibleNode(node: RoadmapNode, identifier: CourseOfferingIdentifier) {
-  return {
-    ...nodeDto(node),
-    resources: node.resources.map((resource) => resourceDto(resource, identifier)),
-  };
+function projectedResources(
+  data: RoadmapProjectionData,
+  node: RoadmapNode,
+  identifier: CourseOfferingIdentifier,
+) {
+  return node.resources.map((resource) =>
+    resourceDto(resource, identifier, data.accessCountByResourceId.get(resource.id) ?? 0),
+  );
 }
 
 export function projectStudentRoadmap(
   data: RoadmapProjectionData,
   identifier: CourseOfferingIdentifier,
-  completedNodeIds: ReadonlySet<string>,
+  progress: StudentProgress,
 ) {
   return {
     ...commonRoadmapProjection(data),
     ...studentRoadmapNodes({
       nodes: data.nodes.map((node) => ({
         ...node,
-        resources: node.resources.map((resource) => resourceDto(resource, identifier)),
+        resources: projectedResources(data, node, identifier),
       })),
       dependencies: data.dependencies,
-      completedNodeIds,
+      ...progress,
       isClosed: Boolean(data.roadmap.closedAt),
     }),
   };
@@ -175,7 +194,10 @@ export function projectTeacherRoadmap(
 ) {
   return {
     ...commonRoadmapProjection(data),
-    nodes: data.nodes.map((node) => projectAccessibleNode(node, identifier)),
+    nodes: data.nodes.map((node) => ({
+      ...nodeDto(node),
+      resources: projectedResources(data, node, identifier),
+    })),
     dependencies: data.dependencies,
   };
 }

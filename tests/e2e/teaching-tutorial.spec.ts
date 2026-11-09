@@ -273,7 +273,9 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await page.screenshot({ path: 'test-results/tutorial-hide.png' });
 
   await openNodeMenu(page, 'Retroalimentación del control', 'Ocultar para estudiantes');
-  await expect(confirmation).toContainText('se eliminarán sus conexiones con');
+  await expect(confirmation).toContainText(
+    'Además, se eliminará su conexión; al volver a mostrarlo, tendrás que conectarlo de nuevo.',
+  );
   await expect(confirmation).toHaveClass(/driver-active-element/);
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
   await expectStep(page, 'Oculta un nodo');

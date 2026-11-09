@@ -9,7 +9,7 @@ export type NoticeTargetRef = Readonly<{
 
 export const SCOPE_DEPTH = { roadmap: 0, node: 1 } as const;
 
-export type BroadScope = keyof typeof SCOPE_DEPTH;
+type BroadScope = keyof typeof SCOPE_DEPTH;
 
 export type RoadmapViewNode = Readonly<{
   id: string;
@@ -69,7 +69,7 @@ export interface RoadmapView {
 
 export type TargetContext = Readonly<Record<string, unknown>>;
 
-export type TargetCurrent = Readonly<{ value: string; visible: boolean; context?: TargetContext }>;
+type TargetCurrent = Readonly<{ value: string; visible: boolean; context?: TargetContext }>;
 
 export type TargetValues = Readonly<{
   knownValue: string;
@@ -86,7 +86,7 @@ export type EntryValue = Readonly<{
   context?: TargetContext;
 }>;
 
-export type SummaryNodeIdField = 'nodeId' | 'sourceNodeId' | 'targetNodeId';
+type SummaryNodeIdField = 'nodeId' | 'sourceNodeId' | 'targetNodeId';
 
 export type SummaryPart = string | Readonly<{ nodeTitle: string; nodeIdField: SummaryNodeIdField }>;
 

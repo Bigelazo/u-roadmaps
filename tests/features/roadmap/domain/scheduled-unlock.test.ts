@@ -5,7 +5,7 @@ import {
   chileWallClock,
   blockedPrerequisiteNodeIds,
   decideScheduledUnlock,
-  dueScheduledUnlockNodeIds,
+  settleDueScheduledUnlocks,
 } from '@/features/roadmap/domain/scheduled-unlock';
 
 const chain = [
@@ -28,8 +28,12 @@ function node(
   };
 }
 
+function settle(nodes: ReturnType<typeof node>[], now: string, dependencies = chain) {
+  return settleDueScheduledUnlocks({ nodes, dependencies, now: new Date(now) });
+}
+
 function due(nodes: ReturnType<typeof node>[], now: string, dependencies = chain) {
-  return new Set(dueScheduledUnlockNodeIds({ nodes, dependencies, now: new Date(now) }));
+  return settle(nodes, now, dependencies).releasedNodeIds;
 }
 
 const longChain = [
@@ -83,14 +87,30 @@ test('releases a blocked node at its scheduled instant and not before', () => {
   expect(due(nodes, '2026-10-20T00:00:00.000Z')).toEqual(new Set(['theory']));
 });
 
-test('waits while any transitive prerequisite keeps a teacher block', () => {
+test('discards a due schedule while any transitive prerequisite keeps a teacher block', () => {
   const nodes = [
     node('intro', null),
-    node('theory', null),
+    node('theory', '2026-10-21T12:00:00.000Z'),
     node('assessment', '2026-10-14T12:00:00.000Z'),
   ];
 
-  expect(due(nodes, '2026-10-20T12:00:00.000Z')).toEqual(new Set());
+  expect(settle(nodes, '2026-10-20T12:00:00.000Z')).toEqual({
+    releasedNodeIds: new Set(),
+    discardedNodeIds: new Set(['assessment']),
+  });
+});
+
+test('discards nothing when every due schedule is released, counting prerequisites released in the same pass', () => {
+  const nodes = [
+    node('intro', '2026-10-10T12:00:00.000Z'),
+    node('theory', null, false),
+    node('assessment', '2026-10-14T12:00:00.000Z'),
+  ];
+
+  expect(settle(nodes, '2026-10-14T12:00:00.000Z')).toEqual({
+    releasedNodeIds: new Set(['intro', 'assessment']),
+    discardedNodeIds: new Set(),
+  });
 });
 
 test('releases a due chain together when every blocked prerequisite is also due', () => {

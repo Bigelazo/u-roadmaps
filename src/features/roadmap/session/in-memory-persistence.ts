@@ -1,6 +1,10 @@
 import type { Point } from '@/features/roadmap/graph/geometry';
 import { blockedNodeAccessMessage } from '@/features/roadmap/domain/access';
 import {
+  hasUnreviewedResources,
+  unreviewedResourcesMessage,
+} from '@/features/roadmap/domain/resource-review';
+import {
   confirmChange,
   planChange,
   type ChangeWithImpact,
@@ -32,23 +36,43 @@ function copy<T>(value: T): T {
 type AnyRoadmapNode = AnyRoadmapDto['nodes'][number];
 type NodeDraft = { readonly id: string };
 
+type SimulatedProgress = {
+  readonly completedNodeIds: Set<string>;
+  readonly reviewedResourceIds: Set<string>;
+};
+
 function asStudentRoadmap(
   roadmap: AnyRoadmapDto,
-  completedNodeIds: ReadonlySet<string>,
+  { completedNodeIds, reviewedResourceIds }: SimulatedProgress,
 ): StudentRoadmapDto {
   if (roadmap.nodes.every((node) => 'access' in node)) return copy(roadmap as StudentRoadmapDto);
   return copy({
-    course: roadmap.course,
-    courseOffering: roadmap.courseOffering,
     roadmap: roadmap.roadmap,
     nodeTypes: roadmap.nodeTypes,
     ...studentRoadmapNodes({
       nodes: (roadmap as RoadmapDto).nodes,
       dependencies: roadmap.dependencies,
       completedNodeIds,
+      reviewedResourceIds,
       isClosed: Boolean(roadmap.roadmap.closedAt),
     }),
   });
+}
+
+function requireCompletableNode(
+  roadmap: AnyRoadmapDto,
+  progress: SimulatedProgress,
+  nodeId: string,
+) {
+  const node = asStudentRoadmap(roadmap, progress).nodes.find(({ id }) => id === nodeId);
+  if (!node) return;
+  if (node.access.status === 'BLOCKED') throw new Error(blockedNodeAccessMessage(node.access));
+  if (
+    'resources' in node &&
+    !progress.completedNodeIds.has(nodeId) &&
+    hasUnreviewedResources(node.resources)
+  )
+    throw new Error(unreviewedResourcesMessage);
 }
 
 function teachingNodes(roadmap: AnyRoadmapDto) {
@@ -69,9 +93,11 @@ export type InMemoryStudentProgress = { completedNodeIds: readonly string[] };
 
 export type PracticeRoadmap = {
   roadmap: AnyRoadmapDto;
-  readonly canvasPreviewCompletions: Set<string>;
+  readonly canvasPreviewProgress: SimulatedProgress;
   readonly createdNodePosition?: Point;
   complete(nodeId: string): void;
+  completeCanvasPreview(nodeId: string): void;
+  resetCanvasPreview(): void;
   updateNodes(update: (nodes: AnyRoadmapNode[]) => readonly NodeDraft[]): void;
   mutateNode(nodeId: string, update: (node: AnyRoadmapNode) => NodeDraft): void;
   mutateResource(resourceId: string, update: (resource: Resource) => Resource | null): void;
@@ -86,27 +112,37 @@ export function createInMemoryRoadmapSessionPersistence(
   initialRoadmap: AnyRoadmapDto,
   options: { studentProgress?: InMemoryStudentProgress; createdNodePosition?: Point } = {},
 ): RoadmapCanvasSessionPersistence {
-  const studentCompletions = options.studentProgress
-    ? new Set(options.studentProgress.completedNodeIds)
+  const studentProgress: SimulatedProgress | null = options.studentProgress
+    ? {
+        completedNodeIds: new Set(options.studentProgress.completedNodeIds),
+        reviewedResourceIds: new Set(),
+      }
     : null;
 
   const practice: PracticeRoadmap = {
     roadmap: copy(initialRoadmap),
-    canvasPreviewCompletions: new Set<string>(),
+    canvasPreviewProgress: { completedNodeIds: new Set(), reviewedResourceIds: new Set() },
     createdNodePosition: options.createdNodePosition,
 
     complete(nodeId) {
-      if (studentCompletions) {
-        const access = asStudentRoadmap(practice.roadmap, studentCompletions).nodes.find(
-          ({ id }) => id === nodeId,
-        )?.access;
-        if (access?.status === 'BLOCKED') throw new Error(blockedNodeAccessMessage(access));
-        studentCompletions.add(nodeId);
+      if (studentProgress) {
+        requireCompletableNode(practice.roadmap, studentProgress, nodeId);
+        studentProgress.completedNodeIds.add(nodeId);
         return;
       }
       practice.mutateNode(nodeId, (node) =>
         'isCompleted' in node ? { ...node, isCompleted: true, canComplete: false } : node,
       );
+    },
+
+    completeCanvasPreview(nodeId) {
+      requireCompletableNode(practice.roadmap, practice.canvasPreviewProgress, nodeId);
+      practice.canvasPreviewProgress.completedNodeIds.add(nodeId);
+    },
+
+    resetCanvasPreview() {
+      practice.canvasPreviewProgress.completedNodeIds.clear();
+      practice.canvasPreviewProgress.reviewedResourceIds.clear();
     },
 
     updateNodes(update) {
@@ -148,9 +184,16 @@ export function createInMemoryRoadmapSessionPersistence(
       const blocked = new Set(plan.consequences.blockedNodeIds);
       const unblocked = new Set(plan.consequences.unblockedNodeIds);
       const removed = new Set(plan.consequences.removedDependencyIds);
+      const discarded = new Set(plan.consequences.discardedScheduleNodeIds);
       practice.updateNodes((nodes) =>
         nodes.map((node) => {
           if (!('isTeacherBlocked' in node)) return node;
+          if (discarded.has(node.id))
+            return {
+              ...node,
+              teacherUnlockAt: undefined,
+              teacherUnlockIncludesDependents: undefined,
+            };
           if (blocked.has(node.id)) return { ...node, isTeacherBlocked: true };
           if (unblocked.has(node.id))
             return {
@@ -194,14 +237,21 @@ export function createInMemoryRoadmapSessionPersistence(
   };
 
   return {
+    async recordResourceAccess(resource, scope) {
+      const progress =
+        scope === 'canvas-preview' ? practice.canvasPreviewProgress : studentProgress;
+      progress?.reviewedResourceIds.add(resource.id);
+      return { countsAccess: false };
+    },
+
     async load() {
-      return studentCompletions
-        ? asStudentRoadmap(practice.roadmap, studentCompletions)
+      return studentProgress
+        ? asStudentRoadmap(practice.roadmap, studentProgress)
         : copy(practice.roadmap);
     },
 
     async loadCanvasPreview() {
-      return asStudentRoadmap(practice.roadmap, practice.canvasPreviewCompletions);
+      return asStudentRoadmap(practice.roadmap, practice.canvasPreviewProgress);
     },
 
     async readChangeImpact(command) {

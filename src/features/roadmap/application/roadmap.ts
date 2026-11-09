@@ -24,7 +24,7 @@ import { ApplicationError } from '@/shared/errors/server';
 
 type JsonObject = Record<string, unknown>;
 
-export function resourceDownloadUrl(identifier: CourseOfferingIdentifier, resourceId: string) {
+function resourceDownloadUrl(identifier: CourseOfferingIdentifier, resourceId: string) {
   return `/api/${encodeURIComponent(identifier.courseCode)}/${identifier.year}/${identifier.semester}/roadmap/resources/${resourceId}/file`;
 }
 
@@ -35,15 +35,22 @@ export function resourceDto(
     url: string;
     type: 'FILE' | 'LINK';
     fileKey?: string | null;
+    fileContentType: string | null;
+    fileSize?: number | null;
   },
   identifier?: CourseOfferingIdentifier,
+  accessCount?: number,
 ) {
+  const isFile = resource.type === 'FILE';
   return {
     id: resource.id,
     title: resource.title,
     url:
       resource.fileKey && identifier ? resourceDownloadUrl(identifier, resource.id) : resource.url,
     type: resource.type,
+    fileContentType: isFile ? (resource.fileContentType ?? null) : null,
+    fileSize: isFile ? (resource.fileSize ?? null) : null,
+    ...(accessCount === undefined ? {} : { accessCount }),
   };
 }
 
@@ -189,6 +196,7 @@ async function copyFrozenVersion(
               type: true,
               fileKey: true,
               fileContentType: true,
+              fileSize: true,
             },
           },
         },

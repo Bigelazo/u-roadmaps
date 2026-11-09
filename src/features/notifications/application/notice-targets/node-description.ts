@@ -9,7 +9,7 @@ import {
   type TargetValues,
 } from './descriptor';
 
-export const nodeDescriptionRef = (nodeId: string) => ({
+const nodeDescriptionRef = (nodeId: string) => ({
   noticeTarget: NOTICE_TARGET.nodeDescription,
   targetKey: `node:${nodeId}:description`,
   nodeId,

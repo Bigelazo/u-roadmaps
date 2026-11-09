@@ -8,7 +8,7 @@ import {
   type RoadmapView,
 } from './descriptor';
 
-export const typeNameRef = (nodeTypeId: string) => ({
+const typeNameRef = (nodeTypeId: string) => ({
   noticeTarget: NOTICE_TARGET.nodeTypeName,
   targetKey: nodeTypeNameTarget(nodeTypeId),
   nodeId: null,
