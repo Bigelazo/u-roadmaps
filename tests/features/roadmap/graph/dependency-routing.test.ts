@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { resolve } from 'node:path';
 import { beforeAll, expect, test } from 'vitest';
-import { AvoidLib } from 'libavoid-js';
+import { AvoidLib, type AvoidRouter, type NativeObject } from 'libavoid-js';
 import {
   DependencyRouter,
   roadmapRoutingScene,
@@ -217,6 +217,13 @@ test('reserves the same ornament footprints for every viewer and ignores hidden 
     ],
     [],
   );
+  expect(input.obstacles.find((o) => o.id === 'a:resources')!.width).toBe(52);
+  expect(input.obstacles.find((o) => o.id === 'a:status')).toMatchObject({
+    x: 86,
+    y: 46,
+    width: 44,
+    height: 44,
+  });
   expect(studentView).toEqual(roadmapRoutingScene([node], []));
   expect(
     roadmapRoutingScene(
@@ -467,6 +474,78 @@ test('rebuilds canonical routes after movement and connector history', () => {
       const expected = fresh.route(input);
       expect([...saved.routes].sort()).toEqual([...expected.routes].sort());
     });
+  });
+});
+
+test('releases native routers on scene replacement and idempotent disposal', () => {
+  const avoid = AvoidLib.getInstance();
+  const live = new Set<AvoidRouter>();
+  const tracked = new Proxy(avoid, {
+    get(target, property) {
+      if (property === 'Router')
+        return new Proxy(target.Router, {
+          construct(Type, args) {
+            const router = Reflect.construct(Type, args) as AvoidRouter;
+            live.add(router);
+            return router;
+          },
+        });
+      if (property === 'destroy')
+        return (object: NativeObject) => {
+          target.destroy(object);
+          live.delete(object as AvoidRouter);
+        };
+      return Reflect.get(target, property);
+    },
+  });
+  const router = new DependencyRouter(tracked);
+  try {
+    expect(router.route(scene()).fallbacks).toBe(0);
+    expect(live.size).toBe(1);
+    expect(router.route(scene()).fallbacks).toBe(0);
+    expect(live.size).toBe(1);
+    router.dispose();
+    expect(live.size).toBe(0);
+    router.dispose();
+    expect(live.size).toBe(0);
+    expect(() => router.route(scene())).toThrow('disposed');
+  } finally {
+    router.dispose();
+    for (const resource of live) avoid.destroy(resource);
+  }
+});
+
+test('rejects an arrow wing collision even when its center line clears the obstacle', () => {
+  const points = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+  ];
+  expect(dependencyRoute(points, 'a', 'b', [body('near-arrow', 90, 3, 5, 2)])).toBeNull();
+  expect(dependencyRoute(points, 'a', 'b', [body('clear-arrow', 90, 7, 5, 2)])).not.toBeNull();
+});
+
+test('separates intermediate corridors for dependencies sharing the same incoming port', () => {
+  withRouter((router) => {
+    const result = router.route({
+      obstacles: [
+        body('0', 480, 480),
+        body('1', 800, 480),
+        body('2', 800, 240),
+        body('5', 640, 600),
+        body('6', 480, 600),
+      ],
+      dependencies: [
+        { id: 'lower', source: '1', target: '6' },
+        { id: 'upper', source: '2', target: '6' },
+      ],
+    });
+    expect(result.fallbacks).toBe(0);
+    const lower = result.routes.get('lower')!.points;
+    const upper = result.routes.get('upper')!.points;
+    expect(lower.at(-1)).toEqual(upper.at(-1));
+    const corridor = (points: typeof lower) =>
+      points.slice(1, -2).find((point, i) => point.x === points[i + 2].x)!;
+    expect(Math.abs(corridor(lower).x - corridor(upper).x)).toBeGreaterThanOrEqual(2);
   });
 });
 

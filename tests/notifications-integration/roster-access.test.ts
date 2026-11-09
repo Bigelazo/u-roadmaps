@@ -1,6 +1,6 @@
 import { expect } from 'vitest';
-import type { Prisma } from '@/shared/server/db';
-import { recordRoadmapNotices, type NoticeDelivery } from '@/features/notifications/server';
+import { prisma, type Prisma } from '@/shared/server/db';
+import { recordRoadmapNotices } from '@/features/notifications/server';
 import type { RoadmapChangePort } from '@/features/roadmap/server';
 import { test, type IntegrationCourse } from './fixtures';
 import { enrollStudents, pendingNotices, teacherEdits } from './roadmap';
@@ -27,20 +27,35 @@ function countedQueries(transaction: Prisma.TransactionClient, count: () => void
   });
 }
 
-async function recordingQueries(edit: (port: RoadmapChangePort) => Promise<unknown>) {
-  let queries = 0;
-  const deliveries: NoticeDelivery[] = [];
+async function recordingQueries(
+  edit: (port: RoadmapChangePort) => Promise<unknown>,
+  afterRecording: (
+    transaction: Prisma.TransactionClient,
+    attempt: number,
+  ) => Promise<void> = async () => {},
+) {
+  const attempts: number[] = [];
+  const delivered: number[] = [];
   await edit({
     async report(transaction, changes) {
+      let queries = 0;
       const delivery = await recordRoadmapNotices(
         countedQueries(transaction, () => queries++),
         changes,
       );
-      if (delivery) deliveries.push(delivery);
+      attempts.push(queries);
+      const attempt = attempts.length;
+      await afterRecording(transaction, attempt);
+      return (
+        delivery &&
+        (async () => {
+          delivered.push(attempt);
+          await delivery((persist) => persist());
+        })
+      );
     },
   });
-  for (const delivery of deliveries) await delivery((persist) => persist());
-  return queries;
+  return { attempts, delivered };
 }
 
 const changes = {
@@ -56,7 +71,37 @@ test.for(Object.entries(changes))(
     const [newcomer] = await enrollStudents(otherCourse, 40);
     const small = await recordingQueries((port) => change(port, course));
     const large = await recordingQueries((port) => change(port, otherCourse));
-    expect(large).toBe(small);
+    expect(small.attempts.length).toBeGreaterThan(0);
+    expect(large.attempts.length).toBeGreaterThan(0);
+    expect([...small.attempts, ...large.attempts]).toEqual(
+      Array(small.attempts.length + large.attempts.length).fill(small.attempts[0]),
+    );
     expect(await pendingNotices(newcomer, otherCourse.roadmapId)).toHaveLength(1);
   },
 );
+
+test('recording measures each retry separately and delivers only the committed attempt', async ({
+  course,
+  otherCourse,
+}) => {
+  const baseline = await recordingQueries((port) => changes.description(port, otherCourse));
+  const retried = await recordingQueries(
+    (port) => changes.description(port, course),
+    async (transaction, attempt) => {
+      if (attempt !== 1) return;
+      await transaction.course.findUniqueOrThrow({ where: { code: course.identifier.courseCode } });
+      await prisma.course.update({
+        where: { code: course.identifier.courseCode },
+        data: { name: 'Concurrent edit' },
+      });
+      await transaction.course.update({
+        where: { code: course.identifier.courseCode },
+        data: { name: 'Retried edit' },
+      });
+    },
+  );
+  expect(retried.attempts.length).toBeGreaterThanOrEqual(2);
+  expect(retried.attempts).toEqual(Array(retried.attempts.length).fill(baseline.attempts[0]));
+  expect(retried.delivered).toEqual([retried.attempts.length]);
+  expect(await pendingNotices(course.studentId, course.roadmapId)).toHaveLength(1);
+});

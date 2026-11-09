@@ -1,6 +1,6 @@
 import type { CDPSession, Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { ok } from './helpers';
+import { authenticateAs, ok } from './helpers';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -56,6 +56,39 @@ async function panCanvas(page: Page, client: CDPSession, delta: { x: number; y: 
   await touch(client, 'touchEnd');
 }
 
+async function settleViewport(page: Page) {
+  let previous = '';
+  let stableSince = Date.now();
+  await expect
+    .poll(async () => {
+      const transform = await page
+        .locator('.react-flow__viewport')
+        .evaluate((element) => element.style.transform);
+      if (transform !== previous) {
+        previous = transform;
+        stableSince = Date.now();
+      }
+      return Date.now() - stableSince;
+    })
+    .toBeGreaterThan(200);
+}
+
+async function centerOverview(page: Page) {
+  await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+  await settleViewport(page);
+  const canvas = await center(page.locator('.react-flow'));
+  await page.mouse.move(canvas.x, canvas.y);
+  await page.mouse.wheel(0, 900);
+  await expect
+    .poll(() =>
+      page
+        .locator('.react-flow__viewport')
+        .evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).a),
+    )
+    .toBeLessThan(0.3);
+  await settleViewport(page);
+}
+
 async function panToCanvasCenter(page: Page, client: CDPSession, node: Locator) {
   const canvas = await page.locator('.react-flow').boundingBox();
   if (!canvas) throw new Error('Practice canvas is not visible.');
@@ -71,7 +104,7 @@ async function centerPracticePair(page: Page, client: CDPSession) {
   const target = page.locator('.react-flow__node[data-id="practice-node-d"]');
   const canvas = await page.locator('.react-flow').boundingBox();
   if (!canvas) throw new Error('Practice canvas is not visible.');
-  await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+  await centerOverview(page);
   const from = await center(source.locator('p'));
   const to = await center(target.locator('p'));
   const delta = {
@@ -195,11 +228,12 @@ for (const width of [390, 360]) {
       await expect
         .poll(
           async () =>
-            (await viewport.evaluate((element) => element.style.transform)) !== initialTransform ||
-            (await reset.source.evaluate((element) => element.style.transform)) !==
-              initialNodeTransform,
+            (await viewport.evaluate((element) => element.style.transform)) !== initialTransform,
         )
         .toBe(true);
+      await expect
+        .poll(() => reset.source.evaluate((element) => element.style.transform))
+        .toBe(initialNodeTransform);
       await expect(page.locator('.react-flow__edge')).toHaveCount(8);
 
       await openPractice(page);
@@ -218,6 +252,7 @@ for (const width of [390, 360]) {
       await expect(modeMessage(page)).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(actions).toBeHidden();
+      await fresh.source.focus();
       await trigger.tap();
       await expect(actions).toBeVisible();
       await actions.getByRole('button', { name: 'Cerrar acciones' }).tap();
@@ -275,7 +310,7 @@ test('touch Arrow mode reaches Nodes under its banner on a landscape phone', asy
 
     const viewport = page.locator('.react-flow__viewport');
     const readable = await viewport.evaluate((element) => element.style.transform);
-    await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
+    await centerOverview(page);
     await expect
       .poll(() => viewport.evaluate((element) => element.style.transform))
       .not.toBe(readable);
@@ -290,3 +325,124 @@ test('touch Arrow mode reaches Nodes under its banner on a landscape phone', asy
     await client.detach();
   }
 });
+
+test('native touch pans from a Node without saving and deliberately moves it persistently', async ({
+  page,
+  course,
+}, testInfo) => {
+  await authenticateAs(page.context(), course.users.teacher.id);
+  await page.goto(course.pagePath());
+  const node = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
+  await expect(node).toBeVisible();
+  await settleViewport(page);
+  const viewport = page.locator('.react-flow__viewport');
+  const position = () => node.evaluate((element) => element.style.transform);
+  const original = await position();
+  const patches: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'PATCH' && request.url().endsWith(`/nodes/${course.nodes.first}`))
+      patches.push(request.postData() ?? '');
+  });
+  const client = await page.context().newCDPSession(page);
+  async function frameNode() {
+    await centerOverview(page);
+    const canvas = await center(page.locator('.react-flow'));
+    const from = await center(node.locator('p'));
+    await panCanvas(page, client, { x: canvas.x - from.x, y: canvas.y - from.y });
+    await settleViewport(page);
+  }
+  async function dragNode() {
+    const start = await center(node.locator('p'));
+    expect(
+      await page.evaluate(
+        ({ x, y }) =>
+          document.elementFromPoint(x, y)?.closest('.react-flow__node')?.getAttribute('data-id'),
+        start,
+      ),
+    ).toBe(course.nodes.first);
+    await touch(client, 'touchStart', start);
+    for (let step = 1; step <= 6; step++)
+      await touch(client, 'touchMove', { x: start.x + step * 5, y: start.y + step * 10 });
+    await touch(client, 'touchEnd');
+  }
+  try {
+    await frameNode();
+    const initialViewport = await viewport.evaluate((element) => element.style.transform);
+    await dragNode();
+    await expect
+      .poll(() => viewport.evaluate((element) => element.style.transform))
+      .not.toBe(initialViewport);
+    await expect.poll(position).toBe(original);
+    await page.reload();
+    await expect(node).toBeVisible();
+    await expect.poll(position).toBe(original);
+    expect(patches).toEqual([]);
+    await frameNode();
+    await page.getByRole('button', { name: 'Mover nodos', exact: true }).tap();
+    await expect(page.getByText('Arrastra un nodo para moverlo')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('touch-move-nodes-390.png') });
+    const stationaryViewport = await viewport.evaluate((element) => element.style.transform);
+    const saved = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'PATCH' &&
+        response.url().endsWith(`/nodes/${course.nodes.first}`),
+    );
+    await dragNode();
+    expect((await saved).ok()).toBe(true);
+    await expect.poll(position).not.toBe(original);
+    const moved = await position();
+    expect(await viewport.evaluate((element) => element.style.transform)).toBe(stationaryViewport);
+    await page.getByRole('button', { name: 'Listo', exact: true }).tap();
+    await expect(page.getByRole('button', { name: 'Mover nodos', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await page.reload();
+    await expect(node).toBeVisible();
+    await expect.poll(position).toBe(moved);
+    expect(patches).toHaveLength(1);
+    await frameNode();
+    await armArrowMode(page, client, node);
+    await page.getByRole('button', { name: 'Cancelar modo flecha', exact: true }).tap();
+    await page.screenshot({ path: testInfo.outputPath('touch-pan-default-390.png') });
+  } finally {
+    await touch(client, 'touchEnd').catch(() => undefined);
+    await client.detach();
+  }
+});
+
+for (const hasTouch of [true, false]) {
+  test.describe(`mouse editing with touch capability ${hasTouch}`, () => {
+    test.use({ hasTouch, isMobile: hasTouch, viewport: { width: 1440, height: 1000 } });
+
+    test('the first mouse drag moves and saves a Node', async ({ page, course }, testInfo) => {
+      await authenticateAs(page.context(), course.users.teacher.id);
+      await page.goto(course.pagePath());
+      const node = page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`);
+      await expect(node).toBeVisible();
+      await settleViewport(page);
+      const original = await node.evaluate((element) => element.style.transform);
+      const start = await center(node.locator('p'));
+      const saved = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' &&
+          response.url().endsWith(`/nodes/${course.nodes.first}`),
+      );
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      await page.mouse.move(start.x + 50, start.y + 60, { steps: 6 });
+      await page.mouse.up();
+      expect((await saved).ok()).toBe(true);
+      await expect
+        .poll(() => node.evaluate((element) => element.style.transform))
+        .not.toBe(original);
+      const moved = await node.evaluate((element) => element.style.transform);
+      await page.reload();
+      await expect(node).toBeVisible();
+      await expect.poll(() => node.evaluate((element) => element.style.transform)).toBe(moved);
+      await page.screenshot({
+        path: testInfo.outputPath(`mouse-editing-touch-${hasTouch}-1440.png`),
+      });
+    });
+  });
+}

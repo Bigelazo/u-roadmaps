@@ -96,11 +96,13 @@ test('hide → show → block collapses to one access notice and recognition reb
     (type: { id: string }) => type.id === findNode(roadmap, nodeId).nodeTypeId,
   );
   const node = { title, nodeType: { name, icon, color } };
-  expect((await recognized.json()).summary.groups).toContainEqual({
-    title,
-    node,
-    items: [[{ node }, ' fue ocultado del Roadmap.']],
-  });
+  expect((await recognized.json()).summary.groups).toEqual([
+    {
+      title,
+      node,
+      items: [[{ node }, ' fue ocultado del Roadmap.']],
+    },
+  ]);
   await expect.poll(notices).toHaveLength(0);
 });
 

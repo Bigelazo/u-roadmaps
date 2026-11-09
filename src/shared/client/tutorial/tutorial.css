@@ -134,7 +134,12 @@
   pointer-events: auto;
 }
 
+.driver-active [data-tutorial-exit][data-tutorial-obscured] {
+  visibility: hidden;
+}
+
 .driver-active:has([data-slot='sheet-overlay']) [data-tutorial-exit] {
+  visibility: hidden;
   z-index: 10;
 }
 
@@ -154,6 +159,23 @@
     .driver-popover.u-roadmaps-tour {
     visibility: hidden;
   }
+}
+
+.driver-active.u-roadmaps-tour-acting:has(
+    button[aria-label='Crear en el mapa'][aria-expanded='true']
+  )
+  [data-tutorial-exit] {
+  visibility: hidden;
+}
+
+.driver-active.u-roadmaps-tour-acting
+  .react-flow:has(button[aria-label='Crear en el mapa'][aria-expanded='true']) {
+  z-index: auto !important;
+}
+
+.driver-active.u-roadmaps-tour-acting
+  .react-flow__panel:has(button[aria-label='Crear en el mapa'][aria-expanded='true']) {
+  z-index: var(--tutorial-z-acting-layer);
 }
 
 .driver-active button[aria-label='Crear en el mapa'] {
