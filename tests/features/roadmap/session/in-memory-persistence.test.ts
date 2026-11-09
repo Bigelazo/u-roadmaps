@@ -80,13 +80,12 @@ test('sets a Node to the target visibility, as production does', async () => {
   );
 });
 
-test('a confirmed Node unlock unlocks its Change impact and releases a due Scheduled unlock waiting on it', async () => {
+test('a confirmed Node unlock unlocks exactly its Change impact and discards a due Scheduled unlock its prerequisite held', async () => {
+  const overdue = new Date(Date.now() - 60_000).toISOString();
   const persistence = createInMemoryRoadmapSessionPersistence({
     ...roadmap,
     nodes: roadmap.nodes.map((node) =>
-      node.id === 'dependent'
-        ? { ...node, teacherUnlockAt: new Date(Date.now() - 60_000).toISOString() }
-        : node,
+      node.id === 'dependent' ? { ...node, teacherUnlockAt: overdue } : node,
     ),
   });
   const unlock = {
@@ -102,7 +101,9 @@ test('a confirmed Node unlock unlocks its Change impact and releases a due Sched
   await executeWithChangeImpact(persistence, unlock);
 
   expect((await persistence.load()).nodes).toEqual(
-    roadmap.nodes.map((node) => ({ ...node, isTeacherBlocked: false })),
+    roadmap.nodes.map((node) =>
+      node.id === 'dependent' ? node : { ...node, isTeacherBlocked: false },
+    ),
   );
 });
 
@@ -248,6 +249,7 @@ test('refuses a Node type that is not available in the Roadmap, as production do
       kind: 'add-node',
       node: { title: 'Nuevo', description: '', nodeTypeId: 'missing', isVisible: true },
       position: { x: 0, y: 0 },
+      displaced: [],
     }),
   ).rejects.toThrow(unavailable);
   await expect(
@@ -279,7 +281,7 @@ test('never reuses an identifier after a deletion', async () => {
     };
   };
   const createAll = async () => {
-    await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 } });
+    await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 }, displaced: [] });
     await executeWithChangeImpact(persistence, {
       kind: 'create-dependency',
       sourceNodeId: 'prerequisite',
@@ -314,12 +316,40 @@ test('places a created Node at its created-node position and resolves with its i
   });
   const node = { title: 'Nuevo', description: '', nodeTypeId: 'content', isVisible: true };
 
-  const created = await persistence.execute({ kind: 'add-node', node, position: { x: 0, y: 0 } });
+  const created = await persistence.execute({
+    kind: 'add-node',
+    node,
+    position: { x: 0, y: 0 },
+    displaced: [],
+  });
 
   expect(created).toEqual({ createdNodeId: expect.any(String) });
   expect((await persistence.load()).nodes).toContainEqual(
     expect.objectContaining({ id: created?.createdNodeId, positionX: 960, positionY: 360 }),
   );
+});
+
+test('pushes the Nodes a created Node lands on two grid cells away and keeps them moved', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap, {
+    createdNodePosition: { x: 960, y: 360 },
+  });
+  const create = async (title: string) =>
+    (
+      await persistence.execute({
+        kind: 'add-node',
+        node: { title, description: '', nodeTypeId: 'content', isVisible: true },
+        position: { x: 0, y: 0 },
+        displaced: [],
+      })
+    )?.createdNodeId;
+
+  const first = await create('Primero');
+  const second = await create('Segundo');
+
+  const nodes = (await persistence.load()).nodes;
+  const placed = (id?: string) => nodes.find((node) => node.id === id)!;
+  expect(placed(second)).toMatchObject({ positionX: 960, positionY: 360 });
+  expect(placed(first)).toMatchObject({ positionX: 960, positionY: 480 });
 });
 
 test('presents a Node whose Node type is missing with the shared unknown Node type', async () => {
@@ -332,7 +362,14 @@ test('presents a Node whose Node type is missing with the shared unknown Node ty
 
 test('lists the Resources of a deletion Change impact by title, as production does', async () => {
   const link = (id: string, title: string) =>
-    ({ id, title, url: 'https://example.com', type: 'LINK' }) as const;
+    ({
+      id,
+      title,
+      url: 'https://example.com',
+      type: 'LINK',
+      fileContentType: null,
+      fileSize: null,
+    }) as const;
   const persistence = createInMemoryRoadmapSessionPersistence({
     ...roadmap,
     nodes: roadmap.nodes.map((node) =>
@@ -398,6 +435,52 @@ test('Practice resources preserve File ownership and permit Link edits', async (
   });
 });
 
+test('Practice replaces a File in place and refuses a replacement for a Link', async () => {
+  const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
+  const resources = async () =>
+    (await persistence.load()).nodes.flatMap((node) => ('resources' in node ? node.resources : []));
+  await persistence.execute({
+    kind: 'upload-resource',
+    nodeId: 'selected',
+    file: new File(['bytes'], 'guide.txt', { type: 'text/plain' }),
+  });
+  await persistence.execute({
+    kind: 'add-resource',
+    nodeId: 'selected',
+    resource: { title: 'Video', url: 'https://example.test/video', type: 'LINK' },
+  });
+  const [file, link] = await resources();
+  const replacement = new File(['slides'], 'slides.pptx', {
+    type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  });
+  await persistence.execute({
+    kind: 'update-resource',
+    resourceId: file.id,
+    resource: { ...file, title: 'Guía.pptx' },
+    file: replacement,
+  });
+  await expect(
+    persistence.execute({
+      kind: 'update-resource',
+      resourceId: link.id,
+      resource: link,
+      file: replacement,
+    }),
+  ).rejects.toThrow('Solo un Archivo permite reemplazar su archivo.');
+  expect(await resources()).toEqual([
+    {
+      id: file.id,
+      title: 'Guía.pptx',
+      url: 'slides.pptx',
+      type: 'FILE',
+      fileContentType: replacement.type,
+      fileSize: replacement.size,
+      accessCount: 0,
+    },
+    link,
+  ]);
+});
+
 test('refuses to delete a Dependency that is not in the Roadmap', async () => {
   const persistence = createInMemoryRoadmapSessionPersistence(roadmap);
 
@@ -408,5 +491,36 @@ test('refuses to delete a Dependency that is not in the Roadmap', async () => {
   expect((await persistence.load()).dependencies.map(({ id }) => id)).toEqual([
     'prerequisite-selected',
     'selected-dependent',
+  ]);
+});
+
+test('a practice student completes a Node only after reviewing its Resources, without counting them', async () => {
+  const guide = {
+    id: 'guide',
+    title: 'Guía',
+    url: 'https://example.test/guide',
+    type: 'LINK' as const,
+    fileContentType: null,
+    fileSize: null,
+    accessCount: 0,
+  };
+  const persistence = createInMemoryRoadmapSessionPersistence(
+    { ...roadmap, nodes: [{ ...independent, resources: [guide] }], dependencies: [] },
+    { studentProgress: { completedNodeIds: [] } },
+  );
+
+  await expect(
+    persistence.execute({ kind: 'complete-node', nodeId: independent.id }),
+  ).rejects.toThrow('Revisa todos los recursos de este nodo antes de completarlo.');
+  await expect(persistence.recordResourceAccess(guide, 'roadmap')).resolves.toEqual({
+    countsAccess: false,
+  });
+  await persistence.execute({ kind: 'complete-node', nodeId: independent.id });
+
+  expect((await persistence.load()).nodes).toEqual([
+    expect.objectContaining({
+      isCompleted: true,
+      resources: [{ ...guide, isReviewed: true }],
+    }),
   ]);
 });

@@ -4,6 +4,7 @@ import {
   visibleRoadmapGraph,
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
+import { withResourceReviews } from '@/features/roadmap/domain/resource-review';
 
 export type Participant =
   { role: 'STUDENT'; completedNodeIds: ReadonlySet<string> } | { role: 'TEACHER' };
@@ -59,15 +60,20 @@ type StudentRoadmapSourceNode = ParticipantNode & {
   resources: Resource[];
 };
 
+export type StudentProgress = {
+  completedNodeIds: ReadonlySet<string>;
+  reviewedResourceIds: ReadonlySet<string>;
+};
+
 export function studentRoadmapNodes<Dependency extends RoadmapGraphDependency>({
   nodes,
   dependencies,
   completedNodeIds,
+  reviewedResourceIds,
   isClosed,
-}: {
+}: StudentProgress & {
   nodes: readonly StudentRoadmapSourceNode[];
   dependencies: readonly Dependency[];
-  completedNodeIds: ReadonlySet<string>;
   isClosed: boolean;
 }) {
   const view = participantNodeAccess({
@@ -92,7 +98,7 @@ export function studentRoadmapNodes<Dependency extends RoadmapGraphDependency>({
         isVisible: true,
         access,
         description: node.description,
-        resources: node.resources,
+        resources: withResourceReviews(node.resources, reviewedResourceIds),
         isCompleted,
         canComplete: !isClosed && !isCompleted,
       };

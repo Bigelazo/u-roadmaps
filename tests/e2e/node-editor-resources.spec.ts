@@ -36,14 +36,14 @@ for (const width of [1440, 390]) {
         .locator('[data-slot="select-value"] svg'),
     ).toBeVisible();
     const row = editor.getByRole('listitem').filter({ hasText: resource.title });
-    await expect(row.locator('[data-slot="item-media"] svg')).toBeVisible();
-    await expect(row.getByText('Archivo', { exact: true })).toBeVisible();
+    await expect(row.locator('[data-slot="item-media"] svg.lucide-file-type')).toBeVisible();
+    await expect(row.getByRole('link', { name: `Descargar ${resource.title}` })).toBeVisible();
+    const linkRow = editor.getByRole('listitem').filter({ hasText: 'Video como enlace' });
+    await expect(linkRow.locator('[data-slot="item-media"] svg.lucide-link-2')).toBeVisible();
     await expect(
-      editor
-        .getByRole('listitem')
-        .filter({ hasText: 'Video como enlace' })
-        .getByText('Enlace', { exact: true }),
+      linkRow.getByRole('link', { name: 'Abrir enlace Video como enlace' }),
     ).toBeVisible();
+    await expect(editor.getByText(/^(Archivo|Enlace)$/)).toHaveCount(0);
     const resources = editor.getByRole('list', { name: 'Recursos del nodo' });
     await resources.scrollIntoViewIfNeeded();
     await resources.screenshot({ path: testInfo.outputPath('file-link-rendering.png') });
@@ -70,6 +70,66 @@ for (const width of [1440, 390]) {
       expect.arrayContaining([
         expect.objectContaining({ id: resource.id, title: 'Plantilla actualizada.pdf.docx' }),
       ]),
+    );
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`replacing a File keeps the Resource and serves the new file at ${width}px`, async ({
+    page,
+    course,
+    teacherApi: api,
+  }, testInfo) => {
+    const created = await api.post(course.apiPath(`/nodes/${course.nodes.first}/resources`), {
+      multipart: {
+        file: {
+          name: 'Pauta.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          buffer: Buffer.from('Primera pauta'),
+        },
+      },
+    });
+    await ok(created, 201);
+    const { resource } = await created.json();
+    await authenticateAs(page.context(), course.users.teacher.id);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(course.pagePath());
+    await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
+    await page.setViewportSize({ width, height: 900 });
+    const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
+    await editor.getByRole('button', { name: 'Editar recurso Pauta.docx' }).click();
+    const form = editor.getByRole('form', { name: 'Editor de recurso' });
+    await form.getByLabel('Reemplazar archivo').setInputFiles({
+      name: 'pauta-final.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.7 pauta final'),
+    });
+    await expect(form.getByText('pauta-final.pdf', { exact: true })).toBeVisible();
+    await expect(form.locator('#resource-extension')).toHaveText(/\.pdf$/);
+    await form.scrollIntoViewIfNeeded();
+    await form.screenshot({ path: testInfo.outputPath('resource-replacement.png') });
+    const saved = page.waitForResponse(
+      (res) =>
+        res.request().method() === 'PATCH' && res.url().includes(`/resources/${resource.id}`),
+    );
+    await form.getByRole('button', { name: 'Guardar recurso' }).click();
+    expect((await saved).status()).toBe(200);
+    await expect(form).toHaveCount(0);
+    const row = editor.getByRole('listitem').filter({ hasText: 'Pauta.pdf' });
+    await expect(row.locator('[data-slot="item-media"] svg.lucide-file-text')).toBeVisible();
+    const download = await api.get(course.apiPath(`/resources/${resource.id}/file`));
+    await ok(download);
+    expect(download.headers()['content-type']).toBe('application/pdf');
+    expect((await download.body()).toString()).toBe('%PDF-1.7 pauta final');
+    const roadmap = await (await api.get(course.apiPath())).json();
+    const node = roadmap.nodes.find((item: { id: string }) => item.id === course.nodes.first);
+    expect(node.resources).toContainEqual(
+      expect.objectContaining({
+        id: resource.id,
+        title: 'Pauta.pdf',
+        type: 'FILE',
+        fileContentType: 'application/pdf',
+      }),
     );
   });
 }
@@ -118,7 +178,7 @@ test('teacher saves consecutive Node edits and publishes links without reloading
     expect((await published).status()).toBe(201);
     await expect(form).toHaveCount(0);
     await expect(
-      editor.getByRole('link', { name: `Abrir recurso ${resourceTitle}`, exact: true }),
+      editor.getByRole('link', { name: `Abrir enlace ${resourceTitle}`, exact: true }),
     ).toBeVisible();
   }
 
@@ -132,7 +192,7 @@ test('teacher saves consecutive Node edits and publishes links without reloading
   await fileForm.getByRole('button', { name: 'Subir archivo', exact: true }).click();
   await expect(fileForm).toHaveCount(0);
   await expect(
-    editor.getByRole('link', { name: 'Abrir recurso archivo-consecutivo.txt', exact: true }),
+    editor.getByRole('link', { name: 'Descargar archivo-consecutivo.txt', exact: true }),
   ).toBeVisible();
 
   const finalTitle = 'Edición después de publicar recursos';

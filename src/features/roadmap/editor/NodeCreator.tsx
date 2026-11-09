@@ -23,7 +23,12 @@ import { Field, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { NodeContentFields } from './NodeContentFields';
 import styles from './NodeCreator.module.css';
 import { NodeTypesEditor } from './NodeTypesEditor';
-import { NODE_TYPES_MENU_ITEM_LABEL, type NodeInput, type NodeTypeInput } from './types';
+import {
+  CREATE_NODE_MENU_ITEM_LABEL,
+  NODE_TYPES_MENU_ITEM_LABEL,
+  type NodeInput,
+  type NodeTypeInput,
+} from './types';
 
 const MotionButton = motion.create(Button);
 
@@ -159,7 +164,7 @@ export function NodeCreator({
                         setIsNodeDialogOpen(true);
                       }}
                     >
-                      <span className={styles.actionLabel}>Crear nodo</span>
+                      <span className={styles.actionLabel}>{CREATE_NODE_MENU_ITEM_LABEL}</span>
                       <span className={styles.actionIcon} aria-hidden="true">
                         <CirclePlus />
                       </span>

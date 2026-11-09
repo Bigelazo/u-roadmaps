@@ -12,6 +12,10 @@ export type Resource = {
   title: string;
   url: string;
   type: 'FILE' | 'LINK';
+  fileContentType: string | null;
+  fileSize: number | null;
+  accessCount?: number;
+  isReviewed?: boolean;
 };
 
 export type NodeType = {
@@ -66,7 +70,7 @@ export type StudentBlockedRoadmapNode = RoadmapNodeSummary & {
 
 export type StudentRoadmapNode = StudentAccessibleRoadmapNode | StudentBlockedRoadmapNode;
 
-type RoadmapNodeDto = RoadmapNode | StudentRoadmapNode;
+export type RoadmapNodeDto = RoadmapNode | StudentRoadmapNode;
 
 export type RoadmapDependency = {
   id: string;

@@ -484,8 +484,35 @@ test('sizes cards from their titles in grid-aligned dimensions', () => {
   expect(cards[1].style.height).toBe(cards[0].style.height);
 });
 
-test('clamps long card titles to two lines while preserving the full title as a tooltip', () => {
+function stubTitleLayout(layout: { scrollHeight: number; clientHeight: number }) {
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(
+    () => layout.scrollHeight,
+  );
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(
+    () => layout.clientHeight,
+  );
+  const observers: (() => void)[] = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  return {
+    resize(next: { scrollHeight: number; clientHeight: number }) {
+      Object.assign(layout, next);
+      act(() => observers.forEach((callback) => callback()));
+    },
+  };
+}
+
+test('clamps long card titles to two lines and offers the full title as a tooltip only when cut', () => {
   const title = 'Un título deliberadamente muy largo que ocuparía más de dos líneas sin recortarse';
+  stubTitleLayout({ scrollHeight: 57, clientHeight: 38 });
   renderNode(studentNodeProps({ id: 'long-title', data: { title } }));
 
   const heading = screen.getByText(title);
@@ -497,6 +524,21 @@ test('clamps long card titles to two lines while preserving the full title as a 
   expect(heading.className).toContain('line-clamp-2');
   expect(heading.className).toContain('wrap-break-word');
   expect(heading.className).toContain('text-left');
+});
+
+test('omits the title tooltip while the whole title fits and adds it once a resize cuts it', () => {
+  const title = 'Breve';
+  const layout = stubTitleLayout({ scrollHeight: 19, clientHeight: 19 });
+  renderNode(studentNodeProps({ id: 'short-title', data: { title } }));
+
+  const heading = screen.getByText(title);
+  expect(heading.hasAttribute('title')).toBe(false);
+
+  layout.resize({ scrollHeight: 38, clientHeight: 19 });
+  expect(heading.getAttribute('title')).toBe(title);
+
+  layout.resize({ scrollHeight: 19, clientHeight: 19 });
+  expect(heading.hasAttribute('title')).toBe(false);
 });
 
 function mountChangedNode(data: Partial<RoadmapFlowNode['data']>) {

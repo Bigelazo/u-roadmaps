@@ -22,9 +22,11 @@ import {
   previewRoadmapDependency,
   previewTeacherBlock,
   removeRoadmapResource,
+  replaceRoadmapResourceFile,
   updateRoadmapNode,
   updateRoadmapNodeType,
   updateRoadmapResource,
+  uploadRoadmapResource,
   type RoadmapChangePort,
 } from '@/features/roadmap/server';
 import type { TeacherBlockOperation } from '@/features/roadmap/types';
@@ -82,6 +84,10 @@ export function teacherEdits(
       updateRoadmapResource({ ...editor, id: resourceId, input }, port),
     removeResource: (resourceId: string) =>
       removeRoadmapResource({ ...editor, id: resourceId }, port),
+    uploadResource: (nodeId: string, file: File) =>
+      uploadRoadmapResource({ ...editor, id: nodeId, file }, port),
+    replaceResourceFile: (resourceId: string, file: File, title = file.name) =>
+      replaceRoadmapResourceFile({ ...editor, id: resourceId, file, title }, port),
   };
 }
 

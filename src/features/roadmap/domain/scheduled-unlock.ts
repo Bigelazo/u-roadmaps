@@ -4,13 +4,20 @@ import {
   transitivePrerequisiteNodeIds,
   type RoadmapGraphDependency,
 } from '@/features/roadmap/domain/access';
-import { zonedInstant, zonedWallClock, type ZonedWallClock } from '@/shared/zoned-time';
+import {
+  END_OF_DAY_TIME,
+  zonedInstant,
+  zonedWallClock,
+  type ZonedWallClock,
+} from '@/shared/zoned-time';
 
 export type CalendarDay = string;
 
 export type UnlockInstant = string;
 
 export const CHILE_TIME_ZONE = 'America/Santiago';
+
+export const SCHEDULED_UNLOCK_DEFAULT_TIME = END_OF_DAY_TIME;
 
 type ScheduledUnlockNode = {
   id: string;
@@ -123,7 +130,7 @@ export function decideScheduledUnlock({
   return decision;
 }
 
-export function dueScheduledUnlockNodeIds({
+export function settleDueScheduledUnlocks({
   nodes,
   dependencies,
   now,
@@ -164,7 +171,10 @@ export function dueScheduledUnlockNodeIds({
       changed = true;
     }
   }
-  return released;
+  const discarded = new Set(
+    candidates.filter(({ id }) => teacherBlockedNodeIds.has(id)).map(({ id }) => id),
+  );
+  return { releasedNodeIds: released, discardedNodeIds: discarded };
 }
 
 export function pendingScheduledUnlockNodeIds({

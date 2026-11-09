@@ -3,12 +3,14 @@ vi.mock('@/app/_adapters/roadmap-changes', () => ({ roadmapChangePort: {} }));
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { ApplicationError } from '@/shared/errors/types';
 
-const { createResource, uploadResource, updateResource, removeResource } = vi.hoisted(() => ({
-  createResource: vi.fn(),
-  uploadResource: vi.fn(),
-  updateResource: vi.fn(),
-  removeResource: vi.fn(),
-}));
+const { createResource, uploadResource, updateResource, replaceResourceFile, removeResource } =
+  vi.hoisted(() => ({
+    createResource: vi.fn(),
+    uploadResource: vi.fn(),
+    updateResource: vi.fn(),
+    replaceResourceFile: vi.fn(),
+    removeResource: vi.fn(),
+  }));
 
 vi.mock('@/shared/server/db', async () => {
   const { PrismaClientKnownRequestError } = await import('@prisma/client/runtime/client');
@@ -21,6 +23,7 @@ vi.mock('@/features/roadmap/server', () => ({
   createRoadmapResource: createResource,
   uploadRoadmapResource: uploadResource,
   updateRoadmapResource: updateResource,
+  replaceRoadmapResourceFile: replaceResourceFile,
   removeRoadmapResource: removeResource,
   getRoadmapNodeResources: vi.fn(),
 }));
@@ -58,6 +61,7 @@ beforeEach(() => {
   createResource.mockResolvedValue(resource);
   uploadResource.mockResolvedValue(resource);
   updateResource.mockResolvedValue({ resource });
+  replaceResourceFile.mockResolvedValue({ resource });
   removeResource.mockResolvedValue({});
 });
 
@@ -112,6 +116,32 @@ test('returns the updated Resource and an empty deletion response', async () => 
   );
   expect(deleted.status).toBe(204);
   expect(await deleted.text()).toBe('');
+});
+
+test('replaces a Resource file from a multipart edit with its title', async () => {
+  const body = new FormData();
+  body.set('title', 'Guía revisada.pdf');
+  body.set('file', new File(['%PDF-1.7 revised'], 'revisada.pdf', { type: 'application/pdf' }));
+  const response = await PATCH(
+    new Request('http://localhost/resources/resource-id', { method: 'PATCH', body }),
+    context as never,
+  );
+
+  expect(response.status).toBe(200);
+  await expect(response.json()).resolves.toEqual({ resource });
+  expect(updateResource).not.toHaveBeenCalled();
+  const file = replaceResourceFile.mock.calls[0][0].file as File;
+  await expect(file.text()).resolves.toBe('%PDF-1.7 revised');
+  expect(replaceResourceFile).toHaveBeenCalledWith(
+    {
+      userId: 'teacher-id',
+      identifier: { courseCode: 'CC3002', year: 2026, semester: 2 },
+      id: 'resource-id',
+      title: 'Guía revisada.pdf',
+      file,
+    },
+    expect.any(Object),
+  );
 });
 
 test.each([

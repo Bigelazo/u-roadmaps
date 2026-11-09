@@ -30,14 +30,30 @@ const nodeWithResources = {
       id: 'resource-1',
       title: 'Guia de estudio',
       type: 'FILE' as const,
+      fileContentType: 'application/pdf',
+      fileSize: 1_258_291,
+      accessCount: 3,
+      isReviewed: true,
       url: 'https://example.com/guide.pdf',
     },
     {
       id: 'resource-2',
       title: 'Clase grabada',
       type: 'LINK' as const,
+      fileContentType: null,
+      fileSize: null,
+      accessCount: 1,
+      isReviewed: true,
       url: 'https://example.com/class',
     },
+  ],
+};
+
+const nodeWithUnreviewedLink = {
+  ...nodeWithResources,
+  resources: [
+    nodeWithResources.resources[0],
+    { ...nodeWithResources.resources[1], isReviewed: false },
   ],
 };
 
@@ -129,13 +145,92 @@ test('student can complete an available node and open every resource in a new ta
   await user.click(screen.getByRole('button', { name: 'Completar' }));
   expect(onComplete).toHaveBeenCalledWith(nodeWithResources);
 
-  const guide = screen.getByRole('link', { name: /Guia de estudio/i });
+  const guide = screen.getByRole('link', { name: 'Descargar Guia de estudio' });
   expect(guide.getAttribute('href')).toBe(nodeWithResources.resources[0].url);
   expect(guide.getAttribute('target')).toBe('_blank');
   expect(guide.getAttribute('rel')).toBe('noreferrer');
-  expect(screen.getByRole('link', { name: /Clase grabada/i }).getAttribute('href')).toBe(
-    nodeWithResources.resources[1].url,
-  );
+  expect(guide.innerHTML).toContain('lucide-file-text"');
+  const recording = screen.getByRole('link', { name: 'Abrir enlace Clase grabada' });
+  expect(recording.getAttribute('href')).toBe(nodeWithResources.resources[1].url);
+  expect(recording.innerHTML).toContain('lucide-link-2"');
+  expect(screen.queryByText(/Archivo descargable|Enlace externo/)).toBeNull();
+});
+
+test('each Resource row shows its access count, a File its size, and what the student reviewed', () => {
+  renderDetail({ node: nodeWithUnreviewedLink });
+
+  const guide = screen.getByRole('link', { name: 'Descargar Guia de estudio' });
+  expect(within(guide).getByText('3 accesos')).toBeTruthy();
+  expect(within(guide).getByText('1,2 MB')).toBeTruthy();
+  expect(within(guide).getByText('Ya lo revisaste')).toBeTruthy();
+  const recording = screen.getByRole('link', { name: 'Abrir enlace Clase grabada' });
+  expect(within(recording).getByText('1 acceso')).toBeTruthy();
+  expect(within(recording).queryByText(/MB|KB/)).toBeNull();
+  expect(within(recording).queryByText('Ya lo revisaste')).toBeNull();
+});
+
+test('left click, middle click and keyboard activation of a Resource report an access', async () => {
+  const user = userEvent.setup();
+  const onResourceAccess = vi.fn();
+  renderDetail({ node: nodeWithUnreviewedLink, onResourceAccess });
+  const recording = screen.getByRole('link', { name: 'Abrir enlace Clase grabada' });
+  recording.addEventListener('click', (event) => event.preventDefault());
+
+  await user.click(recording);
+  await user.pointer({ keys: '[MouseMiddle]', target: recording });
+  recording.focus();
+  await user.keyboard('{Enter}');
+
+  expect(onResourceAccess).toHaveBeenCalledTimes(3);
+  expect(onResourceAccess).toHaveBeenCalledWith(nodeWithUnreviewedLink.resources[1]);
+});
+
+test('Completar looks disabled while a Resource is unreviewed and a click or Enter only shows the hint', async () => {
+  const user = userEvent.setup();
+  const onComplete = vi.fn();
+  renderDetail({ node: nodeWithUnreviewedLink, onComplete });
+
+  const complete = screen.getByRole('button', { name: 'Completar' }) as HTMLButtonElement;
+  expect(complete.disabled).toBe(false);
+  expect(complete.getAttribute('aria-disabled')).toBe('true');
+  expect(screen.queryByText('Revisa el material aunque sea po...')).toBeNull();
+
+  await user.hover(complete);
+  expect(screen.queryByText('Revisa el material aunque sea po...')).toBeNull();
+  await user.click(complete);
+  expect(screen.getAllByText('Revisa el material aunque sea po...').length).toBeGreaterThan(0);
+  await user.keyboard('{Escape}');
+  complete.focus();
+  await user.keyboard('{Enter}');
+  expect(screen.getAllByText('Revisa el material aunque sea po...').length).toBeGreaterThan(0);
+  expect(onComplete).not.toHaveBeenCalled();
+});
+
+test('the editor student preview reviews a Resource locally before Completar works', async () => {
+  const user = userEvent.setup();
+  const onComplete = vi.fn();
+  const onResourceAccess = vi.fn();
+  const teachingNode = {
+    ...nodeWithResources,
+    resources: nodeWithResources.resources.map((resource) => ({
+      ...resource,
+      isReviewed: undefined,
+    })),
+  };
+  renderDetail({ node: teachingNode, onComplete, onResourceAccess, isTeacherPreview: true });
+  for (const link of screen.getAllByRole('link'))
+    link.addEventListener('click', (event) => event.preventDefault());
+  const complete = screen.getByRole('button', { name: 'Completar' });
+
+  await user.click(complete);
+  expect(onComplete).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('link', { name: 'Descargar Guia de estudio' }));
+  await user.click(screen.getByRole('link', { name: 'Abrir enlace Clase grabada' }));
+  expect(complete.getAttribute('aria-disabled')).toBeNull();
+  await user.click(complete);
+
+  expect(onComplete).toHaveBeenCalledTimes(1);
+  expect(onResourceAccess).not.toHaveBeenCalled();
 });
 
 test('student cannot complete a completed node', () => {
@@ -209,4 +304,31 @@ test('uses the selected-node header and keeps completion next to the close actio
   expect(screen.getByRole('button', { name: 'Completar' }).className).toContain('bg-emerald-600');
   const panel = screen.getByLabelText(node.title);
   expect(panel.className).toContain('shadow-(--shadow-roadmap-panel)');
+});
+
+test('lists Resources before the description, which shows without a heading', () => {
+  renderDetail({ node: nodeWithResources });
+
+  expect(screen.queryByRole('heading', { name: 'Descripción' })).toBeNull();
+  const resources = screen.getByRole('heading', { name: 'Recursos' });
+  const description = screen.getByText(node.description!);
+  expect(
+    resources.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(screen.getByRole('separator')).toBeTruthy();
+});
+
+test('a Node without Resources shows only its description', () => {
+  renderDetail();
+
+  expect(screen.queryByRole('heading', { name: 'Recursos' })).toBeNull();
+  expect(screen.queryByText(/No hay recursos adjuntos/)).toBeNull();
+  expect(screen.queryByRole('separator')).toBeNull();
+  expect(screen.getByText(node.description!)).toBeTruthy();
+});
+
+test('Resource rows keep a 44px touch target', () => {
+  renderDetail({ node: nodeWithResources });
+
+  for (const link of screen.getAllByRole('link')) expect(link.className).toContain('min-h-11');
 });

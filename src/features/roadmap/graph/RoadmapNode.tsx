@@ -33,6 +33,7 @@ import { cn } from 'cn';
 import { formatBadgeCount } from '@/shared/badge-count';
 import { useNodeChangeCount } from '@/features/notifications/client';
 import { useCoarsePointer } from '@/features/roadmap/ui/compact-canvas-layout';
+import { useClampedText } from '@/shared/ui/use-clamped-text';
 
 export type RoadmapNodeStatus = 'completed' | 'available' | 'locked' | 'editing';
 export type RoadmapNodeData = Record<string, unknown> &
@@ -545,6 +546,7 @@ function NodeNotificationBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'i
 export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) {
   const entryProgress = useNodeEntryProgress(id);
   const cardRef = useRef<HTMLDivElement>(null);
+  const titleText = useClampedText<HTMLParagraphElement>(data.title);
   useEffect(() => {
     const wrapper = cardRef.current?.closest<HTMLElement>('.react-flow__node');
     if (!wrapper) return;
@@ -655,7 +657,8 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
       >
         <NodeTypeBadge icon={data.typeIcon} name={data.typeName} color={nodeColor} />
         <p
-          title={data.title}
+          ref={titleText.ref}
+          title={titleText.isClamped ? data.title : undefined}
           className="line-clamp-2 min-w-0 text-left text-[15.5px] leading-tight font-medium wrap-break-word text-ink"
         >
           {data.title}

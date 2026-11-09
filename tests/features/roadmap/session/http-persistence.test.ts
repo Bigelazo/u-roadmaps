@@ -65,11 +65,12 @@ const executions: Record<string, Execution> = {
     command: { kind: 'complete-node', nodeId: 'node-1' },
     requests: [['/nodes/node-1/completion', { method: 'POST' }]],
   },
-  'add a Node and resolve with its identifier': {
+  'add a Node, move the Nodes it pushed aside and resolve with its identifier': {
     command: {
       kind: 'add-node',
       node: { title: 'Límites', description: '', nodeTypeId: 'content', isVisible: true },
       position: { x: 10, y: 20 },
+      displaced: [{ nodeId: 'node-2', position: { x: 10, y: 140 } }],
     },
     requests: [
       [
@@ -86,6 +87,10 @@ const executions: Record<string, Execution> = {
             positionY: 20,
           }),
         },
+      ],
+      [
+        '/nodes/node-2',
+        { method: 'PATCH', headers: json, body: JSON.stringify({ positionX: 10, positionY: 140 }) },
       ],
     ],
     response: { node: { id: 'node-9' } },
@@ -428,6 +433,26 @@ test('uploads a file Resource as multipart form data without setting its boundar
   );
 });
 
+test('replaces a file Resource as multipart form data carrying its edited title', async () => {
+  const fetchMock = respondWith();
+
+  await http.execute({
+    kind: 'update-resource',
+    resourceId: 'resource-1',
+    resource: { title: 'Guía.pdf', url: '/api/protected', type: 'FILE' },
+    file,
+  });
+
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(api('/resources/resource-1'), {
+    method: 'PATCH',
+    body: expect.any(FormData),
+  });
+  expect((fetchMock.mock.calls[0] as unknown as Request)[1].body).toSatisfy(
+    (body: FormData) =>
+      body.get('file') === file && body.get('title') === 'Guía.pdf' && !body.has('url'),
+  );
+});
+
 test('passes the server refusal message through', async () => {
   refuseWith(404, { message: 'El recurso no pertenece al roadmap.' });
 
@@ -521,4 +546,39 @@ test('a batch with one failing item still sends the others and rethrows the fail
     api('/nodes/node-1'),
     api('/nodes/node-2'),
   ]);
+});
+
+test('a Resource access survives navigation and only a Link needs the client to report it', async () => {
+  const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetch);
+
+  await expect(
+    http.recordResourceAccess({ id: 'link-1', type: 'LINK' }, 'roadmap'),
+  ).resolves.toEqual({
+    countsAccess: true,
+  });
+  await expect(
+    http.recordResourceAccess({ id: 'file-1', type: 'FILE' }, 'roadmap'),
+  ).resolves.toEqual({
+    countsAccess: true,
+  });
+  await expect(
+    http.recordResourceAccess({ id: 'file-1', type: 'FILE' }, 'canvas-preview'),
+  ).resolves.toEqual({ countsAccess: false });
+
+  expect(fetch.mock.calls).toEqual([
+    [api('/resources/link-1/access'), { method: 'POST', keepalive: true }],
+    [api('/simulation/resources/file-1/review'), { method: 'POST', keepalive: true }],
+  ]);
+});
+
+test('a refused Resource access is not reported as recorded', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(null, { status: 409 })),
+  );
+
+  await expect(
+    http.recordResourceAccess({ id: 'link-1', type: 'LINK' }, 'roadmap'),
+  ).rejects.toThrow('No se pudo registrar el acceso al recurso.');
 });

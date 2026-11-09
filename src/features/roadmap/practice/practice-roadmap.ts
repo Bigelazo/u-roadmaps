@@ -1,5 +1,9 @@
 import type { RoadmapDto, RoadmapNode } from '@/features/roadmap/types';
-import { addCalendarDays, chileInstant } from '@/features/roadmap/domain/scheduled-unlock';
+import {
+  addCalendarDays,
+  chileInstant,
+  SCHEDULED_UNLOCK_DEFAULT_TIME,
+} from '@/features/roadmap/domain/scheduled-unlock';
 
 export type { PracticeExperience } from '@/features/roadmap/types';
 export type PracticeAcademicTerm = Readonly<{ year: number; semester: number }>;
@@ -114,12 +118,18 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
               title: 'Guía de estudio',
               url: 'https://www.u-cursos.cl',
               type: 'LINK',
+              fileContentType: null,
+              fileSize: null,
+              accessCount: 0,
             },
             {
               id: 'practice-resource-file',
               title: 'Apunte de lectura',
               url: '/practice-roadmap/apunte-de-lectura.txt',
               type: 'FILE',
+              fileContentType: 'text/plain',
+              fileSize: 41,
+              accessCount: 0,
             },
           ],
         },
@@ -148,7 +158,7 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
           isTeacherBlocked: true,
           teacherUnlockAt: chileInstant({
             day: addCalendarDays(today, 14),
-            time: '08:00',
+            time: SCHEDULED_UNLOCK_DEFAULT_TIME,
           }).toISOString(),
         },
       ),

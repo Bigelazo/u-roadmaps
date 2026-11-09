@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { SignJWT } from 'jose';
 import { expect, test, type E2EUser } from './fixtures';
-import { authenticateAs, ok } from './helpers';
+import { authenticateAs, ok, reviewNodeResources } from './helpers';
 import { createDependency } from './create-node';
 import { changeTeacherBlock, connectNodes } from './previewed-writes';
 import { panRoadmapNodeIntoView } from './pan-roadmap';
@@ -541,6 +541,7 @@ test('teacher blocks and unlocks a roadmap branch atomically', async ({
     data: { title: 'Recurso que se conserva', url: 'https://example.test/kept', type: 'LINK' },
   });
   await ok(resource, 201);
+  await reviewNodeResources(student, course.apiPath(), root.id);
   await ok(await student.post(course.apiPath(`/nodes/${root.id}/completion`)));
 
   const block = await teacher.post(teacherBlockPath(root.id), {
@@ -900,7 +901,10 @@ test('teacher and student workflows render on a test-owned course offering', asy
   await expect(
     page.getByRole('link', { name: 'Programa y herramientas del curso' }),
   ).toHaveAttribute('href', 'https://ucampus.uchile.cl/');
-  await expect(page.getByRole('button', { name: 'Completar' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Completar' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
   expect(unresolvedStudentEdgeErrors).toEqual([]);
 });
 

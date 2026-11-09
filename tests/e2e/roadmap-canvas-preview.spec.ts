@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { authenticateAs, ok } from './helpers';
+import { authenticateAs, ok, reviewNodeResources } from './helpers';
 
 test('a teacher previews, completes, resets, and exits the persistent student canvas', async ({
   page,
@@ -13,6 +13,7 @@ test('a teacher previews, completes, resets, and exits the persistent student ca
       candidate.access.status === 'ACCESSIBLE' && candidate.canComplete,
   ) as { id: string };
   expect(node).toBeDefined();
+  await reviewNodeResources(api, course.apiPath(), node.id, 'canvas-preview');
 
   await authenticateAs(page.context(), course.users.teacher.id);
   await page.goto(course.pagePath());

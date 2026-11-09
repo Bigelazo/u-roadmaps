@@ -3,6 +3,7 @@ import type { RoadmapDto, StudentRoadmapDto } from '@/features/roadmap/types';
 import type { NodeActionIntent } from '@/features/roadmap/graph/node-action';
 
 export type {
+  NewNodePlacement,
   RoadmapNodePlacement,
   RoadmapNodePosition,
 } from '@/features/roadmap/canvas/commands/commands';

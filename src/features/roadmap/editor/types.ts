@@ -26,7 +26,12 @@ export type ResourceSession =
   | { kind: 'closed' }
   | { kind: 'adding-file'; value: ResourceInput; selectedFile: File | null }
   | { kind: 'adding-link'; value: ResourceInput }
-  | { kind: 'editing-existing'; resourceId: string; value: ResourceInput };
+  | {
+      kind: 'editing-existing';
+      resourceId: string;
+      value: ResourceInput;
+      replacementFile: File | null;
+    };
 
 export type NodeEditorEffect = CanvasCommandOf<
   'update-node' | 'add-resource' | 'upload-resource' | 'update-resource' | 'delete-resource'
@@ -94,3 +99,5 @@ export type NodeTypeDraft = {
 };
 
 export const NODE_TYPES_MENU_ITEM_LABEL = 'Gestionar tipos de nodo';
+
+export const CREATE_NODE_MENU_ITEM_LABEL = 'Crear nodo';

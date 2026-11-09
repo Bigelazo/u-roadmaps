@@ -113,10 +113,10 @@ it('keeps a free requested position and moves an occupied one to a grid-aligned 
   expect(position!.x % roadmapGridSize).toBe(0);
   expect(position!.y % roadmapGridSize).toBe(0);
   expect(
-    candidate.x + candidate.width + roadmapGridSize <= occupied[0].x ||
-      occupied[0].x + occupied[0].width + roadmapGridSize <= candidate.x ||
-      candidate.y + candidate.height + roadmapGridSize <= occupied[0].y ||
-      occupied[0].y + occupied[0].height + roadmapGridSize <= candidate.y,
+    candidate.x + candidate.width + 2 * roadmapGridSize <= occupied[0].x ||
+      occupied[0].x + occupied[0].width + 2 * roadmapGridSize <= candidate.x ||
+      candidate.y + candidate.height + 2 * roadmapGridSize <= occupied[0].y ||
+      occupied[0].y + occupied[0].height + 2 * roadmapGridSize <= candidate.y,
   ).toBe(true);
 });
 

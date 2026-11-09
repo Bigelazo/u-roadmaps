@@ -1,9 +1,14 @@
-import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { Resource } from '@/features/roadmap/types';
 import { cn } from 'cn';
 import { Button } from '@/shared/ui/button';
 import { Item, ItemMedia } from '@/shared/ui/item';
-import { ResourceIcon } from '@/features/roadmap/ui/ResourceIcon';
+import {
+  ResourceActionIcon,
+  ResourceIcon,
+  resourceActionLabel,
+} from '@/features/roadmap/ui/ResourceIcon';
+import { ResourceMetadata } from '@/features/roadmap/ui/ResourceMetadata';
 import { dividedItemClassName } from './primitives';
 
 type Props = {
@@ -26,22 +31,20 @@ export function ResourceList({ resources, onEdit, onDelete }: Props) {
       {resources.map((item) => (
         <Item key={item.id} render={<li />} className={cn(dividedItemClassName, 'gap-2')}>
           <ItemMedia className="text-primary">
-            <ResourceIcon type={item.type} />
+            <ResourceIcon resource={item} />
           </ItemMedia>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium">{item.title}</span>
-            <span className="block truncate text-xs text-muted-foreground">
-              {item.type === 'FILE' ? 'Archivo' : 'Enlace'}
-            </span>
+            <ResourceMetadata resource={item} className="mt-0.5" />
           </span>
           <a
             href={item.url}
             target="_blank"
             rel="noreferrer"
-            aria-label={`Abrir recurso ${item.title}`}
+            aria-label={resourceActionLabel(item)}
             className="grid size-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
-            <ExternalLink className="size-3.5" />
+            <ResourceActionIcon type={item.type} className="size-3.5" />
           </a>
           <Button
             type="button"

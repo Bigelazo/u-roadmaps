@@ -1,5 +1,10 @@
 import type { ChangeImpactOf as PlannedChangeImpactOf } from '@/features/roadmap/domain/change-impact';
-import { linkResourceOnlyError, resourceEditError } from '@/features/roadmap/domain/resource';
+import {
+  fileReplacementError,
+  linkResourceOnlyError,
+  resourceEditError,
+  uploadedContentType,
+} from '@/features/roadmap/domain/resource';
 import {
   blockedPrerequisiteNodeIds,
   chileWallClock,
@@ -11,6 +16,7 @@ import type {
   ResourceInput,
 } from '@/features/roadmap/editor/types';
 import type { RoadmapLayoutDirection } from '@/features/roadmap/graph/dagre-layout';
+import { nodesDisplacedByNewNode } from '@/features/roadmap/graph/node-collisions';
 import type { PracticeRoadmap } from '@/features/roadmap/session/in-memory-persistence';
 import type {
   ExecutionResult,
@@ -50,6 +56,11 @@ export type RoadmapNodePosition = {
 export type RoadmapNodePlacement = {
   readonly nodeId: string;
   readonly position: RoadmapNodePosition;
+};
+
+export type NewNodePlacement = {
+  readonly position: RoadmapNodePosition;
+  readonly displaced: readonly RoadmapNodePlacement[];
 };
 
 type TeacherBlockChangeImpact = {
@@ -613,23 +624,36 @@ export const canvasCommandCatalog = {
     },
     success: () => 'Nodos ordenados exitosamente.',
   }),
-  'add-node': command<{ kind: 'add-node'; node: NewRoadmapNode; position: RoadmapNodePosition }>({
-    requests: ({ node, position }) => ({
-      method: 'POST',
-      path: '/nodes',
-      body: {
-        ...node,
-        description: node.description || null,
-        positionX: position.x,
-        positionY: position.y,
+  'add-node': command<{ kind: 'add-node'; node: NewRoadmapNode } & NewNodePlacement>({
+    requests: ({ node, position, displaced }) => [
+      {
+        method: 'POST',
+        path: '/nodes',
+        body: {
+          ...node,
+          description: node.description || null,
+          positionX: position.x,
+          positionY: position.y,
+        },
       },
-    }),
+      ...nodeMoves.requests({ positions: displaced }),
+    ],
     failure: 'No se pudo crear el nodo.',
     result: async ([response]) => ({ createdNodeId: (await response.json()).node.id }),
     practice: (practice, { node, position: requested }) => {
       practice.requireAvailableNodeType(node.nodeTypeId);
       const id = crypto.randomUUID();
       const position = practice.createdNodePosition ?? requested;
+      nodeMoves.practice(practice, {
+        positions: nodesDisplacedByNewNode(
+          practice.roadmap.nodes.map(({ id, title, positionX, positionY }) => ({
+            id,
+            title,
+            position: { x: positionX, y: positionY },
+          })),
+          { id, title: node.title, position },
+        ),
+      });
       practice.updateNodes((nodes) => [
         ...nodes,
         {
@@ -678,7 +702,13 @@ export const canvasCommandCatalog = {
     practice: (practice, { nodeId, resource }) => {
       const error = linkResourceOnlyError(resource.type);
       if (error) throw new Error(error);
-      practice.appendResource(nodeId, { ...resource, id: crypto.randomUUID() });
+      practice.appendResource(nodeId, {
+        ...resource,
+        id: crypto.randomUUID(),
+        fileContentType: null,
+        fileSize: null,
+        accessCount: 0,
+      });
     },
     success: () => 'Enlace guardado exitosamente.',
     report: ({ nodeId }) => ({ type: 'addResource', nodeId }),
@@ -696,6 +726,9 @@ export const canvasCommandCatalog = {
         title: file.name,
         url: file.name,
         type: 'FILE',
+        fileContentType: uploadedContentType(file),
+        fileSize: file.size,
+        accessCount: 0,
       }),
     success: () => 'Recurso guardado exitosamente.',
   }),
@@ -703,15 +736,36 @@ export const canvasCommandCatalog = {
     kind: 'update-resource';
     resourceId: string;
     resource: ResourceInput;
+    file?: File;
   }>({
-    requests: ({ resourceId, resource }) => ({
-      method: 'PATCH',
-      path: `/resources/${resourceId}`,
-      body: resource.type === 'FILE' ? { title: resource.title } : resource,
-    }),
+    requests: ({ resourceId, resource, file }) => {
+      const path = `/resources/${resourceId}`;
+      if (!file)
+        return {
+          method: 'PATCH',
+          path,
+          body: resource.type === 'FILE' ? { title: resource.title } : resource,
+        };
+      const body = new FormData();
+      body.append('title', resource.title);
+      body.append('file', file);
+      return { method: 'PATCH', path, body };
+    },
     failure: 'No se pudo guardar el recurso.',
-    practice: (practice, { resourceId, resource }) =>
+    practice: (practice, { resourceId, resource, file }) =>
       practice.mutateResource(resourceId, (current) => {
+        if (file) {
+          const error = fileReplacementError(current.type);
+          if (error) throw new Error(error);
+          practice.canvasPreviewProgress.reviewedResourceIds.delete(resourceId);
+          return {
+            ...current,
+            title: resource.title,
+            url: file.name,
+            fileContentType: uploadedContentType(file),
+            fileSize: file.size,
+          };
+        }
         const changes =
           current.type === 'FILE' && resource.type === 'FILE' && resource.url === current.url
             ? { title: resource.title }
@@ -797,7 +851,7 @@ export const canvasCommandCatalog = {
   }>({
     requests: ({ nodeId }) => ({ method: 'POST', path: `/simulation/nodes/${nodeId}/completion` }),
     failure: 'No se pudo completar el nodo en la previsualización.',
-    practice: (practice, { nodeId }) => void practice.canvasPreviewCompletions.add(nodeId),
+    practice: (practice, { nodeId }) => practice.completeCanvasPreview(nodeId),
     changesCanvasPreview: true,
     success: completionSuccess,
     report: ({ nodeId }) => ({ type: 'completeCanvasPreviewNode', nodeId }),
@@ -805,7 +859,7 @@ export const canvasCommandCatalog = {
   'reset-canvas-preview': command<{ kind: 'reset-canvas-preview' }>({
     requests: () => ({ method: 'DELETE', path: '/simulation' }),
     failure: 'No se pudo reiniciar el progreso de previsualización.',
-    practice: (practice) => practice.canvasPreviewCompletions.clear(),
+    practice: (practice) => practice.resetCanvasPreview(),
     changesCanvasPreview: true,
     confirmedAction: {
       apply: executeAsRequested,
