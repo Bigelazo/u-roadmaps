@@ -127,7 +127,7 @@ function ResourceReplacementField({
         onChange={(event) => selectResourceFile(event.target.files?.item(0) ?? null)}
       />
       {replacementFile ? (
-        <div className="flex min-h-11 items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 py-1 pr-1 pl-3">
+        <div className="flex min-h-11 flex-wrap items-center gap-x-2 rounded-lg border border-primary/40 bg-primary/5 py-1 pr-1 pl-3">
           <ResourceIcon
             resource={{
               type: 'FILE',
@@ -137,17 +137,17 @@ function ResourceReplacementField({
             size={18}
             className="shrink-0 text-primary"
           />
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 flex-1 basis-40">
             <span className="block truncate text-sm font-semibold">{replacementFile.name}</span>
             <span className="block text-xs text-muted-foreground">
-              Reemplazará al archivo actual al guardar
+              Reemplazará al actual al guardar
             </span>
           </span>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="min-h-11 shrink-0"
+            className="ml-auto min-h-11 shrink-0"
             onClick={() => selectResourceFile(null)}
           >
             <Undo2 data-icon="inline-start" />
@@ -165,10 +165,7 @@ function ResourceReplacementField({
           }}
         >
           <FileUp className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          <span className="min-w-0 text-sm">
-            <span className="font-semibold">Arrastra un archivo nuevo</span>{' '}
-            <span className="text-muted-foreground">o selecciónalo</span>
-          </span>
+          <span className="min-w-0 text-sm font-semibold">Arrastra o selecciona un archivo</span>
         </label>
       )}
       <p className="mt-1 text-xs text-muted-foreground">Opcional. Máximo 25 MB.</p>

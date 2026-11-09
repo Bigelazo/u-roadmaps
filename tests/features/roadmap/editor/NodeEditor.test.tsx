@@ -123,7 +123,7 @@ test('replaces a file keeping the edited title, adopting the new extension, and 
   await user.click(within(form).getByRole('button', { name: 'Mantener actual' }));
   expect(within(form).queryByText('solucion.pdf')).toBeNull();
   expect(within(form).getByText('.docx')).toBeTruthy();
-  fireEvent.drop(within(form).getByText('Arrastra un archivo nuevo'), {
+  fireEvent.drop(within(form).getByText('Arrastra o selecciona un archivo'), {
     dataTransfer: { files: { item: () => replacement } },
   });
   await user.click(save);
