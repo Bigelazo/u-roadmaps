@@ -78,7 +78,10 @@ function projectNodeInformationPreview(
               ...resource,
               ...resourceSession.value,
               ...(resourceSession.replacementFile
-                ? { fileContentType: uploadedContentType(resourceSession.replacementFile) }
+                ? {
+                    fileContentType: uploadedContentType(resourceSession.replacementFile),
+                    fileSize: resourceSession.replacementFile.size,
+                  }
                 : {}),
             }
           : resource,
@@ -92,6 +95,8 @@ function projectNodeInformationPreview(
           url: '#',
           type: 'FILE' as const,
           fileContentType: uploadedContentType(resourceSession.selectedFile),
+          fileSize: resourceSession.selectedFile.size,
+          accessCount: 0,
         },
       ];
     } else if (resourceSession.kind === 'adding-link') {
@@ -101,6 +106,8 @@ function projectNodeInformationPreview(
           id: 'node-information-preview-resource',
           ...resourceSession.value,
           fileContentType: null,
+          fileSize: null,
+          accessCount: 0,
         },
       ];
     }

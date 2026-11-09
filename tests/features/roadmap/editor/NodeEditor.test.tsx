@@ -54,6 +54,7 @@ const resource = {
   url: 'https://example.test/guia',
   type: 'LINK' as const,
   fileContentType: null,
+  fileSize: null,
 };
 
 const nodeTypes: RoadmapDto['nodeTypes'] = [
@@ -144,6 +145,7 @@ test('Resource rows name their action and file category instead of a type captio
     url: '/api/protected/resource-2/file',
     type: 'FILE' as const,
     fileContentType: null,
+    fileSize: null,
   };
   renderEditor(withNode({ resources: [resource, sheet] }));
   const list = screen.getByRole('list', { name: 'Recursos del nodo' });

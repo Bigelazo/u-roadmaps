@@ -288,7 +288,10 @@ test('a missing source omits its Resource and does not retain an empty destinati
 
 test('successful uploads and copies retain independent bytes', async ({ course }) => {
   const resource = await upload(course, course.change.nodeId);
-  const downloaded = await downloadRoadmapResource({ ...teacher(course), resourceId: resource.id });
+  const downloaded = await downloadRoadmapResource(
+    { ...teacher(course), resourceId: resource.id },
+    recordingChangePort().port,
+  );
   expect(downloaded.bytes.toString()).toBe('Contenido');
   const source = await copySource(course);
   await source.copy();
@@ -347,7 +350,12 @@ test('a retried upload registration retains the original bytes without repeating
     },
   );
   expect(
-    (await downloadRoadmapResource({ ...teacher(course), resourceId: result.id })).bytes.toString(),
+    (
+      await downloadRoadmapResource(
+        { ...teacher(course), resourceId: result.id },
+        recordingChangePort().port,
+      )
+    ).bytes.toString(),
   ).toBe('Once');
   expect(await readdir(directory)).toHaveLength(1);
   expect(
@@ -470,7 +478,10 @@ for (const version of [false, true]) {
             course.identifier,
             resource.id,
           )
-        : downloadRoadmapResource({ ...teacher(course), resourceId: resource.id });
+        : downloadRoadmapResource(
+            { ...teacher(course), resourceId: resource.id },
+            recordingChangePort().port,
+          );
     await expect(download()).rejects.toMatchObject({ code: 'EISDIR' });
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const response = await downloadResponse(version, course, resource.id);
@@ -508,7 +519,10 @@ for (const node of [false, true]) {
     ).toMatchObject([{ id: resource.id }]);
     expect(
       (
-        await downloadRoadmapResource({ ...teacher(course), resourceId: resource.id })
+        await downloadRoadmapResource(
+          { ...teacher(course), resourceId: resource.id },
+          recordingChangePort().port,
+        )
       ).bytes.toString(),
     ).toBe('Contenido');
   });
@@ -528,7 +542,10 @@ for (const node of [false, true]) {
         : removeRoadmapResource(request, recordingChangePort().port),
     ).resolves.toEqual({});
     await expect(
-      downloadRoadmapResource({ ...teacher(course), resourceId: resource.id }),
+      downloadRoadmapResource(
+        { ...teacher(course), resourceId: resource.id },
+        recordingChangePort().port,
+      ),
     ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
     expect(await readdir(directory)).toEqual([]);
     expect(warning).not.toHaveBeenCalled();
@@ -570,7 +587,10 @@ test('downloads keep participant Node access separate from frozen version teache
 }) => {
   const resource = await upload(course, course.change.nodeId);
   const download = (userId: string) =>
-    downloadRoadmapResource({ userId, identifier: course.identifier, resourceId: resource.id });
+    downloadRoadmapResource(
+      { userId, identifier: course.identifier, resourceId: resource.id },
+      recordingChangePort().port,
+    );
   await expect(download(otherCourse.teacherId)).rejects.toMatchObject({ status: 403 });
   await prisma.roadmapNode.update({
     where: { id: course.change.nodeId },
@@ -675,7 +695,10 @@ test('a file replacement keeps the Resource, serves the new bytes and deletes on
   const keys = await readdir(directory);
   expect(keys).toHaveLength(1);
   expect(keys).not.toContain(replacedKey);
-  const downloaded = await downloadRoadmapResource({ ...teacher(course), resourceId: resource.id });
+  const downloaded = await downloadRoadmapResource(
+    { ...teacher(course), resourceId: resource.id },
+    recordingChangePort().port,
+  );
   expect(downloaded).toMatchObject({ contentType: 'application/pdf', title: 'Guía revisada.pdf' });
   expect(downloaded.bytes.toString()).toBe('Segunda versión');
   const [fact] = recorder.facts();
@@ -720,11 +743,14 @@ test('replacing a file in a copied Roadmap leaves the frozen version with its ow
     frozen.id,
   );
   expect(frozenDownload.bytes.toString()).toBe('Independent source');
-  const currentDownload = await downloadRoadmapResource({
-    ...teacher(course),
-    identifier: current,
-    resourceId: copied.id,
-  });
+  const currentDownload = await downloadRoadmapResource(
+    {
+      ...teacher(course),
+      identifier: current,
+      resourceId: copied.id,
+    },
+    recordingChangePort().port,
+  );
   expect(currentDownload.bytes.toString()).toBe('Versión 2027');
 });
 

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { copyFile, mkdir, open, readFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const maxUploadBytes = 25 * 1024 * 1024;
@@ -38,6 +38,15 @@ export async function copyUploadedFile(sourceFileKey: string, fileKey: string) {
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+export async function uploadedFileSize(fileKey: string) {
+  try {
+    return (await stat(storagePath(fileKey))).size;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
 }

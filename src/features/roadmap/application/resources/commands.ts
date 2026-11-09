@@ -48,6 +48,7 @@ type NewResource = {
   type: 'FILE' | 'LINK';
   fileKey?: string;
   fileContentType?: string | null;
+  fileSize?: number;
 };
 
 function resourceCreation<Input>(parse: (input: Input) => NewResource) {
@@ -86,13 +87,14 @@ export const createRoadmapResource = resourceCreation(
 type UploadedResource = Omit<NewResource, 'url' | 'type'> & { fileKey: string };
 
 const createUploadedResource = resourceCreation(
-  ({ nodeId, title, fileKey, fileContentType }: UploadedResource) => ({
+  ({ nodeId, title, fileKey, fileContentType, fileSize }: UploadedResource) => ({
     nodeId,
     title,
     url: fileResourceUrl(fileKey),
     type: 'FILE',
     fileKey,
     fileContentType,
+    fileSize,
   }),
 );
 
@@ -130,7 +132,14 @@ export async function uploadRoadmapResource(
   return withStoredFiles('upload Resource', async (files) => {
     await files.upload(fileKey, file);
     return createUploadedResource(
-      { ...participant, nodeId, title, fileKey, fileContentType: uploadedContentType(file) },
+      {
+        ...participant,
+        nodeId,
+        title,
+        fileKey,
+        fileContentType: uploadedContentType(file),
+        fileSize: file.size,
+      },
       changePort,
     );
   });
@@ -185,16 +194,29 @@ const resourceFileReplacement = roadmapCommand({
     title: string;
     fileKey: string;
     fileContentType: string | null;
+    fileSize: number;
   }) => input,
   access: 'none',
-  run: async ({ tx, roadmap, actor, input: { resourceId, title, fileKey, fileContentType } }) => {
+  run: async ({
+    tx,
+    roadmap,
+    actor,
+    input: { resourceId, title, fileKey, fileContentType, fileSize },
+  }) => {
     const resource = await requireResource(tx, resourceId, roadmap.id);
     const error = fileReplacementError(resource.type);
     if (error) throw new ApplicationError(400, 'INVALID_RESOURCE_EDIT', error);
-    const updated = await tx.resource.update({
-      where: { id: resource.id },
-      data: { title, url: fileResourceUrl(fileKey), fileKey, fileContentType },
-    });
+    const [updated] = await Promise.all([
+      tx.resource.update({
+        where: { id: resource.id },
+        data: { title, url: fileResourceUrl(fileKey), fileKey, fileContentType, fileSize },
+      }),
+      tx.resourceAccess.updateMany({
+        where: { resourceId: resource.id },
+        data: { isReviewed: false },
+      }),
+      tx.simulatedResourceReview.deleteMany({ where: { resourceId: resource.id } }),
+    ]);
     return {
       result: {
         resource: resourceDto(updated, actor.identifier),
@@ -232,7 +254,14 @@ export async function replaceRoadmapResourceFile(
     async (files) => {
       await files.upload(fileKey, file);
       return resourceFileReplacement(
-        { ...participant, resourceId, title, fileKey, fileContentType: uploadedContentType(file) },
+        {
+          ...participant,
+          resourceId,
+          title,
+          fileKey,
+          fileContentType: uploadedContentType(file),
+          fileSize: file.size,
+        },
         changePort,
       );
     },

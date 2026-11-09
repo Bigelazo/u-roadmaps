@@ -184,7 +184,8 @@ Los avisos no tienen configuración externa. Véase [operación y verificación]
 | `pnpm prisma:migrate:dev`                  | Aplica las migraciones existentes usando `.env`.                                                      |
 | `pnpm prisma:migrate`                      | Aplica las migraciones existentes usando `.env`.                                                      |
 | `pnpm prisma:seed`                         | Carga los tipos de nodo predefinidos.                                                                 |
-| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones y ejecuta el seed.                                              |
+| `pnpm prisma:prepare`                      | Genera el cliente, aplica migraciones, ejecuta el seed y registra tamaños de archivo faltantes.       |
+| `pnpm resources:backfill-file-sizes`       | Registra el tamaño de los recursos de archivo que no lo tienen, leyendo `uploads/`.                   |
 | `NODE_ENV=development pnpm dev:data:reset` | Reconstruye los escenarios locales de demostración.                                                   |
 | `pnpm sync:academic-calendar`              | Obtiene y guarda las fechas oficiales del semestre actual. Requiere cargar las variables de entorno.  |
 
@@ -249,7 +250,7 @@ docs/                         ADR, especificaciones, investigación y prototipos
 uploads/                      Archivos subidos; no se versiona
 ```
 
-Las entidades persistidas principales son `Course`, `CourseOffering`, `Roadmap`, `RoadmapNode`, `NodeType`, `Dependency`, `Resource`, `User`, `Participation`, `Completion`, `SimulatedCompletion`, `AcademicTerm` y los registros de avisos y reconocimiento.
+Las entidades persistidas principales son `Course`, `CourseOffering`, `Roadmap`, `RoadmapNode`, `NodeType`, `Dependency`, `Resource`, `ResourceAccess`, `User`, `Participation`, `Completion`, `SimulatedCompletion`, `SimulatedResourceReview`, `AcademicTerm` y los registros de avisos y reconocimiento.
 
 Las pantallas principales son `/`, `/academic-overview` y `/courses/[courseCode]/[year]/[semester]`. La API del roadmap parte de `/api/[courseCode]/[year]/[semester]/roadmap`; los avisos propios se consultan en `/api/notifications`.
 

@@ -1257,6 +1257,7 @@ describe('canvas commands', () => {
         url: 'guia.pdf',
         type: 'FILE' as const,
         fileContentType: 'application/pdf',
+        fileSize: null,
       };
       const persistence = createInMemoryRoadmapSessionPersistence({
         ...editable,

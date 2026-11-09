@@ -60,6 +60,7 @@ const source: RoadmapCopySource = {
       type: 'FILE',
       fileKey: 'key-a',
       fileContentType: 'application/pdf',
+      fileSize: 2048,
     },
   ],
 };
@@ -144,6 +145,7 @@ describe('planRoadmapCopy', () => {
         type: 'LINK',
         fileKey: null,
         fileContentType: null,
+        fileSize: null,
       },
       {
         id: expect.any(String),
@@ -153,6 +155,7 @@ describe('planRoadmapCopy', () => {
         type: 'LINK',
         fileKey: null,
         fileContentType: null,
+        fileSize: null,
       },
     ]);
   });
@@ -167,6 +170,7 @@ describe('planRoadmapCopy', () => {
       type: 'FILE',
       fileKey: expect.stringMatching(/^new-/),
       fileContentType: 'application/pdf',
+      fileSize: 2048,
     });
     expect(plan.fileCopies).toEqual([{ sourceFileKey: 'key-a', fileKey: file.fileKey }]);
   });

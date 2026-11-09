@@ -1,6 +1,7 @@
 import 'server-only';
 
 export { closeDueRoadmaps, readRoadmapClosureCalendar } from './application/closure';
+export { backfillResourceFileSizes } from './infrastructure/resources/file-sizes';
 
 export {
   changeTeacherBlock,
@@ -28,6 +29,8 @@ export {
   updateRoadmapResource,
   uploadRoadmapResource,
   replaceRoadmapResourceFile,
+  recordCanvasPreviewResourceReview,
+  recordLinkResourceAccess,
 } from '@/features/roadmap/application/resources';
 export {
   completeNode,

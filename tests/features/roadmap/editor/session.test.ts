@@ -54,7 +54,10 @@ it('closes the Resource form when its own result is refreshed before the effect 
     [
       {
         type: 'canonical-refresh',
-        node: { ...node, resources: [{ id: 'resource-1', ...link, fileContentType: null }] },
+        node: {
+          ...node,
+          resources: [{ id: 'resource-1', ...link, fileContentType: null, fileSize: null }],
+        },
       },
       { type: 'resolve-effect', effectId: 1, epoch: pending.epoch, status: 'committed' },
     ],
@@ -80,6 +83,7 @@ it('treats its own refreshed file replacement as the pending result, not a remot
     url: '/api/protected/resource-1/file',
     type: 'FILE' as const,
     fileContentType: 'application/msword',
+    fileSize: null,
   };
   const withFile = { ...node, resources: [stored] };
   const replacement = new File(['pdf'], 'guia.pdf', { type: 'application/pdf' });
@@ -119,7 +123,14 @@ it('treats its own refreshed file replacement as the pending result, not a remot
         type: 'canonical-refresh',
         node: {
           ...withFile,
-          resources: [{ ...stored, title: 'Guía.pdf', fileContentType: 'application/pdf' }],
+          resources: [
+            {
+              ...stored,
+              title: 'Guía.pdf',
+              fileContentType: 'application/pdf',
+              fileSize: replacement.size,
+            },
+          ],
         },
       },
       { type: 'resolve-effect', effectId: 1, epoch: pending.epoch, status: 'committed' },

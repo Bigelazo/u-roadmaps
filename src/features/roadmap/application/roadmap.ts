@@ -36,16 +36,21 @@ export function resourceDto(
     type: 'FILE' | 'LINK';
     fileKey?: string | null;
     fileContentType: string | null;
+    fileSize?: number | null;
   },
   identifier?: CourseOfferingIdentifier,
+  accessCount?: number,
 ) {
+  const isFile = resource.type === 'FILE';
   return {
     id: resource.id,
     title: resource.title,
     url:
       resource.fileKey && identifier ? resourceDownloadUrl(identifier, resource.id) : resource.url,
     type: resource.type,
-    fileContentType: resource.type === 'FILE' ? (resource.fileContentType ?? null) : null,
+    fileContentType: isFile ? (resource.fileContentType ?? null) : null,
+    fileSize: isFile ? (resource.fileSize ?? null) : null,
+    ...(accessCount === undefined ? {} : { accessCount }),
   };
 }
 
@@ -191,6 +196,7 @@ async function copyFrozenVersion(
               type: true,
               fileKey: true,
               fileContentType: true,
+              fileSize: true,
             },
           },
         },

@@ -13,6 +13,9 @@ export type Resource = {
   url: string;
   type: 'FILE' | 'LINK';
   fileContentType: string | null;
+  fileSize: number | null;
+  accessCount?: number;
+  isReviewed?: boolean;
 };
 
 export type NodeType = {

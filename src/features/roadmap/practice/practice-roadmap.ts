@@ -121,6 +121,8 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
               url: 'https://www.u-cursos.cl',
               type: 'LINK',
               fileContentType: null,
+              fileSize: null,
+              accessCount: 0,
             },
             {
               id: 'practice-resource-file',
@@ -128,6 +130,8 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
               url: '/practice-roadmap/apunte-de-lectura.txt',
               type: 'FILE',
               fileContentType: 'text/plain',
+              fileSize: 41,
+              accessCount: 0,
             },
           ],
         },

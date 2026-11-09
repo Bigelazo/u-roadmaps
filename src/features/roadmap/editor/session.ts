@@ -174,6 +174,7 @@ function updatedResource(
     title: effect.resource.title,
     url: replaced?.url ?? resource.url,
     fileContentType: uploadedContentType(effect.file),
+    fileSize: effect.file.size,
   };
 }
 

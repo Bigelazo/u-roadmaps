@@ -364,7 +364,14 @@ test('presents a Node whose Node type is missing with the shared unknown Node ty
 
 test('lists the Resources of a deletion Change impact by title, as production does', async () => {
   const link = (id: string, title: string) =>
-    ({ id, title, url: 'https://example.com', type: 'LINK', fileContentType: null }) as const;
+    ({
+      id,
+      title,
+      url: 'https://example.com',
+      type: 'LINK',
+      fileContentType: null,
+      fileSize: null,
+    }) as const;
   const persistence = createInMemoryRoadmapSessionPersistence({
     ...roadmap,
     nodes: roadmap.nodes.map((node) =>
@@ -469,6 +476,8 @@ test('Practice replaces a File in place and refuses a replacement for a Link', a
       url: 'slides.pptx',
       type: 'FILE',
       fileContentType: replacement.type,
+      fileSize: replacement.size,
+      accessCount: 0,
     },
     link,
   ]);
@@ -484,5 +493,34 @@ test('refuses to delete a Dependency that is not in the Roadmap', async () => {
   expect((await persistence.load()).dependencies.map(({ id }) => id)).toEqual([
     'prerequisite-selected',
     'selected-dependent',
+  ]);
+});
+
+test('a practice student completes a Node only after reviewing its Resources, without counting them', async () => {
+  const guide = {
+    id: 'guide',
+    title: 'Guía',
+    url: 'https://example.test/guide',
+    type: 'LINK' as const,
+    fileContentType: null,
+    fileSize: null,
+    accessCount: 0,
+  };
+  const persistence = createInMemoryRoadmapSessionPersistence(
+    { ...roadmap, nodes: [{ ...independent, resources: [guide] }], dependencies: [] },
+    { studentProgress: { completedNodeIds: [] } },
+  );
+
+  await expect(
+    persistence.execute({ kind: 'complete-node', nodeId: independent.id }),
+  ).rejects.toThrow('Revisa todos los recursos de este nodo antes de completarlo.');
+  expect(persistence.recordResourceAccess(guide, 'roadmap')).toEqual({ countsAccess: false });
+  await persistence.execute({ kind: 'complete-node', nodeId: independent.id });
+
+  expect((await persistence.load()).nodes).toEqual([
+    expect.objectContaining({
+      isCompleted: true,
+      resources: [{ ...guide, isReviewed: true }],
+    }),
   ]);
 });

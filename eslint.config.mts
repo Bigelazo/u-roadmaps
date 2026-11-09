@@ -334,6 +334,7 @@ export default defineConfig([
       'tests/features/roadmap/stored-file-ownership.test.ts',
       'tests/features/roadmap/participant-access.test.ts',
       'tests/features/roadmap/preview-version.test.ts',
+      'tests/features/roadmap/resource-access.test.ts',
       'tests/features/roadmap/roadmap-command.test.ts',
     ],
     settings: { vitest: { vitestImports: ['../../notifications-integration/fixtures'] } },

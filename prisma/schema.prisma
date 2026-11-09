@@ -140,18 +140,45 @@ model Dependency {
 }
 
 model Resource {
-  id              String       @id @default(uuid()) @db.Uuid
-  roadmapNodeId   String       @db.Uuid
-  title           String       @db.VarChar(240)
-  url             String
-  type            ResourceType
-  fileKey         String?      @unique @db.Uuid
-  fileContentType String?      @db.VarChar(255)
-  roadmapNode     RoadmapNode  @relation(fields: [roadmapNodeId], references: [id], onDelete: Cascade)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id               String                    @id @default(uuid()) @db.Uuid
+  roadmapNodeId    String                    @db.Uuid
+  title            String                    @db.VarChar(240)
+  url              String
+  type             ResourceType
+  fileKey          String?                   @unique @db.Uuid
+  fileContentType  String?                   @db.VarChar(255)
+  fileSize         Int?
+  roadmapNode      RoadmapNode               @relation(fields: [roadmapNodeId], references: [id], onDelete: Cascade)
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  accesses         ResourceAccess[]
+  simulatedReviews SimulatedResourceReview[]
 
   @@index([roadmapNodeId])
+}
+
+model ResourceAccess {
+  userId         String   @db.Uuid
+  resourceId     String   @db.Uuid
+  accessCount    Int
+  isReviewed     Boolean
+  lastAccessedAt DateTime @default(now()) @db.Timestamptz(3)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource       Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, resourceId])
+  @@index([resourceId])
+}
+
+model SimulatedResourceReview {
+  participationId String        @db.Uuid
+  resourceId      String        @db.Uuid
+  reviewedAt      DateTime      @default(now()) @db.Timestamptz(3)
+  participation   Participation @relation(fields: [participationId], references: [id], onDelete: Cascade)
+  resource        Resource      @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([participationId, resourceId])
+  @@index([resourceId])
 }
 
 model User {
@@ -172,6 +199,7 @@ model User {
   nodeChangeReviews             NodeChangeReview[]
   participations                Participation[]
   completions                   Completion[]
+  resourceAccesses              ResourceAccess[]
   createdRoadmaps               Roadmap[]                     @relation("RoadmapCreator")
   closureTeachingStaff          RoadmapClosureTeachingStaff[]
 }
@@ -184,16 +212,17 @@ model VtiLoginTransaction {
 }
 
 model Participation {
-  id                    String                       @id @default(uuid()) @db.Uuid
-  userId                String                       @db.Uuid
-  courseOfferingId      String                       @db.Uuid
-  institutionalPosition InstitutionalCoursePosition?
-  role                  ParticipationRole
-  isActive              Boolean                      @default(true)
-  noticeResetAt         DateTime?                    @db.Timestamptz(3)
-  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseOffering        CourseOffering               @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
-  simulatedCompletions  SimulatedCompletion[]
+  id                       String                       @id @default(uuid()) @db.Uuid
+  userId                   String                       @db.Uuid
+  courseOfferingId         String                       @db.Uuid
+  institutionalPosition    InstitutionalCoursePosition?
+  role                     ParticipationRole
+  isActive                 Boolean                      @default(true)
+  noticeResetAt            DateTime?                    @db.Timestamptz(3)
+  user                     User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseOffering           CourseOffering               @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  simulatedCompletions     SimulatedCompletion[]
+  simulatedResourceReviews SimulatedResourceReview[]
 
   @@unique([userId, courseOfferingId])
   @@unique([id, courseOfferingId])

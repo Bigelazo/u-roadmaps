@@ -549,3 +549,23 @@ test('a batch with one failing item still sends the others and rethrows the fail
     api('/nodes/node-2'),
   ]);
 });
+
+test('a Resource access is sent without waiting and only a Link needs the client to report it', () => {
+  const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+  vi.stubGlobal('fetch', fetch);
+
+  expect(http.recordResourceAccess({ id: 'link-1', type: 'LINK' }, 'roadmap')).toEqual({
+    countsAccess: true,
+  });
+  expect(http.recordResourceAccess({ id: 'file-1', type: 'FILE' }, 'roadmap')).toEqual({
+    countsAccess: true,
+  });
+  expect(http.recordResourceAccess({ id: 'file-1', type: 'FILE' }, 'canvas-preview')).toEqual({
+    countsAccess: false,
+  });
+
+  expect(fetch.mock.calls).toEqual([
+    [api('/resources/link-1/access'), { method: 'POST', keepalive: true }],
+    [api('/simulation/resources/file-1/review'), { method: 'POST', keepalive: true }],
+  ]);
+});

@@ -708,6 +708,8 @@ export const canvasCommandCatalog = {
         ...resource,
         id: crypto.randomUUID(),
         fileContentType: null,
+        fileSize: null,
+        accessCount: 0,
       });
     },
     success: () => 'Enlace guardado exitosamente.',
@@ -727,6 +729,8 @@ export const canvasCommandCatalog = {
         url: file.name,
         type: 'FILE',
         fileContentType: uploadedContentType(file),
+        fileSize: file.size,
+        accessCount: 0,
       }),
     success: () => 'Recurso guardado exitosamente.',
   }),
@@ -755,11 +759,13 @@ export const canvasCommandCatalog = {
         if (file) {
           const error = fileReplacementError(current.type);
           if (error) throw new Error(error);
+          practice.canvasPreviewProgress.reviewedResourceIds.delete(resourceId);
           return {
             ...current,
             title: resource.title,
             url: file.name,
             fileContentType: uploadedContentType(file),
+            fileSize: file.size,
           };
         }
         const changes =
@@ -847,7 +853,7 @@ export const canvasCommandCatalog = {
   }>({
     requests: ({ nodeId }) => ({ method: 'POST', path: `/simulation/nodes/${nodeId}/completion` }),
     failure: 'No se pudo completar el nodo en la previsualización.',
-    practice: (practice, { nodeId }) => void practice.canvasPreviewCompletions.add(nodeId),
+    practice: (practice, { nodeId }) => practice.completeCanvasPreview(nodeId),
     changesCanvasPreview: true,
     success: completionSuccess,
     report: ({ nodeId }) => ({ type: 'completeCanvasPreviewNode', nodeId }),
@@ -855,7 +861,7 @@ export const canvasCommandCatalog = {
   'reset-canvas-preview': command<{ kind: 'reset-canvas-preview' }>({
     requests: () => ({ method: 'DELETE', path: '/simulation' }),
     failure: 'No se pudo reiniciar el progreso de previsualización.',
-    practice: (practice) => practice.canvasPreviewCompletions.clear(),
+    practice: (practice) => practice.resetCanvasPreview(),
     changesCanvasPreview: true,
     confirmedAction: {
       apply: executeAsRequested,

@@ -215,7 +215,10 @@ test('invalid read ids are refused before authorisation', async ({ course }) => 
   const outsider = { userId: randomUUID(), identifier: course.identifier };
   const refusals = await Promise.allSettled([
     getRoadmapNodeResources({ ...outsider, nodeId: 'not-a-node' }),
-    downloadRoadmapResource({ ...outsider, resourceId: 'not-a-resource' }),
+    downloadRoadmapResource(
+      { ...outsider, resourceId: 'not-a-resource' },
+      recordingChangePort().port,
+    ),
   ]);
   for (const refusal of refusals)
     expect(refusal).toMatchObject({ status: 'rejected', reason: { status: 400 } });
@@ -282,7 +285,10 @@ test('an inactive Participation is refused by every Roadmap read', async ({ cour
   await prisma.participation.updateMany({ where: offering, data: { isActive: false } });
   const refusals = await Promise.allSettled([
     ...roadmapReads(course),
-    downloadRoadmapResource({ ...student(course), resourceId: course.change.nodeId }),
+    downloadRoadmapResource(
+      { ...student(course), resourceId: course.change.nodeId },
+      recordingChangePort().port,
+    ),
   ]);
   for (const refusal of refusals)
     expect(refusal).toMatchObject({
