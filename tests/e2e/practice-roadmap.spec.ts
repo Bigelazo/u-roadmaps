@@ -185,16 +185,23 @@ async function expectNodeAction(page: Page, title: string, action: string) {
 }
 
 async function connect(page: Page, sourceTitle: string, targetTitle: string) {
-  await practiceNode(page, sourceTitle).getByTestId('roadmap-card').hover();
-  const source = practiceNode(page, sourceTitle).locator('.react-flow__handle-right');
-  const target = practiceNode(page, targetTitle).locator('.react-flow__handle-left');
+  const sourceNode = practiceNode(page, sourceTitle);
+  const originalPosition = await sourceNode.evaluate((element) => element.style.transform);
+  await sourceNode.getByTestId('roadmap-card').hover();
+  const source = sourceNode.locator('.react-flow__handle-top');
+  const target = practiceNode(page, targetTitle).getByTestId('roadmap-card');
+  await source.hover();
   const from = await source.boundingBox();
   const to = await target.boundingBox();
   if (!from || !to) throw new Error('No se pudieron medir las conexiones.');
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await expect(practiceNode(page, targetTitle)).toHaveClass(/roadmap-node--connection-target/);
   await page.mouse.up();
+  await expect
+    .poll(() => sourceNode.evaluate((element) => element.style.transform))
+    .toBe(originalPosition);
 }
 
 test('"Salir" returns to an allow-listed origin or to the home page', async ({
