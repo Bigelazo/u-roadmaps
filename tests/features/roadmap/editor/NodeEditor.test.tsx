@@ -263,12 +263,60 @@ test('renders the selected Node as one cohesive editing surface', () => {
   expect(screen.getByRole('heading', { name: /Recursos/ })).toBeTruthy();
 });
 
-test('places support material before student access', () => {
+test('orders the panel so a long description comes last, after every other section', () => {
   renderEditor();
 
-  const resources = screen.getByRole('heading', { name: /Recursos/ });
-  const status = screen.getByRole('heading', { name: 'Acceso de estudiantes' });
-  expect(resources.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const sections = [
+    screen.getByLabelText('Título'),
+    screen.getByRole('combobox', { name: 'Tipo' }),
+    screen.getByRole('heading', { name: /Recursos/ }),
+    screen.getByRole('heading', { name: 'Acceso de estudiantes' }),
+    screen.getByRole('heading', { name: 'Eliminar nodo' }),
+    screen.getByLabelText(/Descripción o Contenido del nodo/),
+  ];
+  for (const [index, section] of sections.slice(1).entries())
+    expect(
+      sections[index].compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+});
+
+test('labels the description as optional Markdown content that accepts a dropped .md file', () => {
+  renderEditor();
+
+  const description = screen.getByRole('textbox', {
+    name: 'Descripción o Contenido del nodo opcional',
+  });
+  expect(screen.getByText('opcional').tagName).toBe('EM');
+  expect(description.getAttribute('aria-describedby')).toBe('edit-node-description-help');
+  expect(
+    screen.getByText(
+      'El texto es compatible con Markdown. Puedes arrastrar un archivo .md para reemplazarlo.',
+    ).id,
+  ).toBe('edit-node-description-help');
+});
+
+test('keeps saving and previewing in a footer pinned below the scrolling content', async () => {
+  const user = userEvent.setup();
+  const { perform } = renderEditor();
+
+  const footer = screen.getByRole('form', { name: 'Guardar nodo' });
+  expect(footer.className).toContain('sticky');
+  expect(footer.className).toContain('bottom-0');
+  expect(within(footer).getByRole('button', { name: 'Guardar cambios' })).toBe(saveButton());
+  expect(within(footer).getByRole('button', { name: 'Previsualizar' })).toBeTruthy();
+  expect(
+    screen.getByLabelText(/Descripción o Contenido del nodo/).compareDocumentPosition(footer) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+
+  await retitle(user, 'Título enviado con Enter');
+  await user.keyboard('{Enter}');
+  expect(perform).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'update-node',
+      value: expect.objectContaining({ title: 'Título enviado con Enter' }),
+    }),
+  );
 });
 
 const unsavedNotice = (text: string) => (_: string, element: Element | null) =>

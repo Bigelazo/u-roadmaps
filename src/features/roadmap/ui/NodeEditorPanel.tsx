@@ -23,7 +23,7 @@ export function NodeEditorPanel({ isOpen, panelWidth, onPanelWidthChange, childr
       onPanelWidthChange={onPanelWidthChange}
     >
       <SidebarContent className="min-h-0 overflow-y-auto">
-        <div role="group" aria-label="Editor de nodo" className="pb-6">
+        <div role="group" aria-label="Editor de nodo" className="flex flex-1 flex-col">
           {children}
         </div>
       </SidebarContent>

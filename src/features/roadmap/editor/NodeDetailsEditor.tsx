@@ -1,5 +1,5 @@
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/shared/ui/tooltip';
-import { useState, type ComponentType, type ReactNode } from 'react';
+import { useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
 import { cn } from 'cn';
 import {
   CalendarClock,
@@ -15,7 +15,7 @@ import {
 import { Button } from '@/shared/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/shared/ui/field';
 import { Separator } from '@/shared/ui/separator';
-import { NodeContentFields } from './NodeContentFields';
+import { NodeDescriptionField, NodeTitleField, NodeTypeField } from './NodeContentFields';
 import { NodeResources } from './NodeResources';
 import { useNodeEditorContext } from './context';
 import { NodePanelHeader } from '@/features/roadmap/ui/NodePanelHeader';
@@ -42,7 +42,7 @@ function NodeHeader() {
             title="Editar nodo"
             triggerLabel="Editar nodo en pantalla completa"
           >
-            <NodeForm isFullscreen />
+            <NodeForm />
           </NodeFullscreenDialog>
           <Tooltip>
             <TooltipTrigger
@@ -72,108 +72,107 @@ function listInProse(items: readonly string[]) {
   return items.length > 1 ? `${items.slice(0, -1).join(', ')} y ${items.at(-1)}` : items[0];
 }
 
-function NodeForm({ isFullscreen = false }: { isFullscreen?: boolean }) {
-  const {
-    node,
-    nodeTypes,
-    nodeDraft,
-    isDirty,
-    unsavedFields,
-    canSaveNode,
-    changeNodeDraft,
-    saveNode,
-    discardNodeDraft,
-    previewNodeInformation,
-    previewButtonRef,
-  } = useNodeEditorContext();
-  const idPrefix = isFullscreen ? 'fullscreen-node' : 'edit-node';
+function useNodeSubmission(idPrefix: string) {
+  const { node, nodeDraft, canSaveNode, saveNode, discardNodeDraft } = useNodeEditorContext();
   const [titleErrorNodeId, setTitleErrorNodeId] = useState<string | null>(null);
   const titleError =
     titleErrorNodeId === node.id && !nodeDraft.title.trim()
       ? 'Escribe un título para el nodo.'
       : undefined;
 
+  return {
+    titleError,
+    submit: (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!canSaveNode) return;
+      if (!nodeDraft.title.trim()) {
+        setTitleErrorNodeId(node.id);
+        document.getElementById(`${idPrefix}-title`)?.focus();
+        return;
+      }
+      saveNode();
+    },
+    discard: () => {
+      setTitleErrorNodeId(null);
+      discardNodeDraft();
+    },
+  };
+}
+
+function useNodeFieldProps(idPrefix: string) {
+  const { nodeDraft, changeNodeDraft } = useNodeEditorContext();
+  return {
+    idPrefix,
+    value: nodeDraft,
+    onChange: (patch: Partial<typeof nodeDraft>) => changeNodeDraft({ ...nodeDraft, ...patch }),
+  };
+}
+
+function UnsavedChanges({ onDiscard }: { onDiscard: () => void }) {
+  const { unsavedFields } = useNodeEditorContext();
+
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-between gap-3 rounded-lg bg-primary-soft/45 py-1 pr-1 pl-3 text-sm text-primary-deep',
+        unsavedFields.length === 0 && 'hidden',
+      )}
+    >
+      <p aria-live="polite" className="flex min-w-0 items-center gap-2">
+        {unsavedFields.length > 0 ? (
+          <>
+            <PencilLine aria-hidden="true" className="size-4 shrink-0" />
+            <span>
+              <span className="font-semibold">Sin guardar:</span>{' '}
+              {listInProse(unsavedFields.map((field) => unsavedFieldLabels[field]))}
+            </span>
+          </>
+        ) : null}
+      </p>
+      {unsavedFields.length > 0 ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-primary-deep hover:bg-primary-soft"
+          onClick={onDiscard}
+        >
+          Descartar
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+function SaveButton() {
+  const { canSaveNode } = useNodeEditorContext();
+  return (
+    <Button type="submit" disabled={!canSaveNode}>
+      <Save data-icon="inline-start" />
+      Guardar cambios
+    </Button>
+  );
+}
+
+function NodeForm() {
+  const { nodeTypes } = useNodeEditorContext();
+  const idPrefix = 'fullscreen-node';
+  const field = useNodeFieldProps(idPrefix);
+  const { titleError, submit, discard } = useNodeSubmission(idPrefix);
+
   return (
     <form
       noValidate
-      className={cn(
-        'flex flex-col gap-4 py-5',
-        isFullscreen && 'py-0 [--markdown-editor-min-height:50dvh]',
-      )}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!canSaveNode) return;
-        if (!nodeDraft.title.trim()) {
-          setTitleErrorNodeId(node.id);
-          document.getElementById(`${idPrefix}-title`)?.focus();
-          return;
-        }
-        saveNode();
-      }}
+      className="flex flex-col gap-4 [--markdown-editor-min-height:50dvh]"
+      onSubmit={submit}
     >
       <FieldGroup>
-        <NodeContentFields
-          idPrefix={idPrefix}
-          nodeTypes={nodeTypes}
-          value={nodeDraft}
-          titleError={titleError}
-          onChange={(patch) => changeNodeDraft({ ...nodeDraft, ...patch })}
-        />
+        <NodeTitleField {...field} error={titleError} />
+        <NodeTypeField {...field} nodeTypes={nodeTypes} />
+        <NodeDescriptionField {...field} />
       </FieldGroup>
-      <div
-        className={cn(
-          'flex items-center justify-between gap-3 rounded-lg bg-primary-soft/45 py-1 pr-1 pl-3 text-sm text-primary-deep',
-          unsavedFields.length === 0 && 'hidden',
-        )}
-      >
-        <p aria-live="polite" className="flex min-w-0 items-center gap-2">
-          {unsavedFields.length > 0 ? (
-            <>
-              <PencilLine aria-hidden="true" className="size-4 shrink-0" />
-              <span>
-                <span className="font-semibold">Sin guardar:</span>{' '}
-                {listInProse(unsavedFields.map((field) => unsavedFieldLabels[field]))}
-              </span>
-            </>
-          ) : null}
-        </p>
-        {unsavedFields.length > 0 ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="shrink-0 text-primary-deep hover:bg-primary-soft"
-            onClick={() => {
-              setTitleErrorNodeId(null);
-              discardNodeDraft();
-            }}
-          >
-            Descartar
-          </Button>
-        ) : null}
-      </div>
-      <div
-        className={cn(
-          'grid gap-2',
-          !isFullscreen && 'grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))]',
-        )}
-      >
-        <Button type="submit" disabled={!canSaveNode}>
-          <Save data-icon="inline-start" />
-          Guardar cambios
-        </Button>
-        {!isFullscreen ? (
-          <Button
-            ref={previewButtonRef}
-            type="button"
-            variant="outline"
-            onClick={previewNodeInformation}
-          >
-            <Eye data-icon="inline-start" />
-            {isDirty ? 'Previsualizar cambios' : 'Previsualizar'}
-          </Button>
-        ) : null}
-      </div>
+      <UnsavedChanges onDiscard={discard} />
+      <SaveButton />
     </form>
   );
 }
@@ -364,16 +363,50 @@ function NodeDangerZone() {
   );
 }
 
+const panelFormId = 'edit-node-form';
+
 export function NodeDetailsEditor() {
+  const { nodeTypes, isDirty, previewNodeInformation, previewButtonRef } = useNodeEditorContext();
+  const idPrefix = 'edit-node';
+  const field = useNodeFieldProps(idPrefix);
+  const { titleError, submit, discard } = useNodeSubmission(idPrefix);
+
   return (
-    <div>
+    <div className="flex flex-1 flex-col">
       <NodeHeader />
-      <div className="px-6">
-        <NodeForm />
+      <div className="flex-1 px-6">
+        <FieldGroup className="py-5">
+          <NodeTitleField {...field} error={titleError} form={panelFormId} />
+          <NodeTypeField {...field} nodeTypes={nodeTypes} />
+        </FieldGroup>
         <NodeResources />
         <NodeStatus />
         <NodeDangerZone />
+        <section className="border-t border-border pt-5 pb-6">
+          <NodeDescriptionField {...field} />
+        </section>
       </div>
+      <form
+        id={panelFormId}
+        noValidate
+        aria-label="Guardar nodo"
+        onSubmit={submit}
+        className="sticky bottom-0 z-10 flex flex-col gap-2 border-t border-border bg-card px-6 py-3 shadow-[0_-6px_12px_-10px_rgb(0_0_0/0.25)]"
+      >
+        <UnsavedChanges onDiscard={discard} />
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,11rem),1fr))] gap-2">
+          <SaveButton />
+          <Button
+            ref={previewButtonRef}
+            type="button"
+            variant="outline"
+            onClick={previewNodeInformation}
+          >
+            <Eye data-icon="inline-start" />
+            {isDirty ? 'Previsualizar cambios' : 'Previsualizar'}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }
