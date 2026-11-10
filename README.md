@@ -73,6 +73,13 @@ Cada curso se identifica por el código del ramo, el año y el semestre, y tiene
 
 Los avisos funcionan exclusivamente con la aplicación y PostgreSQL, sin servicios externos. Véase [operación de avisos](docs/notifications-operations.md).
 
+### Integración con U-Cursos
+
+- La extensión [u-roadmaps-web-extension](https://github.com/Bigelazo/u-roadmaps-web-extension) (Chrome y Firefox) agrega el servicio U-Roadmaps a cada curso de U-Cursos y muestra ahí el roadmap y la cantidad de avisos pendientes del curso.
+- `/embed/courses/[courseCode]/[year]/[semester]` es la entrada embebida: con sesión redirige al roadmap sin la barra superior; sin sesión pide acceso al almacenamiento o el ingreso con U-Pasaporte en una pestaña nueva.
+- `GET /api/[courseCode]/[year]/[semester]/notifications/count` entrega los avisos pendientes de una oferta de curso.
+- Sobre HTTPS la cookie de sesión es `SameSite=None`; solo U-Cursos puede embeber la aplicación (`frame-ancestors`) y `src/proxy.ts` rechaza las mutaciones de `/api` que vienen de otro sitio.
+
 ## Tecnologías
 
 Las versiones siguientes corresponden a las dependencias declaradas en [package.json](package.json).
