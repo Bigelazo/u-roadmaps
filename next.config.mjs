@@ -7,6 +7,15 @@ const nextConfig = {
   headers() {
     return [
       {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://www.u-cursos.cl",
+          },
+        ],
+      },
+      {
         source: '/vendor/libavoid/:path*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
       },

@@ -63,7 +63,7 @@ export default defineConfig([
   },
   {
     files: architecturalFiles,
-    ignores: ['src/instrumentation.ts'],
+    ignores: ['src/instrumentation.ts', 'src/proxy.ts'],
     plugins: { boundaries },
     settings: {
       'boundaries/include': [
