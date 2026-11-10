@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { effectivePosition, positionCapabilities } from '@/shared/institutional-position';
+import { effectivePosition, outranks, positionCapabilities } from '@/shared/institutional-position';
 
 it.each([
   ['COURSE_PROFESSOR', true, true],
@@ -32,3 +32,14 @@ for (let mask = 0; mask < 64; mask++) {
     expect(effectivePosition(positions.toReversed())).toBe(positions[0] ?? null);
   });
 }
+
+it('ranks every position above every lower one and above an unknown position', () => {
+  for (const [index, position] of precedence.entries()) {
+    for (const lower of [...precedence.slice(index + 1), null])
+      expect(outranks(position, lower)).toBe(true);
+    for (const higherOrSame of precedence.slice(0, index + 1))
+      expect(outranks(position, higherOrSame)).toBe(false);
+  }
+  expect(outranks(null, null)).toBe(false);
+  expect(outranks(null, 'OBSERVER')).toBe(false);
+});

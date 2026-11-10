@@ -22,3 +22,14 @@ export function positionCapabilities(position: InstitutionalCoursePosition | nul
     role: isTeachingStaff ? ('TEACHER' as const) : ('STUDENT' as const),
   };
 }
+
+function rank(position: InstitutionalCoursePosition | null) {
+  return position === null ? POSITION_PRIORITY.length : POSITION_PRIORITY.indexOf(position);
+}
+
+export function outranks(
+  position: InstitutionalCoursePosition | null,
+  other: InstitutionalCoursePosition | null,
+) {
+  return rank(position) < rank(other);
+}

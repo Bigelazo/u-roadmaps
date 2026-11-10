@@ -70,17 +70,34 @@ it('reads both course lists from MUFASA without exposing its token in the URL', 
   });
 });
 
-it('answers a partial history when MUFASA includes a course it cannot parse', async () => {
+it('answers a partial history and logs the discarded row when MUFASA includes a course it cannot parse', async () => {
   process.env.MUFASA_TOKEN = 'private-token';
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   stubCourseLists({
-    enrolled: [
-      enrolledCourse,
-      { codigo: 'CC0000', nombre: 'Registro con período no compatible', ano: 2025, periodo: 3 },
-    ],
+    enrolled: [enrolledCourse, { codigo: 'CC0000', nombre: 'Registro sin año', periodo: 2 }],
   });
 
   await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({
     status: 'partial',
+    courses: [parsedEnrolledCourse],
+  });
+  expect(warn).toHaveBeenCalledWith('MUFASA course row discarded', {
+    endpoint: 'cursos_inscritos',
+    error: 'MUFASA returned a course without a valid academic term.',
+  });
+  expect(JSON.stringify(warn.mock.calls)).not.toContain('12345678');
+  warn.mockRestore();
+});
+
+it('keeps a history complete when it includes a summer course, which no Academic term models', async () => {
+  process.env.MUFASA_TOKEN = 'private-token';
+  stubCourseLists({
+    enrolled: [enrolledCourse],
+    taught: [{ codigo: 'CC0000', nombre: 'Escuela de verano', ano: 2019, periodo: 3, id_cargo: 1 }],
+  });
+
+  await expect(getMufasaAcademicHistory('12345678')).resolves.toEqual({
+    status: 'complete',
     courses: [parsedEnrolledCourse],
   });
 });

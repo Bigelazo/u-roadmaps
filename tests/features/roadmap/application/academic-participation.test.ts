@@ -124,6 +124,64 @@ test.for([
   },
 );
 
+const partial = (...courses: Reported[]): AcademicHistory => ({
+  status: 'partial',
+  courses: courses.map(reported),
+});
+
+test('a partial history that reports a higher position promotes the stored Participation', async ({
+  course,
+}) => {
+  const result = await synchronize(
+    course.studentId,
+    course,
+    partial({ ...course.identifier, institutionalPosition: 'AUXILIARY_PROFESSOR' }),
+  );
+  const stored = await storedActive(course.studentId, course);
+  expect(stored).toMatchObject({
+    id: course.participationId,
+    role: 'TEACHER',
+    institutionalPosition: 'AUXILIARY_PROFESSOR',
+  });
+  expect(result).toEqual({ status: 'partial', participation: stored });
+});
+
+test('a partial history materializes a reported offering without a stored Participation', async ({
+  course,
+}) => {
+  const identifier = earlier(course);
+  await synchronizeCourseOffering(
+    userWith(
+      course.teacherId,
+      partial({ ...identifier, institutionalPosition: 'COURSE_PROFESSOR' }),
+    ),
+    identifier,
+    recordingChangePort().port,
+  );
+  expect(
+    await prisma.participation.findFirst({
+      where: { userId: course.teacherId, isActive: true, courseOffering: identifier },
+    }),
+  ).toMatchObject({ role: 'TEACHER', institutionalPosition: 'COURSE_PROFESSOR' });
+});
+
+test('a partial history never demotes the stored position', async ({ course }) => {
+  await prisma.participation.updateMany({
+    where: { userId: course.teacherId },
+    data: { institutionalPosition: 'COURSE_PROFESSOR' },
+  });
+  for (const institutionalPosition of ['COORDINATING_PROFESSOR', 'STUDENT'] as const)
+    await synchronize(
+      course.teacherId,
+      course,
+      partial({ ...course.identifier, institutionalPosition }),
+    );
+  expect(await storedActive(course.teacherId, course)).toMatchObject({
+    role: 'TEACHER',
+    institutionalPosition: 'COURSE_PROFESSOR',
+  });
+});
+
 test('a complete history without a recognized position neither materializes nor deactivates', async ({
   course,
 }) => {
@@ -216,6 +274,19 @@ test('Roadmap creation falls back to the stored active Participation without a c
   expect(await createRoadmap(course.teacherId, course, complete(earlier(course)))).toBe('rejected');
 });
 
+test('Roadmap creation accepts the course professor position a partial history reports', async ({
+  course,
+}) => {
+  const reporting = (institutionalPosition: MufasaEnrolledCourse['institutionalPosition']) =>
+    partial({ ...course.identifier, institutionalPosition });
+  expect(await createRoadmap(course.teacherId, course, reporting('COURSE_PROFESSOR'))).toBe(
+    'allowed',
+  );
+  expect(await createRoadmap(course.colleagueId, course, reporting('COORDINATING_PROFESSOR'))).toBe(
+    'rejected',
+  );
+});
+
 const synchronizeHistory = (userId: string, history: AcademicHistory) =>
   synchronizeAcademicHistory(userWith(userId, history), recordingChangePort().port);
 
@@ -259,13 +330,27 @@ test('a complete whole history deactivates every omitted active Participation', 
   ]);
 });
 
-test.for([
-  { status: 'partial', courses: [reported({ courseCode: 'OTHER', year: 2000 })] },
-  { status: 'unavailable' },
-] as const)('a $status whole history preserves everything', async (history, { course }) => {
+test('an unavailable whole history preserves everything', async ({ course }) => {
   await synchronizeHistory(course.studentId, complete(course.identifier, earlier(course)));
   const before = await activeOfferings(course.studentId);
+  const history = { status: 'unavailable' } as const;
   expect(await synchronizeHistory(course.studentId, history)).toEqual(history);
   expect(await activeOfferings(course.studentId)).toEqual(before);
-  expect(await prisma.courseOffering.count({ where: { courseCode: 'OTHER' } })).toBe(0);
+});
+
+test('a partial whole history materializes what it reports and deactivates nothing', async ({
+  course,
+}) => {
+  await synchronizeHistory(course.studentId, complete(course.identifier, earlier(course)));
+  const before = await activeOfferings(course.studentId);
+  const later = { ...course.identifier, year: course.identifier.year + 1 };
+  const history = partial(later);
+  expect(await synchronizeHistory(course.studentId, history)).toEqual(history);
+  expect(await activeOfferings(course.studentId)).toEqual(
+    expect.arrayContaining([
+      ...before,
+      { role: 'STUDENT', courseCode: course.identifier.courseCode, year: later.year },
+    ]),
+  );
+  expect(await activeOfferings(course.studentId)).toHaveLength(before.length + 1);
 });

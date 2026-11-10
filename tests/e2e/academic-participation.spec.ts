@@ -259,6 +259,44 @@ test('a partial institutional response preserves a stored teaching Participation
   await ok(await api.get(course.apiPath('/simulation')));
 });
 
+test('a course professor reported by a partial response sees and uses Roadmap creation', async ({
+  course,
+  createCourse,
+  apiAs,
+  reportPosition,
+  page,
+}) => {
+  const user = course.users.teacher;
+  const offering = await createCourse({ roadmap: false });
+  await reportPosition(user, offering, 'COURSE_PROFESSOR');
+  await failUcampusEndpoint(user, 'cursos_inscritos');
+  await authenticateAs(page.context(), user.id);
+  await page.goto('/academic-overview');
+  await expect(
+    page.getByRole('button', { name: `Crear roadmap de ${offering.courseName}` }),
+  ).toBeVisible();
+  const api = await apiAs(user);
+  await ok(await api.post(offering.apiPath(), { data: {} }), 201);
+});
+
+test('an unconfirmed position explains why Roadmap creation is unavailable', async ({
+  course,
+  createCourse,
+  page,
+}) => {
+  const user = course.users.teacher;
+  const offering = await createCourse({
+    roadmap: false,
+    participants: [{ user, role: 'TEACHER', institutionalPosition: null }],
+  });
+  await failUcampusEndpoint(user, 'cursos_dictados');
+  await authenticateAs(page.context(), user.id);
+  await page.goto('/academic-overview');
+  const row = page.getByRole('listitem').filter({ hasText: offering.courseCode });
+  await expect(row.getByText('No pudimos confirmar tu cargo con U-Campus.')).toBeVisible();
+  await expect(row.getByRole('button', { name: /Crear roadmap/ })).toHaveCount(0);
+});
+
 for (const [position, expected] of [
   ['COURSE_PROFESSOR', 201],
   ['COORDINATING_PROFESSOR', 403],

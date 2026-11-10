@@ -129,6 +129,14 @@ function CourseRoadmapAction({
       year: course.year,
     });
   }
+  if (awaitsCreation && !course.isPositionConfirmed) {
+    return (
+      <p className="max-w-64 text-sm text-muted-foreground">
+        No pudimos confirmar tu cargo con U-Campus. Si eres profesor de cátedra, recarga la página
+        más tarde para crear el roadmap.
+      </p>
+    );
+  }
   if (awaitsCreation) {
     return (
       <p className="max-w-64 text-sm text-muted-foreground">

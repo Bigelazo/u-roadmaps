@@ -54,7 +54,8 @@ function courseFromMufasa(
     isPastClosure: pastClosure,
     canCreateRoadmap: localCourse
       ? localCourse.canCreateRoadmap
-      : isComplete && isCourseLeadPosition(course.institutionalPosition) && !pastClosure,
+      : isCourseLeadPosition(course.institutionalPosition) && !pastClosure,
+    isPositionConfirmed: isComplete,
   };
 }
 

@@ -97,9 +97,9 @@ export function CreateRoadmapDialog({ courseCode, year, semester, courseName }: 
   return (
     <Dialog onOpenChange={openChanged}>
       <DialogTrigger
-        render={<Button aria-label={`Crear roadmap de ${courseName}`} size="lg" type="button" />}
+        render={<Button aria-label={`Crear roadmap de ${courseName}`} type="button" />}
       >
-        <Plus aria-hidden="true" size={16} />
+        <Plus aria-hidden="true" data-icon="inline-start" />
         Crear roadmap
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
