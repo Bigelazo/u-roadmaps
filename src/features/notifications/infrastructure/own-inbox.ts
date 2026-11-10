@@ -140,6 +140,37 @@ export async function countOwnNoticeTargets(
   return queryInboxCounts(await inboxRecipient(userId, filter.roadmapId, readAccess), filter);
 }
 
+export type CourseOfferingIdentity = Readonly<{
+  courseCode: string;
+  year: number;
+  semester: number;
+}>;
+
+export async function countOwnCourseOfferingNoticeTargets(
+  userId: string,
+  { courseCode, year, semester }: CourseOfferingIdentity,
+  readAccess: ParticipantAccessReader,
+) {
+  const roadmap = await prisma.roadmap.findFirst({
+    where: {
+      courseOffering: {
+        courseCode,
+        year,
+        semester,
+        participants: { some: { userId, isActive: true } },
+      },
+    },
+    select: { id: true },
+  });
+  if (!roadmap) return { unread: 0 };
+  const filter = { roadmapId: roadmap.id };
+  const { count } = await queryInboxCounts(
+    await inboxRecipient(userId, roadmap.id, readAccess),
+    filter,
+  );
+  return { unread: count };
+}
+
 export async function countOwnNodeChanges(
   userId: string,
   params: URLSearchParams,

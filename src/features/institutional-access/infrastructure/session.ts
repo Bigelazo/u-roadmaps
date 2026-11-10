@@ -10,6 +10,18 @@ export function applicationSessionCookieName(request: Request) {
   return isHttps(request) ? '__Secure-next-auth.session-token' : 'next-auth.session-token';
 }
 
+export function applicationSessionCookie(request: Request) {
+  const secure = isHttps(request);
+  return {
+    name: applicationSessionCookieName(request),
+    httpOnly: true,
+    sameSite: secure ? ('none' as const) : ('lax' as const),
+    path: '/',
+    secure,
+    maxAge: applicationSessionMaxAge,
+  };
+}
+
 export async function createApplicationSessionToken(userId: string) {
   const secret = authOptions.secret;
   if (!secret) return null;

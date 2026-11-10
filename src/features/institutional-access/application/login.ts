@@ -12,7 +12,7 @@ import {
 import { ApplicationError, applicationResult } from '@/shared/errors/server';
 import { isHttps, siteUrl } from '@/shared/server/environment/site-url';
 import {
-  applicationSessionCookieName,
+  applicationSessionCookie,
   applicationSessionMaxAge,
   createApplicationSessionToken,
 } from '../infrastructure/session';
@@ -77,13 +77,8 @@ export function completeInstitutionalLogin(request: Request, rawToken: FormDataE
 
     const response = NextResponse.redirect(siteUrl('/academic-overview', request), 303);
     response.cookies.set({
-      name: applicationSessionCookieName(request),
+      ...applicationSessionCookie(request),
       value: sessionToken,
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      secure: isHttps(request),
-      maxAge: applicationSessionMaxAge,
       expires: new Date(Date.now() + applicationSessionMaxAge * 1000),
     });
     response.cookies.delete(vtiLoginStateCookieName);

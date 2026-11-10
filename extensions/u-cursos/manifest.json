@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "U-Roadmaps en U-Cursos",
+  "version": "0.1.0",
+  "description": "Abre el roadmap de U-Roadmaps de cada curso dentro de U-Cursos y muestra cuántas notificaciones del curso tienes sin leer.",
+  "homepage_url": "https://roadmap.dcc.uchile.cl",
+  "minimum_chrome_version": "121",
+  "icons": {
+    "16": "icons/network-16.png",
+    "32": "icons/network-32.png",
+    "48": "icons/network-48.png",
+    "128": "icons/network-128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "host_permissions": ["https://roadmap.dcc.uchile.cl/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.u-cursos.cl/*"],
+      "js": ["roadmap-service.js"],
+      "css": ["roadmap-service.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/network.svg"],
+      "matches": ["https://www.u-cursos.cl/*"]
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "u-roadmaps@dcc.uchile.cl",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["none"] }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}

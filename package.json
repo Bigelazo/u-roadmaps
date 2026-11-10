@@ -26,6 +26,9 @@
     "test:integration": "vitest run --config vitest.notifications.config.mts",
     "test:integration:locked": "sh scripts/with-test-db.sh notifications pnpm run test:integration",
     "loc:chart": "node scripts/loc-chart/generate.mjs",
+    "extension:lint": "pnpm dlx web-ext lint --source-dir extensions/u-cursos",
+    "extension:package": "node scripts/package-u-cursos-extension.mjs",
+    "extension:screenshots": "node scripts/u-cursos-extension-screenshots.mjs",
     "worktree:setup": "sh scripts/worktree-setup.sh",
     "prepare": "lefthook install"
   },
