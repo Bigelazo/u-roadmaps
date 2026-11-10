@@ -10,6 +10,7 @@ import {
   closingPopoverKey,
   resolveElement,
   revealTutorialTarget,
+  TUTORIAL_EXIT_ATTRIBUTE,
   TUTORIAL_TRIGGER_ATTRIBUTE,
   waitForElement,
   waitForStableElement,
@@ -78,6 +79,29 @@ export function RoadmapTutorial<Action = never>({
       });
       if (!groupHighlight.isConnected) document.body.appendChild(groupHighlight);
       return groupHighlight;
+    };
+    const restoreExitControl = () =>
+      document
+        .querySelector(`[${TUTORIAL_EXIT_ATTRIBUTE}]`)
+        ?.removeAttribute('data-tutorial-obscured');
+    const syncExitControl = () => {
+      const exitControl = document.querySelector(`[${TUTORIAL_EXIT_ATTRIBUTE}]`);
+      if (!exitControl) return;
+      const popover = tour.getState().popover?.wrapper;
+      const exitBounds = exitControl?.getBoundingClientRect();
+      const popoverBounds = popover?.getBoundingClientRect();
+      exitControl?.toggleAttribute(
+        'data-tutorial-obscured',
+        Boolean(
+          popover?.checkVisibility() &&
+          exitBounds &&
+          popoverBounds &&
+          exitBounds.left < popoverBounds.right &&
+          exitBounds.right > popoverBounds.left &&
+          exitBounds.top < popoverBounds.bottom &&
+          exitBounds.bottom > popoverBounds.top,
+        ),
+      );
     };
     const askExit = () => {
       if (confirmingRef.current) return;
@@ -158,13 +182,16 @@ export function RoadmapTutorial<Action = never>({
       },
       onHighlighted: () => {
         highlighting = false;
+        syncExitControl();
       },
       onPopoverRender: () => {
+        syncExitControl();
         if (!following) return;
         following = false;
         skipDriverPopoverFocus();
       },
       onDestroyStarted: askExit,
+      onDestroyed: restoreExitControl,
       overlayClickBehavior: askExit,
     });
     driverRef.current = tour;
@@ -186,6 +213,7 @@ export function RoadmapTutorial<Action = never>({
     const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
       document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
+      syncExitControl();
       if (confirmingRef.current || highlighting || index === undefined || !tour.isActive()) return;
       restoreHighlight(index);
       if (steps[index].highlightElements) {
@@ -232,6 +260,7 @@ export function RoadmapTutorial<Action = never>({
       window.removeEventListener('keydown', onKeyDown, true);
       tour.destroy();
       groupHighlight.remove();
+      restoreExitControl();
       driverRef.current = null;
     };
   }, [steps, actions]);

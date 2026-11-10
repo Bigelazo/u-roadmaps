@@ -425,7 +425,12 @@ test('the FI1001 historical student sees the closed course while versions exclud
   await expect(page.getByRole('heading', { name: 'Edición 2026-1' })).toBeVisible();
   await page.getByText('Información de la versión', { exact: true }).click();
   await expect(page.getByText('Copiada de la edición 2025-2')).toBeVisible();
-  await expect(page.getByText('Martín Vega Ríos · Ayudante')).toBeVisible();
+  await expect(
+    page
+      .getByRole('list', { name: 'Equipo docente' })
+      .getByRole('listitem')
+      .filter({ hasText: 'Martín Vega Ríos' }),
+  ).toContainText('Ayudante');
   await expect(page.getByText('Nicolás Fuentes Arancibia')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Completar', exact: true })).toHaveCount(0);
 });

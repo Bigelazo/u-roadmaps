@@ -201,7 +201,9 @@ La sincronización del calendario puede consultar el PDF sin escribir en la base
 pnpm exec dotenv -e .env -- pnpm sync:academic-calendar --dry-run
 ```
 
-Sin `--dry-run`, guarda las fechas y sus fuentes en `AcademicTerm`. El script utiliza el año y mes de `America/Santiago` para seleccionar el semestre y no instala una tarea programada.
+Sin `--dry-run`, guarda las fechas y sus fuentes en `AcademicTerm`. El script utiliza el año y mes de `America/Santiago` para seleccionar el semestre y no espera la fecha habitual de publicación.
+
+El proceso persistente sincroniza el calendario por sí solo. Desde el 15 de abril (semestre 1) o el 15 de octubre (semestre 2), hora de `America/Santiago`, lo busca una vez al día, cerca de las 10:00, hasta guardarlo; después no vuelve a consultarlo. Antes de esas fechas no consulta el sitio. Los fallos se registran como advertencia y se reintentan al día siguiente o al reiniciar el proceso. No se ejecuta con datos de desarrollo o E2E, para conservar sus calendarios ficticios.
 
 ## Pruebas
 

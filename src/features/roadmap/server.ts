@@ -1,5 +1,6 @@
 import 'server-only';
 
+export { syncAcademicCalendar } from './application/academic-calendar-sync';
 export { closeDueRoadmaps, readRoadmapClosureCalendar } from './application/closure';
 export { backfillResourceFileSizes } from './infrastructure/resources/file-sizes';
 

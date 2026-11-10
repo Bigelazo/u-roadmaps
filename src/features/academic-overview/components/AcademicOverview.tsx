@@ -18,56 +18,15 @@ import {
 } from '@/shared/ui/accordion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Separator } from '@/shared/ui/separator';
-import type {
-  AcademicOverviewCourse,
-  AcademicOverviewInstitutionalPosition,
-  AcademicOverviewPage,
-  AcademicOverviewTerm,
-} from '../types';
+import type { AcademicOverviewCourse, AcademicOverviewPage, AcademicOverviewTerm } from '../types';
 import { courseParticipantsUrl, termLabel } from '@/shared/course-offering';
 import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { NotificationCountButton } from '@/features/notifications/client';
 import { versionHistoryUrl } from '@/shared/version-history-url';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { cn } from 'cn';
+import { PositionPlate } from '@/shared/ui/position-plate';
 import { AcademicOverviewTutorialButton } from './AcademicOverviewTutorialButton';
-
-const positionDetails: Record<
-  AcademicOverviewInstitutionalPosition | 'TEACHING_STAFF',
-  Readonly<{ label: string; color: string | null }>
-> = {
-  TEACHING_STAFF: { label: 'Equipo docente', color: null },
-  COORDINATING_PROFESSOR: {
-    label: 'Profesor coordinador',
-    color: 'var(--position-coordinating-professor)',
-  },
-  COURSE_PROFESSOR: { label: 'Profesor de cátedra', color: 'var(--position-course-professor)' },
-  AUXILIARY_PROFESSOR: { label: 'Auxiliar', color: 'var(--position-auxiliary-professor)' },
-  TEACHING_ASSISTANT: { label: 'Ayudante', color: 'var(--position-teaching-assistant)' },
-  STUDENT: { label: 'Estudiante', color: 'var(--position-student)' },
-  OBSERVER: { label: 'Oyente', color: 'var(--position-observer)' },
-};
-
-function PositionPlate({
-  position,
-}: Readonly<{ position: (typeof positionDetails)[keyof typeof positionDetails] }>) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-sm bg-[color-mix(in_srgb,var(--position-color)_16%,var(--card))] px-2 py-0.5 text-xs font-bold text-ink"
-      style={{ '--position-color': position.color ?? 'var(--steel)' } as React.CSSProperties}
-    >
-      <span
-        aria-hidden="true"
-        className={
-          position.color
-            ? 'size-2 shrink-0 rounded-full bg-(--position-color)'
-            : 'size-2 shrink-0 rounded-full border border-graphite'
-        }
-      />
-      {position.label}
-    </span>
-  );
-}
 
 function CourseProgress({
   progress,
@@ -254,10 +213,7 @@ function CourseRow({
   isPastTerm: boolean;
   renderRoadmapCreation: RoadmapCreationAction;
 }>) {
-  const position =
-    positionDetails[
-      course.institutionalPosition ?? (course.role === 'TEACHER' ? 'TEACHING_STAFF' : 'STUDENT')
-    ];
+  const position = course.institutionalPosition ?? (course.role === 'TEACHER' ? null : 'STUDENT');
 
   const isPastOffering = isPastTerm || course.isPastClosure;
 

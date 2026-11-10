@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  currentAcademicTerm,
   extractAcademicTermDates,
   fetchPublishedAcademicTerm,
   selectTermCalendarPdf,
@@ -13,6 +14,15 @@ const calendarPage = `
 `;
 
 describe('academic calendar', () => {
+  it.each([
+    ['2026-07-31T12:00:00.000Z', { year: 2026, semester: 1 }],
+    ['2026-08-01T12:00:00.000Z', { year: 2026, semester: 2 }],
+    ['2027-01-01T02:00:00.000Z', { year: 2026, semester: 2 }],
+    ['2027-01-01T04:00:00.000Z', { year: 2027, semester: 1 }],
+  ])('at %s the current term in Santiago is %o', (now, term) => {
+    expect(currentAcademicTerm(new Date(now))).toEqual(term);
+  });
+
   it('selects the PDF from the requested term section, regardless of page order', () => {
     expect(selectTermCalendarPdf(calendarPage, { year: 2026, semester: 1 })).toBe(
       'https://ingenieria.uchile.cl/dam/otono-2026.pdf',

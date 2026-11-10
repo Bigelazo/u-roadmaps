@@ -30,6 +30,36 @@ const termName: Record<Semester, string> = {
   2: 'primavera',
 };
 
+function santiagoDate(now: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)?.value ?? '';
+  return {
+    year: Number(part('year')),
+    month: Number(part('month')),
+    day: `${part('year')}-${part('month')}-${part('day')}`,
+  };
+}
+
+const calendarPublicationMonthDay: Record<Semester, string> = {
+  1: '04-15',
+  2: '10-15',
+};
+
+export function currentAcademicTerm(now = new Date()): AcademicTermIdentifier {
+  const { year, month } = santiagoDate(now);
+  return { year, semester: month >= 8 ? 2 : 1 };
+}
+
+export function isCalendarExpectedPublished(term: AcademicTermIdentifier, now = new Date()) {
+  return santiagoDate(now).day >= `${term.year}-${calendarPublicationMonthDay[term.semester]}`;
+}
+
 function normalizeText(value: string) {
   return value
     .replace(/&nbsp;/gi, ' ')

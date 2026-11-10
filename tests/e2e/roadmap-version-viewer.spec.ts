@@ -196,9 +196,12 @@ closedVersion(
     ).toBe(true);
     await canvas.getByText('Información de la versión', { exact: true }).click();
     await expect(page.getByText('Creada desde cero')).toBeVisible();
-    await expect(
-      page.getByText(`${course.users.teacher.name} · Profesor de cátedra`),
-    ).toBeVisible();
+    const teacherEntry = page
+      .getByRole('list', { name: 'Equipo docente' })
+      .getByRole('listitem')
+      .filter({ hasText: course.users.teacher.name });
+    await expect(teacherEntry).toContainText('Profesor de cátedra');
+    await expect(teacherEntry).toContainText('Creó la versión');
     await expect(page.getByText(course.users.studentWithProgress.name)).toHaveCount(0);
 
     await canvas.getByText('Información de la versión', { exact: true }).click();
@@ -211,9 +214,10 @@ closedVersion(
     expect((await download).suggestedFilename()).toBe('guia.txt');
     await expect(page.getByRole('button', { name: /Completar|Recurso|Guardar/ })).toHaveCount(0);
     await canvas.getByText('Información de la versión', { exact: true }).click();
-    await expect(page.getByRole('list', { name: 'Linaje' })).toHaveText(
-      `Edición ${closedYear}-${closed.semester}`,
-    );
+    const lineage = page.getByRole('list', { name: 'Linaje' });
+    await expect(lineage.getByRole('listitem')).toHaveCount(1);
+    await expect(lineage).toContainText(`Edición ${closedYear}-${closed.semester}`);
+    await expect(lineage).toContainText('Esta versión');
     expect(await sideEffectCounts(closed)).toEqual(before);
   },
 );

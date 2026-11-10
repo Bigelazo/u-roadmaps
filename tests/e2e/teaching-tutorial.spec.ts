@@ -4,6 +4,7 @@ import { enterRoadmap } from './enter-roadmap';
 import { fileDrop } from './file-drop';
 import { expect, test } from './fixtures';
 import { authenticateAs } from './helpers';
+import { expectExitReachable } from './tutorial-exit';
 
 const steps = [
   'Centrar roadmap',
@@ -78,6 +79,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   createUser,
 }) => {
   test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
   const user = await createUser();
   await authenticateAs(page.context(), user.id);
   await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
@@ -205,6 +207,8 @@ test('teaching staff perform each action step of the teaching tutorial', async (
     markdown,
   );
 
+  await expectExitReachable(page, 'editor-desktop');
+
   const editorScroll = page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]');
   await page.locator('[aria-label="Editor de nodo"]').hover();
   await page.mouse.wheel(0, 700);
@@ -240,6 +244,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
   await expect(confirmation.locator('[data-slot="node-name"] svg')).toHaveCount(1);
   await page.screenshot({ path: 'test-results/tutorial-block-confirmation.png' });
   await confirmation.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(confirmation).toBeHidden();
   await expectStep(page, 'Bloquea un nodo');
   await expect(blockMenuTrigger).toHaveClass(/driver-active-element/);
   await blockMenuTrigger.click();
@@ -377,7 +382,7 @@ test('the highlighted creation menu stays behind its floating button', async ({
 }) => {
   const user = await createUser();
   await authenticateAs(page.context(), user.id);
-  await page.goto('/practice-roadmap/teaching');
+  await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
   await expectStep(page, 'Centrar roadmap');
   await page.getByRole('button', { name: 'Centrar mapa' }).click();
   await expectStep(page, 'Nodos');
@@ -386,15 +391,42 @@ test('the highlighted creation menu stays behind its floating button', async ({
   await next(page, 'Crea un nodo');
   const creator = page.getByRole('button', { name: 'Crear en el mapa' });
   await creator.click();
-  await expect(page.getByRole('menu')).toHaveClass(/driver-active-element/);
+  await expect(page.getByRole('menuitem', { name: 'Crear nodo', exact: true })).toHaveClass(
+    /driver-active-element/,
+  );
+  await expect(page.getByRole('menuitem', { name: 'Crear nodo', exact: true })).toHaveCSS(
+    'transform',
+    'none',
+  );
+  await page.getByRole('menuitem', { name: 'Crear nodo', exact: true }).hover();
+  await expect(creator).toHaveCSS('transform', 'none');
+  await expect(tourPopover(page)).toHaveCSS('opacity', '1');
   await expect
     .poll(() =>
       creator.evaluate((button) => {
         const rect = button.getBoundingClientRect();
-        return button.contains(document.elementFromPoint(rect.x + 5, rect.y + rect.height / 2));
+        return button.contains(
+          document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2),
+        );
       }),
     )
     .toBe(true);
+  const unrelatedNode = practiceNode(page, 'Conceptos básicos');
+  await expect(unrelatedNode).toBeInViewport();
+  await expect
+    .poll(() =>
+      unrelatedNode.evaluate((node) => {
+        const rect = node.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        return hit !== null && !node.contains(hit);
+      }),
+    )
+    .toBe(true);
+  await expectExitReachable(page, 'creator-menu-open-desktop');
+  await page.screenshot({ path: 'test-results/tutorial-creator-centre.png' });
   await creator.click();
   await expect(page.getByRole('menu')).toHaveCount(0);
+  await expectExitReachable(page, 'creator-menu-closed-desktop');
+  await page.getByRole('link', { name: 'Salir', exact: true }).click();
+  await expect(page).toHaveURL(/\/academic-overview$/);
 });

@@ -67,15 +67,25 @@ const routingWasmUrl = '/vendor/libavoid/0.4.5/libavoid.wasm';
 
 let modulePromise: Promise<AvoidModule> | undefined;
 export function loadRoutingModule(): Promise<AvoidModule> {
-  return (modulePromise ??= import('libavoid-js')
-    .then(async ({ AvoidLib }) => {
-      await AvoidLib.load(routingWasmUrl);
-      return AvoidLib.getInstance();
-    })
+  if (modulePromise) return modulePromise;
+  let timeout: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new DOMException('Routing engine load timed out', 'TimeoutError'));
+    }, 30_000);
+  });
+  const loading = import('libavoid-js').then(async ({ AvoidLib }) => {
+    await AvoidLib.load(routingWasmUrl);
+    return AvoidLib.getInstance();
+  });
+  const attempt = Promise.race([loading, deadline])
     .catch((error: unknown) => {
-      modulePromise = undefined;
+      if (modulePromise === attempt) modulePromise = undefined;
       throw error;
-    }));
+    })
+    .finally(() => clearTimeout(timeout));
+  modulePromise = attempt;
+  return attempt;
 }
 
 export function prepareRoutingEngine() {

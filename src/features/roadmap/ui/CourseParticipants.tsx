@@ -1,59 +1,17 @@
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
-import { cn } from 'cn';
 import { ArrowLeft, Route } from 'lucide-react';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { buttonVariants } from '@/shared/ui/button-variants';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
 import { dividedListClassName, PageShell, PageTitle } from '@/shared/ui/page-layout';
 import { termLabel } from '@/shared/course-offering';
-import type { InstitutionalCoursePosition } from '@/shared/institutional-position';
+import { PositionPlate } from '@/shared/ui/position-plate';
 import type {
   CourseMember,
   CourseParticipants as Participants,
 } from '@/features/roadmap/course-participants-types';
 
 import { StudentRoster } from './StudentRoster';
-
-const positionLabels: Record<InstitutionalCoursePosition, string> = {
-  COURSE_PROFESSOR: 'Profesor de cátedra',
-  COORDINATING_PROFESSOR: 'Profesor coordinador',
-  AUXILIARY_PROFESSOR: 'Auxiliar',
-  TEACHING_ASSISTANT: 'Ayudante',
-  STUDENT: 'Estudiante',
-  OBSERVER: 'Oyente',
-};
-
-const positionColors: Record<InstitutionalCoursePosition, string> = {
-  COURSE_PROFESSOR: 'var(--position-course-professor)',
-  COORDINATING_PROFESSOR: 'var(--position-coordinating-professor)',
-  AUXILIARY_PROFESSOR: 'var(--position-auxiliary-professor)',
-  TEACHING_ASSISTANT: 'var(--position-teaching-assistant)',
-  STUDENT: 'var(--position-student)',
-  OBSERVER: 'var(--position-observer)',
-};
-
-function PositionPlate({ position }: Readonly<{ position: InstitutionalCoursePosition | null }>) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-sm bg-[color-mix(in_srgb,var(--position-color)_16%,var(--card))] px-2 py-0.5 text-xs font-bold text-ink"
-      style={
-        {
-          '--position-color': position ? positionColors[position] : 'var(--steel)',
-        } as CSSProperties
-      }
-    >
-      <span
-        aria-hidden="true"
-        className={cn(
-          'size-2 shrink-0 rounded-full',
-          position ? 'bg-(--position-color)' : 'border border-graphite',
-        )}
-      />
-      {position ? positionLabels[position] : 'Equipo docente'}
-    </span>
-  );
-}
 
 function percent(ratio: number) {
   return `${Math.round(ratio * 100)}%`;
