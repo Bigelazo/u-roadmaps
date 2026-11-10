@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { authenticateAs } from './helpers';
+import { authenticateAs, reviewNodeResources } from './helpers';
 import { createExistingNode } from './existing-node';
 import { literal, sql } from './database';
 import { openNativeStream, streamFrames, type StreamWindow } from './notices';
@@ -171,6 +171,7 @@ test('classification and Dependency repeats reconcile independent targets and wi
     nodeTypeId: typeId,
     title: 'Nodo de ruta',
   });
+  await reviewNodeResources(student, course.apiPath(), course.nodes.first);
   expect(
     (await student.post(course.apiPath(`/nodes/${course.nodes.first}/completion`))).status(),
   ).toBe(200);

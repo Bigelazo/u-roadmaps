@@ -59,7 +59,8 @@ test('a student reviews every Resource before completing, and each access counts
   const teacher = await apiAs(course.users.teacher);
   const node = await nodeWithResources(teacher, course);
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-  await page.goto(`${course.pagePath()}?targetNode=${node.id}`);
+  await page.goto(course.pagePath());
+  await page.locator(`.react-flow__node[data-id="${node.id}"]`).click();
   const detail = page.locator('#student-node-detail-panel');
 
   const complete = await expectGatedCompletion(page);

@@ -1,6 +1,6 @@
 import type { APIRequestContext } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { ok } from './helpers';
+import { ok, reviewNodeResources } from './helpers';
 import {
   acknowledgeOpening,
   findNode,
@@ -171,6 +171,7 @@ test('description changes while blocked do not seed knowledge the recipient neve
     }),
   );
   expect(await descriptions()).toHaveLength(0);
+  await reviewNodeResources(recipient, course.apiPath(), course.nodes.first);
   await ok(await recipient.post(course.apiPath(`/nodes/${course.nodes.first}/completion`)));
   const accessible = await (await recipient.get(course.apiPath())).json();
   expect(findNode(accessible, node.id).description).toBe(

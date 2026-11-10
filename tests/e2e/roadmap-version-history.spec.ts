@@ -198,7 +198,12 @@ test('teaching staff reach the history from the Roadmap and from past offerings'
   await expect(page).toHaveURL(new RegExp(`/courses/${past.courseCode}/versions$`));
   const version = page.getByRole('listitem', { name: `Edición ${pastTerm.year}-1` });
   await expect(version).toContainText('Creada desde cero');
-  await expect(version).toContainText(`${teacher.name} · Profesor de cátedra`);
+  const member = version
+    .getByRole('list', { name: 'Equipo docente' })
+    .getByRole('listitem')
+    .filter({ hasText: teacher.name });
+  await expect(member.getByText(teacher.name, { exact: true })).toBeVisible();
+  await expect(member.getByText('Profesor de cátedra', { exact: true })).toBeVisible();
   await expect(version).toContainText('Creador no registrado');
 
   await page.goto('/academic-overview');

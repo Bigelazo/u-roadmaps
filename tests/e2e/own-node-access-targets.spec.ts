@@ -3,7 +3,7 @@ import { expect, test } from './fixtures';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { createExistingNode } from './existing-node';
 import { sql } from './database';
-import { ok } from './helpers';
+import { ok, reviewNodeResources } from './helpers';
 import { acknowledgeOpening, findNode, listNotices, prepareOpening, recognize } from './notices';
 import { changeTeacherBlock, hideNode } from './previewed-writes';
 
@@ -115,6 +115,7 @@ test('a student Completion advances known access before a later Teacher block', 
   await ok(
     await author.patch(course.apiPath(`/nodes/${unchanged}`), { data: { isVisible: true } }),
   );
+  await reviewNodeResources(student, course.apiPath(), unchanged);
   await ok(await student.post(course.apiPath(`/nodes/${unchanged}/completion`)));
   const nodeId = course.nodes.second;
   const roadmap = await (await student.get(course.apiPath())).json();
@@ -145,6 +146,7 @@ test('Completion withdraws returned access and preserves a genuinely pending pub
   await expect
     .poll(async () => (await notices())[0]?.data)
     .toMatchObject({ knownValue: 'Disponible', currentValue: 'Bloqueado' });
+  await reviewNodeResources(student, course.apiPath(), prerequisite);
   await ok(await student.post(course.apiPath(`/nodes/${prerequisite}/completion`)));
   await expect.poll(notices).toHaveLength(0);
   const hidden = await createExistingNode({
@@ -161,6 +163,7 @@ test('Completion withdraws returned access and preserves a genuinely pending pub
   await expect
     .poll(async () => (await hiddenNotices())[0]?.data)
     .toMatchObject({ knownValue: 'Retirado', currentValue: 'Bloqueado' });
+  await reviewNodeResources(student, course.apiPath(), course.nodes.second);
   await ok(await student.post(course.apiPath(`/nodes/${course.nodes.second}/completion`)));
   await expect
     .poll(async () => (await hiddenNotices())[0]?.data)

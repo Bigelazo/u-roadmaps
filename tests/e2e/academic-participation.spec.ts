@@ -1,7 +1,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { expect, test, type E2ECourseOffering } from './fixtures';
 import { forgetUcampusUser, failUcampusEndpoint } from './ucampus';
-import { authenticateAs, ok } from './helpers';
+import { authenticateAs, ok, reviewNodeResources } from './helpers';
 import { changeTeacherBlock } from './previewed-writes';
 
 const forbidden = {
@@ -237,6 +237,7 @@ test('an observer reported among taught courses keeps student capabilities', asy
     403,
   );
   await ok(await api.get(course.apiPath('/simulation')), 403);
+  await reviewNodeResources(api, course.apiPath(), course.nodes.first);
   await ok(await api.post(course.apiPath(`/nodes/${course.nodes.first}/completion`)));
 });
 
