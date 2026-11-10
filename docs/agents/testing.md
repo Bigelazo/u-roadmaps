@@ -228,9 +228,10 @@ Un Ramo sin nómina registrada responde 503. Ambos se eliminan al terminar el te
 No se infiere un cargo institucional desde un rol guardado en la aplicación.
 Desde #187, la creación usa el cargo confirmado por U-Campus o, ante una respuesta
 fallida o parcial, el cargo de profesor de cátedra guardado en una Participation
-activa. Un cargo desconocido nunca autoriza crear. Una respuesta fallida o parcial
-no reescribe Participations. La proyección de los datos válidos
-parciales sigue disponible sin reemplazar el rol local guardado.
+activa. Un cargo desconocido nunca autoriza crear. Una respuesta fallida no
+reescribe Participations. Una respuesta parcial solo materializa los cursos que
+informa y sube cargos guardados; nunca baja un cargo ni desactiva.
+Los cursos de verano de U-Campus se ignoran sin volver parcial la respuesta.
 
 ## Evidencias y diagnóstico
 

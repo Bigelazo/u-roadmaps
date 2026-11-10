@@ -10,6 +10,7 @@ import {
 } from '@/integrations/ucampus/server';
 import {
   effectivePosition,
+  outranks,
   positionCapabilities,
   type InstitutionalCoursePosition,
 } from '@/shared/institutional-position';
@@ -75,10 +76,13 @@ function readActiveParticipation(
   });
 }
 
+type Materialization = 'replace' | 'promote';
+
 async function materializeParticipation(
   user: AcademicUser,
   { identifier, ...access }: CourseAccess,
   changePort: RoadmapChangePort,
+  materialization: Materialization,
 ) {
   const institutionalPosition = effectivePosition(access.positions);
   if (!institutionalPosition) return null;
@@ -99,9 +103,23 @@ async function materializeParticipation(
         select: { id: true },
       });
       if (roadmap) await lockRoadmap(transaction, roadmap.id, 'key-share');
-      const [previous] = await transaction.$queryRaw<{ role: string }[]>`
-      SELECT role FROM "Participation" WHERE "userId" = ${user.id}::uuid
+      const [previous] = await transaction.$queryRaw<
+        {
+          id: string;
+          role: string;
+          institutionalPosition: InstitutionalCoursePosition | null;
+          isActive: boolean;
+        }[]
+      >`
+      SELECT id, role, "institutionalPosition", "isActive" FROM "Participation"
+        WHERE "userId" = ${user.id}::uuid
         AND "courseOfferingId" = ${courseOffering.id}::uuid FOR UPDATE`;
+      if (
+        materialization === 'promote' &&
+        previous?.isActive &&
+        !outranks(institutionalPosition, previous.institutionalPosition)
+      )
+        return transaction.participation.findUniqueOrThrow({ where: { id: previous.id } });
       const participation = await transaction.participation.upsert({
         where: {
           userId_courseOfferingId: { userId: user.id, courseOfferingId: courseOffering.id },
@@ -176,19 +194,23 @@ export async function synchronizeCourseOffering(
   changePort: RoadmapChangePort,
 ): Promise<CourseOfferingSynchronization> {
   const history = await user.ucampus.getAcademicHistory(user.rut);
-  if (history.status !== 'complete')
+  if (history.status === 'unavailable')
     return {
-      status: history.status,
+      status: 'unavailable',
       participation: await readActiveParticipation(user, identifier),
     };
   const key = offeringKey(identifier);
   const access = reportedOfferings(history.courses).get(key);
+  if (history.status === 'partial') {
+    if (access) await materializeParticipation(user, access, changePort, 'promote');
+    return { status: 'partial', participation: await readActiveParticipation(user, identifier) };
+  }
   if (!access) {
     await deactivateParticipations(user, (offering) => offeringKey(offering) === key, changePort);
     return { status: 'complete', position: null, participation: null };
   }
   const participation =
-    (await materializeParticipation(user, access, changePort)) ??
+    (await materializeParticipation(user, access, changePort, 'replace')) ??
     (await readActiveParticipation(user, identifier));
   return { status: 'complete', position: effectivePosition(access.positions), participation };
 }
@@ -198,9 +220,12 @@ export async function synchronizeAcademicHistory(
   changePort: RoadmapChangePort,
 ): Promise<AcademicHistory> {
   const history = await user.ucampus.getAcademicHistory(user.rut);
-  if (history.status !== 'complete') return history;
+  if (history.status === 'unavailable') return history;
   const offerings = reportedOfferings(history.courses);
-  for (const access of offerings.values()) await materializeParticipation(user, access, changePort);
+  const materialization = history.status === 'complete' ? 'replace' : 'promote';
+  for (const access of offerings.values())
+    await materializeParticipation(user, access, changePort, materialization);
+  if (history.status === 'partial') return history;
   await deactivateParticipations(
     user,
     (offering) => !offerings.has(offeringKey(offering)),

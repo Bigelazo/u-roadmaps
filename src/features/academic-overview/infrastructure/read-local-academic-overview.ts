@@ -72,6 +72,7 @@ export async function readLocalAcademicOverview(
       isPastClosure: pastClosure,
       canCreateRoadmap:
         positionCapabilities(institutionalPosition).canCreateRoadmap && !pastClosure,
+      isPositionConfirmed: false,
     };
   });
 }

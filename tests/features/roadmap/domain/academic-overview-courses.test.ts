@@ -28,6 +28,7 @@ it.each(priorities.slice(0, -1))('prefers %s to every lower institutional positi
     progress: null,
     isPastClosure: false,
     canCreateRoadmap: institutionalPosition === 'COURSE_PROFESSOR',
+    isPositionConfirmed: true,
   });
   for (const other of lower) {
     expect(uniqueAcademicOverviewCourses([offering(other), offering(position)])).toEqual([

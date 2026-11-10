@@ -23,11 +23,12 @@ export type AcademicOverviewCourse = Readonly<{
   progress: Readonly<{ completedNodes: number; visibleNodes: number }> | null;
   isPastClosure: boolean;
   canCreateRoadmap: boolean;
+  isPositionConfirmed: boolean;
 }>;
 
 export type AcademicOverviewApiOffering = Omit<
   AcademicOverviewCourse,
-  'canCreateRoadmap' | 'isPastClosure' | 'progress'
+  'canCreateRoadmap' | 'isPastClosure' | 'isPositionConfirmed' | 'progress'
 >;
 
 export type RoadmapClosureCalendar = (

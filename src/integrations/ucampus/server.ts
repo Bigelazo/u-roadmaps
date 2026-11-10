@@ -107,7 +107,9 @@ function institutionalPosition(
   }
 }
 
-function parseCourse(value: unknown, isTeaching: boolean): MufasaEnrolledCourse {
+const summerPeriod = 3;
+
+function parseCourse(value: unknown, isTeaching: boolean): MufasaEnrolledCourse | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('MUFASA returned an invalid enrolled course.');
   }
@@ -118,6 +120,7 @@ function parseCourse(value: unknown, isTeaching: boolean): MufasaEnrolledCourse 
   const semester = readInteger(course, ['periodo', 'semestre', 'semester']);
   const section = readString(course, ['seccion', 'section']);
 
+  if (courseCode && name && year && semester === summerPeriod) return null;
   if (!courseCode || !name || !year || (semester !== 1 && semester !== 2)) {
     throw new Error('MUFASA returned a course without a valid academic term.');
   }
@@ -160,15 +163,22 @@ async function getMufasaCourseList(
     );
     if (payload === null) return { status: 'unavailable' };
     const remoteCourses = enrolledCoursesPayload(payload);
-    const courses = remoteCourses.flatMap((course) => {
+    const courses: MufasaEnrolledCourse[] = [];
+    let discarded = 0;
+    for (const remoteCourse of remoteCourses) {
       try {
-        return [parseCourse(course, isTeaching)];
-      } catch {
-        return [];
+        const course = parseCourse(remoteCourse, isTeaching);
+        if (course) courses.push(course);
+      } catch (error) {
+        discarded++;
+        console.warn('MUFASA course row discarded', {
+          endpoint,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
-    });
-    if (remoteCourses.length > 0 && courses.length === 0) return { status: 'unavailable' };
-    return { status: courses.length === remoteCourses.length ? 'complete' : 'partial', courses };
+    }
+    if (discarded > 0 && courses.length === 0) return { status: 'unavailable' };
+    return { status: discarded === 0 ? 'complete' : 'partial', courses };
   } catch {
     return { status: 'unavailable' };
   }
