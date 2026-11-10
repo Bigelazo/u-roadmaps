@@ -4,4 +4,6 @@ export async function register() {
   startRoadmapClosure();
   const { startScheduledUnlockRelease } = await import('@/app/_adapters/scheduled-unlock-release');
   startScheduledUnlockRelease();
+  const { startAcademicCalendarSync } = await import('@/app/_adapters/academic-calendar-sync');
+  startAcademicCalendarSync();
 }

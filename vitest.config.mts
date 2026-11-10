@@ -5,6 +5,7 @@ const notificationsDatabaseTests = [
   'tests/features/roadmap/{change-port-operations,participant-access,preview-version,resource-access,roadmap-command,stored-file-ownership}.test.ts',
   'tests/features/roadmap/application/academic-participation.test.ts',
   'tests/prisma/**/*.test.ts',
+  'tests/features/roadmap/application/academic-calendar-sync.test.ts',
 ];
 
 export const notificationsDatabaseHarness: TestUserConfig = {
