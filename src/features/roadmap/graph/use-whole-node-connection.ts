@@ -8,7 +8,7 @@ import {
   type TouchEvent as ReactTouchEvent,
 } from 'react';
 import type { Connection, OnConnectStart } from '@xyflow/react';
-import { wouldCreateDependencyCycle } from '@/features/roadmap/domain/access';
+import { dependencyRejection, type DependencyRejection } from '@/features/roadmap/domain/access';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 
@@ -43,6 +43,14 @@ function isOverArrowModeControl(event: ConnectionPointerEvent) {
   );
 }
 
+export type ConnectionRejection = {
+  reason: Exclude<DependencyRejection, 'SELF_DEPENDENCY'>;
+  source: RoadmapFlowNode;
+  target: RoadmapFlowNode;
+};
+
+export const arrowModeMessage = 'Modo flecha: toca un nodo de destino';
+
 type PendingTouch = {
   nodeId: string | null;
   x: number;
@@ -55,16 +63,21 @@ export function useWholeNodeConnection({
   edges,
   enabled,
   onConnect,
+  onReject,
 }: {
   nodes: readonly RoadmapFlowNode[];
   edges: readonly RoadmapFlowEdge[];
   enabled: boolean;
   onConnect: (connection: Connection) => void;
+  onReject: (rejection: ConnectionRejection) => void;
 }) {
   const [targetId, setTargetId] = useState<string | null>(null);
+  const [rejectedTargetId, setRejectedTargetId] = useState<string | null>(null);
+  const [arrowRejection, setArrowRejection] = useState<ConnectionRejection | null>(null);
+  const [arrowInput, setArrowInput] = useState<'touch' | 'pointer'>('touch');
   const [arrowSourceId, setArrowSourceId] = useState<string | null>(null);
   const [arrowPointer, setArrowPointer] = useState<{ x: number; y: number } | null>(null);
-  const [arrowMessage, setArrowMessage] = useState('Modo flecha: toca un nodo de destino');
+  const [arrowMessage, setArrowMessage] = useState(arrowModeMessage);
   const mobileSource = useRef<string | null>(null);
   const pendingTouch = useRef<PendingTouch | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -84,23 +97,42 @@ export function useWholeNodeConnection({
     () => edges.map((edge) => ({ sourceNodeId: edge.source, targetNodeId: edge.target })),
     [edges],
   );
-  const isValidConnection = useCallback(
-    (connection: { source: string | null; target: string | null }) => {
-      if (!enabled || !connection.source || !connection.target) return false;
-      const from = nodesById.get(connection.source);
-      const to = nodesById.get(connection.target);
-      return Boolean(
-        from &&
-        to &&
-        !from.data.isHidden &&
-        !to.data.isHidden &&
-        !dependencies.some(
-          (edge) => edge.sourceNodeId === from.id && edge.targetNodeId === to.id,
-        ) &&
-        !wouldCreateDependencyCycle(dependencies, from.id, to.id),
+  const rejectionOf = useCallback(
+    (sourceId: string | null, targetId: string | null) => {
+      const from = sourceId ? nodesById.get(sourceId) : undefined;
+      const to = targetId ? nodesById.get(targetId) : undefined;
+      if (!from || !to) return null;
+      const reason = dependencyRejection(
+        dependencies,
+        { id: from.id, isVisible: !from.data.isHidden },
+        { id: to.id, isVisible: !to.data.isHidden },
       );
+      return reason ? { reason, source: from, target: to } : null;
     },
-    [dependencies, enabled, nodesById],
+    [dependencies, nodesById],
+  );
+  const reportableRejection = useCallback(
+    (sourceId: string | null, targetId: string | null): ConnectionRejection | null => {
+      const rejection = rejectionOf(sourceId, targetId);
+      if (!rejection || rejection.reason === 'SELF_DEPENDENCY') return null;
+      return { reason: rejection.reason, source: rejection.source, target: rejection.target };
+    },
+    [rejectionOf],
+  );
+  const isValidConnection = useCallback(
+    (connection: { source: string | null; target: string | null }) =>
+      enabled &&
+      Boolean(connection.source && nodesById.has(connection.source)) &&
+      Boolean(connection.target && nodesById.has(connection.target)) &&
+      !rejectionOf(connection.source, connection.target),
+    [enabled, nodesById, rejectionOf],
+  );
+  const highlightCandidate = useCallback(
+    (sourceId: string, candidate: string | null) => {
+      setTargetId(isValidConnection({ source: sourceId, target: candidate }) ? candidate : null);
+      setRejectedTargetId(reportableRejection(sourceId, candidate) ? candidate : null);
+    },
+    [isValidConnection, reportableRejection],
   );
   const cancelPendingTouch = useCallback(() => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -113,7 +145,9 @@ export function useWholeNodeConnection({
     setArrowSourceId(null);
     setArrowPointer(null);
     setTargetId(null);
-    setArrowMessage('Modo flecha: toca un nodo de destino');
+    setRejectedTargetId(null);
+    setArrowRejection(null);
+    setArrowMessage(arrowModeMessage);
   }, [cancelPendingTouch]);
   useEffect(() => {
     if (!arrowSourceId) return;
@@ -133,6 +167,22 @@ export function useWholeNodeConnection({
     )
       cancelArrowMode();
   }, [cancelArrowMode, enabled, nodesById]);
+  const startArrowMode = useCallback(
+    (nodeId: string) => {
+      const node = nodesById.get(nodeId);
+      if (!enabled || !node || node.data.isHidden) return;
+      cancelPendingTouch();
+      mobileSource.current = nodeId;
+      setArrowInput('pointer');
+      setArrowSourceId(nodeId);
+      setArrowPointer(null);
+      setTargetId(null);
+      setRejectedTargetId(null);
+      setArrowRejection(null);
+      setArrowMessage(arrowModeMessage);
+    },
+    [cancelPendingTouch, enabled, nodesById],
+  );
   const suppressDropClick = useCallback((duration = 0) => {
     suppressClick.current = true;
     if (clickResetTimer.current) clearTimeout(clickResetTimer.current);
@@ -149,15 +199,17 @@ export function useWholeNodeConnection({
         return;
       }
       if (!isValidConnection({ source: from, target })) {
-        setArrowMessage('Elige otro nodo visible que permita esta dependencia');
+        setArrowRejection(reportableRejection(from, target));
+        setArrowMessage('Elige otro nodo como destino');
         setTargetId(null);
+        setRejectedTargetId(null);
         setArrowPointer(null);
         return;
       }
       cancelArrowMode();
       onConnect({ source: from, target, sourceHandle: null, targetHandle: null });
     },
-    [cancelArrowMode, isValidConnection, onConnect],
+    [cancelArrowMode, isValidConnection, onConnect, reportableRejection],
   );
   const onConnectStart: OnConnectStart = useCallback(
     (_event, parameters) => {
@@ -166,6 +218,7 @@ export function useWholeNodeConnection({
       source.current = { nodeId: parameters.nodeId, handleId: parameters.handleId };
       emitted.current = false;
       setTargetId(null);
+      setRejectedTargetId(null);
     },
     [cancelArrowMode, enabled],
   );
@@ -194,19 +247,13 @@ export function useWholeNodeConnection({
         event.stopPropagation();
         const point = touch ?? ('clientX' in event ? event : null);
         if (point) setArrowPointer({ x: point.clientX, y: point.clientY });
-        const candidate = nodeUnderPointer(event);
-        setTargetId(
-          isValidConnection({ source: mobileSource.current, target: candidate }) ? candidate : null,
-        );
+        highlightCandidate(mobileSource.current, nodeUnderPointer(event));
         return;
       }
       if (!source.current) return;
-      const candidate = nodeUnderPointer(event);
-      setTargetId(
-        isValidConnection({ source: source.current.nodeId, target: candidate }) ? candidate : null,
-      );
+      highlightCandidate(source.current.nodeId, nodeUnderPointer(event));
     },
-    [cancelPendingTouch, isValidConnection],
+    [cancelPendingTouch, highlightCandidate],
   );
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
@@ -214,7 +261,9 @@ export function useWholeNodeConnection({
       if (!start) return;
       if (!emitted.current) {
         const target = nodeUnderPointer(event);
-        if (target)
+        const rejection = reportableRejection(start.nodeId, target);
+        if (rejection) onReject(rejection);
+        else if (target)
           completeConnection({
             source: start.nodeId,
             sourceHandle: start.handleId,
@@ -224,9 +273,10 @@ export function useWholeNodeConnection({
       }
       source.current = null;
       setTargetId(null);
+      setRejectedTargetId(null);
       suppressDropClick();
     },
-    [completeConnection, suppressDropClick],
+    [completeConnection, onReject, reportableRejection, suppressDropClick],
   );
 
   const onTouchStartCapture = useCallback(
@@ -263,10 +313,13 @@ export function useWholeNodeConnection({
       longPressTimer.current = setTimeout(() => {
         candidate.armed = true;
         mobileSource.current = nodeId;
+        setArrowInput('touch');
         setArrowSourceId(nodeId);
         setArrowPointer(null);
         setTargetId(null);
-        setArrowMessage('Modo flecha: toca un nodo de destino');
+        setRejectedTargetId(null);
+        setArrowRejection(null);
+        setArrowMessage(arrowModeMessage);
         longPressTimer.current = null;
       }, touchLongPressDuration);
     },
@@ -293,9 +346,13 @@ export function useWholeNodeConnection({
 
   return {
     targetId,
+    rejectedTargetId,
     arrowSourceId,
     arrowPointer,
     arrowMessage,
+    arrowRejection,
+    arrowInput,
+    startArrowMode,
     cancelArrowMode,
     onTouchStartCapture,
     onTouchEndCapture,

@@ -17,6 +17,15 @@ import { useConnectionPreviewRoute } from '@/features/roadmap/graph/routing/Depe
 import { DependencyPath } from '@/features/roadmap/graph/DependencyPath';
 
 export const ConnectionTargetContext = createContext<(NodeRect & { id: string }) | null>(null);
+const previewStyle = { stroke: 'var(--primary)', strokeWidth: 1.5, pointerEvents: 'none' } as const;
+const rejectedPreviewStyle = {
+  stroke: 'var(--muted-foreground)',
+  strokeWidth: 1.5,
+  strokeDasharray: '4 4',
+  pointerEvents: 'none',
+} as const;
+
+export const ConnectionRejectedTargetContext = createContext<NodeRect | null>(null);
 
 function sourceTowardsPointer(source: NodeRect, point: Point) {
   const sourcePosition = nearestSide(nodeCenter(source), point);
@@ -35,6 +44,7 @@ export function ConnectionPreview({
   pointer,
 }: ConnectionLineComponentProps) {
   const target = useContext(ConnectionTargetContext);
+  const rejectedTarget = useContext(ConnectionRejectedTargetContext);
   const routedPath = useConnectionPreviewRoute(fromNode.id, target?.id ?? null);
   const { getViewport } = useReactFlow();
   const viewport = getViewport();
@@ -48,11 +58,25 @@ export function ConnectionPreview({
   const sourceGeometry = sourceRect
     ? sourceTowardsPointer(sourceRect, point)
     : { sourceX: fromX, sourceY: fromY, sourcePosition: fromPosition };
+  const rejectedSide = rejectedTarget
+    ? nearestSide(nodeCenter(rejectedTarget), {
+        x: sourceGeometry.sourceX,
+        y: sourceGeometry.sourceY,
+      })
+    : null;
+  const freeEnd =
+    rejectedTarget && rejectedSide
+      ? { ...sideAnchor(rejectedTarget, rejectedSide), position: rejectedSide }
+      : {
+          x: toX,
+          y: toY,
+          position: sourceRect ? nearestSide(point, nodeCenter(sourceRect)) : toPosition,
+        };
   const [freePath] = getSmoothStepPath({
     ...sourceGeometry,
-    targetX: toX,
-    targetY: toY,
-    targetPosition: sourceRect ? nearestSide(point, nodeCenter(sourceRect)) : toPosition,
+    targetX: freeEnd.x,
+    targetY: freeEnd.y,
+    targetPosition: freeEnd.position,
     borderRadius: 8,
   });
   const path = target ? routedPath : freePath;
@@ -61,7 +85,7 @@ export function ConnectionPreview({
     <DependencyPath
       className="react-flow__connection-path"
       path={path}
-      style={{ stroke: 'var(--primary)', strokeWidth: 1.5, pointerEvents: 'none' }}
+      style={rejectedTarget && !target ? rejectedPreviewStyle : previewStyle}
     />
   );
 }
@@ -80,8 +104,15 @@ export function TouchConnectionPreview({
   pointer: { x: number; y: number } | null;
 }) {
   const routedPath = useConnectionPreviewRoute(sourceId, targetId ?? null);
+  const rejectedTarget = useContext(ConnectionRejectedTargetContext);
   const { screenToFlowPosition } = useReactFlow();
-  const point = pointer ? screenToFlowPosition(pointer, { snapToGrid: false }) : null;
+  const rejected = Boolean(rejectedTarget && !target);
+  const point =
+    rejectedTarget && !target
+      ? sideAnchor(rejectedTarget, nearestSide(nodeCenter(rejectedTarget), nodeCenter(source)))
+      : pointer
+        ? screenToFlowPosition(pointer, { snapToGrid: false })
+        : null;
   if (!target && !point) return null;
   if (
     !target &&
@@ -116,7 +147,7 @@ export function TouchConnectionPreview({
         <DependencyPath
           path={path}
           className="react-flow__connection-path"
-          style={{ stroke: 'var(--primary)', strokeWidth: 1.5, pointerEvents: 'none' }}
+          style={rejected ? rejectedPreviewStyle : previewStyle}
         />
       </svg>
     </ViewportPortal>

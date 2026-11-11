@@ -62,9 +62,17 @@ import {
   DependencyAnimationReady,
   type DependencyAnimationControls,
 } from '@/features/roadmap/graph/DependencyAnimation';
-import { useWholeNodeConnection } from '@/features/roadmap/graph/use-whole-node-connection';
+import {
+  arrowModeMessage,
+  useWholeNodeConnection,
+  type ConnectionRejection,
+} from '@/features/roadmap/graph/use-whole-node-connection';
+import { DependencyRejectionMessage } from '@/features/roadmap/graph/DependencyRejectionMessage';
+import { NodeConnectorContext } from '@/features/roadmap/graph/node-connector';
+import { notify } from '@/shared/ui/notify';
 import {
   ConnectionPreview,
+  ConnectionRejectedTargetContext,
   ConnectionTargetContext,
   TouchConnectionPreview,
 } from '@/features/roadmap/graph/ConnectionPreview';
@@ -157,6 +165,10 @@ function fitAllOptions(compact: boolean, container: HTMLElement | null): FitView
         maxZoom: 1,
       }
     : { ...roadmapFitViewOptions, minZoom: roadmapMinZoom };
+}
+
+function notifyConnectionRejection(rejection: ConnectionRejection) {
+  notify.error(<DependencyRejectionMessage {...rejection} />);
 }
 
 function readingOrder(nodes: readonly RoadmapFlowNode[]) {
@@ -1084,6 +1096,7 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     edges: flow.edges,
     enabled: canInteract && !touchMoveMode,
     onConnect: connectNodes,
+    onReject: notifyConnectionRejection,
   });
   const connectionNodes = useMemo(
     () =>
@@ -1094,10 +1107,14 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
             ? 'roadmap-node--arrow-source'
             : node.id === connection.targetId
               ? 'roadmap-node--connection-target'
-              : undefined,
+              : node.id === connection.rejectedTargetId
+                ? 'roadmap-node--connection-rejected'
+                : undefined,
       })),
-    [flow.nodes, connection.targetId, connection.arrowSourceId],
+    [flow.nodes, connection.targetId, connection.rejectedTargetId, connection.arrowSourceId],
   );
+  const { startArrowMode } = connection;
+  const nodeConnector = useMemo(() => ({ start: startArrowMode }), [startArrowMode]);
   const targetNode = flow.nodes.find((node) => node.id === connection.targetId);
   const targetRect = targetNode
     ? {
@@ -1105,6 +1122,10 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         ...targetNode.position,
         ...roadmapNodeSizeForTitle(targetNode.data.title),
       }
+    : null;
+  const rejectedTargetNode = flow.nodes.find((node) => node.id === connection.rejectedTargetId);
+  const rejectedTargetRect = rejectedTargetNode
+    ? { ...rejectedTargetNode.position, ...roadmapNodeSizeForTitle(rejectedTargetNode.data.title) }
     : null;
   const arrowSourceNode = flow.nodes.find((node) => node.id === connection.arrowSourceId);
   const arrowSourceRect = arrowSourceNode
@@ -1204,132 +1225,138 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
         >
           <DependencyRouting nodes={flow.nodes} edges={flow.edges}>
             <ConnectionTargetContext value={targetRect}>
-              <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
-                className="h-full"
-                nodes={connectionNodes}
-                edges={flow.edges}
-                nodeTypes={roadmapNodeTypes}
-                edgeTypes={roadmapEdgeTypes}
-                nodesDraggable={
-                  canInteract && !connection.arrowSourceId && (!touchInput || touchMoveMode)
-                }
-                nodesConnectable={canInteract}
-                snapToGrid
-                snapGrid={[roadmapGridSize, roadmapGridSize]}
-                connectionMode={ConnectionMode.Loose}
-                connectOnClick={false}
-                connectionLineComponent={ConnectionPreview}
-                isValidConnection={connection.isValidConnection}
-                nodesFocusable
-                nodeDragThreshold={5}
-                nodeClickDistance={6}
-                elementsSelectable={isNavigationEnabled}
-                panOnDrag={isNavigationEnabled && !connection.arrowSourceId}
-                zoomOnScroll={isNavigationEnabled}
-                zoomOnPinch={isNavigationEnabled}
-                zoomOnDoubleClick={isNavigationEnabled}
-                onNodesChange={handleNodesChange}
-                onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
-                  setFlow((current) => ({
-                    ...current,
-                    edges: applyEdgeChanges(
-                      changes.filter((change) => change.type !== 'remove'),
-                      current.edges,
-                    ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
-                  }))
-                }
-                onNodeClick={(_event, node) => {
-                  if (node.data.blockReason) {
-                    setBlockedNoticeNodeId((current) => (current === node.id ? null : node.id));
-                    return;
-                  }
-                  setBlockedNoticeNodeId(null);
-                  onSelectNode(node.id);
-                }}
-                onPaneClick={() => {
-                  setBlockedNoticeNodeId(null);
-                  if (isActionMenuActive) closeActionMenu(false);
-                  if (compact && props.selectedNodeId) onClearSelectedNode?.();
-                }}
-                onMoveStart={(event) => {
-                  if (event) setBlockedNoticeNodeId(null);
-                }}
-                onEdgeMouseEnter={
-                  canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined
-                }
-                onEdgeMouseLeave={
-                  canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
-                }
-                onNodeDragStop={
-                  canInteract ? (_event, _node, dragged) => settleDraggedNodes(dragged) : undefined
-                }
-                onSelectionDragStop={
-                  canInteract ? (_event, dragged) => settleDraggedNodes(dragged) : undefined
-                }
-                onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
-                onConnectStart={canInteract ? connection.onConnectStart : undefined}
-                onConnectEnd={canInteract ? connection.onConnectEnd : undefined}
-                onConnect={canInteract ? connection.onConnect : undefined}
-                onEdgesDelete={
-                  canInteract
-                    ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
-                    : undefined
-                }
-                onMoveEnd={(event, viewport) => {
-                  if (!event) return;
-                  onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-                }}
-                fitView={!compact}
-                fitViewOptions={roadmapFitViewOptions}
-                minZoom={roadmapMinZoom}
-                maxZoom={roadmapMaxZoom}
-                proOptions={{ hideAttribution: true }}
-              >
-                <RoadmapGraphContents
-                  props={props}
-                  model={model}
-                  nodeMovementControl={
-                    canEdit &&
-                    !connection.arrowSourceId &&
-                    (coarsePointer || touchInput || touchMoveMode) ? (
-                      <Button
-                        type="button"
-                        variant={touchMoveMode ? 'default' : 'outline'}
-                        aria-pressed={touchMoveMode}
-                        className="min-h-11 shrink-0"
-                        disabled={!canInteract}
-                        onClick={() => {
-                          connection.cancelArrowMode();
-                          setMovingNodes((current) => !current);
-                        }}
-                      >
-                        <Move aria-hidden="true" data-icon="inline-start" />
-                        {touchMoveMode ? 'Listo' : 'Mover nodos'}
-                      </Button>
-                    ) : null
-                  }
-                  onAutoLayout={() => {
-                    dependencyAnimationRef.current?.finish();
-                    model.proposeAutoLayout();
-                  }}
-                />
-                <DependencyAnimationReady />
-                <BlockedNodeNotice
-                  nodeId={blockedNoticeNodeId}
-                  roadmap={props.projection.roadmap}
-                  containerRef={containerRef}
-                  onClose={() => setBlockedNoticeNodeId(null)}
-                />
-                {arrowSourceRect ? (
-                  <TouchConnectionPreview
-                    source={arrowSourceRect}
-                    sourceId={connection.arrowSourceId!}
-                    targetId={connection.targetId}
-                    target={targetRect}
-                    pointer={connection.arrowPointer}
-                  />
-                ) : null}
-              </ReactFlow>
+              <ConnectionRejectedTargetContext value={rejectedTargetRect}>
+                <NodeConnectorContext value={nodeConnector}>
+                  <ReactFlow<RoadmapFlowNode, RoadmapFlowEdge>
+                    className="h-full"
+                    nodes={connectionNodes}
+                    edges={flow.edges}
+                    nodeTypes={roadmapNodeTypes}
+                    edgeTypes={roadmapEdgeTypes}
+                    nodesDraggable={
+                      canInteract && !connection.arrowSourceId && (!touchInput || touchMoveMode)
+                    }
+                    nodesConnectable={canInteract}
+                    snapToGrid
+                    snapGrid={[roadmapGridSize, roadmapGridSize]}
+                    connectionMode={ConnectionMode.Loose}
+                    connectOnClick={false}
+                    connectionLineComponent={ConnectionPreview}
+                    isValidConnection={connection.isValidConnection}
+                    nodesFocusable
+                    nodeDragThreshold={5}
+                    nodeClickDistance={6}
+                    elementsSelectable={isNavigationEnabled}
+                    panOnDrag={isNavigationEnabled && !connection.arrowSourceId}
+                    zoomOnScroll={isNavigationEnabled}
+                    zoomOnPinch={isNavigationEnabled}
+                    zoomOnDoubleClick={isNavigationEnabled}
+                    onNodesChange={handleNodesChange}
+                    onEdgesChange={(changes: EdgeChange<RoadmapFlowEdge>[]) =>
+                      setFlow((current) => ({
+                        ...current,
+                        edges: applyEdgeChanges(
+                          changes.filter((change) => change.type !== 'remove'),
+                          current.edges,
+                        ).map((edge) => (canEdit ? updateEdgeAppearance(edge) : edge)),
+                      }))
+                    }
+                    onNodeClick={(_event, node) => {
+                      if (node.data.blockReason) {
+                        setBlockedNoticeNodeId((current) => (current === node.id ? null : node.id));
+                        return;
+                      }
+                      setBlockedNoticeNodeId(null);
+                      onSelectNode(node.id);
+                    }}
+                    onPaneClick={() => {
+                      setBlockedNoticeNodeId(null);
+                      if (isActionMenuActive) closeActionMenu(false);
+                      if (compact && props.selectedNodeId) onClearSelectedNode?.();
+                    }}
+                    onMoveStart={(event) => {
+                      if (event) setBlockedNoticeNodeId(null);
+                    }}
+                    onEdgeMouseEnter={
+                      canEdit ? (_event, edge) => setEdgeHover(edge.id, true) : undefined
+                    }
+                    onEdgeMouseLeave={
+                      canEdit ? (_event, edge) => setEdgeHover(edge.id, false) : undefined
+                    }
+                    onNodeDragStop={
+                      canInteract
+                        ? (_event, _node, dragged) => settleDraggedNodes(dragged)
+                        : undefined
+                    }
+                    onSelectionDragStop={
+                      canInteract ? (_event, dragged) => settleDraggedNodes(dragged) : undefined
+                    }
+                    onNodeDragStart={() => dependencyAnimationRef.current?.finish()}
+                    onConnectStart={canInteract ? connection.onConnectStart : undefined}
+                    onConnectEnd={canInteract ? connection.onConnectEnd : undefined}
+                    onConnect={canInteract ? connection.onConnect : undefined}
+                    onEdgesDelete={
+                      canInteract
+                        ? (edges) => deleteDependencies(edges.map((edge) => edge.id))
+                        : undefined
+                    }
+                    onMoveEnd={(event, viewport) => {
+                      if (!event) return;
+                      onViewportChange?.({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
+                    }}
+                    fitView={!compact}
+                    fitViewOptions={roadmapFitViewOptions}
+                    minZoom={roadmapMinZoom}
+                    maxZoom={roadmapMaxZoom}
+                    proOptions={{ hideAttribution: true }}
+                  >
+                    <RoadmapGraphContents
+                      props={props}
+                      model={model}
+                      nodeMovementControl={
+                        canEdit &&
+                        !connection.arrowSourceId &&
+                        (coarsePointer || touchInput || touchMoveMode) ? (
+                          <Button
+                            type="button"
+                            variant={touchMoveMode ? 'default' : 'outline'}
+                            aria-pressed={touchMoveMode}
+                            className="min-h-11 shrink-0"
+                            disabled={!canInteract}
+                            onClick={() => {
+                              connection.cancelArrowMode();
+                              setMovingNodes((current) => !current);
+                            }}
+                          >
+                            <Move aria-hidden="true" data-icon="inline-start" />
+                            {touchMoveMode ? 'Listo' : 'Mover nodos'}
+                          </Button>
+                        ) : null
+                      }
+                      onAutoLayout={() => {
+                        dependencyAnimationRef.current?.finish();
+                        model.proposeAutoLayout();
+                      }}
+                    />
+                    <DependencyAnimationReady />
+                    <BlockedNodeNotice
+                      nodeId={blockedNoticeNodeId}
+                      roadmap={props.projection.roadmap}
+                      containerRef={containerRef}
+                      onClose={() => setBlockedNoticeNodeId(null)}
+                    />
+                    {arrowSourceRect ? (
+                      <TouchConnectionPreview
+                        source={arrowSourceRect}
+                        sourceId={connection.arrowSourceId!}
+                        targetId={connection.targetId}
+                        target={targetRect}
+                        pointer={connection.arrowPointer}
+                      />
+                    ) : null}
+                  </ReactFlow>
+                </NodeConnectorContext>
+              </ConnectionRejectedTargetContext>
             </ConnectionTargetContext>
           </DependencyRouting>
         </DependencyAnimationProvider>
@@ -1353,7 +1380,27 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
               aria-live="polite"
               className="flex max-w-md flex-wrap items-center justify-center gap-3 rounded-lg border border-primary bg-card px-4 py-3 text-sm text-foreground shadow-md"
             >
-              <span>{connection.arrowMessage}</span>
+              <span>
+                {connection.arrowRejection ? (
+                  <DependencyRejectionMessage {...connection.arrowRejection} />
+                ) : connection.arrowInput === 'pointer' &&
+                  arrowSourceNode &&
+                  connection.arrowMessage === arrowModeMessage ? (
+                  <>
+                    Haz clic en el nodo que requiere{' '}
+                    <NodeName
+                      title={arrowSourceNode.data.title}
+                      nodeType={{
+                        name: arrowSourceNode.data.typeName,
+                        icon: arrowSourceNode.data.typeIcon,
+                        color: arrowSourceNode.data.typeColor,
+                      }}
+                    />
+                  </>
+                ) : (
+                  connection.arrowMessage
+                )}
+              </span>
               <Button
                 type="button"
                 variant="outline"

@@ -1,5 +1,6 @@
 import { expect, expectTypeOf, test } from 'vitest';
 import {
+  dependencyRejection,
   eligibleBranchUnlockNodeIds,
   transitiveDependentNodeIds,
   transitivePrerequisiteNodeIds,
@@ -80,4 +81,26 @@ test('models hidden nodes and teacher blocks as incompatible states', () => {
   };
 
   expectTypeOf(hiddenTeacherBlockedNode).toMatchTypeOf<RoadmapNode>();
+});
+
+test.each([
+  { name: 'self', source: 'a', target: 'a', hidden: [], expected: 'SELF_DEPENDENCY' },
+  {
+    name: 'hidden end',
+    source: 'a',
+    target: 'c',
+    hidden: ['c'],
+    expected: 'HIDDEN_NODE_DEPENDENCY_FORBIDDEN',
+  },
+  { name: 'duplicate', source: 'a', target: 'b', hidden: [], expected: 'DEPENDENCY_CONFLICT' },
+  { name: 'cycle', source: 'c', target: 'a', hidden: [], expected: 'DEPENDENCY_CYCLE' },
+  { name: 'allowed', source: 'a', target: 'c', hidden: [], expected: null },
+])('dependencyRejection reports $name', ({ source, target, hidden, expected }) => {
+  const dependencies = [
+    { sourceNodeId: 'a', targetNodeId: 'b' },
+    { sourceNodeId: 'b', targetNodeId: 'c' },
+  ];
+  const hiddenIds: readonly string[] = hidden;
+  const end = (id: string) => ({ id, isVisible: !hiddenIds.includes(id) });
+  expect(dependencyRejection(dependencies, end(source), end(target))).toBe(expected);
 });

@@ -1,8 +1,9 @@
 import {
+  dependencyRejection,
   eligibleBranchUnlockNodeIds,
   transitiveDependentNodeIds,
   visibleRoadmapGraph,
-  wouldCreateDependencyCycle,
+  type DependencyRejection,
 } from '@/features/roadmap/domain/access';
 import { ruleRejection, type RuleRejection } from '@/features/roadmap/domain/rule-rejection';
 import {
@@ -193,29 +194,24 @@ function dependenciesTouching(snapshot: RoadmapSnapshot, nodeId: string) {
     .sort(byId);
 }
 
+const dependencyRejectionMessages: Record<DependencyRejection, string> = {
+  SELF_DEPENDENCY: 'Un nodo no puede depender de sí mismo.',
+  HIDDEN_NODE_DEPENDENCY_FORBIDDEN: 'No se pueden crear dependencias con nodos ocultos.',
+  DEPENDENCY_CONFLICT: 'La dependencia ya existe.',
+  DEPENDENCY_CYCLE: 'La dependencia formaría un ciclo.',
+};
+
 function planDependency(
   snapshot: RoadmapSnapshot,
   { sourceNodeId, targetNodeId }: Extract<ChangeWithImpact, { kind: 'create-dependency' }>,
 ): PlannedChange<'create-dependency'> {
   if (sourceNodeId === targetNodeId)
-    return ruleRejection('SELF_DEPENDENCY', 'Un nodo no puede depender de sí mismo.');
+    return ruleRejection('SELF_DEPENDENCY', dependencyRejectionMessages.SELF_DEPENDENCY);
   const sourceNode = nodeOf(snapshot, sourceNodeId);
   const targetNode = nodeOf(snapshot, targetNodeId);
   if (!sourceNode || !targetNode) return nodeNotFound();
-  if (!sourceNode.isVisible || !targetNode.isVisible)
-    return ruleRejection(
-      'HIDDEN_NODE_DEPENDENCY_FORBIDDEN',
-      'No se pueden crear dependencias con nodos ocultos.',
-    );
-  if (
-    snapshot.dependencies.some(
-      (dependency) =>
-        dependency.sourceNodeId === sourceNodeId && dependency.targetNodeId === targetNodeId,
-    )
-  )
-    return ruleRejection('DEPENDENCY_CONFLICT', 'La dependencia ya existe.');
-  if (wouldCreateDependencyCycle(snapshot.dependencies, sourceNodeId, targetNodeId))
-    return ruleRejection('DEPENDENCY_CYCLE', 'La dependencia formaría un ciclo.');
+  const rejection = dependencyRejection(snapshot.dependencies, sourceNode, targetNode);
+  if (rejection) return ruleRejection(rejection, dependencyRejectionMessages[rejection]);
   const nodes = sourceNode.isTeacherBlocked ? cascadingTeacherBlock(snapshot, targetNodeId) : [];
   return {
     kind: 'ALLOWED',

@@ -2,7 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import type { Connection } from '@xyflow/react';
-import { useWholeNodeConnection } from '@/features/roadmap/graph/use-whole-node-connection';
+import {
+  useWholeNodeConnection,
+  type ConnectionRejection,
+} from '@/features/roadmap/graph/use-whole-node-connection';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 
@@ -26,12 +29,14 @@ function node(id: string, hidden = false): RoadmapFlowNode {
 function Harness({
   onConnect,
   onOpen,
+  onReject = () => {},
   edges = [],
   hiddenTarget = false,
   enabled = true,
 }: {
   onConnect: (connection: Connection) => void;
   onOpen: () => void;
+  onReject?: (rejection: ConnectionRejection) => void;
   edges?: RoadmapFlowEdge[];
   hiddenTarget?: boolean;
   enabled?: boolean;
@@ -41,6 +46,7 @@ function Harness({
     edges,
     enabled,
     onConnect,
+    onReject,
   });
   return (
     <div
@@ -82,6 +88,7 @@ function Harness({
       </div>
       <button type="button">Canvas vacío</button>
       <output aria-label="Destino resaltado">{connection.targetId}</output>
+      <output aria-label="Destino rechazado">{connection.rejectedTargetId}</output>
     </div>
   );
 }
@@ -122,13 +129,17 @@ test('the existing handle connection and whole-Node fallback do not emit the sam
 });
 
 test.each([
-  { name: 'hidden destination', hiddenTarget: true, edges: [], enabled: true },
-  { name: 'read-only canvas', hiddenTarget: false, edges: [], enabled: false },
+  {
+    name: 'hidden destination',
+    hiddenTarget: true,
+    edges: [],
+    reason: 'HIDDEN_NODE_DEPENDENCY_FORBIDDEN',
+  },
   {
     name: 'duplicate',
     hiddenTarget: false,
     edges: [{ id: 'existing', source: 'source', target: 'target' }],
-    enabled: true,
+    reason: 'DEPENDENCY_CONFLICT',
   },
   {
     name: 'transitive cycle',
@@ -137,27 +148,75 @@ test.each([
       { id: 'first', source: 'target', target: 'middle' },
       { id: 'second', source: 'middle', target: 'source' },
     ],
-    enabled: true,
+    reason: 'DEPENDENCY_CYCLE',
   },
-])('rejects a whole-Node drop for $name', async ({ hiddenTarget, edges, enabled }) => {
+])(
+  'marks the Node as rejected and reports why a whole-Node drop fails for $name',
+  async ({ hiddenTarget, edges, reason }) => {
+    const user = userEvent.setup();
+    const onConnect = vi.fn();
+    const onReject = vi.fn();
+    render(
+      <Harness
+        onConnect={onConnect}
+        onOpen={vi.fn()}
+        onReject={onReject}
+        edges={edges}
+        hiddenTarget={hiddenTarget}
+      />,
+    );
+    await user.pointer([
+      { target: screen.getByRole('button', { name: 'Handle de origen' }), keys: '[MouseLeft>]' },
+      { target: screen.getByRole('button', { name: 'Título del destino' }) },
+    ]);
+    expect(screen.getByLabelText('Destino resaltado').textContent).toBe('');
+    expect(screen.getByLabelText('Destino rechazado').textContent).toBe('target');
+    await user.pointer({ keys: '[/MouseLeft]' });
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(onReject).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        reason,
+        source: expect.objectContaining({ id: 'source' }),
+        target: expect.objectContaining({ id: 'target' }),
+      }),
+    );
+    expect(screen.getByLabelText('Destino rechazado').textContent).toBe('');
+  },
+);
+
+test('a read-only canvas never starts a connection or reports a rejection', async () => {
   const user = userEvent.setup();
   const onConnect = vi.fn();
+  const onReject = vi.fn();
   render(
     <Harness
       onConnect={onConnect}
       onOpen={vi.fn()}
-      edges={edges}
-      hiddenTarget={hiddenTarget}
-      enabled={enabled}
+      onReject={onReject}
+      hiddenTarget
+      enabled={false}
     />,
   );
   await user.pointer([
     { target: screen.getByRole('button', { name: 'Handle de origen' }), keys: '[MouseLeft>]' },
     { target: screen.getByRole('button', { name: 'Título del destino' }) },
+    { keys: '[/MouseLeft]' },
   ]);
-  expect(screen.getByLabelText('Destino resaltado').textContent).toBe('');
-  await user.pointer({ keys: '[/MouseLeft]' });
   expect(onConnect).not.toHaveBeenCalled();
+  expect(onReject).not.toHaveBeenCalled();
+});
+
+test('dropping back on the source Node cancels without reporting a rejection', async () => {
+  const user = userEvent.setup();
+  const onReject = vi.fn();
+  render(<Harness onConnect={vi.fn()} onOpen={vi.fn()} onReject={onReject} />);
+  await user.pointer([
+    { target: screen.getByRole('button', { name: 'Handle de origen' }), keys: '[MouseLeft>]' },
+    { target: screen.getByRole('button', { name: 'Handle de origen' }) },
+  ]);
+  expect(screen.getByLabelText('Destino rechazado').textContent).toBe('');
+  await user.pointer({ keys: '[/MouseLeft]' });
+  expect(onReject).not.toHaveBeenCalled();
 });
 
 test('an empty-canvas drop and an ordinary Node click do not create a Dependency', async () => {
