@@ -1,14 +1,13 @@
 import { expect, test } from './fixtures';
-import { authenticateAs, ok } from './helpers';
+import { ok } from './helpers';
 import {
+  countNotices,
   acknowledgeOpening,
   findNode,
   listNotices,
-  openNativeStream,
   pendingNotices,
   prepareOpening,
   recognize,
-  streamFrames,
 } from './notices';
 
 test('title target absorbs renames, withdraws a return to known and restarts after recognition', async ({
@@ -59,26 +58,17 @@ test('concurrent title changes leave one target matching the current Node, and r
   expect(await notices()).toHaveLength(1);
 });
 
-test('updating and withdrawing a title target invalidate the recipient Inbox over real SSE', async ({
+test('updating and withdrawing a title target update the recipient Inbox', async ({
   course,
   teacherApi: author,
   studentApi: recipient,
-  page,
 }) => {
   const node = findNode(await (await author.get(course.apiPath())).json(), course.nodes.first);
-  await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
-  await openNativeStream(page);
-  const inboxEvents = async () =>
-    (await streamFrames(page)).filter((frame) => frame.kind === 'inbox').length;
   const notices = () => pendingNotices(recipient, node.id);
   for (const title of ['Primer nombre', 'Segundo nombre', node.title]) {
-    const before = await inboxEvents();
     await ok(await author.patch(course.apiPath(`/nodes/${node.id}`), { data: { title } }));
-    await expect.poll(inboxEvents).toBeGreaterThan(before);
     await expect.poll(notices).toHaveLength(title === node.title ? 0 : 1);
-    expect(
-      (await (await recipient.get(`/api/notifications/counts?nodeId=${node.id}`)).json()).count,
-    ).toBe(title === node.title ? 0 : 1);
+    expect(await countNotices(recipient, `nodeId=${node.id}`)).toBe(title === node.title ? 0 : 1);
   }
 });
 

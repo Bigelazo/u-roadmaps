@@ -1,6 +1,10 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { insert, literal, sql } from './database';
-import { expect, type E2EPrimaryCourseOffering } from './fixtures';
+import { expect, type E2ECourseOffering } from './fixtures';
+
+type NoticeCourse = Pick<E2ECourseOffering, 'id' | 'courseCode' | 'year' | 'semester'> & {
+  roadmapId: string;
+};
 
 type StoredTarget = Readonly<{
   noticeTarget: string;
@@ -11,7 +15,7 @@ type StoredTarget = Readonly<{
 }>;
 
 export async function storeNotices(
-  course: E2EPrimaryCourseOffering,
+  course: NoticeCourse,
   recipientId: string,
   targets: readonly StoredTarget[],
   availableAt = new Date(),
@@ -35,7 +39,7 @@ export async function storeNotices(
 }
 
 export async function storeTitleNotices(
-  course: E2EPrimaryCourseOffering,
+  course: NoticeCourse,
   recipientId: string,
   count: number,
   availableAt?: Date,
@@ -77,6 +81,11 @@ export async function listNotices(
   return (await response.json()).notifications as StoredNotice[];
 }
 
+export async function countNotices(api: APIRequestContext, query = '') {
+  return (await listNotices(api, { ...Object.fromEntries(new URLSearchParams(query)), limit: 100 }))
+    .length;
+}
+
 export function pendingNotices(api: APIRequestContext, nodeId: string) {
   return listNotices(api, { nodeId, read: false });
 }
@@ -108,12 +117,12 @@ type StreamFrame = { kind: string; data: { userId: string; courseCode?: string }
 export type StreamWindow = Window & { notificationFrames: StreamFrame[] };
 
 export async function openNativeStream(page: Page) {
-  await page.goto('/api/notifications/counts');
+  await page.goto('/api/notifications');
   await page.evaluate(() => {
     const frames: StreamFrame[] = [];
     (window as unknown as StreamWindow).notificationFrames = frames;
     const source = new EventSource('/api/notifications/stream');
-    for (const kind of ['ready', 'inbox', 'roadmap']) {
+    for (const kind of ['ready', 'roadmap']) {
       source.addEventListener(kind, (event) => {
         frames.push({ kind, data: JSON.parse((event as MessageEvent).data) });
       });
@@ -128,4 +137,13 @@ export async function openNativeStream(page: Page) {
 
 export function streamFrames(page: Page) {
   return page.evaluate(() => (window as unknown as StreamWindow).notificationFrames);
+}
+
+export async function openInbox(page: Page, name: string | RegExp = /^Avisos(,|$)/) {
+  const bell = page.getByRole('button', { name, exact: typeof name === 'string' });
+  const inbox = page.getByRole('dialog', { name: 'Avisos' });
+  await expect(async () => {
+    if (!(await inbox.isVisible())) await bell.click();
+    await expect(inbox).toBeVisible({ timeout: 1000 });
+  }).toPass();
 }

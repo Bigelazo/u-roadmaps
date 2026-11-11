@@ -21,24 +21,13 @@ async function inboxSignals(recipientId: string, write: () => Promise<unknown>) 
   }
 }
 
-test('every notice write of the lifecycle module invalidates the recipient Inbox', async ({
-  course,
-}) => {
+test('notice writes no longer signal the recipient Inbox in real time', async ({ course }) => {
   const node = await addNode(course, 'Colas');
   const edits = teacherEdits(course);
-  expect(
-    await inboxSignals(course.studentId, () => edits.rename(node.id, 'Pilas')),
-  ).toBeGreaterThan(0);
-  expect(
-    await inboxSignals(course.studentId, () => edits.rename(node.id, 'Árboles')),
-  ).toBeGreaterThan(0);
-  expect(
-    await inboxSignals(course.studentId, () => edits.rename(node.id, 'Colas')),
-  ).toBeGreaterThan(0);
-  await edits.rename(node.id, 'Pilas');
+  expect(await inboxSignals(course.studentId, () => edits.rename(node.id, 'Pilas'))).toBe(0);
   expect(
     await inboxSignals(course.studentId, () => enterRoadmap(course.studentId, course.roadmapId)),
-  ).toBeGreaterThan(0);
+  ).toBe(0);
   const created = await edits.create('Grafos');
-  expect(await inboxSignals(course.studentId, () => edits.remove(created.id))).toBeGreaterThan(0);
+  expect(await inboxSignals(course.studentId, () => edits.remove(created.id))).toBe(0);
 });

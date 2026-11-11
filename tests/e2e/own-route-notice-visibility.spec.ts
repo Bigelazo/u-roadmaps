@@ -2,7 +2,7 @@ import { expect, test } from './fixtures';
 import { createExistingNode } from './existing-node';
 import { insert, sql } from './database';
 import { ok } from './helpers';
-import { listNotices, prepareOpening } from './notices';
+import { countNotices, listNotices, prepareOpening } from './notices';
 import { hideNode } from './previewed-writes';
 
 for (const target of ['dependency', 'node-type-name'] as const)
@@ -61,12 +61,7 @@ for (const target of ['dependency', 'node-type-name'] as const)
     const allNotices = () => listNotices(recipient, { roadmapId: course.roadmapId });
     const targetNotices = async () =>
       (await allNotices()).filter(({ data }) => data.noticeTarget === target);
-    const count = async () =>
-      (
-        await (
-          await recipient.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)
-        ).json()
-      ).count;
+    const count = async () => await countNotices(recipient, `roadmapId=${course.roadmapId}`);
     const nodePath = course.apiPath(`/nodes/${hiddenId}`);
     const hide = async () => ok(await hideNode(author, nodePath));
     const show = async () => ok(await author.patch(nodePath, { data: { isVisible: true } }));

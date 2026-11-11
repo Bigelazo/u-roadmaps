@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
-import { findNode } from './notices';
+import { countNotices, findNode } from './notices';
 
 test('Node marks outlive Roadmap recognition and clear only when that Node is opened', async ({
   page,
@@ -17,8 +17,7 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
   const mark = (id: string) => card(id).getByRole('img', { name: /cambios? sin revisar/ });
   const changesUrl = `/api/notifications/node-changes?roadmapId=${course.roadmapId}`;
   const changes = async () => (await (await api.get(changesUrl)).json()).byNode;
-  const pending = async () =>
-    (await (await api.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)).json()).count;
+  const pending = async () => await countNotices(api, `roadmapId=${course.roadmapId}`);
   await authenticateAs(page.context(), user.id);
   const entered = () =>
     page.waitForResponse(
@@ -35,10 +34,8 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
       await author.patch(course.apiPath(`/nodes/${course.nodes.first}`), { data: { description } }),
     );
   }
-  await expect(mark(course.nodes.first)).toHaveAccessibleName('1 cambio sin revisar');
-  await expect(mark(course.nodes.first)).toHaveText('1');
-  expect(await changes()).toEqual({ [course.nodes.first]: 1 });
-  await expect(mark(course.nodes.second)).toHaveCount(0);
+  await expect.poll(changes).toEqual({ [course.nodes.first]: 1 });
+  await expect(mark(course.nodes.first)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /avisos sin leer para este Roadmap/ })).toHaveCount(
     0,
   );
@@ -48,7 +45,9 @@ test('Node marks outlive Roadmap recognition and clear only when that Node is op
   expect((await acknowledged).status()).toBe(200);
   await page.getByRole('button', { name: 'Entendido' }).click();
   await expect.poll(pending).toBe(0);
+  await expect(mark(course.nodes.first)).toHaveAccessibleName('1 cambio sin revisar');
   await expect(mark(course.nodes.first)).toHaveText('1');
+  await expect(mark(course.nodes.second)).toHaveCount(0);
 
   await card(course.nodes.first).click();
   await expect(mark(course.nodes.first)).toHaveCount(0);

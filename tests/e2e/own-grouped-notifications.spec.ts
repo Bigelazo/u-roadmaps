@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
-import { listNotices } from './notices';
+import { openInbox, countNotices, listNotices } from './notices';
 
 test('Inbox groups three targets, counts edits as targets, and ungroups on withdrawal', async ({
   course,
@@ -42,22 +42,20 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
     `roadmapId=${course.roadmapId}`,
     `courseCode=${course.courseCode}&year=${course.year}&semester=${course.semester}`,
   ]) {
-    expect((await (await recipient.get(`/api/notifications/counts?${filter}`)).json()).count).toBe(
-      3,
-    );
+    expect(await countNotices(recipient, `${filter}`)).toBe(3);
   }
+  await page.goto('/academic-overview');
   await expect(page.getByRole('button', { name: 'Avisos, 3 sin leer', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /avisos sin leer para este Roadmap/ })).toHaveCount(
     0,
   );
-  await page.goto('/academic-overview');
   await expect(
     page.getByRole('button', {
       name: `3 avisos sin leer para el curso ${course.courseName}`,
       exact: true,
     }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Avisos, 3 sin leer', exact: true }).click();
+  await openInbox(page, 'Avisos, 3 sin leer');
   const row = page.getByRole('button', { name: /El Roadmap ha recibido 3 cambios\./ });
   await expect(row).toContainText(course.courseName);
   await row.click();
@@ -77,10 +75,7 @@ test('Inbox groups three targets, counts edits as targets, and ungroups on withd
     }),
   );
   await expect.poll(notices).toHaveLength(2);
-  expect(
-    (await (await recipient.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`)).json())
-      .count,
-  ).toBe(2);
+  expect(await countNotices(recipient, `roadmapId=${course.roadmapId}`)).toBe(2);
 });
 
 test('Roadmaps group separately before pagination and absorbed targets move to the top', async ({

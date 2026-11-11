@@ -6,12 +6,14 @@ import { ApplicationError } from '@/shared/errors/server';
 import {
   queryInboxPage,
   queryInboxCounts,
+  queryInboxOfferingCounts,
   queryNodeChangeCounts,
   type InboxFilter,
   type InboxRecipient,
 } from './inbox-query';
 import { changeSummary } from '../application/change-summary';
 import type { ChangeSummary } from '../contracts/change-summary';
+import type { OwnInboxNotice, OwnInboxSnapshot } from '../contracts/own-inbox-snapshot';
 import { lockRecipientRoadmap } from '@/shared/server/recipient-roadmap-lock';
 import {
   entryTargetSnapshots,
@@ -131,13 +133,37 @@ export async function listOwnNotices(
   return { notifications: page.notices.map(noticeRecord), hasMore: page.hasMore };
 }
 
-export async function countOwnNoticeTargets(
+function ownInboxNotice(
+  notice: Parameters<typeof noticeRecord>[0] & { roadmapId: string },
+): OwnInboxNotice {
+  const { id, courseName, subject, body, data, createdAt } = noticeRecord(notice);
+  return {
+    id,
+    roadmapId: notice.roadmapId,
+    ...(courseName ? { courseName } : {}),
+    subject,
+    body,
+    ...(data && typeof data === 'object' && !Array.isArray(data)
+      ? { data: data as Record<string, unknown> }
+      : {}),
+    createdAt,
+  };
+}
+
+export async function readOwnInbox(
   userId: string,
-  params: URLSearchParams,
   readAccess: ParticipantAccessReader,
-) {
-  const filter = inboxFilter(params);
-  return queryInboxCounts(await inboxRecipient(userId, filter.roadmapId, readAccess), filter);
+): Promise<OwnInboxSnapshot> {
+  const recipient = await inboxRecipient(userId, undefined, readAccess);
+  const [offerings, page] = await Promise.all([
+    queryInboxOfferingCounts(recipient),
+    queryInboxPage(recipient, {}, { limit: null, grouped: true, cursor: null }),
+  ]);
+  return {
+    total: offerings.reduce((total, { unread }) => total + unread, 0),
+    offerings,
+    notices: page.notices.map(ownInboxNotice),
+  };
 }
 
 export type CourseOfferingIdentity = Readonly<{

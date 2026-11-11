@@ -6,6 +6,7 @@ import {
   acknowledgeOwnNotices,
   listOwnNotices,
   prepareOwnRoadmapOpening,
+  readOwnInbox,
   recordRoadmapNotices,
   type NoticeDelivery,
 } from '@/features/notifications/server';
@@ -145,6 +146,11 @@ export async function enrollStudents(course: IntegrationCourse, count: number) {
 export async function pendingNotices(userId: string, roadmapId: string) {
   return (await listOwnNotices(userId, new URLSearchParams({ roadmapId, limit: '100' })))
     .notifications;
+}
+
+export async function inboxCount(userId: string, roadmapId: string) {
+  const { offerings } = await readOwnInbox(userId);
+  return { count: offerings.find((offering) => offering.roadmapId === roadmapId)?.unread ?? 0 };
 }
 
 export async function enterRoadmap(userId: string, roadmapId: string) {
