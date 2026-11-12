@@ -19,8 +19,8 @@ import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
 
 const nodeTypes = {
   content: { name: 'Contenido', Icon: BookOpen, color: '#024AD8' },
-  assessment: { name: 'Evaluación', Icon: ClipboardCheck, color: '#FF5050' },
-  supplementary: { name: 'Material extra', Icon: LibraryBig, color: '#356373' },
+  assessment: { name: 'Evaluación', Icon: ClipboardCheck, color: '#DB2777' },
+  supplementary: { name: 'Material extra', Icon: LibraryBig, color: '#0F4C81' },
 } as const;
 
 export type RouteSpecimenNodeId =

@@ -148,13 +148,13 @@ test('the reset fixture exposes the three complete roadmap scenarios', async ({ 
         expect.objectContaining({
           name: 'Evaluación',
           icon: 'ClipboardCheck',
-          color: '#FF5050',
+          color: '#DB2777',
           isPredefined: true,
         }),
         expect.objectContaining({
           name: 'Material extra',
           icon: 'LibraryBig',
-          color: '#356373',
+          color: '#0F4C81',
           isPredefined: true,
         }),
         expect.objectContaining({ icon: 'Shapes', isPredefined: false }),

@@ -10,8 +10,8 @@ import {
   teachingIconCatalog,
 } from '@/features/roadmap/node-type-appearance';
 
-test('defines the approved twenty-color palette and rejects arbitrary hexadecimal colors', () => {
-  expect(nodeTypeColorPalette).toHaveLength(20);
+test('defines the approved twelve-color palette and rejects arbitrary hexadecimal colors', () => {
+  expect(nodeTypeColorPalette).toHaveLength(12);
   expect(isNodeTypeColor('#024ad8')).toBe(true);
   expect(isNodeTypeColor('#ABCDEF')).toBe(false);
 });

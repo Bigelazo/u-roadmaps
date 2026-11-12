@@ -1,26 +1,18 @@
 import { unknownNodeType } from '@/shared/node-type';
 
 export const nodeTypeColorPalette = [
-  { value: '#024AD8', label: 'Azul institucional' },
-  { value: '#1467A8', label: 'Azul océano' },
-  { value: '#1476C9', label: 'Azul cielo' },
-  { value: '#356373', label: 'Azul acero' },
   { value: '#00758A', label: 'Cian profundo' },
-  { value: '#007C75', label: 'Turquesa' },
-  { value: '#287A3D', label: 'Verde hoja' },
-  { value: '#176245', label: 'Verde bosque' },
-  { value: '#687520', label: 'Oliva' },
-  { value: '#906800', label: 'Ocre' },
-  { value: '#BD5800', label: 'Naranja' },
-  { value: '#FF5050', label: 'Coral' },
-  { value: '#C9362B', label: 'Rojo' },
-  { value: '#B42355', label: 'Carmín' },
-  { value: '#C52F73', label: 'Frambuesa' },
+  { value: '#1467A8', label: 'Azul océano' },
+  { value: '#024AD8', label: 'Azul institucional' },
+  { value: '#0F4C81', label: 'Azul marino' },
+  { value: '#5F3DC4', label: 'Índigo' },
+  { value: '#7C6CF0', label: 'Lavanda' },
+  { value: '#9333EA', label: 'Amatista' },
+  { value: '#6B2160', label: 'Ciruela' },
   { value: '#AD2680', label: 'Magenta' },
-  { value: '#7540B8', label: 'Violeta' },
-  { value: '#5F3DC4', label: 'Morado' },
-  { value: '#3F51B5', label: 'Índigo' },
-  { value: '#56616F', label: 'Pizarra' },
+  { value: '#DB2777', label: 'Rosa' },
+  { value: '#BD5800', label: 'Naranja' },
+  { value: '#E0A800', label: 'Amarillo' },
 ] as const;
 
 export type NodeTypeColor = (typeof nodeTypeColorPalette)[number]['value'];

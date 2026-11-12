@@ -70,7 +70,7 @@ test('teacher creates and edits a custom node type with visual pickers', async (
   await dialog.getByRole('button', { name: 'Color: sin selección' }).click();
   await page
     .getByRole('dialog', { name: 'Elegir color' })
-    .getByRole('button', { name: 'Verde hoja' })
+    .getByRole('button', { name: 'Amarillo' })
     .click();
   await expect(create).toBeEnabled();
   await create.click();
@@ -78,16 +78,16 @@ test('teacher creates and edits a custom node type with visual pickers', async (
 
   await dialog.getByRole('button', { name: `Editar tipo ${typeName}` }).click();
   await expect(dialog.getByRole('button', { name: 'Icono: Química' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Color: Verde hoja' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Color: Amarillo' })).toBeVisible();
   await dialog.getByRole('button', { name: 'Icono: Química' }).click();
   await page
     .getByRole('dialog', { name: 'Elegir Icono' })
     .getByRole('button', { name: 'Cálculo' })
     .click();
-  await dialog.getByRole('button', { name: 'Color: Verde hoja' }).click();
+  await dialog.getByRole('button', { name: 'Color: Amarillo' }).click();
   await page
     .getByRole('dialog', { name: 'Elegir color' })
-    .getByRole('button', { name: 'Violeta' })
+    .getByRole('button', { name: 'Amatista' })
     .click();
   const updateResponse = await Promise.all([
     page.waitForResponse(
@@ -102,7 +102,7 @@ test('teacher creates and edits a custom node type with visual pickers', async (
   const nodeType = (await roadmap.json()).nodeTypes.find(
     (type: { name: string }) => type.name === typeName,
   );
-  expect(nodeType).toMatchObject({ icon: 'Calculator', color: '#7540B8' });
+  expect(nodeType).toMatchObject({ icon: 'Calculator', color: '#9333EA' });
 });
 
 test('course participants receive their authorized roadmap representation', async ({
