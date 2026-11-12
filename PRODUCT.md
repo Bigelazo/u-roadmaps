@@ -31,7 +31,7 @@ U-Roadmaps aims to replace course pages as the main place where a course's conte
 - Teaching staff author on an interactive canvas (React Flow + Dagre layout) with a resizable side panel, confirmations that state the impact of hiding, deleting, connecting or locking, and a student-rules preview with simulated progress.
 - The semester calendar matters: roadmaps close after the official final-exam date (Chile time), become read-only history, and can be versioned into later offerings.
 - Roadmap notices tell participants what changed since their last visit (Inbox, Change summary on entry).
-- Practice roadmaps and tutorials teach the editor and the student experience on an in-memory roadmap.
+- Practice roadmaps and tutorials teach the editor and the student experience on an in-memory roadmap, accessible from the landing page without signing in. Anonymous practice does not record tutorial activity; course access still requires sign-in.
 - Interface language is Spanish; repository documentation for agents and the issue tracker is English.
 
 ## Capabilities and Constraints

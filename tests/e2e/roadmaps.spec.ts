@@ -1288,7 +1288,6 @@ test('VTI callback rejects missing state, invalid tokens, and incomplete claims'
 
 test('landing access starts VTI and dismisses authentication failures without reloading', async ({
   page,
-  request,
 }) => {
   await page.goto('/?error=Authentication');
   await expect(
@@ -1309,9 +1308,12 @@ test('landing access starts VTI and dismisses authentication failures without re
     page.getByRole('alert', { name: 'No pudimos completar tu ingreso con U-Pasaporte.' }),
   ).toHaveCount(0);
 
-  const protectedRoute = await request.get('/academic-overview', { maxRedirects: 0 });
-  await ok(protectedRoute, 307);
-  expect(protectedRoute.headers().location).toContain('/api/plogin/start');
+  await page.route('**/api/plogin/start', (route) =>
+    route.fulfill({ contentType: 'text/html', body: 'Ingreso institucional de prueba' }),
+  );
+  await page.goto('/academic-overview');
+  await expect(page).toHaveURL('/api/plogin/start');
+  await expect(page.getByText('Ingreso institucional de prueba')).toBeVisible();
 });
 
 test('logout requires confirmation and removes the application session', async ({
