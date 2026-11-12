@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { useWholeNodeConnection } from '@/features/roadmap/graph/use-whole-node-connection';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { Connection } from '@xyflow/react';
+import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 
 const originalHitTest = Object.getOwnPropertyDescriptor(document, 'elementFromPoint');
 let hitTarget: Element | null;
@@ -29,11 +30,13 @@ function Harness({
   onOpen,
   onPan,
   enabled = true,
+  edges = [],
 }: {
   onConnect: (connection: Connection) => void;
   onOpen: () => void;
   onPan?: () => void;
   enabled?: boolean;
+  edges?: RoadmapFlowEdge[];
 }) {
   const nodes: RoadmapFlowNode[] = ['source', 'target'].map((id) => ({
     id,
@@ -49,7 +52,13 @@ function Harness({
       isTeacherBlocked: false,
     },
   }));
-  const connection = useWholeNodeConnection({ nodes, edges: [], enabled, onConnect });
+  const connection = useWholeNodeConnection({
+    nodes,
+    edges,
+    enabled,
+    onConnect,
+    onReject: () => {},
+  });
   return (
     <div
       onTouchStartCapture={connection.onTouchStartCapture}
@@ -77,6 +86,7 @@ function Harness({
       <output aria-label="Origen en modo flecha">{connection.arrowSourceId}</output>
       <output aria-label="Aviso de modo flecha">{connection.arrowMessage}</output>
       <output aria-label="Destino resaltado">{connection.targetId}</output>
+      <output aria-label="Motivo del rechazo">{connection.arrowRejection?.reason}</output>
     </div>
   );
 }
@@ -206,5 +216,25 @@ test('Escape cancels touch arrow mode even when keyboard focus stays outside the
   expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('source');
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('');
+  expect(onConnect).not.toHaveBeenCalled();
+});
+
+test('tapping a target that already depends on the source keeps arrow mode and explains why', () => {
+  const onConnect = vi.fn();
+  render(
+    <Harness
+      onConnect={onConnect}
+      onOpen={vi.fn()}
+      edges={[{ id: 'existing', source: 'source', target: 'target' }]}
+    />,
+  );
+  const source = beginLongPress();
+  fireEvent.touchEnd(source, ended());
+  const target = screen.getByText('Cuerpo de destino');
+  hitTarget = target;
+  fireEvent.touchStart(target, touch());
+  fireEvent.touchEnd(target, ended());
+  expect(screen.getByLabelText('Origen en modo flecha').textContent).toBe('source');
+  expect(screen.getByLabelText('Motivo del rechazo').textContent).toBe('DEPENDENCY_CONFLICT');
   expect(onConnect).not.toHaveBeenCalled();
 });

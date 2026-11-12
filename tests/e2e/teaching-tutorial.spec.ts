@@ -63,7 +63,7 @@ function blockedByTeacher(page: Page, title: string) {
 
 async function connect(page: Page, sourceTitle: string, targetTitle: string) {
   await practiceNode(page, sourceTitle).getByTestId('roadmap-card').hover();
-  const source = practiceNode(page, sourceTitle).locator('.react-flow__handle-right');
+  const source = practiceNode(page, sourceTitle).locator('[data-node-connector="right"]');
   const target = practiceNode(page, targetTitle).getByTestId('roadmap-card');
   const from = await source.boundingBox();
   const to = await target.boundingBox();

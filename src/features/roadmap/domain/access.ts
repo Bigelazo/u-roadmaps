@@ -86,6 +86,31 @@ export function wouldCreateDependencyCycle(
   );
 }
 
+export type DependencyRejection =
+  | 'SELF_DEPENDENCY'
+  | 'HIDDEN_NODE_DEPENDENCY_FORBIDDEN'
+  | 'DEPENDENCY_CONFLICT'
+  | 'DEPENDENCY_CYCLE';
+
+type DependencyEnd = { id: string; isVisible: boolean };
+
+export function dependencyRejection(
+  dependencies: readonly RoadmapGraphDependency[],
+  source: DependencyEnd,
+  target: DependencyEnd,
+): DependencyRejection | null {
+  if (source.id === target.id) return 'SELF_DEPENDENCY';
+  if (!source.isVisible || !target.isVisible) return 'HIDDEN_NODE_DEPENDENCY_FORBIDDEN';
+  if (
+    dependencies.some(
+      ({ sourceNodeId, targetNodeId }) => sourceNodeId === source.id && targetNodeId === target.id,
+    )
+  )
+    return 'DEPENDENCY_CONFLICT';
+  if (wouldCreateDependencyCycle(dependencies, source.id, target.id)) return 'DEPENDENCY_CYCLE';
+  return null;
+}
+
 export function eligibleBranchUnlockNodeIds({
   dependencies,
   teacherBlockedNodeIds,

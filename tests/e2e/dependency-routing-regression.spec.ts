@@ -42,7 +42,7 @@ test('a valid-target preview matches its persisted obstacle route with source fa
   await expect(obstacle).toBeVisible();
   await expect(target.getByTestId('roadmap-card')).toHaveCSS('transform', 'none');
   await source.getByTestId('roadmap-card').hover();
-  const from = await bounds(source.locator('.react-flow__handle-right'));
+  const from = await bounds(source.locator('[data-node-connector="right"]'));
   const to = await bounds(target.locator('p'));
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();

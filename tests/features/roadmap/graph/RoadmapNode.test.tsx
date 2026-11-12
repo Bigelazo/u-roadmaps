@@ -327,7 +327,9 @@ test('allows the graph to observe touch starts without letting native handles st
     </div>,
   );
 
-  fireEvent.touchStart(screen.getAllByTestId('roadmap-node-handle')[0]);
+  fireEvent.touchStart(
+    screen.getAllByLabelText('Agregar un nodo que requiera Introducción a funciones')[0],
+  );
   expect(observeTouch).toHaveBeenCalledTimes(1);
   expect(bubbleTouch).not.toHaveBeenCalled();
 });
