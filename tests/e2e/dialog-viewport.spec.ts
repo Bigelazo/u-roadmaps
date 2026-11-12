@@ -109,7 +109,7 @@ test('shared Dialog preserves desktop sizing and other consumers on a short view
   await expect(types).toBeVisible();
   await expectWithinViewport(types, 390);
   await page.screenshot({ path: testInfo.outputPath('node-types.png') });
-  await types.getByRole('button', { name: 'Close', exact: true }).tap();
+  await types.getByRole('button', { name: 'Cerrar tipos de nodo', exact: true }).tap();
   await expect(types).toBeHidden();
   await page.getByRole('button', { name: 'Centrar mapa', exact: true }).tap();
   const introduction = page

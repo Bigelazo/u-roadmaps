@@ -549,8 +549,9 @@ describe('canvasConfirmation', () => {
       );
     expect(plain(deletion('t'))).toMatchObject({
       title: '¿Eliminar el tipo Taller?',
-      description: 'Esta acción no se puede deshacer.',
-      actions: [{ id: 'delete-node-type', label: 'Eliminar' }],
+      description:
+        'Solo se eliminará este tipo, que debe estar sin uso. Esta acción no se puede deshacer.',
+      actions: [{ id: 'delete-node-type', label: 'Eliminar tipo' }],
     });
     expect(deletion('missing')).toBeNull();
   });

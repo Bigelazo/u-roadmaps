@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from '@/shared/ui/popover';
 import { ScrollArea } from '@/shared/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 
 type Swatch<T> = { value: T; label: string; style?: CSSProperties; content?: ReactNode };
 
@@ -43,26 +43,28 @@ export function PopoverSwatchPicker<T extends string>({
   const grid = (swatches: Swatch<T>[]) => (
     <div className={gridClassName}>
       {swatches.map((swatch) => (
-        <Tooltip key={swatch.value}>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label={swatch.label}
-                aria-pressed={value === swatch.value}
-                className={swatchClassName}
-                style={swatch.style}
-                onClick={() => {
-                  onSelect(swatch.value);
-                  setOpen(false);
-                }}
-              />
-            }
-          >
-            {swatch.content}
-          </TooltipTrigger>
-          <TooltipContent>{swatch.label}</TooltipContent>
-        </Tooltip>
+        <TooltipProvider key={swatch.value} delay={600} timeout={0}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={swatch.label}
+                  aria-pressed={value === swatch.value}
+                  className={swatchClassName}
+                  style={swatch.style}
+                  onClick={() => {
+                    onSelect(swatch.value);
+                    setOpen(false);
+                  }}
+                />
+              }
+            >
+              {swatch.content}
+            </TooltipTrigger>
+            <TooltipContent className="pointer-events-none">{swatch.label}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ))}
     </div>
   );
@@ -83,7 +85,11 @@ export function PopoverSwatchPicker<T extends string>({
         <span className="flex min-w-0 items-center gap-2 truncate">{selection}</span>
         <ChevronDown data-icon="inline-end" aria-hidden="true" />
       </PopoverTrigger>
-      <PopoverContent align="start" className={contentClassName}>
+      <PopoverContent
+        align="start"
+        className={contentClassName}
+        initialFocus={(interactionType) => interactionType === 'keyboard'}
+      >
         <PopoverHeader>
           <PopoverTitle>{title}</PopoverTitle>
         </PopoverHeader>
