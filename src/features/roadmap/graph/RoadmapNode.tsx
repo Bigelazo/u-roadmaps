@@ -126,12 +126,14 @@ function NodeConnectorPort({
   position,
   title,
   enabled,
+  revealed,
   onStart,
 }: {
   handleId: string;
   position: Position;
   title: string;
   enabled: boolean;
+  revealed: boolean;
   onStart: () => void;
 }) {
   const Arrow = connectorArrows[position];
@@ -160,7 +162,17 @@ function NodeConnectorPort({
           />
         }
       >
-        <Arrow aria-hidden="true" strokeWidth={2.25} />
+        <motion.span
+          className="roadmap-node-port-visual"
+          initial={false}
+          animate={{ scale: revealed ? 1 : 0 }}
+          transition={{
+            duration: revealed ? 0.18 : 0.12,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+        >
+          <Arrow aria-hidden="true" strokeWidth={2.25} />
+        </motion.span>
       </TooltipTrigger>
       <TooltipContent side={position}>Arrastrar dependencia</TooltipContent>
     </Tooltip>
@@ -641,6 +653,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
     !data.isActionMenuOpen &&
     !data.isActionMenuClosing;
   const connectionHoverActive = canConnect && connectionHovered;
+  const connectionStarted = useStore((state) => state.connection.fromNode?.id === id);
   useEffect(() => {
     if (!canConnect) setConnectionHovered(false);
   }, [canConnect]);
@@ -740,6 +753,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
           position={position}
           title={data.title}
           enabled={canConnect}
+          revealed={canConnect && (connectionHoverActive || connectionStarted)}
           onStart={() => connector.start(id)}
         />
       ))}
