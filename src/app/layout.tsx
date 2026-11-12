@@ -12,6 +12,7 @@ import { Plus_Jakarta_Sans, Poppins } from 'next/font/google';
 import { cn } from 'cn';
 import { getInboxIdentity, readOwnInbox } from '@/features/notifications/server';
 import { NotificationsProvider } from '@/features/notifications';
+import { AcademicCacheIdentity } from '@/features/academic-overview';
 import { Toaster } from '@/shared/ui/toast';
 
 const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });

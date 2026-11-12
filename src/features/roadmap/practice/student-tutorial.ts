@@ -12,71 +12,74 @@ export const nodeTypeAndResourcesStep = {
     'El nodo es la unidad fundamental del roadmap. El icono y color indican el tipo de nodo, en este caso, "Material extra". Su título indica el propósito o temática. Los contadores representan cuántos archivos y enlaces contiene dentro.',
 };
 
-export const studentTutorialSteps: readonly TutorialStep[] = [
-  {
-    element: canvas,
-    title: 'Muévete por el mapa',
-    description:
-      'Arrastra el fondo para desplazarte. Para acercar o alejar el mapa, pellizca la pantalla o usa la rueda del mouse.',
-  },
-  {
-    element: 'button[aria-label="Centrar mapa"]',
-    title: 'Centrar mapa',
-    description: 'Si te pierdes, este botón vuelve a mostrar el mapa completo.',
-  },
-  nodeTypeAndResourcesStep,
-  {
-    element: nodeSelector(practiceNodeIds.a),
-    title: 'Nodo completado',
-    description: 'Introducción ya está completado: este ícono marca tu trabajo terminado.',
-  },
-  {
-    element: nodeSelector(practiceNodeIds.b),
-    title: 'Nodo pendiente',
-    description: 'Conceptos básicos está pendiente: puedes abrirlo y trabajar en él ahora.',
-  },
-  {
-    element: nodeSelector(practiceNodeIds.d),
-    title: 'Bloqueado por prerrequisitos',
-    description:
-      'Ejercicios guiados se libera cuando completes los nodos anteriores de los que depende.',
-  },
-  {
-    element: nodeSelector(practiceNodeIds.f),
-    title: 'Bloqueado por el equipo docente',
-    description:
-      'Proyecto final está bloqueado por el equipo docente, que lo liberará cuando lo decida.',
-  },
-  {
-    element: nodeSelector(practiceNodeIds.e),
-    title: 'Dependencias',
-    description:
-      'Las flechas muestran prerrequisitos. Control 1 tiene tres: debes completarlos todos para liberarlo.',
-  },
-  {
-    element: `${nodeSelector(practiceNodeIds.c)} [role="img"][aria-label$="sin revisar"]`,
-    title: 'Cambios sin revisar',
-    prepare: () => clickElement('button[aria-label="Cerrar detalle"]'),
-    description:
-      'Esta marca indica que el nodo cambió desde la última vez que lo abriste. Al abrirlo, la marca desaparece.',
-  },
-  {
-    element: '#student-node-detail-panel',
-    title: 'Detalle del nodo',
-    description:
-      'Aquí encuentras la descripción, los recursos y el botón para completar el nodo. Completar un nodo no se puede deshacer, así que úsalo cuando realmente hayas terminado.',
-    side: 'left',
-    prepare: () => clickElement(nodeSelector(practiceNodeIds.b)),
-  },
-  {
-    element: 'button[aria-label^="Avisos"]',
-    title: 'Avisos y resumen de cambios',
-    description:
-      'Cuando el equipo docente cambia tu roadmap, recibes avisos aquí. Al entrar a tu roadmap, un resumen de cambios te muestra lo nuevo.',
-    side: 'bottom',
-    prepare: () => {
-      if (window.matchMedia(compactCanvasLayoutQuery).matches)
-        clickElement('button[aria-label="Cerrar detalle"]');
+export function studentTutorialSteps(isAuthenticated: boolean): readonly TutorialStep[] {
+  return [
+    {
+      element: canvas,
+      title: 'Muévete por el mapa',
+      description:
+        'Arrastra el fondo para desplazarte. Para acercar o alejar el mapa, pellizca la pantalla o usa la rueda del mouse.',
     },
-  },
-];
+    {
+      element: 'button[aria-label="Centrar mapa"]',
+      title: 'Centrar mapa',
+      description: 'Si te pierdes, este botón vuelve a mostrar el mapa completo.',
+    },
+    nodeTypeAndResourcesStep,
+    {
+      element: nodeSelector(practiceNodeIds.a),
+      title: 'Nodo completado',
+      description: 'Introducción ya está completado: este ícono marca tu trabajo terminado.',
+    },
+    {
+      element: nodeSelector(practiceNodeIds.b),
+      title: 'Nodo pendiente',
+      description: 'Conceptos básicos está pendiente: puedes abrirlo y trabajar en él ahora.',
+    },
+    {
+      element: nodeSelector(practiceNodeIds.d),
+      title: 'Bloqueado por prerrequisitos',
+      description:
+        'Ejercicios guiados se libera cuando completes los nodos anteriores de los que depende.',
+    },
+    {
+      element: nodeSelector(practiceNodeIds.f),
+      title: 'Bloqueado por el equipo docente',
+      description:
+        'Proyecto final está bloqueado por el equipo docente, que lo liberará cuando lo decida.',
+    },
+    {
+      element: nodeSelector(practiceNodeIds.e),
+      title: 'Dependencias',
+      description:
+        'Las flechas muestran prerrequisitos. Control 1 tiene tres: debes completarlos todos para liberarlo.',
+    },
+    {
+      element: `${nodeSelector(practiceNodeIds.c)} [role="img"][aria-label$="sin revisar"]`,
+      title: 'Cambios sin revisar',
+      prepare: () => clickElement('button[aria-label="Cerrar detalle"]'),
+      description:
+        'Esta marca indica que el nodo cambió desde la última vez que lo abriste. Al abrirlo, la marca desaparece.',
+    },
+    {
+      element: '#student-node-detail-panel',
+      title: 'Detalle del nodo',
+      description:
+        'Aquí encuentras la descripción, los recursos y el botón para completar el nodo. Completar un nodo no se puede deshacer, así que úsalo cuando realmente hayas terminado.',
+      side: 'left',
+      prepare: () => clickElement(nodeSelector(practiceNodeIds.b)),
+    },
+    {
+      element: isAuthenticated ? 'button[aria-label^="Avisos"]' : '[data-global-navigation]',
+      title: 'Avisos y resumen de cambios',
+      description: isAuthenticated
+        ? 'Cuando el equipo docente cambia tu roadmap, recibes avisos aquí. Al entrar a tu roadmap, un resumen de cambios te muestra lo nuevo.'
+        : 'Cuando ingreses con U-Pasaporte, tendrás un buzón de avisos sobre los cambios de tus roadmaps. Al entrar a cada roadmap, un resumen de cambios te mostrará lo nuevo.',
+      side: 'bottom',
+      prepare: () => {
+        if (window.matchMedia(compactCanvasLayoutQuery).matches)
+          clickElement('button[aria-label="Cerrar detalle"]');
+      },
+    },
+  ];
+}

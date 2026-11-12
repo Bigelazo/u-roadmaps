@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { clearAcademicCourseCache } from '@/features/academic-overview';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { InstitutionalLoginForm } from './InstitutionalLoginForm';
@@ -48,6 +49,7 @@ export default function SessionButton({ isAuthenticated }: { isAuthenticated: bo
           if (actionId !== LOGOUT_ACTION_ID) return;
 
           setPendingActionId(actionId);
+          clearAcademicCourseCache();
           logoutFormRef.current?.requestSubmit();
         }}
       />

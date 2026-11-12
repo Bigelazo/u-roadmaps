@@ -129,7 +129,7 @@ function CourseRoadmapAction({
       year: course.year,
     });
   }
-  if (awaitsCreation && !course.isPositionConfirmed) {
+  if (awaitsCreation && !course.isPositionConfirmed && course.institutionalPosition === null) {
     return (
       <p className="max-w-64 text-sm text-muted-foreground">
         No pudimos confirmar tu cargo con U-Campus. Si eres profesor de cátedra, recarga la página
@@ -408,9 +408,11 @@ export function AcademicOverview({
   renderRoadmapCreation,
   tutorialInvitation = false,
   notice,
+  actions,
 }: Readonly<{
   overview: AcademicOverviewPage;
   notice?: React.ReactNode;
+  actions?: React.ReactNode;
   renderRoadmapCreation: RoadmapCreationAction;
   tutorialInvitation?: boolean;
 }>) {
@@ -419,9 +421,12 @@ export function AcademicOverview({
   return (
     <PageShell className="mx-auto max-w-[1440px] px-6">
       <div className="flex flex-col gap-10 md:gap-16">
-        <header className="flex max-w-3xl items-center gap-3">
-          <PageTitle className="md:text-5xl">Resumen académico</PageTitle>
-          <AcademicOverviewTutorialButton invited={tutorialInvitation} />
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <PageTitle className="md:text-5xl">Resumen académico</PageTitle>
+            <AcademicOverviewTutorialButton invited={tutorialInvitation} />
+          </div>
+          {actions}
         </header>
 
         {notice || overview.source === 'LOCAL' ? (
@@ -449,7 +454,9 @@ export function AcademicOverview({
               <EmptyDescription>
                 {overview.source === 'LOCAL'
                   ? 'Aún no tienes cursos en U-Roadmaps. Cuando U-Campus responda, verás aquí los cursos que inscribes y los que dictas.'
-                  : 'U-Campus no registra cursos inscritos ni cursos en los que formes parte del equipo docente.'}
+                  : overview.source === 'CACHE'
+                    ? 'No tienes cursos activos en U-Roadmaps. Actualiza tus cursos para consultar cambios en U-Campus.'
+                    : 'U-Campus no registra cursos inscritos ni cursos en los que formes parte del equipo docente.'}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

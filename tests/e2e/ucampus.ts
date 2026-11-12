@@ -17,11 +17,36 @@ type Person = { rut: number; nombre1: string; apellido1: string; apellido2: stri
 export async function startUcampus() {
   const coursesByRut = new Map<string, Course[]>();
   const failures = new Set<string>();
+  const historyRequests = new Map<string, number>();
+  const historyDelays = new Map<string, number>();
   const rostersByRamo = new Map<string, RosterRow[]>();
   const people = new Map<string, Person>();
   const server = createServer(async (request, response) => {
     const url = new URL(request.url ?? '/', origin);
     const rut = url.searchParams.get('rut') ?? '';
+    if (url.pathname === '/_history') {
+      if (request.method === 'PUT') {
+        let body = '';
+        for await (const chunk of request) body += chunk;
+        const options = JSON.parse(body) as { delayMs?: number; recover?: boolean };
+        historyDelays.set(rut, options.delayMs ?? 0);
+        if (options.recover) {
+          failures.delete(`${rut}:cursos_dictados`);
+          failures.delete(`${rut}:cursos_inscritos`);
+        }
+      }
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ requests: historyRequests.get(rut) ?? 0 }));
+      return;
+    }
+    if (
+      request.method === 'GET' &&
+      ['/cursos_inscritos', '/cursos_dictados'].includes(url.pathname)
+    ) {
+      historyRequests.set(rut, (historyRequests.get(rut) ?? 0) + 1);
+      const delay = historyDelays.get(rut) ?? 0;
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+    }
     if (url.pathname === '/integrantes' || url.pathname === '/personas') {
       const isRoster = url.pathname === '/integrantes';
       const ramo = url.searchParams.get('id_ramo') ?? '';
@@ -68,6 +93,8 @@ export async function startUcampus() {
       response.end();
     } else if (request.method === 'DELETE') {
       coursesByRut.delete(rut);
+      historyRequests.delete(rut);
+      historyDelays.delete(rut);
       failures.delete(`${rut}:cursos_dictados`);
       failures.delete(`${rut}:cursos_inscritos`);
       response.end();
@@ -195,4 +222,21 @@ export async function forgetUcampusRoster(ramoId: number, ruts: readonly string[
     const response = await fetch(`${origin}${path}`, { method: 'DELETE' });
     if (!response.ok) throw new Error(`U-Campus fixture returned ${response.status}`);
   }
+}
+
+export async function academicHistoryRequests(user: E2EUser) {
+  const response = await fetch(`${origin}/_history?rut=${user.rut}`);
+  if (!response.ok) throw new Error(`U-Campus fixture returned ${response.status}`);
+  return ((await response.json()) as { requests: number }).requests;
+}
+
+export async function controlAcademicHistory(
+  user: E2EUser,
+  options: { delayMs?: number; recover?: boolean },
+) {
+  const response = await fetch(`${origin}/_history?rut=${user.rut}`, {
+    method: 'PUT',
+    body: JSON.stringify(options),
+  });
+  if (!response.ok) throw new Error(`U-Campus fixture returned ${response.status}`);
 }

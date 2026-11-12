@@ -7,6 +7,10 @@ import type {
   AcademicOverviewSources,
 } from './types';
 
+export { readLocalAcademicOverview } from './infrastructure/read-local-academic-overview';
+export { createAcademicCourseCache } from './domain/browser-cache';
+export type { AcademicOverviewBrowserResponse } from './types';
+
 export type { AcademicOverviewActor, AcademicOverviewSources } from './types';
 
 export async function getAcademicOverviewPage(

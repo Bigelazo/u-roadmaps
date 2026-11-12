@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RoadmapCanvasSession } from '@/features/roadmap/session/RoadmapCanvasSession';
 import { createInMemoryRoadmapSessionPersistence } from '@/features/roadmap/session/in-memory-persistence';
 import { RoadmapCanvasSessionPersistenceProvider } from '@/features/roadmap/session/session';
@@ -27,13 +27,16 @@ export function PracticeRoadmapCanvas({
   term,
   today,
   origin,
+  isAuthenticated,
 }: {
   experience: PracticeExperience;
   term: PracticeAcademicTerm;
   today: string;
   origin: string | null;
+  isAuthenticated: boolean;
 }) {
-  useRecordTutorialOpening(experience);
+  useRecordTutorialOpening(experience, isAuthenticated);
+  const studentSteps = useMemo(() => studentTutorialSteps(isAuthenticated), [isAuthenticated]);
   const [actions] = useState(() => createTutorialActions<PracticeCanvasAction>());
   const [teachingSteps] = useState(() =>
     experience === 'teaching' ? teachingTutorialSteps() : [],
@@ -65,7 +68,7 @@ export function PracticeRoadmapCanvas({
         </RoadmapCanvasSessionPersistenceProvider>
       </main>
       {experience === 'student' ? (
-        <RoadmapTutorial steps={studentTutorialSteps} />
+        <RoadmapTutorial steps={studentSteps} />
       ) : (
         <RoadmapTutorial steps={teachingSteps} actions={actions} />
       )}

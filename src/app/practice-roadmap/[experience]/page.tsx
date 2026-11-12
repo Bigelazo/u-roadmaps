@@ -1,4 +1,4 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { PracticeRoadmapCanvas } from '@/features/roadmap';
 import { isPracticeExperience, readPracticeRoadmapCalendar } from '@/features/roadmap/server';
 import { getApplicationSession } from '@/shared/server/session';
@@ -12,7 +12,6 @@ export default async function PracticeRoadmapPage(
   const { origin } = await props.searchParams;
 
   const user = await resolveSessionUser(await getApplicationSession());
-  if (!user) redirect('/api/plogin/start');
   const { term, today } = await readPracticeRoadmapCalendar();
 
   return (
@@ -20,6 +19,7 @@ export default async function PracticeRoadmapPage(
       experience={experience}
       term={term}
       today={today}
+      isAuthenticated={Boolean(user)}
       origin={typeof origin === 'string' ? origin : null}
     />
   );

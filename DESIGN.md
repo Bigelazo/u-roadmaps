@@ -167,6 +167,7 @@ Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram 
 
 - **Primary button**: blue surface, white sentence-case label, minimum 44px height, and a direct verb. Add a Lucide icon only when it clarifies direction or outcome.
 - **Secondary button**: white or cloud surface with blue or ink border. It must not compete with the primary action.
+- **Landing tutorial entry**: “Probar tutorial” is secondary to institutional sign-in. Explain that practice requires no session and saves no changes, then offer the existing Docente and Estudiante tutorial choices. Leaving practice returns to the landing page.
 - **Progress badge**: use the shared `progress` Badge variant for concise completion or current-position labels. It pairs `{colors.progress-soft}` with `{colors.progress-deep}` and must retain a textual state.
 - **Course header**: compact context label, Poppins course name, supporting term/code information, and visible progress when applicable.
 - **Progress track**: neutral base with Jade completion fill, a numeric value, and a textual completed/total description.

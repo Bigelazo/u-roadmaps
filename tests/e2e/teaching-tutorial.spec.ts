@@ -74,15 +74,17 @@ async function connect(page: Page, sourceTitle: string, targetTitle: string) {
   await page.mouse.up();
 }
 
-test('teaching staff perform each action step of the teaching tutorial', async ({
+test('an anonymous visitor performs each action step of the teaching tutorial', async ({
   page,
-  createUser,
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const user = await createUser();
-  await authenticateAs(page.context(), user.id);
-  await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
+  const activityRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/^\/api\/(tutorial|notifications)\//.test(new URL(request.url()).pathname))
+      activityRequests.push(request.url());
+  });
+  await page.goto('/practice-roadmap/teaching');
 
   await expectStep(page, 'Centrar roadmap');
   await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
@@ -325,11 +327,7 @@ test('teaching staff perform each action step of the teaching tutorial', async (
 
   await tourPopover(page).getByRole('button', { name: 'Finalizar' }).click();
   await expect(tourPopover(page)).toHaveCount(0);
-  expect(
-    await queryJson<number>(
-      `SELECT count(*)::int FROM "RoadmapNotice" WHERE "recipientId" = ${literal(user.id)};`,
-    ),
-  ).toBe(0);
+  expect(activityRequests).toEqual([]);
 });
 
 test('the canvas question-mark icon opens the teaching tutorial and points back to the Roadmap', async ({
