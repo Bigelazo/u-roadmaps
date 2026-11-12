@@ -26,7 +26,8 @@ import {
 import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/react';
 import { NodeTypeIcon } from '@/features/roadmap/node-type-icon-registry';
 import type { StudentNodeBlockReason } from '@/features/roadmap/types';
-import { roadmapNodeSizeForTitle } from '@/features/roadmap/graph/geometry';
+import { roadmapNodeDimensions } from '@/features/roadmap/graph/geometry';
+import { roadmapNodeTitleStyle } from './use-roadmap-node-sizing';
 import { NodeConnectorContext } from '@/features/roadmap/graph/node-connector';
 import type { NodeActionCallbacks } from '@/features/roadmap/graph/node-action';
 import {
@@ -621,7 +622,7 @@ function NodeNotificationBadge({ id, data }: Pick<NodeProps<RoadmapFlowNode>, 'i
   return <NodeChangeBadge nodeId={id} />;
 }
 
-export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) {
+export function RoadmapNode({ id, data, selected, width, height }: NodeProps<RoadmapFlowNode>) {
   const entryProgress = useNodeEntryProgress(id);
   const cardRef = useRef<HTMLDivElement>(null);
   const titleText = useClampedText<HTMLParagraphElement>(data.title);
@@ -642,7 +643,7 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
   }, [entryProgress]);
   const connector = useContext(NodeConnectorContext);
   const [connectionHovered, setConnectionHovered] = useState(false);
-  const size = roadmapNodeSizeForTitle(data.title);
+  const size = roadmapNodeDimensions({ data, width, height });
   const locked = data.status === 'locked';
   const hidden = data.isHidden;
   const editing = data.status === 'editing';
@@ -739,7 +740,8 @@ export function RoadmapNode({ id, data, selected }: NodeProps<RoadmapFlowNode>) 
         <p
           ref={titleText.ref}
           title={titleText.isClamped ? data.title : undefined}
-          className="line-clamp-2 min-w-0 text-left text-[15.5px] leading-tight font-medium wrap-break-word text-ink"
+          className="line-clamp-2 min-w-0 text-left wrap-break-word text-ink"
+          style={roadmapNodeTitleStyle}
         >
           {data.title}
         </p>

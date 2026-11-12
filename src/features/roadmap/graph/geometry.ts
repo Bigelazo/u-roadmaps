@@ -21,18 +21,31 @@ function roundUpToRoadmapNodeStep(value: number) {
   return Math.ceil(value / roadmapNodeDimensionStep) * roadmapNodeDimensionStep;
 }
 
-export function roadmapNodeSizeForTitle(title: string) {
+export type RoadmapNodeSize = { width: number; height: number };
+export type RoadmapNodeSizer = (title: string) => RoadmapNodeSize;
+
+export function roadmapNodeSizeForTitle(title: string, measuredTitleWidth?: number) {
   const characterCount = Math.max(Array.from(title.trim()).length, 1);
   const width = Math.min(
     roadmapNodeMaximumWidth,
     Math.max(
       roadmapNodeMinimumSize.width,
       roundUpToRoadmapNodeStep(
-        titleHorizontalChrome + characterCount * estimatedTitleCharacterWidth,
+        titleHorizontalChrome +
+          (measuredTitleWidth ?? characterCount * estimatedTitleCharacterWidth),
       ),
     ),
   );
   return { width, height: roadmapNodeMaximumHeight };
+}
+
+export function roadmapNodeDimensions(node: {
+  width?: number;
+  height?: number;
+  data: { title: string };
+}): RoadmapNodeSize {
+  const fallback = roadmapNodeSizeForTitle(node.data.title);
+  return { width: node.width ?? fallback.width, height: node.height ?? fallback.height };
 }
 
 export function snapToRoadmapGrid(position: Point): Point {

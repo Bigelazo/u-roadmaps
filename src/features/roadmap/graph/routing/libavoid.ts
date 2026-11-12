@@ -7,7 +7,7 @@ import type {
   AvoidShape,
   NativeObject,
 } from 'libavoid-js';
-import { roadmapNodeSizeForTitle, type Point } from '@/features/roadmap/graph/geometry';
+import { roadmapNodeDimensions, type Point } from '@/features/roadmap/graph/geometry';
 import type { RoadmapFlowNode } from '@/features/roadmap/graph/RoadmapNode';
 import type { RoadmapFlowEdge } from '@/features/roadmap/graph/DependencyEdge';
 import {
@@ -33,7 +33,7 @@ export function roadmapRoutingScene(
   for (const node of nodes) {
     if (node.hidden) continue;
     visible.add(node.id);
-    const { width, height } = roadmapNodeSizeForTitle(node.data.title);
+    const { width, height } = roadmapNodeDimensions(node);
     const { x, y } = node.position;
     const add = (
       suffix: string,

@@ -5,10 +5,16 @@ import {
   roadmapNodeSizeForTitle,
   snapToRoadmapGrid,
   type NodeRect,
+  type RoadmapNodeSize,
   type Point,
 } from '@/features/roadmap/graph/geometry';
 
-export type CanvasNode = { readonly id: string; readonly title: string; readonly position: Point };
+export type CanvasNode = {
+  readonly id: string;
+  readonly title: string;
+  readonly position: Point;
+  readonly size?: RoadmapNodeSize;
+};
 
 const maxIterations = 50;
 
@@ -36,10 +42,10 @@ export function placementsWithoutCollisions(
 ): RoadmapNodePlacement[] {
   const anchored = new Map(placed.map(({ nodeId, position }) => [nodeId, position]));
   const boxes: NodeBox[] = nodes
-    .map(({ id, title, position }) => ({
+    .map(({ id, title, position, size }) => ({
       id,
       ...(anchored.get(id) ?? position),
-      ...roadmapNodeSizeForTitle(title),
+      ...(size ?? roadmapNodeSizeForTitle(title)),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   const reached = new Set(anchored.keys());

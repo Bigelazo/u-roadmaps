@@ -104,3 +104,13 @@ test('returns the same grid-aligned layout for repeated requests', () => {
     expect(node.position.y % 20).toBe(0);
   }
 });
+
+test('aligns node centers using explicit typography-based widths', () => {
+  const sized = nodes.map((node, index) => ({
+    ...node,
+    width: index === 0 ? 160 : 240,
+    height: 80,
+  }));
+  const [start, end] = layoutRoadmapGraph(sized, edges, 'TB');
+  expect(start.position.x + start.width! / 2).toBe(end.position.x + end.width! / 2);
+});
