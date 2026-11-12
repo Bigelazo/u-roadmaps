@@ -1,6 +1,12 @@
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
-import { acknowledgeOpening, listNotices, prepareOpening } from './notices';
+import {
+  openInbox,
+  countNotices,
+  acknowledgeOpening,
+  listNotices,
+  prepareOpening,
+} from './notices';
 import { deleteNode } from './previewed-writes';
 
 test('Node repeats arrive without an open Inbox and an earlier opening cannot acknowledge later changes', async ({
@@ -17,8 +23,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
   const nodeId = (await (await ok(created, 201)).json()).node.id;
   const filter = `roadmapId=${roadmap.roadmap.id}&nodeId=${nodeId}`;
   const notices = () => listNotices(recipient, { roadmapId: roadmap.roadmap.id, nodeId });
-  const count = async () =>
-    (await (await recipient.get(`/api/notifications/counts?${filter}`)).json()).count;
+  const count = async () => await countNotices(recipient, `${filter}`);
   try {
     await expect.poll(notices).toHaveLength(1);
     const first = (await notices())[0];
@@ -68,7 +73,7 @@ test('Node repeats arrive without an open Inbox and an earlier opening cannot ac
 
     await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
     await page.goto('/academic-overview');
-    await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+    await openInbox(page);
     await page.getByRole('button', { name: new RegExp(laterTitle) }).click();
     await expect(page).toHaveURL(course.pagePath());
     await expect(

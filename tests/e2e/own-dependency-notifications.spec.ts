@@ -4,7 +4,13 @@ import { expect, test, type E2EUser } from './fixtures';
 import { createDependency, prepareNodeCreator } from './create-node';
 import { createExistingNode } from './existing-node';
 import { authenticateAs, escapeRegExp, ok } from './helpers';
-import { listNotices, storeTitleNotices, type StoredNotice } from './notices';
+import {
+  openInbox,
+  countNotices,
+  listNotices,
+  storeTitleNotices,
+  type StoredNotice,
+} from './notices';
 import { deleteNode, hideNode } from './previewed-writes';
 
 test('Dependency notices preserve route and access changes with Roadmap entry recognition', async ({
@@ -47,7 +53,7 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   const selectRouteNotice = async (user: E2EUser, notice: StoredNotice) => {
     await authenticateAs(page.context(), user.id);
     await page.goto('/academic-overview');
-    await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+    await openInbox(page);
     const noticeButton = page.getByRole('list', { name: 'Lista de avisos' }).getByRole('button', {
       name: new RegExp(
         `^${escapeRegExp(course.courseName)}\\s+(El Roadmap ha recibido \\d+ cambios\\.|${escapeRegExp(notice.body)})`,
@@ -130,10 +136,9 @@ test('Dependency notices preserve route and access changes with Roadmap entry re
   expect(await blockedForStudent(studentWithPrerequisites)).toEqual([[], []]);
   expect(await blockedForStudent(inactiveStudent)).toEqual([[], []]);
 
-  const roadmapCount = await (
-    await apiAs(studentWithoutPrerequisite)
-  ).get(`/api/notifications/counts?roadmapId=${roadmapId}`);
-  expect((await roadmapCount.json()).count).toBeGreaterThan(0);
+  expect(
+    await countNotices(await apiAs(studentWithoutPrerequisite), `roadmapId=${roadmapId}`),
+  ).toBeGreaterThan(0);
 
   const addedRouteNotice = (await routeNoticesFor(studentWithoutPrerequisite, dependencyId))[0];
   await selectRouteNotice(studentWithoutPrerequisite, addedRouteNotice);

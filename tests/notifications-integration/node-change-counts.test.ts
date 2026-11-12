@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { expect } from 'vitest';
 import { test, type IntegrationCourse } from './fixtures';
-import { addNode, enterRoadmap, teacherEdits } from './roadmap';
+import { addNode, enterRoadmap, teacherEdits, inboxCount } from './roadmap';
 import {
   countOwnNodeChangeTargets,
-  countOwnNotices,
   listOwnNotices,
   reviewOwnNode,
 } from '@/features/notifications/server';
@@ -44,7 +43,7 @@ async function seedTargets(
 test('empty public Inbox counts and Node marks retain their complete result shapes', async ({
   course,
 }) => {
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 0 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 0 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({ byNode: {} });
   expect(await listOwnNotices(course.studentId, params(course))).toEqual({
     notifications: [],
@@ -59,7 +58,7 @@ test('two null target keys on one visible Node fall back to distinct notice iden
     { aspect: 'title', nullKey: true },
     { aspect: 'title', nullKey: true },
   ]);
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 2 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 2 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({
     byNode: { [course.change.nodeId]: 2 },
   });
@@ -74,11 +73,11 @@ test('Roadmap recognition retains both Node marks and reviewing A clears only th
   await edits.rename(nodeA, 'Recursión');
   await edits.rename(nodeB, 'Pilas dobles');
   const both = { byNode: { [nodeA]: 1, [nodeB]: 1 } };
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 2 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 2 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual(both);
   expect(await countOwnNodeChangeTargets(course.classmateId, params(course))).toEqual(both);
   await enterRoadmap(course.studentId, course.roadmapId);
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 0 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 0 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual(both);
   expect(
     await reviewOwnNode(course.studentId, { roadmapId: course.roadmapId, nodeId: nodeA }),
@@ -103,7 +102,7 @@ test('Node review excludes changes at and before its millisecond and retains onl
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({
     byNode: { [course.change.nodeId]: 1 },
   });
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 3 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 3 });
 });
 
 test('Participation reset admits only targets strictly after its millisecond without a Node review', async ({
@@ -121,7 +120,7 @@ test('Participation reset admits only targets strictly after its millisecond wit
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({
     byNode: { [course.change.nodeId]: 1 },
   });
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 3 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 3 });
 });
 
 test('eligible recipients and two active Roadmaps retain asymmetric independent counts and marks', async ({
@@ -142,15 +141,15 @@ test('eligible recipients and two active Roadmaps retain asymmetric independent 
     { aspect: 'type' },
   ]);
   await seedTargets(otherCourse, course.studentId, [{ aspect: 'title' }]);
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 2 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 2 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({
     byNode: { [course.change.nodeId]: 2 },
   });
-  expect(await countOwnNotices(course.classmateId, params(course))).toEqual({ count: 3 });
+  expect(await inboxCount(course.classmateId, course.roadmapId)).toEqual({ count: 3 });
   expect(await countOwnNodeChangeTargets(course.classmateId, params(course))).toEqual({
     byNode: { [course.change.nodeId]: 3 },
   });
-  expect(await countOwnNotices(course.studentId, params(otherCourse))).toEqual({ count: 1 });
+  expect(await inboxCount(course.studentId, otherCourse.roadmapId)).toEqual({ count: 1 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(otherCourse))).toEqual({
     byNode: { [otherCourse.change.nodeId]: 1 },
   });
@@ -168,13 +167,13 @@ test('defensive inactive snapshot rejects post-reset notices independently of tr
     data: { noticeResetAt: t },
   });
   await seedTargets(course, course.studentId, [{ aspect: 'title', at: after }]);
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 0 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 0 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({ byNode: {} });
   await prisma.participation.update({
     where: { id: course.participationId },
     data: { isActive: true },
   });
-  expect(await countOwnNotices(course.studentId, params(course))).toEqual({ count: 1 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 1 });
   expect(await countOwnNodeChangeTargets(course.studentId, params(course))).toEqual({
     byNode: { [course.change.nodeId]: 1 },
   });
@@ -190,9 +189,6 @@ test('public count and Node review operations reject missing and invalid identit
   }
   await expect(
     countOwnNodeChangeTargets(course.studentId, new URLSearchParams()),
-  ).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
-  await expect(
-    countOwnNotices(course.studentId, new URLSearchParams({ roadmapId: 'invalid' })),
   ).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
   for (const input of [
     { nodeId: course.change.nodeId },

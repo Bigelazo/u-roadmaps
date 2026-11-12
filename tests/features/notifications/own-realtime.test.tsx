@@ -1,23 +1,15 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import userEvent from '@testing-library/user-event';
-import {
-  NotificationsProvider,
-  NotificationsInbox,
-  NotificationCountButton,
-} from '@/features/notifications/components/NotificationsInbox';
-import { useCounts, useNotifications } from '@/features/notifications/components/inbox-driver';
+import { OwnInboxRealtime } from '@/features/notifications/components/own-realtime';
 import {
   ROADMAP_CHANGE_RECEIVED_EVENT,
-  requestRoadmapRecovery,
+  subscribeToRoadmapRecovery,
 } from '@/shared/client/roadmap-events';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 class BrowserStream extends EventTarget {
   static instances: BrowserStream[] = [];
   closed = false;
-  constructor() {
+  constructor(readonly url: string) {
     super();
     BrowserStream.instances.push(this);
   }
@@ -28,32 +20,9 @@ class BrowserStream extends EventTarget {
     this.dispatchEvent(new MessageEvent(kind, { data: JSON.stringify(data) }));
   }
 }
-function InboxProjection() {
-  const { counts } = useCounts({ filters: [{ read: false }] });
-  const { notifications } = useNotifications({ read: false });
-  return (
-    <p>
-      {counts?.[0].count} pending: {notifications?.map((record) => record.subject).join(', ')}
-    </p>
-  );
-}
-const identity = (subscriber: string) => ({
-  userId: subscriber,
-});
-function inbox(children: ReactNode, subscriber: string | null = 'student') {
-  return (
-    <NotificationsProvider identity={subscriber ? identity(subscriber) : null}>
-      {children}
-    </NotificationsProvider>
-  );
-}
-const renderInbox = (children: ReactNode, subscriber?: string | null) =>
-  render(inbox(children, subscriber));
-function stubFetch<T extends (url: string, init?: RequestInit) => Promise<Response>>(handler: T) {
-  const fetch = vi.fn(handler);
-  vi.stubGlobal('fetch', fetch);
-  return fetch;
-}
+
+const change = { courseCode: 'CC1002', year: 2026, semester: 2 };
+
 beforeEach(() => {
   vi.stubGlobal('EventSource', BrowserStream);
 });
@@ -62,121 +31,55 @@ afterEach(() => {
   BrowserStream.instances = [];
 });
 
-test('one shared stream updates feed and counters without recognizing arrival and discards another User', async () => {
-  let delivered = false;
-  const fetch = stubFetch(async (url: string) =>
-    Response.json(
-      url.includes('/counts')
-        ? { count: delivered ? 1 : 0 }
-        : {
-            notifications: delivered
-              ? [{ id: 'notice', subject: 'Node edited', createdAt: '2026-10-03' }]
-              : [],
-            hasMore: false,
-          },
-    ),
-  );
-  const { unmount } = renderInbox(
-    <>
-      <InboxProjection />
-      <InboxProjection />
-    </>,
-  );
-  await waitFor(() => expect(screen.getAllByText('0 pending:')).toHaveLength(2));
-  expect(BrowserStream.instances).toHaveLength(1);
-  delivered = true;
-  act(() => BrowserStream.instances[0].receive('inbox', { userId: 'other' }));
-  expect(screen.getAllByText('0 pending:')).toHaveLength(2);
-  act(() => BrowserStream.instances[0].receive('inbox', { userId: 'student' }));
-  await waitFor(() => expect(screen.getAllByText('1 pending: Node edited')).toHaveLength(2));
-  expect(fetch.mock.calls.every(([url]) => !url.includes('acknowledge'))).toBe(true);
-  unmount();
-  expect(BrowserStream.instances[0].closed).toBe(true);
-});
-
-test('switching User closes the old stream and ignores its queued events', async () => {
-  stubFetch(async () => Response.json({ notifications: [], hasMore: false, count: 0 }));
+test('the stream relays its own Roadmap signals and ignores another User', () => {
   const changed = vi.fn();
   window.addEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
-  const { rerender, unmount } = renderInbox(<span>Session</span>, 'first');
+  const { unmount } = render(<OwnInboxRealtime userId="student" />);
+  const [stream] = BrowserStream.instances;
+  expect(stream.url).toBe('/api/notifications/stream');
+  act(() => stream.receive('roadmap', { ...change, userId: 'other' }));
+  expect(changed).not.toHaveBeenCalled();
+  act(() => stream.receive('roadmap', { ...change, userId: 'student', accessLost: true }));
+  expect(changed.mock.calls[0][0].detail).toEqual({ ...change, accessLost: true });
+  unmount();
+  expect(stream.closed).toBe(true);
+  window.removeEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
+});
+
+test('a ready stream requests Roadmap recovery and an inbox frame changes nothing', () => {
+  const recovered = vi.fn();
+  const changed = vi.fn();
+  const stopRecovery = subscribeToRoadmapRecovery(recovered);
+  const dispatched = vi.spyOn(window, 'dispatchEvent');
+  window.addEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
+  render(<OwnInboxRealtime userId="student" />);
+  const [stream] = BrowserStream.instances;
+  act(() => stream.receive('ready', { userId: 'student' }));
+  expect(recovered).toHaveBeenCalledTimes(1);
+  dispatched.mockClear();
+  act(() => stream.receive('inbox', { userId: 'student' }));
+  expect(dispatched).not.toHaveBeenCalled();
+  expect(changed).not.toHaveBeenCalled();
+  stopRecovery();
+  window.removeEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
+});
+
+test('switching User closes the old stream and ignores its queued events', () => {
+  const changed = vi.fn();
+  window.addEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
+  const { rerender } = render(<OwnInboxRealtime userId="first" />);
   const old = BrowserStream.instances[0];
-  rerender(inbox(<span>Session</span>, 'second'));
+  rerender(<OwnInboxRealtime userId="second" />);
   expect(old.closed).toBe(true);
-  const change = { courseCode: 'CC1002', year: 2026, semester: 2 };
   act(() => old.receive('roadmap', { ...change, userId: 'first' }));
   expect(changed).not.toHaveBeenCalled();
   act(() => BrowserStream.instances[1].receive('roadmap', { ...change, userId: 'second' }));
   expect(changed.mock.calls[0][0].detail).toEqual(change);
-  act(() =>
-    BrowserStream.instances[1].receive('roadmap', {
-      ...change,
-      userId: 'second',
-      accessLost: true,
-    }),
-  );
-  expect(changed.mock.calls[1][0].detail).toEqual({ ...change, accessLost: true });
-  rerender(inbox(<span>Logged out</span>, null));
-  expect(BrowserStream.instances[1].closed).toBe(true);
-  unmount();
   window.removeEventListener(ROADMAP_CHANGE_RECEIVED_EVENT, changed);
 });
 
-test('a transient Inbox refresh preserves saved data and retries without another signal', async () => {
-  let refreshing = false;
-  let failed = false;
-  stubFetch(async (url: string) => {
-    if (refreshing && !failed && url.includes('/counts')) {
-      failed = true;
-      throw new Error('Temporary network failure');
-    }
-    return Response.json(
-      url.includes('/counts')
-        ? { count: refreshing ? 1 : 0 }
-        : { notifications: [], hasMore: false },
-    );
-  });
-  renderInbox(<InboxProjection />);
-  await screen.findByText('0 pending:');
-  refreshing = true;
-  act(() => BrowserStream.instances[0].receive('inbox', { userId: 'student' }));
-  expect(screen.getByText('0 pending:')).toBeTruthy();
-  await screen.findByText('1 pending:', {}, { timeout: 2500 });
-});
-
-test('foreground recovery retries actual counters after overlapping HTTP failures without another signal', async () => {
-  let refreshing = false;
-  let available = true;
-  stubFetch(async (url: string) => {
-    if (!available) throw new Error('Temporary outage');
-    return Response.json(
-      url.includes('/counts')
-        ? { count: refreshing ? 2 : 0 }
-        : { notifications: [], hasMore: false },
-    );
-  });
-  renderInbox(
-    <>
-      <InboxProjection />
-      <NotificationCountButton filter={{ roadmapId: 'roadmap' }} label="Roadmap" />
-    </>,
-  );
-  await screen.findByText('0 pending:');
-  refreshing = true;
-  available = false;
-  await act(async () => requestRoadmapRecovery());
-  await screen.findByRole('button', { name: 'Avisos para Roadmap, contador no disponible' });
-  available = true;
-  expect(
-    await screen.findByRole(
-      'button',
-      { name: '2 avisos sin leer para Roadmap' },
-      { timeout: 2500 },
-    ),
-  ).toBeTruthy();
-});
-
-test('a closed SSE connection retries and its retry is cancelled on logout', async () => {
-  const { rerender } = renderInbox(<span>Session</span>);
+test('a closed SSE connection retries and its retry is cancelled on unmount', async () => {
+  const { unmount } = render(<OwnInboxRealtime userId="student" />);
   const first = BrowserStream.instances[0];
   Object.defineProperty(first, 'readyState', { value: 2 });
   act(() => first.dispatchEvent(new Event('error')));
@@ -185,147 +88,17 @@ test('a closed SSE connection retries and its retry is cancelled on logout', asy
   const second = BrowserStream.instances[1];
   Object.defineProperty(second, 'readyState', { value: 2 });
   act(() => second.dispatchEvent(new Event('error')));
-  rerender(inbox(<span>Logged out</span>, null));
+  unmount();
   expect(second.closed).toBe(true);
-});
-
-test('an Inbox refresh failure keeps saved notices visible while offering retry', async () => {
-  vi.stubGlobal(
-    'IntersectionObserver',
-    class {
-      observe() {}
-      disconnect() {}
-    },
-  );
-  let available = true;
-  stubFetch(async (url: string) => {
-    if (!available && !url.includes('/counts')) throw new Error('Temporary outage');
-    return Response.json(
-      url.includes('/counts')
-        ? { count: 1 }
-        : {
-            notifications: [
-              { id: 'notice', subject: 'Saved Node change', createdAt: '2026-10-03' },
-            ],
-            hasMore: false,
-          },
-    );
-  });
-  renderInbox(<NotificationsInbox identity={identity('student')} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 1 sin leer' }));
-  await screen.findByRole('button', { name: /Saved Node change/ });
-  available = false;
-  act(() => BrowserStream.instances[0].receive('inbox', { userId: 'student' }));
-  await screen.findByText('No se pudieron cargar los avisos.');
-  expect(screen.getByRole('button', { name: /Saved Node change/ })).toBeTruthy();
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  expect(BrowserStream.instances).toHaveLength(2);
 });
 
 test('going offline closes the tab stream and returning online opens a real replacement', () => {
-  renderInbox(<span>Session</span>);
+  render(<OwnInboxRealtime userId="student" />);
   const first = BrowserStream.instances[0];
   act(() => window.dispatchEvent(new Event('offline')));
   expect(first.closed).toBe(true);
   act(() => window.dispatchEvent(new Event('online')));
   expect(BrowserStream.instances).toHaveLength(2);
-});
-
-function PagedInboxProjection() {
-  const { notifications, fetchMore, isFetching } = useNotifications({ limit: 10 });
-  return (
-    <>
-      <ul>
-        {notifications?.map((notice) => (
-          <li key={notice.id}>{notice.subject}</li>
-        ))}
-      </ul>
-      <button disabled={isFetching} onClick={() => void fetchMore()}>
-        Load next page
-      </button>
-    </>
-  );
-}
-
-test('an SSE refresh preserves expanded Inbox pages and updates their saved notices', async () => {
-  let refreshed = false;
-  stubFetch(async (url: string) => {
-    const params = new URL(url, 'http://localhost').searchParams;
-    const start = params.get('after') === 'notice-10' ? 10 : 0;
-    return Response.json({
-      notifications: Array.from({ length: 10 }, (_, offset) => ({
-        id: `notice-${start + offset + 1}`,
-        subject:
-          refreshed && start + offset === 0
-            ? 'Updated first notice'
-            : `Notice ${start + offset + 1}`,
-        createdAt: '2026-10-03',
-      })),
-      hasMore: start === 0,
-    });
-  });
-  renderInbox(<PagedInboxProjection />);
-  await screen.findByText('Notice 10');
-  await userEvent.click(screen.getByRole('button', { name: 'Load next page' }));
-  await screen.findByText('Notice 20');
-  refreshed = true;
-  act(() => BrowserStream.instances[0].receive('inbox', { userId: 'student' }));
-  await screen.findByText('Updated first notice');
-  expect(screen.getAllByRole('listitem')).toHaveLength(20);
-  expect(screen.getByText('Notice 20')).toBeTruthy();
-});
-
-test('the Inbox loads the next page of notices on «Cargar más avisos» until none remain', async () => {
-  stubFetch(async (url: string) => {
-    if (url.includes('/counts')) return Response.json({ count: 2 });
-    const secondPage = new URL(url, 'http://localhost').searchParams.get('after') === 'first';
-    return Response.json({
-      notifications: [
-        secondPage
-          ? { id: 'second', subject: 'Older Node change', createdAt: '2026-10-02' }
-          : { id: 'first', subject: 'Newer Node change', createdAt: '2026-10-03' },
-      ],
-      hasMore: !secondPage,
-    });
-  });
-  renderInbox(<NotificationsInbox identity={identity('student')} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 2 sin leer' }));
-  await screen.findByRole('button', { name: /Newer Node change/ });
-  await userEvent.click(screen.getByRole('button', { name: 'Cargar más avisos' }));
-  await screen.findByRole('button', { name: /Older Node change/ });
-  expect(screen.getByRole('button', { name: /Newer Node change/ })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Cargar más avisos' })).toBeNull();
-});
-
-test('a burst of Inbox signals refreshes once without marking shown rows', async () => {
-  const fetch = stubFetch<(url: string, init?: RequestInit) => Promise<Response>>(async (url) =>
-    Response.json(
-      url.includes('/counts')
-        ? { count: 1 }
-        : url.endsWith('/notice')
-          ? { id: 'notice', subject: 'Saved Node change', createdAt: '2026-10-03' }
-          : {
-              notifications: [
-                { id: 'notice', subject: 'Saved Node change', createdAt: '2026-10-03' },
-              ],
-              hasMore: false,
-            },
-    ),
-  );
-  renderInbox(<NotificationsInbox identity={identity('student')} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Avisos, 1 sin leer' }));
-  await screen.findByRole('button', { name: /Saved Node change/ });
-  const mutations = () =>
-    fetch.mock.calls.filter(([, init]) => init?.method && init.method !== 'GET').length;
-  const feedRequests = () =>
-    fetch.mock.calls.filter(([url]) => new URL(url, 'http://localhost').searchParams.has('limit'))
-      .length;
-  await waitFor(() => expect(mutations()).toBe(0));
-  const before = feedRequests();
-  act(() => {
-    for (let signal = 0; signal < 5; signal++)
-      BrowserStream.instances[0].receive('inbox', { userId: 'student' });
-  });
-  await waitFor(() => expect(feedRequests()).toBe(before + 1));
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  expect(feedRequests()).toBe(before + 1);
-  expect(mutations()).toBe(0);
 });

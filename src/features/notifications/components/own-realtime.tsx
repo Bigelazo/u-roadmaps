@@ -3,12 +3,8 @@
 import { useEffect } from 'react';
 import {
   ROADMAP_CHANGE_RECEIVED_EVENT,
-  subscribeToRoadmapRecovery,
   requestRoadmapRecovery,
 } from '@/shared/client/roadmap-events';
-
-export const OWN_INBOX_REFRESH_EVENT = 'own-inbox-updated';
-const INBOX_SIGNAL_COALESCE_MS = 100;
 
 export function OwnInboxRealtime({ userId }: { userId: string }) {
   useEffect(() => {
@@ -16,17 +12,8 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
     let active = true;
     let source: EventSource;
     let retry: ReturnType<typeof setTimeout> | undefined;
-    let pendingRefresh: ReturnType<typeof setTimeout> | undefined;
     let retryDelay = 1000;
-    const refresh = () => {
-      clearTimeout(pendingRefresh);
-      pendingRefresh = undefined;
-      if (active) window.dispatchEvent(new Event(OWN_INBOX_REFRESH_EVENT));
-    };
-    const scheduleRefresh = () => {
-      pendingRefresh ??= setTimeout(refresh, INBOX_SIGNAL_COALESCE_MS);
-    };
-    const receive = (event: MessageEvent<string>, kind: 'ready' | 'inbox' | 'roadmap') => {
+    const receive = (event: MessageEvent<string>, kind: 'ready' | 'roadmap') => {
       if (!active) return;
       let value: Record<string, unknown>;
       try {
@@ -40,8 +27,6 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
       if (kind === 'ready') {
         retryDelay = 1000;
         requestRoadmapRecovery();
-      } else if (kind === 'inbox') {
-        scheduleRefresh();
       } else if (
         typeof value.courseCode === 'string' &&
         value.courseCode.trim().length > 0 &&
@@ -68,7 +53,7 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
       source?.close();
       const connection = new EventSource('/api/notifications/stream');
       source = connection;
-      for (const kind of ['ready', 'inbox', 'roadmap'] as const) {
+      for (const kind of ['ready', 'roadmap'] as const) {
         connection.addEventListener(kind, (event) => {
           if (connection === source) receive(event as MessageEvent<string>, kind);
         });
@@ -87,12 +72,9 @@ export function OwnInboxRealtime({ userId }: { userId: string }) {
     connect();
     window.addEventListener('offline', disconnect);
     window.addEventListener('online', connect);
-    const stopRecovery = subscribeToRoadmapRecovery(refresh);
     return () => {
       active = false;
-      stopRecovery();
       clearTimeout(retry);
-      clearTimeout(pendingRefresh);
       window.removeEventListener('offline', disconnect);
       window.removeEventListener('online', connect);
       source?.close();

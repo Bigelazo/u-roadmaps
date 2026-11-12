@@ -4,7 +4,7 @@ import { prepareNodeCreator } from './create-node';
 import { sql } from './database';
 import { createExistingNode } from './existing-node';
 import { authenticateAs, escapeRegExp, ok } from './helpers';
-import { listNotices } from './notices';
+import { openInbox, listNotices } from './notices';
 import { changeTeacherBlock, deleteNode, hideNode } from './previewed-writes';
 
 test('access notices retain context through blocking, unlocking, hiding and deletion', async ({
@@ -32,7 +32,7 @@ test('access notices retain context through blocking, unlocking, hiding and dele
   const selectNotice = async (nodeId: string, title: string) => {
     await authenticateAs(page.context(), student.id);
     await page.goto('/academic-overview');
-    await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+    await openInbox(page);
     await page
       .getByRole('list', { name: 'Lista de avisos' })
       .getByRole('button', {

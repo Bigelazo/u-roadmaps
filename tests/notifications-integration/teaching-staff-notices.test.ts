@@ -7,8 +7,9 @@ import {
   pendingNotices,
   summaryInInboxWords,
   teacherEdits,
+  inboxCount,
 } from './roadmap';
-import { countOwnNodeChangeTargets, countOwnNotices } from '@/features/notifications/server';
+import { countOwnNodeChangeTargets } from '@/features/notifications/server';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
 type Edits = ReturnType<typeof teacherEdits>;
@@ -135,7 +136,7 @@ test.for(['hidden', 'Teacher-blocked'] as const)(
     const params = new URLSearchParams({ roadmapId: course.roadmapId });
     const shown = async (userId: string) => ({
       targets: (await pendingNotices(userId, course.roadmapId)).map(noticeTarget).sort(),
-      counts: await countOwnNotices(userId, params),
+      counts: await inboxCount(userId, course.roadmapId),
       marks: await countOwnNodeChangeTargets(userId, params),
     });
     expect(await shown(course.colleagueId)).toEqual({
