@@ -36,9 +36,7 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
       receive(change) {
         void (async () => {
           if (stopped) return;
-          if (change.kind === 'inbox' && change.userId === userId) {
-            send('inbox', { userId });
-          } else if (change.kind === 'roadmap' && (!change.userId || change.userId === userId)) {
+          if (change.kind === 'roadmap' && (!change.userId || change.userId === userId)) {
             const courseOfferingId = String(change.courseOfferingId);
             if (change.userId !== userId && !memberships.has(courseOfferingId)) {
               const participation = await prisma.participation.findFirst({
@@ -54,7 +52,6 @@ export async function openNotificationStream(userId: string, signal: AbortSignal
                 where: { userId, courseOfferingId, isActive: true },
                 select: { id: true },
               }));
-            send('inbox', { userId });
             send('roadmap', { ...change, userId, ...(accessLost ? { accessLost: true } : {}) });
           }
         })().catch(() => {

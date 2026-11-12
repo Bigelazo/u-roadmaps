@@ -6,11 +6,11 @@ import {
   acknowledgeOwnNotices as acknowledgeNotices,
   countOwnCourseOfferingNoticeTargets,
   countOwnNodeChanges,
-  countOwnNoticeTargets,
   type CourseOfferingIdentity,
   listOwnNotices as listNotices,
   uuid,
   prepareOwnNoticeOpening as prepareNoticeOpening,
+  readOwnInbox as readInbox,
 } from './infrastructure/own-inbox';
 import { ApplicationError } from '@/shared/errors/server';
 import type { RoadmapChanges } from '@/shared/roadmap-changes';
@@ -27,8 +27,8 @@ export function listOwnNotices(userId: string, params: URLSearchParams) {
   return listNotices(userId, params, readParticipantAccess);
 }
 
-export function countOwnNotices(userId: string, params: URLSearchParams) {
-  return countOwnNoticeTargets(userId, params, readParticipantAccess);
+export function readOwnInbox(userId: string) {
+  return readInbox(userId, readParticipantAccess);
 }
 
 export function countOwnCourseOfferingNotices(userId: string, offering: CourseOfferingIdentity) {

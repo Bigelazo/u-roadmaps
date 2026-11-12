@@ -1,15 +1,8 @@
 import { expect } from 'vitest';
 import { test } from './fixtures';
-import { addNode, enterRoadmap, teacherEdits } from './roadmap';
-import { countOwnCourseOfferingNotices, countOwnNotices } from '@/features/notifications/server';
+import { addNode, enterRoadmap, inboxCount, teacherEdits } from './roadmap';
+import { countOwnCourseOfferingNotices } from '@/features/notifications/server';
 import { prisma } from '@/shared/server/db';
-
-function courseBellCount(userId: string, identifier: Record<string, string | number>) {
-  return countOwnNotices(
-    userId,
-    new URLSearchParams(Object.entries(identifier).map(([key, value]) => [key, String(value)])),
-  );
-}
 
 test('a Course offering count matches the unread count of its Roadmap bell', async ({
   course,
@@ -28,12 +21,7 @@ test('a Course offering count matches the unread count of its Roadmap bell', asy
   await edits.rename(nodeB, 'Pilas dobles');
   await teacherEdits(otherCourse).rename(otherCourse.change.nodeId, 'Colas');
 
-  const roadmapBell = await countOwnNotices(
-    course.studentId,
-    new URLSearchParams({ roadmapId: course.roadmapId }),
-  );
-  expect(roadmapBell.count).toBe(2);
-  expect(await courseBellCount(course.studentId, course.identifier)).toEqual(roadmapBell);
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 2 });
   expect(await countOwnCourseOfferingNotices(course.studentId, course.identifier)).toEqual({
     unread: 2,
   });

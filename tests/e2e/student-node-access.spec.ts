@@ -32,7 +32,7 @@ for (const restriction of ['blocked', 'hidden', 'deleted'] as const) {
       deleted: () => deleteNode(teacher, endpoint),
     };
     expect((await restrict[restriction]()).status()).toBe(restriction === 'deleted' ? 204 : 200);
-    await expect(page.getByRole('button', { name: /^Avisos, [1-9]/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Avisos', exact: true })).toBeVisible();
     await expect(page.getByText('Detalle conservado en la vista del estudiante.')).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const completion = page.waitForResponse(

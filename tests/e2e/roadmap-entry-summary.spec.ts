@@ -1,3 +1,4 @@
+import { openInbox } from './notices';
 import { enterRoadmap } from './enter-roadmap';
 import { expect, test } from './fixtures';
 import { authenticateAs, ok } from './helpers';
@@ -20,7 +21,8 @@ test('entry recognizes Node notices and shows changes once without targeting a N
     (await (await recipient.get(`/api/notifications?roadmapId=${course.roadmapId}`)).json())
       .notifications;
   await expect.poll(pending).toHaveLength(1);
-  await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
+  await page.reload();
+  await openInbox(page, 'Avisos, 1 sin leer');
   await page.getByRole('button', { name: /Pilas y colas/ }).click();
   await expect(page).toHaveURL(course.pagePath());
   const dialog = page.getByRole('dialog', {
@@ -69,8 +71,8 @@ test('first entry clears pending notices silently and opening a Node or Inbox re
     if (request.url().includes('/api/notifications') && request.method() !== 'GET')
       mutations.push(request.url());
   });
-  await page.getByRole('button', { name: 'Avisos, 1 sin leer', exact: true }).click();
-  await expect(page.getByRole('button', { name: /Se actualizó la descripción/ })).toBeVisible();
+  await openInbox(page, 'Avisos');
+  await expect(page.getByText('No tienes avisos todavía.')).toBeVisible();
   await page.keyboard.press('Escape');
   await page.locator(`.react-flow__node[data-id="${course.nodes.first}"]`).click();
   await expect(page.getByRole('button', { name: 'Cerrar detalle' })).toBeVisible();

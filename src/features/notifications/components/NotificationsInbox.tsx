@@ -1,8 +1,16 @@
 'use client';
 
-import { useCounts, useNotifications } from './inbox-driver';
 import { OwnInboxRealtime } from './own-realtime';
-import { acknowledgeOwnInbox, prepareOwnInboxOpening, type InboxRecord } from './inbox-api';
+import { acknowledgeOwnInbox, prepareOwnInboxOpening } from './inbox-api';
+import {
+  OwnInboxStoreProvider,
+  useAcknowledgeRoadmap,
+  useOwnInbox,
+  type OfferingFilter,
+  type OwnInboxSnapshotPromise,
+  type OwnInboxView,
+} from './inbox-store';
+import type { OwnInboxNotice } from '../contracts/own-inbox-snapshot';
 import { ChangeSummaryDialog, type ChangeSummaryNodeName } from './ChangeSummaryDialog';
 import type { ChangeSummary } from '../contracts/change-summary';
 import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from '@/shared/ui/popover';
@@ -23,7 +31,6 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import { formatBadgeCount } from '@/shared/badge-count';
 import type { InboxIdentity } from '../server';
-type NotificationDataFilter = Record<string, string | number>;
 const notificationDateFormatter = new Intl.DateTimeFormat('es-CL', {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -33,33 +40,34 @@ export function NotificationCountButton({
   filter,
   label,
 }: {
-  filter: NotificationDataFilter;
+  filter: OfferingFilter;
   label: string;
 }) {
   const openInbox = useOpenNotificationInbox();
-  const { counts, error } = useCounts({ filters: [{ read: false, data: filter }] });
-  const count = counts?.[0]?.count ?? 0;
-  if (count === 0 && !error) return null;
+  const inbox = useOwnInbox();
+  if (!inbox) return null;
+  const count = inbox.unreadFor(filter);
+  if (count === 0 && inbox.available) return null;
   return (
     <button
       aria-label={
-        error
-          ? `Avisos para ${label}, contador no disponible`
-          : `${count} avisos sin leer para ${label}`
+        inbox.available
+          ? `${count} avisos sin leer para ${label}`
+          : `Avisos para ${label}, contador no disponible`
       }
       className="inline-flex min-h-11 items-center gap-2 rounded-md border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
       onClick={() => openInbox(filter)}
       type="button"
     >
       <Bell aria-hidden="true" size={16} />
-      <span>{error ? '?' : count}</span>
+      <span>{inbox.available ? count : '?'}</span>
     </button>
   );
 }
 
 const NotificationInboxContext = createContext<{
-  filter: NotificationDataFilter | undefined;
-  openInbox: (filter?: NotificationDataFilter) => void;
+  filter: OfferingFilter | undefined;
+  openInbox: (filter?: OfferingFilter) => void;
   resetFilter: () => void;
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -95,7 +103,7 @@ function field<T extends 'string' | 'number'>(
   return typeof value === type ? (value as T extends 'string' ? string : number) : null;
 }
 
-function notificationDate(notification: InboxRecord) {
+function notificationDate(notification: OwnInboxNotice) {
   const occurredAt = field(notification.data ?? {}, 'occurredAt', 'string');
   if (!occurredAt || Number.isNaN(new Date(occurredAt).getTime())) return 'Fecha no disponible';
   return notificationDateFormatter.format(new Date(occurredAt));
@@ -105,8 +113,8 @@ function NotificationRow({
   notification,
   onSelect,
 }: {
-  notification: InboxRecord;
-  onSelect: (notification: InboxRecord) => void;
+  notification: OwnInboxNotice;
+  onSelect: (notification: OwnInboxNotice) => void;
 }) {
   return (
     <li>
@@ -128,35 +136,30 @@ function NotificationRow({
 }
 
 function InboxNotificationList({
-  notifications,
-  isLoading,
-  isFetching,
-  hasMore,
-  error,
-  fetchMore,
-  refetch,
+  inbox,
+  filter,
   onSelect,
-}: Pick<
-  ReturnType<typeof useNotifications>,
-  'notifications' | 'isLoading' | 'isFetching' | 'hasMore' | 'error' | 'fetchMore' | 'refetch'
-> & { onSelect: (notification: InboxRecord) => void }) {
-  if (isLoading && !notifications) {
+}: {
+  inbox: OwnInboxView | null;
+  filter: OfferingFilter | undefined;
+  onSelect: (notification: OwnInboxNotice) => void;
+}) {
+  if (!inbox) {
     return (
       <Alert role="status" className="m-3 w-auto">
         <AlertDescription>Cargando avisos…</AlertDescription>
       </Alert>
     );
   }
-  const refreshError = error ? (
-    <Alert variant="destructive" className="m-3 w-auto gap-3">
-      <AlertDescription>No se pudieron cargar los avisos.</AlertDescription>
-      <Button onClick={() => void refetch()} type="button" variant="outline">
-        Reintentar
-      </Button>
-    </Alert>
-  ) : null;
-  if (error && !notifications?.length) return refreshError;
-  if (!notifications?.length) {
+  if (!inbox.available) {
+    return (
+      <Alert variant="destructive" className="m-3 w-auto">
+        <AlertDescription>No se pudieron cargar los avisos.</AlertDescription>
+      </Alert>
+    );
+  }
+  const notifications = inbox.noticesFor(filter);
+  if (!notifications.length) {
     return (
       <Alert role="status" className="m-3 w-auto">
         <Empty className="p-0">
@@ -168,51 +171,22 @@ function InboxNotificationList({
     );
   }
   return (
-    <>
-      {refreshError}
-      <ul aria-label="Lista de avisos">
-        {notifications.map((notification) => (
-          <NotificationRow key={notification.id} notification={notification} onSelect={onSelect} />
-        ))}
-      </ul>
-      {hasMore ? (
-        <div className="p-3">
-          <Button
-            className="w-full"
-            disabled={isFetching}
-            onClick={() => void fetchMore()}
-            type="button"
-            variant="outline"
-          >
-            {isFetching ? 'Cargando…' : 'Cargar más avisos'}
-          </Button>
-        </div>
-      ) : null}
-    </>
+    <ul aria-label="Lista de avisos">
+      {notifications.map((notification) => (
+        <NotificationRow key={notification.id} notification={notification} onSelect={onSelect} />
+      ))}
+    </ul>
   );
 }
 
 function InboxBell() {
+  const inbox = useOwnInbox();
   const router = useRouter();
   const { filter, openInbox, resetFilter, open, setOpen } = useContext(NotificationInboxContext);
-  const {
-    counts,
-    isLoading: countsLoading,
-    error: countsError,
-    refetch: refetchCounts,
-  } = useCounts({
-    filters: [{ read: false }],
-  });
-  const { notifications, isLoading, isFetching, hasMore, error, fetchMore, refetch } =
-    useNotifications({ limit: 10, data: filter });
-  useEffect(() => {
-    if (!open) return;
-    void refetch();
-    void refetchCounts();
-  }, [open, refetch, refetchCounts]);
-  const unreadCount = counts?.[0]?.count ?? 0;
+  const unreadCount = inbox?.total ?? 0;
+  const countUnavailable = inbox !== null && !inbox.available;
 
-  function selectNotification(notification: InboxRecord) {
+  function selectNotification(notification: OwnInboxNotice) {
     const data = notification.data ?? {};
     const courseCode = field(data, 'courseCode', 'string');
     const year = field(data, 'year', 'number');
@@ -234,7 +208,7 @@ function InboxBell() {
     >
       <PopoverTrigger
         aria-label={
-          countsError
+          countUnavailable
             ? 'Avisos, contador no disponible'
             : `Avisos${unreadCount > 0 ? `, ${unreadCount} sin leer` : ''}`
         }
@@ -243,7 +217,7 @@ function InboxBell() {
         type="button"
       >
         <Bell aria-hidden="true" size={20} />
-        {!countsLoading && unreadCount > 0 ? (
+        {unreadCount > 0 ? (
           <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
             {formatBadgeCount(unreadCount)}
           </span>
@@ -259,11 +233,6 @@ function InboxBell() {
         <div className="flex items-center justify-between border-b px-4 py-3">
           <PopoverTitle>Avisos</PopoverTitle>
           <div className="flex items-center gap-2">
-            {countsError ? (
-              <Alert variant="destructive" role="status">
-                <AlertDescription>No se pudo actualizar el contador.</AlertDescription>
-              </Alert>
-            ) : null}
             <Button
               aria-label="Cerrar avisos"
               className="lg:hidden"
@@ -277,16 +246,7 @@ function InboxBell() {
           </div>
         </div>
         <div className="max-h-[calc(min(32rem,100dvh-6rem)-4rem)] overflow-y-auto max-lg:h-[calc(100dvh-4rem)] max-lg:max-h-none">
-          <InboxNotificationList
-            notifications={notifications}
-            isLoading={isLoading}
-            isFetching={isFetching}
-            hasMore={hasMore}
-            error={error}
-            fetchMore={fetchMore}
-            refetch={refetch}
-            onSelect={selectNotification}
-          />
+          <InboxNotificationList inbox={inbox} filter={filter} onSelect={selectNotification} />
         </div>
       </PopoverContent>
     </Popover>
@@ -295,17 +255,21 @@ function InboxBell() {
 
 export function NotificationsProvider({
   identity,
+  inbox = null,
   children,
 }: {
   identity: InboxIdentity | null;
+  inbox?: OwnInboxSnapshotPromise | null;
   children: ReactNode;
 }) {
   return (
     <div className="contents" key={identity?.userId ?? 'anonymous'}>
-      <NotificationInboxProvider>
-        {identity ? <OwnInboxRealtime userId={identity.userId} /> : null}
-        {children}
-      </NotificationInboxProvider>
+      <OwnInboxStoreProvider snapshot={identity ? inbox : null}>
+        <NotificationInboxProvider>
+          {identity ? <OwnInboxRealtime userId={identity.userId} /> : null}
+          {children}
+        </NotificationInboxProvider>
+      </OwnInboxStoreProvider>
     </div>
   );
 }
@@ -318,6 +282,7 @@ export function RoadmapEntryNotifications({
   NodeName: ChangeSummaryNodeName;
 }) {
   const [summary, setSummary] = useState<ChangeSummary | null>(null);
+  const acknowledgeRoadmap = useAcknowledgeRoadmap();
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -325,19 +290,23 @@ export function RoadmapEntryNotifications({
       active.current = false;
     };
   }, []);
-  const acknowledge = useCallback(async (input: AcknowledgeInput) => {
-    if (!input.entryKey) return false;
-    const operation = { roadmapId: input.roadmapId, operationId: crypto.randomUUID() };
-    try {
-      await prepareOwnInboxOpening(operation);
-      const result = await acknowledgeOwnInbox(operation);
-      if (!active.current) return true;
-      if (result.summary?.groups.length) setSummary(result.summary);
-      return true;
-    } catch {
-      return false;
-    }
-  }, []);
+  const acknowledge = useCallback(
+    async (input: AcknowledgeInput) => {
+      if (!input.entryKey) return false;
+      const operation = { roadmapId: input.roadmapId, operationId: crypto.randomUUID() };
+      try {
+        await prepareOwnInboxOpening(operation);
+        const result = await acknowledgeOwnInbox(operation);
+        acknowledgeRoadmap(input.roadmapId);
+        if (!active.current) return true;
+        if (result.summary?.groups.length) setSummary(result.summary);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [acknowledgeRoadmap],
+  );
   const acknowledgement = useMemo(() => ({ acknowledge }), [acknowledge]);
 
   return (
@@ -349,9 +318,9 @@ export function RoadmapEntryNotifications({
 }
 
 function NotificationInboxProvider({ children }: { children: ReactNode }) {
-  const [filter, setFilter] = useState<NotificationDataFilter | undefined>();
+  const [filter, setFilter] = useState<OfferingFilter | undefined>();
   const [open, setOpen] = useState(false);
-  const openInbox = useCallback((nextFilter?: NotificationDataFilter) => {
+  const openInbox = useCallback((nextFilter?: OfferingFilter) => {
     setFilter(nextFilter);
     setOpen(true);
   }, []);

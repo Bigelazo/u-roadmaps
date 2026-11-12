@@ -4,11 +4,11 @@ import { enterRoadmap } from './enter-roadmap';
 import { expect, test, type E2EUser } from './fixtures';
 import { sql } from './database';
 import { authenticateAs, ok } from './helpers';
-import { listNotices, recognize, storeNotices } from './notices';
+import { openInbox, countNotices, listNotices, recognize, storeNotices } from './notices';
 import { changeTeacherBlock, deleteNode } from './previewed-writes';
 
 async function noticeCount(api: APIRequestContext, query: string) {
-  return (await (await api.get(`/api/notifications/counts?${query}`)).json()).count;
+  return await countNotices(api, `${query}`);
 }
 
 test('visible Node changes reach the Inbox and Roadmap entry recognizes them', async ({
@@ -33,7 +33,7 @@ test('visible Node changes reach the Inbox and Roadmap entry recognizes them', a
   });
   await authenticateAs(page.context(), course.users.studentWithoutProgress.id);
   await page.goto('/academic-overview');
-  await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+  await openInbox(page);
   await page.getByRole('button', { name: new RegExp(title) }).click();
   await expect(page).toHaveURL(course.pagePath());
   await expect(
@@ -156,7 +156,7 @@ test('Resource notices persist context and share Roadmap entry recognition', asy
 
   await authenticateAs(page.context(), student.id);
   await page.goto('/academic-overview');
-  await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+  await openInbox(page);
   await page
     .getByRole('button', {
       name: new RegExp(secondResourceTitle),

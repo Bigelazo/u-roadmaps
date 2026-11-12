@@ -10,7 +10,7 @@ import { isFramedRequest } from '@/app/_adapters/embedding';
 import { developmentEnvironmentEnabled } from '@/shared/server/environment/development';
 import { Plus_Jakarta_Sans, Poppins } from 'next/font/google';
 import { cn } from 'cn';
-import { getInboxIdentity } from '@/features/notifications/server';
+import { getInboxIdentity, readOwnInbox } from '@/features/notifications/server';
 import { NotificationsProvider } from '@/features/notifications';
 import { AcademicCacheIdentity } from '@/features/academic-overview';
 import { Toaster } from '@/shared/ui/toast';
@@ -33,12 +33,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = await resolveSessionUser(session);
   const framed = isFramedRequest(requestHeaders);
   const inboxIdentity = user ? getInboxIdentity(user.id) : null;
+  const inbox = user
+    ? readOwnInbox(user.id).catch((error: unknown) => {
+        console.error('[inbox] no se pudo leer la bandeja', error);
+        return null;
+      })
+    : null;
 
   return (
     <html lang="es" className={cn('font-sans', plusJakartaSans.variable, poppins.variable)}>
       <body>
-        <NotificationsProvider identity={inboxIdentity}>
-          <AcademicCacheIdentity userId={user?.id ?? null} />
+        <NotificationsProvider identity={inboxIdentity} inbox={inbox}>
           {framed ? null : (
             <GlobalNavigation
               isAuthenticated={Boolean(user)}

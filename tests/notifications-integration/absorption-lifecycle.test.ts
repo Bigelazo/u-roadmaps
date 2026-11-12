@@ -7,10 +7,15 @@ import { createRoadmap } from '@/features/roadmap/application/roadmap';
 import {
   acknowledgeOwnNotices,
   countOwnNodeChangeTargets,
-  countOwnNotices,
   prepareOwnRoadmapOpening,
 } from '@/features/notifications/server';
-import { deferredNoticePort, enterRoadmap, pendingNotices, teacherEdits } from './roadmap';
+import {
+  deferredNoticePort,
+  enterRoadmap,
+  pendingNotices,
+  teacherEdits,
+  inboxCount,
+} from './roadmap';
 
 type Notice = Awaited<ReturnType<typeof pendingNotices>>[number];
 const data = (notice: Notice) => notice.data as Record<string, unknown>;
@@ -82,7 +87,7 @@ test('a pending creation notice whose Node no longer exists is not shown or coun
   await prisma.roadmapNode.delete({ where: { id: node.id } });
   const params = new URLSearchParams({ roadmapId: course.roadmapId });
   expect(await pendingNotices(course.studentId, course.roadmapId)).toEqual([]);
-  expect(await countOwnNotices(course.studentId, params)).toEqual({ count: 0 });
+  expect(await inboxCount(course.studentId, course.roadmapId)).toEqual({ count: 0 });
   expect(
     (await countOwnNodeChangeTargets(course.studentId, params)).byNode[node.id],
   ).toBeUndefined();

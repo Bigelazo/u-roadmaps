@@ -69,7 +69,7 @@ Cada curso se identifica por el código del ramo, el año y el semestre, y tiene
 - Selección de destinatarios según participación activa y acceso al contenido, excluyendo al autor del cambio.
 - Reconocimiento de avisos al entrar al roadmap, con un Resumen de cambios de lo ocurrido desde la entrada anterior. Abrir la bandeja o un nodo no reconoce avisos; las llegadas posteriores a la entrada permanecen pendientes.
 - Agrupación por objeto del aviso: los cambios sucesivos al mismo elemento actualizan un único aviso, y volver al valor conocido lo retira.
-- Entrega en vivo mediante SSE para los avisos propios y la proyección del roadmap; recuperación al volver a la pestaña o recuperar la conexión, con tratamiento de borradores locales y pérdida de acceso.
+- Los avisos se leen al cargar la página, sin tiempo real; reconocer un roadmap actualiza la campana y los contadores por curso en el mismo navegador. SSE entrega solo las señales del roadmap para el lienzo docente y la pérdida de acceso; recuperación al volver a la pestaña o recuperar la conexión, con tratamiento de borradores locales y pérdida de acceso.
 
 Los avisos funcionan exclusivamente con la aplicación y PostgreSQL, sin servicios externos. Véase [operación de avisos](docs/notifications-operations.md).
 
@@ -92,7 +92,7 @@ Las versiones siguientes corresponden a las dependencias declaradas en [package.
 | Persistencia       | PostgreSQL y Prisma 7 con adaptador `pg`                        |
 | Sesión e identidad | NextAuth 4, JOSE y VTI                                          |
 | Datos académicos   | U-Campus/MUFASA y lectura del calendario oficial en PDF         |
-| Notificaciones     | PostgreSQL, agrupación propia y SSE autenticado                 |
+| Notificaciones     | PostgreSQL, agrupación propia y lectura al cargar la página     |
 | Pruebas            | Vitest, Testing Library y Playwright                            |
 | Herramientas       | pnpm, ESLint y Prettier                                         |
 

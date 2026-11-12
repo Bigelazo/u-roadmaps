@@ -1,7 +1,7 @@
 import { enterRoadmap } from './enter-roadmap';
 import { expect, test, type E2EUser } from './fixtures';
 import { authenticateAs, ok } from './helpers';
-import { listNotices, type StoredNotice } from './notices';
+import { openInbox, countNotices, listNotices, type StoredNotice } from './notices';
 import { hideNode } from './previewed-writes';
 
 test('used Type renames deliver one general notice across Sections and recognize together with Nodes', async ({
@@ -90,15 +90,14 @@ test('used Type renames deliver one general notice across Sections and recognize
     },
   });
   expect(notice.data.nodeId).toBeUndefined();
-  const count = await studentApi.get(`/api/notifications/counts?roadmapId=${course.roadmapId}`);
-  expect((await count.json()).count).toBeGreaterThan(0);
+  expect(await countNotices(studentApi, `roadmapId=${course.roadmapId}`)).toBeGreaterThan(0);
   await authenticateAs(page.context(), student.id);
   await page.goto('/academic-overview');
   await expect(page.getByRole('button', { name: /^Avisos, .* sin leer$/ })).toBeVisible();
   await expect(
     page.getByLabel(new RegExp(`avisos sin leer para el curso ${course.courseName}`)),
   ).toBeVisible();
-  await page.getByRole('button', { name: /^Avisos(,|$)/ }).click();
+  await openInbox(page);
   await page
     .getByRole('list', { name: 'Lista de avisos' })
     .getByRole('button')
