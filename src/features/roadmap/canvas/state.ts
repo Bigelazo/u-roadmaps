@@ -33,8 +33,7 @@ export type CanvasStateAction =
       node: StudentAccessibleRoadmapNode;
       focusReturn: () => void;
     }
-  | { type: 'completeTeacherPreview' }
-  | { type: 'toggleStudentDetail' };
+  | { type: 'completeTeacherPreview' };
 
 export const initialCanvasState: CanvasState = {
   selectedNodeId: null,
@@ -140,7 +139,5 @@ export function canvasStateReducer(state: CanvasState, action: CanvasStateAction
       };
     case 'completeTeacherPreview':
       return { ...state, isTeacherPreviewCompleted: true };
-    case 'toggleStudentDetail':
-      return { ...state, isStudentDetailOpen: !state.isStudentDetailOpen };
   }
 }

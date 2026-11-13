@@ -711,7 +711,6 @@ export const canvasCommandCatalog = {
       });
     },
     success: () => 'Enlace guardado exitosamente.',
-    report: ({ nodeId }) => ({ type: 'addResource', nodeId }),
   }),
   'upload-resource': command<{ kind: 'upload-resource'; nodeId: string; file: File }>({
     requests: ({ nodeId, file }) => {

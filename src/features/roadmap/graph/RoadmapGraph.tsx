@@ -266,7 +266,6 @@ function mapProjectionToFlow(
       type: 'roadmap',
       ...sizeForTitle(node.title),
       data: {
-        roadmapId: roadmap.roadmap.id,
         notificationsEnabled,
         title: node.title,
         typeColor: nodeType?.color ?? 'var(--primary)',
