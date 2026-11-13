@@ -18,6 +18,8 @@ export type TutorialStep<Action = never> = Readonly<{
   prepare?: () => Promise<void> | void;
   advanceWhen?: (action: Action) => boolean;
   allowManualAdvance?: boolean;
+  exclusiveInteraction?: boolean;
+  ownsLayer?: (layer: Element) => boolean;
 }>;
 
 export type TutorialActions<Action> = Readonly<{
@@ -40,6 +42,13 @@ export function resolveElement(element: TutorialStep['element']) {
   return typeof element === 'string' ? document.querySelector(element) : element();
 }
 
+export function resolveStepTargets(step: Pick<TutorialStep, 'element' | 'highlightElements'>) {
+  const elements = step.highlightElements?.() ?? [];
+  if (elements.length) return [...elements];
+  const element = resolveElement(step.element);
+  return element ? [element] : [];
+}
+
 export async function waitForElement(element: TutorialStep['element'], timeoutMs = 3000) {
   const start = performance.now();
   while (!resolveElement(element) && performance.now() - start < timeoutMs)
@@ -54,6 +63,21 @@ export function markTutorialClosingPopover() {
   try {
     sessionStorage.setItem(closingPopoverKey, '1');
     // eslint-disable-next-line no-empty -- Without storage the origin simply shows no closing popover.
+  } catch {}
+}
+
+export function readTutorialClosingPopover() {
+  try {
+    return sessionStorage.getItem(closingPopoverKey) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function clearTutorialClosingPopover() {
+  try {
+    sessionStorage.removeItem(closingPopoverKey);
+    // eslint-disable-next-line no-empty -- Without storage there is no pending closing popover to clear.
   } catch {}
 }
 

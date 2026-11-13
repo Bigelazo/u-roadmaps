@@ -1,6 +1,7 @@
 :root {
   --tutorial-z-exit-control: 1100000000;
   --tutorial-z-acting-layer: 100000;
+  --tutorial-z-toast: 1000000;
   --tutorial-z-exit-confirmation: 1200000000;
 }
 
@@ -11,8 +12,8 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-xl, 16px);
   padding: 18px;
-  min-width: 260px;
-  max-width: min(340px, calc(100vw - 32px));
+  min-width: min(260px, var(--tutorial-popover-width, 260px));
+  max-width: var(--tutorial-popover-width, min(340px, calc(100vw - 32px)));
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
 }
 
@@ -127,9 +128,6 @@
 }
 
 .driver-active [data-tutorial-exit] {
-  position: fixed;
-  top: var(--tutorial-exit-top);
-  bottom: auto;
   z-index: var(--tutorial-z-exit-control);
 }
 .driver-active [data-tutorial-exit],
@@ -137,11 +135,59 @@
   pointer-events: auto;
 }
 
-.driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) > * {
+.driver-active
+  [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit))
+  > :is(
+    [data-slot='dialog-overlay'],
+    [data-slot='alert-dialog-overlay'],
+    [data-slot='sheet-overlay']
+  ) {
+  background-color: transparent;
+  backdrop-filter: none;
+}
+
+.driver-active [data-slot='toast-viewport'] {
+  z-index: var(--tutorial-z-toast) !important;
+}
+.driver-active [data-slot='toast'],
+.driver-active [data-slot='toast'] * {
+  pointer-events: none !important;
+}
+.driver-active [data-slot='toast'] button,
+.driver-active [data-slot='toast'] button * {
+  pointer-events: auto !important;
+}
+
+.driver-active.u-roadmaps-tour-acting
+  [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit))
+  > :not([data-slot='toast-viewport']) {
   z-index: var(--tutorial-z-acting-layer) !important;
 }
-.driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)),
-.driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit)) * {
+.driver-active.u-roadmaps-tour-acting
+  [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit, [data-slot='toast-viewport'])),
+.driver-active.u-roadmaps-tour-acting
+  [data-base-ui-portal]:not(:has(.u-roadmaps-tour-exit, [data-slot='toast-viewport']))
+  * {
+  pointer-events: auto;
+}
+
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal]:has(.driver-active-element) * {
+  pointer-events: none;
+}
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal] .driver-active-element,
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal] .driver-active-element *,
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal] [data-base-ui-portal],
+.driver-active.u-roadmaps-tour-acting [data-base-ui-portal] [data-base-ui-portal] * {
+  pointer-events: auto;
+}
+
+.driver-active.u-roadmaps-tour-exclusive
+  [data-base-ui-portal]:has(.u-roadmaps-tour-interactive)
+  > :not([data-slot='toast-viewport']) {
+  z-index: var(--tutorial-z-acting-layer) !important;
+}
+.driver-active .u-roadmaps-tour-interactive,
+.driver-active .u-roadmaps-tour-interactive * {
   pointer-events: auto;
 }
 

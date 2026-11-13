@@ -123,9 +123,6 @@ for (const width of [1280, 390]) {
     await expect(typesDialog).toHaveClass(/driver-active-element/);
     await closeTypes.click();
     await expect(typesDialog).toHaveCount(0);
-    await creator.click();
-    await expect(types).toHaveClass(/driver-active-element/);
-    await popover.getByRole('button', { name: 'Siguiente' }).click();
     await expect(popover.locator('.driver-popover-title')).toHaveText('Conecta tu nodo');
     await expect(page.getByRole('menu')).toHaveCount(0);
   });
