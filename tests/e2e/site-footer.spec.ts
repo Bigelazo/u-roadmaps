@@ -9,7 +9,7 @@ test('site pages share one footer with provenance, credit, version and the repos
   const footer = page.getByRole('contentinfo');
   await expect(footer).toContainText('© 2026 Universidad de Chile');
   await expect(footer).toContainText('Creado por Daniel Ramírez López');
-  await expect(footer).toContainText('v1.0.0');
+  await expect(footer).toContainText('v0.1.0');
   await expect(footer.getByRole('link', { name: /^Repositorio en GitHub/ })).toHaveAttribute(
     'href',
     'https://github.com/Bigelazo/u-roadmaps',
