@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 export const TUTORIAL_TRIGGER_ATTRIBUTE = 'data-tutorial-trigger';
 
 export const TUTORIAL_EXIT_ATTRIBUTE = 'data-tutorial-exit';
@@ -6,9 +8,12 @@ export const closingPopoverKey = 'u-roadmaps:tutorial-closing-popover';
 export type TutorialStep<Action = never> = Readonly<{
   element: string | (() => Element | null);
   title: string;
-  description: string;
+  description: string | (() => ReactNode);
   side?: 'top' | 'right' | 'bottom' | 'left';
+  popoverOffset?: number;
   allowInteraction?: boolean;
+  focusZoom?: number;
+  onEnter?: () => (() => void) | void;
   highlightElements?: () => readonly Element[];
   prepare?: () => Promise<void> | void;
   advanceWhen?: (action: Action) => boolean;
@@ -56,17 +61,18 @@ export const TUTORIAL_REVEAL_EVENT = 'u-roadmaps:tutorial-reveal';
 
 export type TutorialRevealDetail = Readonly<{
   elements: readonly Element[];
+  focusZoom?: number;
   waitUntil: (movement: Promise<void>) => void;
 }>;
 
-export async function revealTutorialTarget(elements: readonly Element[]) {
+export async function revealTutorialTarget(elements: readonly Element[], focusZoom?: number) {
   const movements: Promise<void>[] = [];
   const origin = elements[0];
   if (!origin) return;
   origin.dispatchEvent(
     new CustomEvent<TutorialRevealDetail>(TUTORIAL_REVEAL_EVENT, {
       bubbles: true,
-      detail: { elements, waitUntil: (movement) => movements.push(movement) },
+      detail: { elements, focusZoom, waitUntil: (movement) => movements.push(movement) },
     }),
   );
   await Promise.all(movements.map((movement) => movement.catch(() => undefined)));

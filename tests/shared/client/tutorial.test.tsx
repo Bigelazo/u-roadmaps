@@ -26,6 +26,7 @@ vi.mock('driver.js', () => ({
       destroy: mock.destroy,
       isActive: () => true,
       getActiveIndex: () => mock.index,
+      getState: () => ({}),
       getActiveElement: () => document.body,
       refresh: mock.refresh,
       moveTo: (index: number) => {

@@ -1,4 +1,17 @@
 import {
+  CirclePlus,
+  Eye,
+  EyeOff,
+  FilePlusCorner,
+  LockKeyhole,
+  LockKeyholeOpen,
+  Settings,
+  Shapes,
+  Trash2,
+  CircleCheckBig,
+} from 'lucide-react';
+import { TutorialAction, TutorialNode } from './tutorial-label';
+import {
   clickElement,
   revealTutorialTarget,
   waitForElement,
@@ -11,7 +24,41 @@ import {
 } from '@/features/roadmap/editor/types';
 import { compactCanvasLayoutQuery } from '@/features/roadmap/ui/compact-canvas-layout';
 import { practiceNodeIds } from './practice-roadmap';
-import { canvas, nodeSelector, nodeTypeAndResourcesStep } from './student-tutorial';
+import {
+  canvas,
+  mapNavigationSteps,
+  nodeSelector,
+  nodeTypeAndResourcesStep,
+} from './student-tutorial';
+
+function floatingMenuItem(label: string) {
+  return (
+    [...document.querySelectorAll('[role="menuitem"]')].find(
+      (item) => item.getAttribute('aria-label') === label || item.textContent?.trim() === label,
+    ) ?? null
+  );
+}
+
+function openCreationMenu() {
+  const button = document.querySelector<HTMLButtonElement>('button[aria-label="Crear en el mapa"]');
+  if (button?.getAttribute('aria-expanded') !== 'true') button?.click();
+}
+
+function closeCreationMenu() {
+  document
+    .querySelector('[role="menu"]')
+    ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+}
+
+function nodeTypesControl() {
+  return (
+    document
+      .querySelector('button[aria-label="Cerrar tipos de nodo"]')
+      ?.closest('[role="dialog"]') ??
+    floatingMenuItem(NODE_TYPES_MENU_ITEM_LABEL) ??
+    document.querySelector('button[aria-label="Crear en el mapa"]')
+  );
+}
 
 function nodeCreator() {
   const dialog = [...document.querySelectorAll('[role="dialog"]')].find((candidate) =>
@@ -76,33 +123,40 @@ function revealNodes(...nodeIds: readonly (string | null)[]) {
 export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAction>[] {
   let createdNodeId: string | null = null;
   return [
-    {
-      element: 'button[aria-label="Centrar mapa"]',
-      title: 'Centrar roadmap',
-      description:
-        'Arrastra el fondo para desplazarte; para acercar o alejar, pellizca la pantalla o usa la rueda del mouse. Presiona este botón para centrar la vista en el roadmap completo.',
-      advanceWhen: (action) => action.type === 'fitView',
-      allowManualAdvance: true,
-    },
+    ...mapNavigationSteps,
     nodeTypeAndResourcesStep,
     {
       element: nodeSelector(practiceNodeIds.h),
       title: 'Nodo oculto',
+      focusZoom: 1.4,
       description:
         'Esta representación marca un nodo que está oculto para estudiantes: solo el equipo docente puede verlo.',
     },
     {
       element: nodeSelector(practiceNodeIds.f),
       title: 'Nodo bloqueado',
+      focusZoom: 1.4,
       description:
         'Esta representación marca un nodo bloqueado por el equipo docente. Los estudiantes pueden verlo en el roadmap, pero no pueden acceder a él hasta que lo liberes.',
     },
     {
       element: nodeCreator,
       title: 'Crea un nodo',
-      description:
-        'Presiona el botón flotante y elige "Crear nodo". Escribe un título, elige el tipo y déjalo visible para estudiantes. La descripción es compatible con Markdown, y puedes arrastrar un archivo .md a la descripción.',
+      prepare: () => revealNodes(...Object.values(practiceNodeIds)),
+      description: () => {
+        const target = nodeCreator();
+        if (target?.getAttribute('role') === 'dialog')
+          return 'Escribe un título, elige el tipo de nodo y déjalo visible para estudiantes.';
+        if (target?.getAttribute('role') === 'menuitem')
+          return (
+            <>
+              Elige <TutorialAction icon={CirclePlus}>Crear nodo</TutorialAction>.
+            </>
+          );
+        return 'A continuación, presiona el botón flotante.';
+      },
       side: 'top',
+      popoverOffset: 40,
       advanceWhen: (action) => {
         if (action.type !== 'addNode') return false;
         createdNodeId = action.nodeId;
@@ -110,48 +164,43 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       },
     },
     {
-      element: () =>
-        document.querySelector(`[aria-label="${NODE_TYPES_MENU_ITEM_LABEL}"]`) ??
-        document.querySelector('button[aria-label="Crear en el mapa"]'),
+      element: nodeTypesControl,
+      allowInteraction: true,
       title: 'Tipos de nodo',
-      description:
-        'En el menú de "Crear en el mapa", la opción "Tipos de nodo" te permite crear tus propios tipos, con su nombre, ícono y color.',
+      prepare: async () => {
+        openCreationMenu();
+        await waitForElement(() => floatingMenuItem(NODE_TYPES_MENU_ITEM_LABEL));
+      },
+      description: () => (
+        <>
+          En el menú del botón flotante, la opción{' '}
+          <TutorialAction icon={Shapes}>Tipos de nodo</TutorialAction> te permite crear tus propios
+          tipos personalizados.
+        </>
+      ),
       side: 'top',
     },
     {
       element: canvas,
       title: 'Conecta tu nodo',
-      prepare: () => revealNodes(createdNodeId, practiceNodeIds.e),
-      description:
-        'Arrastra una de las flechas que aparecen junto a tu nuevo nodo hasta "Control 1", o haz clic en una y luego en "Control 1". En pantalla táctil, mantén presionado tu nodo y toca "Control 1".',
+      prepare: () => {
+        clickElement('button[aria-label="Cerrar tipos de nodo"]');
+        closeCreationMenu();
+        return revealNodes(createdNodeId, practiceNodeIds.e);
+      },
+      description: () => (
+        <>
+          Coloca el cursor sobre tu nodo, y arrastra una de las flechas que aparecen, o haz click en
+          una flecha y luego en el nodo <TutorialNode title="Control 1" type="Evaluación" />.
+        </>
+      ),
       advanceWhen: (action) =>
         action.type === 'connectNodes' &&
         action.sourceNodeId === createdNodeId &&
         action.targetNodeId === practiceNodeIds.e,
     },
     {
-      element: nodeSelector(practiceNodeIds.e),
-      title: 'Dependencias',
-      highlightElements: () => {
-        const selectors = [
-          nodeSelector(practiceNodeIds.e),
-          ...(createdNodeId
-            ? [
-                nodeSelector(createdNodeId),
-                `.react-flow__edge[aria-label="Edge from ${createdNodeId} to ${practiceNodeIds.e}"]`,
-              ]
-            : []),
-        ];
-        return selectors.flatMap((selector) => {
-          const element = document.querySelector(selector);
-          return element ? [element] : [];
-        });
-      },
-      description:
-        'Tu nodo ahora es un prerrequisito del nodo "Control 1": un nodo permanecerá automáticamente bloqueado para estudiantes hasta que complete todos sus prerrequisitos. Para borrar una dependencia, puedes seleccionarla y pulsar el botón de eliminar.',
-    },
-    {
-      element: canvas,
+      element: () => (createdNodeId ? document.querySelector(nodeSelector(createdNodeId)) : null),
       title: 'Selecciona tu nodo',
       prepare: () => revealNodes(createdNodeId),
       description: 'Selecciona el nodo que creaste para editarlo.',
@@ -162,27 +211,49 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       allowInteraction: true,
       title: 'Editor de nodo',
       prepare: async () => {
-        if (!window.matchMedia(compactCanvasLayoutQuery).matches || !createdNodeId) return;
+        if (!createdNodeId || !document.querySelector('#roadmap-editor-panel[hidden]')) return;
         clickElement(nodeSelector(createdNodeId));
         await waitForElement('#roadmap-editor-panel:not([hidden])');
       },
-      description:
-        'Aquí puedes cambiar múltiples propiedades del nodo, como su título, descripción, tipo, recursos, bloquear, ocultar, etc.',
+      description: () => (
+        <>
+          Aquí puedes cambiar múltiples propiedades del nodo, como su título, descripción, tipo,
+          recursos, <TutorialAction icon={LockKeyhole}>bloquear</TutorialAction>,{' '}
+          <TutorialAction icon={EyeOff}>ocultar</TutorialAction>, etc.
+        </>
+      ),
       side: 'left',
     },
     {
       element: branchBlockControl,
       title: 'Bloquea un nodo',
       prepare: async () => {
-        if (!window.matchMedia(compactCanvasLayoutQuery).matches) {
-          clickElement(nodeSelector(practiceNodeIds.b));
-          return;
-        }
         clickElement('#roadmap-editor-panel button[aria-label="Deseleccionar nodo"]');
         await waitForElement('#roadmap-editor-panel[hidden]');
+        await revealNodes(practiceNodeIds.b);
       },
-      description:
-        'En el nodo "Conceptos básicos" abre su menú de acciones y elige "Bloquear nodo". El bloqueo también se propagará a todos los nodos dependientes del seleccionado.',
+      side: 'top',
+      description: () => {
+        const target = branchBlockControl();
+        if (target?.getAttribute('role') === 'alertdialog')
+          return (
+            <>
+              Selecciona <TutorialAction icon={LockKeyhole}>Bloquear nodo</TutorialAction>. Debido a
+              que este nodo posee otros dependientes a él, estos también serán bloqueados.
+            </>
+          );
+        if (target?.getAttribute('aria-label') === 'Bloquear nodo')
+          return (
+            <>
+              Elige <TutorialAction icon={LockKeyhole}>Bloquear nodo</TutorialAction>.
+            </>
+          );
+        return (
+          <>
+            Abre el <TutorialAction icon={Settings}>Menú de acciones</TutorialAction>.
+          </>
+        );
+      },
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
         action.nodeId === practiceNodeIds.b &&
@@ -191,14 +262,28 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: canvas,
       title: 'Bloqueo propagado',
-      description:
-        'En este caso, el bloqueo se propagó a los nodos dependientes de "Conceptos básicos": "Ejercicios guiados", "Control 1", "Proyecto final" y "Retroalimentación del control".',
+      description: () => (
+        <>
+          En este caso, el bloqueo se propagó a los nodos dependientes de{' '}
+          <TutorialNode title="Conceptos básicos" />: <TutorialNode title="Ejercicios guiados" />,{' '}
+          <TutorialNode title="Control 1" type="Evaluación" />,{' '}
+          <TutorialNode title="Proyecto final" type="Evaluación" /> y{' '}
+          <TutorialNode title="Retroalimentación del control" />.
+        </>
+      ),
     },
     {
       element: nodeControlOrConfirmation(practiceNodeIds.b),
       title: 'Desbloquea el nodo',
-      description:
-        'Abre otra vez el menú de acciones del nodo "Conceptos básicos" y desbloquéalo. Puedes elegir entre desbloquear solo este nodo, o incluir además a los dependientes de él.',
+      side: 'top',
+      description: () => (
+        <>
+          Abre otra vez el <TutorialAction icon={LockKeyhole}>Menú de acciones</TutorialAction> del
+          nodo <TutorialNode title="Conceptos básicos" /> y elige{' '}
+          <TutorialAction icon={LockKeyholeOpen}>Desbloquear</TutorialAction>. Puedes elegir entre
+          desbloquear solo este nodo, o incluir además a los dependientes de él.
+        </>
+      ),
       advanceWhen: (action) =>
         action.type === 'changeTeacherBlock' &&
         action.nodeId === practiceNodeIds.b &&
@@ -212,14 +297,25 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         await waitForElement('#roadmap-editor-panel[hidden]');
         clickElement('button[aria-label="Centrar mapa"]');
       },
-      description:
-        'El nodo "Proyecto final" tiene configurado un desbloqueo programado: será liberado a los estudiantes en la fecha y hora seleccionados. Puedes configurar esto cuando quieras en el editor de nodos.',
+      description: () => (
+        <>
+          El nodo <TutorialNode title="Proyecto final" type="Evaluación" /> tiene configurado un
+          desbloqueo programado: será liberado a los estudiantes en la fecha y hora seleccionados.
+          Puedes configurar esto cuando quieras en el editor de nodos.
+        </>
+      ),
     },
     {
       element: nodeControlOrConfirmation(practiceNodeIds.g),
       title: 'Oculta un nodo',
-      description:
-        'Abre el menú de acciones y oculta este nodo. Esto eliminará todas sus dependencias.',
+      side: 'top',
+      description: () => (
+        <>
+          Abre el <TutorialAction icon={Settings}>Menú de acciones</TutorialAction> y elige{' '}
+          <TutorialAction icon={EyeOff}>Ocultar para estudiantes</TutorialAction> para ocultar este
+          nodo. Esto eliminará todas sus dependencias.
+        </>
+      ),
       advanceWhen: (action) =>
         action.type === 'changeVisibility' &&
         action.nodeId === practiceNodeIds.g &&
@@ -228,28 +324,54 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
     {
       element: () => (createdNodeId ? document.querySelector(nodeSelector(createdNodeId)) : null),
       title: 'Agregar recursos',
-      description:
-        'Puedes agregar recursos a tus nodos, como archivos o enlaces. Lo puedes hacer a través del menú de acciones, o a través del panel de edición',
+      description: () => (
+        <>
+          Puedes <TutorialAction icon={FilePlusCorner}>agregar recursos</TutorialAction> a tus
+          nodos, como archivos o enlaces. Lo puedes hacer a través del{' '}
+          <TutorialAction icon={Settings}>Menú de acciones</TutorialAction>, o a través del panel de
+          edición.
+        </>
+      ),
     },
     {
       element: confirmationOrCanvas,
       title: 'Elimina tu nodo',
+      side: 'top',
       prepare: () => revealNodes(createdNodeId),
-      description:
-        'Abre el menú de tu nodo y elige "Eliminar nodo". Antes de eliminar verás qué recursos y dependencias se pierden.',
+      description: () => (
+        <>
+          Abre el <TutorialAction icon={Settings}>Menú de acciones</TutorialAction> de tu nodo y
+          elige{' '}
+          <TutorialAction icon={Trash2} intent="destructive">
+            Eliminar nodo
+          </TutorialAction>
+          . Antes de eliminar verás qué recursos y dependencias se pierden.
+        </>
+      ),
       advanceWhen: (action) => action.type === 'deleteNode' && action.nodeId === createdNodeId,
     },
     {
       element: 'button[aria-label="Vista estudiante"]',
       title: 'Vista estudiante',
-      description: 'Presiona "Vista estudiante" para ver el mapa como lo ve un estudiante.',
+      description: () => (
+        <>
+          Presiona <TutorialAction icon={Eye}>Vista estudiante</TutorialAction> para ver el mapa
+          como lo ve un estudiante.
+        </>
+      ),
       advanceWhen: (action) => action.type === 'enterCanvasPreview',
     },
     {
       element: nodeDetailOr(practiceNodeIds.a),
       title: 'Completa un nodo',
       prepare: () => clickElement('button[aria-label="Centrar mapa"]'),
-      description: 'Abre Introducción y presiona "Completar", como lo haría un estudiante.',
+      description: () => (
+        <>
+          Abre <TutorialNode title="Introducción" /> y presiona{' '}
+          <TutorialAction icon={CircleCheckBig}>Completar</TutorialAction>, como lo haría un
+          estudiante.
+        </>
+      ),
       advanceWhen: (action) =>
         action.type === 'completeCanvasPreviewNode' && action.nodeId === practiceNodeIds.a,
     },
@@ -260,8 +382,14 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
         if (window.matchMedia(compactCanvasLayoutQuery).matches)
           clickElement('button[aria-label="Cerrar detalle"]');
       },
-      description:
-        'Al completar Introducción se liberan Conceptos básicos y Lectura complementaria, que dependían de ella.',
+      description: () => (
+        <>
+          Al completar <TutorialNode title="Introducción" /> se liberan{' '}
+          <TutorialNode title="Conceptos básicos" /> y{' '}
+          <TutorialNode title="Lectura complementaria" type="Material extra" />, que dependían de
+          ella.
+        </>
+      ),
     },
     {
       element: () =>

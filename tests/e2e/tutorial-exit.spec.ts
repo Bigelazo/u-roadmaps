@@ -28,8 +28,14 @@ for (const viewport of [
         await node(title).getByRole('button', { name: 'Abrir menú de acciones del nodo' }).tap();
         await page.getByRole('dialog').getByRole('button', { name: label, exact: true }).tap();
       };
-      await expect(heading).toHaveText('Centrar roadmap');
-      for (const title of ['Nodos', 'Nodo oculto', 'Nodo bloqueado', 'Crea un nodo']) {
+      await expect(heading).toHaveText('Muévete por el mapa');
+      for (const title of [
+        'Centrar mapa',
+        'Nodos',
+        'Nodo oculto',
+        'Nodo bloqueado',
+        'Crea un nodo',
+      ]) {
         await next(title);
       }
       await expectExitReachable(page, `creator-${viewport.width}`);
@@ -67,9 +73,8 @@ for (const viewport of [
       ).toBeVisible();
       await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await node('Control 1').locator('p').tap();
-      await expect(heading).toHaveText('Dependencias');
+      await expect(heading).toHaveText('Selecciona tu nodo');
       await expectExitReachable(page, `dependencies-${viewport.width}`);
-      await next('Selecciona tu nodo');
       await node('Mi nodo de práctica').locator('p').tap();
       await expect(heading).toHaveText('Editor de nodo');
       await expectExitReachable(page, `editor-${viewport.width}`);
@@ -134,9 +139,8 @@ for (const viewport of [
           'Nodos',
           'Nodo completado',
           'Nodo pendiente',
-          'Bloqueado por prerrequisitos',
+          'Bloqueado por dependencias',
           'Bloqueado por el equipo docente',
-          'Dependencias',
           'Cambios sin revisar',
           'Detalle del nodo',
           'Avisos y resumen de cambios',
@@ -162,8 +166,14 @@ test.describe('landscape tutorial exit', () => {
     await authenticateAs(page.context(), user.id);
     await page.goto('/practice-roadmap/teaching?origin=%2Facademic-overview');
     const popover = page.locator('.driver-popover');
-    await expect(popover.locator('.driver-popover-title')).toHaveText('Centrar roadmap');
-    for (const title of ['Nodos', 'Nodo oculto', 'Nodo bloqueado', 'Crea un nodo']) {
+    await expect(popover.locator('.driver-popover-title')).toHaveText('Muévete por el mapa');
+    for (const title of [
+      'Centrar mapa',
+      'Nodos',
+      'Nodo oculto',
+      'Nodo bloqueado',
+      'Crea un nodo',
+    ]) {
       await popover.getByRole('button', { name: 'Siguiente' }).tap();
       await expect(popover.locator('.driver-popover-title')).toHaveText(title);
     }

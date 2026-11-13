@@ -40,6 +40,17 @@ function crowdedPairs(rects: readonly (NodeRect & { id: string })[]) {
   );
 }
 
+test('reserves the expanded title width when resolving a drop', () => {
+  const nodes = [
+    { ...node('a', 0, 0), title: 'Nombre', size: { width: 160, height: 80 } },
+    { ...node('b', 180, 0), title: 'Listas', size: { width: 120, height: 80 } },
+  ];
+  const placements = placementsWithoutCollisions(nodes, [
+    { nodeId: 'a', position: { x: 0, y: 0 } },
+  ]);
+  expect(placements).toContainEqual({ nodeId: 'b', position: { x: 200, y: 0 } });
+});
+
 test('pushes the Nodes a drop lands on, and the Nodes they reach, two grid cells away', () => {
   const nodes = [node('a', 0, 0), node('b', 300, 0), node('c', 300, 140), node('d', 900, 900)];
   const placed = [{ nodeId: 'a', position: { x: 300, y: 40 } }];

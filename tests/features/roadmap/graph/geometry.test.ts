@@ -189,3 +189,12 @@ it('sizes cards from their title while keeping every side on the grid', () => {
     expect(size.height % roadmapGridSize).toBe(0);
   }
 });
+
+it('uses measured title widths before snapping and applying size limits', () => {
+  expect(roadmapNodeSizeForTitle('Nombre', 61.027)).toEqual({ width: 160, height: 80 });
+  expect(roadmapNodeSizeForTitle('Listas', 42.722)).toEqual({ width: 120, height: 80 });
+  expect(roadmapNodeSizeForTitle('MMMMMM', 90)).toEqual({ width: 160, height: 80 });
+  expect(roadmapNodeSizeForTitle('Nombre', 54)).toEqual({ width: 120, height: 80 });
+  expect(roadmapNodeSizeForTitle('Nombre', 54.01)).toEqual({ width: 160, height: 80 });
+  expect(roadmapNodeSizeForTitle('Título largo', 500)).toEqual({ width: 240, height: 80 });
+});

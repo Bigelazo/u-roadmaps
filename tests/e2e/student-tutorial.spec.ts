@@ -1,3 +1,4 @@
+import { observeTutorialExit, tutorialExitFailures } from './tutorial-presentation-observer';
 import type { Page } from '@playwright/test';
 import { literal, queryJson } from './database';
 import { enterRoadmap } from './enter-roadmap';
@@ -10,9 +11,8 @@ const steps = [
   'Nodos',
   'Nodo completado',
   'Nodo pendiente',
-  'Bloqueado por prerrequisitos',
+  'Bloqueado por dependencias',
   'Bloqueado por el equipo docente',
-  'Dependencias',
   'Cambios sin revisar',
   'Detalle del nodo',
   'Avisos y resumen de cambios',
@@ -63,22 +63,42 @@ test('a student walks through the tutorial from their Roadmap and is pointed bac
   await expect(page.getByRole('button', { name: /^Avisos/ })).toBeVisible();
 
   await expectStep(page, 0);
+  await observeTutorialExit(page);
   await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
   await advanceTo(page, 2);
   await expect(practiceNode(page, 'Lectura complementaria')).toHaveClass(/driver-active-element/);
-  await advanceTo(page, 9);
+  await expect
+    .poll(
+      async () => (await practiceNode(page, 'Lectura complementaria').boundingBox())?.width ?? 0,
+    )
+    .toBeGreaterThan(250);
+  await page.screenshot({ path: 'test-results/tutorial-node-zoom.png' });
+  await advanceTo(page, 5);
+  const pulses = page.locator('[data-tutorial-dependency-pulse]');
+  await expect(pulses).toHaveCount(3);
+  const before = await pulses.first().getAttribute('stroke-dashoffset');
+  await expect.poll(() => pulses.first().getAttribute('stroke-dashoffset')).not.toBe(before);
+  await expect(page.locator('[data-tutorial-highlight-group]')).toHaveClass(
+    /driver-active-element/,
+  );
+  await page.screenshot({ path: 'test-results/tutorial-control-dependencies.png' });
+  await advanceTo(page, 6);
+  await expect(pulses).toHaveCount(0);
+  await advanceTo(page, 8);
   const detail = page.locator('#student-node-detail-panel');
   await expect(detail).toHaveClass(/driver-active-element/);
-  await expect(detail.getByRole('heading', { name: 'Conceptos básicos' })).toBeVisible();
-  await expect(tourPopover(page)).toContainText('no se puede deshacer');
+  await expect(detail.getByRole('heading', { name: 'Lectura complementaria' })).toBeVisible();
+  await expect(detail.getByText('Guía de estudio', { exact: true })).toBeVisible();
+  await expect(detail.getByText('Apunte de lectura', { exact: true })).toBeVisible();
   await tourPopover(page).getByRole('button', { name: 'Anterior' }).click();
-  await expectStep(page, 8);
+  await expectStep(page, 7);
   await expect(page.locator('#student-node-detail-panel')).toHaveCount(0);
-  await advanceTo(page, 10);
+  await advanceTo(page, 9);
   await expect(page.getByRole('button', { name: /^Avisos/ })).toHaveClass(/driver-active-element/);
 
   await tourPopover(page).getByRole('button', { name: 'Finalizar' }).click();
   await expect(tourPopover(page)).toHaveCount(0);
+  expect(await tutorialExitFailures(page)).toEqual([]);
   await expect(
     practiceNode(page, 'Conceptos básicos').getByRole('img', { name: 'Pendiente' }),
   ).toBeVisible();

@@ -9,7 +9,7 @@ export async function expectExitReachable(page: Page, evidence: string) {
       exit.evaluate((element) => {
         const box = element.getBoundingClientRect();
         return (
-          getComputedStyle(element).visibility === 'hidden' ||
+          getComputedStyle(element).visibility === 'visible' &&
           element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
         );
       }),

@@ -34,6 +34,8 @@ import {
   findOpenRoadmapPosition,
   roadmapGridSize,
   roadmapNodeSizeForTitle,
+  roadmapNodeDimensions,
+  type RoadmapNodeSizer,
   snapToRoadmapGrid,
 } from '@/features/roadmap/graph/geometry';
 import type { NodeActionCallbacks, NodeActionIntent } from '@/features/roadmap/graph/node-action';
@@ -94,6 +96,7 @@ import {
   type TutorialRevealDetail,
 } from '@/shared/client/tutorial/tutorial-support';
 import { cn } from 'cn';
+import { useRoadmapNodeSizing } from './use-roadmap-node-sizing';
 import {
   layoutRoadmapGraph,
   type RoadmapLayoutDirection,
@@ -178,7 +181,7 @@ function readingOrder(nodes: readonly RoadmapFlowNode[]) {
 }
 
 function nodeRect(node: RoadmapFlowNode) {
-  return { ...node.position, ...roadmapNodeSizeForTitle(node.data.title) };
+  return { ...node.position, ...roadmapNodeDimensions(node) };
 }
 
 function compactInitialViewport(
@@ -245,6 +248,7 @@ function mapProjectionToFlow(
   selectedNodeId: string | null | undefined,
   actionMenu: RoadmapGraphActionMenu,
   notificationsEnabled = false,
+  sizeForTitle: RoadmapNodeSizer = roadmapNodeSizeForTitle,
 ) {
   const { roadmap } = projection;
   const isTeacherView = projection.kind === 'teaching';
@@ -260,6 +264,7 @@ function mapProjectionToFlow(
     return {
       id: node.id,
       type: 'roadmap',
+      ...sizeForTitle(node.title),
       data: {
         roadmapId: roadmap.roadmap.id,
         notificationsEnabled,
@@ -363,7 +368,16 @@ const newNodeId = '__new-node__';
 
 function canvasNodes(nodes: readonly RoadmapFlowNode[]) {
   return nodes.flatMap((node) =>
-    node.hidden ? [] : [{ id: node.id, title: node.data.title, position: node.position }],
+    node.hidden
+      ? []
+      : [
+          {
+            id: node.id,
+            title: node.data.title,
+            position: node.position,
+            size: roadmapNodeDimensions(node),
+          },
+        ],
   );
 }
 
@@ -402,7 +416,9 @@ function RoadmapGraphToolbar({
   bottomLeftActions,
   bottomRightActions,
   nodes,
+  sizeForTitle,
 }: {
+  sizeForTitle: RoadmapNodeSizer;
   onFitView?: () => void;
   containerRef: RefObject<HTMLDivElement | null>;
   showAutoLayout: boolean;
@@ -431,7 +447,7 @@ function RoadmapGraphToolbar({
   }, [containerRef, screenToFlowPosition]);
   const placeNewNode = useCallback(
     (title: string): NewNodePlacement => {
-      const size = roadmapNodeSizeForTitle(title);
+      const size = sizeForTitle(title);
       const viewport = getViewport();
       const center = {
         x: viewport.x + viewport.width / 2 - size.width / 2,
@@ -439,7 +455,7 @@ function RoadmapGraphToolbar({
       };
       const position =
         findOpenRoadmapPosition(
-          nodes.map((node) => ({ ...node.position, ...roadmapNodeSizeForTitle(node.data.title) })),
+          nodes.map((node) => ({ ...node.position, ...roadmapNodeDimensions(node) })),
           center,
           size,
           viewport,
@@ -450,10 +466,11 @@ function RoadmapGraphToolbar({
           id: newNodeId,
           title,
           position,
+          size,
         }),
       };
     },
-    [getViewport, nodes],
+    [getViewport, nodes, sizeForTitle],
   );
 
   const compact = useCompactCanvasLayout();
@@ -877,6 +894,8 @@ function useRoadmapGraphController({
   selectedNodeId,
   focusReturnRequest,
 }: RoadmapGraphProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sizeForTitle = useRoadmapNodeSizing(containerRef);
   const editing: RoadmapGraphEditing | undefined =
     projection.kind === 'teaching' ? projection.editing : undefined;
   const canEdit = editing !== undefined;
@@ -934,6 +953,7 @@ function useRoadmapGraphController({
       selectedNodeId,
       actionMenu,
       notificationsEnabled,
+      sizeForTitle,
     ),
   );
 
@@ -946,11 +966,12 @@ function useRoadmapGraphController({
           selectedNodeIdRef.current,
           actionMenu,
           notificationsEnabled,
+          sizeForTitle,
         ),
         current,
       ),
     );
-  }, [actionMenu, deleteDependency, notificationsEnabled, stableProjection]);
+  }, [actionMenu, deleteDependency, notificationsEnabled, sizeForTitle, stableProjection]);
 
   const applyNodePositions = useCallback(
     (positions: readonly RoadmapNodePlacement[]) => {
@@ -1016,7 +1037,6 @@ function useRoadmapGraphController({
     emitEditingIntent({ kind: 'apply-automatic-layout', layouts });
   }, [emitEditingIntent, flow.edges, flow.nodes]);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const appliedFocusReturnRequestRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -1034,6 +1054,7 @@ function useRoadmapGraphController({
   return {
     canEdit,
     useActionSheet,
+    sizeForTitle,
     requestNodeAction: actionMenu.onAction,
     actionMenuFinalFocus,
     openActionMenuNodeId: actionMenu.openNodeId,
@@ -1120,16 +1141,16 @@ export function RoadmapGraph(props: RoadmapGraphProps) {
     ? {
         id: targetNode.id,
         ...targetNode.position,
-        ...roadmapNodeSizeForTitle(targetNode.data.title),
+        ...roadmapNodeDimensions(targetNode),
       }
     : null;
   const rejectedTargetNode = flow.nodes.find((node) => node.id === connection.rejectedTargetId);
   const rejectedTargetRect = rejectedTargetNode
-    ? { ...rejectedTargetNode.position, ...roadmapNodeSizeForTitle(rejectedTargetNode.data.title) }
+    ? { ...rejectedTargetNode.position, ...roadmapNodeDimensions(rejectedTargetNode) }
     : null;
   const arrowSourceNode = flow.nodes.find((node) => node.id === connection.arrowSourceId);
   const arrowSourceRect = arrowSourceNode
-    ? { ...arrowSourceNode.position, ...roadmapNodeSizeForTitle(arrowSourceNode.data.title) }
+    ? { ...arrowSourceNode.position, ...roadmapNodeDimensions(arrowSourceNode) }
     : null;
 
   const handleKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -1472,8 +1493,10 @@ function RoadmapGraphContents({
         bottomLeftActions={bottomLeftActions}
         bottomRightActions={bottomRightActions}
         nodes={flow.nodes}
+        sizeForTitle={model.sizeForTitle}
       />
       <Background
+        className="z-0!"
         aria-label="Cuadrícula del lienzo"
         variant={BackgroundVariant.Lines}
         color="var(--fog)"
@@ -1547,7 +1570,8 @@ function TutorialRevealTarget({
         );
       });
       const zoom = getZoom();
-      if (visible && (!compact || zoom >= tutorialLegibleZoom)) return;
+      if (visible && detail.focusZoom === undefined && (!compact || zoom >= tutorialLegibleZoom))
+        return;
       detail.waitUntil(
         fitView({
           nodes: nodeElements.map((node) => ({ id: node.dataset.id ?? '' })),
@@ -1558,7 +1582,7 @@ function TutorialRevealTarget({
             left: insets.left + 12,
           }),
           minZoom: roadmapMinZoom,
-          maxZoom: Math.max(zoom, compact ? studentReadableZoom : 0.5),
+          maxZoom: detail.focusZoom ?? Math.max(zoom, compact ? studentReadableZoom : 0.5),
           duration: 300,
         }).then(() => undefined),
       );

@@ -176,6 +176,31 @@ test('updates sizes, retargets and removes dependencies, and releases a scene id
   });
 });
 
+test('routes to the typography-based node borders', () => {
+  const nodes: RoadmapFlowNode[] = ['a', 'b'].map((id, index) => ({
+    id,
+    type: 'roadmap',
+    position: { x: index * 400, y: 0 },
+    width: 160,
+    height: 80,
+    data: {
+      title: 'Nombre',
+      typeColor: '#024AD8',
+      typeName: 'Contenido',
+      typeIcon: 'BookOpen',
+      status: 'editing',
+      isHidden: false,
+      isTeacherBlocked: false,
+    },
+  }));
+  withRouter((router) => {
+    const input = roadmapRoutingScene(nodes, [{ id: 'ab', source: 'a', target: 'b' }]);
+    const route = router.route(input).routes.get('ab')!;
+    expect(route.points[0]).toEqual({ x: 160, y: 40 });
+    expect(route.points.at(-1)).toEqual({ x: 400, y: 40 });
+  });
+});
+
 test('reserves the same ornament footprints for every viewer and ignores hidden nodes', () => {
   const node: RoadmapFlowNode = {
     id: 'a',
