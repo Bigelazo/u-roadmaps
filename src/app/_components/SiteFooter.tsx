@@ -18,8 +18,8 @@ export function SiteFooter() {
             <span className="font-semibold text-ink">U-Roadmaps</span> · Cada curso, una ruta clara.
           </p>
           <p>
-            <span className="inline-block">© 2026 Universidad de Chile ·</span>{' '}
-            <span className="inline-block">Creado por Daniel Ramírez López</span>
+            <span className="inline-block">Creado por Daniel Ramírez López ·</span>{' '}
+            <span className="inline-block">Universidad de Chile</span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-6">

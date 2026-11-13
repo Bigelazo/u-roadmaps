@@ -7,7 +7,7 @@ test('site pages share one footer with provenance, credit, version and the repos
 }) => {
   await page.goto('/');
   const footer = page.getByRole('contentinfo');
-  await expect(footer).toContainText('© 2026 Universidad de Chile');
+  await expect(footer).toContainText('Universidad de Chile');
   await expect(footer).toContainText('Creado por Daniel Ramírez López');
   await expect(footer).toContainText('v0.1.0');
   await expect(footer.getByRole('link', { name: /^Repositorio en GitHub/ })).toHaveAttribute(
@@ -22,7 +22,7 @@ test('site pages share one footer with provenance, credit, version and the repos
   await authenticateAs(page.context(), course.users.teacher.id);
   for (const path of ['/academic-overview', `${course.pagePath()}/participants`]) {
     await page.goto(path);
-    await expect(page.getByRole('contentinfo')).toContainText('© 2026 Universidad de Chile');
+    await expect(page.getByRole('contentinfo')).toContainText('Universidad de Chile');
   }
 });
 
