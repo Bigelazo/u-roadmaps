@@ -26,9 +26,20 @@ it('explains "Gestionar tipos de nodo" in its own step right after "Crea un nodo
   const creation = steps.findIndex((step) => step.title === 'Crea un nodo');
   const nodeTypes = steps[creation + 1];
   expect(nodeTypes.title).toBe('Tipos de nodo');
-  expect(nodeTypes.description).toContain('Tipos de nodo');
+  render(
+    <>
+      {typeof nodeTypes.description === 'function'
+        ? nodeTypes.description()
+        : nodeTypes.description}
+    </>,
+  );
+  expect(screen.getByText('Tipos de nodo')).toBeTruthy();
+  expect(screen.getByText(/te permite crear tus propios tipos personalizados/)).toBeTruthy();
   expect(nodeTypes.advanceWhen).toBeUndefined();
-  expect(steps[creation].description).not.toContain('Gestionar tipos de nodo');
+  const creationDescription = steps[creation].description;
+  expect(
+    typeof creationDescription === 'function' ? creationDescription() : creationDescription,
+  ).toBe('A continuación, presiona el botón flotante.');
 });
 
 it('highlights only the "Crear nodo" action of the open creation menu in "Crea un nodo"', async () => {

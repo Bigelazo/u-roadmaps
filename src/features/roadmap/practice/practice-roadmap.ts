@@ -17,6 +17,30 @@ const nodeTypes = {
   supplementary: 'practice-node-type-supplementary',
 } as const;
 
+export const practiceNodeTypes: RoadmapDto['nodeTypes'] = [
+  {
+    id: nodeTypes.content,
+    name: 'Contenido',
+    icon: 'BookOpen',
+    color: '#024AD8',
+    isPredefined: true,
+  },
+  {
+    id: nodeTypes.assessment,
+    name: 'Evaluación',
+    icon: 'ClipboardCheck',
+    color: '#DB2777',
+    isPredefined: true,
+  },
+  {
+    id: nodeTypes.supplementary,
+    name: 'Material extra',
+    icon: 'LibraryBig',
+    color: '#0F4C81',
+    isPredefined: true,
+  },
+];
+
 export const practiceNodeIds = {
   a: 'practice-node-a',
   b: 'practice-node-b',
@@ -67,29 +91,7 @@ export function practiceRoadmap(term: PracticeAcademicTerm, today: string): Road
   });
   return {
     roadmap: { id: 'practice-roadmap', closedAt: null },
-    nodeTypes: [
-      {
-        id: nodeTypes.content,
-        name: 'Contenido',
-        icon: 'BookOpen',
-        color: '#024AD8',
-        isPredefined: true,
-      },
-      {
-        id: nodeTypes.assessment,
-        name: 'Evaluación',
-        icon: 'ClipboardCheck',
-        color: '#DB2777',
-        isPredefined: true,
-      },
-      {
-        id: nodeTypes.supplementary,
-        name: 'Material extra',
-        icon: 'LibraryBig',
-        color: '#0F4C81',
-        isPredefined: true,
-      },
-    ],
+    nodeTypes: practiceNodeTypes,
     nodes: [
       node(
         practiceNodeIds.a,

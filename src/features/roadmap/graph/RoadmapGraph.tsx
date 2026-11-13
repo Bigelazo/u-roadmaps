@@ -1496,6 +1496,7 @@ function RoadmapGraphContents({
         sizeForTitle={model.sizeForTitle}
       />
       <Background
+        className="z-0!"
         aria-label="Cuadrícula del lienzo"
         variant={BackgroundVariant.Lines}
         color="var(--fog)"
@@ -1569,7 +1570,8 @@ function TutorialRevealTarget({
         );
       });
       const zoom = getZoom();
-      if (visible && (!compact || zoom >= tutorialLegibleZoom)) return;
+      if (visible && detail.focusZoom === undefined && (!compact || zoom >= tutorialLegibleZoom))
+        return;
       detail.waitUntil(
         fitView({
           nodes: nodeElements.map((node) => ({ id: node.dataset.id ?? '' })),
@@ -1580,7 +1582,7 @@ function TutorialRevealTarget({
             left: insets.left + 12,
           }),
           minZoom: roadmapMinZoom,
-          maxZoom: Math.max(zoom, compact ? studentReadableZoom : 0.5),
+          maxZoom: detail.focusZoom ?? Math.max(zoom, compact ? studentReadableZoom : 0.5),
           duration: 300,
         }).then(() => undefined),
       );

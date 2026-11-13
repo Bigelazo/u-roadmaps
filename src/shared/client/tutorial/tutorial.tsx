@@ -3,8 +3,10 @@
 import 'driver.js/dist/driver.css';
 import './tutorial.css';
 
-import { driver, type Config, type Driver, type DriveStep } from 'driver.js';
-import { useEffect, useRef, useState } from 'react';
+import { driver, type Config, type Driver, type DriveStep, type PopoverDOM } from 'driver.js';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { positionTutorialPopover } from './tutorial-position';
 import { ConfirmationDialog } from '@/shared/ui/confirmation-dialog';
 import {
   closingPopoverKey,
@@ -35,15 +37,6 @@ const baseConfig: Config = {
   progressText: '{{current}} de {{total}}',
 };
 
-function skipDriverPopoverFocus() {
-  const focus = HTMLElement.prototype.focus;
-  const restore = () => {
-    HTMLElement.prototype.focus = focus;
-  };
-  HTMLElement.prototype.focus = restore;
-  queueMicrotask(restore);
-}
-
 export function RoadmapTutorial<Action = never>({
   steps,
   actions,
@@ -51,15 +44,25 @@ export function RoadmapTutorial<Action = never>({
   steps: readonly TutorialStep<Action>[];
   actions?: TutorialActions<Action>;
 }) {
+  const [descriptionPortal, setDescriptionPortal] = useState<{
+    target: HTMLElement;
+    content: ReactNode;
+    reposition: () => void;
+  } | null>(null);
   const [isConfirmingExit, setIsConfirmingExit] = useState(false);
   const confirmingRef = useRef(false);
   const driverRef = useRef<Driver | null>(null);
+
+  useLayoutEffect(() => {
+    descriptionPortal?.reposition();
+  }, [descriptionPortal]);
 
   useEffect(() => {
     let cancelled = false;
     let moving = false;
     let following = false;
     let highlighting = false;
+    let leaveStep: (() => void) | void;
     const groupHighlight = document.createElement('div');
     groupHighlight.setAttribute('aria-hidden', 'true');
     groupHighlight.setAttribute('data-tutorial-highlight-group', '');
@@ -80,29 +83,35 @@ export function RoadmapTutorial<Action = never>({
       if (!groupHighlight.isConnected) document.body.appendChild(groupHighlight);
       return groupHighlight;
     };
-    const restoreExitControl = () =>
-      document
-        .querySelector(`[${TUTORIAL_EXIT_ATTRIBUTE}]`)
-        ?.removeAttribute('data-tutorial-obscured');
-    const syncExitControl = () => {
-      const exitControl = document.querySelector(`[${TUTORIAL_EXIT_ATTRIBUTE}]`);
-      if (!exitControl) return;
-      const popover = tour.getState().popover?.wrapper;
-      const exitBounds = exitControl?.getBoundingClientRect();
-      const popoverBounds = popover?.getBoundingClientRect();
-      exitControl?.toggleAttribute(
-        'data-tutorial-obscured',
-        Boolean(
-          popover?.checkVisibility() &&
-          exitBounds &&
-          popoverBounds &&
-          exitBounds.left < popoverBounds.right &&
-          exitBounds.right > popoverBounds.left &&
-          exitBounds.top < popoverBounds.bottom &&
-          exitBounds.bottom > popoverBounds.top,
-        ),
-      );
+    const positionPopover = (renderedPopover?: PopoverDOM) => {
+      const index = tour.getActiveIndex();
+      const step = index === undefined ? undefined : steps[index];
+      if (!step) return;
+      const anchor = resolveElement(step.element);
+      if (!anchor) return;
+      const popover = renderedPopover ?? tour.getState().popover;
+      if (popover)
+        positionTutorialPopover(
+          popover,
+          anchor,
+          getExitControl(),
+          step.side,
+          step.highlightElements?.(),
+          step.popoverOffset,
+        );
     };
+    const getExitControl = () =>
+      document.querySelector<HTMLElement>(`[${TUTORIAL_EXIT_ATTRIBUTE}]`);
+    const pinExitControl = () => {
+      const exitControl = getExitControl();
+      if (exitControl && !exitControl.style.getPropertyValue('--tutorial-exit-top')) {
+        exitControl.style.setProperty(
+          '--tutorial-exit-top',
+          `${exitControl.getBoundingClientRect().top}px`,
+        );
+      }
+    };
+    const restoreExitControl = () => getExitControl()?.style.removeProperty('--tutorial-exit-top');
     const askExit = () => {
       if (confirmingRef.current) return;
       confirmingRef.current = true;
@@ -113,10 +122,15 @@ export function RoadmapTutorial<Action = never>({
       await waitForStableElement(step.element);
       const elements = step.highlightElements?.() ?? [];
       const target = elements.length ? elements : [resolveElement(step.element)];
-      await revealTutorialTarget(target.filter((element): element is Element => Boolean(element)));
+      await revealTutorialTarget(
+        target.filter((element): element is Element => Boolean(element)),
+        step.focusZoom,
+      );
     };
     const isActionStep = (index: number | undefined): index is number =>
       index !== undefined && steps[index]?.advanceWhen !== undefined;
+    const isInteractiveStep = (index: number | undefined) =>
+      index !== undefined && (isActionStep(index) || Boolean(steps[index]?.allowInteraction));
     const isRequiredActionStep = (index: number | undefined): index is number =>
       isActionStep(index) && !steps[index].allowManualAdvance;
     const disablesInteraction = (step: TutorialStep<Action>) =>
@@ -138,13 +152,16 @@ export function RoadmapTutorial<Action = never>({
         return;
       }
       moving = true;
+      leaveStep?.();
+      leaveStep = undefined;
       following = false;
       try {
         await steps[index].prepare?.();
         await prepareTarget(steps[index]);
         if (cancelled) return;
-        document.body.classList.toggle(actingClass, isActionStep(index));
+        document.body.classList.toggle(actingClass, isInteractiveStep(index));
         tour.moveTo(index);
+        leaveStep = steps[index].onEnter?.();
       } finally {
         moving = false;
       }
@@ -159,7 +176,7 @@ export function RoadmapTutorial<Action = never>({
         disableActiveInteraction: disablesInteraction(step),
         popover: {
           title: step.title,
-          description: step.description,
+          description: typeof step.description === 'string' ? step.description : ' ',
           side: step.side,
           ...(isRequiredActionStep(index)
             ? {
@@ -182,16 +199,35 @@ export function RoadmapTutorial<Action = never>({
       },
       onHighlighted: () => {
         highlighting = false;
-        syncExitControl();
+        positionPopover();
       },
-      onPopoverRender: () => {
-        syncExitControl();
+      onPopoverRender: (popover) => {
+        const index = tour.getActiveIndex();
+        const description = index === undefined ? undefined : steps[index]?.description;
+        setDescriptionPortal(
+          typeof description === 'function'
+            ? {
+                target: popover.description,
+                content: description(),
+                reposition: () => positionPopover(popover),
+              }
+            : null,
+        );
+        positionPopover(popover);
         if (!following) return;
         following = false;
-        skipDriverPopoverFocus();
+        popover.wrapper.inert = true;
+        queueMicrotask(() => {
+          popover.wrapper.inert = false;
+        });
       },
       onDestroyStarted: askExit,
-      onDestroyed: restoreExitControl,
+      onDestroyed: () => {
+        setDescriptionPortal(null);
+        leaveStep?.();
+        leaveStep = undefined;
+        restoreExitControl();
+      },
       overlayClickBehavior: askExit,
     });
     driverRef.current = tour;
@@ -212,16 +248,17 @@ export function RoadmapTutorial<Action = never>({
     });
     const followTimer = setInterval(() => {
       const index = tour.getActiveIndex();
-      document.body.classList.toggle(actingClass, tour.isActive() && isActionStep(index));
-      syncExitControl();
+      pinExitControl();
+      document.body.classList.toggle(actingClass, tour.isActive() && isInteractiveStep(index));
       if (confirmingRef.current || highlighting || index === undefined || !tour.isActive()) return;
       restoreHighlight(index);
+      positionPopover();
       if (steps[index].highlightElements) {
         resolveHighlight(steps[index]);
         tour.refresh();
         return;
       }
-      if (!isActionStep(index)) return;
+      if (!isInteractiveStep(index)) return;
       const element = resolveElement(steps[index].element);
       if (element && element !== tour.getActiveElement()) highlightAgain();
       else tour.refresh();
@@ -249,10 +286,15 @@ export function RoadmapTutorial<Action = never>({
     void (async () => {
       await steps[0]?.prepare?.();
       if (steps[0]) await prepareTarget(steps[0]);
-      if (!cancelled) tour.drive();
+      if (!cancelled) {
+        pinExitControl();
+        tour.drive();
+        leaveStep = steps[0]?.onEnter?.();
+      }
     })();
     return () => {
       cancelled = true;
+      leaveStep?.();
       unsubscribe?.();
       clearInterval(followTimer);
       clearTimeout(exitTimer);
@@ -277,23 +319,26 @@ export function RoadmapTutorial<Action = never>({
   };
 
   return (
-    <ConfirmationDialog
-      confirmation={
-        isConfirmingExit
-          ? {
-              title: '¿Salir del tutorial?',
-              description:
-                'Podrás seguir explorando el mapa de práctica y repetir el tutorial cuando quieras.',
-              intent: 'default',
-              cancelLabel: 'Seguir con el tutorial',
-              actions: [{ id: 'leave', label: 'Salir' }],
-            }
-          : null
-      }
-      className="u-roadmaps-tour-exit z-(--tutorial-z-exit-confirmation)"
-      onCancel={resume}
-      onAction={leave}
-    />
+    <>
+      {descriptionPortal && createPortal(descriptionPortal.content, descriptionPortal.target)}
+      <ConfirmationDialog
+        confirmation={
+          isConfirmingExit
+            ? {
+                title: '¿Salir del tutorial?',
+                description:
+                  'Podrás seguir explorando el mapa de práctica y repetir el tutorial cuando quieras.',
+                intent: 'default',
+                cancelLabel: 'Seguir con el tutorial',
+                actions: [{ id: 'leave', label: 'Salir' }],
+              }
+            : null
+        }
+        className="u-roadmaps-tour-exit z-(--tutorial-z-exit-confirmation)"
+        onCancel={resume}
+        onAction={leave}
+      />
+    </>
   );
 }
 
