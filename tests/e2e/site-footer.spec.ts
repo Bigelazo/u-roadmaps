@@ -14,6 +14,10 @@ test('site pages share one footer with provenance, credit, version and the repos
     'href',
     'https://github.com/Bigelazo/u-roadmaps',
   );
+  await expect(footer.getByRole('link', { name: 'Reportar un problema' })).toHaveAttribute(
+    'href',
+    /^mailto:danielramirez@ug\.uchile\.cl\?/,
+  );
 
   await authenticateAs(page.context(), course.users.teacher.id);
   for (const path of ['/academic-overview', `${course.pagePath()}/participants`]) {

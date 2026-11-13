@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { readRepositoryStars, repositoryUrl } from '@/app/_adapters/github';
 import { RepositoryLink } from '@/app/_components/RepositoryLink';
+import { ReportProblemLink } from '@/app/_components/ReportProblemLink';
 import { ThirdPartyLicensesLink } from '@/app/_components/ThirdPartyLicensesLink';
 import packageJson from '../../../package.json';
 
@@ -23,6 +24,7 @@ export function SiteFooter() {
         </div>
         <div className="flex flex-wrap items-center gap-x-6">
           <ThirdPartyLicensesLink />
+          <ReportProblemLink version={packageJson.version} />
           <span className="tabular-nums">v{packageJson.version}</span>
           <Suspense fallback={<RepositoryLink href={repositoryUrl} stars={null} />}>
             <StarredRepositoryLink />
