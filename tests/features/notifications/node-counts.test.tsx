@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import {
   NodeChangeCountsProvider,
@@ -117,4 +117,54 @@ test('opening an unchanged Node does not record a review', async () => {
   );
   await screen.findByText('0 and 1');
   expect(methods).not.toContain('POST');
+});
+
+test('changing between real, disabled and simulated counts preserves child state', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ byNode: { first: 2 } })));
+  const view = (enabled: boolean, simulatedCounts?: Record<string, number>) => (
+    <NodeChangeCountsProvider
+      roadmapId="roadmap"
+      enabled={enabled}
+      simulatedCounts={simulatedCounts}
+    >
+      <input aria-label="Draft" defaultValue="" />
+      <Nodes />
+    </NodeChangeCountsProvider>
+  );
+  const { rerender } = render(view(true));
+  await screen.findByText('2 and 0');
+  fireEvent.change(screen.getByLabelText('Draft'), { target: { value: 'Unsaved' } });
+  rerender(view(false));
+  expect(screen.getByText('unknown and unknown')).toBeTruthy();
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('Unsaved');
+  rerender(view(true, { first: 4, second: 1 }));
+  expect(screen.getByText('4 and 1')).toBeTruthy();
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('Unsaved');
+});
+
+test('returning to a Roadmap keeps its newest response when an earlier visit finishes late', async () => {
+  let resolveOld!: (response: Response) => void;
+  const old = new Promise<Response>((resolve) => {
+    resolveOld = resolve;
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockReturnValueOnce(old)
+      .mockResolvedValueOnce(Response.json({ byNode: { second: 1 } }))
+      .mockResolvedValueOnce(Response.json({ byNode: { first: 3 } })),
+  );
+  const view = (roadmapId: string) => (
+    <NodeChangeCountsProvider roadmapId={roadmapId} enabled>
+      <Nodes />
+    </NodeChangeCountsProvider>
+  );
+  const { rerender } = render(view('first-roadmap'));
+  rerender(view('second-roadmap'));
+  await screen.findByText('0 and 1');
+  rerender(view('first-roadmap'));
+  await screen.findByText('3 and 0');
+  await act(async () => resolveOld(Response.json({ byNode: { first: 9 } })));
+  expect(screen.getByText('3 and 0')).toBeTruthy();
 });

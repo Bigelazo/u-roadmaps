@@ -1127,3 +1127,22 @@ test('retries a thrown save failure in Strict Mode without leaving the editor pe
   await waitFor(() => expect(perform).toHaveBeenCalledTimes(2));
   await waitFor(() => expect(saveButton().disabled).toBe(true));
 });
+
+test('consumes command ids once across intervening commands and Node changes', async () => {
+  const command = {
+    id: 'first-command',
+    kind: 'open-resource' as const,
+    nodeId: node.id,
+    mode: 'link' as const,
+  };
+  const { rerenderWith } = renderEditor({ command });
+  await screen.findByRole('form', { name: 'Editor de recurso' });
+  const other = { ...node, id: 'other-node', title: 'Derivadas' };
+  rerenderWith({
+    ...withNode(other),
+    command: { ...command, id: 'second-command', nodeId: other.id },
+  });
+  await screen.findByRole('form', { name: 'Editor de recurso' });
+  rerenderWith({ ...withNode(node), command: { ...command } });
+  expect(screen.queryByRole('form', { name: 'Editor de recurso' })).toBeNull();
+});

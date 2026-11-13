@@ -17,16 +17,7 @@ import { Popover, PopoverTrigger, PopoverContent, PopoverTitle } from '@/shared/
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Empty, EmptyHeader, EmptyDescription } from '@/shared/ui/empty';
 import { Bell, X } from 'lucide-react';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/shared/ui/button';
 import { formatBadgeCount } from '@/shared/badge-count';
@@ -283,13 +274,6 @@ export function RoadmapEntryNotifications({
 }) {
   const [summary, setSummary] = useState<ChangeSummary | null>(null);
   const acknowledgeRoadmap = useAcknowledgeRoadmap();
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
   const acknowledge = useCallback(
     async (input: AcknowledgeInput) => {
       if (!input.entryKey) return false;
@@ -298,7 +282,6 @@ export function RoadmapEntryNotifications({
         await prepareOwnInboxOpening(operation);
         const result = await acknowledgeOwnInbox(operation);
         acknowledgeRoadmap(input.roadmapId);
-        if (!active.current) return true;
         if (result.summary?.groups.length) setSummary(result.summary);
         return true;
       } catch {
