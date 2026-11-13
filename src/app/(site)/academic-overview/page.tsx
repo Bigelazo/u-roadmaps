@@ -4,7 +4,6 @@ import { isFirstVisitInvitationDue } from '@/features/roadmap/server';
 import { AcademicOverviewClient } from './AcademicOverviewClient';
 import { getApplicationSession } from '@/shared/server/session';
 import { resolveSessionUser } from '@/app/_adapters/auth';
-import { ThirdPartyLicensesLink } from '@/app/_components/ThirdPartyLicensesLink';
 
 export default async function AcademicOverviewPage(props: PageProps<'/academic-overview'>) {
   const searchParams = await props.searchParams;
@@ -14,11 +13,6 @@ export default async function AcademicOverviewPage(props: PageProps<'/academic-o
   return (
     <AcademicOverviewClient
       userId={user.id}
-      footer={
-        <footer className="flex justify-end border-t border-fog px-4 py-2 text-sm text-graphite sm:px-6">
-          <ThirdPartyLicensesLink />
-        </footer>
-      }
       notice={
         searchParams.accessLost === '1' ? (
           <Alert role="status">

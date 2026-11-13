@@ -61,19 +61,13 @@ test('actual client initialization shares its pending request across Strict Mode
   );
   render(
     <StrictMode>
-      <CachedAcademicOverview
-        userId={userId}
-        renderRoadmapCreation={() => null}
-        footer={<p>Licencias de terceros</p>}
-      />
+      <CachedAcademicOverview userId={userId} renderRoadmapCreation={() => null} />
     </StrictMode>,
   );
   expect(screen.getByRole('status', { name: 'Cargando resumen académico...' })).toBeTruthy();
   expect(fetcher).toHaveBeenCalledTimes(1);
-  expect(screen.queryByText('Licencias de terceros')).toBeNull();
   finish(Response.json(complete));
   await screen.findByRole('heading', { name: 'Resumen académico' });
-  expect(screen.getByText('Licencias de terceros')).toBeTruthy();
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(readAcademicCourseCache(userId)).toEqual(cache);
 });

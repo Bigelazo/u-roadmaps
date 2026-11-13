@@ -17,10 +17,9 @@ import { AcademicOverviewLoading } from './AcademicOverviewLoading';
 
 type Props = Omit<React.ComponentProps<typeof AcademicOverview>, 'overview'> & {
   userId: string;
-  footer?: React.ReactNode;
 };
 
-export function CachedAcademicOverview({ userId, notice, footer, ...props }: Props) {
+export function CachedAcademicOverview({ userId, notice, ...props }: Props) {
   const [state, setState] = useState<{
     userId: string;
     overview: AcademicOverviewPage;
@@ -127,7 +126,6 @@ export function CachedAcademicOverview({ userId, notice, footer, ...props }: Pro
           ) : null
         }
       />
-      {footer}
     </>
   );
 }
