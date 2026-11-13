@@ -14,7 +14,7 @@ test.each([
   {
     name: 'app imports a feature implementation instead of its public Interface',
     code: "import '@/features/roadmap/application/editor';",
-    filePath: 'src/app/page.tsx',
+    filePath: 'src/app/(site)/page.tsx',
     ruleId: 'boundaries/dependencies',
   },
   {
@@ -26,7 +26,7 @@ test.each([
   {
     name: 'generated Prisma bypasses the shared database adapter',
     code: "import '@/generated/prisma/client';",
-    filePath: 'src/app/page.tsx',
+    filePath: 'src/app/(site)/page.tsx',
     ruleId: 'no-restricted-imports',
   },
   {

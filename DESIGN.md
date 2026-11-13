@@ -161,7 +161,7 @@ Use **Lucide** as the only general-purpose interface icon system. Its rounded li
 
 Use a 24px icon for standard controls and a visible label whenever the action is not universally understood. Icon-only controls require an accessible name and a minimum 44px touch target. Because Lucide does not provide a universal filled variant, reinforce active, selected, and completed states with text, shape, container treatment, or another non-color cue.
 
-Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram sets in the production interface. A future custom brand symbol is the only planned exception.
+Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram sets in the production interface. Two exceptions apply: a future custom brand symbol, and outbound links to a third-party platform, which may use that platform's official mark unmodified, monochrome in `currentColor`, with an accessible name (the GitHub mark in the global footer).
 
 ## Components
 
@@ -177,6 +177,7 @@ Do not mix Lucide with Material Symbols, Material Icons, or unrelated pictogram 
 - **Route specimen**: a faithful static reproduction of the student canvas (`RouteSpecimen`): production node geometry, predefined types, status and resource badges, ink dependencies and the fog grid. Use it wherever a page must show the product instead of describing it, label its course visibly as an example, and never invent states the product lacks.
 - **Cited surface**: when a page compares U-Roadmaps with the platform it replaces, show that platform as quoted sheets in its own system sans, greys, section bands and link color, one sheet per section it really splits content into. Name it only in the panel heading (for example “Hoy, en U-Cursos”), never with its logo, icons, avatars or real people. It sits on Ink as a foreign object; U-Roadmaps type and color stay out of it, except for the Blue cue that links a quoted row to its node.
 - **Institutional provenance**: “Universidad de Chile” appears in the global footer, separate from the U-Roadmaps wordmark.
+- **Global footer**: one compact footer on every page except full-viewport canvases (roadmap, version viewer, practice roadmap) and framed embeds. Cloud surface, Fog top hairline, Graphite caption text that turns Ink on hover, aligned to the global navigation's width. The identity column carries the product name with its promise, then “© 2026 Universidad de Chile · Creado por Daniel Ramírez López”; the action row carries third-party licenses, the version, and the GitHub mark with its star count. Links keep 44px targets; the star count shows only when GitHub answers, and the mark alone stands in otherwise.
 
 ## Logo and Favicon Status
 
