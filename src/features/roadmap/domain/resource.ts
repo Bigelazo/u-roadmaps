@@ -37,3 +37,12 @@ export function replaceFileTitleExtension(title: string, previousName: string, n
   const stem = previous && title.endsWith(previous) ? title.slice(0, -previous.length) : title;
   return stem + fileTitleExtension(nextName);
 }
+
+export const MAX_RESOURCE_FILE_BYTES = 25 * 1024 * 1024;
+
+export function resourceFileError(file: Pick<File, 'size'> | null): string | null {
+  if (!file) return null;
+  if (!file.size) return 'El archivo está vacío.';
+  if (file.size > MAX_RESOURCE_FILE_BYTES) return 'El archivo supera los 25 MB.';
+  return null;
+}

@@ -119,9 +119,9 @@ test('canvas actions in the teaching experience take effect and reset on reopeni
 
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
-  const createDialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  const createDialog = page.getByRole('dialog', { name: 'Crear nodo' });
   await createDialog.getByLabel('Título').fill('Nodo de práctica');
-  await createDialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await createDialog.getByRole('button', { name: 'Crear nodo' }).click();
   await expect(practiceNode(page, 'Nodo de práctica')).toBeVisible();
 
   const edges = page.locator('.react-flow__edge');

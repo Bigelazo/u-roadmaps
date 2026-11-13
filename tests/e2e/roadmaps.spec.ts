@@ -13,9 +13,9 @@ function uniqueName(prefix: string) {
 async function createNodeFromCanvas(page: Page, title: string) {
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  const dialog = page.getByRole('dialog', { name: 'Crear nodo' });
   await dialog.getByLabel('Título').fill(title);
-  await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await dialog.getByRole('button', { name: 'Crear nodo' }).click();
   await expect(page.locator('.react-flow__node').filter({ hasText: title })).toBeVisible();
 }
 
@@ -867,10 +867,10 @@ test('teacher and student workflows render on a test-owned course offering', asy
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();
   await expect(page.getByRole('menuitem', { name: 'Crear nodo' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
-  const createNodeDialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  const createNodeDialog = page.getByRole('dialog', { name: 'Crear nodo' });
   await expect(createNodeDialog).toBeVisible();
   await createNodeDialog.getByLabel('Título').fill(nodeTitle);
-  await createNodeDialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await createNodeDialog.getByRole('button', { name: 'Crear nodo' }).click();
   await expect(page.locator('p', { hasText: nodeTitle })).toBeVisible();
   const roadmap = await api.get(course.apiPath());
   const nodeId = (await roadmap.json()).nodes.find(
@@ -1020,7 +1020,7 @@ test('teacher can save consecutive changes to the same Node', async ({
   await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
   const fullscreen = page.getByRole('dialog', { name: 'Editar nodo', exact: true });
   const title = fullscreen.getByLabel('Título', { exact: true });
-  const description = fullscreen.getByLabel(/Descripción/);
+  const description = fullscreen.getByLabel(/^Contenido/);
   const type = fullscreen.getByRole('combobox', { name: 'Tipo' });
   const save = fullscreen.getByRole('button', { name: 'Guardar cambios' });
   await title.fill(firstTitle);
@@ -1044,7 +1044,7 @@ test('teacher can save consecutive changes to the same Node', async ({
   await expect(fullscreen).toBeHidden();
   const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
   await expect(editor.getByLabel('Título', { exact: true })).toHaveValue(firstTitle);
-  await expect(editor.getByLabel(/Descripción/)).toHaveValue(firstDescription);
+  await expect(editor.getByLabel(/^Contenido/)).toHaveValue(firstDescription);
   await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
 
   await title.fill(secondTitle);

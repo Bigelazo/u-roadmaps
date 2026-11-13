@@ -37,9 +37,12 @@ type CanvasCommandsOptions = {
   report?: (action: PracticeCanvasAction) => void;
 };
 
+export type CommandRun = { readonly applied: boolean; readonly createdNodeId?: string };
+
 export type CanvasCommands = {
   pending: PendingConfirmation | null;
   request: (command: CanvasCommand) => Promise<boolean>;
+  run: (command: CanvasCommand, options?: { readonly announce?: boolean }) => Promise<CommandRun>;
   confirm: (choice: CanvasConfirmationChoice, input?: ConfirmationInput) => Promise<void>;
   cancel: () => void;
 };
@@ -118,9 +121,10 @@ export function useCanvasCommands({
       command: CanvasCommand,
       outcome: CommandOutcome<CanvasCommand>,
       impact?: ChangeImpact,
+      announce = true,
     ) {
       const entry = entryOf(command);
-      const message = entry.success?.(command, outcome, impact);
+      const message = announce ? entry.success?.(command, outcome, impact) : undefined;
       if (message) notify.success(message);
       if (outcome.remaining) return;
       const action = entry.report?.(command, outcome);
@@ -132,10 +136,10 @@ export function useCanvasCommands({
       return (await confirmedAction.impact?.(session, request)) ?? null;
     }
 
-    async function perform(command: CanvasCommand) {
+    async function perform(command: CanvasCommand, announce = true): Promise<CommandRun> {
       const { applied, ...result } = await session.execute(command);
-      if (applied) announceApplied(command, result);
-      return applied;
+      if (applied) announceApplied(command, result, undefined, announce);
+      return { applied, createdNodeId: result.createdNodeId };
     }
 
     async function applyConfirmed(
@@ -182,7 +186,7 @@ export function useCanvasCommands({
 
     async function request(command: CanvasCommand) {
       const { confirmedAction } = entryOf(command);
-      if (!confirmedAction) return perform(command);
+      if (!confirmedAction) return (await perform(command)).applied;
       if (!isSlotFree()) return false;
       const draft = confirmedAction.draftGuard?.(command);
       if (draft && (!(await guardDraft(draft)) || !isSlotFree())) return false;
@@ -209,7 +213,12 @@ export function useCanvasCommands({
       if (pendingRef.current?.phase === 'awaiting') setPending(null);
     };
 
-    return { request, confirm, cancel };
+    async function run(command: CanvasCommand, options?: { readonly announce?: boolean }) {
+      if (entryOf(command).confirmedAction) return { applied: await request(command) };
+      return perform(command, options?.announce ?? true);
+    }
+
+    return { request, run, confirm, cancel };
   }, [guardDraft, onCommandApplied, report, session]);
 
   return { pending, ...commands };

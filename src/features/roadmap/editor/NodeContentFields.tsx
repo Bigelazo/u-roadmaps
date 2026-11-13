@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import { FileText } from 'lucide-react';
 import type { RoadmapDto } from '@/features/roadmap/types';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
@@ -63,13 +65,24 @@ export function NodeDescriptionField({
   value,
   onChange,
   placeholder,
-}: FieldProps & { placeholder?: string }) {
+  action,
+}: FieldProps & { placeholder?: string; action?: ReactNode }) {
+  const label = (
+    <FieldLabel htmlFor={`${idPrefix}-description`}>
+      Contenido <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+    </FieldLabel>
+  );
+
   return (
     <Field>
-      <FieldLabel htmlFor={`${idPrefix}-description`}>
-        Descripción o Contenido del nodo{' '}
-        <em className="font-normal text-muted-foreground">opcional</em>
-      </FieldLabel>
+      {action ? (
+        <div className="-my-2.5 -mr-3.5 flex items-center justify-between gap-2">
+          {label}
+          {action}
+        </div>
+      ) : (
+        label
+      )}
       <MarkdownEditor
         id={`${idPrefix}-description`}
         aria-describedby={`${idPrefix}-description-help`}
@@ -77,8 +90,9 @@ export function NodeDescriptionField({
         value={value.description}
         onValueChange={(description) => onChange({ description })}
       />
-      <FieldDescription id={`${idPrefix}-description-help`} className="italic">
-        El texto es compatible con Markdown. Puedes arrastrar un archivo .md para reemplazarlo.
+      <FieldDescription id={`${idPrefix}-description-help`} className="flex items-start gap-1.5">
+        <FileText aria-hidden="true" className="mt-0.75 size-3.5 shrink-0" />
+        <span>Admite Markdown · Arrastra un archivo .md para reemplazar el texto</span>
       </FieldDescription>
     </Field>
   );
@@ -88,21 +102,34 @@ type Props = FieldProps & {
   nodeTypes: RoadmapDto['nodeTypes'];
   titlePlaceholder?: string;
   descriptionPlaceholder?: string;
+  descriptionAction?: ReactNode;
   titleError?: string;
+  titleForm?: string;
 };
 
 export function NodeContentFields({
   nodeTypes,
   titlePlaceholder,
   descriptionPlaceholder,
+  descriptionAction,
   titleError,
+  titleForm,
   ...field
 }: Props) {
   return (
     <>
-      <NodeTitleField {...field} placeholder={titlePlaceholder} error={titleError} />
-      <NodeDescriptionField {...field} placeholder={descriptionPlaceholder} />
+      <NodeTitleField
+        {...field}
+        placeholder={titlePlaceholder}
+        error={titleError}
+        form={titleForm}
+      />
       <NodeTypeField {...field} nodeTypes={nodeTypes} />
+      <NodeDescriptionField
+        {...field}
+        placeholder={descriptionPlaceholder}
+        action={descriptionAction}
+      />
     </>
   );
 }

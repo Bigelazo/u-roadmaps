@@ -112,9 +112,9 @@ for (const width of [1280, 390]) {
     expect(result.overlaps).toBe(0);
     await page.screenshot({ path: `test-results/teaching-creation-transition-${width}.png` });
     await page.getByRole('menuitem', { name: 'Crear nodo', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+    const dialog = page.getByRole('dialog', { name: 'Crear nodo' });
     await dialog.getByLabel('Título').fill('Ejemplo');
-    await dialog.getByRole('button', { name: 'Agregar nodo', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Crear nodo', exact: true }).click();
     await expect(popover.locator('.driver-popover-title')).toHaveText('Tipos de nodo');
     const types = page.getByRole('menuitem', { name: 'Gestionar tipos de nodo' });
     await types.click();

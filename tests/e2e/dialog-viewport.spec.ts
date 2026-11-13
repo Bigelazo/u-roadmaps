@@ -55,7 +55,7 @@ for (const viewport of [
     await openPractice(page);
     await page.getByRole('button', { name: 'Crear en el mapa', exact: true }).tap();
     await page.getByRole('menuitem', { name: 'Crear nodo', exact: true }).tap();
-    const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+    const dialog = page.getByRole('dialog', { name: 'Crear nodo' });
     await expect(dialog).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`${viewport.label}-title.png`) });
     await expectWithinViewport(dialog, viewport.height);
@@ -64,12 +64,12 @@ for (const viewport of [
     await title.fill(`Nodo ${viewport.label}`);
     const client = await page.context().newCDPSession(page);
     try {
-      const initialScroll = await dialog.evaluate((element) => element.scrollTop);
-      for (let swipe = 0; swipe < 3; swipe++) await swipeUp(client, dialog);
-      await expect
-        .poll(() => dialog.evaluate((element) => element.scrollTop))
-        .toBeGreaterThan(initialScroll);
-      const submit = dialog.getByRole('button', { name: 'Agregar nodo', exact: true });
+      const visibility = dialog.getByRole('radiogroup', { name: 'Acceso de estudiantes' });
+      await expect(visibility).not.toBeInViewport({ ratio: 1 });
+      const body = dialog.locator('[data-slot="dialog-body"]');
+      for (let swipe = 0; swipe < 3; swipe++) await swipeUp(client, body);
+      await expect(visibility).toBeInViewport({ ratio: 1 });
+      const submit = dialog.getByRole('button', { name: 'Crear nodo', exact: true });
       await expect(submit).toBeInViewport({ ratio: 1 });
       await page.screenshot({ path: testInfo.outputPath(`${viewport.label}-submit.png`) });
       await submit.tap();
@@ -91,11 +91,11 @@ test('shared Dialog preserves desktop sizing and other consumers on a short view
   const create = page.getByRole('button', { name: 'Crear en el mapa', exact: true });
   await create.tap();
   await page.getByRole('menuitem', { name: 'Crear nodo', exact: true }).tap();
-  const creator = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  const creator = page.getByRole('dialog', { name: 'Crear nodo' });
   await expect(creator.getByRole('textbox', { name: 'Título', exact: true })).toBeFocused();
   await expectWithinViewport(creator, 900);
-  await expect.poll(async () => (await creator.boundingBox())!.width).toBe(384);
-  await expect(creator.getByRole('button', { name: 'Agregar nodo', exact: true })).toBeInViewport({
+  await expect.poll(async () => (await creator.boundingBox())!.width).toBe(672);
+  await expect(creator.getByRole('button', { name: 'Crear nodo', exact: true })).toBeInViewport({
     ratio: 1,
   });
   await page.screenshot({ path: testInfo.outputPath('desktop.png') });

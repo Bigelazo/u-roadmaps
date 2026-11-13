@@ -16,6 +16,16 @@ export type NodeInput = {
 
 export type NodeUpdate = Omit<NodeInput, 'isVisible'>;
 
+export type StagedResource =
+  | { readonly id: string; readonly type: 'FILE'; readonly file: File }
+  | { readonly id: string; readonly type: 'LINK'; readonly title: string; readonly url: string };
+
+export type NodeCreationProgress = { readonly current: number; readonly total: number };
+
+export function stagedResourceTitle(resource: StagedResource) {
+  return resource.type === 'FILE' ? resource.file.name : resource.title;
+}
+
 export type ResourceInput = {
   title: string;
   url: string;
@@ -101,3 +111,5 @@ export type NodeTypeDraft = {
 export const NODE_TYPES_MENU_ITEM_LABEL = 'Gestionar tipos de nodo';
 
 export const CREATE_NODE_MENU_ITEM_LABEL = 'Crear nodo';
+
+export const NODE_RESOURCES_SECTION_ID = 'node-resources';

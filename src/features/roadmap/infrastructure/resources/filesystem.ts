@@ -2,8 +2,7 @@ import 'server-only';
 
 import { copyFile, mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-
-const maxUploadBytes = 25 * 1024 * 1024;
+import { MAX_RESOURCE_FILE_BYTES } from '@/features/roadmap/domain/resource';
 const storageDirectory = join(
   /* turbopackIgnore: true */ process.cwd(),
   process.env.UPLOADS_DIRECTORY || 'uploads',
@@ -15,7 +14,7 @@ function storagePath(fileKey: string) {
 
 export function validateUploadedFile(file: File) {
   if (!file.size) throw new Error('EMPTY_FILE');
-  if (file.size > maxUploadBytes) throw new Error('FILE_TOO_LARGE');
+  if (file.size > MAX_RESOURCE_FILE_BYTES) throw new Error('FILE_TOO_LARGE');
 }
 
 export async function createStoredFile(fileKey: string) {

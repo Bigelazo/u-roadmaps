@@ -19,8 +19,15 @@ import type {
   NodeEditorGuardReason,
   NodeEditorIntent,
   NodeEditorPerformResult,
+  NodeCreationProgress,
   NodeInput,
+  StagedResource,
 } from '@/features/roadmap/editor/types';
+import { NODE_RESOURCES_SECTION_ID } from '@/features/roadmap/editor/types';
+import {
+  createNodeWithResources,
+  nodeCreationSummary,
+} from '@/features/roadmap/session/node-creation';
 import { NodeEditorPanel } from '@/features/roadmap/ui/NodeEditorPanel';
 import {
   RoadmapGraph,
@@ -386,6 +393,7 @@ function useRoadmapCanvasController({ input }: Props) {
     guardEditorDraft,
     roadmap,
     error,
+    dismissError,
     accessLost,
     canvasCommands,
     canvasPreviewWorkflow,
@@ -407,6 +415,14 @@ function useRoadmapCanvasController({ input }: Props) {
   };
 }
 
+function revealNodeResources() {
+  requestAnimationFrame(() =>
+    document
+      .getElementById(NODE_RESOURCES_SECTION_ID)
+      ?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }),
+  );
+}
+
 function fetchesRoadmapNotices(input: RoadmapCanvasSessionInput) {
   return Boolean(input.notificationsEnabled) && !input.practice;
 }
@@ -422,6 +438,7 @@ export function RoadmapCanvasView({ input }: Props) {
     selectedNodeId,
     roadmap,
     error,
+    dismissError,
     accessLost,
     canvasCommands,
     displayedRoadmap,
@@ -482,10 +499,32 @@ export function RoadmapCanvasView({ input }: Props) {
     return <RoadmapCanvasLoading isCanvasPreview />;
   }
   const selectedNode = displayedRoadmap.nodes.find((node) => node.id === selectedNodeId);
-  const addNodeAtOpenPosition = (
+  const addNodeAtOpenPosition = async (
     node: NodeInput,
+    resources: readonly StagedResource[],
     placeNewNode: (title: string) => NewNodePlacement,
-  ) => canvasCommands.request({ kind: 'add-node', node, ...placeNewNode(node.title) });
+    onProgress: (progress: NodeCreationProgress) => void,
+  ) => {
+    const outcome = await createNodeWithResources(
+      canvasCommands.run,
+      { kind: 'add-node', node, ...placeNewNode(node.title) },
+      resources,
+      onProgress,
+    );
+    if (!outcome) return false;
+    const summary = nodeCreationSummary(resources.length, outcome.failed);
+    if (summary?.tone === 'error') {
+      dismissError();
+      notify.error(summary.message);
+      if (outcome.nodeId) {
+        model.dispatchCanvas({ type: 'selectNode', nodeId: outcome.nodeId, panel: 'editor' });
+        revealNodeResources();
+      }
+    } else if (summary) {
+      notify.success(summary.message);
+    }
+    return true;
+  };
   const { isSidePanelOpen, activePanelWidth } = canvasPanelLayout(model, selectedNode);
   return (
     <SidebarProvider className="min-h-0 flex-1">
@@ -738,7 +777,9 @@ function RoadmapCanvasGraph({
   input: Props['input'];
   addNodeAtOpenPosition: (
     node: NodeInput,
+    resources: readonly StagedResource[],
     placeNewNode: (title: string) => NewNodePlacement,
+    onProgress: (progress: NodeCreationProgress) => void,
   ) => Promise<boolean>;
   roadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['roadmap']>;
   displayedRoadmap: NonNullable<ReturnType<typeof useRoadmapCanvasController>['displayedRoadmap']>;
@@ -861,7 +902,9 @@ function RoadmapCanvasGraph({
               <NodeCreator
                 nodeTypes={roadmap.nodeTypes}
                 nodes={roadmap.nodes}
-                onSubmit={(node) => addNodeAtOpenPosition(node, placeNewNode)}
+                onSubmit={(node, resources, onProgress) =>
+                  addNodeAtOpenPosition(node, resources, placeNewNode, onProgress)
+                }
                 onCreateNodeType={(nodeType) =>
                   canvasCommands.request({ kind: 'add-node-type', nodeType })
                 }

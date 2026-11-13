@@ -20,17 +20,26 @@ body:has([data-viewport-page]) [data-global-navigation] {
 }
 
 .markdown-editor {
-  position: relative;
+  max-height: var(--markdown-editor-max-height, none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--steel) transparent;
   font-family: var(--font-mono, monospace);
   font-size: 0.875rem;
   line-height: 1.5;
   tab-size: 4;
 }
 
+.markdown-editor-surface {
+  position: relative;
+}
+
 .markdown-editor pre {
   min-height: var(--markdown-editor-min-height, 8rem);
   margin: 0;
-  padding: calc(0.5rem + 1px) calc(0.625rem + 1px);
+  padding: 0.5rem 0.625rem;
   white-space: pre-wrap;
   overflow-wrap: break-word;
   font: inherit;

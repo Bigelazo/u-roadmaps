@@ -55,12 +55,25 @@ export function positionTutorialPopover(
         top - gap >= exit.bottom)
     );
   });
-  const position = side
-    ? candidates[side]
-    : {
-        left: clampX(centerX - bounds.width / 2),
-        top: Math.max(exit ? exit.bottom + gap : gap, clampY(rect.bottom + gap)),
-      };
+  const overlap = (
+    left: number,
+    top: number,
+    other: { top: number; right: number; bottom: number; left: number },
+  ) =>
+    Math.max(0, Math.min(left + bounds.width, other.right) - Math.max(left, other.left)) *
+    Math.max(0, Math.min(top + bounds.height, other.bottom) - Math.max(top, other.top));
+  const leastCovering = () =>
+    sides
+      .map((candidate) => ({
+        left: clampX(candidates[candidate].left),
+        top: Math.max(exit ? exit.bottom + gap : gap, clampY(candidates[candidate].top)),
+      }))
+      .reduce((best, candidate) =>
+        overlap(candidate.left, candidate.top, area) < overlap(best.left, best.top, area)
+          ? candidate
+          : best,
+      );
+  const position = side ? candidates[side] : leastCovering();
   popover.wrapper.dataset.tutorialPlacement = side ?? 'over';
   popover.wrapper.style.setProperty('--tutorial-popover-left', `${position.left}px`);
   popover.wrapper.style.setProperty('--tutorial-popover-top', `${position.top}px`);

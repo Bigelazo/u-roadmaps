@@ -199,7 +199,7 @@ test.each([false, true])(
     const editor = await screen.findByLabelText('Panel de edición del roadmap');
     expect(await within(editor).findByRole('heading', { name: 'Recursos (1)' })).toBeTruthy();
     expect(
-      (within(editor).getByRole('textbox', { name: /Descripción/ }) as HTMLTextAreaElement).value,
+      (within(editor).getByRole('textbox', { name: /^Contenido/ }) as HTMLTextAreaElement).value,
     ).toBe(dependent.description);
     expect(
       within(editor)

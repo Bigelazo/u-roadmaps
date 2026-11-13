@@ -66,7 +66,7 @@ function NodeHeader() {
   );
 }
 
-const unsavedFieldLabels = { title: 'título', description: 'descripción', nodeTypeId: 'tipo' };
+const unsavedFieldLabels = { title: 'título', description: 'contenido', nodeTypeId: 'tipo' };
 
 function listInProse(items: readonly string[]) {
   return items.length > 1 ? `${items.slice(0, -1).join(', ')} y ${items.at(-1)}` : items[0];

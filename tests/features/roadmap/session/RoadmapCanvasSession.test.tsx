@@ -477,7 +477,7 @@ describe('RoadmapCanvasSession', () => {
     await user.click(await screen.findByRole('button', { name: 'Crear en el mapa' }));
     await user.click(await screen.findByText('Crear nodo'));
     await user.type(screen.getByLabelText('Título'), 'Derivadas');
-    await user.click(screen.getByRole('button', { name: 'Agregar nodo' }));
+    await user.click(screen.getByRole('button', { name: 'Crear nodo' }));
     await waitFor(async () => {
       const created = (await persistence.load()).nodes.find(({ title }) => title === 'Derivadas');
       expect(screen.getByTestId('selected-node-id').textContent).toBe(created?.id);

@@ -53,11 +53,11 @@ for (const viewport of [
       await expectExitReachable(page, `creator-menu-closed-${viewport.width}`);
       await creatorButton.tap();
       await page.getByRole('menuitem', { name: 'Crear nodo' }).tap();
-      const creator = page.getByRole('dialog', { name: 'Agregar al mapa' });
+      const creator = page.getByRole('dialog', { name: 'Crear nodo' });
       await creator.getByLabel('Título').fill('Mi nodo de práctica');
       await creator.getByLabel('Tipo').tap();
       await page.getByRole('option', { name: 'Evaluación', exact: true }).tap();
-      await creator.getByRole('button', { name: 'Agregar nodo' }).tap();
+      await creator.getByRole('button', { name: 'Crear nodo' }).tap();
       await expect(heading).toHaveText('Tipos de nodo');
       await next('Conecta tu nodo');
       const client = await page.context().newCDPSession(page);

@@ -122,7 +122,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   );
 
   const creator = page.getByRole('button', { name: 'Crear en el mapa' });
-  const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  const dialog = page.getByRole('dialog', { name: 'Crear nodo' });
   await expect(tourPopover(page)).toHaveCSS('opacity', '1');
   const gridClip = { x: 8, y: 200, width: 80, height: 80 };
   const gridBeforeMenu = await page.screenshot({ clip: gridClip });
@@ -151,7 +151,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await dialog.getByLabel('Título').fill('Nodo de práctica');
   const markdown = '# Guía del nodo\n\nRepasa **límites**.\n';
   const transfer = await fileDrop(page, 'guia.md', markdown);
-  const description = dialog.getByLabel(/Descripción/);
+  const description = dialog.getByLabel(/^Contenido/);
   await description.dispatchEvent('drop', { dataTransfer: transfer });
   const markdownConfirmation = page.getByRole('alertdialog', {
     name: '¿Reemplazar el texto con el archivo Markdown?',
@@ -162,8 +162,8 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await dialog.getByLabel('Tipo').click();
   await page.getByRole('option', { name: 'Evaluación' }).click();
   await expect(dialog.getByLabel('Tipo')).toContainText('Evaluación');
-  await expect(dialog.getByRole('checkbox', { name: 'Visible para estudiantes' })).toBeChecked();
-  await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await expect(dialog.getByRole('radio', { name: 'Visible' })).toBeChecked();
+  await dialog.getByRole('button', { name: 'Crear nodo' }).click();
   await expectStep(page, 'Tipos de nodo');
   await expect(tourPopover(page).getByRole('button', { name: 'Anterior' })).toHaveCount(0);
   await page.keyboard.press('ArrowLeft');
@@ -202,7 +202,7 @@ test('an anonymous visitor performs each action step of the teaching tutorial', 
   await expect(page.locator('#roadmap-editor-panel [data-slot="sidebar-content"]')).toHaveClass(
     /driver-active-element/,
   );
-  await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/Descripción/)).toHaveValue(
+  await expect(page.locator('[aria-label="Editor de nodo"]').getByLabel(/^Contenido/)).toHaveValue(
     markdown,
   );
 

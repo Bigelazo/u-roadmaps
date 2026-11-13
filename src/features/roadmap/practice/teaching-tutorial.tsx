@@ -61,9 +61,7 @@ function nodeTypesControl() {
 }
 
 function nodeCreator() {
-  const dialog = [...document.querySelectorAll('[role="dialog"]')].find((candidate) =>
-    candidate.textContent?.includes('Agregar al mapa'),
-  );
+  const dialog = document.getElementById('new-node-title')?.closest('[role="dialog"]');
   const layer = document.querySelector('button[aria-label="Crear en el mapa"]')?.parentElement;
   const createAction = [...(layer?.querySelectorAll('[role="menuitem"]') ?? [])].find(
     (item) => item.textContent?.trim() === CREATE_NODE_MENU_ITEM_LABEL,
@@ -217,7 +215,7 @@ export function teachingTutorialSteps(): readonly TutorialStep<PracticeCanvasAct
       },
       description: () => (
         <>
-          Aquí puedes cambiar múltiples propiedades del nodo, como su título, descripción, tipo,
+          Aquí puedes cambiar múltiples propiedades del nodo, como su título, tipo, contenido,
           recursos, <TutorialAction icon={LockKeyhole}>bloquear</TutorialAction>,{' '}
           <TutorialAction icon={EyeOff}>ocultar</TutorialAction>, etc.
         </>

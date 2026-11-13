@@ -101,48 +101,59 @@ export function MarkdownEditor({
 
   return (
     <>
-      <div className="markdown-editor">
-        <pre aria-hidden="true">
-          {highlighted}
-          {'\n'}
-        </pre>
-        <Textarea
-          {...props}
-          disabled={disabled}
-          readOnly={readOnly}
-          className={cn('markdown-editor-input', className)}
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-          onDragOver={(event) => {
-            onDragOver?.(event);
-            if (event.defaultPrevented || !event.dataTransfer.types.includes('Files')) return;
-            event.preventDefault();
-            event.stopPropagation();
-            event.dataTransfer.dropEffect = disabled || readOnly ? 'none' : 'copy';
-            setIsFileOver(mayHoldSingleMarkdownFile(event.dataTransfer));
-          }}
-          onDragLeave={(event) => {
-            onDragLeave?.(event);
-            setIsFileOver(false);
-          }}
-          onDrop={(event) => {
-            onDrop?.(event);
-            setIsFileOver(false);
-            if (event.defaultPrevented || !event.dataTransfer.types.includes('Files')) return;
-            event.preventDefault();
-            event.stopPropagation();
-            if (disabled || readOnly || isReading) return;
-            setImportError(null);
-            const files = event.dataTransfer.files;
-            if (files.length !== 1 || !/\.(md|markdown)$/i.test(files[0].name)) {
-              setImportError('Arrastra un solo archivo Markdown (.md o .markdown).');
-              return;
-            }
-            event.currentTarget.focus();
-            setPendingFile(files[0]);
-          }}
-        />
-        {isMarkdownFileDragged ? <MarkdownDropTarget isFileOver={isFileOver} /> : null}
+      <div
+        className={cn(
+          'markdown-editor rounded-lg border border-input transition-colors',
+          'has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-3 has-[textarea:focus-visible]:ring-ring/50',
+          'has-[textarea:disabled]:cursor-not-allowed has-[textarea:disabled]:bg-input/50 has-[textarea:disabled]:opacity-50',
+        )}
+      >
+        <div className="markdown-editor-surface">
+          <pre aria-hidden="true">
+            {highlighted}
+            {'\n'}
+          </pre>
+          <Textarea
+            {...props}
+            disabled={disabled}
+            readOnly={readOnly}
+            className={cn(
+              'markdown-editor-input rounded-none border-0 focus-visible:ring-0 disabled:bg-transparent disabled:opacity-100 dark:bg-transparent',
+              className,
+            )}
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            onDragOver={(event) => {
+              onDragOver?.(event);
+              if (event.defaultPrevented || !event.dataTransfer.types.includes('Files')) return;
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = disabled || readOnly ? 'none' : 'copy';
+              setIsFileOver(mayHoldSingleMarkdownFile(event.dataTransfer));
+            }}
+            onDragLeave={(event) => {
+              onDragLeave?.(event);
+              setIsFileOver(false);
+            }}
+            onDrop={(event) => {
+              onDrop?.(event);
+              setIsFileOver(false);
+              if (event.defaultPrevented || !event.dataTransfer.types.includes('Files')) return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (disabled || readOnly || isReading) return;
+              setImportError(null);
+              const files = event.dataTransfer.files;
+              if (files.length !== 1 || !/\.(md|markdown)$/i.test(files[0].name)) {
+                setImportError('Arrastra un solo archivo Markdown (.md o .markdown).');
+                return;
+              }
+              event.currentTarget.focus();
+              setPendingFile(files[0]);
+            }}
+          />
+          {isMarkdownFileDragged ? <MarkdownDropTarget isFileOver={isFileOver} /> : null}
+        </div>
       </div>
       <FieldError>{importError}</FieldError>
       <ConfirmationDialog

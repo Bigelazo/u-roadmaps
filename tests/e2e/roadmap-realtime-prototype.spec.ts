@@ -72,7 +72,9 @@ test('teaching sessions reload live and recover transient projection failures th
     await expect(toast(page, 'Fallo transitorio de actualización')).toBeVisible();
     await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Nodo sincronizado');
     await page.unroute(projectionRoute);
-    await expect(page.getByLabel('Descripción')).toHaveValue('Cambio recuperado sin aviso');
+    await expect(page.getByRole('textbox', { name: 'Contenido (opcional)' })).toHaveValue(
+      'Cambio recuperado sin aviso',
+    );
     await expect(toast(page, 'Fallo transitorio de actualización')).toBeHidden();
 
     await recipient.setOffline(true);

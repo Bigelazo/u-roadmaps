@@ -4,6 +4,7 @@ import { Button } from '@/shared/ui/button';
 import { useNodeEditorContext } from './context';
 import { ResourceComposer } from './ResourceComposer';
 import { ResourceList } from './ResourceList';
+import { NODE_RESOURCES_SECTION_ID } from './types';
 
 function composerMode(
   session: ReturnType<typeof useNodeEditorContext>['resourceSession'],
@@ -26,7 +27,7 @@ export function NodeResources() {
   const isComposerOpen = resourceSession.kind !== 'closed';
 
   return (
-    <section className="border-t border-border pt-5">
+    <section id={NODE_RESOURCES_SECTION_ID} className="scroll-mt-4 border-t border-border pt-5">
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-heading text-base font-semibold">
           Recursos <span className="text-muted-foreground">({node.resources.length})</span>

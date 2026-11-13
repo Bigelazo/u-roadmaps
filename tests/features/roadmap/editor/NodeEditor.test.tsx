@@ -272,7 +272,7 @@ test('orders the panel so a long description comes last, after every other secti
     screen.getByRole('heading', { name: /Recursos/ }),
     screen.getByRole('heading', { name: 'Acceso de estudiantes' }),
     screen.getByRole('heading', { name: 'Eliminar nodo' }),
-    screen.getByLabelText(/Descripción o Contenido del nodo/),
+    screen.getByLabelText(/^Contenido/),
   ];
   for (const [index, section] of sections.slice(1).entries())
     expect(
@@ -283,15 +283,11 @@ test('orders the panel so a long description comes last, after every other secti
 test('labels the description as optional Markdown content that accepts a dropped .md file', () => {
   renderEditor();
 
-  const description = screen.getByRole('textbox', {
-    name: 'Descripción o Contenido del nodo opcional',
-  });
-  expect(screen.getByText('opcional').tagName).toBe('EM');
+  const description = screen.getByRole('textbox', { name: 'Contenido (opcional)' });
   expect(description.getAttribute('aria-describedby')).toBe('edit-node-description-help');
   expect(
-    screen.getByText(
-      'El texto es compatible con Markdown. Puedes arrastrar un archivo .md para reemplazarlo.',
-    ).id,
+    screen.getByText('Admite Markdown · Arrastra un archivo .md para reemplazar el texto')
+      .parentElement?.id,
   ).toBe('edit-node-description-help');
 });
 
@@ -305,7 +301,7 @@ test('keeps saving and previewing in a footer pinned below the scrolling content
   expect(within(footer).getByRole('button', { name: 'Guardar cambios' })).toBe(saveButton());
   expect(within(footer).getByRole('button', { name: 'Previsualizar' })).toBeTruthy();
   expect(
-    screen.getByLabelText(/Descripción o Contenido del nodo/).compareDocumentPosition(footer) &
+    screen.getByLabelText(/^Contenido/).compareDocumentPosition(footer) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
 
@@ -570,16 +566,16 @@ test('fullscreen edits the shared Node draft, retains it on close, and saves it'
   expect(dialog.queryByRole('button', { name: /Previsualizar/ })).toBeNull();
   await user.clear(dialog.getByLabelText('Título'));
   await user.type(dialog.getByLabelText('Título'), 'Límites y continuidad');
-  fireEvent.change(dialog.getByLabelText(/Descripción/), { target: { value: description } });
+  fireEvent.change(dialog.getByLabelText(/^Contenido/), { target: { value: description } });
   await user.keyboard('{Escape}');
 
   expect(perform).not.toHaveBeenCalled();
   expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('Límites y continuidad');
-  expect((screen.getByLabelText(/Descripción/) as HTMLTextAreaElement).value).toBe(description);
+  expect((screen.getByLabelText(/^Contenido/) as HTMLTextAreaElement).value).toBe(description);
 
   await user.click(screen.getByRole('button', { name: 'Editar nodo en pantalla completa' }));
   const reopened = within(screen.getByRole('dialog', { name: 'Editar nodo' }));
-  expect((reopened.getByLabelText(/Descripción/) as HTMLTextAreaElement).value).toBe(description);
+  expect((reopened.getByLabelText(/^Contenido/) as HTMLTextAreaElement).value).toBe(description);
   await user.click(reopened.getByRole('button', { name: 'Guardar cambios' }));
 
   expect(perform).toHaveBeenCalledWith({

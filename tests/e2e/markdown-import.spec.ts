@@ -29,7 +29,7 @@ test('Markdown drops require confirmation and update the Node draft before savin
     exact: true,
     includeHidden: true,
   });
-  const description = editor.getByLabel(/Descripción/);
+  const description = editor.getByLabel(/^Contenido/);
   await description.fill('Borrador sin guardar');
   await description.dispatchEvent('dragover', { dataTransfer: transfer });
   await description.dispatchEvent('drop', { dataTransfer: transfer });
@@ -44,7 +44,7 @@ test('Markdown drops require confirmation and update the Node draft before savin
 
   await page.getByRole('button', { name: 'Editar nodo en pantalla completa' }).click();
   const fullscreen = page.getByRole('dialog', { name: 'Editar nodo', exact: true });
-  const fullscreenDescription = fullscreen.getByLabel(/Descripción/);
+  const fullscreenDescription = fullscreen.getByLabel(/^Contenido/);
   await fullscreenDescription.dispatchEvent('drop', { dataTransfer: transfer });
   await expect(confirmation).toBeVisible();
   await confirmation.getByRole('button', { name: 'Reemplazar texto' }).click();
@@ -184,7 +184,7 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  const dialog = page.getByRole('dialog', { name: 'Crear nodo' });
   await dialog.getByLabel('Título').fill('Nodo con Markdown');
   const description = page.locator('#new-node-description');
 
@@ -210,7 +210,7 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
     (response) =>
       response.request().method() === 'POST' && response.url().endsWith(course.apiPath('/nodes')),
   );
-  await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await dialog.getByRole('button', { name: 'Crear nodo' }).click();
   expect((await created).status()).toBe(201);
   const roadmap = await api.get(course.apiPath());
   expect((await roadmap.json()).nodes).toEqual(
@@ -221,7 +221,7 @@ test('teaching staff create a Node whose description comes from a dropped Markdo
 
   await page.locator('.react-flow__node').filter({ hasText: 'Nodo con Markdown' }).click();
   const editor = page.getByRole('group', { name: 'Editor de nodo', exact: true });
-  await expect(editor.getByLabel(/Descripción/)).toHaveValue(content);
+  await expect(editor.getByLabel(/^Contenido/)).toHaveValue(content);
 });
 
 test('teaching staff create a Node without a description', async ({ page, course, apiAs }) => {
@@ -230,9 +230,9 @@ test('teaching staff create a Node without a description', async ({ page, course
   await page.goto(course.pagePath());
   await page.getByRole('button', { name: 'Crear en el mapa' }).click();
   await page.getByRole('menuitem', { name: 'Crear nodo' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Agregar al mapa' });
+  const dialog = page.getByRole('dialog', { name: 'Crear nodo' });
   await dialog.getByLabel('Título').fill('Nodo sin descripción');
-  await dialog.getByRole('button', { name: 'Agregar nodo' }).click();
+  await dialog.getByRole('button', { name: 'Crear nodo' }).click();
   await expect(dialog).toHaveCount(0);
   const roadmap = await api.get(course.apiPath());
   const created = (await roadmap.json()).nodes.find(
